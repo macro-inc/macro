@@ -218,6 +218,19 @@ fn oversized_bodies() -> Vec<(&'static str, String)> {
                 "<p>x".repeat(500)
             ),
         ),
+        // Rebuilt elements share their attributes in the tree, but a
+        // serialization writes each copy out: 214 KB that serialized to
+        // 700 MB.
+        (
+            "long title on rebuilt bold",
+            format!(
+                "<p>{}{}",
+                (0..5)
+                    .map(|i| format!("<b id={i} title=\"{}\">", "a".repeat(4_000)))
+                    .collect::<String>(),
+                "<p>x".repeat(50_000)
+            ),
+        ),
         // Each `<body>` adds its attributes to the one body element.
         (
             "repeated body attributes",
@@ -239,12 +252,18 @@ fn an_oversized_body_sanitizes_in_bounded_memory() {
         let peak = peak_bytes_during(|| sanitized = sanitize_email_html(&html));
 
         assert!(sanitized.ends_with("read the original.</p>"), "{name}");
-        // Parsed whole, the shallow ones peaked between 138 MB and 1.1 GB and
+        // Parsed whole, the shallow ones peaked between 138 MB and 3 GB and
         // the nested ones took seconds; clipped, none peaks above 82 MB.
         assert!(
             peak < 128 << 20,
             "{peak} bytes to sanitize {} bytes of {name}",
             html.len()
+        );
+        // What is stored and parsed again on every thread read.
+        assert!(
+            sanitized.len() < 24 << 20,
+            "{} bytes sanitized from {name}",
+            sanitized.len()
         );
     }
 }

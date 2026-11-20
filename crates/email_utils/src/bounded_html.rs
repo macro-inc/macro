@@ -20,6 +20,12 @@ pub const MAX_HTML_NODES: usize = 250_000;
 /// About how many attributes take the memory of one node.
 pub const ATTRIBUTES_PER_NODE: usize = 4;
 
+/// The most bytes of text, attribute names and values, and comments a parse
+/// builds. Rebuilt formatting elements share their attributes in the tree,
+/// but a serialization writes each copy out, so each counts again; this
+/// bounds the HTML the sanitizer hands ammonia.
+pub const MAX_HTML_TEXT_BYTES: usize = 16 << 20;
+
 /// The most attributes one element may have. Serialized, they are one tag,
 /// and html5ever checks each attribute name in a tag against every earlier
 /// one; a repeated `<body>` adds its attributes to the one body element.
@@ -85,6 +91,7 @@ fn feed(mut parser: Parser<BoundedSink>, html: &str) -> BoundedHtml {
 struct BoundedSink {
     html: Html,
     nodes: usize,
+    text_bytes: usize,
     clipped: bool,
 }
 
@@ -93,6 +100,7 @@ impl BoundedSink {
         Self {
             html,
             nodes: 0,
+            text_bytes: 0,
             clipped: false,
         }
     }
@@ -108,9 +116,22 @@ impl BoundedSink {
         }
     }
 
+    fn count_text_bytes(&mut self, bytes: usize) {
+        self.text_bytes += bytes;
+        if self.text_bytes > MAX_HTML_TEXT_BYTES {
+            self.clipped = true;
+        }
+    }
+
     /// Counts attributes added to an element that then has `total`.
-    fn count_attributes(&mut self, added: usize, total: usize) {
-        self.count_nodes(added / ATTRIBUTES_PER_NODE);
+    fn count_attributes(&mut self, added: &[Attribute], total: usize) {
+        self.count_nodes(added.len() / ATTRIBUTES_PER_NODE);
+        self.count_text_bytes(
+            added
+                .iter()
+                .map(|attr| attr.name.local.len() + attr.value.len())
+                .sum(),
+        );
         if total > MAX_ELEMENT_ATTRIBUTES {
             self.clipped = true;
         }
@@ -136,13 +157,14 @@ impl BoundedSink {
                 }
                 // The tokenizer splits text at every line break and character
                 // reference; scraper joins text that follows text.
-                NodeOrText::AppendText(_) => {
+                NodeOrText::AppendText(text) => {
                     let follows_text = previous
                         .and_then(|previous| self.html.tree.get(previous))
                         .is_some_and(|previous| previous.value().is_text());
                     if !follows_text {
                         self.count_node();
                     }
+                    self.count_text_bytes(text.len());
                 }
             }
         }
@@ -204,17 +226,19 @@ impl TreeSink for BoundedSink {
         flags: ElementFlags,
     ) -> NodeId {
         self.count_node();
-        self.count_attributes(attrs.len(), attrs.len());
+        self.count_attributes(&attrs, attrs.len());
         self.html.create_element(name, attrs, flags)
     }
 
     fn create_comment(&mut self, text: StrTendril) -> NodeId {
         self.count_node();
+        self.count_text_bytes(text.len());
         self.html.create_comment(text)
     }
 
     fn create_pi(&mut self, target: StrTendril, data: StrTendril) -> NodeId {
         self.count_node();
+        self.count_text_bytes(target.len() + data.len());
         self.html.create_pi(target, data)
     }
 
@@ -293,7 +317,7 @@ impl TreeSink for BoundedSink {
             Some(Node::Element(element)) => element.attrs().count(),
             _ => 0,
         };
-        self.count_attributes(attrs.len(), existing + attrs.len());
+        self.count_attributes(&attrs, existing + attrs.len());
         if !self.clipped {
             self.html.add_attrs_if_missing(target, attrs);
         }
