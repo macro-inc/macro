@@ -23,13 +23,17 @@ const LOOP_HINT_CALLS = 50;
 // helps a model, and the bundle's path invites it to read the bundle: a frame
 // in the program keeps only `main.ts:line:column`, and a run of frames in any
 // other scratch file becomes one `at <Macro SDK>`.
-const scratchPath = decodeURIComponent(new URL("./", import.meta.url).pathname);
-const escapedScratch = scratchPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const scratchFrame = new RegExp(`\\bat [^"\\\\]*?\\(?(?:file://)?${escapedScratch}(?!main\\.ts:)[^:)"\\\\]+:\\d+:\\d+\\)?`, "g");
-const scratchPrefix = new RegExp(`(?:file://)?${escapedScratch}`, "g");
+// The directory appears as a file URL, percent-encoded, in frames and as a
+// plain path elsewhere. A frame is `at name (location)` or `at location`; its
+// name is bounded so a long text with many "at " words stays linear.
+const scratchUrlPath = new URL("./", import.meta.url).pathname;
+const scratchPaths = [...new Set([scratchUrlPath, decodeURIComponent(scratchUrlPath)])];
+const escapedScratch = scratchPaths.map((path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+const scratchFrame = new RegExp(`\\bat (?:[^"\\\\()]{0,200} \\()?(?:file://)?(?:${escapedScratch})(?!main\\.ts:)[^:)"\\\\]+:\\d+:\\d+\\)?`, "g");
+const scratchPrefix = new RegExp(`(?:file://)?(?:${escapedScratch})`, "g");
 const repeatedSdkFrames = /at <Macro SDK>(?:\\n\s*at <Macro SDK>)+/g;
 function withoutScratchPaths(json) {
-  if (!json.includes(scratchPath)) return json;
+  if (!scratchPaths.some((path) => json.includes(path))) return json;
   return json
     .replace(scratchFrame, "at <Macro SDK>")
     .replace(scratchPrefix, "")
