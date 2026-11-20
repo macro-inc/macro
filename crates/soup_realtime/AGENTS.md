@@ -68,6 +68,12 @@ tasks itself.
   names the members it had (`participant_user_ids`), and its `Deleted` patch
   goes to them as well (`SoupRealtimePatch::with_named_recipients`); events
   from before that field reach only current accessors.
+- `channel.participant_removed` updates the channel for its remaining members
+  and sends the removed members their own patch
+  (`SoupRealtimePatch::only_for`, no access lookup): `Updated` for a team or
+  public channel, which they can still open unjoined, `Deleted` for a private
+  channel or DM. Every channel settings patch raises `channel.updated`, so
+  conversions and auto-join changes reach members too.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.
