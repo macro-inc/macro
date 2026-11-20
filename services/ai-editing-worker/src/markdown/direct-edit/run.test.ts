@@ -751,4 +751,28 @@ describe('second review', () => {
       checkPositionalIds([{ delete: view.blocks[0].id }], view, shifted)
     ).not.toThrow();
   });
+
+  it('a positional id is a conflict once the block at that position changed', () => {
+    const positional = (v: DocumentView): DocumentView => ({
+      ...v,
+      blocks: v.blocks.map((block, i) => ({ ...block, id: `index-${i}` })),
+    });
+    const base = positional(view);
+    const reordered = positional({
+      ...view,
+      blocks: [
+        view.blocks[0],
+        view.blocks[2],
+        view.blocks[1],
+        ...view.blocks.slice(3),
+      ],
+    });
+
+    expect(() =>
+      checkPositionalIds([{ delete: 'index-1' }], base, reordered)
+    ).toThrow(DirectEditConflict);
+    expect(() =>
+      checkPositionalIds([{ delete: 'index-0' }], base, reordered)
+    ).not.toThrow();
+  });
 });
