@@ -101,8 +101,13 @@ enum TriggerStreamState {
     NoAgentsBound,
     /// `verified` when the service heartbeats the stream, so a quiet stream
     /// still shows its events flow.
-    Live { verified: bool },
-    Reconnecting { attempt: u32, last_error: String },
+    Live {
+        verified: bool,
+    },
+    Reconnecting {
+        attempt: u32,
+        last_error: String,
+    },
 }
 
 impl From<&TriggerStreamHealth> for TriggerStreamState {

@@ -9,7 +9,9 @@ mod test;
 
 use std::time::Duration;
 
+use tokio::sync::watch;
 use tokio::time::Instant;
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::daemon::TriggerStreamHealth;
 
@@ -41,6 +43,9 @@ pub(crate) enum RuntimeHealth {
     ServiceReportsOffline,
     /// The daemon runs but holds no connection yet.
     Dialing,
+    /// No connection here, yet the service lists the harness online: its
+    /// presence lags a lost connection, or another process holds it.
+    ServiceStillListsOnline,
     /// No connection, and the service does not know this harness (or has not
     /// answered yet).
     Unreachable,
@@ -65,9 +70,11 @@ pub(crate) enum TriggerHealth {
     Stopped,
 }
 
-/// Where this terminal runs. Whether a herdr-core terminal is on screen is
-/// not known: herdr-core has no query that says whether the herdr app shows it
-/// as a tab, so a terminal is only named, with how to attach to it.
+/// How often a herdr-core terminal's app tab is re-read: the app can adopt or
+/// park it at any time.
+const VIEWER_CHECK_EVERY: Duration = Duration::from_secs(10);
+
+/// Where this terminal can be seen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     not(unix),
@@ -81,8 +88,13 @@ pub(crate) enum Viewer {
     Terminal,
     /// A herdr 0.9 pane, always on screen in its workspace.
     HerdrPane,
-    /// A herdr-core terminal, which may run in the background.
-    HerdrCore { terminal: String },
+    /// A herdr-core terminal the herdr app holds in a tab (its `herdr.space`
+    /// and `herdr.tab` labels).
+    HerdrTab { terminal: String },
+    /// A herdr-core terminal in no app tab; only `hc attach` reaches it.
+    Background { terminal: String },
+    /// A herdr-core terminal herdr-core has not described yet.
+    Unknown { terminal: String },
 }
 
 pub(crate) fn daemon(paired: bool, running: bool) -> DaemonHealth {
@@ -103,7 +115,8 @@ pub(crate) fn runtime(running: bool, held: bool, service: Option<bool>) -> Runti
     match (held, service) {
         (true, Some(false)) => RuntimeHealth::ServiceReportsOffline,
         (true, _) => RuntimeHealth::Connected,
-        (false, Some(_)) => RuntimeHealth::Dialing,
+        (false, Some(true)) => RuntimeHealth::ServiceStillListsOnline,
+        (false, Some(false)) => RuntimeHealth::Dialing,
         (false, None) => RuntimeHealth::Unreachable,
     }
 }
@@ -140,15 +153,43 @@ pub(crate) fn top_line(error: &str) -> &str {
     error.lines().next().unwrap_or_default()
 }
 
-/// Where this terminal runs.
-pub(crate) fn viewer() -> Viewer {
+/// Where this terminal can be seen, kept current under herdr-core by a check
+/// every [`VIEWER_CHECK_EVERY`] that lives as long as the returned handle.
+pub(crate) fn watch_viewer() -> (watch::Receiver<Viewer>, Option<AbortOnDropHandle<()>>) {
     #[cfg(unix)]
-    match crate::herdr::HerdrSession::detect() {
-        Some(crate::herdr::HerdrSession::Core { terminal, .. }) => {
-            return Viewer::HerdrCore { terminal };
-        }
-        Some(crate::herdr::HerdrSession::Legacy { .. }) => return Viewer::HerdrPane,
-        None => {}
+    if let Some(session) = crate::herdr::HerdrSession::detect() {
+        let cli = session.cli();
+        let crate::herdr::HerdrSession::Core { terminal } = session else {
+            return (watch::channel(Viewer::HerdrPane).1, None);
+        };
+        let (viewer_tx, viewer) = watch::channel(Viewer::Unknown {
+            terminal: terminal.clone(),
+        });
+        let check = tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(VIEWER_CHECK_EVERY);
+            loop {
+                ticker.tick().await;
+                let seen = in_app_tab(cli.shows_own_terminal().await, terminal.clone());
+                viewer_tx.send_replace(seen);
+            }
+        });
+        return (viewer, Some(AbortOnDropHandle::new(check)));
     }
-    Viewer::Terminal
+    (watch::channel(Viewer::Terminal).1, None)
+}
+
+/// A herdr-core terminal's viewer from one read of its labels.
+#[cfg(unix)]
+pub(crate) fn in_app_tab(
+    shown: Result<bool, crate::herdr::cli::HerdrError>,
+    terminal: String,
+) -> Viewer {
+    match shown {
+        Ok(true) => Viewer::HerdrTab { terminal },
+        Ok(false) => Viewer::Background { terminal },
+        Err(error) => {
+            tracing::debug!(%error, "could not read macrod's herdr-core terminal");
+            Viewer::Unknown { terminal }
+        }
+    }
 }

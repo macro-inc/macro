@@ -105,11 +105,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/tui/health.rs` + `src/tui/ui/status.rs`: the header's second line and
   the Overview card report four states apart: daemon (the serving task runs),
   machine (this process holds the runtime connection; the service's flag only
-  adds a disagreement), triggers (`Daemon::trigger_stream_health`: connecting,
-  no agents bound, live with whether the service heartbeats it, reconnecting
-  with attempt and error) and viewer (the terminal, a herdr pane, or the
-  herdr-core terminal id to `hc attach`; herdr-core has no query for whether
-  the app shows a terminal as a tab, so that is not claimed).
+  adds a disagreement, either way), triggers (`Daemon::trigger_stream_health`:
+  connecting, no agents bound, live with whether the service heartbeats it,
+  reconnecting with attempt and error) and viewer (the terminal, a herdr pane,
+  or a herdr-core terminal in an app tab or not, from its `herdr.space` and
+  `herdr.tab` labels, re-read every 10 s since the app adopts and parks
+  terminals; "not in an app tab" names the `hc attach` target). A state the
+  panel cannot confirm is never green.
 - `macrod service` emits a `health` event (`runtime_connected`, `triggers`
   with a `state` tag) at start and whenever either changes; a live stream's
   heartbeats do not emit one. Embedders ignore events they do not know.

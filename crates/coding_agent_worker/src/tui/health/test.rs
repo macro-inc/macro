@@ -32,7 +32,11 @@ fn a_stopped_daemon_has_no_trigger_stream() {
 #[test]
 fn the_runtime_is_connected_only_when_this_process_holds_the_connection() {
     // The service's flag alone once made the header read "connected".
-    assert_eq!(runtime(true, false, Some(true)), RuntimeHealth::Dialing);
+    assert_eq!(
+        runtime(true, false, Some(true)),
+        RuntimeHealth::ServiceStillListsOnline
+    );
+    assert_eq!(runtime(true, false, Some(false)), RuntimeHealth::Dialing);
     assert_eq!(
         runtime(false, false, Some(true)),
         RuntimeHealth::Disconnected

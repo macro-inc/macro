@@ -148,6 +148,39 @@ async fn herdr_core_viewers_report_their_own_state() {
     assert!(!calls.contains("report"));
 }
 
+#[test]
+fn only_a_terminal_with_the_app_tab_labels_is_in_an_app_tab() {
+    let tab = parse_terminal(
+        "get",
+        r#"{"address":"t36","state":"live","cwd":"/work","labels":{"herdr.space":"sp1","herdr.tab":"tb1"}}"#,
+    )
+    .unwrap();
+    assert!(tab.in_app_tab());
+
+    // Started with `hc run --bg`: alive, but no app tab adopts it.
+    let background = parse_terminal(
+        "get",
+        r#"{"address":"t3x","state":"live","cwd":"/work","labels":{"macro.runtime":"codex"}}"#,
+    )
+    .unwrap();
+    assert!(!background.in_app_tab());
+
+    let space_only = parse_terminal(
+        "get",
+        r#"{"address":"t3y","state":"live","cwd":"/work","labels":{"herdr.space":"sp1"}}"#,
+    )
+    .unwrap();
+    assert!(!space_only.in_app_tab());
+
+    // The app parks a terminal by clearing both labels.
+    let parked = parse_terminal(
+        "get",
+        r#"{"address":"t3z","state":"live","cwd":"/work","labels":{"herdr.space":"","herdr.tab":""}}"#,
+    )
+    .unwrap();
+    assert!(!parked.in_app_tab());
+}
+
 /// herdr-core's refusal of a `send` to a terminal in its first seconds whose
 /// output has not yet been still: nothing was typed, so it is safe to retry.
 const STILL_STARTING: &str = r#"{"error":{"hint":"nothing was typed; check hc read t9, then retry","kind":"unavailable","message":"t9 is still starting: its output has not settled"}}"#;

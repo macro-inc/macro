@@ -100,6 +100,11 @@ fn runtime(health: RuntimeHealth) -> Status {
             "dialing",
             "not connected yet - dialing the harness service",
         ),
+        RuntimeHealth::ServiceStillListsOnline => Status::new(
+            WARN,
+            "dialing, service lists online",
+            "not connected - dialing; the service still lists this harness online",
+        ),
         RuntimeHealth::Unreachable => Status::new(
             WARN,
             "unreachable",
@@ -134,7 +139,7 @@ fn triggers(health: &TriggerHealth) -> Status {
             verified: false,
             quiet,
         } => Status::new(
-            OK,
+            DIM,
             format!("open {}", span(*quiet)),
             format!(
                 "open - this service sends no heartbeats, so only the connection is known up; \
@@ -158,13 +163,22 @@ fn viewer(viewer: &Viewer) -> Status {
     match viewer {
         Viewer::Terminal => Status::new(OK, "terminal", "the terminal macrod was started in"),
         Viewer::HerdrPane => Status::new(OK, "herdr pane", "a herdr pane"),
-        Viewer::HerdrCore { terminal } => Status::new(
+        Viewer::HerdrTab { terminal } => Status::new(
             OK,
-            format!("hc {terminal}"),
+            "in an app tab",
+            format!("in a herdr app tab (hc terminal {terminal})"),
+        ),
+        Viewer::Background { terminal } => Status::new(
+            WARN,
+            format!("not in an app tab (hc attach {terminal})"),
             format!(
-                "hc terminal {terminal}, which may run in the background - hc attach {terminal} \
-                 to view it"
+                "hc terminal {terminal}, in no herdr app tab - hc attach {terminal} to view it"
             ),
+        ),
+        Viewer::Unknown { terminal } => Status::new(
+            DIM,
+            format!("hc {terminal}"),
+            format!("hc terminal {terminal}; herdr-core has not said yet whether the app shows it"),
         ),
     }
 }
