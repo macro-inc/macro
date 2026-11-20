@@ -452,6 +452,11 @@ replica. Serialize connect/disconnect effects by harness across replicas and che
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
+Harness presence lease renewals use one more dedicated connection
+(`harness_bindings.rs`, each renewal bounded to 5 s), so a starved shared pool
+can't lapse the leases of live harnesses. A renewal cut off by that bound closes
+its connection instead of returning it: sqlx's unbounded return ping would let a
+silent socket hold the only slot.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview
