@@ -4,7 +4,7 @@
 use agent_code_mode::domain::{CodeModeError, Detach, ExecutionIdentity, JobSessions};
 use agent_runtime_protocol::domain::job::JobUpdatedNotification;
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, PrompterKind};
+use agent_session::domain::model::{AgentSessionId, PrompterKind, TurnPrompter};
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::domain::service::AgentSessionService;
 use async_trait::async_trait;
@@ -40,23 +40,13 @@ pub struct DetachPolicy<Sessions, Flags = feature_flags::outbound::posthog::Post
 impl<Sessions: AgentSessionRepo, Flags: FeatureFlags> DetachPolicy<Sessions, Flags> {
     pub async fn decide(&self, identity: &ExecutionIdentity) -> Result<Detach, CodeModeError> {
         let session = self.sessions.get(identity.session).await.map_err(storage)?;
-        if session.is_background() {
-            return Ok(Detach::Refused(UNATTENDED.into()));
-        }
         let prompter = self
             .sessions
             .turn_prompter(identity.session)
             .await
             .map_err(storage)?;
-        let Some(prompter) = prompter else {
-            return Ok(Detach::Refused(STALE_TURN.into()));
-        };
-        if prompter.action_id.as_uuid() != identity.turn {
-            return Ok(Detach::Refused(STALE_TURN.into()));
-        }
-        if prompter.kind != PrompterKind::User || prompter.user.as_ref() != Some(&identity.owner)
-        {
-            return Ok(Detach::Refused(NOT_OWNER.into()));
+        if let Some(refused) = refusal(session.is_background(), prompter.as_ref(), identity) {
+            return Ok(Detach::Refused(refused.into()));
         }
         let enabled = match &self.flags {
             Some(flags) => match flags.load(&identity.owner).await {
@@ -73,6 +63,28 @@ impl<Sessions: AgentSessionRepo, Flags: FeatureFlags> DetachPolicy<Sessions, Fla
         }
         Ok(Detach::Allowed)
     }
+}
+
+/// Why an execution in this turn may not detach, if it may not: only a turn
+/// the session owner prompted, still running, in a session someone watches.
+fn refusal(
+    background_session: bool,
+    prompter: Option<&TurnPrompter>,
+    identity: &ExecutionIdentity,
+) -> Option<&'static str> {
+    if background_session {
+        return Some(UNATTENDED);
+    }
+    let Some(prompter) = prompter else {
+        return Some(STALE_TURN);
+    };
+    if prompter.action_id.as_uuid() != identity.turn {
+        return Some(STALE_TURN);
+    }
+    if prompter.kind != PrompterKind::User || prompter.user.as_ref() != Some(&identity.owner) {
+        return Some(NOT_OWNER);
+    }
+    None
 }
 
 /// [`DetachPolicy`] behind a trait object, so [`super::RunCredentials`]

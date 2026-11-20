@@ -42,6 +42,7 @@ async fn owner_approval_is_required_before_credentials_and_cancel_skips_gate() {
         agent_id: session.bot_id,
         owner: session.owner_user().unwrap().clone(),
         turn: macro_uuid::Uuid::from_u128(1),
+        lifetime: agent_code_mode::domain::RunLifetime::Foreground,
     };
     let gate = Gate {
         verdict: NativeToolVerdict::Refuse("Owner declined".into()),
@@ -81,6 +82,7 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         owner: session.owner_user().unwrap().clone(),
         agent_id: session.bot_id,
         turn: macro_uuid::Uuid::from_u128(1),
+        lifetime: agent_code_mode::domain::RunLifetime::Foreground,
     };
     let gate = Gate {
         verdict: NativeToolVerdict::RunAs(requester.clone()),
@@ -669,6 +671,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         agent_id: agent,
         owner: owner.clone(),
         turn: macro_uuid::Uuid::from_u128(1),
+        lifetime: agent_code_mode::domain::RunLifetime::Foreground,
     };
     let signed = |token: &str| match handler(
         &JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
