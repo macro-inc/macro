@@ -75,8 +75,10 @@ have some.
 | `field.joined_at.format` | REST writes `Z`, GraphQL `+00:00` | same instant; no caller reads `joined_at` |
 | `field.left_at.missing` | head's fallback and overlay rows set `left_at: null` | no caller reads `left_at` |
 | `field.joined_at.client-stamped` | both sides show an add with the time they stamped when it was sent | client clocks; no caller reads `joined_at` |
+| `field.joined_at.main-stamped` | main keeps the time it stamped when sending an add after the add lands (`main/participants.ts:61`, never reread); the head shows the database's | no caller reads `joined_at`; both orders agree with the database |
 | `tie-order` | rows with the same `joined_at`: REST orders by `joined_at` alone, the soup read aggregates without an order | neither side defines it; main's own order varies between reads |
 | `main-stale` | main differs from the database (people, order, or join times changed since its read), the head matches it | the head is right |
+| `main-stale` (channel deleted) | main keeps the rows it read before the channel was deleted (its refetch fails and TanStack keeps the last data); the head shows none | the head is right: the channel is gone |
 
 ## Mutants
 

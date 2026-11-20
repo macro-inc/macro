@@ -2,7 +2,14 @@
 // difference sorted into the explained classes (README.md, "Differences") or
 // left unexplained. A clean run must have no unexplained difference; a mutant
 // run must have at least one. Usage: bun driver/report.ts <results dir>
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  createReadStream,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { createInterface } from 'node:readline';
 import { judge, type Verdict } from './compare';
 
 const root = process.argv[2];
@@ -16,6 +23,8 @@ const EXPLAINED_FIELDS: Record<string, string> = {
     "head's REST fallback and overlay rows carry left_at: null; main's rows omit it",
   'field.joined_at.client-stamped':
     'a row both sides show with the time each stamped when the add was sent',
+  'field.joined_at.main-stamped':
+    "a landed add main still shows with the time it stamped when sending it (main/participants.ts:61); the head shows the database's",
   'order.ties':
     'rows that joined at the same instant, in an order neither read defines',
 };
@@ -69,9 +78,14 @@ for (const name of readdirSync(root).sort()) {
   const unexplained: Record<string, { count: number; first: string }> = {};
   let differing = 0;
   if (existsSync(`${dir}/records.jsonl`)) {
-    const lines = readFileSync(`${dir}/records.jsonl`, 'utf8').split('\n');
-    lines.forEach((line, index) => {
-      if (!line) return;
+    // Line by line: a run's records reach gigabytes (rosters of thousands).
+    let index = -1;
+    for await (const line of createInterface({
+      input: createReadStream(`${dir}/records.jsonl`),
+      crlfDelay: Number.POSITIVE_INFINITY,
+    })) {
+      index += 1;
+      if (!line) continue;
       const record = JSON.parse(line);
       if (!record.snap) {
         // A form tile count that differs.
@@ -80,14 +94,14 @@ for (const name of readdirSync(root).sort()) {
           first: `${dir}/records.jsonl:${index + 1}`,
         }));
         entry.count += 1;
-        return;
+        continue;
       }
       differing += 1;
       const verdict = judge(record.snap, record.truth);
       const known = classify(verdict);
       if (known) {
         explained[known] = (explained[known] ?? 0) + 1;
-        return;
+        continue;
       }
       const signature = `${record.mode} | ${verdict.bucket} | contract: ${verdict.contractFields.join(',') || '-'} | data: ${verdict.dataFields.join(',') || '-'} | truth old ${verdict.oldVsTruth} new ${verdict.newVsTruth}`;
       const entry = slot(unexplained, signature, () => ({
@@ -95,7 +109,7 @@ for (const name of readdirSync(root).sort()) {
         first: `${dir}/records.jsonl:${index + 1}`,
       }));
       entry.count += 1;
-    });
+    }
   }
   const mutant = config.MUTANT && config.MUTANT !== 'none';
   const caught = Object.values(unexplained).reduce(
@@ -120,6 +134,10 @@ for (const name of readdirSync(root).sort()) {
       p50: pct(summary.live.latencies, 0.5),
       p99: pct(summary.live.latencies, 0.99),
       max: pct(summary.live.latencies, 1),
+      // Both readers still without data past the bound, alike.
+      timedOutNeitherReads: Object.entries(summary.live.timedOutBy ?? {})
+        .filter(([why]) => why.endsWith('head no-data, main no-data'))
+        .reduce((sum, [, count]) => sum + (count as number), 0),
     },
     reload: {
       ...summary.reload,

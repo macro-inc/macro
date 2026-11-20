@@ -66,6 +66,9 @@ function vsTruth(state: ReaderState, truth: Row[] | undefined) {
     : ('misordered' as const);
 }
 
+/** Whether a reader shows anyone. */
+const rowsShown = (state: ReaderState) => !!state.data?.length;
+
 /** Whether every row the database has carries the database's join time. */
 function timesOf(state: ReaderState, truth: Row[] | undefined) {
   if (!truth || state.isPending || !state.data) return false;
@@ -184,7 +187,7 @@ export function dataFields(
     new Map(
       (rows ?? []).map((row) => [row.user_id, Date.parse(row.joined_at)])
     );
-  const [ta, tb] = [at(a.data), at(b.data)];
+  const [ta, tb, db] = [at(a.data), at(b.data), at(truth)];
   const inFlight = new Set(
     (truth ?? [])
       .filter((row) => {
@@ -226,6 +229,14 @@ export function dataFields(
         ) {
           if (inFlight.has(row.user_id) && x !== y)
             out.add('field.joined_at.client-stamped');
+          // Main still shows the time it stamped when it sent an add that has
+          // landed (its hand-patched cache is never reread); the head shows the
+          // database's.
+          else if (
+            Date.parse(x) !== db.get(row.user_id) &&
+            Date.parse(y) === db.get(row.user_id)
+          )
+            out.add('field.joined_at.main-stamped');
           else if (Date.parse(x) !== Date.parse(y)) out.add('field.joined_at');
           else if (x !== y) out.add('field.joined_at.format');
           continue;
@@ -265,7 +276,13 @@ export function judge(snap: Snap, truth: Row[] | undefined): Verdict {
         asBag(snap.oldContract[key]) === asBag(snap.newContract[key])
     );
   if (contract.length && onlyTies) bucket = 'tie-order';
-  else if (contract.length) {
+  else if (contract.length && !truth) {
+    // The channel is gone: the right roster is none, and a side still showing
+    // rows kept them from before.
+    if (!rowsShown(snap.new) && rowsShown(snap.old)) bucket = 'main-stale';
+    else if (rowsShown(snap.new) && !rowsShown(snap.old)) bucket = 'new-wrong';
+    else bucket = 'contract-diff';
+  } else if (contract.length) {
     if (newVsTruth === 'match' && oldVsTruth !== 'match') bucket = 'main-stale';
     else if (oldVsTruth === 'match' && newVsTruth !== 'match')
       bucket = 'new-wrong';
