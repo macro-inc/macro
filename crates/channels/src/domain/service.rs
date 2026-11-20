@@ -470,19 +470,21 @@ where
             }
         }
 
-        let channel_name = req.channel_name.clone();
+        // The stored name after the patch: it keeps the old one unless renamed.
+        let channel_name = req.channel_name.clone().or_else(|| info.name.clone());
         self.repo
             .patch_channel(channel_id, actor.as_ref().to_string(), team_id, req)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        if channel_name.is_some() {
-            self.events.dispatch(ChannelEvent::ChannelUpdated {
-                channel_id,
-                actor,
-                previous_name: info.name,
-                channel_name,
-            });
-        }
+        // Every patch is announced, not only renames, so members' cached copies
+        // follow a conversion or an auto-join change. An unchanged name tells
+        // consumers it was not a rename.
+        self.events.dispatch(ChannelEvent::ChannelUpdated {
+            channel_id,
+            actor,
+            previous_name: info.name,
+            channel_name,
+        });
         Ok(())
     }
 

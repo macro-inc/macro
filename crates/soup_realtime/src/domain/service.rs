@@ -162,15 +162,18 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         let mut seen = HashSet::with_capacity(patches.len());
         let access_sources = patches
             .iter()
-            .map(|patch| &patch.access_source)
+            .filter_map(|patch| patch.access_source.as_ref())
             .filter(|source| seen.insert(*source))
             .cloned()
             .collect::<Vec<_>>();
-        let shared_access = self
-            .access_expander
-            .expand_user_access(&access_sources)
-            .await
-            .context("failed to expand current user access")?;
+        let shared_access = if access_sources.is_empty() {
+            Vec::new()
+        } else {
+            self.access_expander
+                .expand_user_access(&access_sources)
+                .await
+                .context("failed to expand current user access")?
+        };
 
         // Entities sharing access point at one deduplicated recipient list.
         let mut recipient_lists = Vec::with_capacity(shared_access.len());
@@ -191,8 +194,10 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
 
         let mut publish_count = 0;
         for patch in patches {
-            let current_users = recipient_list_by_source
-                .get(&patch.access_source)
+            let current_users = patch
+                .access_source
+                .as_ref()
+                .and_then(|source| recipient_list_by_source.get(source))
                 .and_then(|&index| recipient_lists.get(index))
                 .map(Vec::as_slice)
                 .unwrap_or_default();

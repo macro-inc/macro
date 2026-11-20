@@ -119,7 +119,9 @@ pub enum ChannelEvent {
         /// Active participants after the join.
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
-    /// Channel metadata was updated (rename).
+    /// Channel settings were patched: a rename, a conversion to or from a team
+    /// channel, or an auto-join change. `channel_name` equals `previous_name`
+    /// when the name did not change.
     ChannelUpdated {
         /// Updated channel id.
         channel_id: Uuid,
@@ -127,7 +129,7 @@ pub enum ChannelEvent {
         actor: MacroUserIdStr<'static>,
         /// Stored channel name before the update.
         previous_name: Option<String>,
-        /// New channel name.
+        /// Stored channel name after the update.
         channel_name: Option<String>,
     },
     /// Participants were removed from a channel (admin removal or self-leave).

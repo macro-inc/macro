@@ -401,6 +401,61 @@ async fn updated_and_deleted_patches_are_published_unchanged() {
 }
 
 #[tokio::test]
+async fn a_patch_only_for_named_users_skips_current_accessors() {
+    let harness = harness(vec![user("member")], false, HashSet::new());
+    let for_members = Patch::Updated(document(DOCUMENT_ID));
+    let for_removed = Patch::Deleted(document(DOCUMENT_ID));
+
+    let delivery = harness
+        .service
+        .notify_users(vec![
+            SoupRealtimePatch::for_entity(for_members.clone()),
+            SoupRealtimePatch::only_for(for_removed.clone(), vec![user("removed")]),
+        ])
+        .await
+        .expect("patches are published");
+
+    let messages = harness.messages.lock().expect("messages lock").clone();
+    assert_eq!(
+        messages,
+        vec![
+            SoupRealtimeMessage::new(user("member"), for_members),
+            SoupRealtimeMessage::new(user("removed"), for_removed),
+        ]
+    );
+    assert_eq!(delivery.publish_count, 2);
+    // Only the members' patch has an access source to look up.
+    assert_eq!(
+        *harness
+            .access_entities
+            .lock()
+            .expect("access entities lock"),
+        vec![document(DOCUMENT_ID)]
+    );
+}
+
+#[tokio::test]
+async fn a_batch_of_patches_only_for_named_users_looks_up_no_access() {
+    let harness = harness(vec![user("member")], false, HashSet::new());
+    let patch = Patch::Deleted(document(DOCUMENT_ID));
+
+    harness
+        .service
+        .notify_users(vec![SoupRealtimePatch::only_for(
+            patch.clone(),
+            vec![user("removed")],
+        )])
+        .await
+        .expect("patch is published");
+
+    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        *harness.messages.lock().expect("messages lock"),
+        vec![SoupRealtimeMessage::new(user("removed"), patch)]
+    );
+}
+
+#[tokio::test]
 async fn named_recipients_receive_the_patch_without_current_access() {
     let patch = Patch::Deleted(document(DOCUMENT_ID));
     for (current, named, expected) in [

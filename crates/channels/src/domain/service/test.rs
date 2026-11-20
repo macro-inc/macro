@@ -1376,6 +1376,45 @@ async fn patch_channel_dispatches_channel_updated() {
 }
 
 #[tokio::test]
+async fn patch_channel_announces_settings_changes_that_keep_the_name() {
+    let team_id = Uuid::new_v4();
+    for request in [
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: None,
+        },
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: None,
+            auto_join_team: Some(false),
+        },
+    ] {
+        let channel_id = Uuid::new_v4();
+        let repo = FakeMutationRepo::new(channel_id, "macro|sender@example.com");
+        repo.state.lock().unwrap().user_team_id = Some(team_id);
+        let events = FakeEvents::default();
+        let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+        svc.patch_channel(
+            patch_receipt("macro|sender@example.com", channel_id, AccessRole::Admin),
+            request,
+        )
+        .await
+        .unwrap();
+
+        // Members' cached copies follow the change; the equal names tell
+        // consumers such as the activity timeline that it was no rename.
+        let events = events.events.lock().unwrap();
+        assert!(matches!(
+            events.as_slice(),
+            [ChannelEvent::ChannelUpdated { channel_id: updated, previous_name: Some(previous), channel_name: Some(current), .. }]
+                if *updated == channel_id && previous == "Project" && current == "Project"
+        ));
+    }
+}
+
+#[tokio::test]
 async fn noop_patch_channel_dispatches_nothing() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

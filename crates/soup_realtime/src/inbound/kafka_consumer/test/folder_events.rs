@@ -108,8 +108,8 @@ fn per_entity_messages(
         .into_iter()
         .flat_map(|patch| {
             let source = (
-                patch.access_source.entity_type,
-                patch.access_source.entity_id.to_string(),
+                access_source(&patch).entity_type,
+                access_source(&patch).entity_id.to_string(),
             );
             users_by_entity
                 .get(&source)
