@@ -1,8 +1,9 @@
 import { mkdir } from 'node:fs/promises';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const CHANNEL_ID = '00000000-0000-7000-8000-00000000c0c0';
 const CALL_ID = '00000000-0000-7000-8000-0000000ca110';
+const DRAGGED_DOCUMENT_ID = '00000000-0000-7000-8000-00000000d0c0';
 const CALLER = 'macro|caller@example.com';
 const STARTED_AT = new Date(Date.now() - 5 * 60_000).toISOString();
 const PATH =
@@ -80,6 +81,7 @@ type Scenario = {
   unread?: boolean;
   theme?: string;
   headerWidth?: number;
+  drag?: boolean;
 };
 
 async function open(
@@ -172,6 +174,12 @@ async function open(
           thread_id: body.thread_id ?? null,
         }),
       });
+    } else if (scenario.drag && url.pathname.endsWith('/soup/graphql')) {
+      // A GraphQL error sends previews to the REST preview the drag fixture
+      // seeds, so the dropped document's chip shows its name.
+      await route.fulfill({
+        json: { data: null, errors: [{ message: 'Not in this fixture' }] },
+      });
     } else if (url.pathname.endsWith(`/call/${CHANNEL_ID}/active`)) {
       await route.fulfill({
         json:
@@ -199,7 +207,7 @@ async function open(
     ? PATH.replace('call-thread.html', 'call-overlay.html')
     : PATH;
   await page.goto(
-    `${path}?view=${view}&shell=${scenario.shell ?? ''}&work=${scenario.work ?? 'off'}&chat=${scenario.chat ?? 'on'}&baseline=${scenario.baseline ? 'main' : 'branch'}&unread=${scenario.unread ?? false}&theme=${scenario.theme ?? 'dark'}${scenario.headerWidth ? `&headerWidth=${scenario.headerWidth}` : ''}`
+    `${path}?view=${view}&shell=${scenario.shell ?? ''}&work=${scenario.work ?? 'off'}&chat=${scenario.chat ?? 'on'}&baseline=${scenario.baseline ? 'main' : 'branch'}&unread=${scenario.unread ?? false}&theme=${scenario.theme ?? 'dark'}&drag=${scenario.drag ?? false}${scenario.headerWidth ? `&headerWidth=${scenario.headerWidth}` : ''}`
   );
   // Let the cold entry-module graph mount before timing an interaction.
   await page.getByRole('main').waitFor({ state: 'attached', timeout: 60_000 });
@@ -208,6 +216,75 @@ async function open(
 
 const callRow = (page: Page) =>
   page.locator(`[data-message-id="${CALL_ID}"]`).first();
+
+async function dragRowOnto(page: Page, target: Locator) {
+  const from = await page.getByTestId('drag-row').boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) throw new Error('Missing drag geometry');
+  await page.mouse.move(from.x + 10, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 20, to.y + to.height / 2, { steps: 10 });
+}
+
+test('a list row dropped on the channel becomes a mention in its composer', async ({
+  page,
+}, testInfo) => {
+  // Rows drag with a mouse; the touch composer starts as a collapsed pill.
+  test.skip(testInfo.project.name === 'phone');
+  const { posted } = await open(page, 'messages', {
+    status: { state: 'ended', ended_at: STARTED_AT, duration_ms: 60_000 },
+    drag: true,
+  });
+  const target = page.getByText('Earlier in the channel');
+  await expect(target).toBeVisible({ timeout: 30_000 });
+
+  // Drop on a message, away from the composer: the whole channel takes it.
+  await dragRowOnto(page, target);
+  await page.screenshot({ path: testInfo.outputPath('channel-drag.png') });
+  await page.mouse.up();
+
+  const mention = page
+    .locator('[data-markdown-editable]')
+    .locator(`[data-document-id="${DRAGGED_DOCUMENT_ID}"]`);
+  await expect(mention).toHaveText('Launch plan');
+  // Loaded, not the dimmed placeholder the chip shows while it reads the name.
+  await expect(mention).not.toHaveClass(/opacity-50/, { timeout: 15_000 });
+  await page.screenshot({ path: testInfo.outputPath('channel-drop.png') });
+
+  await page.getByRole('button', { name: /send/i }).click();
+  await expect.poll(() => posted.length).toBe(1);
+  expect(JSON.stringify(posted[0])).toContain(DRAGGED_DOCUMENT_ID);
+});
+
+test('a list row dropped on the call panel becomes a mention in the call composer', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name === 'phone');
+  const { posted } = await open(page, 'panel', {
+    status: { state: 'live' },
+    drag: true,
+  });
+  const target = page.getByText('Start the conversation.', { exact: true });
+  await expect(target).toBeVisible({ timeout: 30_000 });
+
+  // The panel shows the call's reply composer in place of the channel input.
+  await dragRowOnto(page, target);
+  await page.mouse.up();
+
+  const mention = page
+    .getByTestId('call-panel')
+    .locator('[data-markdown-editable]')
+    .locator(`[data-document-id="${DRAGGED_DOCUMENT_ID}"]`);
+  await expect(mention).toHaveText('Launch plan');
+  // Loaded, not the dimmed placeholder the chip shows while it reads the name.
+  await expect(mention).not.toHaveClass(/opacity-50/, { timeout: 15_000 });
+  await page.screenshot({ path: testInfo.outputPath('call-panel-drop.png') });
+
+  await page.getByRole('button', { name: /send/i }).click();
+  await expect.poll(() => posted.length).toBe(1);
+  expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
+  expect(JSON.stringify(posted[0])).toContain(DRAGGED_DOCUMENT_ID);
+});
 
 test('a live call is a row with its thread collapsed under it and a way in', async ({
   page,

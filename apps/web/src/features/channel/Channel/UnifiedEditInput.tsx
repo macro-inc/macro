@@ -1,5 +1,5 @@
 import { Show } from 'solid-js';
-import { InputFlag } from '../Input';
+import { InputFlag, type InputHandle } from '../Input';
 import type { MessageData } from '../Message';
 import type { MessageEditor } from './create-message-editor';
 import { MessageEditorContent } from './InlineMessageEditor';
@@ -12,6 +12,8 @@ export function UnifiedEditInput(props: {
   channelId: string;
   messageEditor: MessageEditor;
   onNavigateToMessage: (message: MessageData) => void;
+  /** Called with the edit composer's handle once it is ready. */
+  onReady?: (handle: InputHandle) => void;
 }) {
   return (
     <Show when={props.messageEditor.state()?.message} keyed>
@@ -33,6 +35,7 @@ export function UnifiedEditInput(props: {
               // Backstop focus; on mobile the action drawer's focusInput
               // machinery is the primary path.
               requestAnimationFrame(() => handle.focus());
+              props.onReady?.(handle);
             }}
           />
         </div>
