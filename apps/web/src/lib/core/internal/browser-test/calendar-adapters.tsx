@@ -16,6 +16,9 @@ export const getGraphqlSoupCacheHost = () =>
 export { useQueryAccount } from './test-account';
 export const emailToId = (email: string) => `macro|${email}`;
 export const idToEmail = (id: string) => id.replace(/^macro\|/, '');
+export { tryMacroId } from '@core/user/macroId';
+export const getDisplayName = (id: string | undefined | null) =>
+  id ? idToEmail(id) : '';
 export const useUserId = () => () => 'macro|viewer@example.com';
 export const useIsAuthenticated = () => () => true;
 export const useUserInfo = () => () => ({

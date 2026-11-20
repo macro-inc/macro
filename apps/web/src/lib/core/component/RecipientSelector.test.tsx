@@ -8,6 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecipientSelector } from './RecipientSelector';
 
@@ -158,5 +159,47 @@ describe('RecipientSelector scrolling', () => {
     setEmails(['a@example.com', 'b@example.com']);
     await nextFrame();
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+});
+
+describe('RecipientSelector listed people', () => {
+  const sam = () => ({
+    kind: 'contact' as const,
+    id: 'contact-sam',
+    data: {
+      id: 'contact-sam',
+      email: 'sam@example.com',
+      name: 'Sam Lee',
+      type: 'extracted' as const,
+    },
+  });
+
+  it('commits the listed person whose address is typed', () => {
+    const [selected, setSelected] = createSignal<WithCustomUserInput[]>([]);
+    render(() => (
+      <RecipientSelector
+        options={() => [sam()]}
+        selectedOptions={selected()}
+        setSelectedOptions={setSelected}
+      />
+    ));
+    const input = screen.getByRole<HTMLInputElement>('combobox');
+    fireEvent.input(input, { target: { value: 'SAM@EXAMPLE.COM' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(selected().map((option) => option.id)).toEqual(['contact-sam']);
+  });
+
+  it('keeps a chip whose address changes in place', () => {
+    const [pool, setPool] = createStore({ choice: sam() });
+    render(() => (
+      <RecipientSelector
+        options={() => [pool.choice]}
+        selectedOptions={[pool.choice]}
+        setSelectedOptions={() => {}}
+      />
+    ));
+    expect(screen.queryByText('Sam Lee')).not.toBeNull();
+    setPool('choice', 'data', 'email', 'sam.new@example.com');
+    expect(screen.queryByText('Sam Lee')).not.toBeNull();
   });
 });

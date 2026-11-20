@@ -206,3 +206,348 @@ it.each(['secondary', 'notifications'])(
     client.clear();
   }
 );
+
+it('keeps the people still matching typed text until its read lands', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  const [viewer, setViewer] = createSignal('macro|viewer@example.com');
+  const people = [
+    ['Sarah Chen', 'sarah.chen@example.com'],
+    ['Sam Lee', 'sam.lee@example.com'],
+    ['Omar Kim', 'omar.kim@example.com'],
+  ].map(([name, email]) => ({ id: `macro|${email}`, email, name }));
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (request.query === 'fail') throw new Error('read failed');
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: people.filter((person) =>
+          `${person.name} ${person.email}`
+            .toLowerCase()
+            .includes(request.query.toLowerCase())
+        ),
+        nextCursor: null,
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: viewer() }),
+      {
+        search,
+        enabled: () => true,
+        selfId: viewer,
+        senderDomain: () => 'example.com',
+        includeSelf: () => false,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(listed()).toEqual(['Sarah Chen', 'Sam Lee', 'Omar Kim']);
+
+  // Each keystroke narrows the people already listed; none blink out while
+  // the read for the new text waits out its debounce.
+  setSearch('sa');
+  expect(source!.loading()).toBe(true);
+  expect(listed()).toEqual(['Sarah Chen', 'Sam Lee']);
+  setSearch('sarah.c');
+  expect(listed()).toEqual(['Sarah Chen']);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(source!.loading()).toBe(false);
+  expect(listed()).toEqual(['Sarah Chen']);
+
+  // Text no listed person matches empties the list until results land.
+  setSearch('omar');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toEqual(['Omar Kim']);
+
+  // A failed read keeps nothing from the earlier text.
+  setSearch('fail');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(source!.error()).toBeTruthy();
+  expect(listed()).toEqual([]);
+
+  // People listed for one account never show for another.
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toHaveLength(3);
+  setViewer('macro|other@example.com');
+  expect(listed()).toEqual([]);
+  client.clear();
+});
+
+it('keeps only the people the read for the typed text can list, from the same cache generation', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  let changeGeneration = () => {};
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: request.query
+          ? []
+          : [
+              {
+                id: 'macro|sam@example.com',
+                email: 'sam@example.com',
+                name: 'Sam Lee',
+              },
+            ],
+        nextCursor: null,
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(listed()).toEqual(['Sam Lee']);
+
+  // The cache splits typed text at white space only, so "sam," needs a comma.
+  setSearch('sam,');
+  expect(listed()).toEqual([]);
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toEqual(['Sam Lee']);
+  setSearch('SAM LEE');
+  expect(listed()).toEqual(['Sam Lee']);
+
+  // A new cache generation keeps nobody listed from the one before.
+  setSearch('');
+  await vi.advanceTimersByTimeAsync(250);
+  expect(listed()).toEqual(['Sam Lee']);
+  changeGeneration();
+  setSearch('sam');
+  expect(listed()).toEqual([]);
+  client.clear();
+});
+
+it('keeps nobody listed before a new cache generation while the list reads on', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  let changeGeneration = () => {};
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      if (request.cursor) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return {
+          query: request.query,
+          source: 'cache',
+          sync: 'snapshot',
+          offline: false,
+          users: [],
+          nextCursor: null,
+        };
+      }
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users: [
+          {
+            id: 'macro|sam@example.com',
+            email: 'sam@example.com',
+            name: 'Sam Lee',
+          },
+        ],
+        nextCursor: {
+          source: 'people',
+          generation: 'fixture',
+          after: 'next',
+          userId: viewer,
+          query: request.query,
+          policyKey: hashKey([request.policy]),
+        },
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(listed()).toEqual(['Sam Lee']);
+
+  // The list keeps its rows while the next page loads, also once the
+  // generation changes, but typing keeps none of them.
+  const nextPage = Promise.allSettled([source!.next()]);
+  await vi.advanceTimersByTimeAsync(0);
+  changeGeneration();
+  expect(listed()).toEqual(['Sam Lee']);
+  setSearch('sam');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(800);
+  await nextPage;
+  client.clear();
+});
+
+it('keeps nobody listed below a first page read again in a new cache generation', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('');
+  let changeGeneration = () => {};
+  let changed = false;
+  const host = {
+    clientId: 'client',
+    onCacheChanged: () => () => {},
+    onCacheGenerationChanged: (listener: () => void) => {
+      changeGeneration = listener;
+      return () => {};
+    },
+  } as unknown as NonNullable<
+    ReturnType<Parameters<typeof createContactRecipientSource>[0]>['host']
+  >;
+  // Page one lists First, page two Sam Lee; page three is slow. After the
+  // generation changes, page one lists Fresh and nothing follows.
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => {
+      const after = request.cursor?.after;
+      if (after === 'third')
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      if (changed) await new Promise((resolve) => setTimeout(resolve, 50));
+      const name = after === 'second' ? 'Sam Lee' : changed ? 'Fresh' : 'First';
+      const email = `${name.split(' ')[0].toLowerCase()}@example.com`;
+      return {
+        query: request.query,
+        source: 'cache',
+        sync: 'snapshot',
+        offline: false,
+        users:
+          after === 'third' || request.query
+            ? []
+            : [{ id: `macro|${email}`, email, name }],
+        nextCursor:
+          changed || after === 'third'
+            ? null
+            : {
+                source: 'people',
+                generation: 'fixture',
+                after: after === 'second' ? 'third' : 'second',
+                userId: viewer,
+                query: request.query,
+                policyKey: hashKey([request.policy]),
+              },
+      };
+    });
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => undefined,
+        senderDomain: () => undefined,
+        includeSelf: () => true,
+      },
+      () => false,
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const listed = () => source!.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(0);
+  await source!.next();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(listed()).toEqual(['First', 'Sam Lee']);
+
+  // The list keeps Sam Lee below the first page read in the new generation,
+  // but typing keeps nobody read before it.
+  const third = Promise.allSettled([source!.next()]);
+  await vi.advanceTimersByTimeAsync(0);
+  changed = true;
+  changeGeneration();
+  await vi.advanceTimersByTimeAsync(60);
+  expect(listed()).toEqual(['Fresh', 'Sam Lee']);
+  setSearch('sam');
+  expect(listed()).toEqual([]);
+  await vi.advanceTimersByTimeAsync(800);
+  await third;
+  client.clear();
+});

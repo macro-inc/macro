@@ -18,10 +18,8 @@ import { isAutomatedAddress } from '@core/user/automated-address';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { matches } from '@core/util/match';
-import { preserveOrderedWindow } from '@core/util/ordered-window';
 import { truncateString } from '@core/util/string';
 import CheckIcon from '@icon/system/regular/check.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
@@ -55,13 +53,13 @@ import { RecipientMenuContent } from './RecipientMenuContent';
 import { RecipientSourceControls } from './RecipientSourceControls';
 import {
   getRecipientOptionEmail,
+  getRecipientOptionFields,
   getRecipientOptionLabel,
   getRecipientOptionName,
-  getRecipientOptionTextValue,
-  getRecipientOptionValue,
-  rankRecipientMatches,
+  type RecipientOptionFields,
   uniqueRecipientMatches,
 } from './recipient-options';
+import { listRecipients, suggestRecipients } from './recipient-search';
 
 function ChipWithUserTooltip(props: {
   chip: JSX.Element;
@@ -471,49 +469,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     excludedIds: props.excludedIds,
   });
 
-  const baseRecipientSearchConfig =
-    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
-      selfDomain,
-      getRecipientOptionEmail
-    );
-
-  // Create search function for recipients - only used for initial sorting with no query
-  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
-    config: {
-      ...baseRecipientSearchConfig,
-      brevityWeight: 1,
-      timeWeight: 1.5,
-      boostFn: (item) => {
-        const sameDomainBoost = baseRecipientSearchConfig.boostFn?.(item) ?? 0;
-        const isSearching = untrack(() => inputValue().trim().length > 0);
-        if (!isSearching) return sameDomainBoost;
-
-        const personBoost =
-          item.kind === 'user' || item.kind === 'contact' ? 0.25 : 0;
-        return sameDomainBoost * 0.125 + personBoost;
-      },
-      useViewedAt: true,
-    },
-    getName: getRecipientOptionTextValue,
-    isChannelItem: (item) => item.kind === 'channel',
-    getTimestamp: (item) => {
-      if (item.kind === 'user') {
-        return { lastInteraction: item.data.lastInteraction };
-      }
-      if (item.kind === 'channel') {
-        const channel = item.data as typeof item.data & {
-          interacted_at?: string | null;
-          viewed_at?: string | null;
-        };
-        return {
-          viewedAt: channel.viewed_at,
-          updatedAt: channel.interacted_at ?? channel.updated_at,
-        };
-      }
-      return {};
-    },
-  });
-
   const selectedEmails = createMemo(() => {
     const set = new Set<string>();
     for (const option of props.selectedOptions) {
@@ -527,6 +482,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const recipients = createMemo(() => {
     const options: CombinedRecipientItem[] = [];
     const emails = new Set<string>();
+    const fields = new Map<CombinedRecipientItem, RecipientOptionFields>();
 
     const personal: CombinedRecipientItem[] = [];
     const personalIds = new Set(
@@ -539,7 +495,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       ...(props.options?.() ?? []),
     ])) {
       const item = option as CombinedRecipientItem;
-      const email = getRecipientOptionEmail(item);
+      const itemFields = getRecipientOptionFields(item);
+      const email = itemFields.email;
 
       if (
         !(item.kind === 'user' && personalIds.has(item.id)) &&
@@ -571,37 +528,40 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
       if (item.kind === 'user' && personalIds.has(item.id)) personal.push(item);
       if (item.kind === 'user' && !personalIds.has(item.id)) {
-        options.push({ ...item, data: augmentUserWithDmActivity(item.data) });
+        const augmented: CombinedRecipientItem = {
+          ...item,
+          data: augmentUserWithDmActivity(item.data),
+        };
+        fields.set(augmented, getRecipientOptionFields(augmented));
+        options.push(augmented);
         continue;
       }
 
+      fields.set(item, itemFields);
       options.push(item);
     }
 
-    const sorted = recipientSearch(options, '').map((item) => {
-      return item.item;
-    });
-
     return {
-      raw: options,
+      listed: listRecipients(options, personal, selfDomain(), fields),
       emails,
-      sorted,
-      personal,
     };
   });
+  const selected = createMemo(() => new Set<unknown>(props.selectedOptions));
+  /** An option's fields, read once per list for every listed option. A chip's
+   * own fields are read live, so an address that changes in place re-keys it. */
+  const fieldsOf = (option: CombinedRecipientItem) =>
+    untrack(selected).has(option)
+      ? getRecipientOptionFields(option)
+      : untrack(recipients).listed.fields(option);
 
   const options = createMemo(() => {
-    const { raw, emails, sorted, personal } = recipients();
+    const { listed, emails } = recipients();
     const currentUserInput = inputValue();
 
     // Check if currentUserInput matches any existing email
     const hasExactEmailMatch =
       currentUserInput && emails.has(currentUserInput.toLowerCase());
 
-    const searchTerm = currentUserInput.trim();
-    const searched = searchTerm
-      ? recipientSearch(raw, searchTerm).map((item) => item.item)
-      : sorted;
     const typed: CombinedRecipientItem[] = [];
 
     // Only add custom input if it doesn't match an existing email
@@ -621,22 +581,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     }
 
     // Selected custom chips stay hidden; an async result must not toggle one.
-    return uniqueRecipientMatches<
-      CombinedRecipientItem | WithCustomUserInput<K>
-    >(
-      preserveOrderedWindow(
-        rankRecipientMatches([...searched, ...typed], searchTerm),
-        personal,
-        getRecipientOptionValue
-      ),
-      props.selectedOptions
+    return suggestRecipients(
+      listed,
+      currentUserInput.trim(),
+      typed,
+      props.selectedOptions as CombinedRecipientItem[]
     ) as CombinedRecipientItem<K>[];
   });
 
   const visibleOptionKeys = createMemo(
     () =>
       new Set(
-        (options() as CombinedRecipientItem[]).map(getRecipientOptionValue)
+        (options() as CombinedRecipientItem[]).map(
+          (option) => fieldsOf(option).value
+        )
       )
   );
 
@@ -649,7 +607,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     const keys = visibleOptionKeys();
     const hiddenSelected = (
       props.selectedOptions as CombinedRecipientItem[]
-    ).filter((option) => !keys.has(getRecipientOptionValue(option)));
+    ).filter((option) => !keys.has(fieldsOf(option).value));
     return [...visible, ...hiddenSelected];
   });
 
@@ -707,7 +665,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       );
     if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
       return false;
-    const known = recipients().raw;
+    const known = recipients().listed.options;
     const findKnown = (email: string) =>
       known.find(
         (option) =>
@@ -795,11 +753,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         validationState={invalid() ? 'invalid' : 'valid'}
         options={optionsWithSelected()}
         optionLabel={getRecipientOptionLabel}
-        optionValue={getRecipientOptionValue}
-        optionTextValue={getRecipientOptionTextValue}
+        optionValue={(option) => fieldsOf(option).value}
+        optionTextValue={(option) => fieldsOf(option).text}
         optionDisabled={getOptionDisabled}
         defaultFilter={(option) =>
-          visibleOptionKeys().has(getRecipientOptionValue(option))
+          visibleOptionKeys().has(fieldsOf(option).value)
         }
         value={props.selectedOptions as CombinedRecipientItem[]}
         onChange={handleChange}

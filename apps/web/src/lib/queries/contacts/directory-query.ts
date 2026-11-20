@@ -242,6 +242,9 @@ export function createContactDirectoryWindow(
     /** Stable across pages, but changes with eligibility, scope and activation. */
     inputKey: () =>
       hashKey([generation(), input().query, input().policyKey, input().active]),
+    /** Changes with the account, the cache client and the cache generation;
+     * pages read before it changed never show after. */
+    generation,
     search,
     setSearch: (value: string) => {
       setCursor(undefined);
