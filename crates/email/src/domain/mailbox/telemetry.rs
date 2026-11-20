@@ -29,6 +29,7 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
         MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         MailboxError::CalendarPartsUnavailable => "calendar_parts",
+        MailboxError::ClaimsUnfinished(_) => "unfinished",
         _ => "other",
     }
 }

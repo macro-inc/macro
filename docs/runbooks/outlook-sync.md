@@ -55,7 +55,11 @@ backoff). A value the database refuses (`unstorable`: SQLSTATE class 22, a NOT
 NULL or CHECK violation) is refused the same way every time, so it stops like
 a refusal Graph won't change: 3 tries, 10 minutes apart. NUL characters, which
 no PostgreSQL text holds, are removed from a message's text, headers, names
-and attachment metadata before the write. It is then `abandoned`: the span
+and attachment metadata before the write. A message whose claims keep ending
+with no outcome at all (the worker reading it stopped, as one that runs out of
+memory does, and its lease expired) stops after 5 such claims in a row, unread
+(`unfinished`): a read that kills its worker would otherwise kill one every
+few minutes forever. It is then `abandoned`: the span
 records `@outlook.outcome:abandoned`, a `"mailbox message abandoned"` WARN
 names its `@defer_reason` and attempts, and
 the health snapshot counts it in `abandoned` instead of `queued`. The next
