@@ -176,6 +176,16 @@ three-step flow:
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
+**New direct message** opens a draft message whose To
+field takes either people or one existing conversation. People open their DM
+or group chat, creating it on the first message. While the field is empty it
+also suggests the channels and group chats you belong to (the same set as
+Share To; reach a one-to-one DM by picking the person). A picked channel is the
+only recipient: the field takes no typing and suggests nothing until its chip
+is removed (its X, or Backspace), and once anyone is picked channels are no
+longer suggested. Send posts into the channel and opens it at the message, as
+sending to a DM does. Phones and tablets behave the same.
+
 The channel header's Invite dialog and Participants add controls use paged personal
 suggestions, not a complete address book. Scrolling to the end (or PageDown) lists
 the next page below the earlier ones, up to 500 people; selected people and typed
@@ -1532,8 +1542,9 @@ The sidebar's **New** dropdown spans its button's full width.
 **New** offers separate **New channel** and **New direct message** actions in
 both sidebar layouts. **New channel** opens the existing
 [name, visibility, and optional invitations flow](#create-a-channel).
-**New direct message** opens the existing recipient picker, including people,
-external email addresses, private groups, and available agent personas.
+**New direct message** opens the draft message's recipient picker: people,
+external email addresses, available agent personas, or one channel or group
+chat you belong to (see [Create a channel](#create-a-channel)).
 The sectioned sidebar also offers **New section** in the same menu.
 
 Check each creation action with the sidebar flag on and off; changing the layout
