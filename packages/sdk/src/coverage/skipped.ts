@@ -161,6 +161,8 @@ export const authBacklog = [
   'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
   'getTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
+  'getTeamAgentInbox', // An agent teammate's email inbox is an admin app setting for now.
+  'addTeamAgentInbox', // Giving an agent teammate an email inbox is an admin app flow for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'listTeamComputerUsage', // Computer usage graphs belong to the app.
