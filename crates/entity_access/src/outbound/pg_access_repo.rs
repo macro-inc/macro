@@ -1004,6 +1004,16 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_current_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        queries::channel_users::read_channel_users(&self.pool, channel_id)
+            .await
+            .map_err(AccessError::from)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_call_channel(
         &self,
         call_id: &Uuid,

@@ -46,6 +46,18 @@ impl EntityAudienceLookup for GroupingLookup {
         }
         Ok(audiences)
     }
+
+    async fn get_current_channel_users(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        self.lookups.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .users_by_entity
+            .get(&(EntityType::Channel, channel_id.to_string()))
+            .cloned()
+            .unwrap_or_default())
+    }
 }
 
 struct RecordingPublisher(Arc<Mutex<Vec<SoupRealtimeMessage>>>);
