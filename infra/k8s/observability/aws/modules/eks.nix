@@ -46,16 +46,6 @@ in
   }) addonNames;
 
   variable = {
-    admin_principal_arns = {
-      type = "list(string)";
-      description = "IAM role ARNs granted cluster admin through EKS access entries.";
-      validation = [
-        {
-          condition = ref "length(var.admin_principal_arns) > 0 && alltrue([for arn in var.admin_principal_arns : can(regex(\"^arn:aws:iam::${settings.accountId}:(role|user)/\", arn))])";
-          error_message = "Give at least one IAM role or user ARN in account ${settings.accountId}.";
-        }
-      ];
-    };
     public_access_cidrs = {
       type = "list(string)";
       description = "CIDRs allowed to reach the cluster's public API endpoint.";
@@ -89,6 +79,49 @@ in
         name = "observability-k8s-node";
         assume_role_policy = builtins.toJSON (iam.trust "ec2.amazonaws.com" [ "sts:AssumeRole" ]);
       };
+      # Cluster admin for IAM users tagged `settings.cluster.adminTag`. Only
+      # users: a role session's tags can come from whoever assumed it, a
+      # user's only from IAM admins. Its one IAM permission is reading this
+      # cluster (aws_iam_role_policy.admin); its power is the access entry.
+      admin = {
+        name = cluster.adminRole;
+        max_session_duration = 3600;
+        assume_role_policy = builtins.toJSON (
+          let
+            assumedBy = value: condition: {
+              Effect = "Allow";
+              Principal.AWS = "arn:aws:iam::${settings.accountId}:root";
+              Action = "sts:AssumeRole";
+              Condition = {
+                StringEquals = {
+                  "aws:PrincipalTag/${cluster.adminTag}" = value;
+                  "aws:PrincipalType" = "User";
+                };
+              }
+              // condition;
+            };
+          in
+          iam.policy [
+            (assumedBy "admin" { Bool."aws:MultiFactorAuthPresent" = "true"; })
+            (assumedBy "automation" { })
+          ]
+        );
+      };
+    };
+
+    # `update-kubeconfig` from a profile that assumes the admin role.
+    aws_iam_role_policy.admin = {
+      name = "describe-cluster";
+      role = ref "aws_iam_role.admin.id";
+      policy = builtins.toJSON (
+        iam.policy [
+          {
+            Effect = "Allow";
+            Action = "eks:DescribeCluster";
+            Resource = ref "aws_eks_cluster.observability.arn";
+          }
+        ]
+      );
     };
 
     # Nodes get what the kubelet, the VPC CNI, image pulls and SSM need, and no
@@ -132,15 +165,13 @@ in
     };
 
     aws_eks_access_entry.admin = {
-      for_each = ref "toset(var.admin_principal_arns)";
       cluster_name = ref "aws_eks_cluster.observability.name";
-      principal_arn = ref "each.value";
+      principal_arn = ref "aws_iam_role.admin.arn";
       type = "STANDARD";
     };
     aws_eks_access_policy_association.admin = {
-      for_each = ref "aws_eks_access_entry.admin";
       cluster_name = ref "aws_eks_cluster.observability.name";
-      principal_arn = ref "each.value.principal_arn";
+      principal_arn = ref "aws_eks_access_entry.admin.principal_arn";
       policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy";
       access_scope.type = "cluster";
     };
