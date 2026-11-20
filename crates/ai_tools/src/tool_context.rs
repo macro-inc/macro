@@ -1638,6 +1638,36 @@ pub struct ToolEntityCreator {
     pub document_service: Arc<ToolDocumentService>,
 }
 
+/// Build imported metadata before any document creation side effect.
+fn imported_document_metadata(
+    name: &str,
+    visibility: import::domain::ports::ImportVisibility,
+) -> documents::domain::create::NewDocumentMetadataBuilder {
+    let metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+    match imported_link_share(visibility) {
+        models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+            metadata.initial_link_share(state)
+        }
+        models_permissions::share_permission::InitialLinkShare::EntityDefault => metadata,
+    }
+}
+
+/// Translate the reviewed import policy into an exact link override when needed.
+pub(crate) fn imported_link_share(
+    visibility: import::domain::ports::ImportVisibility,
+) -> models_permissions::share_permission::InitialLinkShare {
+    match visibility {
+        import::domain::ports::ImportVisibility::Personal => {
+            models_permissions::share_permission::InitialLinkShare::Exact(
+                models_permissions::share_permission::LinkShareState::Off,
+            )
+        }
+        import::domain::ports::ImportVisibility::Shared => {
+            models_permissions::share_permission::InitialLinkShare::EntityDefault
+        }
+    }
+}
+
 impl ToolEntityCreator {
     pub(crate) fn creation_principal(
         user: &MacroUserIdStr<'static>,
@@ -1677,9 +1707,10 @@ impl ToolEntityCreator {
         subtype: documents::domain::create::MarkdownSubtype,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
-        let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+        let mut metadata = imported_document_metadata(name, visibility);
         if let Some(id) = id {
             metadata = metadata.id(id);
         }
@@ -1778,7 +1809,8 @@ impl ToolEntityCreator {
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
         share_with_team: bool,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         // Same team resolution as the CreateDocument tool, so imported tasks
         // number correctly within the user's team; the roster doubles as the
         // assignee-email lookup. A teamless user gets a private task.
@@ -1790,11 +1822,15 @@ impl ToolEntityCreator {
             team_id,
         };
         let task_id = self
-            .create_doc(user, id, name, content, subtype, folder, dates)
+            .create_doc(user, id, name, content, subtype, folder, dates, visibility)
             .await?;
-        self.apply_task_properties(user, &task_id, properties, &roster)
+        let notice = self
+            .apply_task_properties(user, &task_id, properties, &roster, visibility)
             .await;
-        Ok(task_id)
+        Ok(import::domain::ports::CreatedImportTask {
+            id: task_id,
+            notice,
+        })
     }
 
     /// Create an imported markdown document, in `folder` when given and with
@@ -1812,6 +1848,7 @@ impl ToolEntityCreator {
         properties: &import::domain::ports::ImportedDocumentProperties,
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let document_id = self
             .create_doc(
@@ -1822,6 +1859,7 @@ impl ToolEntityCreator {
                 documents::domain::create::MarkdownSubtype::Note,
                 folder,
                 dates,
+                visibility,
             )
             .await?;
         let access = match self
@@ -1859,7 +1897,8 @@ impl ToolEntityCreator {
         task_id: &str,
         properties: &import::domain::ports::ImportedTaskProperties,
         roster: &[MacroUserIdStr<'static>],
-    ) {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> Option<import::domain::ports::TaskImportNoticeReason> {
         use models_properties::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
@@ -1931,34 +1970,60 @@ impl ToolEntityCreator {
             }
         }
 
-        if let Some(email) = properties.assignee_email.as_deref() {
-            // Only assign teammates — an email with no roster match (an
-            // external collaborator, a bot) is silently skipped.
-            let Some(assignee) = roster
-                .iter()
-                .find(|member| member.email_str().eq_ignore_ascii_case(email))
-            else {
-                return;
-            };
-            let reference = models_properties::EntityReference::new(
-                assignee.as_ref().to_string(),
-                models_properties::EntityType::User,
-            );
-            if let Err(e) = self
-                .task_properties
-                .set_entity_property(
-                    &principal,
-                    task_id,
-                    SystemPropertyKey::Assignees.uuid(),
-                    Some(SetPropertyValue::MultiEntityReference {
-                        references: vec![reference],
-                    }),
-                )
-                .await
-            {
-                tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
+        match self
+            .apply_task_assignee(
+                user,
+                task_id,
+                properties.assignee_email.as_deref(),
+                roster,
+                visibility,
+            )
+            .await
+        {
+            Ok(notice) => notice,
+            Err(error) => {
+                tracing::warn!(task_id, error = ?error, "failed to set imported task assignee");
+                None
             }
         }
+    }
+
+    /// Apply only the assignee, sharing the same visibility policy with strict retries.
+    pub(crate) async fn apply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_id: &str,
+        email: Option<&str>,
+        roster: &[MacroUserIdStr<'static>],
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<import::domain::ports::TaskImportNoticeReason>> {
+        use models_properties::api::requests::SetPropertyValue;
+        use system_properties::SystemPropertyKey;
+        let Some(assignee) = email.and_then(|email| {
+            roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+        }) else {
+            return Ok(None);
+        };
+        if let Some(notice) = visibility.task_assignee_notice(user, assignee) {
+            return Ok(Some(notice));
+        }
+        let reference = models_properties::EntityReference::new(
+            assignee.as_ref().to_string(),
+            models_properties::EntityType::User,
+        );
+        self.task_properties
+            .set_entity_property(
+                &Self::creation_principal(user),
+                task_id,
+                SystemPropertyKey::Assignees.uuid(),
+                Some(SetPropertyValue::MultiEntityReference {
+                    references: vec![reference],
+                }),
+            )
+            .await?;
+        Ok(None)
     }
 }
 
@@ -2031,8 +2096,10 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             // Single tracked tasks (Linear) are shared with the team, as
             // tasks the user makes are.
             true,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
+        .map(|created| created.id)
     }
 
     async fn create_notion_document(
@@ -2051,6 +2118,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             properties,
             None,
             None,
+            import::domain::ports::ImportVisibility::Shared,
         )
         .await
     }

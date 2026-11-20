@@ -281,7 +281,9 @@ tag) with a status in place of a role: **Setting up** with a spinner while its
 computer provisions, with the computer's setup step under it (**Creating the
 computer**, **Starting up**, **Connecting to Macro**), then **Starting**
 (spinner; the computer is up and the agent hasn't reported online yet), then
-**Running**, **Paused**, **Needs attention** or **Released**. A failed
+**Running**, **Paused**, **Not responding** (its computer stopped answering
+after setup, or crashed and is restarting; it comes back by itself),
+**Needs attention** or **Released**. A failed
 computer's row offers owners and admins **Retry**, the computer's own retry,
 so it never buys a second computer. Owners and admins pick a voice later with the
 row's waveform button (**Change voice**): **Save voice** calls
@@ -333,11 +335,10 @@ short chip) and above the composer; messages still send. **Setting up** (also
 while the agent is **Starting**): "<name>
 is still being set up. It'll answer once it's ready."; a failed setup:
 "<name> isn't running: setup failed." with **Retry** for owners and admins;
-a powered-off computer, or one whose macrod isn't connected: "<name> isn't
+a powered-off computer, or one that is **Not responding**: "<name> isn't
 running: its computer is offline."; a released one: "<name> isn't running
-right now." The state comes from the team's agents and `/harnesses`, the same
-sources as the Members row; members can't see the computer's runtime, so a
-running computer whose macrod dropped shows them no banner.
+right now." The state comes from the team's agents, the same source as the
+Members row, so every member sees the same banner.
 
 Owners and admins remove an agent with its trash button and a destructive
 confirmation, **Remove <name>?** ("Its computer and files are deleted. This
@@ -965,7 +966,9 @@ row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
 on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
-host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
+host**), **Starting…** while a power-on runs, **Powered off**, **Not responding**
+(past setup but unreachable or restarting after a crash; it comes back by
+itself), a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
 charge is still being confirmed (`purchasing`, or the API's billing setup

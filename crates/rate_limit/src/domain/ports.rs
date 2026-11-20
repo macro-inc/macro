@@ -4,7 +4,10 @@ use std::future::Future;
 
 use rootcause::Report;
 
-use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitOk, RateLimitResult};
+use crate::domain::models::{
+    RateLimitConfig, RateLimitKey, RateLimitOk, RateLimitResult, TokenBucketConfig,
+    TokenBucketResult,
+};
 
 /// Port for rate limiting operations.
 pub trait RateLimitPort: Send + Sync + 'static {
@@ -26,6 +29,18 @@ pub trait RateLimitPort: Send + Sync + 'static {
     ///
     /// Used to roll back a previously counted request when the action fails.
     fn decrement(&self, key: &RateLimitKey) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for token-bucket rate limiting, shared by every process that uses the
+/// same key.
+pub trait TokenBucketPort: Send + Sync + 'static {
+    /// Atomically refill the key's bucket for the time since it last gained a
+    /// token, then take one token if any is left.
+    fn take(
+        &self,
+        key: RateLimitKey,
+        config: TokenBucketConfig,
+    ) -> impl Future<Output = Result<TokenBucketResult, Report>> + Send;
 }
 
 /// The external facing service interface.
