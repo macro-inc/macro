@@ -165,6 +165,12 @@ function editorLines() {
   );
 }
 
+/** Waits two frames, after the page has handled the events before it. */
+async function nextFrames() {
+  for (let i = 0; i < 2; i++)
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
 async function clones(page: Page) {
   return page.evaluate(
     () => (Reflect.get(window, '__composerCounts') as { clones: number }).clones
@@ -328,7 +334,13 @@ test('caret moves and one-line edits never copy the composer to measure it', asy
     for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('Shift+Home');
     await page.keyboard.press('End');
+    // Lexical reads a caret move from the selectionchange that follows it;
+    // a Backspace before that deletes the stale selection instead.
+    await page.evaluate(nextFrames);
     for (let i = 0; i < 10; i++) await page.keyboard.press('Backspace');
+    await expect(page.locator('[data-markdown-editable]')).toHaveText(
+      'A short draft that stays o'
+    );
     await expectLayoutFitsDraft(page, 'short draft');
     expect(await clones(page)).toBe(before);
 
@@ -341,6 +353,7 @@ test('caret moves and one-line edits never copy the composer to measure it', asy
     expect(expanded - before).toBeLessThanOrEqual(2);
     await page.keyboard.type('ok');
     for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft');
+    await page.evaluate(nextFrames);
     await page.keyboard.press('Backspace');
     await expectLayoutFitsDraft(page, 'further edits');
     expect(await page.evaluate(editorLines)).toBe(1);
