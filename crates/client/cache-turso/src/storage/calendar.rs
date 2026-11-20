@@ -66,7 +66,7 @@ pub(super) const VALIDATED_SQL: [&str; 13] = [
 /// Writes or removes the range row of every occurrence entry, keeping the
 /// last entry for a key exactly like the record upsert does.
 pub(super) fn write_ranges(
-    connection: &Arc<Connection>,
+    connection: &Db,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
     let mut last = HashMap::new();
@@ -95,10 +95,7 @@ pub(super) fn write_ranges(
 }
 
 /// Removes the range rows of deleted occurrence records.
-pub(super) fn delete_ranges(
-    connection: &Arc<Connection>,
-    keys: &[RecordKey],
-) -> Result<(), TursoStorageError> {
+pub(super) fn delete_ranges(connection: &Db, keys: &[RecordKey]) -> Result<(), TursoStorageError> {
     let mut statement = None;
     for key in keys
         .iter()
@@ -114,7 +111,7 @@ pub(super) fn delete_ranges(
 }
 
 /// Removes every calendar row and sync value with the rest of the cache.
-pub(super) fn clear(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn clear(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(connection, "DELETE FROM calendar_ranges", Vec::new())?;
     driver::execute(connection, "DELETE FROM calendar_coverage", Vec::new())?;
     for key in [WATERMARK_KEY, FRESHNESS_KEY] {
@@ -123,9 +120,7 @@ pub(super) fn clear(connection: &Arc<Connection>) -> Result<(), TursoStorageErro
     Ok(())
 }
 
-pub(super) fn save_projection_version(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+pub(super) fn save_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(
         connection,
         META_UPSERT,
@@ -139,9 +134,7 @@ pub(super) fn save_projection_version(
 
 /// Rebuilds the disposable range rows from occurrence records when the
 /// projection changed, without touching records, coverage, or sync state.
-pub(super) fn ensure_projection_version(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+pub(super) fn ensure_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(connection, META_SELECT, vec![text(PROJECTION_VERSION_KEY)])?;
     if let [row] = versions.as_slice()
         && required_text(row, 0)? == CALENDAR_PROJECTION_VERSION.to_string()
@@ -162,7 +155,7 @@ pub(super) fn ensure_projection_version(
 }
 
 fn for_each_record(
-    connection: &Arc<Connection>,
+    connection: &Db,
     typename: &str,
     mut visit: impl FnMut(&EntityKey<'static>, &Record) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
@@ -211,7 +204,7 @@ fn row_values(row: &CalendarRangeRow) -> Vec<Value> {
     ]
 }
 
-fn delete_row(statement: &mut turso_core::Statement, key: &str) -> Result<(), TursoStorageError> {
+fn delete_row(statement: &mut driver::Prepared, key: &str) -> Result<(), TursoStorageError> {
     let changed = driver::execute_prepared(statement, vec![text(key)])?;
     if (0..=1).contains(&changed) {
         Ok(())
@@ -257,7 +250,7 @@ fn parse_span(row: &[Value]) -> Result<CalendarSpan, TursoStorageError> {
     })
 }
 
-fn load_sync_state(connection: &Arc<Connection>) -> Result<CalendarSyncState, TursoStorageError> {
+fn load_sync_state(connection: &Db) -> Result<CalendarSyncState, TursoStorageError> {
     let value = |key: &str| -> Result<Option<String>, TursoStorageError> {
         match driver::query(connection, META_SELECT, vec![text(key)])?.as_slice() {
             [] => Ok(None),
@@ -278,10 +271,7 @@ fn load_sync_state(connection: &Arc<Connection>) -> Result<CalendarSyncState, Tu
     })
 }
 
-fn save_sync_state(
-    connection: &Arc<Connection>,
-    state: &CalendarSyncState,
-) -> Result<(), TursoStorageError> {
+fn save_sync_state(connection: &Db, state: &CalendarSyncState) -> Result<(), TursoStorageError> {
     match &state.watermark {
         Some(watermark) => driver::execute(
             connection,
@@ -304,7 +294,7 @@ fn save_sync_state(
 }
 
 fn query_rows(
-    connection: &Arc<Connection>,
+    connection: &Db,
     request: &CalendarRangeRequest,
 ) -> Result<Vec<CalendarRangeRow>, TursoStorageError> {
     let rows = match &request.event_key {
@@ -349,7 +339,7 @@ fn query_rows(
 }
 
 fn query_coverage(
-    connection: &Arc<Connection>,
+    connection: &Db,
     request: &CalendarRangeRequest,
 ) -> Result<Vec<CalendarSpan>, TursoStorageError> {
     let mut coverage = Vec::new();
@@ -369,11 +359,7 @@ fn query_coverage(
     Ok(coverage)
 }
 
-fn record_keys(
-    connection: &Arc<Connection>,
-    sql: &str,
-    value: &str,
-) -> Result<Vec<String>, TursoStorageError> {
+fn record_keys(connection: &Db, sql: &str, value: &str) -> Result<Vec<String>, TursoStorageError> {
     driver::query(connection, sql, vec![text(value)])?
         .iter()
         .map(|row| required_text(row, 0))
@@ -381,7 +367,7 @@ fn record_keys(
 }
 
 fn collect_deleted_keys(
-    connection: &Arc<Connection>,
+    connection: &Db,
     commit: &CalendarCommit,
 ) -> Result<BTreeSet<String>, TursoStorageError> {
     let mut deleted = BTreeSet::new();
@@ -435,7 +421,7 @@ fn collect_deleted_keys(
     Ok(deleted)
 }
 
-fn reset_records(connection: &Arc<Connection>) -> Result<Vec<String>, TursoStorageError> {
+fn reset_records(connection: &Db) -> Result<Vec<String>, TursoStorageError> {
     let mut deleted = Vec::new();
     for typename in [OCCURRENCE_TYPENAME, EVENT_TYPENAME] {
         for row in driver::query(
@@ -457,7 +443,7 @@ fn reset_records(connection: &Arc<Connection>) -> Result<Vec<String>, TursoStora
 }
 
 fn apply_commit(
-    connection: &Arc<Connection>,
+    connection: &Db,
     commit: &CalendarCommit,
 ) -> Result<CalendarCommitOutcome, TursoStorageError> {
     let mut deleted_keys = if commit.reset {
@@ -559,7 +545,7 @@ impl CalendarRangeStorage for TursoStorage {
 }
 
 /// Validates the frozen calendar tables, their columns, and every index.
-pub(super) fn validate_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> {
     let column = |name, declared_type, not_null, primary_key_position| ColumnSpec {
         name,
         declared_type,

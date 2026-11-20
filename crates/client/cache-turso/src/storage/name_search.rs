@@ -15,7 +15,7 @@ const PROBE_LIMIT: usize = 129;
 const RANK_BUDGET: usize = 4096;
 
 pub(super) fn read(
-    connection: &Arc<Connection>,
+    connection: &Db,
     read: &mut NameSearchRead<'_>,
 ) -> Result<(), TursoStorageError> {
     driver::read_transaction(connection, || {
@@ -69,7 +69,7 @@ pub(super) fn read(
     })
 }
 fn incomplete(
-    connection: &Arc<Connection>,
+    connection: &Db,
     read: &mut NameSearchRead<'_>,
     prior: bool,
 ) -> Result<(), TursoStorageError> {
@@ -88,7 +88,7 @@ fn incomplete(
     })
 }
 fn stage_read(
-    connection: &Arc<Connection>,
+    connection: &Db,
     read: &mut NameSearchRead<'_>,
     stage: NameStage,
 ) -> Result<(), TursoStorageError> {
@@ -169,7 +169,7 @@ fn stage_read(
     Ok(())
 }
 fn candidates(
-    connection: &Arc<Connection>,
+    connection: &Db,
     read: &mut NameSearchRead<'_>,
     stage: Option<NameStage>,
     seed: &Seed,
@@ -181,7 +181,7 @@ fn candidates(
     })
 }
 fn visit(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &str,
     params: driver::Values,
     mut row: impl FnMut(&EntityKey<'_>, &Record),
@@ -202,7 +202,7 @@ fn visit(
 }
 
 fn ordered(
-    connection: &Arc<Connection>,
+    connection: &Db,
     read: &mut NameSearchRead<'_>,
     stage: NameStage,
 ) -> Result<bool, TursoStorageError> {

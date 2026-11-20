@@ -1,4 +1,4 @@
-use crate::driver;
+use crate::driver::{self, Db};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
@@ -31,9 +31,10 @@ use predicate_index::{
     ValidatedIndexQuery,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
-use turso_core::{Connection, Numeric, Value};
+use turso_core::{Numeric, Value};
 
 #[cfg(test)]
 use predicate_index::PendingOptimisticProjection;
@@ -190,8 +191,9 @@ pub struct TursoStorage {
     session: ConnectedOpfsSession,
     #[cfg(not(target_arch = "wasm32"))]
     database: Arc<Database>,
-    #[cfg(not(target_arch = "wasm32"))]
-    connection: Arc<Connection>,
+    /// The session's connection with its prepared statements. Its statements
+    /// hold connection references, so closing releases them first.
+    connection: Db,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     fault: Mutex<Option<TestFault>>,
 }
@@ -224,13 +226,14 @@ impl TursoStorage {
         scope: &str,
     ) -> Result<(Self, TursoStorageOpenOutcome), TursoStorageOpenFailure> {
         let fresh = session.disposition() == OpenDisposition::Fresh;
-        let connection = session.connection();
+        let connection = Db::uncached(session.connection());
         let result = initialize(&connection, scope, fresh);
         drop(connection);
         match result {
             Ok(_) => Ok((
                 Self {
                     health: AtomicU8::new(0),
+                    connection: Db::cached(session.connection()),
                     session,
                 },
                 if fresh {
@@ -313,10 +316,14 @@ impl TursoStorage {
     /// worker before a recovery wipe.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
         let reason = self.latched_reason();
-        let closed = self
-            .session
-            .try_close()
-            .map_err(TursoStorageCloseFailure::new)?;
+        let Self {
+            session,
+            connection,
+            ..
+        } = self;
+        connection.release_statements();
+        drop(connection);
+        let closed = session.try_close().map_err(TursoStorageCloseFailure::new)?;
         Ok(match reason {
             Some(reason) => {
                 TursoStorageCloseOutcome::ResetRequired(ResetRequiredTursoStorageClosed {
@@ -328,8 +335,8 @@ impl TursoStorage {
         })
     }
 
-    fn connection(&self) -> Arc<Connection> {
-        self.session.connection()
+    fn connection(&self) -> Db {
+        self.connection.clone()
     }
 }
 
@@ -351,7 +358,7 @@ pub enum QueuedMutationCount {
 pub fn count_queued_mutations(
     session: &ConnectedOpfsSession,
 ) -> Result<QueuedMutationCount, TursoStorageError> {
-    let connection = session.connection();
+    let connection = Db::uncached(session.connection());
     let count = |sql: &str| -> Result<u64, TursoStorageError> {
         let rows = driver::query(&connection, sql, Vec::new())?;
         let [row] = rows.as_slice() else {
@@ -771,7 +778,7 @@ fn open_native_database(
         .connect()
         .map_err(TursoStorageError::turso)
         .map_err(|error| if fresh { error } else { error.initialization() })?;
-    let migrated = match initialize(&connection, scope, fresh) {
+    let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
         Ok(migrated) => migrated,
         Err(error) => {
             if connection.close().is_err() {
@@ -786,7 +793,7 @@ fn open_native_database(
         TursoStorage {
             health: AtomicU8::new(0),
             database,
-            connection,
+            connection: Db::cached(connection),
             #[cfg(all(test, not(target_arch = "wasm32")))]
             fault: Mutex::new(None),
         },
@@ -870,6 +877,7 @@ impl TursoStorage {
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
         let reason = self.latched_reason();
+        self.connection.release_statements();
         self.connection.close().map_err(|_| {
             TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
         })?;
@@ -881,7 +889,7 @@ impl TursoStorage {
         })
     }
 
-    fn connection(&self) -> Arc<Connection> {
+    fn connection(&self) -> Db {
         self.connection.clone()
     }
 }
@@ -1959,7 +1967,7 @@ fn validate_shadow_reconciliation(
 }
 
 fn queue_snapshot_matches(
-    connection: &Arc<Connection>,
+    connection: &Db,
     expected: &[MutationQueueSnapshot],
 ) -> Result<bool, TursoStorageError> {
     let rows = driver::query(
@@ -1988,7 +1996,7 @@ fn queue_snapshot_matches(
 }
 
 fn queue_identity_matches(
-    connection: &Arc<Connection>,
+    connection: &Db,
     expected: &[MutationId],
 ) -> Result<bool, TursoStorageError> {
     let rows = driver::query(
@@ -2008,7 +2016,7 @@ fn queue_identity_matches(
 }
 
 fn write_shadow_reconciliation(
-    connection: &Arc<Connection>,
+    connection: &Db,
     reconciliation: OptimisticShadowReconciliation,
     mut after_write: impl FnMut(usize) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
@@ -2028,7 +2036,7 @@ fn write_shadow_reconciliation(
 }
 
 fn write_upsert_shadow_reconciliation(
-    connection: &Arc<Connection>,
+    connection: &Db,
     enqueued: MutationId,
     reconciliation: OptimisticUpsertReconciliation,
     mut after_write: impl FnMut(usize) -> Result<(), TursoStorageError>,
@@ -2053,7 +2061,7 @@ fn write_upsert_shadow_reconciliation(
 }
 
 fn delete_optimistic_projection(
-    connection: &Arc<Connection>,
+    connection: &Db,
     record_key: &PredicateRecordKey,
 ) -> Result<(), TursoStorageError> {
     let changed = driver::execute(
@@ -2069,7 +2077,7 @@ fn delete_optimistic_projection(
 }
 
 fn insert_optimistic_projection(
-    connection: &Arc<Connection>,
+    connection: &Db,
     owner: i64,
     state: OptimisticProjectionState,
     uncertainty: OptimisticUncertainty,
@@ -2139,7 +2147,7 @@ fn insert_optimistic_projection(
 }
 
 fn write_optimistic_uncertainty(
-    connection: &Arc<Connection>,
+    connection: &Db,
     document_id: i64,
     uncertainty: OptimisticUncertainty,
 ) -> Result<(), TursoStorageError> {
@@ -2185,7 +2193,7 @@ fn optimistic_projection_state_code(state: &OptimisticProjectionState) -> (i64, 
 }
 
 fn write_projection_mutations(
-    connection: &Arc<Connection>,
+    connection: &Db,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<(), TursoStorageError> {
     // Contact facts are cache-owned derivatives of normalized authority. A
@@ -2308,7 +2316,7 @@ fn write_projection_mutations(
 }
 
 fn write_projection_state(
-    connection: &Arc<Connection>,
+    connection: &Db,
     record_key: &PredicateRecordKey,
     state: Option<&ProjectionState>,
 ) -> Result<(), TursoStorageError> {
@@ -2396,7 +2404,7 @@ fn write_projection_state(
 }
 
 fn upsert_index_document(
-    connection: &Arc<Connection>,
+    connection: &Db,
     record_key: &PredicateRecordKey,
     profile: &Profile,
     partition: &Token,
@@ -2418,10 +2426,7 @@ fn upsert_index_document(
     }
 }
 
-fn delete_index_facts(
-    connection: &Arc<Connection>,
-    document_id: i64,
-) -> Result<(), TursoStorageError> {
+fn delete_index_facts(connection: &Db, document_id: i64) -> Result<(), TursoStorageError> {
     for sql in INDEX_FACTS_DELETE {
         let changed = driver::execute(connection, sql, vec![Value::from_i64(document_id)])?;
         if changed < 0 {
@@ -2440,7 +2445,7 @@ fn projection_state_code(kind: ProjectionIncompleteKind) -> i64 {
 }
 
 fn load_projection_states(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<Vec<Option<ProjectionState>>, TursoStorageError> {
     let documents = load_index_documents(connection, keys)?;
@@ -2502,7 +2507,7 @@ fn projection_incomplete_kind(state: i64) -> Result<ProjectionIncompleteKind, Tu
 }
 
 fn load_optimistic_projections(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, TursoStorageError> {
     if keys.is_empty() {
@@ -2709,7 +2714,7 @@ fn sql_placeholders(count: usize) -> String {
 }
 
 fn load_index_documents(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<Vec<Option<predicate_index::IndexDocument>>, TursoStorageError> {
     if keys.is_empty() {
@@ -2821,7 +2826,7 @@ fn load_index_documents(
 }
 
 fn present_predicate_records(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<BTreeSet<PredicateRecordKey>, TursoStorageError> {
     let mut present = BTreeSet::new();
@@ -2855,7 +2860,7 @@ fn present_predicate_records(
 }
 
 fn predicate_scope_is_incomplete(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &ValidatedIndexQuery,
 ) -> Result<bool, TursoStorageError> {
     let descriptor = query.as_query();
@@ -2884,7 +2889,7 @@ struct OptimisticQueryStatus {
 }
 
 fn optimistic_query_status(
-    connection: &Arc<Connection>,
+    connection: &Db,
     query: &ValidatedIndexQuery,
 ) -> Result<OptimisticQueryStatus, TursoStorageError> {
     let descriptor = query.as_query();
@@ -3281,7 +3286,7 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 /// same transaction, so an interrupted migration leaves the previous state intact
 /// and is retried on the next open.
 fn migrate_previous_format(
-    connection: &Arc<Connection>,
+    connection: &Db,
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
@@ -3309,11 +3314,7 @@ fn migrate_previous_format(
 
 /// Validates or initializes a database. Returns whether a previous format was
 /// carried forward, which native owners compact after opening.
-fn initialize(
-    connection: &Arc<Connection>,
-    scope: &str,
-    fresh: bool,
-) -> Result<bool, TursoStorageError> {
+fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
@@ -3435,7 +3436,7 @@ fn initialize(
     Ok(migrated)
 }
 
-fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn save_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(
         connection,
         "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
@@ -3447,7 +3448,7 @@ fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), Tu
     Ok(())
 }
 
-fn ensure_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn ensure_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(
         connection,
         "SELECT value FROM meta WHERE key = ?1",
@@ -3512,7 +3513,7 @@ fn ensure_search_projection_version(connection: &Arc<Connection>) -> Result<(), 
     })
 }
 
-fn enable_foreign_keys(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn enable_foreign_keys(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(connection, "PRAGMA foreign_keys = ON", Vec::new())?;
     let rows = driver::query(connection, "PRAGMA foreign_keys", Vec::new())?;
     if rows.len() == 1 && required_i64(&rows[0], 0)? == 1 {
@@ -3928,7 +3929,7 @@ const OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS: &[ColumnSpec] = &[
     },
 ];
 
-fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_allowed_schema_objects(connection)?;
     validate_table_columns(connection, "meta", META_COLUMNS)?;
     validate_table_columns(connection, "records", RECORD_COLUMNS)?;
@@ -4015,7 +4016,7 @@ const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
 const TURSO_AUTOINCREMENT_TABLE: &str =
     "__turso_internal_seq___turso_internal_autoincrement_mutation_queue";
 
-fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_allowed_schema_objects(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "SELECT type, name, sql FROM sqlite_schema ORDER BY type ASC, name ASC",
@@ -4120,7 +4121,7 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
 }
 
 fn validate_support_table(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     support_position: usize,
 ) -> Result<(), TursoStorageError> {
@@ -4185,7 +4186,7 @@ fn validate_support_table(
 }
 
 fn validate_table_columns(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     expected: &[ColumnSpec],
 ) -> Result<(), TursoStorageError> {
@@ -4229,7 +4230,7 @@ fn default_matches(value: Option<&Value>, expected_zero: bool) -> bool {
     }
 }
 
-fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_search_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "PRAGMA index_list('search_documents')",
@@ -4306,7 +4307,7 @@ fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStor
     Ok(())
 }
 
-fn validate_mutation_queue_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_mutation_queue_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "PRAGMA index_list('mutation_queue')",
@@ -4370,7 +4371,7 @@ fn validate_mutation_queue_indexes(connection: &Arc<Connection>) -> Result<(), T
 }
 
 fn validate_mutation_index_columns(
-    connection: &Arc<Connection>,
+    connection: &Db,
     index: &str,
     column: i64,
     name: &str,
@@ -4404,7 +4405,7 @@ fn validate_mutation_index_columns(
 }
 
 fn validate_table_indexes(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     expected_key_columns: &[(i64, &str)],
 ) -> Result<(), TursoStorageError> {
@@ -4428,7 +4429,7 @@ fn validate_table_indexes(
 }
 
 fn validate_primary_index(
-    connection: &Arc<Connection>,
+    connection: &Db,
     row: &[Value],
     expected_key_columns: &[(i64, &str)],
 ) -> Result<(), TursoStorageError> {
@@ -4497,7 +4498,7 @@ impl SchemaToken {
 }
 
 fn validate_table_constraints(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     expects_autoincrement: bool,
 ) -> Result<(), TursoStorageError> {
@@ -4644,7 +4645,7 @@ fn scan_quoted(
     Err(compatibility())
 }
 
-fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_predicate_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     for (table, index, expected_columns) in [
         (
             "index_documents",
@@ -4716,9 +4717,7 @@ fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoS
     Ok(())
 }
 
-fn validate_optimistic_predicate_indexes(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+fn validate_optimistic_predicate_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let indexes = driver::query(
         connection,
         "PRAGMA index_list('optimistic_index_documents')",
@@ -4779,10 +4778,7 @@ fn validate_optimistic_predicate_indexes(
     Ok(())
 }
 
-fn validate_no_foreign_keys(
-    connection: &Arc<Connection>,
-    table: &str,
-) -> Result<(), TursoStorageError> {
+fn validate_no_foreign_keys(connection: &Db, table: &str) -> Result<(), TursoStorageError> {
     let escaped = table.replace('\'', "''");
     if driver::query(
         connection,
@@ -4798,7 +4794,7 @@ fn validate_no_foreign_keys(
     }
 }
 
-fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_optimistic_foreign_key(connection: &Db) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
         "PRAGMA foreign_key_list('optimistic_layers')",
@@ -4823,9 +4819,7 @@ fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), T
     Ok(())
 }
 
-fn validate_shadow_document_foreign_key(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+fn validate_shadow_document_foreign_key(connection: &Db) -> Result<(), TursoStorageError> {
     validate_cascade_foreign_key(
         connection,
         "optimistic_index_documents",
@@ -4836,7 +4830,7 @@ fn validate_shadow_document_foreign_key(
 }
 
 fn validate_fact_foreign_key(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     parent: &str,
 ) -> Result<(), TursoStorageError> {
@@ -4844,7 +4838,7 @@ fn validate_fact_foreign_key(
 }
 
 fn validate_cascade_foreign_key(
-    connection: &Arc<Connection>,
+    connection: &Db,
     table: &str,
     parent: &str,
     from: &str,
@@ -4878,7 +4872,7 @@ fn compatibility() -> TursoStorageError {
     TursoStorageError::reset(PhysicalResetReason::Compatibility)
 }
 
-fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn validate_queue_consistency(connection: &Db) -> Result<(), TursoStorageError> {
     let queue = driver::query(connection, QUEUE_SELECT, Vec::new())
         .map_err(TursoStorageError::initialization)?;
     for row in queue {
@@ -4896,9 +4890,7 @@ fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoS
     }
 }
 
-fn validate_optimistic_shadow_consistency(
-    connection: &Arc<Connection>,
-) -> Result<(), TursoStorageError> {
+fn validate_optimistic_shadow_consistency(connection: &Db) -> Result<(), TursoStorageError> {
     if !driver::query(connection, "PRAGMA foreign_key_check", Vec::new())
         .map_err(TursoStorageError::initialization)?
         .is_empty()
@@ -4992,8 +4984,8 @@ fn prepare_records(
 }
 
 fn delete_search_document(
-    rowid_statement: &mut turso_core::Statement,
-    delete_statement: &mut turso_core::Statement,
+    rowid_statement: &mut driver::Prepared,
+    delete_statement: &mut driver::Prepared,
     profile: SearchProfile,
     key: &RecordKey,
 ) -> Result<(), TursoStorageError> {
@@ -5015,7 +5007,7 @@ fn delete_search_document(
 }
 
 fn delete_search_documents_batch(
-    connection: &Arc<Connection>,
+    connection: &Db,
     profile: SearchProfile,
     keys: &[&RecordKey],
 ) -> Result<(), TursoStorageError> {
@@ -5053,7 +5045,7 @@ fn delete_search_documents_batch(
 }
 
 fn upsert_search_documents_batch(
-    connection: &Arc<Connection>,
+    connection: &Db,
     documents: &[(&RecordKey, &SearchDocument)],
 ) -> Result<(), TursoStorageError> {
     for documents in documents.chunks(SEARCH_WRITE_BATCH_SIZE) {
@@ -5083,17 +5075,14 @@ fn upsert_search_documents_batch(
 }
 
 /// Writes every derived row of upserted records in the records' transaction.
-fn write_derived_rows(
-    connection: &Arc<Connection>,
-    entries: &[EncodedRecord],
-) -> Result<(), TursoStorageError> {
+fn write_derived_rows(connection: &Db, entries: &[EncodedRecord]) -> Result<(), TursoStorageError> {
     write_search_documents(connection, entries)?;
     calendar::write_ranges(connection, entries)?;
     people_sql::write(connection, entries)
 }
 
 fn write_search_documents(
-    connection: &Arc<Connection>,
+    connection: &Db,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
     let mut last_entry_by_key = HashMap::with_capacity(entries.len());
@@ -5231,7 +5220,7 @@ fn parse_boolean(row: &[Value], index: usize) -> Result<bool, TursoStorageError>
 }
 
 fn claim_is_current(
-    connection: &Arc<Connection>,
+    connection: &Db,
     id: i64,
     claim: &MutationClaimToken,
 ) -> Result<bool, TursoStorageError> {
@@ -5247,7 +5236,7 @@ fn claim_is_current(
     }
 }
 
-fn require_layer(connection: &Arc<Connection>, id: i64) -> Result<(), TursoStorageError> {
+fn require_layer(connection: &Db, id: i64) -> Result<(), TursoStorageError> {
     let rows = driver::query(connection, REQUIRE_LAYER_SELECT, vec![Value::from_i64(id)])?;
     if rows.len() == 1 && required_i64(&rows[0], 0)? == 1 {
         Ok(())

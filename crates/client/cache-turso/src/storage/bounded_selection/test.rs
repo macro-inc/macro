@@ -35,11 +35,7 @@ fn document(n: u32, timestamp: i64) -> IndexDocument {
     doc
 }
 
-fn hits(
-    connection: &Arc<Connection>,
-    query: &ValidatedIndexQuery,
-    excluded: &[i64],
-) -> Vec<(String, i64)> {
+fn hits(connection: &Db, query: &ValidatedIndexQuery, excluded: &[i64]) -> Vec<(String, i64)> {
     select(connection, query, excluded, true)
         .unwrap()
         .iter()
@@ -52,11 +48,7 @@ fn hits(
         .collect()
 }
 
-fn reference(
-    connection: &Arc<Connection>,
-    query: &ValidatedIndexQuery,
-    excluded: &[i64],
-) -> Vec<(String, i64)> {
+fn reference(connection: &Db, query: &ValidatedIndexQuery, excluded: &[i64]) -> Vec<(String, i64)> {
     let (sql, parameters) = compile_predicate_selection(query, excluded, true);
     driver::query(connection, &sql, parameters)
         .unwrap()
