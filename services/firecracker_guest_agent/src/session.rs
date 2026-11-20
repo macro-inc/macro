@@ -55,6 +55,9 @@ async fn run(
             return write_frame(&mut writer, &failed).await;
         }
     };
+    // Its arrival, so a host-side wait splits into the exec arriving late
+    // and the program taking long.
+    tracing::info!(pid = child.id(), "exec started");
 
     // Every frame for the host goes through one writer task, so stdout and
     // stderr chunks never interleave inside a frame.

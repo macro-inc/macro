@@ -118,7 +118,15 @@ MMDS.
 - One operation per computer at a time; every request is idempotent.
 - Exec: a WebSocket per program, bridged to the guest agent
   (`services/firecracker_guest_agent`, root, vsock port 1024) with the frames of
-  `firecracker_host_api::exec`.
+  `firecracker_host_api::exec`. A `CONNECT` handshake on the jail's
+  hybrid vsock socket first gets 3 s (doubled after each timeout, which
+  warns) and is retried (pauses of 10 ms doubling to 100 ms) until the
+  caller's deadline; `firecracker_host.vsock_connect` records the attempts
+  and the last error, `firecracker_host.guest_exec` the connect time and
+  exit code.
+  The host agent sends its trace id with each exec (on the WebSocket path,
+  when the start frame has room for it), and the guest agent logs it on the
+  exec's journal lines ("exec started", "exec ended").
 - Goldens are scanned for secrets before they are published: every customer
   can read a golden's whole memory.
 - Spans for every phase (`firecracker_host.*`), joined to the control
