@@ -29,7 +29,9 @@ export function MobileFaceSlot(props: FaceSlotProps) {
       </Show>
       <Dialog open={open()} onOpenChange={setOpen} class="w-[28rem]">
         <Panel depth={2} class="max-h-[85vh] w-full rounded-xl text-ink">
-          <Panel.Header class="justify-between gap-2 px-3">
+          {/* The title takes the body's inset; Done's own padding lines its
+              text up on the other edge. */}
+          <Panel.Header class="justify-between gap-2 pr-3 pl-5">
             <Dialog.Title as="span" class="m-0 p-0 text-base font-medium">
               {t('agentFaces.sheetTitle')}
             </Dialog.Title>

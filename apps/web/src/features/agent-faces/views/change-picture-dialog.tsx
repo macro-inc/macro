@@ -38,9 +38,12 @@ export function ChangePictureDialog(props: {
       open={props.open}
       onOpenChange={props.onOpenChange}
       onCloseAutoFocus={props.onCloseAutoFocus}
+      // Sized to the editor, not the dialog's default width.
+      class="w-[28rem]"
     >
       <Panel depth={2} class="max-h-[85vh] w-full rounded-xl text-ink">
-        <Panel.Header class="gap-2 px-3">
+        {/* No close button: the title, body and footer share one inset. */}
+        <Panel.Header class="gap-2 px-5">
           <Dialog.Title as="span" class="m-0 flex-1 p-0 text-base font-medium">
             {t('agentFaces.pictureTitle', { name: props.name })}
           </Dialog.Title>
@@ -120,7 +123,7 @@ function ChangePictureBody(props: Parameters<typeof ChangePictureDialog>[0]) {
           </fieldset>
         </div>
       </Panel.Body>
-      <Panel.Footer class="justify-end gap-2 px-4 py-3">
+      <Panel.Footer class="justify-end gap-2 px-5 py-3">
         <Button
           type="button"
           variant="ghost"
