@@ -26,9 +26,7 @@ const LINE_SUFFIX =
 const FILE_NAME = /^[\w.-]*\.[\w-]+$/;
 
 /** The code reference `target` writes, or undefined when it is not one. */
-export function parseCodeReference(
-  target: string
-): CodeReference | undefined {
+export function parseCodeReference(target: string): CodeReference | undefined {
   let text = target.trim();
   if (text.startsWith('file://')) {
     text = text.slice('file://'.length);
@@ -155,7 +153,10 @@ export function linkCodeSpans(
 
       return line.replace(INLINE_CODE, (span, code: string, offset: number) => {
         const before = line[offset - 1];
-        const after = line.slice(offset + span.length, offset + span.length + 2);
+        const after = line.slice(
+          offset + span.length,
+          offset + span.length + 2
+        );
         if (before === '[' && after === '](') return span;
         if (/[[\]]/.test(code)) return span;
 

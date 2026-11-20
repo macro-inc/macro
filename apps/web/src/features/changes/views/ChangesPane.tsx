@@ -407,9 +407,7 @@ function ChangesBodyContent(props: {
                       )}
                       annotations={notes.annotations}
                       renderAnnotation={notes.renderAnnotation}
-                      selection={() =>
-                        notes.selection() ?? review.pointed()
-                      }
+                      selection={() => notes.selection() ?? review.pointed()}
                       reveal={review.pointed}
                       onSelectLines={notes.onSelectLines}
                     />

@@ -6,6 +6,7 @@
 
 import type { LineRange } from '@app/components/diff-view/model/lines';
 import type { AppLinkOpener } from '@core/component/LexicalMarkdown/component/core/app-link-opener';
+import type { ChangedFile } from './core/changeset';
 import {
   type CodeReference,
   findChangedFile,
@@ -14,7 +15,6 @@ import {
   namesFile,
   parseCodeReference,
 } from './core/code-reference';
-import type { ChangedFile } from './core/changeset';
 import type { ChangesController } from './primitives/create-changes';
 
 function pointedLines(

@@ -71,7 +71,9 @@ describe('parseCodeReference', () => {
       path: 'src/pane.tsx',
       lines: { start: 20, end: 20 },
     });
-    expect(parseCodeReference('file:///home/u/repo/src/my%20pane.tsx#L3')).toEqual({
+    expect(
+      parseCodeReference('file:///home/u/repo/src/my%20pane.tsx#L3')
+    ).toEqual({
       path: '/home/u/repo/src/my pane.tsx',
       lines: { start: 3, end: 3 },
     });
@@ -122,7 +124,9 @@ describe('headBlobUrl', () => {
         },
         { path: 'docs/a b.md', lines: { start: 3, end: 9 } }
       )
-    ).toBe('https://github.com/macro-inc/macro/blob/abc123/docs/a%20b.md#L3-L9');
+    ).toBe(
+      'https://github.com/macro-inc/macro/blob/abc123/docs/a%20b.md#L3-L9'
+    );
   });
 
   it('gives up without a repository, a head commit, or for an absolute path', () => {
@@ -165,6 +169,8 @@ describe('linkCodeSpans', () => {
   it('links again after a closed fence', () => {
     expect(
       linkCodeSpans('~~~\n`src/pane.tsx`\n~~~\nSee `src/pane.tsx:3`.', files)
-    ).toBe('~~~\n`src/pane.tsx`\n~~~\nSee [`src/pane.tsx:3`](src/pane.tsx#L3).');
+    ).toBe(
+      '~~~\n`src/pane.tsx`\n~~~\nSee [`src/pane.tsx:3`](src/pane.tsx#L3).'
+    );
   });
 });

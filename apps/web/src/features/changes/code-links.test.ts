@@ -65,7 +65,8 @@ describe('createCodeLinkOpener', () => {
       expect(open('/home/u/macro/docs/guide.md')).toBe(true);
       expect(context.notified).toEqual([
         {
-          message: '/home/u/macro/docs/guide.md is not one of the changed files',
+          message:
+            '/home/u/macro/docs/guide.md is not one of the changed files',
           tone: 'failure',
         },
       ]);
