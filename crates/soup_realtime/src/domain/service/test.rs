@@ -564,7 +564,7 @@ async fn a_failed_roster_read_fails_the_batch_before_publishing() {
 }
 
 #[tokio::test]
-async fn patches_sharing_an_audience_count_it_once() {
+async fn an_audience_is_counted_only_as_the_patches_received_it() {
     let harness = harness(vec![user("one"), user("two")], false, HashSet::new());
 
     let delivery = harness
@@ -586,6 +586,27 @@ async fn patches_sharing_an_audience_count_it_once() {
     assert_eq!(
         delivery.recipient_sets,
         HashSet::from([vec![user("one"), user("two")], vec![user("gone")]])
+    );
+}
+
+#[tokio::test]
+async fn a_roster_sent_only_with_named_users_counts_as_the_merged_audience() {
+    // An add: the roster's members and the added user receive one patch.
+    let harness = harness(vec![user("one")], false, HashSet::new());
+
+    let delivery = harness
+        .service
+        .notify_users(vec![
+            SoupRealtimePatch::for_entity(Patch::Updated(channel(DOCUMENT_ID)))
+                .with_named_recipients(vec![user("new")]),
+        ])
+        .await
+        .expect("patch is published");
+
+    assert_eq!(delivery.publish_count, 2);
+    assert_eq!(
+        delivery.recipient_sets,
+        HashSet::from([vec![user("new"), user("one")]])
     );
 }
 
