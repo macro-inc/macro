@@ -45,3 +45,18 @@ export function builtInPropertySuggestion(
 ): BuiltInPropertySuggestion | undefined {
   return SUGGESTIONS_BY_NAME.get(name.trim().toLowerCase());
 }
+
+/**
+ * The built-in property that owns `name`. The server refuses a property that
+ * reuses a built-in name, comparing the whole name without regard to case.
+ */
+export function builtInPropertyNamed<
+  T extends { display_name: string; is_system: boolean },
+>(name: string, definitions: readonly T[]): T | undefined {
+  const typed = name.trim().toLowerCase();
+  if (!typed) return undefined;
+  return definitions.find(
+    (definition) =>
+      definition.is_system && definition.display_name.toLowerCase() === typed
+  );
+}

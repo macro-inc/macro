@@ -2641,8 +2641,11 @@ list and no Sales view reads a custom property.
 the name that the built-in property exists and what it links, with **Use
 Contacts** (or **Use Companies**), which leaves creation and opens that
 property's value instead. For every type but **Any Entity** the note adds that
-the type can't link to CRM records. **Create** still creates the property,
-except under a system property's exact name, which the server refuses.
+the type can't link to CRM records. **Create** still creates the property.
+A name that is exactly a built-in property's (`Contacts`, `Status`, `Owner`, in
+any case) cannot be used: the note says the name belongs to a built-in
+property, **Create** is disabled, and **Use <name>** appears when that property
+applies to the item being edited.
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
