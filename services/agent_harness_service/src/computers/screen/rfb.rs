@@ -79,6 +79,33 @@ enum Verdict {
     /// A ClientInit, forwarded as a shared one so a viewer never
     /// disconnects the others.
     Shared,
+    /// SetEncodings, forwarded without the extended clipboard.
+    Encodings,
+}
+
+/// TigerVNC's ExtendedClipboard pseudo-encoding (`0xC0A1E5CE`). A viewer
+/// that offers it must answer the server's clipboard caps with a
+/// ClientCutText, which the gate drops while it doesn't drive; the server
+/// then sends selections as extended Provide messages that a view-only
+/// noVNC skips without reading, and its stream desyncs. Without it the
+/// server sends plain ServerCutText, which every viewer reads.
+const EXTENDED_CLIPBOARD: [u8; 4] = 0xC0A1_E5CEu32.to_be_bytes();
+
+/// `message` (a whole SetEncodings) without [`EXTENDED_CLIPBOARD`].
+fn without_extended_clipboard(message: &[u8]) -> Vec<u8> {
+    let encodings: Vec<&[u8]> = message
+        .get(4..)
+        .unwrap_or_default()
+        .chunks_exact(4)
+        .filter(|encoding| *encoding != EXTENDED_CLIPBOARD)
+        .collect();
+    let count = u16::try_from(encodings.len()).unwrap_or(u16::MAX);
+    let mut rewritten = vec![2, 0];
+    rewritten.extend_from_slice(&count.to_be_bytes());
+    for encoding in encodings {
+        rewritten.extend_from_slice(encoding);
+    }
+    rewritten
 }
 
 impl RfbGate {
@@ -109,6 +136,7 @@ impl RfbGate {
                 }
                 Verdict::Input | Verdict::Drop => {}
                 Verdict::Shared => forward.push(1),
+                Verdict::Encodings => forward.extend(without_extended_clipboard(message)),
             }
             start += length;
         }
@@ -174,7 +202,10 @@ fn message(bytes: &[u8]) -> Result<Option<(usize, Verdict)>, GateError> {
         // SetPixelFormat
         0 => sized(Some(20), Verdict::Pass),
         // SetEncodings
-        2 => sized(u16_at(bytes, 2).map(|count| 4 + 4 * count), Verdict::Pass),
+        2 => sized(
+            u16_at(bytes, 2).map(|count| 4 + 4 * count),
+            Verdict::Encodings,
+        ),
         // FramebufferUpdateRequest
         3 => sized(Some(10), Verdict::Pass),
         // KeyEvent

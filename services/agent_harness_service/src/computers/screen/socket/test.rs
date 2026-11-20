@@ -202,6 +202,9 @@ mod over_the_wire {
     struct FakeXvnc {
         received: Mutex<Vec<u8>>,
         changed: Notify,
+        /// What it sends after its version, once the viewer's ClientInit
+        /// arrived.
+        script: Mutex<Vec<u8>>,
     }
 
     impl FakeXvnc {
@@ -240,6 +243,14 @@ mod over_the_wire {
                 let (harness_end, mut guest_end) = tokio::io::duplex(1 << 20);
                 tokio::spawn(async move {
                     guest_end.write_all(b"RFB 003.008\n").await.unwrap();
+                    let script = std::mem::take(&mut *xvnc.script.lock().unwrap());
+                    let (mut guest_reader, mut guest_writer) = tokio::io::split(guest_end);
+                    tokio::spawn(async move {
+                        let _ = guest_writer.write_all(&script).await;
+                        // Keep the stream open: the guest doesn't hang up.
+                        std::future::pending::<()>().await;
+                    });
+                    let mut guest_end = guest_reader;
                     let mut buffer = [0u8; 4096];
                     loop {
                         match guest_end.read(&mut buffer).await {
@@ -303,6 +314,10 @@ mod over_the_wire {
 
     /// A socket route serving `grant`, as a redeemed ticket would.
     async fn rig(pool: PgPool, grant: ScreenGrant) -> Rig {
+        rig_with_script(pool, grant, Vec::new()).await
+    }
+
+    async fn rig_with_script(pool: PgPool, grant: ScreenGrant, script: Vec<u8>) -> Rig {
         let tasks = TaskTracker::new();
         let shutdown = CancellationToken::new();
         let screens = Arc::new(computer_screen::domain::service::ScreenService::new(
@@ -319,7 +334,10 @@ mod over_the_wire {
             ),
             MacroPeople::new(pool),
         ));
-        let xvnc = Arc::new(FakeXvnc::default());
+        let xvnc = Arc::new(FakeXvnc {
+            script: Mutex::new(script),
+            ..FakeXvnc::default()
+        });
         let allowed = Arc::new(AtomicBool::new(true));
         let viewers = Arc::new(Viewers::default());
         let route = {
@@ -497,5 +515,57 @@ mod over_the_wire {
             "accessRevoked"
         );
         assert_eq!(rig.screens.lease(COMPUTER).await.unwrap(), None);
+    }
+
+    /// A ServerCutText of `text` (RFC 6143 7.6.4).
+    fn server_cut_text(text: &[u8]) -> Vec<u8> {
+        let mut message = vec![3u8, 0, 0, 0];
+        message.extend_from_slice(&(text.len() as u32).to_be_bytes());
+        message.extend_from_slice(text);
+        message
+    }
+
+    /// TigerVNC's extended clipboard: a negative length, then flags and a
+    /// zlib-looking payload the relay must not touch.
+    fn extended_cut_text(payload: &[u8]) -> Vec<u8> {
+        let mut message = vec![3u8, 0, 0, 0];
+        let length = -i32::try_from(payload.len() + 4).unwrap();
+        message.extend_from_slice(&length.to_be_bytes());
+        message.extend_from_slice(&0x1000_0001u32.to_be_bytes());
+        message.extend_from_slice(payload);
+        message
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn large_clipboards_from_the_guest_reach_the_viewer_byte_for_byte(pool: PgPool) {
+        // What Xvnc sends when a page's text is selected: a plain cut text
+        // of 100 KB and of 2 MB, an extended one, then a bell.
+        let plain_small: Vec<u8> = (0..100_000u32)
+            .map(|index| b'a' + (index % 26) as u8)
+            .collect();
+        let plain_large: Vec<u8> = (0..2_000_000u32).map(|index| (index % 251) as u8).collect();
+        let extended: Vec<u8> = (0..300_000u32)
+            .map(|index| (index * 7 % 256) as u8)
+            .collect();
+        let mut script = server_cut_text(&plain_small);
+        script.extend(server_cut_text(&plain_large));
+        script.extend(extended_cut_text(&extended));
+        script.push(2); // Bell
+        let rig = rig_with_script(pool, grant("alice", Mode::View), script.clone()).await;
+        let mut client = connect(&rig).await;
+
+        let mut expected = b"RFB 003.008\n".to_vec();
+        expected.extend_from_slice(&script);
+        let mut received = Vec::new();
+        while received.len() < expected.len() {
+            match client.next().await.unwrap().unwrap() {
+                ClientFrame::Binary(bytes) => received.extend_from_slice(&bytes),
+                ClientFrame::Text(_) => {}
+                other => panic!("unexpected frame {other:?}"),
+            }
+        }
+
+        assert_eq!(received.len(), expected.len());
+        assert!(received == expected, "the relay changed the guest's bytes");
     }
 }

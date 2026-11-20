@@ -201,3 +201,22 @@ fn pointers_clamp_to_the_screen_and_clipboards_are_latin1() {
     );
     assert_eq!(clipboard, vec![6, 0, 0, 0, 0, 0, 0, 2, 0xe9, b'?']);
 }
+
+#[test]
+fn the_extended_clipboard_is_never_offered_to_the_server() {
+    let mut gate = RfbGate::new();
+    gate.filter(HANDSHAKE, false).unwrap();
+    // noVNC's SetEncodings: Tight (7), ExtendedClipboard, DesktopSize (-223).
+    let mut set_encodings = vec![2u8, 0, 0, 3];
+    set_encodings.extend_from_slice(&7i32.to_be_bytes());
+    set_encodings.extend_from_slice(&0xC0A1_E5CEu32.to_be_bytes());
+    set_encodings.extend_from_slice(&(-223i32).to_be_bytes());
+
+    let filtered = gate.filter(&set_encodings, false).unwrap();
+
+    let mut expected = vec![2u8, 0, 0, 2];
+    expected.extend_from_slice(&7i32.to_be_bytes());
+    expected.extend_from_slice(&(-223i32).to_be_bytes());
+    assert_eq!(filtered.forward, expected);
+    assert!(!filtered.input);
+}
