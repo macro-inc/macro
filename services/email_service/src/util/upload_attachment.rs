@@ -446,7 +446,7 @@ async fn upload_data_to_presigned_url(
 /// The `<Code>` of an S3 error response, such as `SignatureDoesNotMatch` or
 /// `SlowDown`. The rest of the body can echo the signed request, the presigned
 /// URL's credentials and session token included, so nothing else is read.
-fn s3_error_code(body: &str) -> Option<String> {
+pub fn s3_error_code(body: &str) -> Option<String> {
     let mut code = preceded(
         (take_until("<Code>"), tag("<Code>")),
         terminated(alphanumeric1, tag("</Code>")),
