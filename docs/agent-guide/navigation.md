@@ -624,9 +624,12 @@ The outer sidebar is an icon rail; labels appear in tooltips.
 
 **Settings → Dock** (`/app/settings/dock`, desktop only) moves the rail to the
 left (default), top, right, or bottom edge of the window, and sets it **Large**
-(56px bar, 40px buttons) or **Small** (44px bar, 32px buttons). The choice is
-saved per device (`macro:dock` in localStorage, read by the boot shell in
-`index.html`) and applies at once. Tooltips and rail menus open away from the
+(56px bar, 40px buttons) or **Small** (44px bar, 32px buttons). **App
+alignment** **Center** puts the apps and More in the middle of the bar, with
+Create and Search at its start and the footer at its end. The page's **Apps**
+section is the same show, hide and reorder list as **More → Customize sidebar**.
+Edge, size and alignment are saved per device (`macro:dock` in localStorage,
+read by the boot shell in `index.html`) and apply at once. Tooltips and rail menus open away from the
 dock's edge; on the top or bottom edge the apps run left to right, with the
 footer actions at the far end, and a mouse wheel scrolls apps that don't fit.
 The rail sets `--dock-inset-left|right|bottom` on the root to its thickness on
@@ -634,7 +637,8 @@ its edge, so corner overlays (toasts, incoming calls) stay clear of it. Verify
 each edge and size, a rail tooltip, the More menu, and a toast with a bottom
 or right dock.
 
-Open **More → Customize sidebar** to show, hide, or reorder available apps.
+Open **More → Customize sidebar** (or Settings → Dock → **Apps**) to show,
+hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
 cannot be hidden. Verify that hovering within a destination row keeps the drag

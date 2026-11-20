@@ -1,12 +1,17 @@
 import { t } from '@app/lib/i18n';
 import {
+  type DockAlignment,
   type DockPosition,
   type DockSize,
+  dockAlignment,
   dockPosition,
   dockSize,
+  setDockAlignment,
   setDockPosition,
   setDockSize,
 } from '@components/app/dock-prefs';
+import { CustomizeNavItems } from '@components/app/sidebar-next/customize-sidebar-modal';
+import { useNavItemGates } from '@components/app/sidebar-next/use-nav-item-gates';
 import { Tabs } from '@ui';
 import { DockPositionPicker } from './components/dock-position-picker';
 import {
@@ -17,10 +22,14 @@ import {
 } from './primitives';
 
 /**
- * Settings → Dock: which window edge the app rail sits against, and its size.
- * Changes apply to the rail at once; the choice is saved on this device.
+ * Settings → Dock: which window edge the app rail sits against, its size, where
+ * its apps sit along it, and which apps it shows (the More menu's Customize
+ * sidebar list). Edge, size and alignment are saved on this device; the app
+ * list is the rail's own preference.
  */
 export function Dock() {
+  const gates = useNavItemGates();
+
   const positions = (): { value: DockPosition; label: string }[] => [
     { value: 'left', label: t('settingsDock.left') },
     { value: 'top', label: t('settingsDock.top') },
@@ -31,6 +40,11 @@ export function Dock() {
   const sizes = (): { value: DockSize; label: string }[] => [
     { value: 'large', label: t('settingsDock.large') },
     { value: 'small', label: t('settingsDock.small') },
+  ];
+
+  const alignments = (): { value: DockAlignment; label: string }[] => [
+    { value: 'start', label: t('settingsDock.alignStart') },
+    { value: 'center', label: t('settingsDock.alignCenter') },
   ];
 
   return (
@@ -67,7 +81,27 @@ export function Dock() {
                 onChange={setDockSize}
               />
             </SettingsRow>
+            <SettingsRow
+              label={t('settingsDock.alignmentLabel')}
+              description={t('settingsDock.alignmentDescription')}
+            >
+              <Tabs
+                aria-label={t('settingsDock.alignmentLabel')}
+                size="sm"
+                options={alignments()}
+                value={dockAlignment()}
+                onChange={setDockAlignment}
+              />
+            </SettingsRow>
           </SettingsCard>
+        </SettingsSection>
+
+        <SettingsSection
+          title={t('settingsDock.appsTitle')}
+          target="Apps"
+          description={t('settingsDock.appsDescription')}
+        >
+          <CustomizeNavItems gates={gates()} />
         </SettingsSection>
       </SettingsPage>
     </div>

@@ -3,7 +3,8 @@ import { createSignal } from 'solid-js';
 import { z } from 'zod';
 
 /**
- * Where the app rail (the dock) sits and how big it is. A per-device
+ * Where the app rail (the dock) sits, how big it is, and whether its apps
+ * start at its leading edge or sit in its middle. A per-device
  * preference, like Windows' taskbar, set in Settings → Dock.
  *
  * Read synchronously by `index.html`'s boot shell under the same key, so the
@@ -14,18 +15,26 @@ export const DOCK_STORAGE_KEY = 'macro:dock';
 
 export const DOCK_POSITIONS = ['left', 'top', 'right', 'bottom'] as const;
 export const DOCK_SIZES = ['large', 'small'] as const;
+export const DOCK_ALIGNMENTS = ['start', 'center'] as const;
 
 export type DockPosition = (typeof DOCK_POSITIONS)[number];
 export type DockSize = (typeof DOCK_SIZES)[number];
+export type DockAlignment = (typeof DOCK_ALIGNMENTS)[number];
 
 const dockPrefsSchema = z.object({
   position: z.enum(DOCK_POSITIONS),
   size: z.enum(DOCK_SIZES),
+  // Added after position and size; earlier saves have none.
+  align: z.enum(DOCK_ALIGNMENTS).default('start'),
 });
 
 type DockPrefs = z.infer<typeof dockPrefsSchema>;
 
-const DEFAULT_DOCK_PREFS: DockPrefs = { position: 'left', size: 'large' };
+const DEFAULT_DOCK_PREFS: DockPrefs = {
+  position: 'left',
+  size: 'large',
+  align: 'start',
+};
 
 // makePersistedState absorbs storage failures: an unreadable save keeps the
 // default, and a blocked write still applies the choice for this session.
@@ -49,12 +58,16 @@ const [dockPrefs, setDockPrefs] = makePersistedState(
 
 export const dockPosition = () => dockPrefs().position;
 export const dockSize = () => dockPrefs().size;
+export const dockAlignment = () => dockPrefs().align;
 
 export const setDockPosition = (position: DockPosition) =>
   setDockPrefs((current) => ({ ...current, position }));
 
 export const setDockSize = (size: DockSize) =>
   setDockPrefs((current) => ({ ...current, size }));
+
+export const setDockAlignment = (align: DockAlignment) =>
+  setDockPrefs((current) => ({ ...current, align }));
 
 /** Whether the dock runs along the top or bottom edge. */
 export const isDockHorizontal = () =>

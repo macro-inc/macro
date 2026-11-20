@@ -15,8 +15,10 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type DockSize,
+  dockAlignment,
   dockPosition,
   dockSize,
   isDockHorizontal,
@@ -108,6 +110,56 @@ function scrollHorizontallyOnWheel(event: WheelEvent) {
   nav.scrollLeft += event.deltaY;
 }
 
+const isDockCentered = () => dockAlignment() === 'center';
+
+/**
+ * One run of rail buttons: Create and Search at the start, the apps and More,
+ * and the footer actions at the end. With the apps centered, the start and end
+ * groups pin to the bar's ends; otherwise the apps follow Search and the end
+ * group is pushed to the far end.
+ */
+function RailGroup(props: {
+  place: 'start' | 'apps' | 'end';
+  children: JSX.Element;
+}) {
+  const horizontal = isDockHorizontal;
+  const placement = () =>
+    match(props.place)
+      .with(
+        'start',
+        () =>
+          isDockCentered() &&
+          (horizontal() ? 'justify-self-start' : 'self-start')
+      )
+      .with('apps', () =>
+        cn(
+          horizontal() ? 'max-w-full min-w-0' : 'max-h-full min-h-0',
+          !isDockCentered() && (horizontal() ? 'pl-4' : 'pt-4')
+        )
+      )
+      .with('end', () => {
+        if (isDockCentered()) {
+          return horizontal() ? 'justify-self-end' : 'self-end';
+        }
+        return horizontal() ? 'ml-auto' : 'mt-auto';
+      })
+      .exhaustive();
+
+  return (
+    <div
+      class={cn(
+        'flex items-center gap-1',
+        horizontal() ? 'flex-row' : 'flex-col',
+        props.place !== 'apps' && 'shrink-0',
+        props.place === 'end' && (horizontal() ? 'h-full' : 'w-full'),
+        placement()
+      )}
+    >
+      {props.children}
+    </div>
+  );
+}
+
 /**
  * The app sidebar (the dock): a single always-narrow bar of icon buttons,
  * labels in tooltips. It sits against the left, right, top or bottom edge, in
@@ -147,81 +199,95 @@ export const SidebarRail = () => {
       data-ui="sidebar-rail"
       style={DOCK_SIZE_VARIABLES[dockSize()]}
       class={cn(
-        'relative flex shrink-0 items-center gap-1 overflow-hidden bg-page',
+        'relative shrink-0 gap-1 overflow-hidden bg-page',
         isDockHorizontal()
-          ? 'h-(--rail-thickness) w-full flex-row py-(--rail-padding) pl-(--rail-padding) pr-3'
-          : 'h-full w-(--rail-thickness) flex-col px-(--rail-padding) pt-(--rail-padding) pb-3'
+          ? 'h-(--rail-thickness) w-full py-(--rail-padding) pl-(--rail-padding) pr-3'
+          : 'h-full w-(--rail-thickness) px-(--rail-padding) pt-(--rail-padding) pb-3',
+        // Centered: three tracks, the apps in the middle one, so they center
+        // on the whole bar however wide Create/Search and the footer are.
+        // The middle track shrinks to 0 so a long app list scrolls instead.
+        isDockCentered() && 'grid place-items-center',
+        isDockCentered() &&
+          (isDockHorizontal()
+            ? 'grid-cols-[1fr_minmax(0,max-content)_1fr]'
+            : 'grid-rows-[1fr_minmax(0,max-content)_1fr]'),
+        !isDockCentered() && 'flex items-center',
+        !isDockCentered() && (isDockHorizontal() ? 'flex-row' : 'flex-col')
       )}
     >
-      <SidebarRailCreateButton />
-      <SearchRailButton />
+      <RailGroup place="start">
+        <SidebarRailCreateButton />
+        <SearchRailButton />
+      </RailGroup>
 
-      <nav
-        onWheel={scrollHorizontallyOnWheel}
-        class={
-          isDockHorizontal()
-            ? 'min-w-0 overflow-x-auto pl-4'
-            : 'min-h-0 overflow-y-auto pt-4'
-        }
-      >
-        <ul
-          class={cn(
-            'flex items-center gap-1',
-            isDockHorizontal() ? 'flex-row' : 'flex-col'
-          )}
+      <RailGroup place="apps">
+        <nav
+          onWheel={scrollHorizontallyOnWheel}
+          class={
+            isDockHorizontal()
+              ? 'min-w-0 overflow-x-auto'
+              : 'min-h-0 overflow-y-auto'
+          }
         >
-          <For each={visibleNavItems(gates())}>
-            {(item) => (
-              <li class="flex">
-                <Switch
-                  fallback={
-                    <ListNav
-                      item={item}
-                      unread={unread.has(item.id)}
-                      unreadCount={unread.count(item.id)}
-                    />
-                  }
-                >
-                  <Match when={item.id === 'channels'}>
-                    <Suspense
-                      fallback={
-                        <ListNav
-                          item={item}
-                          unread={unread.has(item.id)}
-                          unreadCount={unread.count(item.id)}
-                        />
-                      }
-                    >
-                      <ChannelsListNav
+          <ul
+            class={cn(
+              'flex items-center gap-1',
+              isDockHorizontal() ? 'flex-row' : 'flex-col'
+            )}
+          >
+            <For each={visibleNavItems(gates())}>
+              {(item) => (
+                <li class="flex">
+                  <Switch
+                    fallback={
+                      <ListNav
                         item={item}
                         unread={unread.has(item.id)}
                         unreadCount={unread.count(item.id)}
                       />
-                    </Suspense>
-                  </Match>
-                  <Match
-                    when={
-                      item.id === 'calendar' &&
-                      calendarPreferences.showNextMeetingBadge
                     }
                   >
-                    <Suspense fallback={<ListNav item={item} />}>
-                      <CalendarListNav item={item} />
-                    </Suspense>
-                  </Match>
-                </Switch>
-              </li>
-            )}
-          </For>
-        </ul>
-      </nav>
+                    <Match when={item.id === 'channels'}>
+                      <Suspense
+                        fallback={
+                          <ListNav
+                            item={item}
+                            unread={unread.has(item.id)}
+                            unreadCount={unread.count(item.id)}
+                          />
+                        }
+                      >
+                        <ChannelsListNav
+                          item={item}
+                          unread={unread.has(item.id)}
+                          unreadCount={unread.count(item.id)}
+                        />
+                      </Suspense>
+                    </Match>
+                    <Match
+                      when={
+                        item.id === 'calendar' &&
+                        calendarPreferences.showNextMeetingBadge
+                      }
+                    >
+                      <Suspense fallback={<ListNav item={item} />}>
+                        <CalendarListNav item={item} />
+                      </Suspense>
+                    </Match>
+                  </Switch>
+                </li>
+              )}
+            </For>
+          </ul>
+        </nav>
 
-      <MoreMenu gates={gates()} />
+        <MoreMenu gates={gates()} />
+      </RailGroup>
 
-      <div class="min-h-0 min-w-0 flex-1" />
-
-      <ReturnToCallButton />
-      <FooterActions />
+      <RailGroup place="end">
+        <ReturnToCallButton />
+        <FooterActions />
+      </RailGroup>
     </div>
   );
 };
