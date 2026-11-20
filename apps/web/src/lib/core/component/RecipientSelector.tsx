@@ -145,12 +145,18 @@ function AgentAvatar(props: { agent: CombinedRecipientItem<'agent'>['data'] }) {
 
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem> & {
   inviteExternalEmails?: boolean;
+  /** Already a recipient: shown dimmed with its check, and not pickable. */
+  added?: boolean;
 };
 
 const RECIPIENT_OPTION_HEIGHT_PX = 36;
 const RECIPIENT_OPTION_MAX_VISIBLE_COUNT = 6;
 
 function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
+  // Rows are disabled when invalid or already added; only invalid ones read
+  // as unknown.
+  const invalid = () => props.disabled && !props.added;
+
   const handleMouseEnter = () => {
     const items = document.querySelectorAll('[data-highlighted]');
     items.forEach((item) => {
@@ -172,10 +178,11 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
       item={props}
       class={cn(
         'flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5',
-        props.disabled && 'hover:bg-ink/5'
+        invalid() && 'hover:bg-ink/5',
+        props.added && 'opacity-50'
       )}
-      onMouseEnter={props.disabled ? handleMouseEnter : undefined}
-      onMouseLeave={props.disabled ? handleMouseLeave : undefined}
+      onMouseEnter={invalid() ? handleMouseEnter : undefined}
+      onMouseLeave={invalid() ? handleMouseLeave : undefined}
       // Kobalte still selects on pointerup, but synchronously detaches this
       // popup. Cancel outside-dismiss handling of that same event in a drawer.
       onPointerUp={(event) => event.preventDefault()}
@@ -198,7 +205,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             const showEmail = Boolean(name) && name !== email && Boolean(email);
 
             // Use appropriate id for UserIcon based on type
-            const iconId = props.disabled ? '?' : option.id;
+            const iconId = invalid() ? '?' : option.id;
 
             return (
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink select-none text-sm">
@@ -221,7 +228,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
                 <p
                   class={cn(
                     'ph-no-capture truncate my-auto',
-                    props.disabled && 'italic'
+                    invalid() && 'italic'
                   )}
                 >
                   <Show
@@ -407,7 +414,21 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     });
   }
 
+  // An added recipient stays listed, so the user sees it is there, but is
+  // disabled: Kobalte would otherwise remove it when it is picked again, and
+  // its keyboard navigation skips disabled rows, so Enter and Tab never land
+  // on one. Chips still remove it.
+  const selectedValues = createMemo(
+    () =>
+      new Set(
+        (props.selectedOptions as CombinedRecipientItem[]).map(
+          getRecipientOptionValue
+        )
+      )
+  );
+
   function getOptionDisabled(option: CombinedRecipientItem): boolean {
+    if (selectedValues().has(getRecipientOptionValue(option))) return true;
     if (option.kind === 'custom') {
       return option.data.invalid;
     }
@@ -827,6 +848,24 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         <Combobox.Control<CombinedRecipientItem>>
           {(state) => {
             const context = useComboboxContext();
+            // Kobalte's list opens on its first selected row, which is meant
+            // to restore a single choice. Here that row is an added
+            // recipient, disabled, so move on to the first row that can be
+            // picked: Enter and Tab act on the highlighted row.
+            createEffect(() => {
+              const list = context.listState();
+              const manager = list.selectionManager();
+              const focused = manager.focusedKey();
+              if (focused === undefined || !manager.isDisabled(focused)) return;
+
+              const collection = list.collection();
+              let key = collection.getFirstKey();
+              while (key !== undefined && manager.isDisabled(key)) {
+                key = collection.getKeyAfter(key);
+              }
+              manager.setFocusedKey(key);
+            });
+
             const [chipsScrollRef, setChipsScrollRef] =
               createSignal<HTMLElement>();
             return (
@@ -1206,6 +1245,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           <RecipientComboboxItem
                             {...item}
                             inviteExternalEmails={props.inviteExternalEmails}
+                            added={selectedValues().has(item.key)}
                           />
                         );
                       }}
