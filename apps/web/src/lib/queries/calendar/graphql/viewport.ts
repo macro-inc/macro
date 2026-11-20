@@ -9,6 +9,7 @@ import {
   classifyCacheError,
 } from '@graphql-cache/telemetry';
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { CombinedError } from '@urql/core';
 import { type Result, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type { CalendarOccurrenceQueryRange } from '../keys';
@@ -18,7 +19,11 @@ import {
   type FetchCalendarOccurrencePage,
   readCalendarRange,
 } from './range';
-import { CALENDAR_CACHE_READ_DEADLINE_MS } from './readiness';
+import {
+  CALENDAR_CACHE_HEAD_START_MS,
+  CALENDAR_CACHE_READ_DEADLINE_MS,
+  withinDeadline,
+} from './readiness';
 
 /** Why a viewport the cache should serve was read from REST instead. */
 export type CalendarCacheFallback =
@@ -26,12 +31,14 @@ export type CalendarCacheFallback =
   | 'not-ready'
   /** The native engine cannot serve calendar ranges. */
   | 'unsupported'
-  /** An earlier read of this host is still past its deadline. */
-  | 'stalled'
   /** The cache path was still running at the deadline and REST answered first. */
   | 'deadline'
-  /** The cache path failed: a refused or timed-out cache request, or its fetch. */
-  | 'cache-error';
+  /** As `deadline`, with the head start a read gets while another is overdue. */
+  | 'stalled'
+  /** A cache request failed: refused during an owner handoff, timed out. */
+  | 'cache-error'
+  /** The cache path's GraphQL fetch of an uncovered span failed. */
+  | 'fetch-error';
 
 export type CalendarViewportRead =
   | { source: 'cache'; data: CalendarOccurrencesData }
@@ -40,6 +47,11 @@ export type CalendarViewportRead =
       data: CalendarOccurrencesData;
       fallback: CalendarCacheFallback;
     };
+
+export type FetchCalendarOccurrencesFromRest = (
+  range: CalendarOccurrenceQueryRange,
+  signal?: AbortSignal
+) => Promise<CalendarOccurrencesData>;
 
 type CacheOutcome = Result<CalendarRangeRead, unknown>;
 
@@ -51,13 +63,11 @@ type Contender =
   | { from: 'cache'; outcome: CacheOutcome }
   | { from: 'rest'; result: Result<CalendarOccurrencesData, unknown> };
 
-export type FetchCalendarOccurrencesFromRest = (
-  range: CalendarOccurrenceQueryRange,
-  signal?: AbortSignal
-) => Promise<CalendarOccurrencesData>;
+type TraceSpan = Pick<Span, 'setAttr'>;
 
 // Cache reads of each host still running past their deadline. While one is,
-// later viewports read from REST rather than queue behind it.
+// later viewports give the cache only the startup head start before REST
+// races it, instead of each waiting out the full deadline.
 const overdueReads = new WeakMap<object, number>();
 
 function cacheStalled(host: object): boolean {
@@ -92,8 +102,13 @@ function cacheFailureKind(
 }
 
 function cacheAnswer(outcome: CacheOutcome): CacheAnswer {
-  if (outcome.isErr())
-    return { answered: false, fallback: 'cache-error', error: outcome.error };
+  if (outcome.isErr()) {
+    // urql reports a failed request, offline or refused by the server, as a
+    // combined error; anything else came from the cache.
+    const fallback =
+      outcome.error instanceof CombinedError ? 'fetch-error' : 'cache-error';
+    return { answered: false, fallback, error: outcome.error };
+  }
   return match(outcome.value)
     .with(
       { kind: 'range' },
@@ -115,32 +130,27 @@ function cacheAnswer(outcome: CacheOutcome): CacheAnswer {
     );
 }
 
-async function deadline(ms: number, cancel: AbortSignal): Promise<'deadline'> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve('deadline'), ms);
-    cancel.addEventListener('abort', () => clearTimeout(timer), {
-      once: true,
-    });
-  });
+function recordCacheAnswer(span: TraceSpan): void {
+  span.setAttr('calendar.read.source', 'cache');
 }
 
 function recordFallback(
-  span: Pick<Span, 'setAttr'>,
+  span: TraceSpan,
   fallback: CalendarCacheFallback,
   error?: unknown
 ): void {
   span.setAttr('calendar.read.source', 'rest');
   span.setAttr('calendar.read.fallback_reason', fallback);
-  const cacheError = error === undefined ? undefined : cacheFailureKind(error);
+  if (fallback !== 'cache-error' && fallback !== 'deadline') return;
+  const cacheError =
+    fallback === 'cache-error' ? cacheFailureKind(error) : undefined;
   if (cacheError) span.setAttr('calendar.read.cache_error', cacheError);
-  // Startup and old engines are expected; these mean the cache stopped
-  // answering, so count them whether or not this trace is sampled.
-  if (fallback === 'deadline' || fallback === 'cache-error') {
-    Telemetry.warn('calendar.occurrences.cache_fallback', {
-      'calendar.read.fallback_reason': fallback,
-      ...(cacheError ? { 'calendar.read.cache_error': cacheError } : {}),
-    });
-  }
+  // Startup, old engines and failed fetches are expected; these mean the
+  // cache stopped answering, so count them whether or not the trace is kept.
+  Telemetry.warn('calendar.occurrences.cache_fallback', {
+    'calendar.read.fallback_reason': fallback,
+    ...(cacheError ? { 'calendar.read.cache_error': cacheError } : {}),
+  });
 }
 
 /**
@@ -152,7 +162,8 @@ async function raceCacheWithRest(
   cache: PromiseLike<CacheOutcome>,
   range: CalendarOccurrenceQueryRange,
   fetchRest: FetchCalendarOccurrencesFromRest,
-  span: Pick<Span, 'setAttr'>,
+  span: TraceSpan,
+  deadlineFallback: 'deadline' | 'stalled',
   signal?: AbortSignal
 ): Promise<CalendarViewportRead> {
   if (signal?.aborted) throw signal.reason;
@@ -178,19 +189,36 @@ async function raceCacheWithRest(
       const answer = cacheAnswer(first.outcome);
       if (answer.answered) {
         restController.abort();
-        span.setAttr('calendar.read.source', 'cache');
+        recordCacheAnswer(span);
         return { source: 'cache', data: answer.data };
       }
-      recordFallback(span, 'deadline', answer.error);
+      // The cache gave up after all: its own reason explains the REST read.
+      recordFallback(span, answer.fallback, answer.error);
       const result = await rest;
       if (result.isErr()) throw result.error;
-      return { source: 'rest', data: result.value, fallback: 'deadline' };
+      return { source: 'rest', data: result.value, fallback: answer.fallback };
     }
-    recordFallback(span, 'deadline');
-    // An overdue cache path may never settle, so a failed REST read fails the
-    // viewport rather than waiting on it.
-    if (first.result.isErr()) throw first.result.error;
-    return { source: 'rest', data: first.result.value, fallback: 'deadline' };
+    if (first.result.isOk()) {
+      recordFallback(span, deadlineFallback);
+      return {
+        source: 'rest',
+        data: first.result.value,
+        fallback: deadlineFallback,
+      };
+    }
+    if (signal?.aborted) throw first.result.error;
+    // Offline, the cache may still answer a covered week. An overdue cache
+    // path may also never settle, so it gets one more deadline, not forever.
+    const late = await withinDeadline(cache, CALENDAR_CACHE_READ_DEADLINE_MS);
+    if (late !== 'deadline') {
+      const answer = cacheAnswer(late);
+      if (answer.answered) {
+        recordCacheAnswer(span);
+        return { source: 'cache', data: answer.data };
+      }
+    }
+    recordFallback(span, deadlineFallback);
+    throw first.result.error;
   } finally {
     signal?.removeEventListener('abort', abortRest);
   }
@@ -212,23 +240,18 @@ export async function readCalendarViewport(
   range: CalendarOccurrenceQueryRange,
   options: {
     fetchRest: FetchCalendarOccurrencesFromRest;
-    span: Pick<Span, 'setAttr'>;
+    span: TraceSpan;
     signal?: AbortSignal;
     fetchPage?: FetchCalendarOccurrencePage;
-    deadlineMs?: number;
   }
 ): Promise<CalendarViewportRead> {
   const { fetchRest, span, signal } = options;
-  const deadlineMs = options.deadlineMs ?? CALENDAR_CACHE_READ_DEADLINE_MS;
+  const stalled = cacheStalled(host);
+  const deadlineMs = stalled
+    ? CALENDAR_CACHE_HEAD_START_MS
+    : CALENDAR_CACHE_READ_DEADLINE_MS;
   span.setAttr('calendar.read.deadline_ms', deadlineMs);
-  if (cacheStalled(host)) {
-    recordFallback(span, 'stalled');
-    return {
-      source: 'rest',
-      data: await fetchRest(range, signal),
-      fallback: 'stalled',
-    };
-  }
+  span.setAttr('calendar.read.stalled', stalled);
   const cache = ResultAsync.fromPromise(
     readCalendarRange(host, range, {
       signal,
@@ -236,20 +259,22 @@ export async function readCalendarViewport(
     }),
     (error) => error
   );
-  const settled = new AbortController();
-  const first = await Promise.race([
-    cache,
-    deadline(deadlineMs, settled.signal),
-  ]);
-  settled.abort();
+  const first = await withinDeadline(cache, deadlineMs);
   span.setAttr('calendar.read.deadline_exceeded', first === 'deadline');
   if (first === 'deadline') {
     fireAndForget(holdWhileOverdue(host, cache), 'calendar-cache-read');
-    return raceCacheWithRest(cache, range, fetchRest, span, signal);
+    return raceCacheWithRest(
+      cache,
+      range,
+      fetchRest,
+      span,
+      stalled ? 'stalled' : 'deadline',
+      signal
+    );
   }
   const answer = cacheAnswer(first);
   if (answer.answered) {
-    span.setAttr('calendar.read.source', 'cache');
+    recordCacheAnswer(span);
     return { source: 'cache', data: answer.data };
   }
   if (signal?.aborted) throw answer.error ?? signal.reason;

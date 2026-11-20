@@ -26,18 +26,27 @@ export function calendarCacheAnswered(host: object): boolean {
   return answeredHosts.has(host);
 }
 
+/** The read's result if it settles within `ms`, else `deadline`. */
+export async function withinDeadline<T>(
+  read: PromiseLike<T>,
+  ms: number
+): Promise<T | 'deadline'> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<'deadline'>((resolve) => {
+    timer = setTimeout(() => resolve('deadline'), ms);
+  });
+  try {
+    return await Promise.race([read, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The read's result if it settles within the head start, else `not-ready`. */
 export async function withinCacheHeadStart<T>(
   read: Promise<T>,
   headStartMs = CALENDAR_CACHE_HEAD_START_MS
 ): Promise<T | 'not-ready'> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const headStart = new Promise<'not-ready'>((resolve) => {
-    timer = setTimeout(() => resolve('not-ready'), headStartMs);
-  });
-  try {
-    return await Promise.race([read, headStart]);
-  } finally {
-    clearTimeout(timer);
-  }
+  const result = await withinDeadline(read, headStartMs);
+  return result === 'deadline' ? 'not-ready' : result;
 }

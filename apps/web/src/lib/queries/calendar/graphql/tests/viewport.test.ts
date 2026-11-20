@@ -1,10 +1,12 @@
 import type { CalendarRangeCacheResult } from '@graphql-cache/index';
 import { OWNER_HANDOFF_BLOCKED_ERROR_CODE } from '@graphql-cache/protocol';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
+import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarOccurrenceQueryRange } from '../../occurrences';
 import type { CalendarOccurrencePage } from '../range';
 import {
+  CALENDAR_CACHE_HEAD_START_MS,
   CALENDAR_CACHE_READ_DEADLINE_MS,
   markCalendarCacheAnswered,
 } from '../readiness';
@@ -214,7 +216,7 @@ describe('readCalendarViewport', () => {
     });
   });
 
-  it('sends later viewports straight to REST while a read is overdue, then asks the cache again', async () => {
+  it('gives later viewports only the head start while a read is overdue', async () => {
     const host = answeredHost();
     let answer!: (result: CalendarRangeCacheResult) => void;
     host.calendarRange.mockImplementationOnce(
@@ -229,32 +231,158 @@ describe('readCalendarViewport', () => {
       fallback: 'deadline',
     });
 
-    const second = read(host);
-    await expect(second.result).resolves.toMatchObject({
+    // A week the cache still answers comes from the cache.
+    const coveredWeek = read(host);
+    await expect(coveredWeek.result).resolves.toMatchObject({
+      source: 'cache',
+    });
+    expect(coveredWeek.fetchRest).not.toHaveBeenCalled();
+
+    // One it cannot answer races REST after the head start.
+    host.calendarRange.mockImplementationOnce(never);
+    const stuck = read(host);
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_HEAD_START_MS);
+    await expect(stuck.result).resolves.toMatchObject({
       source: 'rest',
       fallback: 'stalled',
     });
-    expect(host.calendarRange).toHaveBeenCalledOnce();
+    expect(stuck.span.attributes).toMatchObject({
+      'calendar.read.stalled': true,
+      'calendar.read.deadline_ms': CALENDAR_CACHE_HEAD_START_MS,
+    });
+    answer(covered());
+  });
+
+  it('returns to the full deadline once every overdue read settles', async () => {
+    const host = answeredHost();
+    let answer!: (result: CalendarRangeCacheResult) => void;
+    host.calendarRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    const first = read(host);
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS);
+    await first.result;
 
     answer(covered());
-    await vi.waitFor(async () => {
-      const third = read(host);
-      await expect(third.result).resolves.toMatchObject({ source: 'cache' });
+    await vi.waitFor(() => {
+      const next = read(host);
+      expect(next.span.attributes['calendar.read.stalled']).toBe(false);
     });
   });
 
-  it('fails without waiting on an overdue cache when REST fails too', async () => {
+  it('fails after one more deadline when REST fails and the cache never answers', async () => {
     const host = answeredHost();
     host.calendarRange.mockImplementationOnce(never);
     const fetchRest = vi.fn(async () => {
       throw new Error('offline');
     });
-    const { result } = read(host, { fetchRest });
-    const failed = expect(result).rejects.toThrow('offline');
+    const { result, span } = read(host, { fetchRest });
+    let settled = false;
+    const failed = expect(result)
+      .rejects.toThrow('offline')
+      .finally(() => {
+        settled = true;
+      });
 
-    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS);
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS * 2 - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
 
     await failed;
+    expect(span.attributes['calendar.read.fallback_reason']).toBe('deadline');
+  });
+
+  it('answers from a late cache when REST fails', async () => {
+    const host = answeredHost();
+    let answer!: (result: CalendarRangeCacheResult) => void;
+    host.calendarRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    const fetchRest = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    const { result, span } = read(host, { fetchRest });
+
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS);
+    expect(fetchRest).toHaveBeenCalledOnce();
+    answer(covered());
+
+    await expect(result).resolves.toMatchObject({ source: 'cache' });
+    expect(span.attributes['calendar.read.source']).toBe('cache');
+  });
+
+  it('aborts the racing REST read when the query is cancelled', async () => {
+    const host = answeredHost();
+    host.calendarRange.mockImplementationOnce(never);
+    const controller = new AbortController();
+    let restSignal: AbortSignal | undefined;
+    const fetchRest = vi.fn(
+      (_range, signal?: AbortSignal) =>
+        new Promise<typeof restData>((_resolve, reject) => {
+          restSignal = signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+    const { result } = read(host, { fetchRest, signal: controller.signal });
+    const rejected = expect(result).rejects.toThrow('cancelled');
+
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS);
+    expect(restSignal?.aborted).toBe(false);
+    controller.abort(new Error('cancelled'));
+
+    await rejected;
+    expect(restSignal?.aborted).toBe(true);
+  });
+
+  it('marks an engine that turns out unsupported after the deadline', async () => {
+    const host = answeredHost();
+    let answer!: (result: CalendarRangeCacheResult) => void;
+    host.calendarRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    const fetchRest = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      return restData;
+    });
+    const { result } = read(host, { fetchRest });
+
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS);
+    answer({ kind: 'unsupported' });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(result).resolves.toMatchObject({
+      source: 'rest',
+      fallback: 'unsupported',
+    });
+  });
+
+  it('labels a failed fetch of an uncovered week apart from cache failures', async () => {
+    const host = answeredHost();
+    host.calendarRange.mockResolvedValueOnce(
+      covered({
+        occurrenceKeys: [],
+        gaps: [{ kind: 'timed', start: 0, end: DAY_MS }],
+      })
+    );
+    const fetchPage = vi.fn(async () => {
+      throw new CombinedError({ networkError: new Error('offline') });
+    });
+    const { result, span } = read(host, { fetchPage });
+
+    await expect(result).resolves.toMatchObject({
+      source: 'rest',
+      fallback: 'fetch-error',
+    });
+    expect(span.attributes['calendar.read.cache_error']).toBeUndefined();
   });
 
   it('does not read REST for a cancelled read', async () => {
