@@ -39,11 +39,7 @@ export function ConnectCardView(props: {
   return (
     <Card width="compact" data-agent-card="connect">
       <CardSingle
-        media={
-          <Item.Media class="self-center">
-            {props.icon}
-          </Item.Media>
-        }
+        media={<Item.Media class="self-center">{props.icon}</Item.Media>}
         title={props.name}
         description={props.kind}
         trailing={
