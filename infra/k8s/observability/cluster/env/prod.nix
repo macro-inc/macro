@@ -6,6 +6,13 @@
     rootPath = "./infra/k8s/observability/cluster/manifests/prod";
   };
 
+  # The switch: Loki and Tempo on the host's buckets, which hold its history
+  # (../aws output `host_buckets`; README "The switch", step 4).
+  macro.backends.buckets = {
+    loki = "observability-logs-2be9169";
+    tempo = "observability-traces-fa2328d";
+  };
+
   macro.cluster = {
     # Off for the first rollout: each application waits for a manual sync
     # after its diff has been read in Argo CD (README "Bootstrap"). On once
