@@ -50,7 +50,7 @@ const searchTypes: readonly SearchType[] = [
  *
  * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
  *
- * Every search, this one and every entity's, is a heavy request that everyone else's searches queue behind. Run searches one after another, never with Promise.all or Promise.allSettled over queries or kinds, and search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each.
+ * Every search, this one and every entity's, is a heavy request that everyone else's searches queue behind; code mode sends at most two at once and holds the rest back, so fanning searches out gains little. Run searches one after another, never with Promise.all or Promise.allSettled over queries or kinds, and search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each.
  *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
