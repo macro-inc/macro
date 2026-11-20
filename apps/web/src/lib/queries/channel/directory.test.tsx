@@ -1432,6 +1432,45 @@ describe('cached channel directory', () => {
       expect(directory.complete()).toBe(true);
       expect(ids(directory.channels())).toEqual(['a']);
     });
+
+    it('settles a read that changes no row without walking the network rows again', async () => {
+      // Counts every read of a network row's id.
+      let walked = 0;
+      const counted = ({ id, ...rest }: DirectoryChannel) =>
+        Object.defineProperty({ ...rest }, 'id', {
+          enumerable: true,
+          get: () => {
+            walked += 1;
+            return id;
+          },
+        }) as DirectoryChannel;
+      const { directory, hydrate } = mountCachedDirectory(
+        [channelRecord('a')],
+        {
+          pageAll: async () => [
+            counted(directoryChannel('a')),
+            counted(directoryChannel('gone', { channelType: 'private' })),
+          ],
+        }
+      );
+      hydrate.mockImplementation(async () => {
+        throw new Error('offline');
+      });
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(hydrate).toHaveBeenCalledTimes(2);
+      const shown = directory.channels();
+      expect(shown).toHaveLength(2);
+      walked = 0;
+
+      // Read again and failed again: the rows stay as they are.
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(hydrate).toHaveBeenCalledTimes(4);
+      expect(walked).toBe(0);
+      expect(directory.channels()).toBe(shown);
+      expect(directory.complete()).toBe(false);
+    });
   });
 
   it('never calls the rows of a fallback waiting on by-id reads complete as the storage resets', async () => {

@@ -326,6 +326,7 @@ function sameIds(
 }
 
 function sameState(a: ChannelDirectoryState, b: ChannelDirectoryState) {
+  if (a === b) return true;
   if (a.complete !== b.complete) return false;
   const aIds = Object.keys(a.records);
   if (aIds.length !== Object.keys(b.records).length) return false;
@@ -882,6 +883,48 @@ export function fallbackConfirmations(
   return ids;
 }
 
+/** Whether the fallback's rows hold a channel a by-id read decides, by what
+ * the read found: a listed one stays unless found absent, an unlisted one
+ * shows once returned. */
+function confirmedMembership(
+  listed: boolean,
+  outcome: ByIdOutcome | undefined
+) {
+  return listed ? outcome !== 'absent' : outcome === 'returned';
+}
+
+/** Whether an outcome that changed from `before` to `after` adds or
+ * removes one of the fallback's rows. It may say so of one that does not. */
+function membershipChanged(
+  listed: ReadonlySet<string>,
+  before: Readonly<Record<string, ByIdOutcome>>,
+  after: Readonly<Record<string, ByIdOutcome>>
+) {
+  for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (before[id] === after[id]) continue;
+    const isListed = listed.has(id);
+    if (
+      confirmedMembership(isListed, before[id]) !==
+      confirmedMembership(isListed, after[id])
+    )
+      return true;
+  }
+  return false;
+}
+
+/** The ids no by-id read has decided yet. */
+function undecided(
+  ids: readonly string[],
+  confirmed: Readonly<Record<string, ByIdOutcome>>
+) {
+  const open: Record<string, true> = {};
+  for (const id of ids) {
+    const outcome = confirmed[id];
+    if (outcome !== 'returned' && outcome !== 'absent') open[id] = true;
+  }
+  return open;
+}
+
 function recordsById(read: ChannelDirectoryRead | undefined) {
   return new Map(
     (read?.channels ?? []).map((channel) => [channel.id, channel])
@@ -989,6 +1032,17 @@ export function createCachedChannelDirectory(
   // The channels the network fallback decides by a by-id read, as of the
   // last read of the cache.
   let confirmations: string[] | undefined;
+  // The by-id outcomes the fallback's rows were last built from.
+  let builtFrom: Readonly<Record<string, ByIdOutcome>> = {};
+  // The ids of the network's rows, built once per load.
+  let listed:
+    | { rows: readonly DirectoryChannel[]; ids: Set<string> }
+    | undefined;
+  const listedIds = (rows: readonly DirectoryChannel[]) => {
+    if (listed?.rows !== rows)
+      listed = { rows, ids: new Set(rows.map(({ id }) => id)) };
+    return listed.ids;
+  };
 
   /** Publishes what `render` built with the fallback's status, keeping each
    * part that did not change. */
@@ -1016,7 +1070,8 @@ export function createCachedChannelDirectory(
 
   /** Shows the last read and, once the network's channels loaded, those
    * channels as the evidence since leaves them. A render after by-id reads
-   * settled (`settle`) reuses the confirmations the last read chose. */
+   * settled (`settle`) reuses the confirmations the last read chose, and
+   * the rows too unless a read's outcome adds or removes one. */
   const render = (settle = false) => {
     const network = fallback;
     if (network.status !== 'loaded') {
@@ -1032,10 +1087,22 @@ export function createCachedChannelDirectory(
       );
       return;
     }
+    const confirmed = untrack(confirm.outcomes);
+    // Nothing else changed since the last render: a read that failed, or
+    // confirmed a row shown, leaves the rows as they are.
+    if (
+      settle &&
+      confirmations &&
+      !membershipChanged(listedIds(network.channels), builtFrom, confirmed)
+    ) {
+      show(untrack(shown).state, undecided(confirmations, confirmed));
+      return;
+    }
+    builtFrom = confirmed;
     const evidence: FallbackEvidence = {
       changes: changes ?? new Map(),
       seen: seen ?? new Set(),
-      confirmed: untrack(confirm.outcomes),
+      confirmed,
     };
     const next = channelDirectoryState(
       fallbackChannels(network.channels, evidence),
@@ -1049,12 +1116,7 @@ export function createCachedChannelDirectory(
         generation === undefined
           ? []
           : fallbackConfirmations(network.channels, evidence);
-    const open: Record<string, true> = {};
-    for (const id of confirmations) {
-      const outcome = evidence.confirmed[id];
-      if (outcome !== 'returned' && outcome !== 'absent') open[id] = true;
-    }
-    show(next, open);
+    show(next, undecided(confirmations, confirmed));
     if (settle) return;
     for (const id of confirmations) confirm.request(id);
   };
@@ -1099,6 +1161,8 @@ export function createCachedChannelDirectory(
     changes = undefined;
     seen = undefined;
     confirmations = undefined;
+    builtFrom = {};
+    listed = undefined;
     confirm.reset();
     fallback = { status: 'idle' };
   };
