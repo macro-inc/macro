@@ -10,6 +10,9 @@ import {
 import type { Accessor } from 'solid-js';
 import { agentCodeExecutionKeys } from './keys';
 
+/** How long a running job's record may fail to load before polling stops. */
+const JOB_POLL_FAILURE_LIMIT_MS = 30_000;
+
 /** Poll while execution is running, including the brief create-to-persist race, and while a background job runs. */
 export function useAgentCodeExecutionQuery(
   sessionId: Accessor<string>,
@@ -36,10 +39,16 @@ export function agentCodeExecutionQueryOptions(
     refetchInterval: (query) => {
       const data = query.state.data;
       // A background job runs for up to ten minutes; it is polled until it
-      // settles, and its log frame refetches it at once when it does. Only
-      // failures in a row stop it: a success resets `fetchFailureCount`.
-      if (data?.job && data.status === 'running')
-        return query.state.fetchFailureCount < 5 ? 2000 : false;
+      // settles, and its log frame refetches it at once when it does.
+      // Polling outlasts brief failures and stops once loads have failed
+      // for half a minute since the last one that worked.
+      if (data?.job && data.status === 'running') {
+        const failingFor =
+          query.state.status === 'error'
+            ? query.state.errorUpdatedAt - query.state.dataUpdatedAt
+            : 0;
+        return failingFor < JOB_POLL_FAILURE_LIMIT_MS ? 2000 : false;
+      }
       return (!data || data.status === 'running') &&
         query.state.dataUpdateCount + query.state.errorUpdateCount < 40
         ? 1000

@@ -387,7 +387,6 @@ impl Jobs {
         Ok(settled)
     }
 
-    /// Stop every job this replica runs; each settles as interrupted.
     /// Interrupt every job and wait, at most [`SHUTDOWN_LIMIT`], for them to
     /// settle; one whose settle can't finish in time is left to the sweep.
     pub(super) async fn shutdown(&self) {
