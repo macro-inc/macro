@@ -1267,6 +1267,66 @@ export type DiscoveryResult =
  */
 export type DuplicableEntityType = 'document' | 'database' | 'chat';
 /**
+ * One edit of a batch. The shapes mirror `str_replace`-style editing tools,
+ * told apart by their fields, so the input is untagged.
+ */
+export type MarkdownEdit =
+  | ReplaceEdit
+  | InsertAfterEdit
+  | InsertBeforeEdit
+  | DeleteEdit
+  | MoveAfterEdit
+  | MoveBeforeEdit;
+/**
+ * A top-level block's durable id, or `start` / `end` where an edit takes a
+ * position.
+ */
+export type BlockId = string;
+/**
+ * What a batch did to one block.
+ */
+export type MarkdownBlockChange =
+  | {
+      blockId: BlockId;
+      /**
+       * Its markdown before.
+       */
+      before: string;
+      /**
+       * Its markdown after.
+       */
+      after: string;
+      kind: 'edited';
+    }
+  | {
+      blockId: BlockId;
+      /**
+       * The block now before it; none at the start.
+       */
+      afterBlockId?: BlockId | null;
+      /**
+       * Its markdown.
+       */
+      markdown: string;
+      kind: 'inserted';
+    }
+  | {
+      blockId: BlockId;
+      /**
+       * Its markdown before the delete.
+       */
+      markdown: string;
+      kind: 'deleted';
+    }
+  | {
+      blockId: BlockId;
+      /**
+       * The block now before it; none at the start.
+       */
+      afterBlockId?: BlockId | null;
+      kind: 'moved';
+    };
+/**
  * Targeted layout operations. Removing placements always retains response columns.
  */
 export type Change =
@@ -9302,7 +9362,7 @@ export interface EditCommentResponse {
   commentId: string;
 }
 /**
- * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`.
+ * Edit a Macro markdown document in place. Two ways: `edits` applies exact changes you already know, with no second model, much faster; `instructions` asks an AI editor to work the change out, which takes several seconds to a minute. Prefer `edits` whenever you can say the exact text: copy `old` from the block content ReadContent returned (each block's internal markdown, with its nodeId as the block id), and give `new`. Use `instructions` for open-ended rewrites, restructuring you can't spell out, or formatting you don't know the markup for. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips with `instructions`, include each referenced item's ids and details: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`. With `edits`, write chips and cards as the same `<m-...>` tags ReadContent shows.
  */
 export interface EditDocument {
   /**
@@ -9310,13 +9370,87 @@ export interface EditDocument {
    */
   document_id: string;
   /**
-   * Natural language instructions. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips; profileId/slug/url for booking links. For document-card(s), include documentId and documentName per document. You may need to look these up.
+   * Natural language instructions for the AI editor. Leave empty when you pass `edits`. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips; profileId/slug/url for booking links. For document-card(s), include documentId and documentName per document. You may need to look these up.
    */
-  instructions: string;
+  instructions?: string;
+  /**
+   * Exact edits, applied in order as one batch with no second model; all apply or none do. Each edit is one of: `{old, new, block_id?, replace_all?}` replaces exact internal markdown (`old` must occur exactly once in the document, or in `block_id`, unless `replace_all`; copy it from ReadContent's block content, including any `**`, `<m-...>` tags and list markers; `old` may span adjacent blocks, joined by one blank line); `{insert_after: ID|'start'|'end', markdown}` or `{insert_before: ...}` inserts new blocks; `{delete: ID}` deletes a block; `{move: ID, after: ID}` or `{move: ID, before: ID}` moves one. IDs are ReadContent nodeIds. Edited blocks keep their ids and comments. A refusal says what to fix (no_match and ambiguous_match list the blocks); nothing is written then. Leave `instructions` empty when you pass edits.
+   */
+  edits?: MarkdownEdit[];
+  /**
+   * With `edits`: check the batch and return the changes it would make, without writing anything.
+   */
+  dry_run?: boolean;
+  /**
+   * With `edits`: allow deleting blocks that hold comments or content markdown cannot show, or most of the document. Set only when the user asked for that deletion.
+   */
+  allow_deleting_content?: boolean;
   /**
    * Set true for one quick, contained edit -- rewrite this paragraph, translate the selected list, fix a heading, bold a phrase. A single model applies it directly in a few seconds. Leave false (the default) for anything with several parts or that restructures the document; the default pipeline plans, dispatches, and reviews its own work, which takes longer but is what multi-step edits need.
    */
   fast?: boolean;
+}
+/**
+ * Replace exact text: `old` must occur once (in `block_id` when given, else
+ * anywhere) unless `replace_all` is set.
+ */
+export interface ReplaceEdit {
+  /**
+   * Limit the match to this block.
+   */
+  block_id?: BlockId | null;
+  /**
+   * Exact internal markdown to find, copied from the block's content.
+   */
+  old: string;
+  /**
+   * Its replacement. Empty deletes it.
+   */
+  new: string;
+  /**
+   * Replace every occurrence instead of requiring exactly one.
+   */
+  replace_all?: boolean;
+}
+/**
+ * Insert new blocks after a block, or after `start` / at `end`.
+ */
+export interface InsertAfterEdit {
+  insert_after: BlockId;
+  /**
+   * Internal markdown of the new blocks.
+   */
+  markdown: string;
+}
+/**
+ * Insert new blocks before a block, or at `start` / before `end`.
+ */
+export interface InsertBeforeEdit {
+  insert_before: BlockId;
+  /**
+   * Internal markdown of the new blocks.
+   */
+  markdown: string;
+}
+/**
+ * Delete a block.
+ */
+export interface DeleteEdit {
+  delete: BlockId;
+}
+/**
+ * Move a block after another (or after `start`), keeping its ids.
+ */
+export interface MoveAfterEdit {
+  move: BlockId;
+  after: BlockId;
+}
+/**
+ * Move a block before another (or before `end`), keeping its ids.
+ */
+export interface MoveBeforeEdit {
+  move: BlockId;
+  before: BlockId;
 }
 export interface EditDocumentResponse {
   /**
@@ -9328,6 +9462,10 @@ export interface EditDocumentResponse {
    * If present, invoke this tool again with this information appended to `instructions`.
    */
   clarification?: string | null;
+  /**
+   * With `edits`: what changed, block by block, with the ids of new blocks.
+   */
+  changes?: MarkdownBlockChange[] | null;
 }
 /**
  * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/gates, set or clear a questions section's showWhen (setShowWhen; skipped sections' questions are not required or saved) and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep gates and showWhen rules after the questions they test and booking last. Read the current form after a timeout or partial result before proceeding. Opening and sharing require SetFormAccess.
