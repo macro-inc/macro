@@ -1,21 +1,16 @@
-# A completed workflow can report failures without exposing the Macro bot token
-# to the build runners or checking out code from a pull request.
-# Configure MACRO_BUILD_ALERT_WEBHOOK_URL (repository variable) and
-# MACRO_BUILD_ALERT_BOT_TOKEN (repository secret). The token is a channel-scoped
-# webhook credential for the Alerts channel.
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/alert_native_build_failures.rs
 name: Alert native build failures
-
 on:
   workflow_run:
+    types:
+      - completed
     workflows:
       - Build Desktop on Tag
       - iOS Preview
       - Release Android App Bundle
-    types: [completed]
-
 permissions:
   actions: read
-
 jobs:
   alert:
     if: contains(fromJSON('["failure", "timed_out"]'), github.event.workflow_run.conclusion)
@@ -23,14 +18,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Notify Macro Alerts about failed native builds
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
-          SOURCE_REF: ${{ github.event.workflow_run.head_branch }}
-          MACRO_WEBHOOK_URL: ${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}
-          MACRO_BOT_TOKEN: ${{ secrets.MACRO_BUILD_ALERT_BOT_TOKEN }}
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -66,3 +53,11 @@ jobs:
               --header 'Content-Type: application/json' \
               --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
               --data-binary @- "$MACRO_WEBHOOK_URL"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+          SOURCE_REF: ${{ github.event.workflow_run.head_branch }}
+          MACRO_WEBHOOK_URL: ${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}
+          MACRO_BOT_TOKEN: ${{ secrets.MACRO_BUILD_ALERT_BOT_TOKEN }}
