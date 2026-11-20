@@ -353,6 +353,25 @@ fn deterministic_draft_rejections_do_not_allow_retries() {
 }
 
 #[test]
+fn a_busy_inbox_is_a_retryable_error_on_draft_and_thread_mutations() {
+    for mapped in [
+        draft_mutation_error(&EmailErr::Contended),
+        mutation_error(&EmailErr::Contended),
+    ] {
+        let extensions = mapped.extensions.as_ref().unwrap();
+        assert_eq!(
+            extensions.get("code"),
+            Some(&async_graphql::Value::from("INBOX_BUSY"))
+        );
+        assert_eq!(
+            extensions.get("retryable"),
+            Some(&async_graphql::Value::from(true))
+        );
+        assert_eq!(mapped.message, EmailErr::Contended.to_string());
+    }
+}
+
+#[test]
 fn scheduled_draft_conflict_is_a_deterministic_invalid_save() {
     let mapped = draft_mutation_error(&EmailErr::MessageDeliveryConflict(Uuid::nil()));
     assert_eq!(

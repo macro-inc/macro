@@ -96,7 +96,11 @@ fn connection_error_status(error: &ConnectionError) -> StatusCode {
             InitializationError::IdentityConflict
             | InitializationError::Changed
             | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
-            InitializationError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            // Clients read a 409 here as a sharing conflict to confirm, so a
+            // busy inbox answers 503 like any other passing failure.
+            InitializationError::Unavailable | InitializationError::Contended => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
         },
         ConnectionError::AlreadyInitialized
         | ConnectionError::NoGmailGrant

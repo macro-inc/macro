@@ -19,6 +19,7 @@ import {
   type MutationInspection,
   parseCacheRevision,
 } from '../protocol';
+import { cacheSessionGeneration } from '../session-generation';
 import type { MutationQueueOwner } from './mutation-queue-owner';
 import {
   createMutationQueueRunner,
@@ -114,6 +115,8 @@ function fixture(
     currentRevision: async () => INITIAL_CACHE_REVISION,
     claimNextMutation: async () => undefined,
   } as unknown as CacheHost;
+  const revalidate = vi.fn(async () => {});
+  const replayExplicitEffects = vi.fn(() => undefined);
   let runner!: MutationQueueRunner;
   runner = createMutationQueueRunner({
     host,
@@ -141,12 +144,87 @@ function fixture(
       operationName: getOperationAST(op.query)?.name?.value,
       variables: op.variables ?? {},
     }),
-    deleteReportedRecords: async () => {},
-    replayExplicitEffects: () => undefined,
-    revalidate: async () => {},
+    deleteReportedRecords: async () => ({ attempted: false }),
+    replayExplicitEffects,
+    revalidate,
   });
-  return { runner, forwarded, commit, host };
+  return { runner, forwarded, commit, host, revalidate, replayExplicitEffects };
 }
+
+it.each([
+  {
+    saveEmailDraft: {
+      draftId: 'canonical-draft',
+      thread: { id: 'canonical-thread' },
+    },
+  },
+  {
+    moveEntities: {
+      results: [{ __typename: 'GraphqlMutationError', message: 'No access' }],
+    },
+  },
+])(
+  'keeps a stale server outcome and journal data while suppressing cache publication: %j',
+  async (data) => {
+    const journal = vi.fn(async () => {});
+    const { runner, forwarded, commit, revalidate, replayExplicitEffects } =
+      fixture({
+        onMutationAttemptResult: journal,
+      });
+    const op = operation();
+    const revalidations = [
+      {
+        query: 'query PropertyParent { user { id } }',
+        operationName: 'PropertyParent',
+        variablesJson: '{}',
+        onlyOnLinkFailure: true,
+      },
+    ];
+    commit.mockResolvedValue({
+      kind: 'committed',
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations,
+    });
+    await runner.admit(op, enqueue(op, '1'), runner.epoch());
+    await cacheSessionGeneration.transition(async () => {});
+    const result = {
+      operation: forwarded[0],
+      data,
+      stale: false,
+      hasNext: false,
+    };
+    const settled = await runner.settle(result, queueAttemptOf(forwarded[0])!);
+    expect(journal).toHaveBeenCalledWith(expect.anything(), result, false);
+    expect(commit).toHaveBeenCalledWith(
+      '1',
+      { owner: 'owner', generation: '1' },
+      expect.objectContaining({
+        data,
+        generation: forwarded[0].context.cacheSessionGeneration,
+      })
+    );
+    expect(journal.mock.invocationCallOrder[0]).toBeLessThan(
+      commit.mock.invocationCallOrder[0]
+    );
+    expect(settled.data).toEqual(data);
+    expect(
+      settled.extensions?.normalizedCacheMutationDisposition
+    ).toMatchObject({ kind: 'committed' });
+    expect(replayExplicitEffects).not.toHaveBeenCalled();
+    expect(revalidate).toHaveBeenCalledOnce();
+    expect(revalidate).toHaveBeenCalledWith(
+      revalidations,
+      expect.anything(),
+      [],
+      true
+    );
+  }
+);
+
 it.each([false, true])(
   'ignores an older lease arriving after a newer draft claim, already settled: %s',
   async (settled) => {

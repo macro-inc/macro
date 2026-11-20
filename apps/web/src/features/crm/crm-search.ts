@@ -1,3 +1,5 @@
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+
 export { materializeCachedGraphqlCrmCompanies } from './queries/graphql';
 
 import { queryReadyGate } from '@queries/gate';
@@ -7,7 +9,7 @@ import type { Accessor } from 'solid-js';
 import { crmCompanySearchQueryOptions } from './queries/company-search';
 import { useQuickAccessCrmCompaniesQuery as createSuggestions } from './queries/company-suggestions';
 export function useQuickAccessCrmCompaniesQuery() {
-  return createSuggestions(useSoupItemsQuery, () => true);
+  return createSuggestions(useSoupItemsQuery, crmAccessAllowed);
 }
 
 /** Companies the search service matches by name or domain, beyond the

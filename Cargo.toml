@@ -573,6 +573,8 @@ doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
 scraper = "0.18"
+# The html5ever scraper 0.18 parses with: email_utils wraps its tree sink.
+html5ever = "0.26"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
