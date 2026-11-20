@@ -434,9 +434,14 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
 
     let body = if streaming {
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
-        let metering = meter.map(|meter| (meter, SseUsage::default()));
+        let mut metering = meter.map(|meter| (meter, SseUsage::default()));
         tokio::spawn(
-            pump(Box::pin(upstream.bytes_stream()), metering, caller).instrument(span.clone()),
+            pump(
+                Box::pin(upstream.bytes_stream()),
+                move |chunk| observe(&mut metering, chunk),
+                caller,
+            )
+            .instrument(span.clone()),
         );
         Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(chunks))
     } else {
@@ -473,19 +478,22 @@ async fn authenticate_brain(
         .ok_or(Rejection::BRAIN_UNAUTHENTICATED)
 }
 
-type UpstreamChunks =
+pub(crate) type UpstreamChunks =
     Pin<Box<dyn futures::Stream<Item = reqwest::Result<axum::body::Bytes>> + Send>>;
 
-/// Streams `upstream` to the caller while metering it. When the caller hangs
-/// up, keeps reading (for at most [`DRAIN_TIMEOUT`]) so the final usage is
-/// still recorded: an abort must not skip output billing.
-async fn pump(
+/// Streams `upstream` to the caller, showing each chunk to `observe` (which
+/// meters it). When the caller hangs up, keeps reading (for at most
+/// [`DRAIN_TIMEOUT`]) so the final usage is still recorded: an abort must
+/// not skip output billing.
+pub(crate) async fn pump<Observe>(
     mut upstream: UpstreamChunks,
-    mut metering: Option<(UsageMeter, SseUsage)>,
+    mut observe: Observe,
     caller: tokio::sync::mpsc::Sender<Result<axum::body::Bytes, std::io::Error>>,
-) {
+) where
+    Observe: FnMut(&reqwest::Result<axum::body::Bytes>) + Send,
+{
     while let Some(chunk) = upstream.next().await {
-        observe(&mut metering, &chunk);
+        observe(&chunk);
         if caller
             .send(chunk.map_err(std::io::Error::other))
             .await
@@ -493,11 +501,11 @@ async fn pump(
         {
             let drain = async {
                 while let Some(chunk) = upstream.next().await {
-                    observe(&mut metering, &chunk);
+                    observe(&chunk);
                 }
             };
             if tokio::time::timeout(DRAIN_TIMEOUT, drain).await.is_err() {
-                tracing::warn!("anthropic stream outlived its drain after the caller hung up");
+                tracing::warn!("a model stream outlived its drain after the caller hung up");
             }
             return;
         }

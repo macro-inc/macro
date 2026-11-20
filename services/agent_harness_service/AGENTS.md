@@ -84,6 +84,49 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   are recorded once, when the socket closes, against the agent
   (`livekit-inference-deepgram-*` pricing rows). Upstream error details stay
   in logs. Span: `speech_gateway.session`; never record transcripts or text.
+- `src/captcha_gateway.rs` + `src/captcha_gateway/`: `POST /brain/captcha/solve`
+  on the egress listener, for agent teammates' `captcha` MCP. Same brain key,
+  `enable-agent-teammates` check and admission as the speech gateway
+  (`brain::BrainAccess`). `solves.rs` owns the `CaptchaSolver` port, the
+  challenge (`recaptchaV2`/`recaptchaV3`/`turnstile`; the page URL loses its
+  query, fragment and credentials; non-http(s) is a 400), idempotency (a
+  `solveId` is remembered 10 minutes per process; a repeat joins or
+  replays, another agent's is a 409; refusals are not remembered), the
+  per-agent, per-process caps (1 concurrent, 20 an hour, 100 a day:
+  `budgetExceeded`) and polling (every 2 s, 120 s in all; a rate limit or
+  outage while polling is waited out). The solve runs on its own task, so a
+  caller that hangs up neither cancels it nor skips its usage. `capsolver.rs`
+  is the only adapter (`CapsolverApiUrl`, `OVERRIDE_CAPSOLVER_API_URL` for
+  `crates/capsolver_emulator`); a `keyBlocked` answer stops tasks for five
+  minutes. `CAPSOLVER_API_KEY` is optional: unset or empty answers
+  `notConfigured`. Only `solved` is billed: one `ProviderCredits` against the
+  agent at `capsolver-<task>` pricing. Span `captcha_gateway.solve`; never
+  record the token, site key, page path or query, or vendor error text.
+- `src/fireworks_gateway.rs` + `src/fireworks_gateway/`:
+  `POST /brain/fireworks/v1/chat/completions` (any other path is a 404), the
+  OpenAI-compatible passthrough the CAPTCHA run's Kimi K3 calls, on
+  `FIREWORK_API_KEY` (Doppler `shared_ai`, required). Same brain check;
+  only `accounts/fireworks/models/kimi-k3`, output cap at most 8192 (4096
+  when unset), and a stream gets `stream_options.include_usage`. Usage
+  (cached prompt tokens as `cache_read`) is recorded against the agent at
+  `kimi-k3` pricing, draining a stream whose caller hung up (the shared
+  `anthropic_gateway::pump`). No local double: `model_emulator` speaks only
+  Gemini. Span `brain_fireworks.chat` (`gen_ai.response.id` is Fireworks'
+  id). Like `/brain/anthropic`, the brain gateways record through the
+  legacy `UsageRecorder` and don't write provider request ids (or CapSolver
+  task ids) to the ledger yet, though `ai_usage`'s financial evidence has
+  `provider_request_id`; the ids are on the spans only.
+- `src/brain_bench.rs` (feature `brain-bench`, bin `brain_bench`): a dev
+  server with just those two brain routes, built by their real router
+  constructors with no database: one bearer key `BRAIN_BENCH_KEY` mapped to
+  a fixed fake agent, rollout and admission always on, usage printed as JSON
+  lines and served at `GET /_bench/usage`. `FIREWORK_API_KEY` required,
+  `CAPSOLVER_API_KEY` optional (`OVERRIDE_CAPSOLVER_API_URL` for the
+  emulator); `--listen` defaults to loopback `127.0.0.1:8490`, since it
+  holds real keys behind one bench key. Never deployed.
+  `capsolver_live_contract` (ignored) solves the Turnstile and reCAPTCHA v2
+  test keys once each through the real adapter when `CAPSOLVER_API_KEY` is
+  set.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's

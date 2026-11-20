@@ -24,6 +24,12 @@ path = "src/cognition_openapi.rs"
 name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
+# A dev server for the brain CAPTCHA and Fireworks routes; never deployed.
+[[bin]]
+name = "brain_bench"
+path = "src/brain_bench_main.rs"
+required-features = ["brain-bench"]
+
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 clap = { workspace = true }
@@ -220,6 +226,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 agent = { path = "../../crates/agent" }
+capsolver_emulator = { path = "../../crates/capsolver_emulator" }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 async-trait = { workspace = true }
@@ -239,6 +246,7 @@ tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
 
 [features]
+brain-bench = []
 local = []
 local_auth = ["macro_authorization/local_auth"]
 local_queue = []

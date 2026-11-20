@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ai_billing::{AiAdmissionError, AiAdmissionService};
+use ai_billing::AiAdmissionService;
 use ai_usage::{AiFeature, UsageAmount, UsageContext, UsageRecorder};
 use axum::{
     Router,
@@ -25,7 +25,6 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use futures::{SinkExt, StreamExt};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use serde::Serialize;
@@ -39,7 +38,7 @@ use tokio_tungstenite::{
 };
 use tracing::{Instrument, Span, field::Empty};
 
-use crate::anthropic_gateway::brain::{BrainAuthenticator, BrainCaller, BrainRollout};
+use crate::anthropic_gateway::brain::{BrainAccess, BrainAuthenticator, BrainCaller, BrainRollout};
 use protocol::{ClientEvent, MAX_MESSAGE_BYTES, Operation, STT_BYTES_PER_SECOND, Session};
 
 mod protocol;
@@ -78,11 +77,9 @@ struct ProviderCredentials {
 
 /// The speech proxy and the voice catalog it serves admins from.
 pub(crate) struct SpeechGateway {
-    brains: Arc<dyn BrainAuthenticator>,
-    /// `enable-agent-teammates` for the calling agent's creator; off refuses
-    /// with 403.
-    rollout: BrainRollout,
-    admission: Arc<dyn AiAdmissionService>,
+    /// The agent's key, `enable-agent-teammates` for its creator (off
+    /// refuses with 403) and admission.
+    access: BrainAccess,
     recorder: Arc<dyn UsageRecorder>,
     client: reqwest::Client,
     credentials: ProviderCredentials,
@@ -118,9 +115,11 @@ impl SpeechGateway {
             secret: EncodingKey::from_secret(secret.as_bytes()),
         };
         Ok(Self {
-            brains,
-            rollout,
-            admission,
+            access: BrainAccess {
+                brains,
+                rollout,
+                admission,
+            },
             recorder,
             client: reqwest::Client::builder()
                 .connect_timeout(CONNECT_TIMEOUT)
@@ -136,30 +135,7 @@ impl SpeechGateway {
 
     /// The agent behind the bearer key, admitted to spend Macro credits.
     async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, StatusCode> {
-        let bearer = headers
-            .typed_get::<Authorization<Bearer>>()
-            .ok_or(StatusCode::UNAUTHORIZED)?;
-        let brain = self
-            .brains
-            .authenticate(bearer.token())
-            .await
-            .map_err(|error| {
-                tracing::error!(error = ?error, "could not authenticate a brain");
-                StatusCode::SERVICE_UNAVAILABLE
-            })?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
-        if !self.rollout.enabled(&brain.user_id).await {
-            return Err(StatusCode::FORBIDDEN);
-        }
-
-        self.admission
-            .admit(&brain.user_id, AiFeature::AgentSession)
-            .await
-            .map_err(|error| match error {
-                AiAdmissionError::Denied(_) => StatusCode::FORBIDDEN,
-                AiAdmissionError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
-            })?;
-        Ok(brain)
+        self.access.authorize(headers).await
     }
 
     /// `Bearer <JWT>` that only performs inference, valid for a minute.
