@@ -222,6 +222,7 @@ members = [
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
   "crates/scheduled_action",
+  "services/search_freshness_probe",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",
@@ -250,6 +251,7 @@ harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }
 openbao_client = { path = "crates/openbao_client" }
 macro_user_id = { path = "crates/macro_user_id" }
+model-entity = { path = "crates/model-entity" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -571,6 +573,8 @@ doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
 scraper = "0.18"
+# The html5ever scraper 0.18 parses with: email_utils wraps its tree sink.
+html5ever = "0.26"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"

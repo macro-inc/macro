@@ -62,6 +62,10 @@ const refreshPropertyQueriesMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../soup/property-queries', () => ({
   refreshPropertyQueries: refreshPropertyQueriesMock,
 }));
+const refreshCrmListsMock = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../soup/crm-association', () => ({
+  refreshCrmAssociatedSoupQueries: refreshCrmListsMock,
+}));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
 
@@ -158,7 +162,7 @@ let dispose: (() => void) | undefined;
 let graphqlExecutions: Array<{
   variables: unknown;
   context: unknown;
-  next: (result: unknown) => void;
+  next: (result: object) => void;
   ended: boolean;
 }>;
 
@@ -169,6 +173,7 @@ const property = {
   valueType: 'STRING',
   isMultiSelect: false,
   isSystemProperty: true,
+  owner: { scope: 'system' },
 } as unknown as Property;
 
 const variables = {
@@ -229,7 +234,8 @@ describe('useEntityPropertiesQuery transport', () => {
         const execution = {
           variables: request.variables,
           context,
-          next: subject.next,
+          next: (result: object) =>
+            subject.next({ ...result, operation: { context } }),
           ended: false,
         };
         graphqlExecutions.push(execution);
@@ -708,6 +714,34 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def');
     expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('refreshes CRM record lists after a custom entity property is saved', async () => {
+    await mutation.mutateAsync(variables);
+    expect(refreshCrmListsMock).not.toHaveBeenCalled();
+
+    await mutation.mutateAsync({
+      properties: [
+        {
+          entityId: 'task-1',
+          entityType: 'TASK' as const,
+          property: {
+            propertyId: 'assignment-2',
+            propertyDefinitionId: 'contact-def',
+            displayName: 'Contact',
+            valueType: 'ENTITY',
+            isMultiSelect: true,
+            isSystemProperty: false,
+            owner: { scope: 'user', user_id: 'macro|owner@example.com' },
+          } as unknown as Property,
+          apiValues: {
+            valueType: 'ENTITY' as const,
+            refs: [{ entity_type: 'CONTACT' as const, entity_id: 'contact-1' }],
+          },
+        },
+      ],
+    });
+    expect(refreshCrmListsMock).toHaveBeenCalledOnce();
   });
 
   it('invalidates the REST projection for a new GraphQL attachment', async () => {

@@ -31,6 +31,9 @@ const mocks = vi.hoisted(() => ({
   favoriteId: undefined as string | undefined,
   favorites: [] as Favorite[],
   referencedChannels: [] as ChannelEntity[],
+  pendingReferenceIds: [] as string[],
+  failedReferenceIds: [] as string[],
+  unavailableReferenceIds: [] as string[],
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
   closedGroups: [] as string[],
@@ -81,6 +84,7 @@ const mocks = vi.hoisted(() => ({
     collapsed: false,
     canCollapse: true,
     expand: vi.fn(),
+    fillsShell: false,
   },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
@@ -169,6 +173,7 @@ vi.mock('@app/components/view-shell', async () => ({
   useViewTabHotkeys: vi.fn(),
   useViewShell: () => ({
     aside: {
+      fillsShell: () => mocks.shell.fillsShell,
       isCollapsed: () => mocks.shell.collapsed,
       canCollapse: () => mocks.shell.canCollapse,
       expand: mocks.shell.expand,
@@ -255,6 +260,12 @@ vi.mock('@queries/channel/notification-selection', () => ({
 vi.mock('@queries/channel/selection-by-id', () => ({
   fetchChannelSelectionById: mocks.fetchChannel,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({
+    createChannelNotificationSettings: () => ({ enabled: () => false }),
+  })
+);
 vi.mock('@queries/notification/unsubscribes', () => ({
   useBulkNotificationPreferencesMutation: () => ({
     mutateAsync: mocks.bulkPreferences,
@@ -305,6 +316,9 @@ vi.mock('../../channels-view-context', () => ({
     state: {
       tab: 'browse',
       expandedGroups: {
+        get favorites() {
+          return !mocks.closedGroups.includes('favorites');
+        },
         get channels() {
           return !mocks.closedGroups.includes('channels');
         },
@@ -348,8 +362,9 @@ vi.mock('@queries/channel/by-ids', () => ({
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
   useCachedChannelsByIds: () => ({
     channels: () => mocks.referencedChannels,
-    pendingIds: () => new Set<string>(),
-    failedIds: () => new Set<string>(),
+    pendingIds: () => new Set(mocks.pendingReferenceIds),
+    failedIds: () => new Set(mocks.failedReferenceIds),
+    unavailableIds: () => new Set(mocks.unavailableReferenceIds),
     error: () => undefined,
     isLoading: () => false,
     retry: async () => {},
@@ -571,6 +586,9 @@ beforeEach(() => {
   mocks.focusedRow = undefined;
   mocks.favorites = [];
   mocks.referencedChannels = [];
+  mocks.pendingReferenceIds = [];
+  mocks.failedReferenceIds = [];
+  mocks.unavailableReferenceIds = [];
   mocks.sectionsEnabled = true;
   mocks.unreadRows = [];
   mocks.closedGroups = [];
@@ -612,6 +630,7 @@ beforeEach(() => {
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
   mocks.shell.collapsed = false;
+  mocks.shell.fillsShell = false;
   mocks.shell.canCollapse = true;
 });
 afterEach(() => {
@@ -647,6 +666,53 @@ it.each([false, true])(
     expect(conversations.contains(liveCalls)).toBe(false);
   }
 );
+describe('favorite metadata hydration', () => {
+  it.each(['pending', 'missing', 'failed', 'read'] as const)(
+    'does not promise extra favorite rows while metadata is %s',
+    (state) => {
+      mocks.favorites = [
+        {
+          entityId: 'outside-page',
+          entityType: 'channel',
+          createdAt: '2026-01-01',
+          sortOrder: 0,
+        },
+      ];
+      if (state === 'pending') mocks.pendingReferenceIds = ['outside-page'];
+      if (state === 'failed') mocks.failedReferenceIds = ['outside-page'];
+      if (state === 'missing') mocks.unavailableReferenceIds = ['outside-page'];
+      if (state === 'read') {
+        mocks.referencedChannels = [
+          { ...channel, id: 'outside-page', unreadNotifications: [] },
+        ];
+        mocks.sectionPreferences = { favorites: { unreadOnly: true } };
+      }
+      mount();
+      const rows = mocks.actualRows();
+      expect(
+        rows.some(
+          (row) =>
+            row.kind === 'reference-status' &&
+            row.group === 'favorites' &&
+            row.state === 'loading'
+        )
+      ).toBe(false);
+      const favorites = rows.filter((row) => row.kind === 'favorite');
+      expect(favorites).toHaveLength(
+        state === 'missing' || state === 'read' ? 0 : 1
+      );
+      expect(
+        rows.some(
+          (row) =>
+            row.kind === 'reference-status' &&
+            row.group === 'favorites' &&
+            row.state === 'error'
+        )
+      ).toBe(state === 'failed');
+    }
+  );
+});
+
 it.each([false, true])(
   'tracks unread activity for favorites outside loaded channel pages with sections enabled: %s',
   (enabled) => {
@@ -1249,6 +1315,26 @@ describe('composer focus on opening a conversation', () => {
     });
     vi.advanceTimersByTime(150);
     expect(mocks.select).toHaveBeenCalledExactlyOnceWith(channel);
+  });
+
+  it('keeps a rail that fills a narrow split on screen while arrowing', () => {
+    vi.useFakeTimers();
+    document.documentElement.dataset.modality = 'keyboard';
+    mocks.shell.fillsShell = true;
+    mount();
+    mocks.onNavigate({
+      result: {
+        item: {
+          kind: 'conversation',
+          id: 'channel:one',
+          scope: 'channels',
+          localIndex: 0,
+          channel,
+        },
+      },
+    });
+    vi.advanceTimersByTime(150);
+    expect(mocks.select).not.toHaveBeenCalled();
   });
 });
 

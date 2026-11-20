@@ -7,7 +7,7 @@ use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use sqlx::PgPool;
 
 use super::{Attempted, Attempts, Handled};
-use crate::process::properties::process_entity_property_update;
+use crate::process::properties::{PropertyRefresh, process_entity_property_update};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PropertyIndexAction<'a> {
@@ -94,7 +94,7 @@ pub(super) async fn process_property_event(
     };
 
     attempts
-        .run(|attempt| async move {
+        .run_handled(|attempt| async move {
             tracing::trace!(
                 entity_id,
                 entity_type = %entity_type,
@@ -104,7 +104,14 @@ pub(super) async fn process_property_event(
                 attempt,
                 "processing property search-index event"
             );
-            process_entity_property_update(opensearch_client, db, entity_id, entity_type).await
+            let refresh =
+                process_entity_property_update(opensearch_client, db, entity_id, entity_type)
+                    .await?;
+            Ok::<_, anyhow::Error>(match refresh {
+                PropertyRefresh::Written => Handled::Indexed,
+                PropertyRefresh::NotIndexed => Handled::NoIndexChange,
+                PropertyRefresh::UnindexedType => Handled::Ignored,
+            })
         })
         .await
 }

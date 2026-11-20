@@ -6,7 +6,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
         properties::build_tag_filter,
-        query::Keys,
+        query::{Keys, child_content_query},
         utils::{should_wildcard_field_query_builder, split_inner_hits_budget},
     },
 };
@@ -14,8 +14,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    QueryType, ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
@@ -23,18 +22,10 @@ use opensearch_query_builder::{
 const PARENT_RELATION: &str = "chat";
 const CHILD_RELATION: &str = "message";
 
-/// Minimum prefix length before we emit a `match_phrase_prefix`. Mirrors
-/// the documents threshold — shorter prefixes risk hitting
-/// `max_clause_count` on expansion.
-const MIN_PREFIX_LEN: usize = 3;
-
 /// The message `_source` fields a `SearchHit` carries. Inner hits do not
 /// inherit the request-level `_source` filter, so without this every message
 /// comes back with its full `content`, which only the highlight needs.
 const MESSAGE_SOURCE_FIELDS: [&str; 2] = ["chat_message_id", "role"];
-
-/// Cap on terms a `match_phrase_prefix` may expand the last word to.
-const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
@@ -151,7 +142,7 @@ impl ChatQueryBuilder {
         let budget = split_inner_hits_budget(self.inner.terms.len());
 
         for (idx, term) in self.inner.terms.iter().enumerate() {
-            let term_query = build_child_content_query(term, &self.inner.match_type);
+            let term_query = child_content_query(term, &self.inner.match_type);
             let inner_query = if self.role.is_empty() {
                 term_query
             } else {
@@ -222,7 +213,7 @@ pub(super) fn build_all_terms_highlight_query(
 ) -> serde_json::Value {
     let term_queries: Vec<serde_json::Value> = terms
         .iter()
-        .map(|t| build_child_content_query(t, match_type).to_json())
+        .map(|t| child_content_query(t, match_type).to_json())
         .collect();
     if term_queries.len() == 1 {
         return term_queries.into_iter().next().unwrap();
@@ -233,24 +224,6 @@ pub(super) fn build_all_terms_highlight_query(
             "minimum_should_match": 1,
         }
     })
-}
-
-/// Build the per-term query that runs inside `has_child` against `content`.
-pub(super) fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(|c| c.is_whitespace())
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        QueryType::MatchPhrase(MatchPhraseQuery::new(
-            "content".to_string(),
-            term.to_string(),
-        ))
-    } else {
-        QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        )
-    }
 }
 
 #[derive(Debug)]

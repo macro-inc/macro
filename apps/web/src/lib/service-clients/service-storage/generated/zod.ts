@@ -8352,10 +8352,15 @@ export const searchContactsResponse = zod
   .describe('Response from searching CRM contacts.');
 
 /**
- * @summary Manually create a contact without a company for the caller's team.
-Any team member may create one. The team must not already have a
-company-less contact with the email (409), and the team's CRM
-killswitch must be on (403).
+ * @summary Manually create a contact for the caller's team without naming a company.
+An email at a company's own domain files the contact under the team's
+company for that domain, creating the company when the team has none; a
+personal or generic provider address, a domain the team blocks, or a
+hidden company leaves the contact without a company. Any team member with
+CRM access may create one. A contact filed under a company is refused when
+that company, or a contact without a company, already has the email as its
+primary address, and one left without a company when another such contact
+has it (409). The team's CRM killswitch must be on (403).
  */
 export const createCrmTeamContactBody = zod
   .object({
@@ -8363,7 +8368,7 @@ export const createCrmTeamContactBody = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+        "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company, unless the team\nblocks the domain or the company is hidden. Optional: omit it to add\nthe contact by name only."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -8644,7 +8649,9 @@ export const setCrmContactCompanyBody = zod
   .object({
     companyId: zod.uuid().describe('Destination company in the same team.'),
   })
-  .describe('Link or switch a contact with a known personal-provider email.');
+  .describe(
+    "Link a contact without a company, or switch the company of a contact\nwhose primary email is at a known personal provider. A contact with an\naddress on its current company's domain cannot switch."
+  );
 
 export const setCrmContactCompanyResponse = zod
   .object({
@@ -84288,6 +84295,73 @@ export const getViewsHandlerResponse = zod.object({
   ),
   views: zod.array(
     zod.object({
+      appearance: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              color: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .enum([
+                      'gray',
+                      'red',
+                      'tomato',
+                      'orange',
+                      'amber',
+                      'yellow',
+                      'green',
+                      'teal',
+                      'blue',
+                      'indigo',
+                      'purple',
+                      'pink',
+                    ])
+                    .describe(
+                      'Named tint keys from the shared tag color palette.'
+                    ),
+                ])
+                .optional(),
+              icon: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .union([
+                      zod
+                        .object({
+                          kind: zod.enum(['macro']),
+                          name: zod
+                            .string()
+                            .describe(
+                              'Catalog name without the SVG extension.'
+                            ),
+                        })
+                        .describe(
+                          "A stable name from Macro's original, distinct icon catalog."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['emoji']),
+                          value: zod
+                            .string()
+                            .describe(
+                              'Unicode emoji text, not markup or a URL.'
+                            ),
+                        })
+                        .describe(
+                          'A single native emoji, including skin-tone and joined sequences.'
+                        ),
+                    ])
+                    .describe("The source of an entity's custom icon."),
+                ])
+                .optional(),
+            })
+            .describe(
+              "An entity's optional icon and tint overrides; absent values retain type defaults."
+            ),
+        ])
+        .optional(),
       config: zod
         .unknown()
         .describe(
@@ -84308,6 +84382,67 @@ export const createViewHandlerBody = zod.object({
 });
 
 export const createViewHandlerResponse = zod.object({
+  appearance: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          color: zod
+            .union([
+              zod.null(),
+              zod
+                .enum([
+                  'gray',
+                  'red',
+                  'tomato',
+                  'orange',
+                  'amber',
+                  'yellow',
+                  'green',
+                  'teal',
+                  'blue',
+                  'indigo',
+                  'purple',
+                  'pink',
+                ])
+                .describe('Named tint keys from the shared tag color palette.'),
+            ])
+            .optional(),
+          icon: zod
+            .union([
+              zod.null(),
+              zod
+                .union([
+                  zod
+                    .object({
+                      kind: zod.enum(['macro']),
+                      name: zod
+                        .string()
+                        .describe('Catalog name without the SVG extension.'),
+                    })
+                    .describe(
+                      "A stable name from Macro's original, distinct icon catalog."
+                    ),
+                  zod
+                    .object({
+                      kind: zod.enum(['emoji']),
+                      value: zod
+                        .string()
+                        .describe('Unicode emoji text, not markup or a URL.'),
+                    })
+                    .describe(
+                      'A single native emoji, including skin-tone and joined sequences.'
+                    ),
+                ])
+                .describe("The source of an entity's custom icon."),
+            ])
+            .optional(),
+        })
+        .describe(
+          "An entity's optional icon and tint overrides; absent values retain type defaults."
+        ),
+    ])
+    .optional(),
   config: zod
     .unknown()
     .describe(
@@ -84350,6 +84485,73 @@ export const listSavedViewDefinitionsResponse = zod
       .array(
         zod
           .object({
+            appearance: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    color: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'gray',
+                            'red',
+                            'tomato',
+                            'orange',
+                            'amber',
+                            'yellow',
+                            'green',
+                            'teal',
+                            'blue',
+                            'indigo',
+                            'purple',
+                            'pink',
+                          ])
+                          .describe(
+                            'Named tint keys from the shared tag color palette.'
+                          ),
+                      ])
+                      .optional(),
+                    icon: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['macro']),
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Catalog name without the SVG extension.'
+                                  ),
+                              })
+                              .describe(
+                                "A stable name from Macro's original, distinct icon catalog."
+                              ),
+                            zod
+                              .object({
+                                kind: zod.enum(['emoji']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'Unicode emoji text, not markup or a URL.'
+                                  ),
+                              })
+                              .describe(
+                                'A single native emoji, including skin-tone and joined sequences.'
+                              ),
+                          ])
+                          .describe("The source of an entity's custom icon."),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "An entity's optional icon and tint overrides; absent values retain type defaults."
+                  ),
+              ])
+              .optional(),
             config: zod
               .object({})
               .describe(
@@ -84381,6 +84583,67 @@ export const listSavedViewDefinitionsResponse = zod
   .describe("A page in the viewer's own order, then by creation time and ID.");
 
 export const createSavedViewDefinitionBody = zod.object({
+  appearance: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          color: zod
+            .union([
+              zod.null(),
+              zod
+                .enum([
+                  'gray',
+                  'red',
+                  'tomato',
+                  'orange',
+                  'amber',
+                  'yellow',
+                  'green',
+                  'teal',
+                  'blue',
+                  'indigo',
+                  'purple',
+                  'pink',
+                ])
+                .describe('Named tint keys from the shared tag color palette.'),
+            ])
+            .optional(),
+          icon: zod
+            .union([
+              zod.null(),
+              zod
+                .union([
+                  zod
+                    .object({
+                      kind: zod.enum(['macro']),
+                      name: zod
+                        .string()
+                        .describe('Catalog name without the SVG extension.'),
+                    })
+                    .describe(
+                      "A stable name from Macro's original, distinct icon catalog."
+                    ),
+                  zod
+                    .object({
+                      kind: zod.enum(['emoji']),
+                      value: zod
+                        .string()
+                        .describe('Unicode emoji text, not markup or a URL.'),
+                    })
+                    .describe(
+                      'A single native emoji, including skin-tone and joined sequences.'
+                    ),
+                ])
+                .describe("The source of an entity's custom icon."),
+            ])
+            .optional(),
+        })
+        .describe(
+          "An entity's optional icon and tint overrides; absent values retain type defaults."
+        ),
+    ])
+    .optional(),
   config: zod
     .object({})
     .describe(
@@ -84412,6 +84675,69 @@ export const reorderSavedViewDefinitionsBody = zod.object({
 
 export const reorderSavedViewDefinitionsResponseItem = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     config: zod
       .object({})
       .describe(
@@ -84443,6 +84769,69 @@ export const getSavedViewDefinitionParams = zod.object({
 
 export const getSavedViewDefinitionResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     config: zod
       .object({})
       .describe(
@@ -84509,6 +84898,217 @@ export const updateSavedViewDefinitionBody = zod.object({
 
 export const updateSavedViewDefinitionResponse = zod
   .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+
+export const setSavedViewAppearanceParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to edit'),
+});
+
+export const setSavedViewAppearanceBody = zod
+  .object({
+    color: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'gray',
+            'red',
+            'tomato',
+            'orange',
+            'amber',
+            'yellow',
+            'green',
+            'teal',
+            'blue',
+            'indigo',
+            'purple',
+            'pink',
+          ])
+          .describe('Named tint keys from the shared tag color palette.'),
+      ])
+      .optional(),
+    icon: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['macro']),
+                name: zod
+                  .string()
+                  .describe('Catalog name without the SVG extension.'),
+              })
+              .describe(
+                "A stable name from Macro's original, distinct icon catalog."
+              ),
+            zod
+              .object({
+                kind: zod.enum(['emoji']),
+                value: zod
+                  .string()
+                  .describe('Unicode emoji text, not markup or a URL.'),
+              })
+              .describe(
+                'A single native emoji, including skin-tone and joined sequences.'
+              ),
+          ])
+          .describe("The source of an entity's custom icon."),
+      ])
+      .optional(),
+  })
+  .describe(
+    "An entity's optional icon and tint overrides; absent values retain type defaults."
+  );
+
+export const setSavedViewAppearanceResponse = zod
+  .object({
+    appearance: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            color: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'gray',
+                    'red',
+                    'tomato',
+                    'orange',
+                    'amber',
+                    'yellow',
+                    'green',
+                    'teal',
+                    'blue',
+                    'indigo',
+                    'purple',
+                    'pink',
+                  ])
+                  .describe(
+                    'Named tint keys from the shared tag color palette.'
+                  ),
+              ])
+              .optional(),
+            icon: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['macro']),
+                        name: zod
+                          .string()
+                          .describe('Catalog name without the SVG extension.'),
+                      })
+                      .describe(
+                        "A stable name from Macro's original, distinct icon catalog."
+                      ),
+                    zod
+                      .object({
+                        kind: zod.enum(['emoji']),
+                        value: zod
+                          .string()
+                          .describe('Unicode emoji text, not markup or a URL.'),
+                      })
+                      .describe(
+                        'A single native emoji, including skin-tone and joined sequences.'
+                      ),
+                  ])
+                  .describe("The source of an entity's custom icon."),
+              ])
+              .optional(),
+          })
+          .describe(
+            "An entity's optional icon and tint overrides; absent values retain type defaults."
+          ),
+      ])
+      .optional(),
     config: zod
       .object({})
       .describe(

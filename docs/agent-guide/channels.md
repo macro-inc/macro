@@ -1092,11 +1092,12 @@ and full account email wrap at phone widths so reviewers can identify the
 requester before answering. If the display name already is the email, it appears
 only once. Every participant
 also gets a **Requests to join** notification (turn it off under notification
-settings) that opens the channel and marks it unread. The first answer wins: the
-row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
-shows **Request withdrawn**, and the other participants' notifications are marked
-done. Approval adds the requester, who gets the usual "added you" invite
-notification, and the timeline shows the usual added row. A requester waiting on
+settings) that opens the channel and marks it unread. The first answer wins and
+the other participants' notifications are marked done. An approved row drops its
+buttons and shows no answer: approval adds the requester, who gets the usual
+"added you" invite notification, and the timeline shows the usual added row. A
+denied row shows **Denied by** for everyone, and a withdrawn request shows
+**Request withdrawn**. A requester waiting on
 the denied view is taken into the channel when the approval arrives.
 
 Verify with two accounts: ask from a non-member, approve or deny from a member
@@ -1161,8 +1162,10 @@ Reopen it with **Show navigation** before the conversation title on desktop,
 or as the leading header pill on touch. Chat remembers the wide-layout choice
 independently of other workspaces. The rail starts at 256px on desktop and 403px
 on wide touch,
-docks above 720px. Narrow desktop panes use a navigation overlay. It remains
-collapsible with no conversation selected and while showing Threads. At 720px
+docks above 720px, including in a new split. Narrow desktop panes show the
+rail at full width until a conversation opens, which then fills the pane with
+**Back** returning to the rail; Threads open the same way. Arrow keys and
+`j`/`k` there only move along the rail; Enter opens the conversation. At 720px
 or narrower, touch shows the full-frame conversation list and
 full-screen navigation, with no sidebar, expand button, or reserved navigation
 row. Only the safe-area top inset precedes the list. Wider touch panes use the
@@ -1205,6 +1208,14 @@ participants to check that it disappears without reloading. Start two calls to
 check newest-first ordering, and dismiss a ring without joining. Repeat with
 the sidebar flag off. At 390×844, keep the existing in-row Join/Decline and live
 indicators: the standalone desktop Live section does not appear on touch.
+
+Reopening Chat or reloading with a saved channel list displays cached conversations
+while the bounded Soup pages revalidate. A settled page replaces the cached seed,
+including when the page is empty. Only a cold list without cached rows shows loading
+placeholders. Favorites do not add skeleton rows while channel metadata loads;
+Unread-only can legitimately leave the section empty. A successfully omitted channel
+favorite disappears from this rail without deleting the saved favorite, while a failed
+lookup offers Retry.
 
 ### Original sidebar (flag off)
 
@@ -1410,6 +1421,54 @@ the channel to notifying for every message. The rail row and Home row show an
 `@` in place of the muted bell, and Settings → Notifications lists the channel
 under **Mentions only** with **Notify for all**. Mute, snooze and mentions-only
 replace each other; a snooze that expires returns the channel to all messages.
+
+### Notification Settings (`enable-channel-notification-settings`)
+
+With the flag on, a channel's menu (rail row, Home row, the open channel's
+title menu) has two entries in place of the one above, in a group of their own
+between separators; section heading menus and the phone sheets group them the
+same way:
+
+- **Mute** holds the time-based choices: **Until I turn it off**, the snooze
+  presets and **Custom…**. A muted channel shows **Unmute** with why beside it
+  ("Until 3:00 PM", or "Muted by Engineering" when every section holding it is
+  muted). Unmuting a channel its sections mute keeps that one channel
+  notifying inside them. **Only @mentions** is gone from Mute.
+- **Notification settings** shows the current choice under its name and is
+  one choice: **All messages**, **Messages involving me** (thread replies,
+  @mentions, calls and join requests; no top-level messages or reactions),
+  **Custom settings…** or **Nothing**. Custom opens a dialog with six
+  checkboxes (Top-level messages, Thread replies, @mentions, Emoji reactions,
+  Calls, Join requests) under where the settings come from ("This channel" or
+  "Inherited from Engineering"); the choice shows Custom whenever the boxes
+  match no preset. A channel either inherits every kind from its sections
+  (the submenu then starts with **Inherited from Engineering**) or has its own
+  full set: any choice on an inheriting channel saves all six on the channel.
+  **Use section default**, first in the submenu with what it gives ("All
+  messages · Engineering"), hands them all back. Document mentions follow
+  top-level messages outside a thread and thread replies inside one. Nothing
+  differs from Mute: it has no duration, and Mute still silences everything.
+
+Sections (Favorites, Direct messages, the team section and custom sections,
+never All channels) have their own **Mute** and **Notification settings**,
+stored on the section, so channels added later follow them. A channel notifies
+for a kind when any section holding it allows it, its sections mute it only
+when all of them are muted, and an untouched section allows everything. A
+channel with its own settings ignores its sections' kinds. Changing a
+section's settings when some of its channels have their own different ones,
+or muting or snoozing it when some are set to keep notifying in muted
+sections, first opens **Some channels have their own settings**: the channels
+listed unchecked, **Select all**, and **Cancel**, **Override** (the checked
+channels follow the section) or **OK** (save, keep theirs). Rows show only the
+muted bell (for channel or section mute), never an indicator for notification
+settings. On a phone, the long-press sheet and the title menu drill into the
+same choices, with the current choice at the end of the Notification settings
+row, and Custom settings drills into the six kinds as toggling rows; custom
+sections' option sheets do the same, but a section's Custom page saves (and
+checks its channels) once when you leave it. Built-in sections have these
+controls on desktop only. A channel with a legacy mentions-only setting shows
+its own settings with only @mentions until its settings are next changed,
+which replaces it.
 
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove

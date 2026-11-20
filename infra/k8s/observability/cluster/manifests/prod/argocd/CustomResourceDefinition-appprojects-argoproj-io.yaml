@@ -1,0 +1,285 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+    helm.sh/resource-policy: keep
+  labels:
+    app.kubernetes.io/name: appprojects.argoproj.io
+    app.kubernetes.io/part-of: argocd
+  name: appprojects.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: AppProject
+    listKind: AppProjectList
+    plural: appprojects
+    shortNames:
+      - appproj
+      - appprojs
+    singular: appproject
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                clusterResourceBlacklist:
+                  items:
+                    properties:
+                      group:
+                        type: string
+                      kind:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                      - group
+                      - kind
+                    type: object
+                  type: array
+                clusterResourceWhitelist:
+                  items:
+                    properties:
+                      group:
+                        type: string
+                      kind:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                      - group
+                      - kind
+                    type: object
+                  type: array
+                description:
+                  maxLength: 255
+                  type: string
+                destinationServiceAccounts:
+                  items:
+                    properties:
+                      defaultServiceAccount:
+                        type: string
+                      namespace:
+                        type: string
+                      server:
+                        type: string
+                    required:
+                      - defaultServiceAccount
+                      - server
+                    type: object
+                  type: array
+                destinations:
+                  items:
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                      server:
+                        type: string
+                    type: object
+                  type: array
+                namespaceResourceBlacklist:
+                  items:
+                    properties:
+                      group:
+                        type: string
+                      kind:
+                        type: string
+                    required:
+                      - group
+                      - kind
+                    type: object
+                  type: array
+                namespaceResourceWhitelist:
+                  items:
+                    properties:
+                      group:
+                        type: string
+                      kind:
+                        type: string
+                    required:
+                      - group
+                      - kind
+                    type: object
+                  type: array
+                orphanedResources:
+                  properties:
+                    ignore:
+                      items:
+                        properties:
+                          group:
+                            type: string
+                          kind:
+                            type: string
+                          name:
+                            type: string
+                        type: object
+                      type: array
+                    warn:
+                      type: boolean
+                  type: object
+                permitOnlyProjectScopedClusters:
+                  type: boolean
+                roles:
+                  items:
+                    properties:
+                      description:
+                        type: string
+                      groups:
+                        items:
+                          type: string
+                        type: array
+                      jwtTokens:
+                        items:
+                          properties:
+                            exp:
+                              format: int64
+                              type: integer
+                            iat:
+                              format: int64
+                              type: integer
+                            id:
+                              type: string
+                          required:
+                            - iat
+                          type: object
+                        type: array
+                      name:
+                        type: string
+                      policies:
+                        items:
+                          type: string
+                        type: array
+                    required:
+                      - name
+                    type: object
+                  type: array
+                signatureKeys:
+                  items:
+                    properties:
+                      keyID:
+                        type: string
+                    required:
+                      - keyID
+                    type: object
+                  type: array
+                sourceIntegrity:
+                  properties:
+                    git:
+                      properties:
+                        policies:
+                          items:
+                            properties:
+                              gpg:
+                                properties:
+                                  keys:
+                                    items:
+                                      type: string
+                                    type: array
+                                  mode:
+                                    type: string
+                                required:
+                                  - keys
+                                  - mode
+                                type: object
+                              repos:
+                                items:
+                                  properties:
+                                    url:
+                                      type: string
+                                  required:
+                                    - url
+                                  type: object
+                                type: array
+                            required:
+                              - gpg
+                              - repos
+                            type: object
+                          type: array
+                      required:
+                        - policies
+                      type: object
+                  required:
+                    - git
+                  type: object
+                sourceNamespaces:
+                  items:
+                    type: string
+                  type: array
+                sourceRepos:
+                  items:
+                    type: string
+                  type: array
+                syncWindows:
+                  items:
+                    properties:
+                      andOperator:
+                        type: boolean
+                      applications:
+                        items:
+                          type: string
+                        type: array
+                      clusters:
+                        items:
+                          type: string
+                        type: array
+                      description:
+                        type: string
+                      duration:
+                        type: string
+                      kind:
+                        type: string
+                      manualSync:
+                        type: boolean
+                      namespaces:
+                        items:
+                          type: string
+                        type: array
+                      schedule:
+                        type: string
+                      syncOverrun:
+                        type: boolean
+                      timeZone:
+                        type: string
+                    type: object
+                  type: array
+              type: object
+            status:
+              properties:
+                jwtTokensByRole:
+                  additionalProperties:
+                    properties:
+                      items:
+                        items:
+                          properties:
+                            exp:
+                              format: int64
+                              type: integer
+                            iat:
+                              format: int64
+                              type: integer
+                            id:
+                              type: string
+                          required:
+                            - iat
+                          type: object
+                        type: array
+                    type: object
+                  type: object
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
