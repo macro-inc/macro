@@ -124,7 +124,7 @@ jobs:
           SERVICE: ${{ inputs.service-name }}
       - id: build-inputs
         name: Collect build inputs for the nix cache
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: github.ref == 'refs/heads/main'
         run: |
           set -uo pipefail
           # The cache is an optimization: a failed lookup only pushes less.
@@ -144,7 +144,7 @@ jobs:
           echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
         shell: bash
       - name: Push to nix cache
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: github.ref == 'refs/heads/main'
         run: |
           set -uo pipefail
           if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then

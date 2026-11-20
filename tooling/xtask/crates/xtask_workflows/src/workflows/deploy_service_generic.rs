@@ -33,6 +33,7 @@ const SERVICES: &[&str] = &[
     "mcp-server",
     "notification-service",
     "organization-retention",
+    "search-freshness-probe",
     "search-processing-service",
     "search-upload",
     "static-file-service",

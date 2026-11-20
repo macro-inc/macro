@@ -20,8 +20,7 @@ use gh_workflow::expr::typed::{
     format, github, input, runner,
 };
 use gh_workflow::{
-    Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
-    WorkflowInput,
+    Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
 };
 
 use crate::workflows::actions::{LocalDeployCloudStoragePulumi, LocalGetProjectName};
@@ -199,12 +198,28 @@ fn build_job(name: &str, gate: &JobOutput<Flag>) -> Job {
 }
 
 /// Only a run on `main` signs what it built into the S3 nix cache.
-const ON_MAIN: &str = "${{ github.ref == 'refs/heads/main' }}";
+fn on_main() -> Expr<Bool> {
+    github().git_ref().eq("refs/heads/main")
+}
 
 /// The signing key on `main`, empty elsewhere, for scripts that push when
 /// it is set.
-const SIGNING_KEY_ON_MAIN: &str =
-    "${{ github.ref == 'refs/heads/main' && secrets.NIX_CACHE_SIGNING_KEY || '' }}";
+fn signing_key_on_main() -> Expr<Str> {
+    on_main().then_else(vars::NIX_CACHE_SIGNING_KEY, "")
+}
+
+pub(crate) struct BuildInputsOutputs {
+    /// The realised build inputs to push, space-separated.
+    pub paths: StepOutput<Str>,
+}
+
+/// The step that lists the build inputs worth caching.
+pub(crate) const BUILD_INPUTS: StepHandle<BuildInputsOutputs> = StepHandle::new(
+    "build-inputs",
+    BuildInputsOutputs {
+        paths: StepOutput::new("build-inputs", "paths"),
+    },
+);
 
 fn build_service_binaries() -> Job {
     build_job(
@@ -212,15 +227,17 @@ fn build_service_binaries() -> Job {
         &SETUP.outputs.has_binaries,
     )
     .add_step(build_prebuilt_binaries())
-    .add_step(collect_build_inputs().if_condition(Expression::new(ON_MAIN)))
+    .add_step(collect_build_inputs().if_condition(on_main()))
     // The service's output makes an unchanged service a pure substitution
     // next run; the deps and build inputs let a changed one compile only
     // its own crates, even on a cold volume.
     .add_step(
-        steps::push_nix_cache(
-            ".#deployCargoArtifacts .#deploy-service-binaries-${{ inputs.service-name }} ${{ steps.build-inputs.outputs.paths }}",
-        )
-        .if_condition(Expression::new(ON_MAIN))
+        steps::push_nix_cache(&format!(
+            ".#deployCargoArtifacts .#deploy-service-binaries-{} {}",
+            service_name(),
+            BUILD_INPUTS.outputs.paths.read()
+        ))
+        .if_condition(on_main())
         // A stuck upload must not hold or fail the deploy.
         .timeout_minutes(15u32)
         .continue_on_error(true),
@@ -256,7 +273,7 @@ fn collect_build_inputs() -> Step<Run> {
             echo "build inputs to cache: ${paths[*]}"
             echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
         "#})
-        .id("build-inputs")
+        .id(BUILD_INPUTS.id())
         .shell("bash")
 }
 
@@ -308,7 +325,7 @@ fn build_lambdas() -> Step<Run> {
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
         .add_env(Env::new("SERVICE", service_name()))
         .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
-        .add_env(Env::new("NIX_CACHE_SIGNING_KEY", SIGNING_KEY_ON_MAIN))
+        .add_env(Env::new("NIX_CACHE_SIGNING_KEY", signing_key_on_main()))
         .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
         .add_env(Env::new(
             "AWS_SECRET_ACCESS_KEY",
@@ -488,7 +505,8 @@ mod test {
                 };
                 signing_steps += 1;
                 assert!(
-                    step["if"].as_str() == Some(ON_MAIN) || key == SIGNING_KEY_ON_MAIN,
+                    step["if"].as_str() == Some(on_main().ast().to_string().as_str())
+                        || key == signing_key_on_main().to_string(),
                     "{name:?} signs off main: {step:?}"
                 );
             }

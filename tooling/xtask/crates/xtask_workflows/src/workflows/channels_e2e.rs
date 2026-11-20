@@ -13,11 +13,10 @@
 //! run on the commit it tested; nothing is reverted or blocked by it. Its
 //! last job tells the Macro Alerts channel when the pushes or the nightly
 //! runs turn red, and when they pass again ([`email_e2e_alert`]).
-use gh_workflow::expr::typed::JobHandle;
+use gh_workflow::expr::typed::{JobHandle, cancelled, failure};
 
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Push, Run, Schedule, Step, Use, Workflow,
-    WorkflowDispatch,
+    Event, Job, Level, Permissions, Push, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 use xtask_paths::RepoGlob;
 
@@ -130,7 +129,7 @@ fn suite() -> Job {
                 // A re-run of a failed job uploads under the same name again.
                 .add_with(("overwrite", true))
                 .add_with(("retention-days", 7))
-                .if_condition(Expression::new("!cancelled()")),
+                .if_condition(!cancelled()),
         )
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -153,7 +152,7 @@ fn stack_logs() -> Step<Run> {
              cp infra/local/generated/{INSTANCE}/run/*.log {logs}/ 2>/dev/null || true",
             logs = STACK_LOGS.as_str(),
         ))
-        .if_condition(Expression::new("failure()"))
+        .if_condition(failure())
 }
 
 fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
@@ -162,5 +161,5 @@ fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
         .add_with(("include-hidden-files", true))
         .add_with(("if-no-files-found", "ignore"))
         .add_with(("retention-days", 7))
-        .if_condition(Expression::new("failure()"))
+        .if_condition(failure())
 }
