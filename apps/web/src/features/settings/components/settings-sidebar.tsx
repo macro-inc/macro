@@ -43,7 +43,7 @@ export function SettingsSidebar(props: {
       </ViewSidebar.Header>
 
       <Show when={props.searchable}>
-        <ViewSidebar.Primary>
+        <ViewSidebar.Primary keepWhenHosted>
           <SearchBar
             label={t('settingsNav.searchSettings')}
             placeholder={t('settingsNav.searchSettings')}

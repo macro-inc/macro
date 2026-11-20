@@ -6,13 +6,17 @@ import { t } from '@app/lib/i18n';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import { TOKENS } from '@core/hotkey/tokens';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
-import { For, Match, Show, Suspense, Switch } from 'solid-js';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import { Button } from '@ui';
+import { For, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
 import { unreadDescription } from '../unread-description';
 import { useNavigationUnread } from '../use-navigation-unread';
-import { SidebarRailCreateButton } from './create-button';
+import { SidebarNewButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { isNavItemActive, useListNavAction } from './list-nav';
 import { MoreMenu } from './more-menu';
@@ -20,7 +24,7 @@ import { NavGlyph } from './nav-glyph';
 import { type SidebarNextNavItem, visibleNavItems } from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
 import { ReturnToCallButton } from './return-to-call-button';
-import { SearchRailButton } from './search-bar-button';
+import { SearchFieldButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 import { useSidebarPrefs } from './use-sidebar-prefs';
 
@@ -123,19 +127,44 @@ function CalendarAppRow(props: Omit<AppRowProps, 'badge'>) {
   return <AppRow {...props} badge={badge()?.label} />;
 }
 
+// Chat's sections read the channel lists; keep them out of the startup bundle.
+const ChatSections = lazyNamed(() => import('./chat-sections'), 'ChatSections');
+const FavoritesSection = lazyNamed(
+  () => import('./favorites-section'),
+  'FavoritesSection'
+);
+
+/**
+ * An app's navigation under its row: starts under the app's icon, with a line
+ * down from it, so the rows inside line up with the app labels. It fills the
+ * room the app rows leave and scrolls inside.
+ */
+function NestedNavigation(props: { children: JSX.Element }) {
+  return (
+    <div
+      class="relative -mr-(--sidebar-gutter) ml-[calc(var(--sidebar-item-inset)+var(--sidebar-icon-slot)/2)] flex min-h-40 flex-1 flex-col overflow-hidden before:absolute before:inset-y-1 before:left-0 before:w-px before:bg-edge-muted has-[[data-single-sidebar-slot]:empty]:hidden"
+      data-single-sidebar-nested=""
+    >
+      {props.children}
+    </div>
+  );
+}
+
 /**
  * Where the active split's workspace renders its navigation (see
- * `NavigationHost`). It fills the room the app rows leave, and takes none
- * while the workspace has no navigation. The navigation fills it absolutely,
- * as a docked split panel does, so the workspace's own list scrolls inside.
+ * `NavigationHost`); it takes no room while the workspace has none. The
+ * navigation fills it absolutely, as a docked split panel does, so the
+ * workspace's own list scrolls inside.
  */
 function NavigationSlot(props: { ref: (element: HTMLElement) => void }) {
   return (
-    <div
-      ref={props.ref}
-      class="relative -mr-(--sidebar-gutter) ml-1 min-h-40 flex-1 overflow-hidden empty:hidden"
-      data-single-sidebar-slot=""
-    />
+    <NestedNavigation>
+      <div
+        ref={props.ref}
+        class="relative min-h-0 flex-1"
+        data-single-sidebar-slot=""
+      />
+    </NestedNavigation>
   );
 }
 
@@ -147,6 +176,7 @@ function NavigationSlot(props: { ref: (element: HTMLElement) => void }) {
 export function SingleSidebar(props: {
   /** Receives the element the active workspace's navigation renders into. */
   setNavigationSlot: (element: HTMLElement) => void;
+  onCollapse: () => void;
 }) {
   const gates = useNavItemGates();
   const unread = useNavigationUnread();
@@ -161,9 +191,21 @@ export function SingleSidebar(props: {
       data-ui="single-sidebar"
       class="relative flex h-full w-64 shrink-0 flex-col bg-page"
     >
-      <div class="flex shrink-0 items-center gap-1 px-2 pt-2 pb-2">
-        <SidebarRailCreateButton />
-        <SearchRailButton />
+      <div class="flex shrink-0 items-center gap-1.5 px-(--sidebar-gutter) pt-2 pb-3">
+        <SearchFieldButton />
+        <SidebarNewButton />
+        <Button
+          variant="ghost"
+          size="icon-md"
+          aria-label={t('nav.collapseSidebar')}
+          tooltip={{
+            content: t('nav.collapseSidebar'),
+            hotkey: TOKENS.sidebar.toggleSingleSidebar,
+          }}
+          onClick={() => props.onCollapse()}
+        >
+          <SidebarIcon class="size-4" />
+        </Button>
       </div>
 
       <nav class="flex min-h-0 flex-1 flex-col gap-(--sidebar-row-gap) overflow-y-auto px-(--sidebar-gutter)">
@@ -194,22 +236,38 @@ export function SingleSidebar(props: {
                   </Match>
                 </Switch>
                 <Show when={isNavItemActive(item)}>
-                  <NavigationSlot ref={props.setNavigationSlot} />
+                  {/* Chat's list fills its split; the sidebar lists its
+                      conversations instead. */}
+                  <Show
+                    when={item.id === 'channels'}
+                    fallback={<NavigationSlot ref={props.setNavigationSlot} />}
+                  >
+                    <NestedNavigation>
+                      <div class="min-h-0 flex-1 overflow-y-auto">
+                        <Suspense>
+                          <ChatSections />
+                        </Suspense>
+                      </div>
+                    </NestedNavigation>
+                  </Show>
                 </Show>
               </>
             );
           }}
         </For>
+        <MoreMenu gates={gates()} presentation="row" />
         {/* A workspace reached from More or a link still shows its navigation. */}
         <Show when={!appIsActive()}>
           <NavigationSlot ref={props.setNavigationSlot} />
         </Show>
+        <Suspense>
+          <FavoritesSection />
+        </Suspense>
       </nav>
 
       {/* Wraps rather than clipping Settings when an update, the mobile app
           button and a call all show at once. */}
       <div class="flex shrink-0 flex-wrap items-center justify-end gap-1 px-2 pt-2 pb-3">
-        <MoreMenu gates={gates()} />
         <div class="min-w-0 flex-1" />
         <ReturnToCallButton />
         <FooterActions horizontal />

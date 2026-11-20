@@ -36,6 +36,12 @@ export default {
 
   // Rail buttons
   appNavigation: 'App navigation',
+  new: 'New',
+  collapseSidebar: 'Collapse sidebar',
+  expandSidebar: 'Expand sidebar',
+  groupChats: 'Group chats',
+  favorites: 'Favorites',
+  directMessages: 'Direct messages',
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
   unreadNotifications: {

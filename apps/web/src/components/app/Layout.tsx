@@ -35,6 +35,8 @@ import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/Nativ
 import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
 import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { usePreference } from '@app/preferences/use-preference';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
@@ -55,7 +57,8 @@ import {
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
+import { attachGlobalDOMScope, registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -291,10 +294,28 @@ export function AppChrome(props: ParentProps) {
   const singleSidebar = () =>
     sidebarVisible() && singleSidebarFlag().enabled === true;
   const [navigationSlot, setNavigationSlot] = createSignal<HTMLElement>();
+  // Collapsed, the single sidebar is the icon rail and shows no workspace
+  // navigation at all: splits keep giving up their columns.
+  const [singleSidebarCollapsed, setSingleSidebarCollapsed] =
+    usePreference<boolean>('macro:pref:single-sidebar:collapsed', {
+      default: false,
+    });
   const navigationHost: NavigationHost = {
     active: singleSidebar,
-    slot: navigationSlot,
+    slot: () => (singleSidebarCollapsed() ? undefined : navigationSlot()),
   };
+  registerHotkey({
+    hotkey: 'cmd+.',
+    hotkeyToken: TOKENS.sidebar.toggleSingleSidebar,
+    scopeId: 'global',
+    description: () => t('nav.collapseSidebar'),
+    condition: singleSidebar,
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      setSingleSidebarCollapsed((collapsed) => !collapsed);
+      return true;
+    },
+  });
 
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
@@ -382,8 +403,16 @@ export function AppChrome(props: ParentProps) {
             <ViewSwitcherContext.Provider value={ViewSwitcher}>
               <NavigationHostContext.Provider value={navigationHost}>
                 <Switch>
+                  <Match when={singleSidebar() && !singleSidebarCollapsed()}>
+                    <SingleSidebar
+                      setNavigationSlot={setNavigationSlot}
+                      onCollapse={() => setSingleSidebarCollapsed(true)}
+                    />
+                  </Match>
                   <Match when={singleSidebar()}>
-                    <SingleSidebar setNavigationSlot={setNavigationSlot} />
+                    <SidebarRail
+                      onExpand={() => setSingleSidebarCollapsed(false)}
+                    />
                   </Match>
                   <Match when={isSidebarVisible()}>
                     <SidebarRail />

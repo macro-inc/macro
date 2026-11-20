@@ -19,6 +19,8 @@ import {
 
 export type MoreMenuProps = {
   gates: NavItemGates;
+  /** A labelled row in the single sidebar's app list; the rail's icon otherwise. */
+  presentation?: 'row';
 };
 
 function navigateToItem(
@@ -59,17 +61,36 @@ export function MoreMenu(props: MoreMenuProps) {
   return (
     <>
       <Dropdown placement="right-start" gutter={6}>
-        <Dropdown.Trigger
-          aria-label={t('nav.more')}
-          variant="ghost"
-          size="icon-md"
-          class="size-10 shrink-0 cursor-default rounded-xl"
-          tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
-          draggable={false}
-          data-sidebar-next-item="more"
+        <Show
+          when={props.presentation === 'row'}
+          fallback={
+            <Dropdown.Trigger
+              aria-label={t('nav.more')}
+              variant="ghost"
+              size="icon-md"
+              class="size-10 shrink-0 cursor-default rounded-xl"
+              tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
+              draggable={false}
+              data-sidebar-next-item="more"
+            >
+              <DotsThreeIcon class="size-5" />
+            </Dropdown.Trigger>
+          }
         >
-          <DotsThreeIcon class="size-5" />
-        </Dropdown.Trigger>
+          <Dropdown.Trigger
+            variant="ghost"
+            size="md"
+            fullWidth
+            class="cursor-default justify-start px-(--sidebar-item-inset) font-normal text-ink-muted"
+            draggable={false}
+            data-sidebar-next-item="more"
+          >
+            <span class="flex size-(--sidebar-icon-slot) items-center justify-center">
+              <DotsThreeIcon class="size-4" />
+            </span>
+            {t('nav.more')}
+          </Dropdown.Trigger>
+        </Show>
         <Dropdown.Content class="min-w-[14rem]">
           <Show when={hiddenItems().length > 0}>
             <Dropdown.Group>

@@ -140,12 +140,6 @@ export type ViewShellRootProps = Omit<
    * a back button that calls `onBack` in place of Show navigation.
    */
   asideList?: { open: boolean; onBack: () => void };
-  /**
-   * Keeps the aside in the split under the single sidebar, for an aside that
-   * is the view's content rather than its navigation (Home's list beside its
-   * preview). `asideList` views keep theirs too.
-   */
-  keepAsideInSplit?: boolean;
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -173,7 +167,6 @@ function Root(props: ViewShellRootProps) {
     'asideRequired',
     'asidePinned',
     'asideList',
-    'keepAsideInSplit',
     'main',
     'detail',
     'detailOpen',
@@ -325,17 +318,17 @@ function Root(props: ViewShellRootProps) {
     !collectionLayout();
   // A list aside takes turns with Main in narrow layouts rather than
   // overlaying it, so the overlay and its open state don't apply there.
-  // The single sidebar shows the active split's navigation, so no split keeps
-  // a navigation column of its own while it is up. An aside that is the
-  // view's list stays in its split: other splits would lose their content.
-  const asideHosted = () =>
+  // Under the single sidebar no split keeps a navigation column: the active
+  // split's navigation shows in the sidebar, and a view whose aside is its
+  // list (Chat, Notifications) takes turns with Main in the whole split, as a
+  // narrow shell does, so every split keeps its content.
+  const underSingleSidebar = () =>
     navigationHost?.active() === true &&
     panel !== undefined &&
     !nestedShell &&
-    local.aside !== false &&
-    !local.asideList &&
-    !local.keepAsideInSplit &&
     !isTouchDevice();
+  const asideHosted = () =>
+    underSingleSidebar() && local.aside !== false && !local.asideList;
   const hostSlot = () =>
     asideHosted() && panel?.isPanelActive()
       ? navigationHost?.slot()
@@ -344,8 +337,7 @@ function Root(props: ViewShellRootProps) {
     if (
       !local.asideList ||
       local.aside === false ||
-      asideHosted() ||
-      !atLayoutBreakpoint()
+      !(atLayoutBreakpoint() || underSingleSidebar())
     ) {
       return undefined;
     }

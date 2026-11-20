@@ -75,6 +75,16 @@ export function useViewShellInternal(): ViewShellInternal {
   return ctx;
 }
 
+/**
+ * Whether the surrounding workspace navigation shows in the single sidebar,
+ * where promotions and create actions give way to navigation alone. Safe
+ * outside a shell.
+ */
+export function useIsHostedNavigation(): Accessor<boolean> {
+  const ctx = useContext(ViewShellContext);
+  return () => ctx?.aside.isHosted() === true;
+}
+
 export function useViewShell(): ViewShellLayout {
   const ctx = useViewShellInternal();
   return {

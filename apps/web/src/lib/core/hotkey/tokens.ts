@@ -139,6 +139,7 @@ export const TOKENS = {
   // sidebar navigation
   sidebar: {
     goToLeader: 'sidebar.goToLeader',
+    toggleSingleSidebar: 'sidebar.toggleSingleSidebar',
     goTo: {
       home: 'sidebar.goTo.home',
       notifications: 'sidebar.goTo.notifications',

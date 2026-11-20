@@ -1,3 +1,4 @@
+import { useIsHostedNavigation } from '@app/components/view-shell';
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { createPromotionVisibility } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { analytics } from '@app/lib/analytics';
@@ -226,8 +227,10 @@ export function SidebarRoutineSuggestions(props: {
   class?: string;
 }) {
   const enabled = useRoutineSuggestionsEnabled();
+  // The single sidebar holds navigation only.
+  const hosted = useIsHostedNavigation();
   return (
-    <Show when={enabled() && !isTouchDevice()}>
+    <Show when={enabled() && !isTouchDevice() && !hosted()}>
       <SidebarCard surface={props.surface} class={props.class} />
     </Show>
   );

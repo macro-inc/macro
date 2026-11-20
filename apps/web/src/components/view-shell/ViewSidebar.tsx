@@ -26,7 +26,7 @@ import {
   ViewSidebarCloseButton,
   ViewSidebarToggle,
 } from './ViewNavigationControls';
-import { ViewShellContext } from './view-shell-context';
+import { useIsHostedNavigation, ViewShellContext } from './view-shell-context';
 
 const SidebarViewContext = createContext<{ view: () => string | undefined }>();
 
@@ -268,18 +268,31 @@ function Title(
 }
 
 /** The shared inset between the title bar and a create action or toolbar. */
-function Primary(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+function Primary(
+  props: JSX.HTMLAttributes<HTMLDivElement> & {
+    /** Keeps controls that are navigation (a search field) in the single
+     * sidebar, which otherwise drops this slot's create actions. */
+    keepWhenHosted?: boolean;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'keepWhenHosted',
+  ]);
+  const hosted = useIsHostedNavigation();
   return (
-    <div
-      {...rest}
-      class={cn(
-        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)',
-        local.class
-      )}
-    >
-      {local.children}
-    </div>
+    <Show when={local.keepWhenHosted || !hosted()}>
+      <div
+        {...rest}
+        class={cn(
+          'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)',
+          local.class
+        )}
+      >
+        {local.children}
+      </div>
+    </Show>
   );
 }
 
