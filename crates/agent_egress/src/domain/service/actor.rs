@@ -320,7 +320,8 @@ async fn traced_exchange(
     let result = transport
         .exchange(session, actor, upstream, request)
         .instrument(span.clone())
-        .await;
+        .await
+        .map_err(|error| reconnect_only_for_connected_apps(error, destination));
     match &result {
         Ok(value) => {
             if traced {
@@ -348,6 +349,21 @@ async fn traced_exchange(
     result
 }
 
+/// Only Macro Connect answers HTTP 409 for a grant that needs reauthorizing;
+/// any other server's 409 is its own failure, not a reason to reconnect.
+fn reconnect_only_for_connected_apps(
+    error: EgressError,
+    destination: &McpDestination,
+) -> EgressError {
+    match (error, destination) {
+        (EgressError::NeedsReconnect, McpDestination::Connected(_)) => EgressError::NeedsReconnect,
+        (EgressError::NeedsReconnect, _) => {
+            EgressError::Upstream(rootcause::report!("upstream answered HTTP 409"))
+        }
+        (error, _) => error,
+    }
+}
+
 /// The length of `value` as JSON, without keeping the text.
 fn json_bytes(value: &Value) -> i64 {
     struct Counter(usize);
@@ -370,8 +386,8 @@ const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. I
 
 /// What a `tools/call` the upstream failed says. A connected app refused for
 /// a grant that needs reconnecting (Macro Connect answers so before calling
-/// the vendor) says so with a reconnect button; a custom server's 409 is its
-/// own, and like every other failure may have run.
+/// the vendor) says so with a reconnect button; every other failure may have
+/// run.
 fn failed_call_text(
     grant: &SessionGrant,
     destination: &McpDestination,

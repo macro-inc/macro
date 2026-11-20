@@ -172,6 +172,10 @@ async fn an_exchange_records_where_it_went_how_big_and_how_it_ended() {
     assert_eq!(expired["otel.status_code"], "ERROR");
 
     let key = CustomMcpServerKey::parse("c491e4f2db62532ac6bc94f43fb214cf").unwrap();
+    let custom_conflict = exchange(Answer::NeedsReconnect, McpDestination::Custom(key)).await;
+    assert_eq!(custom_conflict["mcp.outcome"], "upstream_error");
+
+    let key = CustomMcpServerKey::parse("c491e4f2db62532ac6bc94f43fb214cf").unwrap();
     let custom = exchange(
         Answer::Result(json!({"content":[]})),
         McpDestination::Custom(key),

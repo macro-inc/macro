@@ -41,17 +41,18 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `tools/call` is `EgressError::RateLimited` (with its `Retry-After`), which
   `exchange_as` returns as an error, never as an `isError` result (the
   sandbox proxy answers a tool result saying the call did not run).
-- An upstream HTTP 409, on the handshake or a call, is
-  `EgressError::NeedsReconnect`: Macro Connect's gateway answers it for every
-  request on a connection whose grant needs reauthorization, before calling
-  the vendor. rmcp types only 429 and 5xx statuses, so `TracedClient` gives a
-  409 its typed status back. For a connected app, a `tools/call` (sandbox or
-  `exchange_as`) answers `reconnect_text` as an `isError` result, with an
+- An upstream HTTP 409 from a connected app, on the handshake, a listing or
+  a call, is `EgressError::NeedsReconnect`: Macro Connect's gateway answers
+  it for every request on a connection whose grant needs reauthorization,
+  before calling the vendor. rmcp types only 429 and 5xx statuses, so
+  `TracedClient` gives a 409 its typed status back. A `tools/call` (sandbox
+  or `exchange_as`) answers `reconnect_text` as an `isError` result, with an
   `m-connect-app` chip marked `"reconnect": true`; a listing returns the
   error (the sandbox proxy answers HTTP 409, and code mode's `tools()` turns
-  it into the same text). A custom server's 409 keeps the unknown-outcome
-  answer. A sandbox's owner call is forwarded raw, so its 409 still passes
-  through untouched.
+  it into the same text). Any other server's 409 is an
+  `EgressError::Upstream` (`traced_exchange`). A sandbox's owner call and
+  its `initialize` are forwarded raw, so their 409 still passes through
+  untouched.
 
 ## Scope
 

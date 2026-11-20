@@ -171,7 +171,7 @@ async fn refused_handshake(axum::Json(_): axum::Json<Value>) -> axum::response::
 }
 
 /// An MCP endpoint whose grant expired after the handshake: it initializes
-/// and refuses each `tools/call`.
+/// and refuses each `tools/list` and `tools/call`.
 async fn refused_tool_call(axum::Json(message): axum::Json<Value>) -> axum::response::Response {
     use axum::response::IntoResponse;
     match message["method"].as_str() {
@@ -188,7 +188,7 @@ async fn refused_tool_call(axum::Json(message): axum::Json<Value>) -> axum::resp
             })),
         )
             .into_response(),
-        Some("tools/call") => needs_reauth(),
+        Some("tools/list" | "tools/call") => needs_reauth(),
         _ => http::StatusCode::ACCEPTED.into_response(),
     }
 }
@@ -237,17 +237,19 @@ async fn an_upstream_409_on_the_handshake_needs_reconnecting() {
 }
 
 #[tokio::test]
-async fn an_upstream_409_on_a_tool_call_needs_reconnecting() {
-    let result = needs_reconnect_answer(
-        axum::routing::post(refused_tool_call),
+async fn an_upstream_409_after_the_handshake_needs_reconnecting() {
+    for request in [
+        json!({"method":"tools/list"}),
         json!({"method":"tools/call","params":{"name":"list_customers","arguments":{}}}),
-    )
-    .await;
+    ] {
+        let result =
+            needs_reconnect_answer(axum::routing::post(refused_tool_call), request.clone()).await;
 
-    assert!(
-        matches!(result, Err(EgressError::NeedsReconnect)),
-        "{result:?}"
-    );
+        assert!(
+            matches!(result, Err(EgressError::NeedsReconnect)),
+            "{request}: {result:?}"
+        );
+    }
 }
 
 #[test]

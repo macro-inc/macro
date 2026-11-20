@@ -612,23 +612,38 @@ async fn an_in_process_call_to_an_app_whose_grant_expired_offers_reconnect() {
 }
 
 #[tokio::test]
-async fn an_in_process_call_a_custom_server_refused_with_409_keeps_the_unknown_outcome() {
+async fn a_custom_server_refusing_with_409_is_an_upstream_failure_not_a_reconnect() {
     let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
     let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
         .with_actor_mcp(Arc::new(ExpiredGrantTransport));
     let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+    let custom = McpDestination::Custom(
+        CustomMcpServerKey::parse("0123456789abcdef0123456789abcdef").unwrap(),
+    );
 
     let call = service
         .exchange_as(
             &grant,
             &asker,
-            &McpDestination::Custom(CustomMcpServerKey::parse("0123456789abcdef0123456789abcdef").unwrap()),
+            &custom,
             json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{}}}),
         )
         .await
         .unwrap();
+    let listing = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &custom,
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+        )
+        .await;
 
     assert_eq!(call["isError"], true);
     let text = call["content"][0]["text"].as_str().unwrap();
     assert!(!text.contains("m-connect-app"), "{text}");
+    assert!(
+        matches!(listing, Err(EgressError::Upstream(_))),
+        "{listing:?}"
+    );
 }

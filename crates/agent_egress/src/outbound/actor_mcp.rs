@@ -144,7 +144,7 @@ impl ActorMcpTransport for HttpActorMcpTransport {
                 .list_all_tools()
                 .await
                 .map(|tools| serde_json::json!({"tools": tools}))
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into())),
+                .map_err(call_error),
             Some("tools/call") => {
                 let mut params: rmcp::model::CallToolRequestParams =
                     serde_json::from_value(request["params"].clone())
@@ -195,7 +195,7 @@ fn handshake_error(error: rmcp::service::ClientInitializeError) -> EgressError {
     EgressError::Upstream(rootcause::report!(error).into())
 }
 
-/// A failed call: a 429 the upstream answered is a typed rate limit, since
+/// A failed request on an open session: a 429 the upstream answered is a typed rate limit, since
 /// the request did not run and may be sent again, and a 409 means the
 /// account's grant needs reconnecting; anything else broke the exchange.
 fn call_error(error: rmcp::ServiceError) -> EgressError {
