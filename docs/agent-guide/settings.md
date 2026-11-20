@@ -236,6 +236,10 @@ they return to the invite before onboarding, so they join first and onboarding
 opens on the team. Channel invites (`/channel-invite`) also open before
 onboarding. Other `?redirect=` deep links, such as meetings, return there after
 sign-in, or after onboarding for a new account.
+An emailed invite (`/app/team-invite?id=<id>`) opened by a signed-in account it
+wasn't sent to, and that is already on a team, shows **Already on Team**
+(with the team's name), naming the signed-in address and saying only the address
+the invite was sent to can accept it; it doesn't accept or change the invite.
 An unanswered invite gets up to two reminder emails, with subjects starting
 **Reminder:**, 3 days after the last email and 4 days after that. Invites more
 than 14 days old, already-members, and invites whose sender left the team get none.

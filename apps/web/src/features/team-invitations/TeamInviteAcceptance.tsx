@@ -1,4 +1,5 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { useEmail } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -20,6 +21,7 @@ export function TeamInviteAcceptance() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const userInfo = useUserInfo();
+  const email = useEmail();
 
   const inviteId = () => searchParams.id as string | undefined;
   // A team's shareable invite link opens this page with `link` instead of an
@@ -39,11 +41,13 @@ export function TeamInviteAcceptance() {
 
   const teamName = createMemo(() => teamQuery.data?.team.name);
 
-  // If the invite is gone but the user already belongs to a team (e.g. a
-  // domain auto-join consumed the invite between clicking the link and
-  // landing here), show that instead of "Invite Not Found". Only fetched
-  // once the invite lookup has settled without a match — a valid invite
-  // never waits on (or triggers) this request.
+  // If the invite isn't among the viewer's but they belong to a team, say so
+  // instead of "Invite Not Found". Either a domain auto-join consumed the
+  // invite between clicking the link and landing here, or the invite was sent
+  // to another address and a teammate opened it; the page can't tell which,
+  // so it names the signed-in account and doesn't claim the invite is done.
+  // Only fetched once the invite lookup has settled without a match — a valid
+  // invite never waits on (or triggers) this request.
   const currentTeamQuery = useCurrentTeamQuery(
     () => !!userInfo()?.authenticated && invitesQuery.isSuccess && !invite()
   );
@@ -128,7 +132,9 @@ export function TeamInviteAcceptance() {
                   <LoadingBlock />
                 </Match>
                 <Match when={!invite() && currentTeamName()}>
-                  {(name) => <AlreadyOnTeam teamName={name()} />}
+                  {(name) => (
+                    <AlreadyOnTeam teamName={name()} email={email()} />
+                  )}
                 </Match>
                 <Match when={!invite()}>
                   <InviteNotFound />
@@ -196,7 +202,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
   );
 }
 
-function AlreadyOnTeam(props: { teamName: string }) {
+function AlreadyOnTeam(props: { teamName: string; email: string | undefined }) {
   const navigate = useNavigate();
   return (
     <div class="w-full flex flex-col items-center gap-4 text-center">
@@ -205,9 +211,10 @@ function AlreadyOnTeam(props: { teamName: string }) {
         Already on Team {props.teamName}
       </h2>
       <p class="text-sm text-ink-muted">
-        You're already a member of{' '}
-        <span class="text-ink">{props.teamName}</span>, so there's nothing more
-        to do here.
+        <span class="text-ink">{props.email ?? 'This account'}</span> is already
+        a member of <span class="text-ink">{props.teamName}</span>. If this
+        invite was sent to a different address, only that address can accept it:
+        sign in with it to accept.
       </p>
       <Button
         variant="secondary"
