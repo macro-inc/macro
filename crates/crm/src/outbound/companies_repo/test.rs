@@ -33,6 +33,7 @@ mod personal_emails;
 mod populate_contact;
 mod population_lifecycle;
 mod population_locks;
+mod population_scans;
 #[cfg(feature = "inbound")]
 mod previews;
 mod resolve_association;
