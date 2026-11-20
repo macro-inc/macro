@@ -389,6 +389,9 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         // app, and its name, links and settings. None of them runs a
         // session, and deciding a review is refused.
         "agent-harness.createSessionReview",
+        // Stopping a background job sends nothing, and the route refuses
+        // programs anyway: the agent cancels through its CancelJob tool.
+        "agent-harness.cancelCodeExecutionJob",
         "agent-harness.openInApp",
         "agent-harness.presentSessionView",
         "agent-harness.deleteAgentSession",
