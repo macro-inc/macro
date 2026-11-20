@@ -331,7 +331,9 @@ function buildTurns(frames) {
     turn.toolMs = unionMs(turn.tools.map(i => [i.start, i.end]));
     turn.totalMs = turn.end - turn.start;
     turn.calls = MODEL_CALLS.filter(call => call.start_ms >= turn.start && call.start_ms <= turn.end);
-    turn.calls.forEach((call, i) => { call.round = i + 1; });
+    // The opener races the first round and takes no round number of its own.
+    let round = 0;
+    turn.calls.forEach(call => { call.round = call.usage?.opener ? null : ++round; });
     turn.tokens = TOKENS?.turns?.[turn.n - 1] || null;
     turn.context = DATA.turn_context?.[turn.n - 1] || null;
     turn.flags = turn.context?.flags || [];
@@ -553,7 +555,7 @@ function renderModelCalls(turn) {
     const [klass, text] = BILLING_STATUS[usage?.status] || ['muted', usage?.status || '?'];
     const sharedRow = usage?.row && usage.cost == null && usage.status === 'matched';
     const costCell = usage?.cost != null ? dollars(usage.cost) : sharedRow ? '<span class="muted" title="one billed row covers several rounds; its cost is on the turn">in turn</span>' : '<span class="muted">—</span>';
-    return `<tr${usage?.cache_miss ? ' style="background:var(--fail-soft)" title="cache miss: the whole context was written to the cache again"' : ''}><td>${call.round}</td><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}${usage?.opener ? ' <span class="muted">opener</span>' : ''}</td>` +
+    return `<tr${usage?.cache_miss ? ' style="background:var(--fail-soft)" title="cache miss: the whole context was written to the cache again"' : ''}><td>${call.round ?? '–'}</td><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}${usage?.opener ? ' <span class="muted">opener</span>' : ''}</td>` +
       (tokens ? `<td>${count(tokens.uncached)}</td><td>${count(tokens.cache_read)}</td><td>${count(tokens.cache_write)}</td><td>${count(tokens.output)}</td><td><b>${count(usage.context)}</b></td>` : `<td colspan="5" class="muted">no usage reported</td>`) +
       `<td>${costCell}</td><td><span class="status ${klass}" title="${esc(BILLING_TITLE[usage?.status] || '')}">${esc(text)}</span></td>` +
       `<td>${count(call.eager_tools)}${call.loaded_tools ? ' + ' + count(call.loaded_tools) : ''}</td><td>${promptStack(call.prompt_bytes, scale, true).outerHTML}</td><td>${largest}</td></tr>`;
@@ -611,7 +613,7 @@ function renderTokens() {
     return `<span><i style="background:${MODEL_COLORS[models.indexOf(model.model) % MODEL_COLORS.length]}"></i>${esc(model.model)}</span>`;
   }).join('') + `<span><i style="background:var(--fail)"></i>cache miss</span>`));
 
-  const rows = TOKENS.models.map(model => `<tr><td>${esc(model.label)}${model.label !== model.model ? ` <span class="muted">${esc(model.model)}</span>` : ''}</td><td>${billed ? model.rows : '–'}</td><td>${model.spans}</td>${tokenCells(model.tokens)}<td>${billed ? (dollars(model.cost) ?? 'unpriced') : 'cost unknown'}</td></tr>`).join('');
+  const rows = TOKENS.models.map(model => `<tr><td>${esc(model.label)}${model.label !== model.model ? ` <span class="muted">${esc(model.model)}</span>` : ''}${model.pricing?.length ? ` <span class="muted" title="ai_usage price key suffix">priced ${esc(model.pricing.map(key => ':' + key).join(', '))}</span>` : ''}</td><td>${billed ? model.rows : '–'}</td><td>${model.spans}</td>${tokenCells(model.tokens)}<td>${billed ? (dollars(model.cost) ?? 'unpriced') : 'cost unknown'}</td></tr>`).join('');
   const sum = TOKENS.models.reduce((a, model) => { for (const k of ['uncached', 'cache_read', 'cache_write', 'output']) a[k] += model.tokens[k]; return a; }, { uncached: 0, cache_read: 0, cache_write: 0, output: 0 });
   const side = TOKENS.side.map(entry => `<tr class="side"><td>side: ${esc(entry.feature)} <span class="muted">${esc(entry.models.join(', '))}</span></td><td>${entry.rows}</td><td>–</td><td colspan="4"></td><td>${dollars(entry.cost) ?? 'unpriced'}</td></tr>`).join('');
   section.append(el('div', { class: 'tokens-scroll' }, `<table class="tokens"><tr><th>model</th><th title="ai_usage rows">billed calls</th><th title="chat_streaming spans">spans</th>${TOKEN_HEADS}<th>cost</th></tr>${rows}` +
@@ -653,7 +655,7 @@ function roundTag(item) {
   const call = item.round == null ? null : MODEL_CALLS[item.round];
   if (!DATA.spans?.model_calls) return '';
   return call
-    ? `<span class="round" title="streamed during this model call">round ${call.round ?? '?'} · ${esc(callLabel(call))}</span>`
+    ? `<span class="round" title="streamed during this model call">${call.round == null ? '' : `round ${call.round} · `}${esc(callLabel(call))}</span>`
     : `<span class="round none" title="no model call span covers this step's first frame">unattributed</span>`;
 }
 

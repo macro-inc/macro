@@ -67,7 +67,8 @@ session's `ai_usage` rows (billing), split into uncached input, cache read,
 cache write and output, with a coverage line of how the rows matched the
 spans. Cache read is the history re-read on every call, not unique context:
 compare the average and largest context per call instead, and look for cache
-misses (a call writing its whole context again), which usually dominate an
+misses (a call writing its whole context again; a model's first call is a
+cold write, not a miss), which usually dominate an
 Anthropic session's cost. Never add span tokens to billed totals.
 
 To read what the model actually read, add `--reconstruct`: each turn's

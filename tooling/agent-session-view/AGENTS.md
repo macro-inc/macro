@@ -127,7 +127,13 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   rows (`feature` other than `agent_session`: activity summaries, renames)
   are listed apart. The opener is recognised by `OPENER_MODEL` with no tools
   and few output tokens: when `crates/agent_inmem/src/outbound/rig_engine/opener.rs`
-  changes its `MODEL` or `MAX_TOKENS`, update `token_usage.py`. Matching
+  changes its `MODEL` or `MAX_TOKENS`, update `token_usage.py`
+  (`OPENER_MODEL` is the name without its `openai/` prefix, as spans and
+  `ai_usage` carry it). `ai_usage.model` is the price key, which can carry
+  `:fast`, `:priority`, `:ultrafast` or `:long` suffixes
+  (`crates/agent/src/model/metering/per_call.rs`); rows match spans on the
+  bare model. A model's first call in a session is a cold cache write, not a
+  miss. Matching
   windows are the named constants at the top of `token_usage.py`.
 - `invoke_agent`'s `gen_ai.tool.definitions` is cut at about 25 KB, so the
   deferred list can be partial. Only names, counts and sizes are read from

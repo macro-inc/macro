@@ -13,8 +13,11 @@ cache write, output), the same split the `ai_usage` recorder stores:
 How many spans one row covers depends on the caller: some record one row per
 model round (Opus), others one row per turn summing its rounds (Gemini,
 Sonnet). A row is matched to the shortest run of
-its model's unclaimed spans in its turn whose input counters sum to it
-exactly. Billed output includes reasoning tokens; Gemini spans' output does
+its model's unclaimed spans with usage in its turn, from any start, whose
+input counters sum to it exactly; between equal runs, the one ending nearest
+the row. A row's model is its price key (`crates/agent/src/model/metering/per_call.rs`),
+which can add speed or long-context suffixes (`claude-opus-5-5:fast`,
+`gpt-5.6:priority:long`) to the bare model the spans carry. Billed output includes reasoning tokens; Gemini spans' output does
 not, so a row's output may exceed its spans' by the reasoning (never less).
 """
 import datetime
@@ -68,6 +71,16 @@ def provider(model):
     return "unknown"
 
 
+def bare_model(price_key):
+    """The model a price key bills, without its `:fast` / `:long` suffixes."""
+    return (price_key or "").split(":", 1)[0] or price_key
+
+
+def pricing(price_key):
+    """A price key's suffixes (`fast`, `priority:long`), or None."""
+    return (price_key or "").partition(":")[2] or None
+
+
 def counters(call):
     """The span's four disjoint counters, or None when it reported no usage."""
     values = [call.get(key) for key in ("input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens")]
@@ -113,18 +126,39 @@ def is_opener(call, tokens):
     )
 
 
-def is_cache_miss(call, tokens):
+def is_cache_miss(call, tokens, warm):
+    """A call that wrote most of a large context to the cache again. A model's
+    first call in the session (`warm` false) is a cold write, not a miss."""
     return (
-        tokens is not None and provider(call.get("model")) == "anthropic"
+        warm and tokens is not None and provider(call.get("model")) == "anthropic"
         and context(tokens) >= CACHE_MISS_MIN_TOKENS
         and tokens["cache_write"] >= CACHE_MISS_SHARE * context(tokens)
     )
 
 
 def turn_of(turns, seconds, slack=0.0):
+    """The turn containing the time, else the last one it trails by at most
+    `slack`: a queued turn starting right after must keep its own rows."""
     for turn in turns:
-        if turn.started <= seconds <= turn.bound + slack:
+        if turn.started <= seconds <= turn.bound:
             return turn.number
+    trailed = [turn for turn in turns if turn.bound < seconds <= turn.bound + slack]
+    return trailed[-1].number if trailed else None
+
+
+def matching_run(spans, expected, created_ms):
+    """The shortest run of the spans (in end order) summing to the row, from
+    any start; between equal lengths, the one ending nearest the row."""
+    sums = [dict.fromkeys(COUNTERS, 0)]
+    for call in spans:
+        sums.append({key: sums[-1][key] + call["tokens"][key] for key in COUNTERS})
+    for length in range(1, len(spans) + 1):
+        matches = [
+            spans[start:start + length] for start in range(len(spans) - length + 1)
+            if same_billing({key: sums[start + length][key] - sums[start][key] for key in COUNTERS}, expected)
+        ]
+        if matches:
+            return min(matches, key=lambda run: abs(created_ms - run[-1]["end_ms"]))
     return None
 
 
@@ -155,52 +189,53 @@ def reconcile(export):
     turns = markdown_export.parse(export["frames"], (export.get("spans") or {}).get("tools"))
 
     calls = []
+    warm = set()
     for index, call in enumerate(spans):
         tokens = counters(call)
         calls.append({
-            "index": index, "model": call.get("model"), "provider": provider(call.get("model")),
+            "index": index, "model": call.get("model"),
             "tokens": tokens, "context": context(tokens) if tokens else None,
             "turn": turn_of(turns, call["start_ms"] / 1000), "end_ms": call["end_ms"],
-            "opener": is_opener(call, tokens), "cache_miss": is_cache_miss(call, tokens),
+            "opener": is_opener(call, tokens), "cache_miss": is_cache_miss(call, tokens, call.get("model") in warm),
             "status": "no usage" if tokens is None else "from telemetry", "row": None, "cost": None,
         })
+        if tokens is not None:
+            warm.add(call.get("model"))
 
     billed = [row for row in usage or [] if row.get("feature") == "agent_session"]
     side = [row for row in usage or [] if row.get("feature") != "agent_session"]
     rows = []
-    for row in sorted(billed, key=lambda row: row["created_at"]):
+    for row in sorted(billed, key=lambda row: timestamp_ms(row["created_at"])):
         created_ms = timestamp_ms(row["created_at"])
+        model = bare_model(row["model"])
         turn = turn_of(turns, created_ms / 1000, ROW_AFTER_TURN_S)
-        candidates = sorted((
+        unclaimed = sorted((
             call for call in calls
-            if call["row"] is None and call["model"] == row["model"] and call["turn"] == turn
-            and call["end_ms"] <= created_ms + ROW_AFTER_SPAN_MS
+            if call["row"] is None and call["tokens"] is not None and call["model"] == model
+            and call["turn"] == turn and call["end_ms"] <= created_ms + ROW_AFTER_SPAN_MS
         ), key=lambda call: call["end_ms"])
         expected = row_counters(row)
-        claimed, status = candidates, "partial" if candidates else "billed, no span"
-        reasoning = None
-        for length in range(1, len(candidates) + 1):
-            run = candidates[:length]
-            if all(call["tokens"] for call in run) and same_billing(total(call["tokens"] for call in run), expected):
-                claimed, status = run, "matched"
-                reasoning = expected["output"] - total(call["tokens"] for call in run)["output"]
-                break
+        run = matching_run(unclaimed, expected, created_ms)
+        if run:
+            claimed, status = run, "matched"
+            reasoning = expected["output"] - total(call["tokens"] for call in run)["output"]
+        else:
+            claimed, status, reasoning = unclaimed, "partial" if unclaimed else "billed, no span", 0
         for call in claimed:
             call["row"] = row["id"]
-            call["status"] = status if status == "matched" or call["tokens"] else "no usage"
+            call["status"] = status
         if status == "matched" and len(claimed) == 1:
             claimed[0]["cost"] = row.get("total")
         rows.append({
-            "id": row["id"], "model": row["model"], "turn": turn, "tokens": expected,
+            "id": row["id"], "model": model, "price_key": row["model"], "turn": turn, "tokens": expected,
             "total": row.get("total"), "status": status, "calls": [call["index"] for call in claimed],
-            "reasoning_not_in_spans": reasoning or 0,
-            "opener": row["model"] == OPENER_MODEL and expected["output"] <= OPENER_MAX_OUTPUT
+            "reasoning_not_in_spans": reasoning,
+            "opener": model == OPENER_MODEL and expected["output"] <= OPENER_MAX_OUTPUT
             and all(call["opener"] for call in claimed),
-            "cache_read_cost": cache_read_cost([row]),
         })
     if usage is not None:
         for call in calls:
-            if call["row"] is None:
+            if call["row"] is None and call["tokens"] is not None:
                 call["status"] = "not billed"
 
     source = "ai_usage" if usage else "telemetry"
@@ -223,6 +258,7 @@ def models(calls, rows, billed, source):
                         key=lambda name: str(name)):
         model_calls = [call for call in calls if call["model"] == model]
         model_rows = [row for row in rows if row["model"] == model]
+        model_billed = [row for row in billed if bare_model(row["model"]) == model]
         contexts = [call["context"] for call in model_calls if call["context"] is not None]
         opener = (bool(model_calls) and all(call["opener"] for call in model_calls if call["tokens"])) or (
             bool(model_rows) and all(row["opener"] for row in model_rows))
@@ -230,10 +266,11 @@ def models(calls, rows, billed, source):
             call["tokens"] for call in model_calls if call["tokens"])
         misses = [call for call in model_calls if call["cache_miss"]]
         out.append({
-            "model": model, "label": model_label(model, opener), "provider": provider(model),
+            "model": model, "label": model_label(model, opener),
+            "pricing": sorted({pricing(row["price_key"]) for row in model_rows} - {None}),
             "rows": len(model_rows), "spans": len(model_calls), "tokens": tokens,
-            "cost": cost([row for row in billed if row["model"] == model]) if source == "ai_usage" else None,
-            "cache_read_cost": cache_read_cost([row for row in billed if row["model"] == model]) if source == "ai_usage" else None,
+            "cost": cost(model_billed) if source == "ai_usage" else None,
+            "cache_read_cost": cache_read_cost(model_billed) if source == "ai_usage" else None,
             "contexts": contexts,
             "context_avg": round(sum(contexts) / len(contexts)) if contexts else None,
             "context_first": contexts[0] if contexts else None,
@@ -320,6 +357,6 @@ def frame_rounds(export):
         # first round: it writes only message text, and nothing else.
         message = update["sessionUpdate"] == "agent_message_chunk"
         preferred = [index for index in found if is_opener(spans[index], counters(spans[index])) == message]
-        candidates = preferred or ([] if found and not message else found)
-        out.append(max(candidates, key=lambda index: spans[index]["start_ms"]) if candidates else None)
+        owners = preferred or ([] if found and not message else found)
+        out.append(max(owners, key=lambda index: spans[index]["start_ms"]) if owners else None)
     return out
