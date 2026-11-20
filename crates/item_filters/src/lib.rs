@@ -632,7 +632,8 @@ pub struct ChannelFilters {
     /// Presence of this filter also widens the candidate set to team channels of the
     /// user's teams that they have not joined, so `false` matches those channels,
     /// and, when the filter admits only channels it names by id, to public
-    /// channels too.
+    /// channels too. Soup listings apply the filter and its widening; channel
+    /// search (`/search`) reads only the channels the user joined and ignores it.
     /// None to ignore (participant channels only, today's default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_participant: Option<bool>,
