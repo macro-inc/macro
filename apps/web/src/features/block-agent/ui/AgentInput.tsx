@@ -311,7 +311,13 @@ export function AgentInput(props: AgentInputProps) {
       }}
     >
       <div
-        ref={containerRef}
+        ref={(element) => {
+          containerRef = element;
+          // The editor's max height reads the keyboard's `--dvh`. Written
+          // here, outside the layout the composer watches, so a keyboard
+          // publish doesn't make it measure again.
+          followKeyboardViewport(element);
+        }}
         data-keep-keyboard
         onFocusIn={() => fireAndForget(preloadAgentFold(), 'agent-composer')}
         class="flex flex-col gap-1.5"
@@ -357,7 +363,6 @@ export function AgentInput(props: AgentInputProps) {
                 onMouseDown={focusEditor}
               >
                 <div
-                  ref={followKeyboardViewport}
                   id={AGENT_INPUT_TEXT_AREA_ID}
                   data-composer-scroll
                   class="min-w-0 flex-1 text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"

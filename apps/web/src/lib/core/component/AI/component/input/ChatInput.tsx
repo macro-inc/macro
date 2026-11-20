@@ -399,7 +399,13 @@ export function ChatInput(props: ChatInputComponentProps) {
           }}
           onFocusIn={() => setIsFocused(true)}
           class="relative flex flex-col"
-          ref={containerRef}
+          ref={(element) => {
+            containerRef = element;
+            // The editor's max height reads the keyboard's `--dvh`. Written
+            // here, outside the line the composer layout watches, so a
+            // keyboard publish doesn't make it measure again.
+            followKeyboardViewport(element);
+          }}
           id="chat-input"
         >
           <Show when={!isTallVariant()}>
@@ -474,10 +480,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                   isCollapsed(),
               }}
               style={{ '--composer-right-inset': `${rightControlsInset()}px` }}
-              ref={(element) => {
-                mdRef = element;
-                followKeyboardViewport(element);
-              }}
+              ref={mdRef}
             >
               <ComposerEditor
                 class={isCompactMobile() ? 'min-h-5' : undefined}

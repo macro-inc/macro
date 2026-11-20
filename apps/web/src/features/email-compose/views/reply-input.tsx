@@ -668,8 +668,10 @@ function LoadedReplyInputView(
           <div
             data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
+              // The mobile compose sheet doesn't cap this by the keyboard.
+              if (isMobileCompose()) return;
               followKeyboardViewport(el);
-              if (!isMobileCompose()) setScrollContainer(el);
+              setScrollContainer(el);
             }}
             class={cn(
               'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
