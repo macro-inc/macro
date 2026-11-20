@@ -292,6 +292,15 @@ impl HarnessPresence for PgHarnessPresence {
         self: Arc<Self>,
         live: Vec<HarnessConnection>,
     ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
+        let span = tracing::info_span!(
+            "harness.presence.renew",
+            replica = %self.replica,
+            connections = live.len(),
+            renewed = tracing::field::Empty,
+            restored = tracing::field::Empty,
+            error = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
         Box::pin(async move {
             let (harnesses, connections): (Vec<_>, Vec<_>) = live
                 .iter()
@@ -320,15 +329,20 @@ impl HarnessPresence for PgHarnessPresence {
             let renewed = match renewed {
                 Ok(renewed) => renewed,
                 Err(error) => {
+                    let span = tracing::Span::current();
+                    span.record("error", tracing::field::display(&error));
+                    span.record("otel.status_code", "ERROR");
                     tracing::warn!(error = ?error, replica = %self.replica, "failed to renew harness runtime leases");
                     return Vec::new();
                 }
             };
+            tracing::Span::current().record("renewed", renewed.len());
             let restored: Vec<_> = renewed
                 .into_iter()
                 .filter(|row| row.restored)
                 .map(|row| (row.harness_id, row.id))
                 .collect();
+            tracing::Span::current().record("restored", restored.len());
             for (harness, connection) in &restored {
                 tracing::warn!(
                     telemetry_event = "harness_runtime_lease_restored",
@@ -343,6 +357,7 @@ impl HarnessPresence for PgHarnessPresence {
                     restored.contains(&(harness.as_uuid(), connection.as_uuid()))
                 })
                 .collect()
-        })
+        }
+        .instrument(span))
     }
 }
