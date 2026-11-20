@@ -1,8 +1,11 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { NATIVE_SESSION_SERVICE_URLS } from '../constant/servers';
 import { isTauri } from './platform';
+import { passResponse, prepareResponseObservers } from './response-observers';
 
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
+// tauri-plugin-http's message when a URL is outside the capability's scope.
+const SCOPE_DENIAL = 'url not allowed on the configured scope';
 let originalFetch: typeof fetch | undefined;
 
 // Third-party hosts that allow any origin and require requests from the user's
@@ -87,10 +90,60 @@ export function createPlatformFetch(
     // The plugin cancels only on `init.signal`, never on a `Request`'s own.
     const signal =
       init?.signal ?? (input instanceof Request ? input.signal : undefined);
-    return fetch(input, { ...init, signal });
+    try {
+      return await fetch(input, { ...init, signal });
+    } catch (error) {
+      // The plugin rejects with its Rust error text when no response arrives
+      // (DNS, connect, TLS). Browser fetch rejects those with a TypeError, so
+      // callers can treat both transports alike; the text stays as the message.
+      // Cancellations and scope denials keep their text: they aren't outages.
+      if (
+        typeof error === 'string' &&
+        !signal?.aborted &&
+        !error.startsWith(SCOPE_DENIAL)
+      )
+        throw new TypeError(error);
+      throw error;
+    }
   };
 }
 
 // Native startup installs the transport explicitly; all callers share it.
-export const platformFetch: typeof fetch = (input, init) =>
-  globalThis.fetch(input, init);
+export const platformFetch: typeof fetch = (input, init) => {
+  try {
+    const request = { ...init };
+    // Fetch reads dictionary members through the prototype too. Snapshot their
+    // values into writable fields so observers can annotate frozen/class inputs.
+    if (init) {
+      for (const key of [
+        'body',
+        'cache',
+        'credentials',
+        'headers',
+        'integrity',
+        'keepalive',
+        'method',
+        'mode',
+        'priority',
+        'redirect',
+        'referrer',
+        'referrerPolicy',
+        'signal',
+        'window',
+      ] as const) {
+        if (!Object.hasOwn(request, key) && key in init)
+          Object.defineProperty(request, key, {
+            value: init[key],
+            configurable: true,
+            enumerable: true,
+            writable: true,
+          });
+      }
+    }
+    const observe = prepareResponseObservers(input, request);
+    const response = globalThis.fetch(input, request);
+    return observe === passResponse ? response : response.then(observe);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+};

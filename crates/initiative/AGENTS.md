@@ -11,6 +11,9 @@ properties, and activity.
 - `src/domain/service.rs` + `src/domain/service/reads.rs`: lifecycle and read
   logic. Reads check a project's tasks together through
   `InitiativeResources::view_documents`, never one task at a time.
+- `src/domain/service/lifecycle.rs`: `InitiativeLifecycleReads` supplies physical
+  identity existence to trusted imports without viewer access. Initiatives use
+  permanent deletion; import-domain policy renews missing project generations.
 - `src/domain/models.rs`: `Initiative`, `InitiativeError`.
 - `src/domain/assignees.rs`, `src/domain/history.rs`, `src/domain/activity.rs`:
   assignment policy, change history, and activity recording.
@@ -69,6 +72,9 @@ realtime appearance events do not re-ingest history.
 - Skill: `cloud-storage-hexagonal-architecture`
 
 `create_imported` is the trusted workspace-import creation path: it accepts a
-ledger-derived id and complete source markdown. It checks attribution and owner
-before reusing an existing project, and repairs property initialization on replay.
+ledger-derived id, complete source markdown and the canonical
+`models_permissions::share_permission::InitialLinkShare`. Personal imports pass
+`Exact(Off)`; shared imports pass `EntityDefault`.
+It checks attribution and owner before reusing an existing project, and repairs
+property initialization on replay.
 Interactive creation keeps its existing generated ids and description limits.

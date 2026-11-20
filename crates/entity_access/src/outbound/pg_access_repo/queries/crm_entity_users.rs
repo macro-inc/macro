@@ -25,6 +25,7 @@ pub async fn get_crm_entity_users(
                 FROM crm_companies c
                 JOIN team_user tu ON tu.team_id = c.team_id
                 WHERE c.id = $1
+                  AND (tu.crm_access OR tu.team_role <> 'member')
                   AND (NOT c.hidden OR tu.team_role <> 'member')
                 "#,
                 entity_id
@@ -40,6 +41,7 @@ pub async fn get_crm_entity_users(
                 LEFT JOIN crm_companies c ON c.id = ct.company_id
                 JOIN team_user tu ON tu.team_id = ct.team_id
                 WHERE ct.id = $1
+                  AND (tu.crm_access OR tu.team_role <> 'member')
                   AND (NOT (ct.hidden OR c.hidden IS TRUE) OR tu.team_role <> 'member')
                 "#,
                 entity_id

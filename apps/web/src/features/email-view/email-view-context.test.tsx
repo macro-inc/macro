@@ -259,19 +259,16 @@ it('normalizes restored and route-driven Reminders when the rollout is disabled'
   expect(view.state.tab).toBe('important');
 });
 
-it('leaves a restored Focus tab when Focus or GraphQL Soup turns off', () => {
-  for (const off of ['enable-email-focus', 'enable-graphql-soup']) {
-    const [flag, setFlag] = createStore({ enabled: true });
-    mocks.flag = (key) => key !== off || flag.enabled;
-    mocks.tab = () => 'focus';
-    const { view } = mount();
-    expect(view.state.tab).toBe('focus');
-    setFlag('enabled', false);
-    expect(view.state.tab).toBe('important');
-    view.setTab('focus');
-    expect(view.state.tab).toBe('important');
-    cleanup();
-  }
+it('leaves a restored Focus tab when Focus turns off', () => {
+  const [flag, setFlag] = createStore({ enabled: true });
+  mocks.flag = (key) => key !== 'enable-email-focus' || flag.enabled;
+  mocks.tab = () => 'focus';
+  const { view } = mount();
+  expect(view.state.tab).toBe('focus');
+  setFlag('enabled', false);
+  expect(view.state.tab).toBe('important');
+  view.setTab('focus');
+  expect(view.state.tab).toBe('important');
 });
 
 describe('saved views', () => {
@@ -327,7 +324,6 @@ describe('saved views', () => {
     render(() => (
       <EmailViewProvider
         initialState={{ inboxIds: ['saved-inbox'] }}
-        savedViewsEnabled={() => true}
         savedViewSource={(id) => ({
           data: () => {
             if (!id()) return undefined;

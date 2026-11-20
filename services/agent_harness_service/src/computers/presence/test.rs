@@ -24,8 +24,20 @@ async fn stale_close_preserves_replacement_on_another_replica(pool: PgPool) {
     let second = Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()));
     let old = RuntimeConnectionId::generate();
     let replacement = RuntimeConnectionId::generate();
-    Arc::clone(&first).connected(harness, old).await;
-    Arc::clone(&second).connected(harness, replacement).await;
+    Arc::clone(&first)
+        .connected(
+            harness,
+            old,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    Arc::clone(&second)
+        .connected(
+            harness,
+            replacement,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
 
     let mut old_close = PresenceGuard::lock(&pool, harness).await.unwrap();
     first.disconnected(harness, old).await;
@@ -72,7 +84,11 @@ async fn observation_checks_lease_time_after_guard_started(pool: PgPool) {
     .unwrap();
     let presence = Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()));
     presence
-        .connected(harness, RuntimeConnectionId::generate())
+        .connected(
+            harness,
+            RuntimeConnectionId::generate(),
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
         .await;
     let mut guard = PresenceGuard::lock(&pool, harness).await.unwrap();
     assert!(guard.is_connected().await.unwrap());
@@ -88,4 +104,48 @@ async fn observation_checks_lease_time_after_guard_started(pool: PgPool) {
     .await
     .unwrap();
     assert!(!guard.is_connected().await.unwrap());
+}
+
+/// A renewal that listed a connection before its close and writes after it
+/// brings the closed row back, so a computer's close check reads it as still
+/// connected and skips the disconnect. Closing it again, as the registry does
+/// for a restore it no longer holds, clears it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_late_renewal_restores_a_closed_connection_until_it_is_closed_again(pool: PgPool) {
+    let harness = HarnessId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, kind, name, owner_user_id, created_by)
+        VALUES ($1, 'macrod', 'Computer', 'macro|owner@example.com', 'macro|owner@example.com')
+        "#,
+        harness.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let presence = Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()));
+    let connection = RuntimeConnectionId::generate();
+    Arc::clone(&presence)
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+
+    Arc::clone(&presence)
+        .disconnected(harness, connection)
+        .await;
+    Arc::clone(&presence)
+        .renew(vec![(harness, connection)])
+        .await;
+
+    let mut close_check = PresenceGuard::lock(&pool, harness).await.unwrap();
+    assert!(close_check.is_connected().await.unwrap());
+    drop(close_check);
+
+    presence.disconnected(harness, connection).await;
+
+    let mut close_check = PresenceGuard::lock(&pool, harness).await.unwrap();
+    assert!(!close_check.is_connected().await.unwrap());
 }

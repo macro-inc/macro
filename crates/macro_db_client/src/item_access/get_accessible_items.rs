@@ -5,7 +5,9 @@ use std::sync::{Arc, LazyLock};
 
 use model::item::UserAccessibleItem;
 use single_flight::{DatabaseKey, SingleFlight};
-use sqlx::{Pool, Postgres};
+use sqlx::{PgConnection, Pool, Postgres};
+
+mod checked_documents;
 
 type AccessibleItemsKey = (DatabaseKey, String, Option<String>, bool);
 type AccessibleItems = Result<Arc<Vec<UserAccessibleItem>>, Arc<sqlx::Error>>;
@@ -19,7 +21,9 @@ static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItem
 ///
 /// Callers that miss the cache at the same time for the same database, user and
 /// filters share one run of the queries. A failure reaches all of them as an
-/// `Arc<sqlx::Error>`.
+/// `Arc<sqlx::Error>`. A run whose callers all go away (searches cancelled as
+/// the user keeps typing) still finishes, so the document checks it reads are
+/// there for the next search, and a caller arriving meanwhile joins it.
 pub async fn get_user_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -81,7 +85,7 @@ async fn shared_accessible_items(
     // Boxed so the lookup adds one pointer, not its whole state machine, to
     // the future of every caller up the stack: services near rustc's layout
     // depth limit stop compiling otherwise.
-    Ok(Box::pin(RUNNING_LOOKUPS.run(key, lookup)).await?)
+    Ok(Box::pin(RUNNING_LOOKUPS.run_to_completion(key, lookup)).await?)
 }
 
 async fn query_accessible_items(
@@ -125,6 +129,9 @@ fn to_items(ids: Vec<String>, item_type: &str) -> Vec<UserAccessibleItem> {
 /// join for them. The per-type queries run as unnamed statements because a
 /// cached prepared statement switches every user to one generic plan after
 /// five calls.
+///
+/// Those statistics list only the largest sources and give every other one
+/// the table's average, which `accessible_documents` corrects for.
 async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec<String>> {
     let source_ids = sqlx::query_scalar!(
         r#"
@@ -144,13 +151,91 @@ async fn user_source_ids(db: &Pool<Postgres>, user_id: &str) -> sqlx::Result<Vec
     Ok(source_ids.into_iter().flatten().collect())
 }
 
+/// Callers holding at most this many document grants get their documents
+/// looked up one granted id at a time: about a third of a second of lookups
+/// at the limit when the pages are cached. Above it, one scan of the live
+/// documents can be cheaper than that many random reads, so the planner
+/// chooses. The limit sits above what callers with hundreds of sources hold,
+/// the callers the planner's estimate is most wrong for.
+const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 50_000;
+
+/// The planner cannot be left to choose for every caller. It estimates each
+/// source it has no statistics for at the table's average grant count, so a
+/// caller with a few hundred sources (every direct message is one) looks like
+/// a holder of hundreds of thousands of grants and gets a hash join over a scan
+/// of every live document: seconds of work that grows with the table, for a
+/// caller holding a few thousand grants. Reading the grants first, up to the
+/// limit, replaces that estimate with a fact.
+#[tracing::instrument(
+    skip_all,
+    err,
+    fields(
+        looked_up_by_grant = tracing::field::Empty,
+        grants = tracing::field::Empty,
+        document_checks = tracing::field::Empty,
+        documents_checked = tracing::field::Empty,
+        documents_reused = tracing::field::Empty,
+        documents_listed = tracing::field::Empty,
+    )
+)]
 async fn accessible_documents(
     db: &Pool<Postgres>,
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
 ) -> sqlx::Result<Vec<UserAccessibleItem>> {
-    let ids = sqlx::query_scalar!(
+    // One connection for the grants and the documents: a second checkout
+    // would double this lookup's share of the pool.
+    let mut connection = db.acquire().await?;
+
+    let granted = sqlx::query_scalar!(
+        r#"
+        SELECT ea.entity_id
+        FROM entity_access ea
+        WHERE ea.source_id = ANY($1)
+            AND ea.entity_type = 'document'
+        LIMIT $2
+        "#,
+        source_ids,
+        DOCUMENT_GRANTS_LOOKED_UP_BY_ID + 1
+    )
+    .persistent(false)
+    .fetch_all(&mut *connection)
+    .await?;
+    let span = tracing::Span::current();
+    let looked_up_by_grant =
+        i64::try_from(granted.len()).is_ok_and(|grants| grants <= DOCUMENT_GRANTS_LOOKED_UP_BY_ID);
+    span.record("looked_up_by_grant", looked_up_by_grant);
+    span.record("grants", granted.len());
+
+    let ids = if looked_up_by_grant {
+        let (ids, counts) = checked_documents::accessible_document_ids(
+            &mut connection,
+            DatabaseKey::of(db),
+            user_id,
+            granted,
+            exclude_owned,
+        )
+        .await?;
+        span.record("document_checks", counts.outcome());
+        span.record("documents_checked", counts.checked);
+        span.record("documents_reused", counts.reused);
+        ids
+    } else {
+        documents_by_planner_choice(&mut connection, user_id, source_ids, exclude_owned).await?
+    };
+    span.record("documents_listed", ids.len());
+
+    Ok(to_items(ids, "document"))
+}
+
+async fn documents_by_planner_choice(
+    connection: &mut PgConnection,
+    user_id: &str,
+    source_ids: &[String],
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<String>> {
+    sqlx::query_scalar!(
         r#"
         SELECT d.id
         FROM "Document" d
@@ -168,10 +253,8 @@ async fn accessible_documents(
         exclude_owned
     )
     .persistent(false)
-    .fetch_all(db)
-    .await?;
-
-    Ok(to_items(ids, "document"))
+    .fetch_all(connection)
+    .await
 }
 
 async fn accessible_chats(
@@ -233,6 +316,9 @@ async fn accessible_projects(
 
     Ok(to_items(ids, "project"))
 }
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {

@@ -523,6 +523,8 @@ where
                 ));
             }
         }
+        // Read before the delete: the memberships go with the channel.
+        let participant_user_ids = participant_ids(&participants);
         self.repo
             .delete_channel(channel_id)
             .await
@@ -530,6 +532,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelDeleted {
             channel_id,
             actor: Sender::new_from_user(actor),
+            participant_user_ids,
         });
         Ok(())
     }
@@ -1115,6 +1118,21 @@ where
         entity_id: String,
         user_id: String,
     ) -> Result<Vec<AttachmentEntityReference>, ChannelMessagesErr> {
+        if matches!(
+            entity_type.as_str(),
+            "crm_company" | "crm_contact" | "crm_pipeline"
+        ) {
+            let Some(access) = &self.comment_parent_access else {
+                return Ok(Vec::new());
+            };
+            if !access
+                .can_view_parent(&user_id, &entity_type, &entity_id)
+                .await
+                .map_err(ChannelMessagesErr::Repo)?
+            {
+                return Ok(Vec::new());
+            }
+        }
         let mut references = self
             .repo
             .get_attachment_references(&entity_type, &entity_id, &user_id)

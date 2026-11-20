@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM team WHERE id=$1 FOR KEY SHARE)\n                AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1)\n                AND EXISTS(SELECT 1 FROM \"User\" WHERE id=$2 AND \"isAgent\") AS \"admitted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admitted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "444aba0cbb0b657cf9ab14da51447f18fbcffd90f198fba9e1bfe0db3770778f"
+}

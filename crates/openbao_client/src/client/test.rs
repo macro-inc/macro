@@ -14,10 +14,9 @@ async fn login_and_versioned_cas_wire_contract() {
         .and(body_json(
             serde_json::json!({"jwt":"synthetic-jwt","role":"passwords-service"}),
         ))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"auth":{"client_token":"synthetic-token"}})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"auth":{"client_token":"synthetic-token","lease_duration":60}}),
+        ))
         .expect(1)
         .mount(&server)
         .await;
@@ -32,6 +31,7 @@ async fn login_and_versioned_cas_wire_contract() {
         .await
         .expect("login");
     assert!(!format!("{session:?}").contains("synthetic-token"));
+    assert_eq!(session.lease_duration(), Duration::from_secs(60));
     Mock::given(method("POST"))
         .and(path("/v1/passwords/data/item"))
         .and(header("X-Vault-Namespace", "team-fixture"))
@@ -81,6 +81,7 @@ async fn exact_cas_auth_namespace_and_outage_errors_are_distinct_and_redacted() 
     let session = Session {
         token: SecretString::new("synthetic-token".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     for (status, message, cause) in [
         (
@@ -144,6 +145,7 @@ async fn metadata_totp_and_exact_destroy_shapes() {
     let session = Session {
         token: SecretString::new("synthetic-token".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     Mock::given(method("GET")).and(path("/v1/passwords/metadata/item"))
         .and(header("X-Vault-Namespace","team-fixture"))
@@ -221,10 +223,9 @@ async fn namespace_deletion_requires_parent_lookup_and_never_hides_denial() {
         .and(body_json(
             serde_json::json!({"jwt":"synthetic-jwt","role":"team-fixture"}),
         ))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({"auth":{"client_token":"lifecycle-token"}})),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"auth":{"client_token":"lifecycle-token","lease_duration":60}}),
+        ))
         .expect(1)
         .mount(&server)
         .await;
@@ -305,6 +306,7 @@ async fn malformed_response_and_redirect_never_expose_body_or_follow_credentials
     let session = Session {
         token: SecretString::new("synthetic-token".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     Mock::given(method("GET"))
         .and(path("/v1/totp/code/broken"))
@@ -382,6 +384,7 @@ async fn cancellation_after_remote_acceptance_never_retries_the_write() {
     let session = Session {
         token: SecretString::new("synthetic-token".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     let task = tokio::spawn(async move {
         client
@@ -553,6 +556,7 @@ async fn invalid_sensitive_header_is_rejected_without_request_or_error_leakage()
     let session = Session {
         token: SecretString::new("synthetic-secret\ninvalid-header".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     let error = client
         .metadata(&session, "item", None)
@@ -577,6 +581,7 @@ async fn lost_write_response_is_not_retried_and_accepted_operation_can_be_recove
     let session = Session {
         token: SecretString::new("synthetic-token".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     let accepted =
         serde_json::json!({"operation_id":"accepted-operation","password":"synthetic-password"});
@@ -631,6 +636,7 @@ async fn totp_missing_key_uses_exact_operation_specific_400_cause() {
     let session = Session {
         token: SecretString::new("synthetic-token".into()),
         namespace: Some("team-fixture".into()),
+        lease: Duration::from_secs(60),
     };
     for (name, message, cause) in [
         ("missing", "unknown key: missing", Cause::NotFound),

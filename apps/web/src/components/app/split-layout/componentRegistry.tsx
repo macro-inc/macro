@@ -1,5 +1,4 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import {
   DayDraftRangeContext,
@@ -13,26 +12,14 @@ import {
 } from '@app/features/email-compose/compose-params';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import {
-  DEV_MODE_ENV,
-  enableProjects,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
+import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
-import {
-  type ComponentProps,
-  type JSXElement,
-  lazy,
-  onMount,
-  type ParentProps,
-  Show,
-} from 'solid-js';
-import { useSplitPanelOrThrow } from './layoutUtils';
+import type { JSXElement } from 'solid-js';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -51,6 +38,10 @@ const PasswordsRouteView = lazyNamed(
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+const NewHomeRouteView = lazyNamed(
+  () => import('@app/features/new-home/route-views'),
+  'NewHomeRouteView'
 );
 const NotificationsRouteView = lazyNamed(
   () => import('@app/features/notifications-inbox/route-views'),
@@ -259,46 +250,13 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
-function DisabledProjectsRoute() {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => {
-    if (panel.handle.isPopover()) panel.handle.close();
-    else panel.handle.replace({ next: { type: 'component', id: 'tasks' } });
-  });
-  return null;
-}
-
-function ProjectsRouteGate(props: ParentProps) {
-  const flag = useFeatureFlag(enableProjects);
-  return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <Show when={!flag().loading} fallback={<LoadingBlock />}>
-          <DisabledProjectsRoute />
-        </Show>
-      }
-    >
-      {props.children}
-    </Show>
-  );
-}
-
-const GatedCreateProjectView = (
-  props: ComponentProps<typeof CreateProjectView>
-) => (
-  <ProjectsRouteGate>
-    <CreateProjectView {...props} />
-  </ProjectsRouteGate>
-);
-
-registerComponent('new-project', withAuth(GatedCreateProjectView), {
+registerComponent('new-project', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
 registerComponent('folder-compose', withAuth(FolderComposeView), {
   splitPanelLayout: 'composable',
 });
-registerComponent('project-compose', withAuth(GatedCreateProjectView), {
+registerComponent('project-compose', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
 registerComponent(
@@ -309,9 +267,7 @@ registerComponent(
         ? parseProjectRoute(params.projectRoute)
         : undefined;
     return route ? (
-      <ProjectsRouteGate>
-        <ProjectView route={route} />
-      </ProjectsRouteGate>
+      <ProjectView route={route} />
     ) : (
       <RedirectSplit to={{ type: 'component', id: 'tasks' }} />
     );
@@ -320,11 +276,7 @@ registerComponent(
 );
 registerComponent(
   'tasks-projects',
-  withAuth(() => (
-    <ProjectsRouteGate>
-      <ProjectsListView />
-    </ProjectsRouteGate>
-  )),
+  withAuth(() => <ProjectsListView />),
   { splitPanelLayout: 'composable' }
 );
 
@@ -334,6 +286,13 @@ registerComponent(
   'home',
   () => <HomeRouteView />,
   () => composableLayout(true)
+);
+// New Home's rail item and `g h`: it sends the split on to Recent or
+// Notifications, so it takes the shell they draw on desktop.
+registerComponent(
+  'new-home',
+  () => <NewHomeRouteView />,
+  () => composableLayout()
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
@@ -362,7 +321,7 @@ registerComponent('agents', () => <AgentsRouteView />, {
 registerComponent(
   'mail',
   () => <MailRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'documents',
@@ -382,19 +341,17 @@ registerComponent(
 registerComponent(
   'calendar',
   () => <CalendarRouteView />,
-  // Desktop Calendar draws its own top bar. Touch still needs the split header
-  // for the floating month and action controls.
-  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+  () => composableLayout(true)
 );
 registerComponent(
   'channels',
   () => <ChannelsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'calls',
   () => <CallsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent('companies', () => <CompaniesRouteView />, {
   ownsCollectionState: true,
@@ -507,7 +464,7 @@ registerComponent(
 registerComponent(
   'settings',
   () => <SettingsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'booking-links',
@@ -614,11 +571,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'agent-replay',
-    lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
-  );
-
-  registerComponent(
     'agent-progress',
     lazy(() => import('@app/features/agent-activity/debug/ProgressPlayground'))
   );
@@ -637,20 +589,9 @@ if (LOCAL_ONLY) {
 if (import.meta.env.DEV) {
   registerComponent(
     'spreadsheet-demo',
-    withAuth(() => {
-      const enabled = useSpreadsheetAccess();
-      const Demo = lazy(
-        () => import('@app/features/block-spreadsheet/SpreadsheetDemo')
-      );
-      return (
-        <Show
-          when={enabled()}
-          fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
-        >
-          <Demo />
-        </Show>
-      );
-    })
+    withAuth(
+      lazy(() => import('@app/features/block-spreadsheet/SpreadsheetDemo'))
+    )
   );
 }
 
@@ -661,13 +602,6 @@ if (DEV_MODE_ENV) {
       lazy(
         () => import('@app/features/next-soup/debug/DocumentWherePlayground')
       )
-    )
-  );
-
-  registerComponent(
-    'projection-playground',
-    withAuth(
-      lazy(() => import('@app/features/devtools/debug/ProjectionPlayground'))
     )
   );
 

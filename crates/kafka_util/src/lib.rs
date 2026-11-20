@@ -15,6 +15,7 @@ use std::time::Duration;
 use either::Either;
 use macro_env::Environment;
 use opentelemetry::propagation::{Extractor, Injector};
+use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::{
     CommitMode, Consumer, ConsumerContext, DefaultConsumerContext, StreamConsumer,
 };
@@ -30,11 +31,17 @@ pub use statistics::ConsumerStatistics;
 use statistics::StatisticsContext;
 
 mod msk_iam;
+pub mod progress;
 mod statistics;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
 const MESSAGE_TIMEOUT_MS: &str = "5000";
 const SEND_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long librdkafka waits to check again a partition it found over a
+/// [`Prefetch::Bounded`] queue. Its 1 s default holds every partition back that
+/// long, and caps how fast a partition of quick records drains to one fetch a
+/// second.
+const BOUNDED_FETCH_QUEUE_BACKOFF_MS: &str = "10";
 
 #[derive(Default)]
 struct TraceHeaderInjector(HashMap<String, String>);
@@ -177,6 +184,32 @@ pub trait GroupName {
     /// `Earliest` replays everything the topic still retains there; `Latest`
     /// starts at the next record published.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Earliest;
+
+    /// How far ahead of the application the consumer fetches.
+    ///
+    /// A grouped consumer reads every assigned partition from one local queue,
+    /// in the order fetches return, so a record on a quiet partition waits
+    /// behind every record already fetched from a backlogged one.
+    const PREFETCH: Prefetch = Prefetch::Default;
+}
+
+/// How many records a grouped consumer keeps fetched ahead of the application,
+/// across all of its partitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Prefetch {
+    /// librdkafka's defaults: fetch until 100,000 records or 64 MiB are
+    /// queued, up to 1 MiB per partition per fetch.
+    Default,
+    /// Fetch a partition again only once fewer than `records` are queued, at
+    /// most `partition_bytes` from it per fetch, so the queue holds about
+    /// `records` plus one fetch per partition. A record batch larger than
+    /// `partition_bytes` is still fetched whole.
+    Bounded {
+        /// Queued records below which partitions are fetched again.
+        records: u32,
+        /// Most bytes one fetch takes from one partition.
+        partition_bytes: u32,
+    },
 }
 
 /// Marker type for a consumer that does not subscribe or persist offsets.
@@ -221,6 +254,11 @@ fn base_config(brokers: &str) -> ClientConfig {
 fn consumer_config(brokers: &str) -> ClientConfig {
     let mut config = base_config(brokers);
     config.set("enable.auto.commit", "false");
+    // librdkafka reports an out-of-range offset reset only as a warning, and
+    // rust-rdkafka starts from the `log` crate's level, which can be lower.
+    if (config.log_level as i32) < (RDKafkaLogLevel::Warning as i32) {
+        config.set_log_level(RDKafkaLogLevel::Warning);
+    }
     config
 }
 
@@ -239,6 +277,16 @@ fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
             InitialOffset::Latest => "latest",
         },
     );
+    if let Prefetch::Bounded {
+        records,
+        partition_bytes,
+    } = T::PREFETCH
+    {
+        config
+            .set("queued.min.messages", records.to_string())
+            .set("fetch.message.max.bytes", partition_bytes.to_string())
+            .set("fetch.queue.backoff.ms", BOUNDED_FETCH_QUEUE_BACKOFF_MS);
+    }
     config
 }
 
@@ -261,6 +309,7 @@ fn create_consumer_from_env<T>(
                 .create_with_context(StatisticsContext {
                     inner: DefaultConsumerContext,
                     observer,
+                    offset_resets: statistics::offset_resets_counter(),
                 })
                 .map_err(KafkaConsumerError::Plaintext)?,
         ),
@@ -271,6 +320,7 @@ fn create_consumer_from_env<T>(
                     .create_with_context(StatisticsContext {
                         inner: MskIamClientContext::from_env(),
                         observer,
+                        offset_resets: statistics::offset_resets_counter(),
                     })
                     .map_err(KafkaConsumerError::MskIam)?,
             )
@@ -372,19 +422,27 @@ impl KafkaEventProducer {
     }
 
     /// Sends a keyed payload to `topic` and waits for delivery confirmation.
+    /// `event_type`, the payload's event type, is recorded on the publish span.
     #[tracing::instrument(
         name = "kafka.publish",
         err,
-        skip(self, payload),
+        skip(self, event_type, payload),
         fields(
             otel.kind = "producer",
             messaging.system = "kafka",
             messaging.operation.name = "publish",
             messaging.operation.type = "send",
             messaging.destination.name = topic,
+            macro.event.type = event_type,
         )
     )]
-    pub async fn send(&self, topic: &str, key: &str, payload: &[u8]) -> KafkaResult<()> {
+    pub async fn send(
+        &self,
+        topic: &str,
+        key: &str,
+        event_type: Option<&str>,
+        payload: &[u8],
+    ) -> KafkaResult<()> {
         let record = FutureRecord::to(topic)
             .key(key)
             .payload(payload)
@@ -413,6 +471,44 @@ impl<T> KafkaEventConsumer<T> {
         partitions.add_partition(message.topic(), message.partition());
         either::for_both!(&self.consumer.0, consumer => consumer.pause(&partitions))
     }
+
+    /// The application's position on each assigned partition: one past the
+    /// last record [`Self::recv`] returned there, or [`Offset::Invalid`] before
+    /// the first. Read from the client's own state without a broker request, so
+    /// it answers while the application has stopped receiving.
+    pub fn position(&self) -> KafkaResult<TopicPartitionList> {
+        either::for_both!(&self.consumer.0, consumer => consumer.position())
+    }
+
+    /// The low and high watermarks of `partition` as of the client's last fetch
+    /// from it, without a broker request: librdkafka's fetcher updates them in
+    /// the background, so they answer while the application has stopped
+    /// receiving, unlike statistics callbacks. A watermark not fetched yet is
+    /// negative ([`Offset::Invalid`]'s raw value).
+    pub fn cached_watermarks(&self, topic: &str, partition: i32) -> KafkaResult<(i64, i64)> {
+        let topic = std::ffi::CString::new(topic).map_err(|_| {
+            KafkaError::MetadataFetch(rdkafka::types::RDKafkaErrorCode::InvalidArgument)
+        })?;
+        let client =
+            either::for_both!(&self.consumer.0, consumer => consumer.client().native_ptr());
+        let (mut low, mut high) = (-1, -1);
+        // SAFETY: `client` stays valid while `self` owns the consumer, `topic`
+        // is a NUL-terminated string that outlives the call, and librdkafka only
+        // writes the two offsets, which outlive the call too.
+        let error = unsafe {
+            rdkafka::bindings::rd_kafka_get_watermark_offsets(
+                client,
+                topic.as_ptr(),
+                partition,
+                &raw mut low,
+                &raw mut high,
+            )
+        };
+        match rdkafka::types::RDKafkaErrorCode::from(error) {
+            rdkafka::types::RDKafkaErrorCode::NoError => Ok((low, high)),
+            code => Err(KafkaError::MetadataFetch(code)),
+        }
+    }
 }
 
 impl<T: GroupName> KafkaEventConsumer<T> {
@@ -434,6 +530,20 @@ impl<T: GroupName> KafkaEventConsumer<T> {
         mode: CommitMode,
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => consumer.commit_message(message, mode))
+    }
+
+    /// Commits each listed partition's offset, the next record the group reads.
+    pub fn commit_offsets(
+        &self,
+        offsets: &TopicPartitionList,
+        mode: CommitMode,
+    ) -> KafkaResult<()> {
+        either::for_both!(&self.consumer.0, consumer => consumer.commit(offsets, mode))
+    }
+
+    /// The partitions currently assigned to this group member.
+    pub fn assignment(&self) -> KafkaResult<TopicPartitionList> {
+        either::for_both!(&self.consumer.0, consumer => consumer.assignment())
     }
 }
 

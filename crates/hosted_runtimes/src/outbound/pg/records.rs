@@ -19,7 +19,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE host_id = $1
             "#,
@@ -45,27 +45,33 @@ impl PgComputerRepo {
             .collect())
     }
 
+    /// Healthy computers with due effects for `worker`, on `hosts` (every host when `None`).
     pub(super) async fn healthy_effect_owners(
         &self,
         worker: OutboxWorker,
+        hosts: Option<&[Uuid]>,
         now: DateTime<Utc>,
     ) -> Result<Vec<Uuid>, PgComputerError> {
         let rows = sqlx::query_as!(ComputerRow,
-            r#"SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image FROM hosted_runtime
-             WHERE id IN (SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2)"#,
-            worker as OutboxWorker, now,
+            r#"SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at FROM hosted_runtime
+             WHERE id IN (SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2)
+               AND ($3::UUID[] IS NULL OR host_id = ANY($3))"#,
+            worker as OutboxWorker, now, hosts,
         ).fetch_all(&self.pool).await?;
         self.healthy_ids(rows).await
     }
 
+    /// Healthy computers with due timers, on `hosts` (every host when `None`).
     pub(super) async fn healthy_timer_owners(
         &self,
+        hosts: Option<&[Uuid]>,
         now: DateTime<Utc>,
     ) -> Result<Vec<Uuid>, PgComputerError> {
         let rows = sqlx::query_as!(ComputerRow,
-            r#"SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image FROM hosted_runtime
-             WHERE id IN (SELECT computer_id FROM hosted_runtime_timer WHERE fire_at <= $1)"#,
-            now,
+            r#"SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at FROM hosted_runtime
+             WHERE id IN (SELECT computer_id FROM hosted_runtime_timer WHERE fire_at <= $1)
+               AND ($2::UUID[] IS NULL OR host_id = ANY($2))"#,
+            now, hosts,
         ).fetch_all(&self.pool).await?;
         self.healthy_ids(rows).await
     }

@@ -30,6 +30,24 @@ struct StubRepo {
 }
 
 impl EmailPrivacyRepository for StubRepo {
+    async fn email_consent(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+    ) -> Result<crate::domain::email_privacy::EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
+    async fn excluded_email_threads(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+        _: Option<uuid::Uuid>,
+        _: Option<uuid::Uuid>,
+    ) -> Result<crate::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: uuid::Uuid,
@@ -58,6 +76,8 @@ impl EmailPrivacyRepository for StubRepo {
             mailbox_email: None,
             team_domains: vec![],
             personal_domains: vec![],
+            team_domain_warnings: Default::default(),
+            personal_domain_warnings: Default::default(),
             can_remove_team_domains: false,
         })
     }
@@ -84,6 +104,10 @@ struct ContactListCall {
 }
 
 impl CompaniesRepository for StubRepo {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn list_contacts_for_soup(
         &self,
         scope: CrmContactListScope<'_>,
@@ -214,6 +238,16 @@ impl CompaniesRepository for StubRepo {
         &self,
         _team_id: &uuid::Uuid,
         _email: Option<&str>,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
+    async fn create_contact_for_email_domain(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
         _name: &str,
         _now: DateTime<Utc>,
     ) -> Result<CrmContact, CrmError> {
@@ -438,6 +472,15 @@ impl CompaniesRepository for StubRepo {
         _email: &str,
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn get_company_by_domain_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
 
@@ -1238,6 +1281,33 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for StubRepo {
+    async fn member_has_crm_access(&self, _: uuid::Uuid, _: &str) -> Result<bool, CrmError> {
+        Ok(true)
+    }
+}
+
+#[tokio::test]
+async fn thread_exclusion_writes_are_disabled_without_an_injected_rollout_gate() {
+    use crate::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyService};
+    let service = service();
+    let receipt = receipt_with_role(TeamRole::Owner);
+    for excluded in [true, false] {
+        assert!(matches!(
+            service
+                .change_email_privacy(
+                    &receipt,
+                    EmailPrivacyChange::SetThreadExclusion {
+                        thread_id: uuid::Uuid::now_v7(),
+                        excluded,
+                    }
+                )
+                .await,
+            Err(CrmError::ThreadExclusionsUnavailable),
+        ));
     }
 }
 

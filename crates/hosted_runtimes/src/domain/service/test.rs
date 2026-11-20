@@ -17,10 +17,14 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{ChargeStatus, ItemCharge, StaticFleetAttachment};
 
+mod charging;
 mod comped;
+mod first_start;
+mod purchase_offers;
 mod quarantine;
-mod rollout;
+pub(crate) mod rollout;
 mod sold_resources;
+mod status;
 
 /// What the fake subscription does with a removal.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -50,9 +54,11 @@ pub(crate) struct FakeBilling {
     pub sales_checks: Mutex<usize>,
     pub no_subscription: bool,
     pub yearly: bool,
-    pub decline: bool,
+    pub decline: AtomicBool,
     /// The add fails before it reaches the provider.
     pub provider_error: AtomicBool,
+    /// Another change to the team's subscription is still in flight.
+    pub change_in_flight: AtomicBool,
     /// The add is charged but its answer is lost.
     pub lose_response: AtomicBool,
     pub remove_outcome: Mutex<RemoveOutcome>,
@@ -63,29 +69,20 @@ pub(crate) struct FakeBilling {
     pub removals: Mutex<Vec<(SubscriptionItemId, String)>>,
     /// Keys whose change was given up while its outcome was unknown.
     pub abandoned_keys: Mutex<Vec<String>>,
+    /// Purchase refunds asked for, by computer and key.
+    pub refunds: Mutex<Vec<(ComputerId, String)>>,
+    /// The refund fails at the provider.
+    pub refund_fails: AtomicBool,
+    /// The purchase's invoice was never paid, so nothing is refunded.
+    pub nothing_to_refund: bool,
+    /// The card purchases are charged to.
+    pub card: Option<crate::domain::models::PaymentCard>,
     pub calls: Mutex<Vec<&'static str>>,
 }
 
 impl FakeBilling {
-    /// Keys that were actually charged, in order.
-    pub fn charges(&self) -> Vec<String> {
-        self.charged_keys
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(key, _)| key.clone())
-            .collect()
-    }
-}
-
-impl Billing for FakeBilling {
-    fn sales_available(&self) -> bool {
-        *self.sales_checks.lock().unwrap() += 1;
-        !self.not_sold
-    }
-
-    async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
-        self.calls.lock().unwrap().push("quote");
+    /// The quote both quote reads answer with.
+    fn quoted(&self, size: ComputerSize) -> Result<Quote, BillingError> {
         if self.no_subscription {
             return Err(BillingError::NoSubscription);
         }
@@ -107,6 +104,62 @@ impl Billing for FakeBilling {
                 crate::domain::models::BillingInterval::Month
             },
         })
+    }
+
+    /// Keys that were actually charged, in order.
+    pub fn charges(&self) -> Vec<String> {
+        self.charged_keys
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(key, _)| key.clone())
+            .collect()
+    }
+}
+
+impl Billing for FakeBilling {
+    fn sales_available(&self) -> bool {
+        *self.sales_checks.lock().unwrap() += 1;
+        !self.not_sold
+    }
+
+    async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
+        self.calls.lock().unwrap().push("quote");
+        self.quoted(size)
+    }
+
+    async fn purchase_terms(
+        &self,
+        _team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> Result<crate::domain::models::PurchaseTerms, BillingError> {
+        self.calls.lock().unwrap().push("purchase_terms");
+        Ok(crate::domain::models::PurchaseTerms {
+            quotes: sizes
+                .iter()
+                .map(|&size| {
+                    let quote = self.quoted(size)?;
+                    // A third of the period is left.
+                    let due_today = match billing {
+                        PurchaseBilling::Stripe => quote.amount / 3,
+                        PurchaseBilling::Comped { .. } => 0,
+                    };
+                    Ok(crate::domain::models::PurchaseQuote { quote, due_today })
+                })
+                .collect::<Result<_, BillingError>>()?,
+            renews_at: DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
+            card: self.card.clone(),
+        })
+    }
+
+    async fn purchase_price(
+        &self,
+        _team_id: Uuid,
+        size: ComputerSize,
+    ) -> Result<stripe::PriceId, BillingError> {
+        self.calls.lock().unwrap().push("purchase_price");
+        Ok(self.quoted(size)?.price_id)
     }
 
     async fn add_computer(
@@ -131,7 +184,10 @@ impl Billing for FakeBilling {
                 "billing timed out"
             )));
         }
-        if self.decline {
+        if self.change_in_flight.load(Ordering::SeqCst) {
+            return Err(BillingError::ChangeInFlight);
+        }
+        if self.decline.load(Ordering::SeqCst) {
             return Err(BillingError::PaymentFailed);
         }
         let mut charged = self.charged_keys.lock().unwrap();
@@ -210,7 +266,7 @@ impl Billing for FakeBilling {
             .unwrap()
             .iter()
             .any(|add| add.key == idempotency_key)
-            .then_some(if self.decline {
+            .then_some(if self.decline.load(Ordering::SeqCst) {
                 ChargeStatus::NotApplied
             } else {
                 ChargeStatus::Pending
@@ -257,6 +313,29 @@ impl Billing for FakeBilling {
         Ok(())
     }
 
+    async fn refund_computer_purchase(
+        &self,
+        _team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<crate::domain::lifecycle::PurchaseRefund>, BillingError> {
+        self.calls.lock().unwrap().push("refund_computer_purchase");
+        if self.refund_fails.load(Ordering::SeqCst) {
+            return Err(BillingError::Provider(rootcause::report!("stripe is down")));
+        }
+        self.refunds
+            .lock()
+            .unwrap()
+            .push((computer_id, idempotency_key.to_owned()));
+        if self.nothing_to_refund {
+            return Ok(None);
+        }
+        Ok(Some(crate::domain::lifecycle::PurchaseRefund {
+            credit_note: "cn_1".parse().unwrap(),
+            refund: Some("re_1".parse().unwrap()),
+        }))
+    }
+
     async fn require_paid_plan(&self, _team_id: Uuid) -> Result<(), BillingError> {
         Ok(())
     }
@@ -299,6 +378,7 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
             reason: reason.clone(),
         },
         BillingState::Active { .. }
+        | BillingState::Charging { .. }
         | BillingState::PastDue { .. }
         | BillingState::EndsAt { .. } => Funding::Stripe {
             price_id: stripe::PriceId::from_str("price_standard").unwrap(),
@@ -332,11 +412,15 @@ pub(crate) fn computer(id: ComputerId, phase: Phase, billing: BillingState) -> C
             capacity_wait: None,
             retried_by_team: false,
             failure: None,
+            awaiting_agent: false,
+            first_start_failures: 0,
+            refund: None,
         },
         harness_id: None,
         created_by: admin(),
         created_at: now() - chrono::Duration::days(30),
         enrolled_at: Some(now() - chrono::Duration::days(30)),
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
@@ -443,13 +527,21 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             step_started_at: Some(now()),
         })
     );
+    // Created before the charge ran; the takeover timer it armed is
+    // ignored now that the charge settled.
     assert_eq!(
         effects_of(&service.repo, computer_id),
-        vec![Effect::Create {
-            host: HOST,
-            start: true,
-            generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
-        }]
+        vec![
+            Effect::Create {
+                host: HOST,
+                start: true,
+                generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
+            },
+            Effect::ScheduleTimer {
+                kind: TimerKind::ChargeUnsettled,
+                at: now() + crate::domain::lifecycle::CHARGE_TAKEOVER,
+            },
+        ]
     );
 }
 
@@ -479,11 +571,12 @@ async fn a_retried_purchase_with_the_same_key_never_charges_twice() {
     let Purchase::Confirming(computer_id) = first else {
         panic!("expected a confirming purchase, got {first:?}");
     };
+    // It provisions already; its payment is what is still being confirmed.
     let status = service.status(TEAM, computer_id).await.unwrap();
-    assert_eq!(status.status, ComputerStatusKind::Purchasing);
+    assert_eq!(status.status, ComputerStatusKind::SettingUp);
     assert_eq!(status.billing, Some(BillingStatus::Purchasing));
 
-    // Buy again from the same dialog: the same reservation, no new charge.
+    // Buy again from the same dialog: the same computer, no new charge.
     let again = service
         .purchase(standard_purchase("buy-dialog-1"))
         .await
@@ -491,10 +584,10 @@ async fn a_retried_purchase_with_the_same_key_never_charges_twice() {
     assert_eq!(again, Purchase::Confirming(computer_id));
     assert_eq!(service.billing.adds.lock().unwrap().len(), 1);
 
-    // The worker replays the same idempotent update and converts.
+    // The billing worker replays the same idempotent update.
     service.billing.lose_response.store(false, Ordering::SeqCst);
     clock.advance(CONFIRM_DELAY);
-    assert_eq!(service.confirm_reservations().await.unwrap(), 1);
+    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
 
     let after = service
         .purchase(standard_purchase("buy-dialog-1"))
@@ -527,16 +620,17 @@ async fn a_retried_purchase_with_the_same_key_never_charges_twice() {
 }
 
 /// Edge case (a): an error shown to the buyer always means nothing was
-/// charged, and the next purchase from the dialog charges afresh.
+/// charged. The computer that provisioned beside the charge is released and
+/// never listed, and a retry of the same purchase hears the same refusal.
 #[tokio::test]
-async fn a_declined_purchase_drops_the_reservation_and_charges_nothing() {
+async fn a_declined_purchase_releases_its_computer_unlisted_and_charges_nothing() {
     let service = service_with(
         FakeRepo {
             sold_units: 9,
             ..FakeRepo::default()
         },
         FakeBilling {
-            decline: true,
+            decline: AtomicBool::new(true),
             ..FakeBilling::default()
         },
     );
@@ -549,9 +643,52 @@ async fn a_declined_purchase_drops_the_reservation_and_charges_nothing() {
     ));
     assert!(service.billing.charges().is_empty());
     assert!(service.repo.reservations.lock().unwrap().is_empty());
-    assert!(service.repo.computers.lock().unwrap().is_empty());
+    let declined: Vec<ComputerId> = service
+        .repo
+        .computers
+        .lock()
+        .unwrap()
+        .keys()
+        .copied()
+        .collect();
+    let [computer_id] = declined[..] else {
+        panic!("expected one released computer, got {declined:?}");
+    };
+    let released = service
+        .repo
+        .get(computer_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert!(released.state.declined());
+    // Destroyed with its harness; the buyer heard the 402, so no notice.
+    assert_eq!(
+        effects_of(&service.repo, computer_id),
+        vec![
+            Effect::Create {
+                host: HOST,
+                start: true,
+                generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
+            },
+            Effect::ScheduleTimer {
+                kind: TimerKind::ChargeUnsettled,
+                at: now() + crate::domain::lifecycle::CHARGE_TAKEOVER,
+            },
+            Effect::Destroy { host: HOST },
+            Effect::RevokeHarness,
+        ]
+    );
     assert!(service.list(TEAM).await.unwrap().is_empty());
     assert_eq!(service.confirm_reservations().await.unwrap(), 0);
+    assert_eq!(service.run_billing_effects().await.unwrap(), 0);
+
+    assert!(matches!(
+        service.purchase(standard_purchase("buy-dialog-1")).await,
+        Err(ComputerError::Billing(BillingError::PaymentFailed))
+    ));
+    assert_eq!(service.billing.adds.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -560,6 +697,7 @@ async fn an_expired_reservation_whose_charge_never_landed_is_deleted_uncharged()
     let service = ComputerService::new(
         FakeRepo {
             sold_units: 9,
+            convert_fails: AtomicBool::new(true),
             ..FakeRepo::default()
         },
         FakeBilling {
@@ -603,6 +741,7 @@ async fn an_expired_reservation_whose_charge_landed_becomes_the_computer() {
     let service = ComputerService::new(
         FakeRepo {
             sold_units: 9,
+            convert_fails: AtomicBool::new(true),
             ..FakeRepo::default()
         },
         FakeBilling {
@@ -619,7 +758,15 @@ async fn an_expired_reservation_whose_charge_landed_becomes_the_computer() {
     else {
         panic!("expected a confirming purchase");
     };
+    assert!(
+        service.billing.adds.lock().unwrap().is_empty(),
+        "never charged unconverted"
+    );
+    service.repo.convert_fails.store(false, Ordering::SeqCst);
 
+    // The confirm worker charges the leftover reservation; its answer is lost.
+    clock.advance(CONFIRM_DELAY);
+    assert_eq!(service.confirm_reservations().await.unwrap(), 0);
     clock.advance(RESERVATION_TTL);
     assert_eq!(service.confirm_reservations().await.unwrap(), 1);
 
@@ -706,6 +853,7 @@ async fn requests_on_a_purchase_being_confirmed_are_not_purchased() {
     let service = service_with(
         FakeRepo {
             sold_units: 9,
+            convert_fails: AtomicBool::new(true),
             ..FakeRepo::default()
         },
         FakeBilling {
@@ -872,6 +1020,25 @@ async fn released_with_removal(
     (service, clock, removal_id)
 }
 
+use super::billing::removal_key;
+
+/// The computer [`released_with_removal`] releases.
+const RELEASED: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(1));
+
+/// Effect ids come from each database's own sequence, so two environments
+/// sharing one Stripe account reuse them: a removal key carries the computer
+/// id too, unique everywhere, so their keys never collide.
+#[test]
+fn removal_keys_of_two_computers_with_the_same_effect_id_differ() {
+    let other = ComputerId::new_from_uuid(Uuid::from_u128(2));
+
+    assert_ne!(removal_key(RELEASED, 15, 0), removal_key(other, 15, 0));
+    assert_eq!(
+        removal_key(RELEASED, 15, 0),
+        format!("computer-remove:{RELEASED}:15:0")
+    );
+}
+
 /// A retried removal sends its own key again, so the subscription guard
 /// lets it replay its change instead of refusing it as another one in flight.
 #[tokio::test]
@@ -887,7 +1054,10 @@ async fn a_retried_removal_reuses_its_own_key() {
 
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:0")
+        )]
     );
 }
 
@@ -916,7 +1086,10 @@ async fn a_pool_timeout_never_spends_a_removal_attempt() {
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:0"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:0")
+        )]
     );
 }
 
@@ -933,7 +1106,7 @@ async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
         .abandoned_keys
         .lock()
         .unwrap()
-        .push(format!("computer-remove:{removal_id}:0"));
+        .push(format!("computer-remove:{RELEASED}:{removal_id}:0"));
 
     *service.billing.remove_outcome.lock().unwrap() = RemoveOutcome::Removed;
     clock.advance(chrono::Duration::hours(1));
@@ -941,7 +1114,10 @@ async fn a_removal_moves_past_an_abandoned_key_and_stops_once_one_landed() {
 
     assert_eq!(
         *service.billing.removals.lock().unwrap(),
-        vec![(item("si_1"), format!("computer-remove:{removal_id}:1"))]
+        vec![(
+            item("si_1"),
+            format!("computer-remove:{RELEASED}:{removal_id}:1")
+        )]
     );
     assert!(
         service
@@ -1355,8 +1531,25 @@ async fn deleting_a_team_releases_its_running_computer_and_leaves_no_billing() {
             Effect::RevokeHarness,
         ]
     );
+    // The purchase still charging is released too, its charge fenced.
+    assert!(
+        effects_of(&service.repo, pending).ends_with(&[
+            Effect::Charge,
+            Effect::SettleCharge {
+                landed: crate::domain::lifecycle::LandedCharge::Remove,
+            },
+            Effect::Destroy { host: HOST },
+            Effect::RevokeHarness,
+        ]),
+        "{:?}",
+        effects_of(&service.repo, pending)
+    );
     assert!(service.repo.reservation(pending).await.unwrap().is_none());
-    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+    while service.run_billing_effects().await.unwrap() > 0 {}
+    assert_eq!(
+        *service.billing.settled.lock().unwrap(),
+        vec![format!("computer-add:{pending}")]
+    );
     assert!(service.billing.items.lock().unwrap().is_empty());
     assert!(service.list(TEAM).await.unwrap().is_empty());
 }

@@ -39,6 +39,7 @@ impl JwtValidator for OwnerToken {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: OWNER.into(),
                 fusion_user_id: "test-fusion-user".into(),
                 organization_id: None,
@@ -213,6 +214,7 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
             {"label": "Open", "count": 2},
             {"label": "Won", "count": 0},
             {"label": "Lost", "count": 0},
+            {"label": "Declined", "count": 0},
         ], "empty": 0})
     );
     let revenue = found["pipeline"]["fields"]

@@ -1,5 +1,6 @@
 import '@fontsource-variable/inter';
 import '../../../../index.css';
+import { analytics } from '@app/lib/analytics/analytics';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
@@ -21,19 +22,44 @@ import { ImperativeDialogHost } from '@ui';
 import { Layer } from '@ui/components/Layer';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
 import { themeCssVars } from '../../../theme/utils/themeCssVars';
+import { SettingsPage } from '../../primitives';
 import { TeamMembers } from '../../TeamMembers';
+import { CrmMemberAccessSection } from '../../views/crm-member-access';
 import {
   TeamAgentStatusBanner,
   TeamAgentStatusChip,
 } from '../../views/team-agent-dm-status';
 
-for (const [key, token] of Object.entries(themeCssVars(macroLightTheme)))
+// `?dark` renders the page in the dark theme.
+const dark = new URLSearchParams(window.location.search).has('dark');
+for (const [key, token] of Object.entries(
+  themeCssVars(dark ? macroDarkTheme : macroLightTheme)
+))
   document.documentElement.style.setProperty(key, token);
-document.documentElement.dataset.themeLight = 'true';
+document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+document.documentElement.dataset.themeLight = String(!dark);
 // The fixture uses the same touch variant switch as the app entry point.
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
+
+// Boot the SDK with a local-only flag answer; the production reader still decides visibility.
+analytics.posthog.init('local-browser-fixture', {
+  api_host: location.origin,
+  persistence: 'memory',
+  advanced_disable_flags: true,
+  capture_pageview: false,
+  autocapture: false,
+  disable_session_recording: true,
+  bootstrap: {
+    featureFlags: {
+      'enable-crm-member-access-changes':
+        new URLSearchParams(location.search).get('crmAccessChanges') !== 'off',
+      'fixture-flags-loaded': true,
+    },
+  },
+});
 
 const team: Team = {
   id: 'team-1',
@@ -66,11 +92,17 @@ declare global {
       notify: (content: ComputerSetupMetadata) => Promise<void>;
       /** Shows the DM with `userId`: its header chip and composer banner. */
       openDm: (userId: string) => void;
+      /** Switches between Members and CRM settings' Who can use CRM, keeping the cache. */
+      showPage: (page: 'members' | 'crm') => void;
     };
   }
 }
 
 const [dmWith, setDmWith] = createSignal<string>();
+// `?crm` opens on CRM settings' Who can use CRM, which shares Members' team reads.
+const [shownPage, setShownPage] = createSignal<'members' | 'crm'>(
+  new URLSearchParams(window.location.search).has('crm') ? 'crm' : 'members'
+);
 
 // Navigation is recorded, not performed: this page is Members alone.
 window.teamAgentsFixture = {
@@ -92,8 +124,10 @@ window.teamAgentsFixture = {
     });
   },
   openDm: setDmWith,
+  showPage: setShownPage,
 };
 setGlobalSplitManager({
+  activeSplitId: () => undefined,
   openWithSplit(content: SplitContent) {
     window.teamAgentsFixture.opened.push(content);
     return { status: 'unavailable' };
@@ -138,7 +172,14 @@ if (root)
                     when={dmWith()}
                     fallback={
                       <div class="mx-auto max-w-3xl">
-                        <TeamMembers team={team} />
+                        <Show
+                          when={shownPage() === 'crm'}
+                          fallback={<TeamMembers team={team} />}
+                        >
+                          <SettingsPage title="CRM">
+                            <CrmMemberAccessSection />
+                          </SettingsPage>
+                        </Show>
                       </div>
                     }
                   >

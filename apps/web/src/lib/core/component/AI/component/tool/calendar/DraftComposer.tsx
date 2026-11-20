@@ -23,7 +23,6 @@ import {
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { AgentComposer } from '@app/features/calendar/views/composer/AgentComposer';
 import { MobileAgentComposer } from '@app/features/calendar/views/composer/mobile/MobileAgentComposer';
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -137,8 +136,6 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     requestedInbox()?.needs_calendar_permission;
   // The tool mints the Macro call when it executes, so the composer offers the
   // choice under the same flag as the calendar's own event composer.
-  const quickCalls = useQuickCallsFlag();
-  const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
   let agent: ReturnType<typeof createAgentComposer<CreateCalendarEvent>>;
@@ -355,7 +352,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
                   onCancel={() =>
                     fireAndForget(agent.cancel(), 'ai-calendar-compose')
                   }
-                  macroCallsEnabled={macroCallsEnabled()}
+                  macroCallsEnabled
                   resolveAppLink={resolveAppLink}
                 />
               </ComposerRoot>
@@ -365,7 +362,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           <MobileAgentComposer
             model={agent.model}
             resolveAppLink={resolveAppLink}
-            macroCallsEnabled={macroCallsEnabled()}
+            macroCallsEnabled
             onCancel={() =>
               fireAndForget(agent.cancel(), 'ai-calendar-compose')
             }

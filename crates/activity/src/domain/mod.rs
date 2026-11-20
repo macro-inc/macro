@@ -12,6 +12,7 @@ pub mod realtime;
 #[cfg(feature = "reads")]
 pub mod service;
 pub mod timeline;
+pub mod visible_reads;
 
 #[cfg(feature = "consumer")]
 pub mod announcements;

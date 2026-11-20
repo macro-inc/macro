@@ -72,3 +72,4 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 http-body-util = { workspace = true }
 rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
 tower = { workspace = true }
+wiremock = { workspace = true }

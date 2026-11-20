@@ -908,6 +908,8 @@ export type OpColumnKind =
   | { type: 'text' }
   /**  A number. */
   | { type: 'number' }
+  /**  A number shown as a percent: 0.25 displays as 25%. */
+  | { type: 'percentage' }
   /**  A checkbox. */
   | { type: 'boolean' }
   /**  A date-time. */

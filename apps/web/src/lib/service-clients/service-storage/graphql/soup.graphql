@@ -327,6 +327,10 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		createdAt
 		updatedAt
 	}
+	... on GraphqlSoupTeam {
+		teamName: name
+		ownerId
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource
@@ -670,6 +674,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		computerSetupOutcome: outcome
 		computerSetupFailureReason: failureReason
 	}
+	... on GraphqlPingMetadata {
+		pingBody: body
+		pingEntityName: entityName
+		pingAgentId: agentId
+		pingAgentName: agentName
+		pingAgentAvatarUrl: agentAvatarUrl
+		pingMessageId: messageId
+		pingThreadId: threadId
+	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
 		inviteToTeamTeamId: teamId
@@ -704,6 +717,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventJoinRequestRequestId: requestId
 		calendarEventJoinRequestEventId: eventId
 		calendarEventJoinRequestTitle: title
+	}
+	... on GraphqlPasswordAccessRequestedMetadata {
+		passwordAccessRequestedRequestId: requestId
+		passwordAccessRequestedTeamId: teamId
+		passwordAccessRequestedItemId: itemId
+		passwordAccessRequestedItemName: itemName
 	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary

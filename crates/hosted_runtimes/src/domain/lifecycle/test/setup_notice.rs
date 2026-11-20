@@ -7,10 +7,13 @@ fn setting_up() -> ComputerState {
     ComputerState {
         setup: Some(SetupTimeline {
             reserved_at: now() - Duration::minutes(5),
+            provisioned_at: None,
             paid_at: Some(now() - Duration::minutes(4)),
             booting_at: Some(now() - Duration::minutes(2)),
             connected_at: None,
             waited_for_capacity: false,
+            agent_delivered_at: None,
+            agent_online_at: None,
         }),
         ..billed(Phase::Booting)
     }
@@ -34,7 +37,13 @@ fn apply(state: &ComputerState, event: Event, at: DateTime<Utc>) -> (ComputerSta
         next.waiting_for_capacity(),
     );
     if let Some(setup) = next.setup.as_mut() {
-        setup.advance(&phase, connected, waiting, at);
+        setup.advance(
+            &phase,
+            connected,
+            waiting,
+            crate::domain::setup::PaymentProgress::Settled,
+            at,
+        );
     }
     (next, effects)
 }
@@ -163,8 +172,10 @@ fn a_set_up_computer_that_fails_tells_nobody() {
     assert_eq!(setup_notices(&effects), Vec::<&SetupOutcome>::new());
 }
 
+/// The second failure of a first start releases the computer, so its
+/// notice is the release, not another failure to retry.
 #[test]
-fn a_retried_setup_that_fails_again_tells_the_buyer_again() {
+fn a_retried_setup_that_fails_again_tells_the_buyer_it_was_released() {
     let first_at = now();
     let (failed, effects) = apply(
         &setting_up(),
@@ -190,7 +201,7 @@ fn a_retried_setup_that_fails_again_tells_the_buyer_again() {
 
     assert_eq!(
         setup_notices(&effects),
-        vec![&SetupOutcome::Failed {
+        vec![&SetupOutcome::Released {
             failure: Failure::Power,
             failed_at: second_at,
         }]

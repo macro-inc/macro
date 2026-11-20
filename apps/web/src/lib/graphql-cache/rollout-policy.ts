@@ -4,7 +4,6 @@ export type BooleanFlag = boolean | undefined;
 
 export type BrowserTursoCacheRolloutInput = {
   isTauri: boolean;
-  graphqlTransportEnabled: boolean;
   /** Whether the browser has the worker, lock and storage APIs the cache needs. */
   browserSupported: boolean;
   disableEnvOverride: BooleanFlag;
@@ -16,7 +15,6 @@ export type BrowserTursoCacheRolloutDecision = {
   cohort: CacheRolloutCohort;
   reason:
     | 'tauri-native-unchanged'
-    | 'graphql-transport-disabled'
     | 'emergency-disabled'
     | 'browser-unsupported'
     | 'graphql-transport-enabled';
@@ -25,8 +23,8 @@ export type BrowserTursoCacheRolloutDecision = {
 };
 
 /**
- * Pure cache rollout policy. The GraphQL soup gate enables both transport and
- * cache. The emergency flag is independent and any true kill source wins. A
+ * Pure cache rollout policy. The cache is on unless the emergency flag kills
+ * it, and any true kill source wins. A
  * browser without the cache's worker and storage APIs stays uncached.
  * Tauri returns before browser policy is considered.
  */
@@ -35,18 +33,10 @@ export function resolveBrowserTursoCacheRollout(
 ): BrowserTursoCacheRolloutDecision {
   if (input.isTauri) {
     return {
-      enabled: input.graphqlTransportEnabled,
+      enabled: true,
       cohort: 'unknown',
       reason: 'tauri-native-unchanged',
       nativeCacheUnchanged: true,
-    };
-  }
-  if (!input.graphqlTransportEnabled) {
-    return {
-      enabled: false,
-      cohort: 'control',
-      reason: 'graphql-transport-disabled',
-      nativeCacheUnchanged: false,
     };
   }
   if (input.disableEnvOverride === true || input.posthogDisable === true) {

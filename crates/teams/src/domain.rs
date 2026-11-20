@@ -1,5 +1,6 @@
 pub mod contacts_enqueuer;
 pub mod crm_enqueuer;
+pub mod crm_member_access;
 pub mod customer_repo;
 pub mod domain_notice;
 pub mod events;

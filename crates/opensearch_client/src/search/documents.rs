@@ -6,33 +6,21 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
         properties::{PROPERTIES_PATH, build_tag_filter},
-        query::Keys,
+        query::{Keys, child_content_query},
+        utils::{INNER_HITS_PER_RESULT, split_inner_hits_budget},
     },
 };
 
 use chrono::{DateTime, Utc};
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    NestedQuery, QueryType, ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, NestedQuery, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
 /// in `upsert::document`.
 const PARENT_RELATION: &str = "document";
 const CHILD_RELATION: &str = "chunk";
-
-/// Minimum prefix length before we emit a `match_phrase_prefix`. Matches
-/// the email keyword-field threshold — shorter prefixes explode the term
-/// set on the analyzer and risk hitting `max_clause_count`.
-const MIN_PREFIX_LEN: usize = 3;
-
-/// Budget of chunks returned for one document, shared by its `has_child`
-/// clauses. Every returned chunk is re-analysed by the plain highlighter and
-/// shipped in the response, so fetch time and payload follow the chunk count,
-/// not the term count. A grouped result row previews one passage and expands
-/// to the rest.
-const INNER_HITS_PER_DOCUMENT: u32 = 10;
 
 /// The chunk `_source` fields a `SearchHit` carries. Inner hits do not inherit
 /// the request-level `_source` filter, so without this every chunk comes back
@@ -50,12 +38,6 @@ const STOPWORDS: [&str; 33] = [
     "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these",
     "they", "this", "to", "was", "will", "with",
 ];
-
-/// Cap on terms a `match_phrase_prefix` may expand the last word to.
-/// OpenSearch's default of 50 is too aggressive — a prefix like `wo`
-/// can expand to far more real tokens. Picking a fixed ceiling keeps
-/// query cost bounded without truncating common cases.
-const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 /// Name of the one `inner_hits` block of the passage clause.
 const PASSAGE_INNER_HITS_NAME: &str = "passage";
@@ -284,7 +266,7 @@ impl DocumentQueryBuilder {
 
     /// One `has_child` clause per term, each carrying its own `inner_hits` so
     /// highlights and chunk-nav data come back alongside the parent. The
-    /// clauses split [`INNER_HITS_PER_DOCUMENT`] between them, so a document
+    /// clauses split [`INNER_HITS_PER_RESULT`] between them, so a document
     /// returns at most that many chunks however many terms the query has. The
     /// shared `highlight_query` ORs every term so a returned chunk gets tagged
     /// for every term it contains, not just the one its clause matched.
@@ -293,27 +275,22 @@ impl DocumentQueryBuilder {
             .inner
             .terms
             .iter()
-            .map(|term| build_child_content_query(term, &self.inner.match_type))
+            .map(|term| child_content_query(term, &self.inner.match_type))
             .collect();
         let highlight_query = build_any_term_highlight_query(&term_queries);
-        // Past the budget, only the first clauses carry inner hits. A matching
-        // document has a chunk for every term, so each row still gets passages.
-        let clauses_with_inner_hits = u32::try_from(term_queries.len())
-            .unwrap_or(u32::MAX)
-            .clamp(1, INNER_HITS_PER_DOCUMENT);
-        let inner_hits_per_term = INNER_HITS_PER_DOCUMENT / clauses_with_inner_hits;
+        let budget = split_inner_hits_budget(term_queries.len());
 
         term_queries
             .into_iter()
-            .zip(0u32..)
-            .map(|(inner_query, idx)| {
+            .enumerate()
+            .map(|(idx, inner_query)| {
                 let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
-                if idx >= clauses_with_inner_hits {
+                let Some(size) = budget.size_for_clause(idx) else {
                     return has_child.into();
-                }
+                };
                 let inner_hits = InnerHits::new()
                     .name(format!("term_{idx}"))
-                    .size(inner_hits_per_term)
+                    .size(size)
                     .source_fields(CHUNK_SOURCE_FIELDS)
                     .highlight(inner_hits_content_highlight(&highlight_query));
                 has_child.inner_hits(inner_hits).into()
@@ -348,11 +325,14 @@ impl DocumentQueryBuilder {
             } else {
                 "exact"
             };
-            let term_query = build_child_content_query(term, match_type);
+            let term_query = child_content_query(term, match_type);
 
             // A last term that expands as a prefix is a word still being
             // typed: `for` may be the start of `forecast`, so it is kept.
-            let is_prefix = matches!(term_query, QueryType::MatchPhrasePrefix(_));
+            let is_prefix = matches!(
+                term_query,
+                QueryType::MatchBoolPrefix(_) | QueryType::MatchPhrasePrefix(_)
+            );
             let lowercase = term.to_lowercase();
             if counted_terms.contains(&lowercase)
                 || (STOPWORDS.contains(&lowercase.as_str()) && !is_prefix)
@@ -376,7 +356,7 @@ impl DocumentQueryBuilder {
 
         let inner_hits = InnerHits::new()
             .name(PASSAGE_INNER_HITS_NAME)
-            .size(INNER_HITS_PER_DOCUMENT)
+            .size(INNER_HITS_PER_RESULT)
             .source_fields(CHUNK_SOURCE_FIELDS)
             .highlight(inner_hits_content_highlight(&highlight_query));
         Some(
@@ -510,29 +490,6 @@ fn required_term_count(term_count: usize) -> usize {
         return term_count;
     }
     term_count * 3 / 4
-}
-
-/// Build the per-term query that runs inside `has_child` against `content`.
-///
-/// - Quoted phrases (term contains whitespace) → `match_phrase` (exact).
-/// - Short terms (< `MIN_PREFIX_LEN`) → `match_phrase` (no prefix expansion).
-/// - `match_type` = "exact" → `match_phrase` always.
-/// - Otherwise → `match_phrase_prefix`.
-fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(|c| c.is_whitespace())
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        QueryType::MatchPhrase(MatchPhraseQuery::new(
-            "content".to_string(),
-            term.to_string(),
-        ))
-    } else {
-        QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        )
-    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

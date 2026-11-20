@@ -1,6 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableSnippets } from '@core/constant/featureFlags';
 import { isSnippetEntity, type SnippetEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
@@ -22,8 +20,6 @@ const STALE_TIME = 5 * 60 * 1000;
  * documents are narrowed to the snippet sub type.
  */
 export function useQuickAccessSnippetsQuery() {
-  const snippetsFlag = useFeatureFlag(enableSnippets);
-
   const query = useSoupItemsQuery(
     () => ({
       params: {
@@ -35,7 +31,7 @@ export function useQuickAccessSnippetsQuery() {
         document_filters: { sub_types: ['snippet'] },
       },
     }),
-    () => ({ staleTime: STALE_TIME, enabled: snippetsFlag().enabled })
+    () => ({ staleTime: STALE_TIME })
   );
 
   const snippets = createMemo<SnippetEntity[]>(() =>

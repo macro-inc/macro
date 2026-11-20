@@ -103,7 +103,6 @@ export default {
     close: 'Tutup',
     delete: 'Hapus',
     rename: 'Ganti nama',
-    more: 'Lainnya',
     search: 'Cari',
     settings: 'Setelan',
   },
@@ -517,6 +516,9 @@ export default {
       other: '{{count}} item dihapus',
     },
     toastDeleteFailed: 'Gagal menghapus',
+    toastPropertySet: {
+      other: '{{property}} disetel untuk {{count}} item',
+    },
     toastAddedToFavorites: 'Ditambahkan ke favorit',
     toastAddedCountToFavorites: {
       other: '{{count}} item ditambahkan ke favorit',
@@ -573,10 +575,6 @@ export default {
       other: '{{accepted}} dari {{count}} item ditandai belum selesai',
     },
     toastMarkNotDoneFailed: 'Gagal menandai belum selesai',
-    toastThreadStaysDone:
-      'Utas ini belum menerima pesan apa pun, jadi tetap selesai',
-    toastThreadsStayDone:
-      'Utas-utas ini belum menerima pesan apa pun, jadi tetap selesai',
     toastCountNotRestored: {
       other: '{{count}} item tidak dapat dipulihkan.',
     },
@@ -671,8 +669,6 @@ export default {
     create: 'Buat',
     getMobileApp: 'Dapatkan aplikasi seluler',
     signedInAs: 'Login sebagai {{name}}',
-    commandMenu: 'Menu perintah',
-    searchEverything: 'Cari di mana saja',
     customizeSidebar: 'Sesuaikan sidebar',
     customizeSidebarDescription:
       'Pilih aplikasi yang muncul di sidebar dan seret untuk mengubah urutannya. Beranda selalu berada di urutan pertama.',

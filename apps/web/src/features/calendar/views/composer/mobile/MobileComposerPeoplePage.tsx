@@ -192,7 +192,7 @@ export function MobileComposerPeoplePage(props: {
           onClick={source.loadMore}
           disabled={source.isLoadingMore()}
         >
-          {t('viewMenus.nextOptions')}
+          {t('calendar.moreOptions')}
         </Button>
       </Show>
     </PhoneMenuPage>

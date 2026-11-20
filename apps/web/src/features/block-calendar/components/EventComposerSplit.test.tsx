@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import type { CalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import {
@@ -9,17 +8,13 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { EventComposerSplit } from './EventComposerSplit';
 
 const mocks = vi.hoisted(() => ({
-  flag: () => ({ loading: true, enabled: false }),
   canForward: false,
   controllerEnabled: undefined as (() => boolean) | undefined,
-}));
-vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => () => mocks.flag(),
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => false,
@@ -56,56 +51,58 @@ vi.mock('@app/features/calendar/hooks/use-event-editor', () => ({
     initialValues: () => undefined,
     calendarOptions: () => [],
     guestOptions: () => [],
+    pending: () => false,
+    saveError: () => undefined,
+    disabledFields: () => ({}),
+    addOnlyGuests: () => false,
+    guestsReadOnlyReason: () => undefined,
+    guestListHidden: () => false,
+    guestPolicyEditable: () => false,
+    detailsReadOnlyReason: () => undefined,
+    showRecurringEditNotice: () => false,
+    replacementRequest: () => undefined,
   }),
 }));
-vi.mock('@app/features/calendar/views/composer/EventForm', () => ({
-  EventForm: (props: {
-    controller: CalendarEventFormController;
-    guestsAction?: JSX.Element;
-    status?: JSX.Element;
-  }) => (
-    <>
-      {props.guestsAction}
-      {props.status}
-      <output aria-label="Conference">
-        {props.controller.state().conference}
-      </output>
-      <output aria-label="Start">{props.controller.state().start}</output>
-      <output aria-label="Location">{props.controller.state().location}</output>
-      <input
-        aria-label="Title"
-        value={props.controller.state().title}
-        onInput={(event) =>
-          props.controller.setField('title', event.currentTarget.value)
-        }
-      />
-    </>
-  ),
+vi.mock('@app/features/calendar/views/event-replacement', () => ({
+  useEventReplacement: () => ({ start: vi.fn() }),
+  EventReplacement: () => null,
 }));
-afterEach(cleanup);
-
-it.each([true, false])(
-  'uses the resolved conference default when enabled is %s',
-  (enabled) => {
-    const [flag, setFlag] = createSignal({ loading: true, enabled: false });
-    mocks.flag = flag;
-    render(() => <EventComposerSplit />);
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.getByRole('status').textContent).toBe('Loading event…');
-    setFlag({ loading: false, enabled });
-    expect(screen.getByLabelText('Conference').textContent).toBe(
-      enabled ? 'macro' : 'none'
+vi.mock(
+  '@app/features/calendar/views/composer/CalendarDesktopPlacement',
+  async () => {
+    const { useCalendarComposer } = await import(
+      '@app/features/calendar/context/calendar-composer-context'
     );
-    fireEvent.input(screen.getByRole('textbox'), {
-      target: { value: 'Draft title' },
-    });
-    setFlag({ loading: true, enabled: false });
-    setFlag({ loading: false, enabled });
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
-      'Draft title'
-    );
+    return {
+      CalendarDesktopPlacement: (props: { children?: JSX.Element }) => {
+        const { controller } = useCalendarComposer();
+        return (
+          <>
+            {props.children}
+            <output aria-label="Conference">
+              {controller.state().conference}
+            </output>
+            <output aria-label="Start">{controller.state().start}</output>
+            <output aria-label="Location">{controller.state().location}</output>
+            <input
+              aria-label="Title"
+              value={controller.state().title}
+              onInput={(event) =>
+                controller.setField('title', event.currentTarget.value)
+              }
+            />
+          </>
+        );
+      },
+    };
   }
 );
+afterEach(cleanup);
+
+it('defaults a new event to a Macro call', () => {
+  render(() => <EventComposerSplit />);
+  expect(screen.getByLabelText('Conference').textContent).toBe('macro');
+});
 
 const GUEST_COPY = {
   calendar: { id: 'calendar-1', name: 'Calendar', color: 'orange' },
@@ -113,7 +110,6 @@ const GUEST_COPY = {
 } as CalendarEvent;
 
 it('offers Forward invitation beside the guests of an event the viewer cannot invite to', () => {
-  mocks.flag = () => ({ loading: false, enabled: false });
   mocks.canForward = true;
   render(() => <EventComposerSplit event={GUEST_COPY} />);
   expect(
@@ -124,7 +120,6 @@ it('offers Forward invitation beside the guests of an event the viewer cannot in
 });
 
 it('offers no forward while composing a new event', () => {
-  mocks.flag = () => ({ loading: false, enabled: false });
   mocks.canForward = true;
   render(() => <EventComposerSplit />);
   expect(
@@ -133,7 +128,6 @@ it('offers no forward while composing a new event', () => {
 });
 
 it('offers no forward when the viewer may not forward', () => {
-  mocks.flag = () => ({ loading: false, enabled: false });
   mocks.canForward = false;
   render(() => <EventComposerSplit event={GUEST_COPY} />);
   expect(
@@ -162,7 +156,6 @@ function suggestion() {
 }
 
 it('fills an untouched new event with values suggested after it opened', async () => {
-  mocks.flag = () => ({ loading: false, enabled: false });
   const { pending, resolve } = suggestion();
   render(() => (
     <EventComposerSplit initialValues={OPENED} suggestedValues={pending} />
@@ -191,7 +184,6 @@ it('fills an untouched new event with values suggested after it opened', async (
 });
 
 it('keeps what the user changed before suggestions arrived', async () => {
-  mocks.flag = () => ({ loading: false, enabled: false });
   const { pending, resolve } = suggestion();
   render(() => (
     <EventComposerSplit initialValues={OPENED} suggestedValues={pending} />

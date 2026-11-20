@@ -22,6 +22,8 @@ and the traps. To add a whole service, follow the
 | `infra/packages/service` | `EcrImage`, least-privilege DynamoDB, cluster stack reference. |
 | `infra/packages/lambda` | `Lambda` component and `WorkerTrigger`. |
 | `infra/packages/vpc` | IDs of the one VPC everything runs in (`get_coparse_api_vpc()`). |
+| `infra/k8s/observability/aws/` | Not Pulumi: the observability EKS cluster's AWS layer, OpenTofu written in Nix (terranix), applied by hand. See its README. |
+| `infra/k8s/observability/cluster/` | Not Pulumi: the observability EKS cluster's contents as nixidy modules, rendered to committed YAML that Argo CD applies from `main`. See its README. |
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
@@ -166,7 +168,8 @@ local resources.
 | Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
-| Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of Grafana, Loki and Tempo downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
+| Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of GoAlert downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
+| Merge to `main` changing `infra/k8s/observability/cluster/manifests/prod` | Argo CD on the observability EKS cluster syncs it (automatically: `macro.cluster.autoSync` is on; cluster README "Bootstrap"); PRs run `observability_cluster.yml`, which fails on a stale render or invalid manifests |
 
 Build handoffs use Namespace artifact storage at
 `handoff/<run_id>-<run_attempt>/<service>/<file>`, with a 24-hour expiry.
@@ -201,6 +204,12 @@ build/deployment failure gates remain attempt-scoped.
 - Services marked `bootstrap_pending` or `deploy_enabled: false` are skipped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).
+- **Manual deploys apply no migrations.** `deploy-service-generic.yml` and
+  `deploy-pulumi-stack.yml` refuse to deploy a service with binaries or
+  Lambdas while the deployed commit has a migration that is unapplied to the
+  target environment or differs from what was applied there
+  (`.github/actions/check-macro-db-migrations`). Run `migrate-macro-db.yml`
+  for that environment first, or deploy a commit without the migration.
 - `continueBeforeSteadyState` means a green deploy job does not prove old tasks
   stopped. The circuit breaker rolls back failed deployments; otherwise roll
   forward or redeploy an older ref.
@@ -227,9 +236,9 @@ and receives `APP_SECRETS_JSON` now), `fusion-auth/README.md`.
 
 `agent-harness-service` is the only ECS agent service. Its process also owns
 chat/completions, workspace MCP/OAuth, preview SSH/HTTP/control, routine cron
-and event workers, and projection refresh sweeps. `preview-gateway` retains
-only networking, and `document-cognition` retains the projection queue and
-public DNS record. `mcp-server` retains its public DNS record. Both hostnames
+and event workers. `preview-gateway` retains
+only networking, and `document-cognition` retains the retired projection queue
+and public DNS record. `mcp-server` retains its public DNS record. Both hostnames
 point at the shared gateway, preserving public URLs and OAuth callbacks. The
 retired MCP and schedule stack programs contain no compute resources. Follow
 [the cutover guide](../guides/consolidate-agent-services.md) before deployment;

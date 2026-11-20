@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            SELECT 1 FROM team_user\n            WHERE team_id = $1 AND user_id = $2\n              AND (crm_access OR team_role <> 'member')\n        ) AS \"allowed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a500df8a31d459dc58950f029e96c37c0e8e14b71cca0d1c05bc605374096c66"
+}

@@ -593,6 +593,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness-egress",
             prod: "https://gateway.macro.com/agent-harness-egress",
         },
+        /// OTLP/HTTP intake base for telemetry from outside Macro's network
+        /// (Macro computers, desktop): the analytics proxy, which adds the
+        /// Datadog key. Append `/v1/traces`. Locally, the OTLP collector.
+        pub TelemetryIntakeUrl {
+            local: "http://localhost:4318",
+            dev: "https://macro-prox-dev.macroverse.workers.dev/i/otlp",
+            prod: "https://macro-prox-prod.macroverse.workers.dev/i/otlp",
+        },
         /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
         pub McpServiceUrl {
             local: "http://localhost:8101",
@@ -781,6 +789,18 @@ service_url! {
 }
 
 service_url! {
+    /// TypeSafe API base, which serves the Jev decision models. TypeSafe's
+    /// host in every environment; override it to run against the model
+    /// stand-in of `crates/email_e2e`. Only `email_focus_worker` reads it
+    /// so far: the other services still use `jev`'s own constant.
+    pub struct TypesafeApiUrl {
+        local: "https://api.typesafe.ai",
+        dev: "https://api.typesafe.ai",
+        prod: "https://api.typesafe.ai",
+    }
+}
+
+service_url! {
     /// The Microsoft identity platform's host, for the calls a service
     /// makes: code exchange, token refresh, the OpenID discovery document
     /// and its signing keys. Microsoft's host in every environment; override
@@ -802,6 +822,17 @@ service_url! {
         local: "https://login.microsoftonline.com/",
         dev: "https://login.microsoftonline.com/",
         prod: "https://login.microsoftonline.com/",
+    }
+}
+
+service_url! {
+    /// Gemini API host, where the agent's model router sends GenerateContent
+    /// requests. Google's host in every environment; override it to run
+    /// against `crates/model_emulator`.
+    pub struct GoogleGenerativeAiApiUrl {
+        local: "https://generativelanguage.googleapis.com",
+        dev: "https://generativelanguage.googleapis.com",
+        prod: "https://generativelanguage.googleapis.com",
     }
 }
 

@@ -152,17 +152,29 @@ agent's service.
 | `CREDENTIALS_DIRECTORY` | set by systemd | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
 | `HARNESSD_STATE_DIRECTORY` | yes (with systemd credentials) | harnessd's Claude sign-in, read-only inside the sandbox; the `claude` wrapper on PATH reads it. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Where spans go; none means none are exported. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | no | Extra export headers (`key=value,…`); the image names the computer (`x-macro-computer-id`), for a per-computer limit at the intake once the id is signed. |
+| `MACRO_LAUNCH_TIMINGS` | no | The image's `start-agent` steps, `started:<µs>,<step>:<µs>:<µs>,…,exec:<µs>` (Unix microseconds): `agent.start` begins at `started` and has them as `agent.launch.*`. Malformed is ignored. |
+| `MACRO_SETUP_TRACEPARENT` | no | The computer's setup trace (W3C `traceparent`): the agent's start (`agent.start`) and its online report join it. The image exports it for the first start only, from `/run/macrod/agent-traceparent` (which macrod stages), never from `agent.env`. |
 
 `agent.env` holds `MACRO_API_KEY`, `MACRO_GATEWAY`, the `OVERRIDE_*` service
 addresses, `MACRO_REPO_URL` and `MACRO_REPO_TOKEN`, and, in Macro-credits
 mode, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, which only Claude Code gets.
 Without them, Claude Code uses the computer's Claude login (harnessd).
+It may also hold `OTEL_EXPORTER_OTLP_ENDPOINT` (the deployment's telemetry
+intake), which the image exports as process environment.
+`MACRO_SETUP_TRACEPARENT` comes from a file of its own, never agent.env.
 
 Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
-credential is missing or invalid. Anything but 0 and 75 before the healthy-boot
-marker moves is a failed boot (78 too, unless the boot was already on the last
-good HEAD: then the enrollment, not the code, is wrong), and three in a row
-roll the workspace back to the last good HEAD, recorded as a commit so it
-stays rolled back. A lock that differs from the image's is adopted unless the
+credential is missing or invalid. The launcher (`start-agent`) adds: `78` when
+landed code needs a newer muppet than the image's (`muppetApi` above its
+`apiLevel`) and last-good would run, so it rolls back; and `79` when there
+is nothing that would run to roll back to (a new agent, last-good itself, or a
+last-good that needs more too), which the service doesn't restart until the
+computer boots a newer image. Anything but 0, 75 and 79 before the
+healthy-boot marker moves is a failed boot (78 too, unless the boot was
+already on the last good HEAD: then the enrollment, not the code, is wrong),
+and three in a row roll the workspace back to the last good HEAD, recorded as
+a commit so it stays rolled back. Any stop of last-good's code starts the
+count again. A lock that differs from the image's is adopted unless the
 agent changed `package.json`.

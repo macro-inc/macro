@@ -1,4 +1,3 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import {
@@ -6,8 +5,9 @@ import {
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
-import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -17,7 +17,8 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
-import { Show } from 'solid-js';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import { Match, Show, Switch } from 'solid-js';
 import { MobileCreateButton } from './MobileCreateButton';
 import {
   MobileCreateMenu,
@@ -45,6 +46,7 @@ const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
   channels: 'mobile.newMessage',
   documents: 'mobile.newDocument',
   tasks: 'mobile.newTask',
+  projects: 'viewMenus.newProject',
   companies: 'mobile.newCompany',
 };
 
@@ -57,7 +59,6 @@ type PageCreateAction = Pick<
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
   const createBlocks = useCreateMenuBlocks();
-  const calendarEnabled = useCalendarUiFlag();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
 
@@ -65,23 +66,19 @@ export function MobilePageCreateButton() {
     view: MobileNavViewId | undefined
   ): PageCreateAction | undefined => {
     if (view === 'companies') {
+      if (!crmAccessAllowed()) return;
       return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {
-      return calendarEnabled()
-        ? {
-            label: t('mobile.event'),
-            // Created away from the calendar, the event shows there next.
-            onSelect: () =>
-              openEventComposer({
-                onCreated: (created) =>
-                  fireAndForget(
-                    openCalendarEventSplit(created),
-                    'mobile-create'
-                  ),
-              }),
-          }
-        : undefined;
+      return {
+        label: t('mobile.event'),
+        // Created away from the calendar, the event shows there next.
+        onSelect: () =>
+          openEventComposer({
+            onCreated: (created) =>
+              fireAndForget(openCalendarEventSplit(created), 'mobile-create'),
+          }),
+      };
     }
     const block = mobilePageCreateBlock(view, createBlocks());
     return (
@@ -89,7 +86,12 @@ export function MobilePageCreateButton() {
         label: block.label,
         onSelect: block.keyDownHandler,
         ...(block.blockName === 'task'
-          ? { raiseKeyboard: raiseKeyboardForNewTaskTitle }
+          ? {
+              raiseKeyboard: () =>
+                triggerFocusNewElement(NEW_TASK_TITLE_SELECTOR, {
+                  touchOnly: true,
+                }),
+            }
           : {}),
       }
     );
@@ -135,25 +137,22 @@ export function MobilePageCreateButton() {
 
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
-      <Show
-        when={foregroundView() === 'home'}
+      <Switch
         fallback={
-          <Show
-            when={foregroundView() === 'calendar' && calendarEnabled()}
-            fallback={
-              <MobileCreateButton
-                ariaLabel={actionAriaLabel()}
-                label={action().label}
-                onClick={() => action().onSelect()}
-              />
-            }
-          >
-            <MobileCreateMenu items={calendarActions()} />
-          </Show>
+          <MobileCreateButton
+            ariaLabel={actionAriaLabel()}
+            label={action().label}
+            onClick={() => action().onSelect()}
+          />
         }
       >
-        <MobileCreateMenu items={quickActions()} />
-      </Show>
+        <Match when={foregroundView() === 'home'}>
+          <MobileCreateMenu items={quickActions()} />
+        </Match>
+        <Match when={foregroundView() === 'calendar'}>
+          <MobileCreateMenu items={calendarActions()} />
+        </Match>
+      </Switch>
     </Show>
   );
 }

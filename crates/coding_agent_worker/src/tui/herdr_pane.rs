@@ -354,15 +354,22 @@ pub async fn run_herdr_pane(socket: &Path, session: &str) -> rootcause::Result<(
         }
     });
 
+    let colors = ui::ColorSupport::detect();
     let mut terminal = ratatui::init();
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste);
     // Under herdr-core the window reports the session's state itself.
-    let reports_status =
-        crate::herdr::HerdrSession::detect().is_some_and(|herdr| herdr.panes_report_status());
+    let reports_status = match crate::herdr::HerdrSession::detect() {
+        Ok(herdr) => herdr.is_some_and(|herdr| herdr.panes_report_status()),
+        // Only a herdr-core terminal lacks `HC_BIN`.
+        Err(crate::herdr::HcBinMissing) => true,
+    };
     let mut view = PaneView::new(session);
     let mut ticker = tokio::time::interval(TICK);
     let outcome = loop {
-        if let Err(error) = terminal.draw(|frame| ui::render_herdr_pane(frame, &view)) {
+        if let Err(error) = terminal.draw(|frame| {
+            ui::render_herdr_pane(frame, &view);
+            colors.fit_buffer(frame.buffer_mut());
+        }) {
             break Err(error);
         }
         tokio::select! {

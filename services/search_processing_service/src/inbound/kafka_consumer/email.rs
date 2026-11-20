@@ -2,14 +2,14 @@
 
 use std::borrow::Cow;
 
-use ::email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use ::email::domain::events::{EmailEventOrigin, EmailMacroEvent, EmailTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::email::{remove, upsert};
+use super::{Attempted, Attempts, Handled};
+use crate::process::email::{mailbox_delete::MailboxDeletes, remove, upsert};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmailIndexAction {
@@ -17,8 +17,15 @@ pub(super) enum EmailIndexAction {
         message_id: Uuid,
         owner: String,
     },
+    /// Index a sent message under its thread and drop the copies it left
+    /// under threads the send moved it from.
+    UpsertSentMessage {
+        message_id: Uuid,
+        owner: String,
+    },
     RemoveMessage {
         message_id: Uuid,
+        thread_id: Uuid,
     },
     ReindexThread {
         thread_id: Uuid,
@@ -45,17 +52,22 @@ pub(super) struct EmailEventDescription {
 ///
 /// Email events are produced with a link-scoped (whole inbox) Kafka key, so
 /// thread- and message-scoped events shard by thread id instead: one inbox's
-/// backfill spreads across the worker pool while events for a single thread
-/// stay ordered. Link-scoped events keep the link-id producer key, so their
-/// ordering against a buffered thread event (e.g. a link removal racing a
-/// message upsert) is not guaranteed — an accepted risk of the same order as
-/// this consumer's existing commit-at-handoff drop window.
+/// backfill or reindex spreads across the worker pool while events for a
+/// single thread stay ordered. A reindex request naming several threads
+/// shards by its first, so only that thread's events stay ordered with it.
+/// Link-scoped events keep the link-id producer key, so their ordering
+/// against a buffered thread event (e.g. a link removal racing a message
+/// upsert) is not guaranteed — an accepted risk of the same order as this
+/// consumer's existing commit-at-handoff drop window.
 pub(super) fn email_ordering_key(event: &EmailMacroEvent) -> Cow<'_, str> {
     let thread_id = match &event.event().event {
         EmailTopicEvent::LinkConnected(_)
         | EmailTopicEvent::LinkDisconnected(_)
-        | EmailTopicEvent::LinkReauthRequired(_)
-        | EmailTopicEvent::ThreadsReindexRequested(_) => return Cow::Borrowed(event.key()),
+        | EmailTopicEvent::LinkReauthRequired(_) => return Cow::Borrowed(event.key()),
+        EmailTopicEvent::ThreadsReindexRequested(metadata) => match metadata.thread_ids.first() {
+            Some(thread_id) => *thread_id,
+            None => return Cow::Borrowed(event.key()),
+        },
         EmailTopicEvent::MessageReceived(metadata) => metadata.thread_id,
         EmailTopicEvent::MessageDraftSynced(metadata) => metadata.thread_id,
         EmailTopicEvent::MessageSent(metadata) => metadata.thread_id,
@@ -72,6 +84,36 @@ pub(super) fn email_ordering_key(event: &EmailMacroEvent) -> Cow<'_, str> {
         EmailTopicEvent::ThreadBackfilled(metadata) => metadata.thread_id,
     };
     Cow::Owned(thread_id.to_string())
+}
+
+/// Key of a reindex request for one thread, which only rereads that thread,
+/// so a reread of it already queued covers the request.
+pub(super) fn reread_key(event: &EmailMacroEvent) -> Option<String> {
+    match &event.event().event {
+        EmailTopicEvent::ThreadsReindexRequested(metadata) => {
+            match metadata.thread_ids.as_slice() {
+                [thread_id] => Some(thread_id.to_string()),
+                _ => None,
+            }
+        }
+        EmailTopicEvent::LinkConnected(_)
+        | EmailTopicEvent::LinkDisconnected(_)
+        | EmailTopicEvent::LinkReauthRequired(_)
+        | EmailTopicEvent::MessageReceived(_)
+        | EmailTopicEvent::MessageDraftSynced(_)
+        | EmailTopicEvent::MessageSent(_)
+        | EmailTopicEvent::MessageDeleted(_)
+        | EmailTopicEvent::MessageSendQueued(_)
+        | EmailTopicEvent::MessageSendCancelled(_)
+        | EmailTopicEvent::ThreadArchived(_)
+        | EmailTopicEvent::ThreadTrashed(_)
+        | EmailTopicEvent::ThreadRead(_)
+        | EmailTopicEvent::ThreadStarred(_)
+        | EmailTopicEvent::ThreadSpamChanged(_)
+        | EmailTopicEvent::ThreadProjectChanged(_)
+        | EmailTopicEvent::ThreadLabelsUpdated(_)
+        | EmailTopicEvent::ThreadBackfilled(_) => None,
+    }
 }
 
 pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescription {
@@ -97,6 +139,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: if metadata.is_spam_or_trash {
                 EmailIndexAction::RemoveMessage {
                     message_id: metadata.message_id,
+                    thread_id: metadata.thread_id,
                 }
             } else {
                 EmailIndexAction::UpsertMessage {
@@ -111,6 +154,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: if metadata.is_spam_or_trash {
                 EmailIndexAction::RemoveMessage {
                     message_id: metadata.message_id,
+                    thread_id: metadata.thread_id,
                 }
             } else {
                 EmailIndexAction::UpsertMessage {
@@ -122,9 +166,18 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             event_type: "email.message_draft_synced",
         },
         EmailTopicEvent::MessageSent(metadata) => EmailEventDescription {
-            action: EmailIndexAction::UpsertMessage {
-                message_id: metadata.message_id,
-                owner: metadata.owner.to_string(),
+            // Only a send made in Macro can move an existing message to
+            // another thread; a sent message synced from the provider is a
+            // new row with no older copy to clean up.
+            action: match metadata.origin {
+                EmailEventOrigin::UserAction => EmailIndexAction::UpsertSentMessage {
+                    message_id: metadata.message_id,
+                    owner: metadata.owner.to_string(),
+                },
+                EmailEventOrigin::ProviderSync => EmailIndexAction::UpsertMessage {
+                    message_id: metadata.message_id,
+                    owner: metadata.owner.to_string(),
+                },
             },
             link_id: metadata.link_id,
             event_type: "email.message_sent",
@@ -132,6 +185,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::MessageDeleted(metadata) => EmailEventDescription {
             action: EmailIndexAction::RemoveMessage {
                 message_id: metadata.message_id,
+                thread_id: metadata.thread_id,
             },
             link_id: metadata.link_id,
             event_type: "email.message_deleted",
@@ -221,15 +275,20 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
 async fn process_email_index_action(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    mailbox_deletes: &MailboxDeletes,
     action: EmailIndexAction,
 ) -> anyhow::Result<()> {
     match action {
         EmailIndexAction::UpsertMessage { message_id, owner } => {
             upsert::process_upsert_message(opensearch_client, db, message_id, &owner).await
         }
-        EmailIndexAction::RemoveMessage { message_id } => {
-            remove::process_remove_message(opensearch_client, message_id, None).await
+        EmailIndexAction::UpsertSentMessage { message_id, owner } => {
+            upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
         }
+        EmailIndexAction::RemoveMessage {
+            message_id,
+            thread_id,
+        } => remove::process_remove_message(opensearch_client, message_id, thread_id, None).await,
         EmailIndexAction::ReindexThread { thread_id, owner } => {
             upsert::process_upsert_thread_message(opensearch_client, db, thread_id, &owner, None)
                 .await
@@ -244,9 +303,7 @@ async fn process_email_index_action(
             )
             .await
         }
-        EmailIndexAction::RemoveLink { link_id } => {
-            remove::process_remove_messages_by_link_id(opensearch_client, link_id).await
-        }
+        EmailIndexAction::RemoveLink { link_id } => mailbox_deletes.start(link_id).await,
         EmailIndexAction::Ignore => Ok(()),
     }
 }
@@ -254,10 +311,12 @@ async fn process_email_index_action(
 pub(super) async fn process_email_event(
     db: &PgPool,
     opensearch_client: &OpensearchClient,
+    mailbox_deletes: &MailboxDeletes,
     event: &EmailMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_email_event(&event.event().event);
     if description.action == EmailIndexAction::Ignore {
         tracing::trace!(
@@ -267,55 +326,23 @@ pub(super) async fn process_email_event(
             offset,
             "ignoring email event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     }
 
-    let result = retry_processing(|attempt| {
-        let action = description.action.clone();
-        async move {
-            tracing::trace!(
-                link_id = %description.link_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempt,
-                "processing email search-index event"
-            );
-            process_email_index_action(db, opensearch_client, action)
-                .await
-                .inspect_err(|error| {
-                    if attempt < MAX_PROCESSING_ATTEMPTS {
-                        let retry_delay =
-                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                        tracing::warn!(
-                            error = ?error,
-                            link_id = %description.link_id,
-                            event_type = description.event_type,
-                            partition,
-                            offset,
-                            attempt,
-                            delay_secs = retry_delay.as_secs(),
-                            "email search-index processing failed, retrying"
-                        );
-                    }
-                })
-        }
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                link_id = %description.link_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping email event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
+    attempts
+        .run(|attempt| {
+            let action = description.action.clone();
+            async move {
+                tracing::trace!(
+                    link_id = %description.link_id,
+                    event_type = description.event_type,
+                    partition,
+                    offset,
+                    attempt,
+                    "processing email search-index event"
+                );
+                process_email_index_action(db, opensearch_client, mailbox_deletes, action).await
+            }
+        })
+        .await
 }

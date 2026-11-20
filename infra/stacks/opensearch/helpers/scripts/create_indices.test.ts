@@ -24,6 +24,23 @@ test('channel fallback authors preserve body highlights and sender identities', 
   });
 });
 
+test('the documents index gains the email attachment flag in place', () => {
+  const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'documents');
+  if (!spec) throw new Error('no documents index spec');
+  const { mappings } = spec.body as {
+    mappings: { properties: Record<string, unknown> };
+  };
+  const { is_email_attachment: _, ...live } = mappings.properties;
+
+  const plan = planMappingConvergence({ desired: mappings.properties, live });
+
+  expect(plan.missingPaths).toEqual(['is_email_attachment']);
+  expect(plan.conflictPaths).toEqual([]);
+  expect(plan.updates).toEqual({
+    is_email_attachment: { type: 'boolean', index: true, doc_values: true },
+  });
+});
+
 describe('planCreateIndex', () => {
   test('fresh env — index missing, alias free → create with alias', () => {
     const plan = planCreateIndex({

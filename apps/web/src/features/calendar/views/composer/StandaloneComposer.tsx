@@ -1,7 +1,4 @@
-import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
-import { t } from '@app/lib/i18n';
-import { usePending } from '@app/observability/flow';
-import { createMemo, type JSX, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { CalendarComposerEditor } from '../../CalendarComposerEditor';
 import type { EventEditorInitialValues } from '../../components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '../../core/composer';
@@ -24,25 +21,5 @@ export interface StandaloneComposerProps {
 
 /** Each mounted instance owns one draft; placement changes must not remount it. */
 export function StandaloneComposer(props: StandaloneComposerProps) {
-  const quickCalls = useQuickCallsFlag();
-  const ready = createMemo(
-    (settled) => settled || !quickCalls().loading,
-    false
-  );
-  usePending('calendar.composer.flags', () => !ready());
-  return (
-    <Show
-      when={ready()}
-      fallback={
-        <p role="status" class="p-4">
-          {t('calendar.loadingEvent')}
-        </p>
-      }
-    >
-      <CalendarComposerEditor
-        {...props}
-        macroCallsEnabled={() => quickCalls().enabled && !quickCalls().loading}
-      />
-    </Show>
-  );
+  return <CalendarComposerEditor {...props} macroCallsEnabled={() => true} />;
 }

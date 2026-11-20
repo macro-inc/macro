@@ -33,7 +33,8 @@ export function CalendarComposerEditor(
             event={event()}
             guestInvitesEnabled={setup.guestInvitesEnabled}
             forwardEnabled={setup.forwardEnabled}
-            disabled={setup.model.isDirty() || setup.model.options.pending}
+            disabled={!setup.model.canSave() || setup.model.options.pending}
+            replacementRequest={setup.replacementRequest}
             onDone={setup.saved}
           />
         )}

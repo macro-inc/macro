@@ -13,6 +13,8 @@ import { type DopplerEcsEnvironment, stack } from '../../packages/shared';
 
 const BASE_NAME = 'email-focus-worker';
 const REPO_ROOT = '../../..';
+/** The worker's CloudWatch namespace (`cloudwatch_metrics.rs`). */
+const METRICS_NAMESPACE = 'Macro/EmailFocus';
 
 type Args = {
   role: aws.iam.Role;
@@ -69,8 +71,33 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
     );
     this.ecr = image.ecr;
 
+    // The worker publishes its rollout numbers as CloudWatch custom metrics.
+    // The role is shared with the email service, so the grant is limited to
+    // the worker's namespace. Inline, because the role manages its attached
+    // policies exclusively.
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-metrics-${stack}`,
+      {
+        role: role.name,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['cloudwatch:PutMetricData'],
+              Resource: '*',
+              Condition: {
+                StringEquals: { 'cloudwatch:namespace': METRICS_NAMESPACE },
+              },
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+
     // The worker only calls out: Postgres, Kafka, the classifier API, the
-    // agent harness and the connection gateway.
+    // agent harness, the connection gateway and CloudWatch.
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {

@@ -2,12 +2,12 @@ use super::*;
 use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
-    CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarSyncFailure, CalendarSyncStatus,
-    CalendarWatchRelease, ConferenceChange, DisconnectedCalendar, EventDetails, EventStart,
-    EventStatus, EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot,
-    GoogleWatchChannel, GuestPolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, OwnedInbox,
-    ProviderCalendar, ProviderCalendarTarget, ProviderEventSource, StoredGoogleCalendar,
-    ViewerCapabilities, VisibleCalendar,
+    CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarProvider, CalendarSyncFailure,
+    CalendarSyncStatus, CalendarWatchRelease, ConferenceChange, DisconnectedCalendar, EventDetails,
+    EventStart, EventStatus, EventTransparency, EventType, EventVisibility,
+    GoogleCalendarSyncSnapshot, GoogleWatchChannel, GuestPolicy, OutOfOfficeAutoDeclineMode,
+    OutOfOfficeProperties, OwnedInbox, ProviderCalendar, ProviderCalendarTarget,
+    ProviderEventSource, StoredGoogleCalendar, ViewerCapabilities, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -699,6 +699,13 @@ impl FakeProvider {
 
     fn echo(&self, target: &ProviderCalendarTarget) -> CalendarEventUpsert {
         let mut upsert = echo_upsert(&target.owner_id);
+        if target.provider == CalendarProvider::Outlook {
+            upsert.source = match upsert.source {
+                CalendarEventSource::Google(source) | CalendarEventSource::Outlook(source) => {
+                    CalendarEventSource::Outlook(source)
+                }
+            };
+        }
         upsert.source.details_mut().email_link_id = target.email_link_id;
         upsert.source.details_mut().calendar_id = target.calendar_id;
         upsert.event.attendees = self.echo_attendees.clone();
@@ -1440,6 +1447,82 @@ async fn deleting_clears_team_ooo_rows_only_for_an_out_of_office_event() {
         assert_eq!(notified.len(), 1);
         assert_eq!(notified[0].2, out_of_office);
     }
+}
+
+/// An Outlook copy's write is announced by the projection relay, which
+/// publishes the outbox row the write queued a relay round later, to the
+/// calendar topic and to the inbox's viewers. Fails while the mutation path
+/// publishes or nudges too, which reached each of them twice. The guest copies
+/// a write aligns are Google copies, which no relay announces, so they still
+/// hear it from here.
+#[tokio::test]
+async fn an_outlook_write_leaves_its_announcements_to_the_projection_relay() {
+    let guest_link = Uuid::now_v7();
+    let mut creation = creation_target(false);
+    creation.token_identity.provider = CalendarProvider::Outlook;
+    let repo = FakeRepo {
+        creation_target: Some(creation),
+        write_change: CalendarEventChange::Updated,
+        aligned_copies: vec![crate::domain::models::AlignedGuestCopy {
+            event_id: Uuid::now_v7(),
+            owner_id: "macro|guest@example.com".into(),
+            email_link_id: guest_link,
+        }],
+        ..FakeRepo::default()
+    };
+    let broker = RecordingEventBroker::default();
+    let refresh = RecordingRefreshNotifier::default();
+    CalendarMutationServiceImpl::new(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        broker.clone(),
+        refresh.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    assert_eq!(
+        refresh.notified.lock().expect("notifier lock").clone(),
+        vec![("macro|guest@example.com".to_string(), guest_link, false)]
+    );
+    assert!(broker.published().is_empty(), "{:?}", broker.published());
+}
+
+/// Deleting an Outlook event queues its outbox row, so the relay publishes
+/// the deletion and refreshes its viewers; the mutation path stays quiet.
+/// Fails while it publishes or nudges too.
+#[tokio::test]
+async fn deleting_an_outlook_event_leaves_its_announcements_to_the_projection_relay() {
+    let event_id = Uuid::now_v7();
+    let mut target = mutation_target(false);
+    target.token_identity.provider = CalendarProvider::Outlook;
+    let repo = FakeRepo {
+        mutation_target: Some(target),
+        retired_events: vec![RetiredCalendarEvent {
+            event_id,
+            owner_id: "macro|owner".to_string(),
+            deleted: true,
+            team_ooo_changed: true,
+        }],
+        ..FakeRepo::default()
+    };
+    let broker = RecordingEventBroker::default();
+    let refresh = RecordingRefreshNotifier::default();
+    CalendarMutationServiceImpl::new(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        broker.clone(),
+        refresh.clone(),
+    )
+    .delete_event("macro|user", event_id, None, CalendarDeletionScope::All)
+    .await
+    .unwrap();
+
+    assert!(refresh.notified.lock().expect("notifier lock").is_empty());
+    assert!(broker.published().is_empty(), "{:?}", broker.published());
 }
 
 #[tokio::test]
@@ -3312,3 +3395,21 @@ mod invite;
 mod join;
 mod organizer_copy;
 mod replacement;
+
+#[test]
+fn a_refused_change_shows_its_message_without_the_request_prefix() {
+    let refused = provider_error(CalendarProviderError::refused("Edit it in Outlook."));
+    let failed = provider_error(CalendarProviderError::new(
+        CalendarProviderErrorKind::Permanent,
+        "Outlook refused the change",
+    ));
+
+    assert!(
+        matches!(refused, CalendarMutationError::ProviderRejected(m) if m == "Edit it in Outlook.")
+    );
+    assert!(matches!(
+        failed,
+        CalendarMutationError::ProviderRejected(m)
+            if m == "Calendar provider request failed: Outlook refused the change"
+    ));
+}

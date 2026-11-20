@@ -110,7 +110,11 @@ it('honors fresh access denial and does not let cached records restore access', 
   const refresh = expect(detail.refresh()).rejects.toThrow();
   (await transport.requests.next()).respond(
     undefined,
-    new CombinedError({ graphQLErrors: ['Forbidden'] })
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'Forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+    })
   );
   await refresh;
   expect(detail.view().status).toBe('unavailable');
@@ -181,20 +185,26 @@ it.each(['reconnect', 'invite'] as const)(
   }
 );
 
-it('keeps an admitted conversation through a transport failure and later cache updates', async () => {
-  const { detail } = setup();
-  (await transport.requests.next()).respond(channelPage('one'));
-  await transport.results.next();
-  const refreshed = expect(detail.refresh()).rejects.toThrow();
-  (await transport.requests.next()).respond(
-    undefined,
-    new CombinedError({ networkError: new Error('Offline') })
-  );
-  await refreshed;
-  expect(detail.view().status).toBe('ready');
-  await transport.cache(channelPage());
-  expect(detail.view().status).toBe('ready');
-});
+it.each([
+  new CombinedError({ networkError: new Error('Offline') }),
+  // A resolver failure answers 200 with an uncoded error on user.soup.
+  new CombinedError({
+    graphQLErrors: [{ message: 'A comms error has occured' }],
+  }),
+])(
+  'keeps an admitted conversation through a failed refresh and later cache updates: %s',
+  async (error) => {
+    const { detail } = setup();
+    (await transport.requests.next()).respond(channelPage('one'));
+    await transport.results.next();
+    const refreshed = expect(detail.refresh()).rejects.toThrow();
+    (await transport.requests.next()).respond(undefined, error);
+    await refreshed;
+    expect(detail.view().status).toBe('ready');
+    await transport.cache(channelPage());
+    expect(detail.view().status).toBe('ready');
+  }
+);
 
 it('confirms a cold cache-only absence before declaring the channel unavailable', async () => {
   const { detail } = setup({

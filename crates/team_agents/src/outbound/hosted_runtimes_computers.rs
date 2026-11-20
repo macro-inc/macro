@@ -6,13 +6,15 @@ use hosted_runtimes::domain::{
     agent::ComputerAgents,
     lifecycle::Rejected,
     models::{self, FleetAttachment},
-    ports::{Billing, CompPolicy, ComputerRepo, FleetAttachmentSource},
+    ports::{Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource},
     service::{Clock, ComputerError, ComputerService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::models::{ComputerId, ComputerPurchase, ComputerState, TeamAgentError};
+use crate::domain::models::{
+    ComputerDetails, ComputerId, ComputerPurchase, ComputerState, TeamAgentError,
+};
 use crate::domain::ports::Computers;
 
 #[cfg(test)]
@@ -43,9 +45,8 @@ fn purchase_error(error: ComputerError) -> TeamAgentError {
             "Macro computers are unavailable right now".to_owned(),
         ),
         ComputerError::RolloutDisabled => TeamAgentError::NotEnabled,
-        sold_out @ ComputerError::SoldOut(_) => {
-            TeamAgentError::ComputerUnavailable(sold_out.to_string())
-        }
+        ComputerError::SoldOut(size) => TeamAgentError::NoRoom(size),
+        ComputerError::Billing(BillingError::PaymentFailed) => TeamAgentError::PaymentDeclined,
         ComputerError::SizeNotOffered => {
             TeamAgentError::ComputerUnavailable("this computer size isn't offered".to_owned())
         }
@@ -85,12 +86,15 @@ fn released<Released>(result: Result<Released, ComputerError>) -> Result<(), Tea
 fn computer_state(
     kind: models::ComputerStatusKind,
     availability: FleetAttachment,
+    awaiting_agent: bool,
 ) -> ComputerState {
     use models::ComputerStatusKind as Kind;
     let state = match kind {
         Kind::Purchasing => ComputerState::Purchasing,
         Kind::SettingUp => ComputerState::SettingUp,
+        Kind::Ready if awaiting_agent => ComputerState::AwaitingAgent,
         Kind::Ready => ComputerState::Ready,
+        Kind::Unhealthy => ComputerState::Unhealthy,
         Kind::WaitingForCapacity | Kind::Starting | Kind::Stopping | Kind::Stopped => {
             ComputerState::Paused
         }
@@ -118,20 +122,29 @@ where
     Policy: CompPolicy,
     Agents: ComputerAgents,
 {
+    #[tracing::instrument(skip_all, err)]
+    async fn require_purchase_rollout(
+        &self,
+        buyer: &MacroUserIdStr<'static>,
+    ) -> Result<(), TeamAgentError> {
+        self.service
+            .require_rollout(buyer)
+            .await
+            .map_err(purchase_error)
+    }
+
     #[tracing::instrument(skip_all, fields(team_id = %purchase.team_id), err)]
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
-        let purchase_key = models::PurchaseKey::try_new(purchase.purchase_key)
-            .map_err(|_| TeamAgentError::InvalidPurchaseKey)?;
         self.service
             .purchase_for_agent(
                 models::PurchaseRequest {
                     // The service picks Stripe or a comp by team policy.
                     billing: models::PurchaseBilling::Stripe,
-                    purchase_key,
+                    purchase_key: purchase.purchase_key,
                     team_id: purchase.team_id,
                     created_by: purchase.created_by,
                     size: purchase.size,
-                    name: Some(purchase.name),
+                    name: Some(purchase.name.into_string()),
                     extra_items: vec![],
                 },
                 purchase.agent,
@@ -169,13 +182,47 @@ where
         computer_id: ComputerId,
     ) -> Result<ComputerState, TeamAgentError> {
         match self.service.status_for_roster(team_id, computer_id).await {
-            Ok((status, availability)) => Ok(computer_state(status.status, availability)),
+            Ok(roster) => Ok(computer_state(
+                roster.status.status,
+                roster.attachment,
+                roster.awaiting_agent,
+            )),
             Err(error) => roster_error(error),
         }
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn details(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerDetails, TeamAgentError> {
+        let status = self
+            .service
+            .status_for_roster(team_id, computer_id)
+            .await
+            .map_err(TeamAgentError::internal)?
+            .status;
+        Ok(ComputerDetails {
+            name: status.name,
+            harness_id: status.harness_id,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, computer_id: ComputerId) -> Result<(), TeamAgentError> {
         released(self.service.request_release(team_id, computer_id).await)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn agent_online(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(), TeamAgentError> {
+        self.service
+            .agent_online(team_id, computer_id)
+            .await
+            .map_err(TeamAgentError::internal)
     }
 }

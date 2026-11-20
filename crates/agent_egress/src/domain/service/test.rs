@@ -1397,6 +1397,30 @@ async fn a_tool_call_in_a_turn_the_owner_prompted_goes_straight_through() {
     assert!(service.approvals.held.lock().unwrap().is_empty());
 }
 
+/// A program prompting for the owner acts with their access: its turn's
+/// calls run as the owner's own do, with nothing held.
+#[tokio::test]
+async fn a_tool_call_in_a_turn_a_program_prompted_for_the_owner_goes_straight_through() {
+    let StubSessions(Ok(mut grant)) = prompted_by(Some(owner())) else {
+        unreachable!("granting grants");
+    };
+    if let Some(prompter) = grant.prompter.as_mut() {
+        prompter.kind = agent_session::domain::model::PrompterKind::Program;
+    }
+    let service = gated(StubSessions(Ok(grant)), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}
+
 /// Somebody else's turn holds the call, already addressed and stamped with
 /// the owner's credential, and nothing reaches the upstream yet.
 #[tokio::test]
@@ -1610,3 +1634,4 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
 }
 
 mod actor;
+mod telemetry;

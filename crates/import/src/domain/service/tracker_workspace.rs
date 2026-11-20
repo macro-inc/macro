@@ -7,7 +7,7 @@ use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_select::ConnectorSelect;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -20,9 +20,9 @@ use crate::domain::models::{
     WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedTaskProperties,
-    NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity, SlackWorkspaceSource,
-    TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility,
+    ImportedTaskProperties, NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity,
+    SlackWorkspaceSource, TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
 };
 
 mod claim;
@@ -94,20 +94,25 @@ where
         }
         let on_team = self.repo.user_team_id(user).await?.is_some();
         let mut rows = plan::rows(self.workspace_source, &found, sharing, on_team)?;
-        let copies = self
-            .repo
-            .team_copies(
-                user,
-                &rows
-                    .iter()
-                    .map(|row| row.foreign_id.clone())
-                    .collect::<Vec<_>>(),
-            )
-            .await?;
+        let copies = super::lifecycle::team_copies(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            &rows
+                .iter()
+                .map(|row| row.foreign_id.clone())
+                .collect::<Vec<_>>(),
+        )
+        .await?;
         plan::link_existing(&mut rows, &copies)?;
-        self.repo
-            .replace_plan(user, self.workspace_source, &rows)
-            .await?;
+        super::lifecycle::replace_plan(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            self.workspace_source,
+            &rows,
+        )
+        .await?;
         self.notify(user).await;
         let items = plan::triage_items(&rows, &found)?;
         let batches = triage::decide(
@@ -305,22 +310,58 @@ where
             .filter(|object| object.kind == WrittenKind::Task)
             .map(|object| (object.import_id, object.macro_id))
             .collect();
-        let targets: HashMap<_, _> = current
+        // Only finished objects used by this write's relationships need a
+        // lifecycle read. Older unrelated imports must not become new failures.
+        let referenced: HashSet<String> = current
             .iter()
-            .filter(|row| row.user_id == user.as_ref())
-            .filter_map(|row| {
-                let id = if row.status == ImportStatus::Imported {
-                    row.entity_id
-                        .as_deref()
-                        .and_then(|id| id.parse::<Uuid>().ok())
-                } else if row.review_id == Some(review) && row.status == ImportStatus::Importing {
-                    task_ids.get(&row.id).copied()
-                } else {
-                    None
-                };
-                id.map(|id| (row.foreign_id.clone(), id))
+            .filter(|row| {
+                row.user_id == user.as_ref()
+                    && row.review_id == Some(review)
+                    && row.status == ImportStatus::Importing
+                    && row.waiting_on.is_none()
+            })
+            .filter_map(|row| serde_json::from_value::<TrackerMeta>(row.metadata.clone()).ok())
+            .flat_map(|meta| match meta.object {
+                TrackerObject::Issue(issue) => issue
+                    .group
+                    .as_ref()
+                    .or(issue.team.as_ref())
+                    .map(plan::group_key)
+                    .into_iter()
+                    .chain(
+                        issue
+                            .parent
+                            .as_ref()
+                            .map(|parent| parent.as_str().to_string()),
+                    )
+                    .collect::<Vec<_>>(),
+                TrackerObject::Group(_) => Vec::new(),
             })
             .collect();
+        let mut targets = HashMap::new();
+        for row in current
+            .iter()
+            .filter(|row| row.user_id == user.as_ref() && referenced.contains(&row.foreign_id))
+        {
+            let id = if row.status == ImportStatus::Imported {
+                if !super::lifecycle::live_for_write(&self.repo, self.creator.as_ref(), user, row)
+                    .await?
+                {
+                    failed += 1;
+                    continue;
+                }
+                row.entity_id
+                    .as_deref()
+                    .and_then(|id| id.parse::<Uuid>().ok())
+            } else if row.review_id == Some(review) && row.status == ImportStatus::Importing {
+                task_ids.get(&row.id).copied()
+            } else {
+                None
+            };
+            if let Some(id) = id {
+                targets.insert(row.foreign_id.clone(), id);
+            }
+        }
         for row in current.iter().filter(|row| {
             row.user_id == user.as_ref()
                 && row.review_id == Some(review)
@@ -425,7 +466,15 @@ where
                     if control.reason().is_some() {
                         return Err(ImportError::NotReady("The import stopped."));
                     }
-                    self.repo.claim_team_object(user, row.id, team, true).await
+                    super::lifecycle::claim_team_object(
+                        &self.repo,
+                        self.creator.as_ref(),
+                        user,
+                        row.id,
+                        team,
+                        true,
+                    )
+                    .await
                 },
                 |holder| self.repo.wait_on(user, row.id, holder),
             )
@@ -438,12 +487,16 @@ where
                     self.repo
                         .mark_imported(user, row.id, &entity_id, &entity_type, None)
                         .await?;
+                    if matches!(meta.object, TrackerObject::Issue(_)) {
+                        self.repo.clear_task_notices(user, row.id).await?;
+                    }
                     return Ok(());
                 }
                 TeamClaim::Waiting { .. } => return Ok(()),
                 TeamClaim::Held | TeamClaim::Free => {}
             }
         }
+        let visibility = ImportVisibility::from_shared(meta.plan.shared);
         let id = values::target_id(row.id);
         match &meta.object {
             TrackerObject::Group(group) => {
@@ -454,7 +507,7 @@ where
                         id,
                         &group.title,
                         &values::group_body(group),
-                        meta.plan.shared && team.is_some(),
+                        visibility,
                     )
                     .await?;
                 self.repo
@@ -468,19 +521,28 @@ where
                     .await?;
             }
             TrackerObject::Issue(issue) => {
-                self.creator
+                let created = self
+                    .creator
                     .create_tracker_task(
                         user,
                         id,
                         &issue.title,
                         &values::task_body(issue),
                         &values::properties(issue),
-                        false,
+                        visibility,
                     )
                     .await?;
+                if let Some(notice) = created.notice {
+                    self.repo
+                        .record_task_notice(user, row.id, id, notice)
+                        .await?;
+                }
                 self.repo
                     .record_written(user, &[WrittenObject::own(row.id, WrittenKind::Task, id)])
                     .await?;
+                if meta.plan.shared {
+                    self.repo.clear_task_notices(user, row.id).await?;
+                }
             }
         }
         Ok(())

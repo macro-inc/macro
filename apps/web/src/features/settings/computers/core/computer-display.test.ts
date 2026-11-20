@@ -93,6 +93,18 @@ it('keeps an unrecognized runtime step generic without exposing raw text', () =>
   });
 });
 
+describe('unhealthy', () => {
+  it('reads as not responding, and can still be turned off', () => {
+    const computer: ComputerStatus = { ...waiting, status: 'unhealthy' };
+    expect(computerStatusLabel(computer)).toEqual({
+      label: 'Not responding',
+      detail: "It's back once it reconnects; Macro restarts it if it doesn't",
+      tone: 'failure',
+    });
+    expect(canTogglePower(computer)).toBe(true);
+  });
+});
+
 describe('computerFailureMessage', () => {
   it('shows a translated message for each known failure and the fallback otherwise', () => {
     const failure = (code: string) =>
@@ -103,6 +115,14 @@ describe('computerFailureMessage', () => {
     );
     expect(computerFailureMessage(failure('NAME_MISMATCH'), 'Fallback')).toBe(
       "The name you typed doesn't match this computer."
+    );
+    // The rollout refusal and a missing right are both 403s, told apart by
+    // the harness's code.
+    expect(
+      computerFailureMessage(failure('ROLLOUT_DISABLED'), 'Fallback')
+    ).toBe("Computers aren't available for this account yet.");
+    expect(computerFailureMessage(failure('FORBIDDEN'), 'Fallback')).toBe(
+      "You can't change this computer. Ask a team owner or admin."
     );
     expect(computerFailureMessage(failure('HTTP_500'), 'Fallback')).toBe(
       'Fallback'

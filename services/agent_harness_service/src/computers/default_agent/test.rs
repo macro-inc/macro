@@ -297,12 +297,16 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
             capacity_wait: None,
             retried_by_team: false,
             failure: None,
+            awaiting_agent: false,
+            first_start_failures: 0,
+            refund: None,
         },
         harness_id: Some(harness_id),
         enrollment_generation: Default::default(),
         created_by: buyer.clone(),
         created_at: chrono::Utc::now(),
         enrolled_at: None,
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
@@ -310,6 +314,8 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
     let harnesses = HostedHarnesses {
         service: Arc::new(crate::computers::harness_service(&pool)),
         default_agents: Arc::new(agents),
+        // Never published to here: no agent computer is handed over.
+        runtime_bus: redis::Client::open("redis://127.0.0.1:6379").unwrap(),
     };
     let computers = PgComputerRepo::new(
         pool.clone(),

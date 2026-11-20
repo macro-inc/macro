@@ -50,6 +50,11 @@ export type InboxRow<Content> = {
   id: string;
   /** `other` for a kind this build doesn't know, shown as a generic row. */
   type: InboxRowType | 'other';
+  /**
+   * Other kinds the server lists the row under, because what it shows is
+   * that too: a thread whose reply mentions you is a mention as well.
+   */
+  alsoListedAs: readonly InboxRowType[];
   /** What a done of this row acknowledges. */
   revision: string;
   /** When the row's newest notification was created, epoch milliseconds. */
@@ -78,6 +83,7 @@ export type InboxCardKind =
   | 'invite'
   | 'access'
   | 'agent'
+  | 'ping'
   | 'task'
   | 'pull_request'
   | 'event'

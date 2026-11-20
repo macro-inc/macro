@@ -24,8 +24,8 @@ use uuid::Uuid;
 use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, folder_once};
 use crate::domain::models::{WrittenKind, WrittenObject};
 use crate::domain::ports::{
-    ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity, SourceDates,
-    WorkspaceWriter, WrittenObjects,
+    ImportVisibility, ImportedDocumentProperties, NewDatabase, NotionLinks, SharedEntity,
+    SourceDates, WorkspaceWriter, WrittenObjects,
 };
 
 #[cfg(test)]
@@ -102,9 +102,10 @@ pub(in super::super) async fn write_database<
     folder: Uuid,
     share: bool,
     people: &PeopleMap,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<WrittenDatabase> {
     let source = api.data_source(&item.notion_id).await?;
     let created = database_once(writer, user, item, progress).await?;
@@ -114,6 +115,14 @@ pub(in super::super) async fn write_database<
         writer
             .share_with_team(user, SharedEntity::Database(created.database_id))
             .await?;
+    }
+    if share {
+        for document in progress.all(WrittenKind::Body).values() {
+            cancel.ensure_running()?;
+            writer
+                .share_with_team(user, SharedEntity::Document(*document))
+                .await?;
+        }
     }
     let table = created.table;
     let plan = ColumnPlan::new(&source, created.database_id);
@@ -218,6 +227,7 @@ pub(in super::super) async fn write_database<
         links,
         progress,
         cancel,
+        personal_folder,
     )
     .await?;
     Ok(written)
@@ -408,11 +418,14 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
     rows: &[NotionPage],
     written: &WrittenDatabase,
     page_column: PageColumn,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
+    personal_folder: Option<Uuid>,
 ) -> anyhow::Result<()> {
-    let bodies_folder: tokio::sync::OnceCell<Uuid> = tokio::sync::OnceCell::new();
+    let visibility = ImportVisibility::from_shared(item.shared);
+    let bodies_folder: tokio::sync::OnceCell<Uuid> =
+        tokio::sync::OnceCell::new_with(personal_folder);
     let bodies_name = capped_name(&format!("{} pages", item.title));
     let linked: Vec<anyhow::Result<Option<RowChange>>> = stream::iter(rows.iter().cloned())
         .map(|row| {
@@ -449,6 +462,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                             WrittenKind::BodiesFolder,
                             bodies_name,
                             folder,
+                            visibility,
                         )
                         .await?;
                         // A shared database's row bodies are shared with it,
@@ -467,16 +481,18 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     row.title.trim().to_string()
                 };
                 let id = derived_id(item.import_id, &format!("body/{}", row.id.as_str()));
+                let links = links.read().await.clone();
                 let document: Uuid = writer
                     .create_document(
                         user,
                         id,
                         &title,
                         &markdown,
-                        links,
+                        &links,
                         &ImportedDocumentProperties::default(),
                         Some(folder),
                         Some(SourceDates::from(&row)),
+                        visibility,
                     )
                     .await?
                     .parse()?;

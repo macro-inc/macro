@@ -17,12 +17,14 @@ import { SavedQuery, type SaveQueryOptions } from './saved-query';
  * then write their ids. Select the rows a write means first, then change
  * exactly those by `row_id`, and read them back before saying it worked.
  *
- * ```js
+ * ```typescript
  * const databases = await macro.databases.list();
  * const matches = await Promise.all(
  *   databases.map(async (database) => ({ database, table: await database.table('Tickets') })),
  * );
- * const { database } = matches.find((match) => match.table);
+ * const match = matches.find((candidate) => candidate.table);
+ * if (!match) throw new Error('No database has a Tickets table.');
+ * const { database } = match;
  * const people = await database.query(
  *   `SELECT id FROM macro.people WHERE email = 'sam@example.com'`,
  * );
@@ -48,6 +50,7 @@ import { SavedQuery, type SaveQueryOptions } from './saved-query';
  * | a row of another table in the database | relation |
  * | a status, stage or category | select; `select[]` or tag for several |
  * | money, counts, scores | number |
+ * | a share, rate, or ratio shown as percent | percentage |
  * | dates | date |
  * | yes/no | boolean |
  * | URLs | link |

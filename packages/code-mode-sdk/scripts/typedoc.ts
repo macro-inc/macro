@@ -86,7 +86,12 @@ export function packageEntityDocs(
           : directory.replace(/-([a-z])/g, (_, letter: string) =>
               letter.toUpperCase()
             ),
-      prefixes: [`src/entities/${directory}/`],
+      // Task templates share the task routing sentence; other namespaces
+      // retain their own discovery topics.
+      prefixes: (directory === 'tasks'
+        ? ['tasks', 'task-templates']
+        : [directory]
+      ).map((value) => `src/entities/${value}/`),
     })),
     { name: 'core', prefixes: core },
   ];
@@ -370,8 +375,14 @@ function entityIndex(
       )
     );
     const fields = [
-      ...header.matchAll(/^\| <a id="property-[^"]+"><\/a> `([^`]+)`/gm),
-    ].map((match) => match[1]);
+      ...header.matchAll(
+        /^\| <a id="property-[^"]+"><\/a> `([^`]+)` \| [^\n]*? \| ([^\n]*?) \| /gm
+      ),
+    ].map((match) => {
+      const type = plain(match[2] ?? '');
+      const result = type.match(/^\(\) => (.+)$/)?.[1];
+      return result ? `${match[1]}(): ${result}` : match[1];
+    });
     if (fields.length) lines.push(`Fields: ${fields.join(', ')}`);
     for (const method of methods.filter((method) => !method.inherited)) {
       const signature = method.markdown.match(/^> (.+)$/m)?.[1] ?? '';

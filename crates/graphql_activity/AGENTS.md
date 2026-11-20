@@ -47,3 +47,5 @@ DataLoader) — plus database/form timelines and a realtime subscription.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- Realtime `activityUpdates` rechecks current access for project and CRM records immediately before yielding a queued event; use the activity domain visibility policy and fail closed on permission lookup errors.

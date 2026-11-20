@@ -5,7 +5,7 @@ import { alertMessage, RENOTIFY_MINUTES } from './notify';
 
 /**
  * A prod monitor declared in this stack. The rules with a CloudWatch metric
- * also exist in Grafana (infra/stacks/observability/nixos/prod-alerts.nix); keep
+ * also exist in Grafana (infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix); keep
  * their thresholds and windows in sync there by hand.
  */
 export function prodMonitor(
@@ -28,10 +28,23 @@ export function prodMonitor(
     type?: string;
     /** Attach matching event samples. Needed for Database Monitoring attributes. */
     enableLogsSample?: boolean;
+    /** Evaluate a group only once it has data for the whole window. */
+    requireFullWindow?: boolean;
     /** Overrides for the state-line value text in `alertMessage`. */
     alertDetail?: string;
     warningDetail?: string;
     recoveryDetail?: string;
+    /**
+     * Heartbeats only: alert when the monitor has had no data for this many
+     * minutes. It replaces `onMissingData`, which Datadog treats as a
+     * separate missing-data mode, so the two are never sent together.
+     */
+    noDataTimeframe?: number;
+    /**
+     * Seconds to wait before evaluating, so the newest rollup bucket is
+     * complete: a monitor reads an unfinished bucket as it is.
+     */
+    evaluationDelay?: number;
   }
 ): datadog.Monitor {
   return new datadog.Monitor(
@@ -54,13 +67,18 @@ export function prodMonitor(
       monitorThresholds: args.monitorThresholds,
       monitorThresholdWindows: args.monitorThresholdWindows,
       renotifyInterval: RENOTIFY_MINUTES,
-      requireFullWindow: false,
-      onMissingData: 'default',
+      requireFullWindow: args.requireFullWindow ?? false,
       includeTags: true,
       notifyAudit: false,
+      ...(args.noDataTimeframe === undefined
+        ? { onMissingData: 'default' }
+        : { notifyNoData: true, noDataTimeframe: args.noDataTimeframe }),
       ...(args.enableLogsSample === undefined
         ? {}
         : { enableLogsSample: args.enableLogsSample }),
+      ...(args.evaluationDelay === undefined
+        ? {}
+        : { evaluationDelay: args.evaluationDelay }),
     },
     // The message mentions the GoAlert webhooks, which must exist first.
     { dependsOn: goalertWebhooks }

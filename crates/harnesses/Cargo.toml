@@ -52,5 +52,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 harness_id = { path = "../harness_id", features = ["test-utils"] }
+harnesses = { path = ".", features = ["test-utils"] }
+tower = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+# The crate depends on itself in tests to turn on `test-utils`, which shear reads as unused.
+[package.metadata.cargo-shear]
+ignored = ["harnesses"]

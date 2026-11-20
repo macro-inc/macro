@@ -22,6 +22,7 @@ use system_properties::SystemPropertyKey;
 
 mod agent_session;
 mod attention;
+mod attention_unread;
 mod calendar_event;
 mod candidate_gates;
 mod crm_association;
@@ -31,6 +32,7 @@ pub mod grouping;
 mod harness;
 mod initiative;
 mod notified;
+mod team;
 mod touched;
 mod unexpanded;
 
@@ -40,12 +42,25 @@ mod test;
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
     pool: ReadOnlyPool,
+    source_items_enabled: bool,
 }
 
 impl PgSoupRepo {
-    /// Creates a PostgreSQL soup repository using the provided read-only pool.
+    /// Creates a PostgreSQL soup repository with the item-table listing path.
     pub fn new(pool: ReadOnlyPool) -> Self {
-        PgSoupRepo { pool }
+        PgSoupRepo {
+            pool,
+            source_items_enabled: false,
+        }
+    }
+
+    /// Enables source-item listings after the projection is backfilled and verified.
+    ///
+    /// Disabling this leaves projection maintenance running and restores the
+    /// item-table query without changing authorization or cursor semantics.
+    pub fn with_source_items_enabled(mut self, enabled: bool) -> Self {
+        self.source_items_enabled = enabled;
+        self
     }
 }
 
@@ -82,6 +97,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor,
                         exclude_frecency: false,
                     },
+                    self.source_items_enabled,
                 )
                 .await;
             }
@@ -95,6 +111,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: DynamicSort::from_timestamp_query(query.map_filter(|(_, ast)| ast)),
                         exclude_frecency: true,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -107,6 +124,7 @@ impl SoupRepo for PgSoupRepo {
                         cursor: DynamicSort::from_timestamp_query(ast),
                         exclude_frecency: false,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -130,6 +148,7 @@ impl SoupRepo for PgSoupRepo {
                         ),
                         exclude_frecency: true,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -144,6 +163,7 @@ impl SoupRepo for PgSoupRepo {
                         ),
                         exclude_frecency: false,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
             }
@@ -196,6 +216,7 @@ impl SoupRepo for PgSoupRepo {
                         ),
                         exclude_frecency: true,
                     },
+                    self.source_items_enabled,
                 )
                 .await?
                 .into_iter()
@@ -282,6 +303,16 @@ impl SoupRepo for PgSoupRepo {
                 }),
         );
         items.extend(
+            team::by_ids(&self.pool.0, by_ids_request.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                    sort_key: None,
+                }),
+        );
+        items.extend(
             database_row::by_ids(&self.pool.0, by_ids_request)
                 .await?
                 .into_iter()
@@ -306,6 +337,7 @@ impl SoupRepo for PgSoupRepo {
         items.extend(agent_session::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(initiative::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(harness::by_ids(&self.pool.0, by_ids_request.clone()).await?);
+        items.extend(team::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(database_row::by_ids(&self.pool.0, by_ids_request).await?);
         Ok(items)
     }
@@ -351,8 +383,15 @@ impl SoupRepo for PgSoupRepo {
         &self,
         company_ids: &'a [uuid::Uuid],
         contact_ids: &'a [uuid::Uuid],
+        custom_task_properties: bool,
     ) -> Result<Vec<CrmPropertyEdge>, Self::Err> {
-        crm_association::property_edges(&self.pool.0, company_ids, contact_ids).await
+        crm_association::property_edges(
+            &self.pool.0,
+            company_ids,
+            contact_ids,
+            custom_task_properties,
+        )
+        .await
     }
 
     async fn touched_soup_page<'a>(
@@ -374,6 +413,15 @@ impl SoupRepo for PgSoupRepo {
         req: AttentionCandidateRequest<'a>,
     ) -> Result<Vec<AttentionCandidate>, Self::Err> {
         attention::attention_soup_page(&self.pool.0, req).await
+    }
+
+    async fn attention_unread_entities<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        types: &'a [model_entity::EntityType],
+        limit: u16,
+    ) -> Result<Vec<model_entity::Entity<'static>>, Self::Err> {
+        attention_unread::attention_unread_entities(&self.pool.0, user_id, types, limit).await
     }
 }
 
@@ -488,7 +536,8 @@ pub(crate) async fn populate_properties(
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
                 | SoupItem::AgentSession(_)
-                | SoupItem::Harness(_) => None,
+                | SoupItem::Harness(_)
+                | SoupItem::Team(_) => None,
                 SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())

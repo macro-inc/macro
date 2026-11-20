@@ -10,6 +10,7 @@ axum = [
   "dep:macro_auth",
   "dep:model-error-response",
   "dep:serde",
+  "dep:serde_json",
 ]
 default = ["axum", "outbound"]
 local_auth = ["dep:macro_env_var"]
@@ -30,6 +31,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }

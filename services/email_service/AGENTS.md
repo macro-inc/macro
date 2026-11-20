@@ -14,6 +14,8 @@ the gateway `/email` prefix.
   It composes optional activity correlation and the saved-invitation service;
   `ApiContext` holds services, authentication/router states and configuration;
   raw database/provider clients belong to the composed adapters.
+  Inject CRM rule discovery into the API EmailPgRepo for selected Team reads;
+  the adapter uses the reader's transaction and owns no additional pool.
 - `src/composition/workers.rs`: shared worker service aliases and invitation
   extraction composition. Per-worker constructors stay in `worker::context`.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced
@@ -75,6 +77,16 @@ the gateway `/email` prefix.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
   durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
   row lock through the queue send and commits the publication marker afterwards.
+  CRM publication retains captured incarnation/version/work IDs for modern
+  jobs and makes them due again after 15 minutes; legacy publication deletes.
+  Conditional acknowledgement cannot delete a newer generation. Rule activation
+  remains behind a default-off API flag; workers never initialize consent.
+- `src/email_policy_worker.rs`: cancellation-aware source-event poller on the
+  backfill pool. The CRM domain bounds raw reverse references before filtering
+  active selected policies, atomically scheduling history and system audit.
+  A separate cancellation-aware count-preview poller uses the same pool, with
+  its own bounded read-only snapshot and no consent initialization. Neither
+  creates spans for empty polls; preview work must not delay source events.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver,
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in
@@ -129,10 +141,12 @@ the gateway `/email` prefix.
 
 ## Gotchas
 
+- A program (`macro_authorization::is_program_run`) reads Macro's own sign-in emails redacted: every API response passes `rewrite_program_json` with `models_email::sign_in_email::hide_sign_in_emails`, and `GET /email/messages/{id}/eml` refuses one with 403. A person reads them whole.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.
-- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+- `models_email`'s `Link`, `BlockSenderPayload` and `UnblockSenderPayload`
+  `Debug` print only opaque fields. Keep addresses,
   `macro_id`, contact emails and whole messages out of span fields: skip them
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
@@ -154,16 +168,48 @@ the gateway `/email` prefix.
   client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
+- A presigned upload URL's query holds AWS credentials and a session token,
+  and the `UploadAttachmentError`s of every attachment upload are logged. Keep
+  them free of it: strip reqwest errors with `without_url()`, and from an S3
+  error body keep only its `<Code>` (`s3_error_code`), since a
+  `SignatureDoesNotMatch` body echoes the signed request.
+- An attachment's file type comes from a Macro file type's extension on its
+  filename (`FileType::split_suffix_match`, as uploads use) unless its MIME
+  type names a different Macro file type, and from the MIME type without such
+  an extension: mail clients send many files as `application/octet-stream`.
+  The Gmail attachment backfill calls the same `determine_file_metadata`; keep
+  the two on it.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving
   attachment bytes through the provider-aware reader.
 - Preserve the calendar domain's `team_ooo_changed` hint when forwarding a
   calendar refresh so unrelated invitation updates retain teammates' OOO rows.
+- The Outlook sync loop (`mailbox_sync_worker::run`) claims a due folder page
+  before every message read. An import keeps its folders' next pages due, so
+  claiming pages once per cycle would leave a folder with new mail behind
+  every worker's whole cycle of queued messages. A cycle ends when no message
+  is due, so folder catalogs are checked again before more pages are read.
+- Outlook sync flags are PostHog flags for the service context
+  `outlook-mailbox-sync`, each read about once a minute into a domain switch
+  by `outlook_flags::run` (one `outlook.feature_flag.refresh` span per read,
+  `feature_flag.key` names it). `pubsub_workers` reads
+  `enable-outlook-import-live-pass` into the sync's `LiveImportPass`:
+  newest-first imports and the live pass beside each folder's import round
+  ([runbook](../../docs/runbooks/outlook-sync.md#new-mail-during-an-import)).
+  The API server reads `enable-outlook-notified-message-reads` into the
+  webhook's `NotifiedMessageReads`: a notification's message is queued as
+  live work ([runbook](../../docs/runbooks/outlook-sync.md#reading-notified-messages)).
+  Without a `POSTHOG_API_KEY`, or while a read fails, a flag is off and warns
+  once; a local stack's placeholder key reads off.
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round
   started at an older reader revision ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - Spawn `run_transfers` regardless of the Outlook flags. Gmail inbox moves
   finish there; with writes off it pauses only the Outlook retire step.
+- Every Graph call takes a permit from `RedisMicrosoftRequestGate`
+  (`email_api_client`). `pubsub_workers` builds the Outlook sync's import
+  gateway with `RequestBudget::Import`; every other Microsoft caller,
+  calendar_service included, uses `RequestBudget::Live`.
 - Every `GmailApi` call takes a permit from `RedisGmailRequestGate`
   (`outbound/email_api/gmail_gate.rs`): per mailbox it caps requests in
   flight and quota units per window, and pauses after a Gmail 429 (live work
@@ -260,6 +306,10 @@ the gateway `/email` prefix.
   awaited future takes its own stack slot. Pass a Gmail call through a helper
   as a `BoxFuture`, and box an operation the dispatch awaits in several arms;
   a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
+- Inbox sync and gmail_ops add the operation as context on a failure's error
+  (`prefix_error_source`), so logs and spans keep its whole chain, and their
+  failure spans record the chain's SQLSTATE as `db.response.status_code`
+  (`pubsub::util::sqlstate`).
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
@@ -268,7 +318,12 @@ the gateway `/email` prefix.
   `email::domain::mailbox::inbox_sync::build_contact_connections`.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
-  behind a long mailbox purge would be redelivered and purged twice.
+  behind a long mailbox purge would be redelivered and purged twice. A
+  deletion whose inbox stays locked past the lock timeout
+  (`InboxLifecycleError::Contended`) runs again in the same delivery, up to six
+  times 20 s apart, before it goes back to the queue, so a short contention
+  does not spend a receive. Contention that outlasts all six attempts on five
+  deliveries still dead-letters the deletion.
   `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's write rate.
   Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
   redelivered instead of held in flight. A probe returns an error, and so is
@@ -289,6 +344,21 @@ the gateway `/email` prefix.
   spends live provider quota; Gmail reads three messages at a time to stay
   under the gate's live cap. Don't record message content or addresses on
   its spans.
+- Connecting an inbox writes its `email_links` row, which a CRM contact
+  population share-locks for its whole transaction. The connect transactions
+  (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)
+  open with `outbound::link_lock::begin`, a 5 s `lock_timeout`, and a lock
+  timeout is `InitializationError::Contended`. `/email/init` answers it 503,
+  never 409: web clients released before the coded 409s read any 409 from
+  that route as a sharing conflict to confirm.
+  `set_credential_owner` keeps waiting, because it follows the Google grant's
+  relocation and a give-up would leave the shared inbox's tokens failing.
+  The token-health writes (`email_db_client::links::update::{set,clear}_link_needs_reauth`)
+  give up after 5 s too and are written again on the next token fetch.
+- Every 409 from `/email/init` is an `InitConflictResponse` tagged by `code`;
+  clients offer to share the inbox only for `SHARED_INBOX_CONFLICT`, whose
+  fields stay at the top level for those older clients. A new 409 outcome
+  gets its own variant, never a plain-text body.
 - To run against `crates/gmail_emulator` instead of Google, set the
   `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
   Google client sets them itself. Without

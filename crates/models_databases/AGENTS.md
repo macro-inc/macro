@@ -49,6 +49,8 @@ domain.
 
 - Stay wasm-safe: don't add a dependency that isn't already wasm-compatible,
   and don't add `workspace-hack`.
+- Percentage is Number storage shown as a percent (0.25 displays as 25%), not
+  a new cell value. Number↔Percentage is format-only and does not rescale.
 
 ## Related
 

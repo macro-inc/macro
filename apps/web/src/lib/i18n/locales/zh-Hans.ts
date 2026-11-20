@@ -103,7 +103,6 @@ export default {
     close: '关闭',
     delete: '删除',
     rename: '重命名',
-    more: '更多',
     search: '搜索',
     settings: '设置',
   },
@@ -494,6 +493,9 @@ export default {
       other: '已删除 {{count}} 项',
     },
     toastDeleteFailed: '删除失败',
+    toastPropertySet: {
+      other: '已为 {{count}} 项设置 {{property}}',
+    },
     toastAddedToFavorites: '已添加到收藏',
     toastAddedCountToFavorites: {
       other: '已将 {{count}} 项添加到收藏',
@@ -549,8 +551,6 @@ export default {
       other: '已将 {{count}} 项中的 {{accepted}} 项标记为未完成',
     },
     toastMarkNotDoneFailed: '标记为未完成失败',
-    toastThreadStaysDone: '此会话没有收到的邮件，因此保持已完成状态',
-    toastThreadsStayDone: '这些会话没有收到的邮件，因此保持已完成状态',
     toastCountNotRestored: {
       other: '{{count}} 项未能恢复。',
     },
@@ -644,8 +644,6 @@ export default {
     create: '新建',
     getMobileApp: '获取移动应用',
     signedInAs: '已登录为 {{name}}',
-    commandMenu: '命令菜单',
-    searchEverything: '全局搜索',
     customizeSidebar: '自定义侧边栏',
     customizeSidebarDescription:
       '选择要在侧边栏中显示的应用，拖动可调整顺序。首页始终位于最前。',

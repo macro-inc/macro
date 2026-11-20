@@ -72,6 +72,7 @@ export function mapInitiativeIdentity(
     id: project.id,
     name: project.displayName ?? 'Untitled project',
     appearance: readEntityAppearance(project.appearance),
+    ownerId: project.metadata.ownerId ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
@@ -87,7 +88,6 @@ export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
     taskCount: project.taskCount,
     completedTaskCount: project.completedTaskCount,
     properties: mapGraphqlProperties(project.properties),
-    ownerId: project.metadata.ownerId ?? '',
     memberIds: project.memberIds,
     taskIds: project.taskIds,
     createdAt: project.metadata.createdAt ?? '',
@@ -196,12 +196,16 @@ export function createInitiativeClient(
   }
   return {
     get: (id: string, signal?: AbortSignal) =>
-      catchToResult(async () =>
-        mapInitiativeDetail(
-          (await query(InitiativeDocument, { initiativeId: id }, signal)).user
-            .initiative
-        )
-      ),
+      catchToResult(async () => {
+        const project = (
+          await query(InitiativeDocument, { initiativeId: id }, signal)
+        ).user.visibleInitiative;
+        if (!project)
+          throw new ThrownResultError([
+            { code: 'NOT_FOUND', message: 'initiative not found' },
+          ]);
+        return mapInitiativeDetail(project);
+      }),
     create: (input: CreateInitiativeInput) =>
       catchToResult(async () =>
         mapInitiativeDetail(
@@ -217,7 +221,8 @@ export function createInitiativeClient(
           })
           .toPromise();
         const disposition = optimisticMutationDispositionOf(result);
-        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'queued' || disposition?.kind === 'committed')
+          return;
         if (disposition?.kind === 'permanently-failed')
           operationData({ ...result, error: disposition.error });
         // Detail consumers subscribe to the normalized record. A queued partial

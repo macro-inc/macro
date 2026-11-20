@@ -1,3 +1,5 @@
+import { responseGeneration } from '@graphql-cache/exchange/session-exchange';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 /**
  * The session log over GraphQL, through the normalized cache.
  *
@@ -13,10 +15,6 @@ import {
   traceCacheWrite,
   traceFollowResumed,
 } from '@core/agent-session/load-telemetry';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type {
   AgentSessionLogEntryDto,
@@ -102,15 +100,6 @@ export type SessionLogFollow = {
   rows: (rows: AgentSessionLogEntryDto[]) => void;
   gap: () => void;
 };
-
-/**
- * Whether a watch can follow the session over GraphQL. Only the client
- * built with the Soup websocket carries subscriptions; without it, live
- * rows still arrive through the connection gateway.
- */
-export function canFollowAgentSessionLog(): boolean {
-  return isFeatureEnabled(enableGraphqlSoup);
-}
 
 const DIRECTIONS: ReadonlySet<string> = new Set<LogDirectionDto>([
   'to_server',
@@ -226,7 +215,7 @@ export function watchAgentSessionLog(
     }
     try {
       const snapshot = toSnapshot(sessionId, log);
-      appender?.fetched(snapshot.rows);
+      appender?.fetched(snapshot.rows, responseGeneration(result));
       resolveFetched(snapshot);
     } catch (error) {
       rejectFetched(
@@ -362,7 +351,7 @@ function followAppended(
           follow.gap();
           return;
         }
-        appender?.appended(rows);
+        appender?.appended(rows, responseGeneration(result));
         follow.rows(rows);
       })
     ));
@@ -378,9 +367,9 @@ function followAppended(
 
 type Appender = {
   /** The fetched log landed in the cache; rows held until now go after it. */
-  fetched: (rows: AgentSessionLogEntryDto[]) => void;
+  fetched: (rows: AgentSessionLogEntryDto[], generation: string) => void;
   /** The subscription delivered a run. */
-  appended: (rows: AgentSessionLogEntryDto[]) => void;
+  appended: (rows: AgentSessionLogEntryDto[], generation: string) => void;
   /** Write now what a pending timer would have. */
   flush: () => void;
 };
@@ -394,6 +383,7 @@ type Appender = {
  * row delivered twice is stored once.
  */
 function createAppender(sessionId: string): Appender {
+  let generation = cacheSessionGeneration.capture();
   let known: Set<string> | undefined;
   let pending: AgentSessionLogEntryDto[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -402,8 +392,9 @@ function createAppender(sessionId: string): Appender {
     const rows = pending;
     if (rows.length === 0) return;
     pending = [];
+    if (!cacheSessionGeneration.isCurrent(generation)) return;
     const startedAt = performance.now();
-    void appendAgentSessionLogRows(sessionId, rows).then(
+    void appendAgentSessionLogRows(sessionId, rows, generation).then(
       () => traceCacheWrite(sessionId, startedAt, rows.length),
       (error: unknown) => {
         console.warn('[agent-session] log rows could not be cached', error);
@@ -416,6 +407,14 @@ function createAppender(sessionId: string): Appender {
       timer = undefined;
       write();
     }, CACHE_WRITE_DEBOUNCE_MS);
+  };
+  const currentBatch = (current: string) => {
+    if (current === generation) return;
+    // Flush the previous batch with its own stamp; a startup correction must
+    // never relabel buffered frames with the newly learned owner generation.
+    write();
+    if (!cacheSessionGeneration.isCurrent(generation)) known = undefined;
+    generation = current;
   };
   const remember = (rows: AgentSessionLogEntryDto[]) => {
     if (!known) return false;
@@ -430,13 +429,15 @@ function createAppender(sessionId: string): Appender {
   };
 
   return {
-    fetched(rows) {
+    fetched(rows, generation) {
+      currentBatch(generation);
       known = new Set(rows.map((row) => row.id));
       const held = pending;
       pending = [];
       if (remember(held)) schedule();
     },
-    appended(rows) {
+    appended(rows, generation) {
+      currentBatch(generation);
       if (!known) {
         pending.push(...rows);
         return;
@@ -462,7 +463,8 @@ const LOG_OPERATION = 'AgentSessionLog';
  */
 async function appendAgentSessionLogRows(
   sessionId: string,
-  rows: AgentSessionLogEntryDto[]
+  rows: AgentSessionLogEntryDto[],
+  generation: string
 ): Promise<void> {
   const host = getGraphqlCacheHost();
   if (!host || rows.length === 0) return;
@@ -490,6 +492,7 @@ async function appendAgentSessionLogRows(
   if (appended.length === 0) return;
   await host.writeQuery({
     ...args,
+    generation,
     data: {
       user: {
         id: data.user.id,

@@ -3,6 +3,7 @@
 use agent_code_mode::{domain::SessionCodeMode, inbound::toolset::CodeModeToolContext};
 use agent_code_mode::{domain::reviews::ReviewService, inbound::reviews::ReviewToolContext};
 use std::sync::{Arc, OnceLock};
+use tracing::Instrument as _;
 
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
@@ -112,7 +113,7 @@ impl ServerHandler for InternalTools {
         );
         if self.code_mode.is_some() {
             info.instructions.as_mut().expect("instructions are set").push_str(
-                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the JavaScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
+                " macro_internal.ExecuteCode, macro_internal.DescribeCodeTools and macro_internal.ReadCodeDocs are available directly, without tool search. Follow their descriptions for the type-checked TypeScript main module, SDK entity indexes and symbol references, and persistent review workflow. Reuse indexes and references already in context.",
             );
         }
         info
@@ -200,6 +201,24 @@ impl ServerHandler for InternalTools {
 
     async fn call_tool(
         &self,
+        request: CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        // The in-process agent sends its turn's trace context in `_meta`, so
+        // a code execution and the SDK calls under it join the session trace.
+        let span = tracing::info_span!(
+            "internal_mcp.call_tool",
+            mcp.tool.name = %request.name,
+            agent_session_id = tracing::field::Empty,
+        );
+        genai_telemetry::propagation::set_parent_from_mcp(&span, &context.meta);
+        self.run_tool(request, context).instrument(span).await
+    }
+}
+
+impl InternalTools {
+    async fn run_tool(
+        &self,
         mut request: CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
@@ -210,6 +229,7 @@ impl ServerHandler for InternalTools {
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_request("Missing session authorization", None)
             })?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(grant.id));
         // Resolve actor choices from a user-owned session and its verified turn.
         // Sessions owned by anything else have no account authority.
         let owner = grant
@@ -290,7 +310,7 @@ impl ServerHandler for InternalTools {
                 let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
-                    Ok(value) => CallToolResult::structured(value),
+                    Ok(value) => code_result(value),
                     Err(error) => {
                         CallToolResult::error(vec![ContentBlock::text(error.description)])
                     }
@@ -329,4 +349,28 @@ impl ServerHandler for InternalTools {
         };
         Ok(result.into())
     }
+}
+
+/// The receipt as structured content, which Macro's own agent reads with its
+/// `modelMedia`; other clients read the text and image blocks, so the pixels
+/// reach them as images rather than base64 text.
+fn code_result(value: serde_json::Value) -> CallToolResult {
+    let mut text = value.clone();
+    let media = text
+        .as_object_mut()
+        .and_then(|object| object.remove("modelMedia"));
+    let mut content = vec![ContentBlock::text(text.to_string())];
+    for image in media
+        .as_ref()
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(data) = image.get("data").and_then(serde_json::Value::as_str) {
+            content.push(ContentBlock::image(data, "image/png"));
+        }
+    }
+    let mut result = CallToolResult::success(content);
+    result.structured_content = Some(value);
+    result
 }

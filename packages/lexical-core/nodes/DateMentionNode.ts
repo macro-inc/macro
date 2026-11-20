@@ -76,7 +76,8 @@ export class DateMentionNode extends DecoratorNode<
     const node = $createDateMentionNode({
       date: serializedNode.date,
       displayFormat: serializedNode.displayFormat,
-      mentionUuid: serializedNode.mentionUuid,
+      // Loro stores an absent uuid as null.
+      mentionUuid: serializedNode.mentionUuid ?? undefined,
     }).updateFromJSON(serializedNode);
     $applyIdFromSerialized(node, serializedNode);
     return node;
@@ -99,7 +100,7 @@ export class DateMentionNode extends DecoratorNode<
     const self = super.updateFromJSON(serializedNode);
     self.setDate(serializedNode.date);
     self.setDisplayFormat(serializedNode.displayFormat);
-    self.setMentionUuid(serializedNode.mentionUuid);
+    self.setMentionUuid(serializedNode.mentionUuid ?? undefined);
     return self;
   }
 

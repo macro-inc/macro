@@ -209,7 +209,7 @@ async fn every_deletion_failure_remains_retryable_and_stops_later_effects() {
         assert!(!delete, "{stage}");
         assert_eq!(error.reason, FailureReason::DatabaseQueryFailed, "{stage}");
         assert!(
-            error.source.to_string().starts_with("delete_message: "),
+            format!("{:#}", error.source).starts_with("delete_message: "),
             "{stage}"
         );
         let calls = fake.calls();
@@ -237,7 +237,7 @@ async fn a_failed_rollback_is_propagated_and_broker_rejection_does_not_fail_the_
         .extend([("delete", 1), ("rollback", 1)]);
     let (delete, error) = failure(service.process(Ok(input(operation()))).await);
     assert!(!delete);
-    assert_eq!(error.source.to_string(), "delete_message: rollback");
+    assert_eq!(format!("{:#}", error.source), "delete_message: rollback");
     assert_eq!(fake.calls().last(), Some(&Call::Rollback));
     let (service, fake) = make_service(false);
     fake.0.lock().unwrap().failures.push(("event", 1));

@@ -16,10 +16,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
 import Minimize from '@icon/system/regular/arrows-in.svg';
-import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
-import GitBranch from '@icon/system/regular/git-branch.svg';
-import Link from '@icon/system/regular/link.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import Sparkle from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
@@ -475,10 +475,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         link += `?${queryParams}`;
       }
       await navigator.clipboard.writeText(link);
-      toast.success('Copied document link to clipboard');
+      return true;
     } catch (e) {
       console.error(e);
       toast.failure('Could not copy link');
+      return false;
     }
   };
 
@@ -638,26 +639,25 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                     <span class="flex-1 truncate">Ask Macro</span>
                   </Dropdown.Item>
                 </Show>
-                <Dropdown.Item onSelect={handleCopy}>
-                  <Link class="size-4 shrink-0" />
+                <Dropdown.CopyItem
+                  icon={<LinkIcon class="size-4" />}
+                  onCopy={handleCopy}
+                >
                   <span class="flex-1 truncate">Copy Link</span>
-                </Dropdown.Item>
+                </Dropdown.CopyItem>
                 <Show when={props.blockName === 'task'}>
-                  <Dropdown.Item
-                    onSelect={() =>
-                      fireAndForget(
-                        copyBranchNameToClipboard(props.item.id),
-                        'document-card'
-                      )
+                  <Dropdown.CopyItem
+                    icon={<GitBranchIcon class="size-4" />}
+                    onCopy={() =>
+                      copyBranchNameToClipboard(props.item.id, { silent: true })
                     }
                   >
-                    <GitBranch class="size-4 shrink-0" />
                     <span class="flex-1 truncate">Copy Branch Name</span>
-                  </Dropdown.Item>
+                  </Dropdown.CopyItem>
                 </Show>
                 <Show when={!isSplitAlreadyOpen()}>
                   <Dropdown.Item onSelect={openInNewSplit}>
-                    <ColumnsPlusRight class="size-4 shrink-0" />
+                    <SplitIcon class="size-4 shrink-0" />
                     <span class="flex-1 truncate">Open in New Split</span>
                   </Dropdown.Item>
                 </Show>

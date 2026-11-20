@@ -3,7 +3,12 @@
  * coordinator-routed RPCs, and fans out invalidations.
  */
 
+import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
+import {
+  cacheRequestStamp,
+  isReadOnlyCacheRequest,
+} from '../host/read-availability';
 import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
@@ -30,6 +35,7 @@ import {
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
   isStorageTransactionRequest,
   operationCategoryForRequest,
@@ -129,6 +135,8 @@ const CACHE_WRITE_PRIORITY = 3;
 /** Reads may reorder while they overlap, but never across lifecycle barriers. */
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
+    request.kind === 'current-authority' ||
+    request.kind === 'transition-authority' ||
     request.kind === 'init' ||
     request.kind === 'current-storage-generation' ||
     request.kind === 'teardown' ||
@@ -138,7 +146,11 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 
 /** A new engine or cleared storage: not even a typed search runs ahead. */
 function stopsTypedSearch(request: CacheRequest): boolean {
-  return request.kind === 'init' || request.kind === 'clear';
+  return (
+    request.kind === 'init' ||
+    request.kind === 'clear' ||
+    request.kind === 'transition-authority'
+  );
 }
 
 /** A change made on this device rather than a result from the network. */
@@ -220,6 +232,7 @@ function requestPriority(request: CacheRequest): number {
 function readSignature(request: CacheRequest): string | undefined {
   if (request.kind !== 'read' || request.opId === undefined) return;
   return JSON.stringify([
+    request.generation ?? null,
     request.opId,
     request.query,
     request.operationName ?? null,
@@ -243,6 +256,7 @@ export class CacheWorkerCore {
   private activeRequestHandlers = 0;
   private readonly drainWaiters = new Set<() => void>();
   private resetRequiredReported = false;
+  private executingAuthority: string | undefined;
   private hotCapacity: number | undefined;
   private readonly ports = new Set<PortLike>();
   private readonly telemetry: CacheTelemetryRecorderLike;
@@ -299,7 +313,11 @@ export class CacheWorkerCore {
 
     this.activeRequestHandlers += 1;
     try {
-      const result = await this.enqueue(request);
+      const envelope = (await this.enqueue(request)) as {
+        result: unknown;
+        authorityGeneration?: string;
+      };
+      const result = envelope.result;
       const durationMs = this.now() - startedAt;
       const revisionCategory = revisionAdvancementCategory(request);
       const revisionAdvanced =
@@ -361,7 +379,7 @@ export class CacheWorkerCore {
           durationMs,
         });
       }
-      respond({ id: request.id, ok: true, result });
+      respond({ id: request.id, ok: true, ...envelope });
     } catch (error) {
       const durationMs = this.now() - startedAt;
       const errorCode = classifyCacheError(error);
@@ -603,6 +621,62 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
+    let before = this.executingAuthority;
+    if (request.kind !== 'init') {
+      if (
+        before === undefined ||
+        (!isReadOnlyCacheRequest(request.kind) &&
+          request.kind !== 'current-authority')
+      ) {
+        const authority = await this.requireEngine().currentAuthority(
+          this.scope!
+        );
+        before = authority.generation;
+        if (this.executingAuthority !== before)
+          this.push({ kind: 'authority-changed', authority });
+        this.executingAuthority = before;
+      }
+      const storesContent = cacheRequestStamp(request.kind) === 'captured';
+      const removes =
+        request.kind === 'invalidate' || request.kind === 'delete-records';
+      // A queued command settles under its own stamp even once that is stale.
+      const settlesCommand =
+        request.kind === 'enqueue-optimistic-mutation' ||
+        request.kind === 'commit-optimistic-write';
+      const mustBeCurrent = (storesContent && !settlesCommand) || removes;
+      if (
+        (mustBeCurrent && request.generation !== before) ||
+        (storesContent && request.generation === undefined)
+      )
+        throw new Error(
+          'cache response belongs to an older session generation'
+        );
+    }
+    let result: unknown;
+    try {
+      result = await this.execute(request);
+    } catch (error) {
+      // A failed transition may have committed its closed marker. The next
+      // request must resume it before any read, even on the warm read path.
+      this.executingAuthority = undefined;
+      throw error;
+    }
+    if (
+      request.kind === 'write' ||
+      request.kind === 'hydrate' ||
+      request.kind === 'people-update'
+    ) {
+      const authority = await this.requireEngine().currentAuthority(
+        this.scope!
+      );
+      this.executingAuthority = authority.generation;
+      if (authority.generation !== before)
+        this.push({ kind: 'authority-changed', authority });
+    }
+    return { result, authorityGeneration: this.executingAuthority };
+  }
+
+  private async execute(request: CacheRequest): Promise<unknown> {
     if ('variables' in request && request.variables !== undefined) {
       // Structured clone retains undefined object fields; serde-wasm-bindgen
       // reads them as null. Match the JSON sent to GraphQL and stored in durable
@@ -616,7 +690,49 @@ export class CacheWorkerCore {
     return await match(request)
       .with({ kind: 'init' }, async (request) => {
         await this.init(request.scope, request.hotCapacity);
+        this.executingAuthority = (
+          await this.requireEngine().currentAuthority(request.scope)
+        ).generation;
         return null;
+      })
+      .with({ kind: 'current-authority' }, async (request) => {
+        const authority = await this.requireEngine().currentAuthority(
+          request.identity
+        );
+        if (this.executingAuthority !== authority.generation)
+          this.push({ kind: 'authority-changed', authority });
+        this.executingAuthority = authority.generation;
+        return authority;
+      })
+      .with({ kind: 'transition-authority' }, async (request) => {
+        const context = request.traceparent
+          ? Telemetry.remoteContext(request.traceparent)
+          : Telemetry.captureContext();
+        const result = await context.run(() =>
+          Telemetry.span('crm.access.owner.execute', async (span) => {
+            const result = await this.requireEngine().transitionAuthority(
+              request.identity,
+              request.expected,
+              request.policy
+            );
+            span.setAttr('crm.access.changed', result.changed);
+            return result;
+          })
+        );
+        this.executingAuthority = result.authority.generation;
+        if (result.changed) {
+          this.push({ kind: 'authority-changed', authority: result.authority });
+          this.push({
+            kind: 'ops-affected',
+            opIds: result.affectedOps,
+            keys: [],
+          });
+          this.push({
+            kind: 'cache-changed',
+            revision: parseCacheRevision(result.revision),
+          });
+        }
+        return result;
       })
       .with({ kind: 'current-revision' }, async () => {
         return parseCacheRevision(await this.requireEngine().currentRevision());
@@ -779,7 +895,8 @@ export class CacheWorkerCore {
             request.nowMs,
             request.leaseExpiresAtMs,
             request.clientMetadata,
-            request.uncertainCalendarEventKeys
+            request.uncertainCalendarEventKeys,
+            request.generation
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -858,7 +975,8 @@ export class CacheWorkerCore {
           request.query,
           request.operationName,
           request.variables,
-          request.data
+          request.data,
+          request.generation
         );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -966,6 +1084,7 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'clear' }, async () => {
         const result: CacheRevisionResult = await this.requireEngine().clear();
+        this.executingAuthority = undefined;
         const revision = parseCacheRevision(result.revision);
         this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
@@ -1052,7 +1171,7 @@ export class CacheWorkerCore {
           name: 'graphql_cache.queue_diagnostics',
           operationCategory: 'queue',
           outcome: 'error',
-          errorCode: classifyCacheError(outcome.error),
+          ...describeCacheError(outcome.error),
           queueDiagnosticsAvailability: this.latestQueueDiagnostics
             ? 'available'
             : 'unavailable',
@@ -1097,7 +1216,7 @@ export class CacheWorkerCore {
         name: 'graphql_cache.queue_diagnostics',
         operationCategory: 'queue',
         outcome: 'error',
-        errorCode: classifyCacheError(error),
+        ...describeCacheError(error),
         queueDiagnosticsAvailability: this.latestQueueDiagnostics
           ? 'available'
           : 'unavailable',
@@ -1217,7 +1336,7 @@ export class CacheWorkerCore {
           name: 'graphql_cache.schema_init',
           operationCategory: 'initialization',
           outcome: 'error',
-          errorCode: classifyCacheError(error),
+          ...describeCacheError(error),
           durationMs: this.now() - schemaStartedAt,
         });
         throw error;
@@ -1294,7 +1413,10 @@ export class CacheWorkerCore {
 
   private push(msg: CachePush): void {
     for (const port of this.ports) {
-      port.postMessage(msg);
+      port.postMessage({
+        ...msg,
+        authorityGeneration: this.executingAuthority,
+      });
     }
   }
 

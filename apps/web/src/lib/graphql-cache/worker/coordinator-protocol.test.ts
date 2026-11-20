@@ -216,12 +216,19 @@ describe('coordinator runtime protocol', () => {
       tabId: 'tab',
       ownerEpoch: 2,
     };
-    for (const valid of [cacheUnavailable, superseded, removeStale]) {
+    for (const valid of [
+      cacheUnavailable,
+      { ...cacheUnavailable, superseded: true },
+      superseded,
+      removeStale,
+    ]) {
       expect(validateCoordinatorToTabEnvelope(valid).ok).toBe(true);
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
+      { ...cacheUnavailable, superseded: false },
       { ...superseded, reason: '' },
+      { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },
       { ...removeStale, ownerEpoch: 0 },
     ]) {

@@ -17,6 +17,11 @@ use crate::config::{HarnessCredentials, MacroApi};
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 const HARNESS_ACTING_USER_HEADER: &str = "x-macro-harness-for-macro-user-id";
 
+/// How long the service has to answer one call, so a request it accepts and
+/// never answers fails instead of holding up the trigger stream that awaits it.
+/// Generous: a control call can wait on the session's runtime handshake.
+const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// A failure calling the agent-harness service.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -72,7 +77,8 @@ impl HarnessApi {
         request: &CreateAgentSessionRequest,
         acting_user: &MacroUserIdStr<'static>,
     ) -> Result<CreateAgentSessionResponse, ApiError> {
-        // A trigger stream is not replayed. Creation can commit before reply
+        // The trigger stream resumes after the last event it delivered, so a
+        // failed create is never redelivered. Creation can commit before reply
         // reservation fails, so retry the same identity before any prompt.
         let attempts = if request.id.is_some() && request.thread.is_some() {
             2
@@ -106,6 +112,7 @@ impl HarnessApi {
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, acting_user.as_ref())
             .json(request)
+            .timeout(CALL_TIMEOUT)
             .send()
             .await?;
         if response.status() == StatusCode::CONFLICT {
@@ -154,6 +161,7 @@ impl HarnessApi {
                 client_id: None,
                 action,
             })
+            .timeout(CALL_TIMEOUT)
             .send()
             .await?;
         refuse_errors(response).await?;

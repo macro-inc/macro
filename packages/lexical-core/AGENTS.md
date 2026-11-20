@@ -52,8 +52,20 @@ literal, because Lexical's export adds them to unlinked URL text (see
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
 
+A link's URL comes from saved content: check it with `isAllowedLinkUrl`
+(`utils/link-url.ts`) before it becomes a link node, an anchor, or a call to
+open it. Build transformer sets from `STANDARD_TRANSFORMERS`, never Lexical's
+`TRANSFORMERS` (its `LINK` keeps any URL; see `README.md`).
+
+Table cells import and export through their own transformer sets in
+`transformers/tables.ts`. Keep their chip entries matching the paragraph sets
+(`EXTERNAL_TRANSFORMERS` order for export), or a table drops chips a paragraph
+keeps.
+
 An image under a list item is a child of that `ListItemNode`. Lexical runs
 element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a
 list to its last item. Add it to any new transformer set that has image
 transformers.
+
+Creation-time markdown snapshots write explicit root pins as `pending:<definitionId>`; omit initial pins to preserve the blank golden snapshot and implicit defaults.

@@ -104,7 +104,6 @@ export default {
     close: 'Sluiten',
     delete: 'Verwijderen',
     rename: 'Naam wijzigen',
-    more: 'Meer',
     search: 'Zoeken',
     settings: 'Instellingen',
   },
@@ -520,6 +519,10 @@ export default {
       other: '{{count}} items verwijderd',
     },
     toastDeleteFailed: 'Verwijderen mislukt',
+    toastPropertySet: {
+      one: '{{property}} ingesteld',
+      other: '{{property}} ingesteld voor {{count}} items',
+    },
     toastAddedToFavorites: 'Toegevoegd aan favorieten',
     toastAddedCountToFavorites: {
       one: '{{count}} item toegevoegd aan favorieten',
@@ -590,10 +593,6 @@ export default {
       other: '{{accepted}} van {{count}} items gemarkeerd als niet voltooid',
     },
     toastMarkNotDoneFailed: 'Markeren als niet voltooid mislukt',
-    toastThreadStaysDone:
-      'Deze thread heeft geen ontvangen berichten en blijft dus voltooid',
-    toastThreadsStayDone:
-      'Deze threads hebben geen ontvangen berichten en blijven dus voltooid',
     toastCountNotRestored: {
       one: '{{count}} kon niet worden teruggezet.',
       other: '{{count}} konden niet worden teruggezet.',
@@ -694,8 +693,6 @@ export default {
     create: 'Maken',
     getMobileApp: 'Download de mobiele app',
     signedInAs: 'Ingelogd als {{name}}',
-    commandMenu: 'Opdrachtmenu',
-    searchEverything: 'Alles doorzoeken',
     customizeSidebar: 'Zijbalk aanpassen',
     customizeSidebarDescription:
       'Kies welke apps in de zijbalk staan en sleep om ze te herschikken. Start staat altijd bovenaan.',

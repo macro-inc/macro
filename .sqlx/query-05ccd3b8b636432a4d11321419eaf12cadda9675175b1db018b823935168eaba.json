@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT 'contact'::text AS \"kind!\", c.id AS \"id!\",\n                (c.team_id=$1 AND (c.company_id IS NULL OR co.team_id=$1)) IS TRUE AS \"in_team!\",\n                (c.hidden OR co.hidden) IS TRUE AS \"hidden!\"\n            FROM unnest($2::uuid[]) source(id)\n            CROSS JOIN LATERAL (SELECT id,team_id,hidden,company_id FROM crm_contacts WHERE id=source.id OFFSET 0)c\n            LEFT JOIN LATERAL (SELECT team_id,hidden FROM crm_companies WHERE id=c.company_id OFFSET 0)co ON TRUE\n            UNION ALL\n            SELECT 'company', c.id, c.team_id=$1, c.hidden\n            FROM unnest($3::uuid[]) source(id)\n            CROSS JOIN LATERAL (SELECT id,team_id,hidden FROM crm_companies WHERE id=source.id OFFSET 0)c\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "in_team!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "hidden!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "05ccd3b8b636432a4d11321419eaf12cadda9675175b1db018b823935168eaba"
+}

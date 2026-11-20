@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
+use lexical_client::LexicalClient;
 use sync_service_client::SyncServiceClient;
 use sync_service_client::document_state::{DocumentStateError, DocumentUpdate};
 use sync_service_client::initialize::SnapshotAlreadyExists;
@@ -58,7 +58,10 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
             MARKDOWN_GOLDEN_SNAPSHOT.to_vec()
         } else {
             self.lexical_client
-                .markdown_to_loro_snapshot(markdown)
+                .markdown_to_loro_snapshot(
+                    markdown,
+                    lexical_client::parse_markdown::MarkdownSnapshotOptions::default(),
+                )
                 .await
                 .map_err(|e| {
                     CollabSurfaceError::Internal(
@@ -157,7 +160,7 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
     #[tracing::instrument(err, skip(self))]
     async fn markdown(&self, surface_id: &str) -> Result<String, CollabSurfaceError> {
         self.lexical_client
-            .get_markdown(surface_id, MarkdownTarget::External)
+            .get_agent_markdown(surface_id)
             .await
             .map_err(|e| {
                 CollabSurfaceError::Internal(

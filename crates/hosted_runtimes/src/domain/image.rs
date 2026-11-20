@@ -1,8 +1,6 @@
 //! The image a computer's root disk is built from, and how its disk quota
 //! splits between that root disk and the data disk that survives updates.
 
-use serde::{Deserialize, Serialize};
-
 use crate::domain::enrollment::Enrollment;
 use crate::domain::size::ComputerResources;
 
@@ -10,54 +8,7 @@ use crate::domain::size::ComputerResources;
 /// system, Docker images and anything else that an image update replaces.
 pub const ROOT_DISK_GIB: u32 = 32;
 
-/// A versioned guest image: an Incus alias such as `macro-box/2026-11-10`, or
-/// a Docker tag such as `macro-box:latest`. Each fleet validates its own form.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
-pub struct GuestImage(String);
-
-/// An empty, overlong or unsafe image name.
-#[derive(Debug, thiserror::Error)]
-#[error("image must be 1..=255 characters of letters, digits and -_./:@")]
-pub struct InvalidGuestImage;
-
-impl GuestImage {
-    /// Validate an image name.
-    pub fn try_new(value: &str) -> Result<Self, InvalidGuestImage> {
-        if value.is_empty()
-            || value.len() > 255
-            || !value.bytes().all(|b| {
-                b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'/' | b':' | b'@')
-            })
-        {
-            return Err(InvalidGuestImage);
-        }
-        Ok(Self(value.to_owned()))
-    }
-    /// Borrow the image name.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl TryFrom<String> for GuestImage {
-    type Error = InvalidGuestImage;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::try_new(&value)
-    }
-}
-
-impl std::fmt::Display for GuestImage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for GuestImage {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
-    }
-}
+pub use computer_types::{GuestImage, InvalidGuestImage};
 
 /// The images a fleet creates guests from: the regular guest, and the same
 /// guest built in agent mode for computers that run an agent teammate.
@@ -70,14 +21,13 @@ pub struct GuestImages<Image> {
 }
 
 impl<Image> GuestImages<Image> {
-    /// The image a new guest is created from: the agent image when its
-    /// enrollment carries an agent. A guest recreated after a loss enrolls
-    /// the same way, so an agent computer stays on the agent image.
+    /// The image a new guest is created from: the agent image for an agent
+    /// computer. A guest recreated after a loss enrolls with the same role,
+    /// so an agent computer stays on the agent image.
     pub fn for_enrollment(&self, enrollment: &Enrollment) -> &Image {
-        if enrollment.agent.is_some() {
-            &self.agent
-        } else {
-            &self.regular
+        match enrollment.role {
+            crate::domain::enrollment::ComputerRole::Agent => &self.agent,
+            crate::domain::enrollment::ComputerRole::Person => &self.regular,
         }
     }
 
@@ -91,6 +41,17 @@ impl<Image> GuestImages<Image> {
             agent: convert(self.agent)?,
         })
     }
+}
+
+/// The `/home` sizes the current catalog sells, in GiB, smallest first.
+pub fn sold_home_disk_gib() -> Vec<u32> {
+    let mut sizes: Vec<u32> = crate::domain::size::SIZE_SPECS
+        .iter()
+        .map(|spec| spec.home_disk_gib.get())
+        .collect();
+    sizes.sort_unstable();
+    sizes.dedup();
+    sizes
 }
 
 /// The data disk's share of the disk quota: everything but [`ROOT_DISK_GIB`].

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cp.channel_id::text AS \"source_id!\"\n           FROM (SELECT $1::text AS user_id OFFSET 0) viewer\n           CROSS JOIN LATERAL (\n               SELECT cp.channel_id\n               FROM comms_channel_participants cp\n               WHERE cp.user_id = viewer.user_id AND cp.left_at IS NULL\n               OFFSET 0\n           ) cp\n           UNION ALL\n           SELECT tu.team_id::text FROM team_user tu\n           WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')\n           UNION ALL\n           SELECT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2cf08d60055acdba9cfbeedde220fbdc34e9f99d26f77d6a28e2dd561cfaa9fa"
+}

@@ -111,6 +111,8 @@ fn request(scope: &HydrationScope, query: &str, mode: PeopleMode) -> PeopleSearc
         limit: 50,
         now_ms: 0,
         cursor: None,
+        list_priority: vec![],
+        only_listed: false,
     }
 }
 async fn reference(
@@ -155,12 +157,16 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
         for query in [
             "",
             "Late person",
+            "late",
+            "other",
             "la per",
             "per la",
             "ate",
             "missing",
             "p004999@",
             "p004999@example.com",
+            "p004999",
+            "example.com",
         ] {
             for mode in [
                 PeopleMode::Command,
@@ -201,7 +207,49 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
             ])
             .await
             .unwrap();
+        // A first name shares the exact tier; a comma list, a hyphenated first
+        // name, a last name and a control character after the name do not.
+        // People the viewer messages lead every word-start match.
+        let first_names = [
+            ("macro|zed@example.com", "Zed", None),
+            ("macro|zed.okafor@example.com", "Zed Okafor", Some(100)),
+            ("macro|zed.group@example.com", "Zed, Group", Some(400)),
+            ("macro|zed.ann@example.com", "Zed-Ann Person", None),
+            ("macro|okafor.zed@example.com", "Okafor Zed", Some(200)),
+            ("macro|zed.control@example.com", "Zed\u{1}Person", None),
+            ("macro|ozeda@example.com", "Ozeda", Some(900)),
+        ];
+        storage
+            .put_batch(
+                first_names
+                    .iter()
+                    .map(|(user, name, _)| (key(user), record(user, name)))
+                    .collect(),
+            )
+            .await
+            .unwrap();
         let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: first_names
+                        .iter()
+                        .filter_map(|(user, _, time)| {
+                            Some(PersonFactPatch {
+                                user_id: (*user).try_into().unwrap(),
+                                facts: PersonFacts {
+                                    last_interaction_ms: Some((*time)?),
+                                    ..Default::default()
+                                },
+                            })
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
         for query in ["zzover", "late\0", "%", "_"] {
             parity(
                 &mut engine,
@@ -210,6 +258,198 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
             )
             .await;
         }
+        for mode in [
+            PeopleMode::Command,
+            PeopleMode::Recipient,
+            PeopleMode::Mention,
+            PeopleMode::Property,
+        ] {
+            parity(&mut engine, &request(&scope, "zed okafor", mode), EPOCH).await;
+            let mut request = request(&scope, "zed", mode);
+            request.limit = 2;
+            let mut listed = vec![];
+            loop {
+                let PeopleSearchResult::Page {
+                    people,
+                    next_cursor,
+                    ..
+                } = parity(&mut engine, &request, EPOCH).await
+                else {
+                    panic!("page");
+                };
+                listed.extend(
+                    people
+                        .into_iter()
+                        .map(|person| (person.user_id.to_string(), person.match_rank)),
+                );
+                let Some(cursor) = next_cursor else { break };
+                request.cursor = Some(cursor);
+            }
+            assert_eq!(
+                listed
+                    .iter()
+                    .map(|(user, rank)| (user.as_str(), *rank))
+                    .collect::<Vec<_>>(),
+                [
+                    ("macro|zed.okafor@example.com", 5),
+                    ("macro|zed.group@example.com", 4),
+                    ("macro|okafor.zed@example.com", 4),
+                    ("macro|zed@example.com", 3),
+                    ("macro|zed.ann@example.com", 2),
+                    ("macro|zed.control@example.com", 2),
+                    ("macro|ozeda@example.com", 1),
+                ],
+                "{mode:?}"
+            );
+        }
+    });
+}
+#[test]
+fn messaged_word_prefixes_page_ahead_of_unmessaged_exact_names_at_scale() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        storage
+            .put_batch(
+                (0..300)
+                    .map(|i| {
+                        let user = format!("macro|q{i:06}@example.com");
+                        (key(&user), record(&user, "Person Other"))
+                    })
+                    .chain([(
+                        key("macro|brother@example.com"),
+                        record("macro|brother@example.com", "Brother Person"),
+                    )])
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: (0..200)
+                        .map(|i| (format!("macro|q{i:06}@example.com"), 1000 + i))
+                        .chain([("macro|brother@example.com".to_owned(), 5000)])
+                        .map(|(user, time)| PersonFactPatch {
+                            user_id: user.try_into().unwrap(),
+                            facts: PersonFacts {
+                                last_interaction_ms: Some(time),
+                                ..Default::default()
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
+        for mode in [
+            PeopleMode::Command,
+            PeopleMode::Recipient,
+            PeopleMode::Mention,
+            PeopleMode::Property,
+        ] {
+            let mut request = request(&scope, "other", mode);
+            request.limit = 120;
+            let mut listed = vec![];
+            for _ in 0..3 {
+                let PeopleSearchResult::Page {
+                    people,
+                    next_cursor,
+                    ..
+                } = parity(&mut engine, &request, EPOCH).await
+                else {
+                    panic!("page");
+                };
+                listed.extend(people.into_iter().map(|p| (p.user_id, p.match_rank)));
+                request.cursor = next_cursor;
+            }
+            assert_eq!(listed.len(), 360, "{mode:?}");
+            assert_eq!(listed[0].0.as_ref(), "macro|q000199@example.com");
+            assert!(listed[..200].iter().all(|(_, rank)| *rank == 4), "{mode:?}");
+            assert_eq!(listed[200].0.as_ref(), "macro|p000000@example.com");
+            assert!(listed[200..].iter().all(|(_, rank)| *rank == 3), "{mode:?}");
+        }
+    });
+}
+#[test]
+fn address_terms_match_below_names_on_sparse_and_broad_reads() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        storage
+            .put_batch(vec![
+                (
+                    key("macro|jdoe1@example.org"),
+                    record("macro|jdoe1@example.org", "Jane Doe"),
+                ),
+                (
+                    key("macro|ann@example.net"),
+                    record("macro|ann@example.net", "Test name"),
+                ),
+                (
+                    key("macro|asmith@example.net"),
+                    record("macro|asmith@example.net", "Ann Smith"),
+                ),
+                // Mid-word name and address matches: equally recent, and the
+                // address match's id sorts first, so only the tier orders them.
+                (
+                    key("macro|zsmith@example.net"),
+                    record("macro|zsmith@example.net", "John Smith"),
+                ),
+                (
+                    key("macro|ajohnson@example.net"),
+                    record("macro|ajohnson@example.net", "Pat Lee"),
+                ),
+            ])
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        let users = |result: PeopleSearchResult| {
+            let PeopleSearchResult::Page { people, .. } = result else {
+                panic!("page");
+            };
+            people
+                .into_iter()
+                .map(|p| p.user_id.as_ref().to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        // A local part that differs from the name, and a domain.
+        for (query, expected) in [
+            ("jdoe", vec!["macro|jdoe1@example.org"]),
+            ("example.org", vec!["macro|jdoe1@example.org"]),
+            ("jdoe org", vec!["macro|jdoe1@example.org"]),
+            (
+                "ann",
+                vec!["macro|asmith@example.net", "macro|ann@example.net"],
+            ),
+            (
+                "ohn",
+                vec!["macro|zsmith@example.net", "macro|ajohnson@example.net"],
+            ),
+        ] {
+            let result = parity(
+                &mut engine,
+                &request(&scope, query, PeopleMode::Recipient),
+                EPOCH,
+            )
+            .await;
+            assert_eq!(users(result), expected, "{query}");
+        }
+
+        // More address matches than one probe holds read in rank order.
+        let result = parity(
+            &mut engine,
+            &request(&scope, "example.com", PeopleMode::Recipient),
+            EPOCH,
+        )
+        .await;
+        let people = users(result);
+        assert_eq!(people.len(), 50);
+        assert!(people.iter().all(|user| user.ends_with("@example.com")));
     });
 }
 #[test]
@@ -324,6 +564,8 @@ fn indexed_name_search_100k() {
             "ther",
             "Late",
             "missing",
+            "example.com",
+            "p099999",
             "",
         ] {
             let request = request(&scope, query, PeopleMode::Recipient);
@@ -368,6 +610,25 @@ fn name_candidates_use_covering_range_and_exact_record_seeks() {
             "{plan}"
         );
         assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+        let exact = super::test::request(&scope, "zed", PeopleMode::Mention);
+        let read = NameSearchRead::new(&exact, EPOCH, engine.people_read_version()).unwrap();
+        let seed = sql::seeds(&read, NameStage::ExactName).remove(0);
+        let (sql, params) = sql::candidate(&read, Some(NameStage::ExactName), &seed, false);
+        let rows = driver::query(
+            &engine.storage().connection(),
+            &format!("EXPLAIN QUERY PLAN {sql}"),
+            params,
+        )
+        .unwrap();
+        let plan = rows
+            .iter()
+            .map(|row| required_text(row, 3).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            plan.contains("exact_facts_lookup_idx (attribute=? AND value>=? AND value<?)"),
+            "{plan}"
+        );
     });
 }
 
@@ -406,4 +667,153 @@ fn ordered_early_stop_releases_statement_and_still_checks_cleanup() {
     assert_eq!(driver::query(&c, sql, vec![]).unwrap().len(), 3);
     driver::arm_reset_failure(sql);
     assert!(driver::query_until(&c, sql, vec![], |_| Ok(false)).is_err());
+}
+fn listed_record(user: &str, name: &str, lists: &[&str]) -> Record {
+    let mut record = record(user, name);
+    record.fields.insert(
+        "lists".into(),
+        CacheValue::List(
+            lists
+                .iter()
+                .map(|list| CacheValue::String((*list).into()))
+                .collect(),
+        ),
+    );
+    record
+}
+#[test]
+fn list_groups_match_complete_scan_with_small_groups_and_continuations() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        // Five teammates and a few hundred people in each other list among
+        // 5000 contacts, so a group is far smaller than one rank budget.
+        let lists = |i: usize| -> &'static [&'static str] {
+            match i {
+                0..5 => &["teammates"],
+                5..300 => &["interacted"],
+                300..900 => &["gmail"],
+                900 => &["gmail", "teammates"],
+                901 => &["custom:1"],
+                902..910 => &["invited", "outlook"],
+                4900.. => &["gmail"],
+                _ => &[],
+            }
+        };
+        storage
+            .put_batch(
+                (0..5000)
+                    .filter(|i| !lists(*i).is_empty())
+                    .map(|i| {
+                        let user = format!("macro|p{i:06}@example.com");
+                        let name = if i + 200 >= 5000 {
+                            "Late person"
+                        } else {
+                            "Other person"
+                        };
+                        (key(&user), listed_record(&user, name, lists(i)))
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: [2, 100, 101, 400, 905, 1000, 4950]
+                        .into_iter()
+                        .map(|i| PersonFactPatch {
+                            user_id: format!("macro|p{i:06}@example.com").try_into().unwrap(),
+                            facts: PersonFacts {
+                                last_interaction_ms: Some(1000 + i64::from(i)),
+                                ..Default::default()
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
+        let mention = vec![
+            vec!["teammates".to_owned()],
+            vec!["interacted".to_owned(), "invited".to_owned()],
+            vec!["gmail".to_owned(), "outlook".to_owned()],
+        ];
+        for (priority, only_listed) in [
+            (mention.clone(), false),
+            (mention.clone(), true),
+            (vec![vec!["gmail".to_owned()]], false),
+            (
+                vec![vec!["teammates".to_owned(), "teammates".to_owned()]],
+                true,
+            ),
+        ] {
+            for query in ["", "other", "late", "person", "p000003", "missing"] {
+                for mode in [
+                    PeopleMode::Command,
+                    PeopleMode::Recipient,
+                    PeopleMode::Mention,
+                    PeopleMode::Property,
+                ] {
+                    let mut request = request(&scope, query, mode);
+                    request.list_priority = priority.clone();
+                    request.only_listed = only_listed;
+                    for _ in 0..3 {
+                        let PeopleSearchResult::Page { next_cursor, .. } =
+                            parity(&mut engine, &request, EPOCH).await
+                        else {
+                            panic!("page");
+                        };
+                        if next_cursor.is_none() {
+                            break;
+                        }
+                        request.cursor = next_cursor;
+                    }
+                }
+            }
+        }
+
+        // Empty browsing lists every teammate, most recent first, then the
+        // next group; pages never repeat or skip anyone.
+        let mut request = request(&scope, "", PeopleMode::Mention);
+        request.list_priority = mention;
+        request.limit = 500;
+        let mut listed = vec![];
+        loop {
+            let PeopleSearchResult::Page {
+                people,
+                next_cursor,
+                ..
+            } = parity(&mut engine, &request, EPOCH).await
+            else {
+                panic!("page");
+            };
+            listed.extend(people.into_iter().map(|p| p.user_id.to_string()));
+            let Some(cursor) = next_cursor else { break };
+            request.cursor = Some(cursor);
+        }
+        assert_eq!(
+            listed[..7],
+            [
+                "macro|p000002@example.com",
+                "macro|p000000@example.com",
+                "macro|p000001@example.com",
+                "macro|p000003@example.com",
+                "macro|p000004@example.com",
+                "macro|p000900@example.com",
+                "macro|p000905@example.com",
+            ]
+        );
+        assert_eq!(listed.len(), 5001);
+        assert_eq!(
+            listed
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            5001
+        );
+    });
 }

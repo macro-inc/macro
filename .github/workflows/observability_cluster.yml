@@ -1,0 +1,35 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/observability_cluster.rs
+name: Observability cluster
+on:
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  check-manifests:
+    name: Check rendered manifests
+    runs-on: namespace-profile-linux-small
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Check manifests/prod matches the Nix and validates
+        run: nix run .#check
+        shell: bash
+        working-directory: infra/k8s/observability/cluster
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix

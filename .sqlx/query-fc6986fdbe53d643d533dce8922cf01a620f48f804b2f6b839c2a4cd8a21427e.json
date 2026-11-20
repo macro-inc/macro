@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT request_id, expected_policy_version, policy_version, request_hash, outcome\n               FROM crm_email_policy_idempotency\n               WHERE team_id = $1 AND user_id = $2 AND consent_incarnation = $3 AND request_id = $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "expected_policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "request_hash",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 4,
+        "name": "outcome",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fc6986fdbe53d643d533dce8922cf01a620f48f804b2f6b839c2a4cd8a21427e"
+}

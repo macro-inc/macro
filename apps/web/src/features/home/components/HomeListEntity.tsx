@@ -8,7 +8,10 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
-import { entityIsMuted } from '@entity/utils/notification';
+import {
+  entityIsMentionsOnly,
+  entityIsMuted,
+} from '@entity/utils/notification';
 import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
 import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
@@ -18,30 +21,53 @@ import { getCalendarJoinRequestNotification } from '@notifications/row-notificat
 import type { UnifiedNotification } from '@notifications/types';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { children, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { HomeEntityIcon } from './HomeEntityIcon';
 
 type HomeListEntityProps = BaseListEntityProps & {
   occurrenceKey: string;
   channelName?: string;
+  /** Unread state the list already knows, such as an inbox row's. */
+  unread?: boolean;
+  /** Takes the unread dot's place on hover, as a notification's Mark done. */
+  hoverAction?: JSX.Element;
+  /**
+   * A channel row that stands for one of its threads, as a notification
+   * inbox row about a thread does: it reads as Home's thread row.
+   */
+  thread?: boolean;
+  /**
+   * Name the item alone, as Recents does: the row is the viewer's own work,
+   * so no comment or join request renames it.
+   */
+  itemTitle?: boolean;
 };
 
 /** One compact, single-line Home item; the list owns focus and activation. */
 export function HomeListEntity(props: HomeListEntityProps) {
   const threadEntity = () =>
-    props.entity.type === 'channel_thread' ? props.entity : undefined;
+    props.entity.type === 'channel_thread' ||
+    (props.thread && props.entity.type === 'channel')
+      ? props.entity
+      : undefined;
   // A document announcing a comment reads like a thread row: the
   // comment glyph, who did what, and where. Opening it lands on the comment.
   const commentNotification = () =>
-    getDocumentCommentNotification(props.entity);
+    props.itemTitle ? undefined : getDocumentCommentNotification(props.entity);
   // A calendar event someone asked to join says who asked, like a comment.
   const joinRequestNotification = () =>
-    getCalendarJoinRequestNotification(props.entity);
-  const unread = () => unreadFilterFn(props.entity);
+    props.itemTitle
+      ? undefined
+      : getCalendarJoinRequestNotification(props.entity);
+  const unread = () => props.unread ?? unreadFilterFn(props.entity);
+  // Resolved once: each read of a JSX prop would build the button again.
+  const hoverAction = children(() => props.hoverAction);
   const notificationSource = useGlobalNotificationSource();
   const muted = () =>
     entityIsMuted(notificationSource.mutedEntities(), props.entity);
+  const mentionsOnly = () =>
+    entityIsMentionsOnly(notificationSource.mutedEntities(), props.entity);
 
   return (
     <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
@@ -115,7 +141,11 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   </Match>
                 </Switch>
               </span>
-              <ChannelMutedIndicator muted={muted()} class="size-3.5" />
+              <ChannelMutedIndicator
+                muted={muted()}
+                mentionsOnly={mentionsOnly()}
+                class="size-3.5"
+              />
               <span
                 data-home-timestamp
                 class="hidden shrink-0 text-xs font-normal text-ink-extra-muted group-hover/home-item:block"
@@ -125,11 +155,30 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   overrideTimeStamp={props.timestamp ?? undefined}
                 />
               </span>
-              <Show when={unread()}>
-                <span
-                  aria-label="Unread"
-                  class="size-1.5 shrink-0 rounded-full bg-accent"
-                />
+              <Show
+                when={hoverAction()}
+                fallback={
+                  <Show when={unread()}>
+                    <span
+                      aria-label="Unread"
+                      class="size-1.5 shrink-0 rounded-full bg-accent"
+                    />
+                  </Show>
+                }
+              >
+                {/* One slot for both, so nothing moves as the row is hovered.
+                    The action stays in the tab order, shown while focused. */}
+                <span class="relative flex size-5 shrink-0 items-center justify-center">
+                  <Show when={unread()}>
+                    <span
+                      aria-label="Unread"
+                      class="size-1.5 rounded-full bg-accent group-focus-within/home-item:hidden group-hover/home-item:hidden"
+                    />
+                  </Show>
+                  <span class="invisible absolute inset-0 flex items-center justify-center group-focus-within/home-item:visible group-hover/home-item:visible">
+                    {hoverAction()}
+                  </span>
+                </span>
               </Show>
             </ViewSidebar.Item>
           }
@@ -140,6 +189,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
               surface="home"
               active={props.checked || props.highlighted}
               unread={unread()}
+              hoverAction={hoverAction()}
               onOpen={(event) => {
                 event.preventDefault();
                 props.onClick?.(event);
@@ -158,7 +208,6 @@ function HomeThreadTitle(
   const currentUserId = useUserId();
   const sender = () => {
     const entity = props.entity;
-    if (entity.type !== 'channel_thread') return undefined;
     const notification = entity.notifications?.()?.[0];
     if (notification) {
       // The row's scoped notifications also include document mentions and
@@ -173,6 +222,7 @@ function HomeThreadTitle(
         details: undefined,
       };
     }
+    if (entity.type !== 'channel_thread') return undefined;
     return {
       id: entity.senderId,
       displayName: undefined,

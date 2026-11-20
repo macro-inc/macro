@@ -44,9 +44,12 @@ call_link = [
 ]
 default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
+# Shared selected-rule discovery on an existing caller transaction.
+email_discovery = ["dep:sqlx", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
+  "dep:feature_flags",
   "dep:opentelemetry",
   "dep:tracing-opentelemetry",
   "dep:entity_access_db_utils",
@@ -58,7 +61,7 @@ outbound = [
   "dep:unfurl",
   "ports",
 ]
-ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
+ports = ["dep:async-trait", "dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
@@ -79,6 +82,7 @@ item_filters = { path = "../item_filters", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+psl = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
@@ -111,6 +115,7 @@ models_pagination = { path = "../models_pagination", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
+feature_flags = { path = "../feature_flags", optional = true }
 opentelemetry = { workspace = true, features = ["trace"], optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 readonly_pool = { path = "../readonly_pool", optional = true }

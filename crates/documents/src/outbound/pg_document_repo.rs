@@ -82,22 +82,31 @@ impl<B: BotFacts + 'static> PgDocumentRepo<B> {
         create::find_live_email_document_id_by_sha(&mut conn, owner, sha).await
     }
 
+    /// `None` when the document went to the Trash after the lookup.
     async fn link_existing_email_document(
         &self,
         document_id: &str,
         email_attachment_id: uuid::Uuid,
-    ) -> Result<EmailImportRepoOutcome, DocumentError> {
+    ) -> Result<Option<EmailImportRepoOutcome>, DocumentError> {
         let mut transaction = self.pool.begin().await?;
-        match create::link_document_email(&mut transaction, document_id, email_attachment_id).await
+        match create::link_live_document_email(&mut transaction, document_id, email_attachment_id)
+            .await
         {
-            Ok(()) => {
+            Ok(true) => {
                 transaction.commit().await?;
-                self.reused_email_document(document_id.to_string()).await
+                self.reused_email_document(document_id.to_string())
+                    .await
+                    .map(Some)
+            }
+            Ok(false) => {
+                transaction.rollback().await?;
+                Ok(None)
             }
             Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
                 transaction.rollback().await?;
                 self.reused_linked_email_attachment(email_attachment_id)
                     .await
+                    .map(Some)
             }
             Err(e) => Err(create::email_link_error(e)),
         }
@@ -376,6 +385,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(row.map_or((None, None), |row| (row.first_name, row.last_name)))
     }
 
+    // pg_released_attachments::trash restates these writes, set-based, for
+    // email attachments whose mail is gone; change the two together.
     #[tracing::instrument(err, skip(self))]
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
@@ -605,13 +616,16 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
 
         let owner = Owner::User(owner);
         let owner_principal = owner.principal_id();
+        // A document trashed after the lookup goes on to the locked path,
+        // which looks again and creates a new one if none is left.
         if let Some(existing_id) = self
             .find_reusable_email_document_by_sha(&owner_principal, &document.sha)
             .await?
-        {
-            return self
+            && let Some(outcome) = self
                 .link_existing_email_document(&existing_id, email_attachment_id)
-                .await;
+                .await?
+        {
+            return Ok(outcome);
         }
 
         let mut transaction = self.pool.begin().await?;
@@ -1408,5 +1422,16 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
         transaction.commit().await?;
         Ok(())
+    }
+}
+
+impl<B: BotFacts + 'static> crate::domain::ports::DocumentLifecycleReads for PgDocumentRepo<B> {
+    #[tracing::instrument(skip(self), err)]
+    async fn document_is_live(&self, id: uuid::Uuid) -> anyhow::Result<bool> {
+        match self.get_basic_document(&id.to_string()).await {
+            Ok(document) => Ok(document.deleted_at.is_none()),
+            Err(sqlx::Error::RowNotFound) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
     }
 }

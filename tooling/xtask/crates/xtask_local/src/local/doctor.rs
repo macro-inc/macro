@@ -22,8 +22,8 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
         ("docker daemon", check_docker()),
         ("docker compose", check_compose()),
         (
-            "sccache",
-            check_bin("sccache", "install sccache (in the nix dev shell)"),
+            "kache",
+            check_bin("kache", "install kache (in the nix dev shell)"),
         ),
         (
             "cmake",

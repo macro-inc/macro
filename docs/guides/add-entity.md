@@ -239,8 +239,8 @@ Required for anything people act on; Recent is built from activity.
 Choose one shape.
 
 **Soup kind** (initiatives, agent sessions, database rows). GraphQL Soup is the
-target, but REST Soup still serves users behind `enable-graphql-soup`, so the
-kind must work on both; a kind that only worked on one path showed empty lists
+target, but REST Soup still serves queries GraphQL cannot translate (such as
+`notified_at` sorting), so the kind must work on both; a kind that only worked on one path showed empty lists
 on the other.
 
 - **Model:** `crates/models_soup/src/<kind>.rs` and a `SoupItem` variant in
@@ -391,8 +391,7 @@ the skill doesn't cover:
   routing sentence.
 - Web: a renderer in `apps/web/src/lib/core/component/AI/component/tool/` with
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
-- Regenerate: `cd apps/web && bun run gen-tools` and
-  `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
+- Regenerate: `cd apps/web && bun run gen-tools`.
 - Gemini drops records (`additionalProperties`): use key/value pair lists. It
   rejects a `$ref` loop of required fields, and so does schema generation:
   recurse through an optional field or a list that may be empty. It also

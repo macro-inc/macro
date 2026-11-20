@@ -38,6 +38,8 @@ mod config;
 mod env;
 mod model;
 mod notification;
+mod ping;
+mod wiring;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
@@ -252,6 +254,46 @@ pub async fn main() -> anyhow::Result<()> {
             redis: redis_client,
         },
     };
+    let ping_entity_access = entity_access::domain::service::EntityAccessServiceImpl::new(
+        entity_access::outbound::PgAccessRepository::new(db.clone()),
+    );
+    // Pings are flag-gated per sender.
+    let ping_flags = ping::outbound::flags::NotificationFlags::new(
+        config.environment,
+        config.posthog_api_key.value(),
+        config.posthog_host.value(),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let ping_state = api::ping::PingState {
+        notifications: Arc::new(ping::Pings {
+            flags: ping_flags,
+            access: ping::outbound::entity_access::EntityAccessLinks(ping_entity_access.clone()),
+            feeds: ping::outbound::feed_visibility::FeedCandidateVisibility {
+                source: wiring::soup_candidates(db.clone()),
+                viewers: attention_feed::inbound::viewers::EntityAccessFeedViewers(Arc::new(
+                    ping_entity_access.clone(),
+                )),
+            },
+            messages: ping::outbound::channel_messages::ChannelMessageLinks {
+                access: ping_entity_access,
+                messages: messages::domain::service::MessageService::new(
+                    messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+                    messages::domain::ports::NoMessageEventPublisher,
+                ),
+            },
+            agents: ping::outbound::bots::BotAgentProfiles(
+                bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
+            ),
+            allowance: ping::outbound::allowance::HourlyAllowance(rate_limit_adapter.repo.clone()),
+            ingress: ::notification::domain::service::SqsNotificationIngress {
+                queue: ::notification::outbound::queue::SqsQueue::new(
+                    aws_sdk_sqs::Client::new(&aws_config),
+                    macro_queues::NotificationIngressQueue::new().to_string(),
+                ),
+            },
+        }),
+        authorization_state: authorization_state.clone(),
+    };
 
     let egress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverB {
@@ -342,6 +384,9 @@ pub async fn main() -> anyhow::Result<()> {
         ingress_repository,
         ingress_delivery_queue,
         ingress_state_machine,
+    )
+    .with_channel_sections(
+        channel_labels::outbound::section_membership::PgChannelSectionMembership(db.clone()),
     );
 
     let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
@@ -362,6 +407,12 @@ pub async fn main() -> anyhow::Result<()> {
             item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
                 ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
             ),
+            channel_settings: ::notification::domain::channel_settings::ChannelNotificationSettingsService::new(
+                ::notification::outbound::channel_settings::PgChannelNotificationSettingsRepository(db.clone()),
+            ),
+            section_settings: ::notification::domain::section_settings::SectionNotificationSettingsService::new(
+                ::notification::outbound::section_settings::PgSectionNotificationSettingsRepository(db.clone()),
+            ),
             internal_api_key: config.internal_api_key.clone(),
             db,
             sns_client: Arc::new(sns_client),
@@ -369,6 +420,7 @@ pub async fn main() -> anyhow::Result<()> {
             authorization_state,
         },
         ingress_state,
+        ping_state,
     )
     .await?;
 

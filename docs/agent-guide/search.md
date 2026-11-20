@@ -2,7 +2,9 @@
 
 ## Search
 
-Sidebar `Search` button → `/app/search` with a focused query box. Results
+Sidebar `Search` button → `/app/search` with a focused query box. Until you type
+or add a filter, desktop Search lists nothing and shows its empty state, which
+points to `⌘K` (Ctrl+K elsewhere) for the command menu. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
@@ -44,7 +46,8 @@ as exact; bounded personal-contact windows use their separate policy below.
 
 Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
 exact normalized names, then every query word prefixing a name word in any order,
-then literal contains. Each tier is recent-first with stable identity ties: `jo sm`
+then literal contains, then address terms (`gmail.com`, or a local part unlike
+the name). Each tier is recent-first with stable identity ties: `jo sm`
 and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
 addresses and Macro IDs are exact identities, never display-name aliases.
 Incomplete typed addresses use email-prefix matching.
@@ -93,9 +96,7 @@ replies. It returns one row per thread and never matches only a snippet or body.
 Coverage is existing cached mail: automatic backfill includes 90 days of signal
 mail and 30 days of noise mail, plus other cached threads. Use full-text search
 for uncached older mail. No new backfill or server name-search fallback is added.
-Email name results require the existing normalized GraphQL cache rollout. When
-verifying a local iOS build without PostHog configuration, enable that path with
-the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
+Email name results come from the normalized GraphQL cache; see the
 [cache guide](../../apps/web/docs/graphql-normalized-cache-plan.md#cached-email-quick-access).
 
 Category/mode changes keep the same input mounted and focused. Return inserts
@@ -116,7 +117,8 @@ For Search intent, extraction selects a search type before extracting only that
 type's supported filters. Task status/priority/assignee/creator filters and channel
 In/From filters use the same controls and resolution as desktop Command K.
 The task Assignee facet reuses selected-first ordering when opening the picker,
-with available agents, team members, and the **Search assignees...** placeholder.
+with you, Unassigned and team members before available agents, and the
+**Search assignees...** placeholder.
 Rows stay in place while selecting or deselecting. Existing selected outsiders
 remain removable, but contact discovery is not available. Desktop chips and the
 mobile filter drawer share this behavior.
@@ -215,6 +217,8 @@ survive that cleanup and still open when the viewer is ready.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
+N counts the matches the search returned, at most ten per result for a document,
+chat, agent session or call, so `[10]` can mean ten or more.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
 opens the first content match, or opens the session normally for a title-only hit. These are
 ACP-backed sessions, distinct from legacy chat results. Legacy chat rename, delete,

@@ -29,12 +29,14 @@ pub mod channel_membership;
 pub mod channel_role;
 pub mod channel_users;
 pub mod chat_access;
+pub mod crm_batch_access;
 pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod crm_entity_users;
 pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
+pub mod email_thread_shares;
 pub mod entity_audiences;
 pub mod foreign_entity_access;
 pub mod form_access;
@@ -126,6 +128,10 @@ async fn shared_user_source_ids(
 }
 
 async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let source_ids = sqlx::query_scalar!(
         r#"
             SELECT cp.channel_id::text FROM comms_channel_participants cp
@@ -138,8 +144,9 @@ async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Re
             "#,
         user_id
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(SourceIds(source_ids.into_iter().flatten().collect()))
 }
@@ -163,6 +170,11 @@ pub async fn get_team_scope_source_ids(
     bot_id: &BotIdStr<'_>,
     team_id: &uuid::Uuid,
 ) -> anyhow::Result<SourceIds> {
+    // Keep transaction acquisition out of callers' nested access-check futures.
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let source_ids = sqlx::query_scalar!(
         r#"
         WITH active_bot AS (
@@ -200,8 +212,9 @@ pub async fn get_team_scope_source_ids(
         bot_id.as_uuid(),
         team_id,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(SourceIds(source_ids))
 }

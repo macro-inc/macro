@@ -51,12 +51,42 @@ describe('buildTools', () => {
 
   test('an entity tool holds one hint class and sets every hint', () => {
     const tools = buildTools(catalog, 'entity');
+    const read = tools.find((tool) => tool.name === 'documents_read');
     const write = tools.find((tool) => tool.name === 'documents_write');
+    const taskWrite = tools.find((tool) => tool.name === 'tasks_write');
+    const create = buildTools(catalog, 'method').find(
+      (tool) => tool.name === 'tasks-create'
+    );
     const remove = tools.find((tool) => tool.name === 'documents_delete');
 
+    expect(read?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
+    // Edits can overwrite, and a change reaches collaborators.
     expect(write?.annotations).toMatchObject({
       readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    });
+    // A grouped task tool also edits templates, so the whole tool is destructive.
+    expect([...(taskWrite?.operations.keys() ?? [])]).toEqual([
+      'tasks.create',
+      'TaskTemplate.update',
+      'taskTemplates.create',
+    ]);
+    expect(taskWrite?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    });
+    // Only creating something new isn't destructive.
+    expect([...(create?.operations.keys() ?? [])]).toEqual(['tasks.create']);
+    expect(create?.annotations).toMatchObject({
+      readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: true,
     });
     expect(remove?.annotations).toMatchObject({
       readOnlyHint: false,
@@ -67,7 +97,7 @@ describe('buildTools', () => {
         expect(`${operation.group}_${operation.hint}`).toBe(tool.name);
   });
 
-  test('sending email is its own open-world tool, apart from deleting', () => {
+  test('sending email is its own destructive, open-world tool, apart from deleting', () => {
     const tools = buildTools(catalog, 'entity');
     const send = tools.find((tool) => tool.name === 'email_send');
     const remove = tools.find((tool) => tool.name === 'email_delete');
@@ -75,7 +105,7 @@ describe('buildTools', () => {
     expect(send?.annotations).toEqual({
       title: 'email: send',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
     });
@@ -92,5 +122,40 @@ describe('buildTools', () => {
         catalog.operations.map((operation) => operation.name).sort()
       );
     }
+  });
+  test('descriptions name tools, not SDK namespaces or TSDoc links', () => {
+    const tools = buildTools(catalog, 'entity');
+    const text = JSON.stringify(
+      tools.map(({ description, inputSchema }) => ({
+        description,
+        inputSchema,
+      }))
+    );
+    expect(text).not.toMatch(/\{@link/);
+    // `macro.web` alone is code mode's spelling; MCP gets `the web_* tools`.
+    expect(text).not.toMatch(/`macro\.[a-z][A-Za-z]*`/);
+    expect(
+      tools.find((tool) => tool.name === 'ai_read')?.description
+    ).toContain('the `images_*` tools');
+  });
+
+  test('every tool name says what it covers', () => {
+    const names = buildTools(catalog, 'entity').map((tool) => tool.name);
+    // Grab-bag and jargon groups the review called unclear.
+    for (const unclear of ['core', 'foreign', 'harnesses'])
+      expect(names.filter((name) => name.startsWith(`${unclear}_`))).toEqual(
+        []
+      );
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'account_managers_read',
+        'comments_write',
+        'linked_items_read',
+        'agent_hosts_read',
+        'web_read',
+        'referrals_send',
+        'teams_send',
+      ])
+    );
   });
 });

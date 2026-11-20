@@ -2,13 +2,10 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import {
@@ -93,7 +90,6 @@ export function useConnectInbox(): (provider?: EmailProvider) => void {
 export function EmailCard(props: { class?: string } = {}) {
   const email = useEmail();
   const userId = useUserId();
-  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -133,9 +129,6 @@ export function EmailCard(props: { class?: string } = {}) {
   const outlookOffered = useOutlookAvailable();
   const hasInbox = () =>
     Boolean(inboxes().primary) || inboxes().others.length > 0;
-  // Further inboxes are behind multi-inbox; the first is always offered.
-  const canAddInbox = () => !emailActive() || multiInboxFlag().enabled;
-
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));
     await resyncInbox(linkId).match(
@@ -265,40 +258,38 @@ export function EmailCard(props: { class?: string } = {}) {
             )}
           </For>
         </Show>
-        <Show when={canAddInbox()}>
+        <SettingsSurface>
+          <IntegrationRow
+            icon={<GmailIcon />}
+            title={
+              hasInbox()
+                ? 'Connect another Google Workspace account'
+                : 'Connect a Google Workspace account'
+            }
+            description="Sync a Gmail or Google Workspace inbox into Macro Email."
+          >
+            <ConnectAction
+              label="Connect"
+              ariaLabel="Connect a Google Workspace account"
+              onClick={() => onConnectEmail('GMAIL')}
+            />
+          </IntegrationRow>
+        </SettingsSurface>
+        <Show when={outlookOffered()}>
           <SettingsSurface>
             <IntegrationRow
-              icon={<GmailIcon />}
-              title={
-                hasInbox()
-                  ? 'Connect another Google Workspace account'
-                  : 'Connect a Google Workspace account'
-              }
-              description="Sync a Gmail or Google Workspace inbox into Macro Email."
+              icon={<OutlookIcon />}
+              title="Connect an Outlook account"
+              badge={<OutlookBetaBadge />}
+              description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
             >
               <ConnectAction
                 label="Connect"
-                ariaLabel="Connect a Google Workspace account"
-                onClick={() => onConnectEmail('GMAIL')}
+                ariaLabel="Connect an Outlook account"
+                onClick={() => onConnectEmail('OUTLOOK')}
               />
             </IntegrationRow>
           </SettingsSurface>
-          <Show when={outlookOffered()}>
-            <SettingsSurface>
-              <IntegrationRow
-                icon={<OutlookIcon />}
-                title="Connect an Outlook account"
-                badge={<OutlookBetaBadge />}
-                description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
-              >
-                <ConnectAction
-                  label="Connect"
-                  ariaLabel="Connect an Outlook account"
-                  onClick={() => onConnectEmail('OUTLOOK')}
-                />
-              </IntegrationRow>
-            </SettingsSurface>
-          </Show>
         </Show>
       </div>
 
@@ -365,12 +356,24 @@ async function outlookAvailable(): Promise<boolean> {
   }
 }
 
+function isSyncFailure(status: SyncStatus): boolean {
+  return (
+    status === SyncStatus.ERROR ||
+    status === SyncStatus.NEEDS_REAUTH ||
+    status === SyncStatus.MAILBOX_UNAVAILABLE
+  );
+}
+
 function syncStatusLabel(status: SyncStatus): string {
   return match(status)
     .with(SyncStatus.SYNCING, () => 'Syncing…')
     .with(SyncStatus.UP_TO_DATE, () => 'Up to date')
     .with(SyncStatus.ERROR, () => 'Error — re-sync')
     .with(SyncStatus.NEEDS_REAUTH, () => 'Reconnect to resume sync')
+    .with(
+      SyncStatus.MAILBOX_UNAVAILABLE,
+      () => 'No Outlook mailbox for this account'
+    )
     .with(SyncStatus.INACTIVE, () => 'Disabled')
     .exhaustive(() => 'Unknown sync status');
 }
@@ -480,7 +483,6 @@ function InboxRow(props: {
   onRemove: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const calendarUiEnabled = useCalendarUiFlag();
   return (
     <SettingsSurface class="flex flex-col">
       <div class="flex flex-wrap items-center justify-between gap-3 min-h-14 py-3 px-4">
@@ -513,12 +515,8 @@ function InboxRow(props: {
                   <span
                     class="flex items-center gap-1 text-xs"
                     classList={{
-                      'text-failure':
-                        props.link.sync_status === SyncStatus.ERROR ||
-                        props.link.sync_status === SyncStatus.NEEDS_REAUTH,
-                      'text-ink-muted':
-                        props.link.sync_status !== SyncStatus.ERROR &&
-                        props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
+                      'text-failure': isSyncFailure(props.link.sync_status),
+                      'text-ink-muted': !isSyncFailure(props.link.sync_status),
                     }}
                   >
                     <Show when={props.link.sync_status === SyncStatus.SYNCING}>
@@ -550,9 +548,7 @@ function InboxRow(props: {
           </Show>
           {/* Explicitly enabling calendar also restores mailbox access when
               the Google grant has expired. */}
-          <Show
-            when={calendarUiEnabled() && props.link.needs_calendar_permission}
-          >
+          <Show when={props.link.needs_calendar_permission}>
             <Button
               variant="secondary"
               size="md"
@@ -569,7 +565,6 @@ function InboxRow(props: {
               set still has events to remove. */}
           <Show
             when={
-              calendarUiEnabled() &&
               props.isOwn &&
               (!props.link.needs_calendar_permission ||
                 props.link.has_calendar_data)

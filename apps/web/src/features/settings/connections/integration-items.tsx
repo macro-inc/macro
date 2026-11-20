@@ -1,10 +1,5 @@
 import { SlackImport } from '@app/features/slack-import/slack-import';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_EMAIL,
-  enableMultiInbox,
-  enableSlackArchiveImport,
-} from '@core/constant/featureFlags';
+import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
@@ -17,7 +12,10 @@ import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
-import type { Link as EmailLink } from '@service-email/generated/schemas';
+import {
+  type Link as EmailLink,
+  SyncStatus,
+} from '@service-email/generated/schemas';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -89,7 +87,14 @@ function emailItem(
     },
     categories: ['Email', 'Calendar'],
     get status() {
-      if (links().some((link) => link.needs_reauth)) return 'attention';
+      if (
+        links().some(
+          (link) =>
+            link.needs_reauth ||
+            link.sync_status === SyncStatus.MAILBOX_UNAVAILABLE
+        )
+      )
+        return 'attention';
       return links().length > 0 ? 'connected' : 'available';
     },
     get statusLabel() {
@@ -109,7 +114,6 @@ export function useEmailItems(
 ): Accessor<IntegrationItem[]> {
   const { query } = useEmailLinks();
   const connectInbox = useConnectInbox();
-  const multiInbox = useFeatureFlag(enableMultiInbox);
   const outlookOffered = useOutlookAvailable();
   const links = () => (query.isSuccess ? query.data.links : []);
   const linksFor = (provider: EmailLink['provider']) =>
@@ -118,12 +122,9 @@ export function useEmailItems(
         ? link.provider === 'OUTLOOK'
         : link.provider !== 'OUTLOOK'
     );
-  // Further inboxes are behind multi-inbox; the first is always offered.
-  const canAdd = () => links().length === 0 || multiInbox().enabled;
-
   const actionsFor = (provider: EmailLink['provider']) => () => (
     <>
-      <Show when={canAdd() && (provider !== 'OUTLOOK' || outlookOffered())}>
+      <Show when={provider !== 'OUTLOOK' || outlookOffered()}>
         <ConnectAction
           label={linksFor(provider).length > 0 ? 'Add account' : 'Connect'}
           ariaLabel={
@@ -244,11 +245,10 @@ export function useGithubItem(
 /** Slack export import for team admins, else the agent-led channel import. */
 function SlackImportAction() {
   const teams = useUserTeamsQuery();
-  const archiveImport = useFeatureFlag(enableSlackArchiveImport);
   const team = () => (teams.isSuccess ? teams.data[0] : undefined);
   return (
     <Show
-      when={archiveImport().enabled && team()}
+      when={team()}
       keyed
       fallback={<ImportAction appSlug="slack" name="Slack" />}
     >

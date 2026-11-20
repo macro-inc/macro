@@ -47,6 +47,10 @@ pub enum CalendarProviderErrorKind {
     /// The provider will not open push channels for this resource; only
     /// polling can keep it in sync.
     PushUnsupported,
+    /// Macro's own per-mailbox request admission refused the call, so nothing
+    /// reached the provider. A sync retries after
+    /// [`CalendarProviderError::retry_after`] without counting a failure.
+    Deferred,
 }
 
 /// Typed calendar provider failure returned across the provider port.
@@ -55,6 +59,8 @@ pub enum CalendarProviderErrorKind {
 pub struct CalendarProviderError {
     kind: CalendarProviderErrorKind,
     message: String,
+    retry_after: Option<std::time::Duration>,
+    refused: bool,
 }
 
 impl CalendarProviderError {
@@ -63,7 +69,44 @@ impl CalendarProviderError {
         Self {
             kind,
             message: message.into(),
+            retry_after: None,
+            refused: false,
         }
+    }
+
+    /// A call Macro's own request admission refused before sending it, to
+    /// retry after `retry_after` when the admission names a delay.
+    pub fn deferred(retry_after: Option<std::time::Duration>, message: impl Into<String>) -> Self {
+        Self {
+            kind: CalendarProviderErrorKind::Deferred,
+            message: message.into(),
+            retry_after,
+            refused: false,
+        }
+    }
+
+    /// A [`CalendarProviderErrorKind::Permanent`] change the adapter refuses
+    /// before sending anything to the provider, with a message written for
+    /// the user. Mutations show the message alone, without the "request
+    /// failed" prefix, since no request was made.
+    pub fn refused(message: impl Into<String>) -> Self {
+        Self {
+            kind: CalendarProviderErrorKind::Permanent,
+            message: message.into(),
+            retry_after: None,
+            refused: true,
+        }
+    }
+
+    /// Whether the adapter refused the change before any provider request;
+    /// see [`Self::refused`].
+    pub fn is_refused(&self) -> bool {
+        self.refused
+    }
+
+    /// When a [`CalendarProviderErrorKind::Deferred`] call may be retried.
+    pub fn retry_after(&self) -> Option<std::time::Duration> {
+        self.retry_after
     }
 
     /// Return the retry/reauthorization classification.
@@ -85,7 +128,8 @@ impl From<CalendarProviderErrorKind> for CalendarSyncFailure {
             CalendarProviderErrorKind::ReauthRequired => Self::ReauthRequired,
             CalendarProviderErrorKind::Transient
             | CalendarProviderErrorKind::SyncTokenExpired
-            | CalendarProviderErrorKind::PushUnsupported => Self::Transient,
+            | CalendarProviderErrorKind::PushUnsupported
+            | CalendarProviderErrorKind::Deferred => Self::Transient,
         }
     }
 }
@@ -1338,6 +1382,7 @@ pub trait GoogleCalendarProvider: Send + Sync + 'static {
         &self,
         access_token: &str,
         email_link_id: Uuid,
+        calendar_id: Uuid,
         provider_calendar_id: &str,
         channel_id: Uuid,
         config: &GoogleWatchConfig,
@@ -1360,6 +1405,14 @@ pub trait GoogleCalendarSyncRepository: Send + Sync + 'static {
     fn reap_wedged_google_syncs(
         &self,
         stalled_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<usize, Report>> + Send;
+
+    /// Turn calendar off for Google accounts whose current grant lacks
+    /// Macro's calendar capability, as a grant that loses it does: the
+    /// account is disabled and its local copy removed, and a new grant
+    /// re-imports it. Returns how many accounts were turned off.
+    fn disable_google_accounts_without_calendar_capability(
+        &self,
     ) -> impl Future<Output = Result<usize, Report>> + Send;
 }
 
@@ -1410,6 +1463,15 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
+
+    /// Release the lease of a round Macro's own request admission stopped,
+    /// returning the job to pending with its round start kept and recording
+    /// no failure on the job or the account: nothing reached Google.
+    fn defer_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Dispatch use cases driven by the calendar reminder queue worker.

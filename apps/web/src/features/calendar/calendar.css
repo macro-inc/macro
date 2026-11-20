@@ -1004,11 +1004,12 @@
 	}
 }
 
+/* Touch top bars float at phone and tablet widths. */
+html[data-touch-device="true"] .calendar-view-content {
+	padding-top: calc(var(--mobile-content-inset-top, 0px) + 0.5rem);
+	padding-bottom: 0.5rem;
+}
 @media (max-width: 639px) {
-	html[data-touch-device="true"] .calendar-view-content {
-		padding-top: calc(var(--mobile-content-inset-top, 0px) + 0.5rem);
-		padding-bottom: 0.5rem;
-	}
 
 	/* Keep the grid full height; scroll content above the floating dock and New button. */
 	.calendar-view .fc-timegrid-slots table {

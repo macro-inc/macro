@@ -1,12 +1,33 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { AgentsRouteView } from './route-views';
+import { AgentsRouteView as RouteView } from './route-views';
+
+function AgentsRouteView() {
+  const panel = {
+    panelSize: {
+      get width() {
+        return state.width;
+      },
+    },
+  } as SplitPanelContextType;
+  return (
+    <SplitPanelContext.Provider value={panel}>
+      <RouteView />
+    </SplitPanelContext.Provider>
+  );
+}
 
 const state = vi.hoisted(() => ({
   routeId: 'agents',
   redirect: vi.fn(),
   touch: false,
+  width: 390,
+  workspace: vi.fn(),
 }));
 
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
@@ -39,11 +60,17 @@ vi.mock('./agents-view-skeleton', () => ({ AgentsViewSkeleton: () => null }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch,
 }));
-vi.mock('./views/AgentsView', () => ({ AgentsView: () => null }));
+vi.mock('./views/AgentsView', () => ({
+  AgentsView: (props: { route?: unknown }) => {
+    state.workspace(props.route);
+    return null;
+  },
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.touch = false;
+  state.width = 390;
   state.routeId = 'agents';
 });
 afterEach(cleanup);
@@ -60,4 +87,23 @@ it('replaces the mobile conversation alias instead of trapping Back in a redirec
     { type: 'agent', id: 'session-id' },
     true
   );
+});
+
+it('keeps a wide touch conversation in the Agents workspace instead of redirecting to a split', async () => {
+  state.touch = true;
+  state.width = 1000;
+  state.routeId = 'agents-session~agents~session-id';
+  render(() => (
+    <Suspense fallback={null}>
+      <AgentsRouteView />
+    </Suspense>
+  ));
+  await waitFor(() =>
+    expect(state.workspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversation: { type: 'agent_session', id: 'session-id' },
+      })
+    )
+  );
+  expect(state.redirect).not.toHaveBeenCalled();
 });

@@ -4,7 +4,7 @@
 
 The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
-On desktop a collapsible sidebar starts with the shared outlined `New` button;
+Above 720px on desktop, a collapsible sidebar starts with the shared outlined `New` button;
 `Search calls` is in the list header. The sidebar also holds
 the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
 `External`; External means at least one guest without a Macro account joined),
@@ -13,10 +13,11 @@ a type, channel, or tag shows only that one; choosing it again clears it. These
 refinements carry across the three views. The desktop header uses one row:
 title, an outlined filter group, a view-options group, `New`, and an expandable
 Search icon. Command-F expands and focuses search; Close or Escape clears it
-and restores the icon. Phones keep pill tabs and the header search.
-With `enable-quick-calls` enabled, `New call` opens a menu with `Start an instant
-call`, `Call a channel or contact`, and `Manage call links`; without the flag it
-opens the recipient picker directly. `Start an instant call` opens `/app/meet/new`
+and restores the icon. Touch keeps pill tabs and the header search. Above 720px on touch, the Calls
+list stays left of an empty or selected call preview, and Show sidebar opens
+view/filter navigation in a sheet. Ordinary selections remain in the preview.
+`New call` opens a menu with `Start an instant
+call`, `Call a channel or contact`, and `Manage call links`. `Start an instant call` opens `/app/meet/new`
 without creating a meeting, the same setup reached from `New Call` beside
 Calendar's `New event` or `Create` → `Call` (`C C`). Scheduled calls are created
 through Calendar and can be shared with people who do not have a Macro account.
@@ -47,6 +48,9 @@ Native token skipping also requires the selected session to match the native cal
 The `call.join` trace records the intent, source, session ID, and outcome.
 Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
 media connection also runs in that trace. No RTC tokens are recorded.
+The desktop Chat sidebar also lists active channel/DM and quick calls above
+its conversation sections; see [Chat's Live section](channels.md#live-calls-above-the-desktop-sections)
+for joining, dismissing rings, ordering, and touch behavior.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
@@ -58,6 +62,33 @@ search, returns to the list. Shift+Enter and Open in new split open the recordin
 in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Calls
 detail without losing the transcript target. Existing `/app/drive/call/<callId>`
 links still work. A failed load shows Retry.
+
+The phone floating call pill returns to the media owner's call surface, even
+when its channel is already open. Browser calls select the live `Call` tab
+without joining again; native iOS and Android calls expand their native call
+drawer. The phone pill stays hidden on its own channel, where the composer
+banner offers `Return to call`. Away from that channel, its left action fills
+the pill's inner height with equal top and bottom insets.
+
+### Playback and audio settings
+
+Open **Audio settings** with the caret beside the microphone on desktop or
+phone. The phone opens the shared drawer with microphone selection, noise
+suppression, and Speaker selection only when `HTMLMediaElement.setSinkId` is
+available. iOS Safari/WebKit does not expose that output-routing API: use the
+device's system sound controls instead. Native channel calls use their own
+Speaker/output controls in the call drawer.
+
+For per-person playback volume, use the speaker button on a remote participant's
+tile. Desktop opens the existing vertical slider; supported phone browsers open
+a horizontal slider in a drawer. Moving it changes only local playback, never
+the participant's microphone. iOS Safari ignores media-element volume writes,
+and native calls own their audio, so neither shows this browser slider. Check
+0%, an intermediate value, and 100%, plus closing/reopening and leaving the call.
+
+Call join/leave chimes are separate: **Settings → Notifications → Sounds → Call
+sounds** remains available on phones and desktop. These cues are supported in
+browser calls, not native CallKit sessions, as described below.
 
 ### Join and leave sounds
 
@@ -252,9 +283,10 @@ rather than collapsing to a thin row. Channel and standalone
 calls navigate and leave through their existing session owner; standalone calls
 do not depend on the quick-call feed loading first.
 
-The desktop Chat sidebar has no separate Live section. Live calls are marked
-on their conversation rows with a waveform and elapsed time. Your current call
-uses the waveform as its channel icon and shows live participant avatars.
+The desktop Chat sidebar also marks live calls on their conversation rows
+with a waveform and elapsed time, in addition to its separate Live section.
+Your current call uses the waveform as its channel icon and shows live
+participant avatars.
 Ringing conversations keep their existing Answer and Decline actions; these
 use the real incoming-call signal rather than treating every active call as ringing.
 
@@ -798,8 +830,9 @@ While a call is live, the controls bar instead has a **Call sharing** dropdown w
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
 are disabled while connecting or saving. Team sharing is canonical **view** access
-(the same `Team access` model documents and AI chats use), enabled by default for
-channel calls. Any participant with edit access can change it, and other
+(the same `Team access` model documents and AI chats use). Calls in DMs and private
+channels start **Private**; calls in team and public channels start with team
+sharing. Any participant with edit access can change it, and other
 participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.

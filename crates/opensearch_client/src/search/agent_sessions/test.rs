@@ -34,7 +34,7 @@ fn modes_keep_names_and_folded_content_separate_and_terms_in_one_session() {
     let terms = clauses[0]["bool"]["must"].as_array().unwrap();
     assert_eq!(terms.len(), 2);
     assert_eq!(terms[0]["has_child"]["type"], "message");
-    assert!(terms[0]["has_child"]["query"]["match_phrase_prefix"].is_object());
+    assert!(terms[0]["has_child"]["query"]["match_bool_prefix"].is_object());
     let name = build_query(&args(AgentSessionSearchMode::Name), "exact")
         .unwrap()
         .build()
@@ -46,6 +46,60 @@ fn modes_keep_names_and_folded_content_separate_and_terms_in_one_session() {
         .to_json();
     assert_eq!(both["bool"]["should"].as_array().unwrap().len(), 2);
     assert!(!both.to_string().contains("match_phrase_prefix"));
+}
+
+#[test]
+fn term_clauses_share_one_message_budget_per_session() {
+    for (terms, expected_size) in [
+        (vec!["one"], 10),
+        (vec!["one", "two"], 5),
+        (vec!["one", "two", "three"], 3),
+        (
+            vec!["one", "two", "three", "four", "five", "six", "seven"],
+            1,
+        ),
+    ] {
+        let mut args = args(AgentSessionSearchMode::Content);
+        args.terms = terms.iter().map(|term| term.to_string()).collect();
+        let query = build_query(&args, "partial").unwrap().build().to_json();
+        let clauses = query["bool"]["should"][0]["bool"]["must"]
+            .as_array()
+            .unwrap();
+
+        assert_eq!(clauses.len(), terms.len());
+        for clause in clauses {
+            assert_eq!(
+                clause["has_child"]["inner_hits"]["size"],
+                expected_size,
+                "{} terms",
+                terms.len()
+            );
+        }
+    }
+}
+
+#[test]
+fn only_the_first_ten_term_clauses_carry_inner_hits() {
+    let mut args = args(AgentSessionSearchMode::Content);
+    args.terms = [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+        "twelve",
+    ]
+    .map(String::from)
+    .to_vec();
+    let query = build_query(&args, "partial").unwrap().build().to_json();
+    let clauses = query["bool"]["should"][0]["bool"]["must"]
+        .as_array()
+        .unwrap();
+
+    assert_eq!(clauses.len(), 12, "every term still has to match");
+    let inner_hit_sizes: Vec<Option<u64>> = clauses
+        .iter()
+        .map(|clause| clause["has_child"]["inner_hits"]["size"].as_u64())
+        .collect();
+    let mut expected = vec![Some(1); 10];
+    expected.extend([None, None]);
+    assert_eq!(inner_hit_sizes, expected);
 }
 
 #[test]
@@ -61,7 +115,6 @@ fn each_term_fetches_only_the_navigation_fields_of_matching_messages() {
     for (index, term) in terms.iter().enumerate() {
         let inner_hits = &term["has_child"]["inner_hits"];
         assert_eq!(inner_hits["name"], format!("agent_term_{index}"));
-        assert_eq!(inner_hits["size"], INNER_HITS_PER_TERM);
         assert_eq!(
             inner_hits["_source"],
             serde_json::json!(["message_turn", "author"])

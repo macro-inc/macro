@@ -18,9 +18,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::{
-    models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
+    models::{
+        ActionDecodeError, Activity, ActivityRecord, Actor, NON_TOUCH_ACTION_TAGS, RecordedAction,
+    },
     overview::{ActivityOverview, ActivityWindow, DayCount, EntityRank, TOP_ENTITY_LIMIT},
-    ports::{ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap},
+    ports::{
+        ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap,
+        SubjectActivityPresence,
+    },
 };
 
 /// Writes activities to MacroDB.
@@ -130,6 +135,41 @@ where
     .execute(executor)
     .await?;
     Ok(())
+}
+
+/// Whether an entity's history records more appearance changes than `known`,
+/// through a pool or the owning domain's transaction. Reads at most one entry
+/// past `known`, however long the history, so a domain that counts the changes
+/// it made learns whether anyone else made one.
+pub async fn appearance_changes_exceed<'e, E>(
+    executor: E,
+    entity_type: EntityType,
+    entity_id: &str,
+    known: u32,
+) -> Result<bool, sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let known = i64::from(known);
+    let seen = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "seen!"
+        FROM (
+            SELECT 1
+            FROM activity_events
+            WHERE entity_type = $1
+                AND entity_id = $2
+                AND action = 'appearance_changed'
+            LIMIT $3
+        ) AS recorded
+        "#,
+        entity_type.as_ref(),
+        entity_id,
+        known + 1,
+    )
+    .fetch_one(executor)
+    .await?;
+    Ok(seen > known)
 }
 
 impl ActivityRepo for PgActivityRepo {
@@ -476,6 +516,41 @@ impl ActivityReads for PgActivityRepo {
             records: rows.into_iter().filter_map(StoredRow::decode).collect(),
             truncated,
         })
+    }
+}
+
+impl SubjectActivityPresence for PgActivityRepo {
+    type Err = sqlx::Error;
+
+    // One range probe of idx_activity_events_subject that stops at the first touch.
+    #[tracing::instrument(skip_all, err)]
+    async fn touched_between(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let skipped: Vec<String> = NON_TOUCH_ACTION_TAGS
+            .iter()
+            .map(|tag| (*tag).to_owned())
+            .collect();
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM activity_events
+                WHERE subject_id = $1
+                  AND occurred_at >= $2
+                  AND occurred_at < $3
+                  AND action <> ALL($4)
+            ) AS "touched!"
+            "#,
+            subject_id,
+            from,
+            to,
+            &skipped,
+        )
+        .fetch_one(&self.pool)
+        .await
     }
 }
 

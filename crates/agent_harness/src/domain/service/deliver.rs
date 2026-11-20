@@ -7,27 +7,30 @@ use super::*;
 /// dial stops restoring it.
 const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
 
-/// Whether neither Macro nor the runtime has seen activity in `session` for
-/// [`IDLE_SESSION_AFTER`]. `modified_at` moves when a turn starts, runs, is
-/// stopped or blocks, never when it ends, so an unfinished turn is read from
-/// the turn projection instead. `runtime_activity` is the runtime's own
-/// `updatedAt` for it, when its listing carries one; a runtime clock ahead of
-/// ours counts as now, never as the future.
-fn is_idle(
+/// When Macro or the runtime last saw activity in `session`. `modified_at`
+/// moves when a turn starts, runs, is stopped or blocks, never when it ends,
+/// so an unfinished turn is read from the turn projection instead.
+/// `runtime_activity` is the runtime's own `updatedAt` for it, when its
+/// listing carries one; a runtime clock ahead of ours counts as now, never as
+/// the future.
+fn last_activity(
     session: &AgentSession,
     runtime_activity: Option<chrono::DateTime<chrono::Utc>>,
-) -> bool {
-    let now = chrono::Utc::now();
-    let last_activity = runtime_activity.map_or(session.modified_at, |runtime| {
+    now: chrono::DateTime<chrono::Utc>,
+) -> chrono::DateTime<chrono::Utc> {
+    runtime_activity.map_or(session.modified_at, |runtime| {
         runtime.min(now).max(session.modified_at)
-    });
-    now - last_activity >= IDLE_SESSION_AFTER
+    })
 }
 
 /// What a runtime's dial does with a session it listed.
 pub(super) enum DialReattach {
-    /// Restore it now.
-    Eager,
+    /// Restore it now, however many others the dial restores: work is in
+    /// flight or waiting on it.
+    Required,
+    /// Seen active at this time, within [`IDLE_SESSION_AFTER`]: restore it
+    /// now if the dial's eager cap has room, most recent first.
+    Recent(chrono::DateTime<chrono::Utc>),
     /// Leave it to bind on its next prompt or delivery.
     Lazy,
     /// Archived, or not an external session.
@@ -144,13 +147,15 @@ where
 
     /// Load a live external session onto its runtime's new connection.
     ///
-    /// Safe to repeat: a session already attached here keeps its actor, and
+    /// Safe to repeat: a session already attached here on the runtime's
+    /// current connection keeps its actor, one still on a displaced
+    /// connection is stopped and attached afresh, and
     /// an archived or managed one is never started by a runtime's dial.
     /// Answers whether the session is attached here with its durable queue
     /// loaded, so the caller can dispatch what it holds. That holds for a
     /// session an earlier attempt attached before failing to load its queue,
     /// so a retry finishes the job instead of stranding the queue.
-    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty))]
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty, agent.session.displaced_connection = tracing::field::Empty))]
     pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
         let span = tracing::Span::current();
         let session = self.sessions.get_session(session_id).await?;
@@ -161,23 +166,49 @@ where
             return Ok(false);
         }
         if self.sessions.attached_mcp_servers(session_id).is_some() {
-            span.record("agent.session.reattached", false);
-            self.ensure_hydrated(session_id).await?;
-            return Ok(true);
+            if self.on_current_connection(&session).await? {
+                span.record("agent.session.reattached", false);
+                self.ensure_hydrated(session_id).await?;
+                return Ok(true);
+            }
+            // Still bound to the socket this dial displaced: its actor is
+            // winding down but has not left yet. Wait for it to go, or the
+            // session would count as restored while the new connection drops
+            // its frames.
+            span.record("agent.session.displaced_connection", true);
+            self.sessions
+                .close_session(session_id)
+                .instrument(tracing::info_span!("agent.session.close_displaced"))
+                .await?;
         }
         self.reconnect(session_id).await?;
         span.record("agent.session.reattached", true);
         Ok(true)
     }
 
+    /// Whether `session`'s live actor here rides on the connection its
+    /// runtime is connected on now, rather than one a redial displaced.
+    async fn on_current_connection(&self, session: &AgentSession) -> Result<bool> {
+        let Some(attached) = self.sessions.attached_connection(session.id) else {
+            return Ok(false);
+        };
+        let current = self
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)?
+            .and_then(|harness| self.runtimes.connection_of(harness));
+        Ok(current == Some(attached))
+    }
+
     /// What a runtime's dial does with one of the sessions it listed.
     ///
-    /// Only work that would otherwise wait or go unseen is restored at dial
-    /// time: a command in flight here, a turn the durable projection shows
-    /// unfinished (still open, or open when the session disconnected, on any
-    /// replica), a durable queue nobody else dispatches, or a session that
-    /// Macro or the runtime (its listed `updatedAt`) saw active in the last
-    /// hour.
+    /// Work that would otherwise wait or go unseen is always restored at
+    /// dial time: a command in flight here, a turn the durable projection
+    /// shows unfinished (still open, or open when the session disconnected,
+    /// on any replica), or a durable queue nobody else dispatches. A session
+    /// that Macro or the runtime (its listed `updatedAt`) saw active in the
+    /// last hour is restored if the dial's eager cap has room.
     /// Everything else binds on its next prompt or delivery, which reconnects
     /// a detached session anyway; durable notifications and conversation
     /// recovery reach theirs through their own sweeps. Whether the session
@@ -201,19 +232,20 @@ where
             .as_ref()
             .and_then(|acp| runtime_activity.get(acp))
             .copied();
-        if self.busy.is_pending(session_id) || !is_idle(&session, listed_activity) {
-            return Ok(DialReattach::Eager);
-        }
-        if self.sessions.has_unfinished_turn(session_id).await? {
-            return Ok(DialReattach::Eager);
-        }
-        if !self
-            .sessions
-            .list_queued_actions(session_id)
-            .await?
-            .is_empty()
+        if self.busy.is_pending(session_id)
+            || self.sessions.has_unfinished_turn(session_id).await?
+            || !self
+                .sessions
+                .list_queued_actions(session_id)
+                .await?
+                .is_empty()
         {
-            return Ok(DialReattach::Eager);
+            return Ok(DialReattach::Required);
+        }
+        let now = chrono::Utc::now();
+        let last_activity = last_activity(&session, listed_activity, now);
+        if now - last_activity < IDLE_SESSION_AFTER {
+            return Ok(DialReattach::Recent(last_activity));
         }
         Ok(DialReattach::Lazy)
     }
@@ -337,6 +369,7 @@ where
                 announced: None,
                 created_at: chrono::Utc::now(),
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
@@ -408,6 +441,7 @@ where
             announce: _,
             context: _,
             client: _,
+            prompter: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)
@@ -472,6 +506,9 @@ where
             return Ok(());
         };
         let session = self.sessions.get_session(session_id).await?;
+        // Every prompt names the agent itself, so it can tell a message that
+        // calls it by name from one meant for someone else.
+        let agent = self.sessions.session_bot(session.bot_id).await?;
         // Every prompt names the owner and its sender, so the agent can tell
         // a request from the person whose access it spends from anyone
         // else's. A session owned by a bot or team has no person to name.
@@ -496,6 +533,7 @@ where
             .compose(
                 &raw_prompt,
                 (!instructions.is_empty()).then_some(instructions.as_str()),
+                Some(&agent),
                 people.as_ref(),
                 context,
             )

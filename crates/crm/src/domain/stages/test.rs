@@ -693,3 +693,9 @@ async fn reset_clears_legacy_ids() {
         .unwrap();
     assert!(settings.legacy().is_empty());
 }
+
+impl crate::domain::auth::CrmMemberAccess for StubSettings {
+    async fn member_has_crm_access(&self, _: uuid::Uuid, _: &str) -> Result<bool, CrmError> {
+        Ok(true)
+    }
+}

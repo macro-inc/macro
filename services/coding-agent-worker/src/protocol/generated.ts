@@ -18,6 +18,12 @@
  */
 export type AcpMessage = { [key in string]: unknown };
 
+/**
+ *  An agent teammate's environment: credentials and addresses, one variable
+ *  each. Debug shows only the names.
+ */
+export type AgentEnvironment = { [key in string]: string };
+
 /**  The result of probing a fresh ACP subprocess. */
 export type ModelProbeResult =
 /**  The raw options returned by `session/new`. */
@@ -42,7 +48,25 @@ export type ToRuntimeMessage =
  *  configured harness what it advertises. Answers are therefore
  *  interchangeable, so nothing correlates a response to a request.
  */
-{ type: "modelProbeRequest" };
+({ type: "modelProbeRequest" }) & { environment?: never } |
+/**
+ *  The agents bound to this runtime may have changed: re-read them.
+ *
+ *  A hint with no payload, sent when the service may have just bound an
+ *  agent to the runtime, so it starts serving that agent's triggers at
+ *  once rather than at its next poll. Runtimes that do not serve
+ *  triggers ignore it.
+ */
+({ type: "agentsChanged" }) & { environment?: never } |
+/**
+ *  Run this agent teammate on the computer: write its environment where
+ *  the guest's agent service reads it, which (re)starts the agent. Sent
+ *  to a warm pool computer a purchase took for an agent; the agent's own
+ *  online report, not a reply, confirms it.
+ */
+{ type: "applyAgent";
+/**  The agent's environment. */
+environment: AgentEnvironment };
 
 /**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
 export type ToServerMessage =

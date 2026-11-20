@@ -39,6 +39,12 @@ Macro's event topics.
 
 ## Gotchas
 
+- `MacroEventBrokerService` counts every `send_event` in the OTel counter
+  `event_broker.publishes` (`topic`, `event_type`, `outcome`: `published`,
+  `failed`, `timed_out`, `unserializable`, `cancelled`), read by the Search
+  freshness dashboard. `event_type` is the payload's `event_type` tag, which the
+  publisher port also receives for its span; an externally tagged event enum
+  (the calendar topic's) has none. Tests pass a meter through `with_meter`.
 - `Event` constructors stamp `agent_correlation_id` and `routine_id` from
   `agent_correlation::context` (omitted from the wire when absent). Build
   events inside the request's task, or `agent_correlation::context::capture`

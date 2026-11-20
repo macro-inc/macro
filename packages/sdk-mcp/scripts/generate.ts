@@ -636,13 +636,39 @@ function lowerFirst(name: string) {
   return name.charAt(0).toLowerCase() + name.slice(1);
 }
 
+/**
+ * Tool group names for entity directories whose own name says little to a
+ * model or a reviewer, and for directories code mode doesn't route on that
+ * still deserve a group of their own. Every other directory keeps its name.
+ */
+const GROUP_NAMES: Readonly<Record<string, string>> = {
+  'account-managers': 'account_managers',
+  foreign: 'linked_items',
+  harnesses: 'agent_hosts',
+  messages: 'comments',
+  'task-templates': 'tasks',
+};
+
+/**
+ * What the groups code mode folds into its `core` entity are for. Code mode
+ * takes one `@routing` sentence per entity, so these live here, not in the
+ * SDK's TSDoc.
+ */
+const GROUP_ROUTING: Readonly<Record<string, string>> = {
+  account_managers:
+    "Use when asking an agent account to manage the user's account, or approving, declining, listing or revoking those grants; not sharing a single item.",
+  comments:
+    'Use when replying to, editing, resolving or deleting a comment or comment thread on a document, channel, call, CRM record or initiative; not posting a new channel message (`macro.channels`).',
+};
+
 function groupOf(declaration: ts.ClassDeclaration) {
   const path = relative(`${sdkRoot}src`, declaration.getSourceFile().fileName);
   const [top, directory] = path.split('/');
+  if (top !== 'entities' || !directory) return 'core';
+  const named = GROUP_NAMES[directory];
+  if (named) return named;
   // The same entities code mode routes on; the rest is shared plumbing.
-  return top === 'entities' &&
-    directory &&
-    entityDirectories.includes(directory)
+  return entityDirectories.includes(directory)
     ? directory.replaceAll('-', '_')
     : 'core';
 }
@@ -758,7 +784,8 @@ const macroClass = macroFile?.statements.find(
 if (!macroClass) throw new Error('Macro class not found');
 
 // Namespaces are `Macro`'s readonly properties, recursively.
-addOperations(macroClass, { kind: 'namespace', path: [] }, 'macro', 'core');
+// The client's own methods (`myPrincipalId`) are about who the caller is.
+addOperations(macroClass, { kind: 'namespace', path: [] }, 'macro', 'me');
 
 // Handle classes: every SDK class with a `static byId` and tagged methods.
 for (const declaration of sdkClasses) {
@@ -814,6 +841,8 @@ for (const declaration of sdkClasses) {
     .trim();
   if (routing) groups[groupOf(declaration)] ??= routing;
 }
+for (const [group, routing] of Object.entries(GROUP_ROUTING))
+  groups[group] ??= routing;
 for (const operation of operations)
   if (!groups[operation.group])
     errors.add(`group ${operation.group} has no @routing sentence`);
@@ -823,6 +852,52 @@ if (errors.size) {
   for (const error of [...errors].sort()) console.error(`  ${error}`);
   process.exit(1);
 }
+
+// Descriptions are written for code mode, which reads `macro.web.search` and
+// `{@link Document.edit}`; an MCP client sees tools. Point SDK references at
+// the tool that serves them and drop TSDoc link markup.
+const namespaceGroups = new Map<string, string>();
+const operationTools = new Map<string, string>();
+for (const operation of operations) {
+  operationTools.set(operation.name, `${operation.group}_${operation.hint}`);
+  if (operation.receiver.kind === 'namespace') {
+    const [namespace] = operation.name.split('.');
+    if (namespace) namespaceGroups.set(namespace, operation.group);
+  }
+}
+
+function forMcp(text: string) {
+  return text
+    .replace(/`macro\.([A-Za-z.]+)(\([^`]*\))?`/g, (whole, path: string) => {
+      const tool = operationTools.get(path);
+      if (tool) return `\`${path}\` (\`${tool}\`)`;
+      const group = namespaceGroups.get(path);
+      return group ? `the \`${group}_*\` tools` : whole;
+    })
+    .replace(
+      /\{@link(?:code|plain)?\s+([^}|\s]+)(?:\s*\|\s*|\s+)?([^}]*)\}/g,
+      (_, target: string, label: string) => label.trim() || `\`${target}\``
+    );
+}
+
+function rewriteDescriptions(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) rewriteDescriptions(item);
+  } else if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const [key, child] of Object.entries(record)) {
+      if (key === 'description' && typeof child === 'string')
+        record[key] = forMcp(child);
+      else rewriteDescriptions(child);
+    }
+  }
+}
+
+rewriteDescriptions(operations);
+rewriteDescriptions([...handles.values()]);
+rewriteDescriptions([...definitions.values()]);
+for (const [group, routing] of Object.entries(groups))
+  groups[group] = forMcp(routing);
 
 const catalog: Catalog = {
   groups: Object.fromEntries(

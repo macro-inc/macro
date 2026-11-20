@@ -5,7 +5,12 @@ use chrono::DateTime;
 
 type Scan = (Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<bool>);
 
-async fn scan(pool: &PgPool, team: Uuid, link: Uuid, email: &str) -> anyhow::Result<Scan> {
+pub(super) async fn scan(
+    pool: &PgPool,
+    team: Uuid,
+    link: Uuid,
+    email: &str,
+) -> anyhow::Result<Scan> {
     let set_based = sqlx::query_file!(
         "src/outbound/companies_repo/email_privacy/interactions.sql",
         team,
@@ -72,7 +77,7 @@ async fn insert_draft(pool: &PgPool, link: Uuid, thread: Uuid) -> anyhow::Result
     Ok(())
 }
 
-async fn insert_member(pool: &PgPool, team: Uuid, user: &str) -> anyhow::Result<()> {
+pub(super) async fn insert_member(pool: &PgPool, team: Uuid, user: &str) -> anyhow::Result<()> {
     let macro_user = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
@@ -100,6 +105,36 @@ async fn insert_member(pool: &PgPool, team: Uuid, user: &str) -> anyhow::Result<
 
 fn at(month: u32) -> DateTime<Utc> {
     format!("2025-{month:02}-01T00:00:00Z").parse().unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mail_deleted_at_the_provider_is_no_interaction(pool: PgPool) -> anyhow::Result<()> {
+    let (_repo, team, link) = setup(&pool).await?;
+    consent_to_mailbox(&pool, team, link).await?;
+    insert_interaction(&pool, link, "kept@acme.example.com", at(1), true).await?;
+    let deleted = [
+        insert_interaction(&pool, link, "kept@acme.example.com", at(2), true).await?,
+        insert_interaction(&pool, link, "gone@acme.example.com", at(3), false).await?,
+    ];
+    // Outlook's sync keeps a message deleted at the provider as a tombstone.
+    sqlx::query!(
+        r#"UPDATE email_messages SET mailbox_state = '{"provider_missing":true}'::jsonb
+           WHERE thread_id = ANY($1)"#,
+        &deleted[..]
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(
+        scan(&pool, team, link, "kept@acme.example.com").await?,
+        (Some(at(1)), Some(at(1)), Some(true)),
+        "the deleted later message no longer extends the range"
+    );
+    assert_eq!(
+        scan(&pool, team, link, "gone@acme.example.com").await?,
+        (None, None, None)
+    );
+    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -25,7 +25,7 @@ name: Deploy on Push
 on:
   push:
     branches:
-    - main
+      - main
 jobs:
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
@@ -41,9 +41,18 @@ jobs:
       NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
   deploy-sync-service:
     needs:
-    - deploy-cloud-storage
+      - deploy-cloud-storage
     name: Deploy Sync Service
     uses: ./.github/workflows/deploy_sync_service.yml
+    with:
+      environment: dev
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  deploy-mcp-chatgpt-worker:
+    needs:
+      - deploy-cloud-storage
+    name: Deploy MCP ChatGPT Worker
+    uses: ./.github/workflows/deploy_mcp_chatgpt_worker.yml
     with:
       environment: dev
     secrets:
@@ -58,14 +67,14 @@ jobs:
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
   deploy-web-app:
     needs:
-    - deploy-cloud-storage
-    - deploy-sync-service
-    - build-web-app
+      - deploy-cloud-storage
+      - deploy-sync-service
+      - build-web-app
     name: Deploy Web App
     uses: ./.github/workflows/deploy_web_app.yml
     with:
-      notify: false
       environment: dev
+      notify: false
       prebuilt: true
     secrets:
       AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}

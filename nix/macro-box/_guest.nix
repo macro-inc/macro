@@ -1,6 +1,6 @@
 # The Macro computer guest as a NixOS module: macrod, harnessd, Claude Code, herdr,
-# Chromium on an Xvnc display, Docker and nix-ld. `_image.nix` adds the Incus
-# VM image on top; `_vm-test.nix` boots this module alone.
+# Chromium on an Xvnc display, Docker and nix-ld. `_container.nix` adds the
+# Docker image on top; `_vm-test.nix` boots this module alone.
 {
   config,
   lib,
@@ -37,17 +37,30 @@ let
     "/run/wrappers"
     "/run/current-system/sw"
   ];
-  claudeUserConfig = json.generate "claude.json" {
+  # `macro-chrome-devtools-mcp.socket` hands sessions their chrome-devtools
+  # MCP server here (`files/mcp-spare.mjs`); they reach it with socat. In
+  # macro's home, so the agent's sandbox (ProtectHome) can't.
+  chromeDevtoolsMcpSocket = "${home}/.cache/macro-mcp/chrome-devtools.sock";
+  claudeUserBase = json.generate "claude.json" {
     hasCompletedOnboarding = true;
     mcpServers.chrome-devtools = {
       type = "stdio";
-      command = lib.getExe cfg.chromeDevtoolsMcp;
+      command = lib.getExe pkgs.socat;
       args = [
-        "--browser-url"
-        "http://127.0.0.1:9222"
+        "STDIO"
+        "UNIX-CONNECT:${chromeDevtoolsMcpSocket}"
       ];
     };
   };
+  claudeUserConfig =
+    if cfg.claudeCodeFirstRunSeed then
+      import ./_claude-first-run.nix {
+        inherit pkgs;
+        inherit (cfg) claudeCode;
+        base = claudeUserBase;
+      }
+    else
+      claudeUserBase;
   # Real copies (mode), not store symlinks: useradd copies /etc/skel and
   # Claude Code rewrites ~/.claude.json.
   skel = {
@@ -118,6 +131,15 @@ in
       default = import ./_claude-code.nix { inherit pkgs; };
       description = "Claude Code, pinned for the models computers default to.";
     };
+    claudeCodeFirstRunSeed = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Put the settings `claudeCode` writes on its first start into
+        /etc/skel's `~/.claude.json` (`_claude-first-run.nix` runs it once at
+        build time). Off for a `claudeCode` that isn't Claude Code (tests).
+      '';
+    };
     claudeAgentAcp = lib.mkOption {
       type = lib.types.package;
       default = import ./_claude-agent-acp.nix { inherit pkgs; };
@@ -134,8 +156,7 @@ in
     };
     enrollFrom = lib.mkOption {
       type = lib.types.str;
-      default = "incus";
-      description = "`macrod enroll --from`: `incus` or `file:<path>`.";
+      description = "`macrod enroll --from`: `mmds` or `file:<path>`.";
     };
     agentMode = lib.mkOption {
       type = lib.types.bool;
@@ -147,8 +168,7 @@ in
     };
     dataDisk = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
-      # The Incus disk device named `data`.
-      default = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_data";
+      default = null;
       description = ''
         Block device mounted at /home, formatted on first boot. It keeps
         homes and macrod's state across image updates; null keeps them on
@@ -357,14 +377,13 @@ in
     # `#!/bin/bash` and `#!/usr/bin/python3` shebangs resolve through PATH.
     services.envfs.enable = true;
 
+    # Neither enrollment nor macrod waits for network-online.target: the
+    # claim retries every 250 ms and macrod redials from 250 ms, so each one
+    # starts as soon as its input exists (the Incus socket, the enrolled
+    # marker) and reaches the network the moment DHCP answers.
     systemd.services.macrod-enroll = {
       description = "Join this computer to Macro";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ];
-      after = [
-        "network-online.target"
-        "incus-agent.service"
-      ];
       before = [ "macrod.service" ];
       # Runs on every boot: `macrod enroll` re-enrolls for a newer
       # generation and keeps the existing enrollment otherwise.
@@ -385,10 +404,7 @@ in
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";
-            runtimeInputs = [
-              pkgs.coreutils
-              pkgs.curl
-            ];
+            runtimeInputs = [ pkgs.coreutils ];
             text = builtins.readFile ./files/check-enrollment-source;
           }
         );
@@ -406,14 +422,8 @@ in
       wantedBy = [ "multi-user.target" ];
       # Wants, not Requires: a first enroll attempt that fails must not fail
       # macrod's start for good; the enroll retry starts it once enrolled.
-      wants = [
-        "network-online.target"
-        "macrod-enroll.service"
-      ];
-      after = [
-        "network-online.target"
-        "macrod-enroll.service"
-      ];
+      wants = [ "macrod-enroll.service" ];
+      after = [ "macrod-enroll.service" ];
       path = systemPath;
       environment.HOME = home;
       unitConfig = {
@@ -427,6 +437,9 @@ in
         WorkingDirectory = workspace;
         # --ignore-stdin-eof: systemd's closed stdin must not stop the daemon.
         ExecStart = "${lib.getExe' cfg.macrod "macrod"} service --ignore-stdin-eof --config ${macrodConfig} --workspace ${workspace}";
+        # Where macrod's spans go: the OTel variables `macrod enroll` wrote
+        # from the enrollment's telemetry intake. Absent: none are exported.
+        EnvironmentFile = "-/var/lib/macrod/telemetry.env";
         Restart = "always";
         RestartSec = 1;
         RestartSteps = 5;
@@ -481,6 +494,35 @@ in
         ];
         environment.DISPLAY = display;
       };
+    # A chrome-devtools MCP server loaded ahead of each session after the
+    # first: one started by Claude Code itself spends ~0.6 s loading before
+    # the session's first turn can start. Socket-activated, so nothing runs
+    # (and no memory is used) until a computer's first session connects;
+    # each session still gets its own server process.
+    systemd.user.sockets.macro-chrome-devtools-mcp = {
+      description = "chrome-devtools MCP servers for agent sessions";
+      wantedBy = [ "sockets.target" ];
+      unitConfig.ConditionUser = "macro";
+      socketConfig = {
+        ListenStream = chromeDevtoolsMcpSocket;
+        SocketMode = "0600";
+      };
+    };
+    systemd.user.services.macro-chrome-devtools-mcp = {
+      description = "chrome-devtools MCP servers for agent sessions, one kept ready";
+      unitConfig.ConditionUser = "macro";
+      serviceConfig = {
+        ExecStart = lib.escapeShellArgs [
+          (lib.getExe pkgs.nodejs_24)
+          "${./files/mcp-spare.mjs}"
+          (lib.getExe cfg.chromeDevtoolsMcp)
+          "--browser-url"
+          "http://127.0.0.1:9222"
+        ];
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
 
     system.stateVersion = "26.05";
   };

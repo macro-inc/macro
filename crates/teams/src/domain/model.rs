@@ -306,6 +306,16 @@ pub struct SubscriptionItemView {
     pub computer_id: Option<String>,
 }
 
+/// The credit note that undid a computer's purchase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerPurchaseCredit {
+    /// The credit note on the purchase's invoice.
+    pub credit_note: stripe::CreditNoteId,
+    /// The card refund it made; `None` when the invoice was paid from the
+    /// team's credit balance, which the note restores instead.
+    pub refund: Option<stripe::RefundId>,
+}
+
 /// What removing one subscription item did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemRemoval {
@@ -373,6 +383,62 @@ pub struct SubscriptionTerms {
     pub trialing: bool,
 }
 
+/// A subscription's terms and the card it charges, from one read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaymentTerms {
+    /// Period end, interval, currency and trial.
+    pub terms: SubscriptionTerms,
+    /// The subscription's default card, else the customer's invoice default;
+    /// `None` when there is none or the method is not a card.
+    pub card: Option<PaymentCard>,
+    /// The customer's credit balance, in the currency's smallest unit (0 or
+    /// more): Stripe applies it to an invoice before charging the card.
+    pub credit: i64,
+}
+
+/// A card as a buyer recognizes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaymentCard {
+    /// Card network.
+    pub brand: CardBrand,
+    /// Last four digits.
+    pub last4: String,
+}
+
+/// A card network, as Stripe names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum CardBrand {
+    /// American Express.
+    Amex,
+    /// Diners Club.
+    Diners,
+    /// Discover.
+    Discover,
+    /// eftpos Australia.
+    EftposAu,
+    /// JCB.
+    Jcb,
+    /// Mastercard.
+    Mastercard,
+    /// UnionPay.
+    Unionpay,
+    /// Visa.
+    Visa,
+    /// A network Stripe itself doesn't know.
+    Unknown,
+}
+
+/// What adding one item of `price_id` would invoice now: the prorated rest
+/// of the current period, less discounts, plus tax not included in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProratedCharge {
+    /// The added price.
+    pub price_id: stripe::PriceId,
+    /// In the currency's smallest unit.
+    pub amount: i64,
+}
+
 /// What a Stripe price charges.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PriceInfo {
@@ -428,6 +494,8 @@ pub struct TeamWithMembers {
     pub team: Team,
     /// The members of the team
     pub members: Vec<TeamMember<'static>>,
+    /// Current effective CRM access for each member, independent of mailbox consent.
+    pub crm_member_access: HashMap<String, bool>,
     /// Provider-confirmed pending seat changes, keyed by member user ID.
     /// Empty when no changes apply to this viewer; absent when the lookup fails.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -460,8 +528,8 @@ fn default_crm_backfill() -> bool {
     true
 }
 
-/// Compatibility response for `PATCH /team/crm`. CRM records are always
-/// available; this endpoint does not enroll mailboxes or backfill emails.
+/// Compatibility response for `PATCH /team/crm`. Record access follows member
+/// permissions; this endpoint does not enroll mailboxes or backfill emails.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct PatchTeamCrmSettingsResponse {
@@ -514,6 +582,8 @@ pub struct PatchTeamRequest {
     pub name: Option<String>,
     /// The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
     pub slug: Option<String>,
+    /// Change one member's CRM access. Admins and owners always retain access.
+    pub member_crm_access: Option<PatchTeamMemberCrmAccess>,
     /// Role updates to apply to team users
     pub user_role_updates: Option<Vec<PatchTeamUserRole>>,
     /// The default link-share scope for items owned by the team. Omit to
@@ -532,6 +602,17 @@ pub struct PatchTeamRequest {
 pub struct PatchTeamPlanRequest {
     /// The new team plan
     pub team_plan: TeamPlan,
+}
+
+/// An administrator's change to one member's CRM access.
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamMemberCrmAccess {
+    /// The current member to update.
+    #[cfg_attr(feature = "axum", schema(value_type = String))]
+    pub user_id: MacroUserIdStr<'static>,
+    /// Whether the member may use CRM records and team-shared pipelines.
+    pub enabled: bool,
 }
 
 /// Request to update a team user's role
@@ -778,6 +859,15 @@ pub struct TeamInviteSnapshot<'a> {
     pub last_sent_at: DateTime<Utc>,
     /// Whether the invite creates an agent account
     pub is_agent: bool,
+}
+
+/// Deleted membership state retained for compensation after a failed removal.
+#[derive(Debug, Clone)]
+pub struct RemovedTeamMember<'a> {
+    /// Membership identity, role and billing plan at deletion.
+    pub member: TeamMember<'a>,
+    /// Stored preference, including a denial masked by an administrative role.
+    pub crm_access: bool,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.

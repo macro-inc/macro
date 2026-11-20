@@ -56,6 +56,12 @@ export type AvailabilityCalendarsResponse = {
  */
 export type Booking = {
     /**
+     * When Macro stopped trying to update the host's calendar for the
+     * booking's latest change. A failed booking with this set is not being
+     * retried, and cancelling it is the way to release its time.
+     */
+    abandonedAt?: string | null;
+    /**
      * Answers keyed by question identity.
      */
     answers: {
@@ -366,7 +372,7 @@ export type BookingLinkEvent = {
     /**
      * Attach a Macro call when someone books. A join link is created for that
      * booking and written onto the calendar invitation. Mutually exclusive
-     * with `googleMeet`. Prefer this for a Macro booking; omit or false when
+     * with `googleMeet`. Set it when the user wants a Macro call; omit or false when
      * the link should use Google Meet or no video. False is omitted so drafts
      * saved before this field still round-trip unchanged.
      */
@@ -962,6 +968,39 @@ export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | '
 export type CalendarProvider = 'google' | 'outlook';
 
 /**
+ * Edits laid over the saved event in its replacement, as an event update
+ * would apply them; omitted fields keep the saved value.
+ */
+export type CalendarReplacementChanges = {
+    /**
+     * Replacement guest list.
+     */
+    attendees?: Array<CalendarAttendeeInputBody> | null;
+    /**
+     * Replacement description; an empty string clears it.
+     */
+    description?: string | null;
+    /**
+     * Replacement location; an empty string clears it.
+     */
+    location?: string | null;
+    /**
+     * Replacement recurrence properties; an empty list clears them. Applies
+     * only to a whole series, and drops its copied occurrences like a time
+     * change.
+     */
+    recurrenceLines?: Array<string> | null;
+    reminders?: null | EventReminders;
+    time?: null | EventTime;
+    /**
+     * Replacement title.
+     */
+    title?: string | null;
+    transparency?: null | EventTransparency;
+    visibility?: null | EventVisibility;
+};
+
+/**
  * Safe preview and recovery response; never exposes the opaque provider snapshot.
  */
 export type CalendarReplacementView = {
@@ -975,7 +1014,7 @@ export type CalendarReplacementView = {
     completedSteps: number;
     event?: null | CalendarEvent;
     /**
-     * Entire recurring series, including exceptions, is replaced.
+     * The replacement is a recurring series.
      */
     isSeries: boolean;
     /**
@@ -1417,6 +1456,7 @@ export type PrepareCalendarReplacementRequest = {
      * Exact calendar copy; defaults to canonical.
      */
     calendarId?: string | null;
+    changes?: null | CalendarReplacementChanges;
     /**
      * Original-start key; omitted to replace the entire series.
      */
@@ -2289,6 +2329,10 @@ export type ChangeBookingErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    /**
+     * The host's calendar refused the reschedule; the booking keeps its original time
+     */
+    422: unknown;
 };
 
 export type ChangeBookingResponses = {

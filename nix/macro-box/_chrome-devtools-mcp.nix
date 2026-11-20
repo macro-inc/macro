@@ -11,7 +11,10 @@ pkgs.stdenvNoCC.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/lib/chrome-devtools-mcp
     cp -r . $out/lib/chrome-devtools-mcp
+    # files/cdp-wait.mjs: a browser call right after a restore waits (up to
+    # 10 s) for Chromium's DevTools port instead of failing.
     makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/chrome-devtools-mcp \
+      --add-flags "--import=${./files/cdp-wait.mjs}" \
       --add-flags $out/lib/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js
   '';
   meta.mainProgram = "chrome-devtools-mcp";

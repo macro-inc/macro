@@ -81,11 +81,33 @@
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
+}
 
-  ::selection {
+/* Text selection tint. Set it only where `--color-ink` is (re)defined: Chrome's
+   highlight inheritance hands it to every descendant. A `::selection` rule
+   that every element matches made Chrome compute a highlight style per
+   element, again on each custom-property write on <html>, which was a third
+   of every whole-page restyle. Engines without highlight inheritance (Safari,
+   Firefox) get the descendant rule through the class `highlightInheritance.ts`
+   sets on <html>. A subtree that redefines `--color-ink` restarts the tint:
+   add it to the first list (`.onboarding-flow`, `.fig-editor-theme` do it in
+   their own files), or give it `selection-root` when the ink varies by
+   element. */
+:root::selection,
+[data-theme-light]::selection,
+[data-invert]::selection,
+.no-highlight-inheritance ::selection {
+  background-color: oklch(from var(--color-ink) l c h / 0.1);
+}
+
+/* For a subtree whose `--color-ink` follows each element (`currentColor`):
+   the tint is computed per element there, as it was everywhere before. The
+   class lets Chrome's ancestor filter skip every element outside it. */
+@utility selection-root {
+  &::selection,
+  & ::selection {
     background-color: oklch(from var(--color-ink) l c h / 0.1);
   }
-
 }
 
 html[data-platform='ios'],
@@ -398,11 +420,15 @@ body.tauri-ios {
   --color-link-visited: var(--color-accent);
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
-  --color-control: var(--color-surface-2);
+  /* Mail's list fill and row divider under names no surface overrides, so a
+     sample list inside one (Settings → Email) can take them back. */
+  --color-list-control: var(--color-surface-2);
+  --color-list-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-control: var(--color-list-control);
   --color-control-raised: color-mix(in oklch, var(--color-surface-2) 95%, var(--color-content-0));
   --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
   --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
-  --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
+  --color-edge-divider: var(--color-list-divider);
   --color-edge-focus: color-mix(in oklch, var(--color-content-0) 40%, transparent);
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
@@ -885,7 +911,10 @@ html:not([data-touch-device="true"]) [data-invert] {
 }
 
 @custom-variant mobile {
-  &:where(html[data-touch-device="true"] *) {
+  &:where(html[data-touch-device="true"][data-native-horizontal-size-class="compact"] *) {
+    @slot;
+  }
+  &:where(html[data-touch-device="true"]:not([data-native-horizontal-size-class]) *) {
     @media (max-width: 639px) {
       @slot;
     }
@@ -1215,87 +1244,91 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
 /* Native iOS press paint layers belong to the material, including channel inputs.
    ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
    the glass rim. No child nodes, computed-style snapshots or release cleanup.
-   Keep this scope in sync with glassPress.ts's surface selection. */
-html[data-platform='ios'][data-touch-device='true'] :is(
-  [data-glass-input],
-  [data-input] [data-composer-collapsed],
-  [data-mobile-dock-island],
-  [data-header-island],
-  [data-slot='button-group']:is(.glass, [class~='touch:glass']),
-  :is(button, a, [role='button'], [role='tab']):is(.glass, [class~='touch:glass'], .island, [class~='touch:island'])
-) {
-  /* The shimmer replaces native tap feedback only on these press surfaces. */
-  -webkit-tap-highlight-color: transparent;
-  --press-expansion: 0px;
-  position: relative;
-  isolation: isolate;
-  overflow: visible;
-  background-color: transparent !important;
-  backdrop-filter: none;
-  box-shadow: none;
-  scale: 1;
-  transform-origin: center;
-  transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
-
-  & button {
-    scale: 1 !important;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    z-index: -1;
-    pointer-events: none;
-    background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
-    background-image: radial-gradient(
-      circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
-      at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
-      color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
-      color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
-      transparent 100%
-    );
-    backdrop-filter: var(--glass-backdrop, none);
-    box-shadow: var(--glass-shadow, none);
-    transition: --press-light 220ms ease-out,
-      --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  &::before, &::after {
-    inset: calc(-1 * var(--press-expansion));
-    border-radius: inherit;
-  }
-
-  & svg {
+   Keep this scope in sync with glassPress.ts's surface selection.
+   Only iOS WebKit knows -webkit-touch-callout, so other browsers drop the block
+   instead of testing every element against it on each restyle. */
+@supports (-webkit-touch-callout: none) {
+  html[data-platform='ios'][data-touch-device='true'] :is(
+    [data-glass-input],
+    [data-input] [data-composer-collapsed],
+    [data-mobile-dock-island],
+    [data-header-island],
+    [data-slot='button-group']:is(.glass, [class~='touch:glass']),
+    :is(button, a, [role='button'], [role='tab']):is(.glass, [class~='touch:glass'], .island, [class~='touch:island'])
+  ) {
+    /* The shimmer replaces native tap feedback only on these press surfaces. */
+    -webkit-tap-highlight-color: transparent;
+    --press-expansion: 0px;
+    position: relative;
+    isolation: isolate;
+    overflow: visible;
+    background-color: transparent !important;
+    backdrop-filter: none;
+    box-shadow: none;
     scale: 1;
     transform-origin: center;
-    transform-box: view-box;
-    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
+    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
 
-  &[data-glass-press]::before {
-    --press-light: 1;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    &[data-glass-press='round'] {
-      scale: var(--press-scale);
+    & button {
+      scale: 1 !important;
     }
-    &[data-glass-press='wide'] {
-      --press-expansion: var(--press-outset);
 
-      & svg {
-        scale: 1.18;
+    &::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      pointer-events: none;
+      background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
+      background-image: radial-gradient(
+        circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
+        at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
+        color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
+        color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
+        transparent 100%
+      );
+      backdrop-filter: var(--glass-backdrop, none);
+      box-shadow: var(--glass-shadow, none);
+      transition: --press-light 220ms ease-out,
+        --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    &::before, &::after {
+      inset: calc(-1 * var(--press-expansion));
+      border-radius: inherit;
+    }
+
+    & svg {
+      scale: 1;
+      transform-origin: center;
+      transform-box: view-box;
+      transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    &[data-glass-press]::before {
+      --press-light: 1;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      &[data-glass-press='round'] {
+        scale: var(--press-scale);
+      }
+      &[data-glass-press='wide'] {
+        --press-expansion: var(--press-outset);
+
+        & svg {
+          scale: 1.18;
+        }
+      }
+      &[data-glass-press]::before {
+        --press-spread: 1;
       }
     }
-    &[data-glass-press]::before {
-      --press-spread: 1;
-    }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
-    &, &::before, &::after, & svg {
-      transition: none;
+    @media (prefers-reduced-motion: reduce) {
+      &, &::before, &::after, & svg {
+        transition: none;
+      }
     }
   }
 }
@@ -1335,7 +1368,19 @@ html[data-platform='ios'][data-touch-device='true'] :is(
     user-select: none;
   }
 
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+  /* One selector per `:where()`, not one `:where(a, b, …)`: Chrome tests every
+     element against a multi-argument `:where()` and walks up to the root for
+     each `… *` in it, while `:where(.md) *` is skipped by its ancestor filter.
+     Both keep zero specificity. */
+  :where(input),
+  :where(textarea),
+  :where(select),
+  :where(p) *,
+  :where(p span),
+  :where(.pdfViewer) *,
+  :where(.markdown-content) *,
+  :where([contenteditable]),
+  :where(.md) * {
     user-select: text;
   }
 

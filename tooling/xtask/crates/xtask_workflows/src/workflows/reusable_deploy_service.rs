@@ -9,69 +9,140 @@
 //! matrix out across it; with a single service there is no fan-out to
 //! amortise, so the per-service build realises its own closure directly (the
 //! /nix sticky disk still substitutes everything unchanged from prior runs).
+//!
+//! Like deploy-all-services, the builds read the private S3 nix cache, so a
+//! cold /nix volume downloads instead of rebuilding. Only runs on `main` write
+//! to it: a dispatch on another branch builds that branch's code, which must
+//! never be signed into the cache.
 
-use anyhow::Result;
-use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, failure,
+    format, github, input, runner,
+};
+use gh_workflow::{
+    Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
+};
 
+use crate::workflows::actions::{LocalDeployCloudStoragePulumi, LocalGetProjectName};
 use crate::workflows::{runners, steps, vars};
 
-/// Build the workflow. The `workflow_call` input/secret block is filled in by
-/// [`patch`].
-pub fn reusable_deploy_service() -> Workflow {
-    Workflow::new("Reusable Deploy Service")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("setup", setup())
-        .add_job("build-service-binaries", build_service_binaries())
-        .add_job("build-lambda-artifacts", build_lambda_artifacts())
-        .add_job("deploy", deploy())
+pub(crate) struct SetupOutputs {
+    /// Whether the service builds binaries.
+    pub has_binaries: JobOutput<Flag>,
+    /// Whether the service builds lambdas.
+    pub has_lambdas: JobOutput<Flag>,
 }
 
-/// Fill in the ordered `workflow_call` inputs/secrets block.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to deploy to
-              service-name:
-                required: true
-                type: string
-                description: The name of the service to deploy
-              pulumi-stack-name:
-                required: false
-                type: string
-                description: Override pulumi stack name (defaults to service-name)
-              use-docker:
-                required: false
-                type: boolean
-                default: true
-                description: Whether to setup docker
-              use-lfs:
-                required: false
-                type: boolean
-                default: false
-                description: Whether to checkout LFS content
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-              DD_APP_KEY:
-                required: true
-              DD_API_KEY:
-                required: true
-        "#})?,
-    );
-    Ok(())
+/// The job that resolves which artifacts the service builds.
+pub(crate) const SETUP: JobHandle<SetupOutputs> = JobHandle::new(
+    "setup",
+    SetupOutputs {
+        has_binaries: JobOutput::new("setup", "has_binaries"),
+        has_lambdas: JobOutput::new("setup", "has_lambdas"),
+    },
+);
+
+pub(crate) struct CheckOutputs {
+    /// Whether the service builds binaries.
+    pub has_binaries: StepOutput<Flag>,
+    /// Whether the service builds lambdas.
+    pub has_lambdas: StepOutput<Flag>,
+}
+
+/// The step that writes [`SETUP`]'s outputs.
+pub(crate) const CHECK: StepHandle<CheckOutputs> = StepHandle::new(
+    "check",
+    CheckOutputs {
+        has_binaries: StepOutput::new("check", "has_binaries"),
+        has_lambdas: StepOutput::new("check", "has_lambdas"),
+    },
+);
+
+pub(crate) const BUILD_SERVICE_BINARIES: JobHandle<()> =
+    JobHandle::new("build-service-binaries", ());
+pub(crate) const BUILD_LAMBDA_ARTIFACTS: JobHandle<()> =
+    JobHandle::new("build-lambda-artifacts", ());
+pub(crate) const CHECK_MIGRATIONS: JobHandle<()> = JobHandle::new("check-migrations", ());
+
+pub(crate) struct ProjectNameOutputs {
+    /// The service's Pulumi project name.
+    pub project_name: StepOutput<Str>,
+}
+
+/// The step that resolves the service's Pulumi project, when no stack name is
+/// given.
+pub(crate) const PROJECT_NAME: StepHandle<ProjectNameOutputs> = StepHandle::new(
+    "project-name",
+    ProjectNameOutputs {
+        project_name: LocalGetProjectName::project_name_output("project-name"),
+    },
+);
+
+fn service_name() -> Expr<Str> {
+    input("service-name")
+}
+
+/// Build the workflow.
+pub fn reusable_deploy_service() -> Workflow {
+    Workflow::new("Reusable Deploy Service")
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "environment",
+                    WorkflowInput::string()
+                        .description("The environment to deploy to")
+                        .required(true),
+                )
+                .add_input(
+                    "service-name",
+                    WorkflowInput::string()
+                        .description("The name of the service to deploy")
+                        .required(true),
+                )
+                .add_input(
+                    "pulumi-stack-name",
+                    WorkflowInput::string()
+                        .description("Override pulumi stack name (defaults to service-name)")
+                        .required(false),
+                )
+                .add_input(
+                    "use-docker",
+                    WorkflowInput::boolean()
+                        .description("Whether to setup docker")
+                        .required(false)
+                        .default(true),
+                )
+                .add_input(
+                    "use-lfs",
+                    WorkflowInput::boolean()
+                        .description("Whether to checkout LFS content")
+                        .required(false)
+                        .default(false),
+                )
+                .add_secret(
+                    "AWS_ACCESS_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "AWS_SECRET_ACCESS_KEY",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret(
+                    "PULUMI_ACCESS_TOKEN",
+                    WorkflowCallSecret::default().required(true),
+                )
+                .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
+                .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true))
+                .add_secret(
+                    "NIX_CACHE_SIGNING_KEY",
+                    WorkflowCallSecret::default().required(false),
+                ),
+        ))
+        .add_job(SETUP, setup())
+        .add_job(BUILD_SERVICE_BINARIES, build_service_binaries())
+        .add_job(BUILD_LAMBDA_ARTIFACTS, build_lambda_artifacts())
+        .add_job(CHECK_MIGRATIONS, check_migrations())
+        .add_job("deploy", deploy())
 }
 
 /// Resolve which artifact kinds this service produces so the heavy nix build
@@ -79,11 +150,17 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
 /// to build (mirrors deploy-all-services' matrix filtering, for one service).
 fn setup() -> Job {
     Job::default()
-        .name("Check ${{ inputs.service-name }} artifacts")
+        .name(format!("Check {} artifacts", service_name()))
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("has_binaries", "${{ steps.check.outputs.has_binaries }}")
-        .add_output("has_lambdas", "${{ steps.check.outputs.has_lambdas }}")
-        .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
+        .add_output(
+            SETUP.outputs.has_binaries.name(),
+            CHECK.outputs.has_binaries.read(),
+        )
+        .add_output(
+            SETUP.outputs.has_lambdas.name(),
+            CHECK.outputs.has_lambdas.read(),
+        )
+        .add_step(steps::checkout_v4_action().sparse_checkout(".github/"))
         .add_step(check_artifact_config())
 }
 
@@ -103,33 +180,101 @@ fn check_artifact_config() -> Step<Run> {
             echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
             echo "service=$SERVICE binaries=$has_binaries lambdas=$has_lambdas"
         "#})
-        .id("check")
-        .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .id(CHECK.id())
+        .add_env(Env::new("SERVICE", service_name()))
 }
 
 /// Base for the two Nix build jobs using Namespace's warm `/nix` volume.
-fn build_job(name: &str, gate_output: &str) -> Job {
+fn build_job(name: &str, gate: &JobOutput<Flag>) -> Job {
     Job::default()
         .name(name)
-        .needs(vec!["setup".to_string()])
-        .cond(Expression::new(format!(
-            "${{{{ needs.setup.outputs.{gate_output} == 'true' }}}}"
-        )))
+        .needs(vec![SETUP.to_string()])
+        .cond(gate.read().is_set())
         .runs_on(runners::Runner::Mid.to_string())
-        .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::checkout_v4_action().clean(false))
         .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_cache())
 }
 
+/// Only a run on `main` signs what it built into the S3 nix cache.
+fn on_main() -> Expr<Bool> {
+    github().git_ref().eq("refs/heads/main")
+}
+
+/// The signing key on `main`, empty elsewhere, for scripts that push when
+/// it is set.
+fn signing_key_on_main() -> Expr<Str> {
+    on_main().then_else(vars::NIX_CACHE_SIGNING_KEY, "")
+}
+
+pub(crate) struct BuildInputsOutputs {
+    /// The realised build inputs to push, space-separated.
+    pub paths: StepOutput<Str>,
+}
+
+/// The step that lists the build inputs worth caching.
+pub(crate) const BUILD_INPUTS: StepHandle<BuildInputsOutputs> = StepHandle::new(
+    "build-inputs",
+    BuildInputsOutputs {
+        paths: StepOutput::new("build-inputs", "paths"),
+    },
+);
+
 fn build_service_binaries() -> Job {
-    build_job("Build ${{ inputs.service-name }} binaries", "has_binaries")
-        .add_step(build_prebuilt_binaries())
-        .add_step(steps::upload_handoff_artifact(
-            "prebuilt-binaries.tar.gz",
-            "${{ inputs.service-name }}",
+    build_job(
+        &format!("Build {} binaries", service_name()),
+        &SETUP.outputs.has_binaries,
+    )
+    .add_step(build_prebuilt_binaries())
+    .add_step(collect_build_inputs().if_condition(on_main()))
+    // The service's output makes an unchanged service a pure substitution
+    // next run; the deps and build inputs let a changed one compile only
+    // its own crates, even on a cold volume.
+    .add_step(
+        steps::push_nix_cache(&format!(
+            ".#deployCargoArtifacts .#deploy-service-binaries-{} {}",
+            service_name(),
+            BUILD_INPUTS.outputs.paths.read()
         ))
-        .add_step(steps::teardown_nix())
+        .if_condition(on_main())
+        // A stuck upload must not hold or fail the deploy.
+        .timeout_minutes(15u32)
+        .continue_on_error(true),
+    )
+    .add_step(steps::upload_handoff_artifact(
+        "prebuilt-binaries.tar.gz",
+        service_name(),
+    ))
+    .add_step(steps::teardown_nix())
+}
+
+/// The store paths a changed service rebuilds from on a cold volume besides
+/// the deps: the vendored crate sources, the Rust toolchain and the code-mode
+/// assets. Only paths this run already realised are listed, so pushing them
+/// builds nothing.
+fn collect_build_inputs() -> Step<Run> {
+    Step::new("Collect build inputs for the nix cache")
+        .run(indoc::indoc! {r#"
+            set -uo pipefail
+            # The cache is an optimization: a failed lookup only pushes less.
+            mapfile -t candidates < <(
+              nix eval --raw .#deployCargoArtifacts --apply 'deps: builtins.concatStringsSep "\n" ([ (toString deps.cargoVendorDir) ] ++ map toString (builtins.filter (input: builtins.match "rust-[0-9].*" (input.name or "") != null) deps.nativeBuildInputs))' \
+                || echo "::warning::could not list the deps' build inputs" >&2
+              echo
+              nix eval --raw .#code-mode-assets.outPath \
+                || echo "::warning::could not find the code-mode assets" >&2
+              echo
+            )
+            paths=()
+            for path in $(printf '%s\n' "${candidates[@]}" | sort -u); do
+              if [[ -e "$path" ]]; then paths+=("$path"); fi
+            done
+            echo "build inputs to cache: ${paths[*]}"
+            echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
+        "#})
+        .id(BUILD_INPUTS.id())
+        .shell("bash")
 }
 
 fn build_prebuilt_binaries() -> Step<Run> {
@@ -152,7 +297,7 @@ fn build_prebuilt_binaries() -> Step<Run> {
     Step::new("Build prebuilt binaries")
         .run(script)
         .shell("bash")
-        .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .add_env(Env::new("SERVICE", service_name()))
 }
 
 /// Each handler is a crane + cargo-zigbuild nix package; the build script
@@ -161,22 +306,31 @@ fn build_prebuilt_binaries() -> Step<Run> {
 /// the Namespace Nix cache volume).
 fn build_lambda_artifacts() -> Job {
     build_job(
-        "Build ${{ inputs.service-name }} Lambda artifacts",
-        "has_lambdas",
+        &format!("Build {} Lambda artifacts", service_name()),
+        &SETUP.outputs.has_lambdas,
     )
     .add_step(build_lambdas())
     .add_step(log_lambda_receipt())
     .add_step(steps::upload_handoff_artifact(
         "lambda-artifacts.tar.gz",
-        "${{ inputs.service-name }}",
+        service_name(),
     ))
     .add_step(steps::teardown_nix())
 }
 
 fn build_lambdas() -> Step<Run> {
+    // The script pushes the handlers it built when both cache values are
+    // set; off `main` the key is empty, so it skips the push.
     Step::new("Build Lambda artifacts")
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
-        .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .add_env(Env::new("SERVICE", service_name()))
+        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
+        .add_env(Env::new("NIX_CACHE_SIGNING_KEY", signing_key_on_main()))
+        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
+        .add_env(Env::new(
+            "AWS_SECRET_ACCESS_KEY",
+            vars::AWS_SECRET_ACCESS_KEY,
+        ))
 }
 
 fn log_lambda_receipt() -> Step<Run> {
@@ -190,19 +344,34 @@ fn log_lambda_receipt() -> Step<Run> {
         .shell("bash")
 }
 
-/// A build job is skipped when the service has no binaries/lambdas (and a
-/// service may legitimately have neither). Proceed as long as nothing
-/// actually failed or was cancelled — skipped needs are expected here.
+fn check_migrations() -> Job {
+    steps::check_macro_db_migrations_job(
+        &format!("Check {} migrations are applied", service_name()),
+        &SETUP,
+        SETUP
+            .outputs
+            .has_binaries
+            .read()
+            .is_set()
+            .or(SETUP.outputs.has_lambdas.read().is_set()),
+    )
+}
+
+/// A build or migration-check job is skipped when it does not apply to the
+/// service (and a service may legitimately have neither binaries nor lambdas).
+/// Proceed as long as nothing actually failed or was cancelled — skipped needs
+/// are expected here.
 /// Deploys via Pulumi + Docker; AWS auth is via explicit static keys.
 fn deploy() -> Job {
     Job::default()
-        .name("Deploy ${{ inputs.service-name }}")
+        .name(format!("Deploy {}", service_name()))
         .needs(vec![
-            "setup".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
+            SETUP.to_string(),
+            BUILD_SERVICE_BINARIES.to_string(),
+            BUILD_LAMBDA_ARTIFACTS.to_string(),
+            CHECK_MIGRATIONS.to_string(),
         ])
-        .cond(Expression::new("${{ !failure() && !cancelled() }}"))
+        .cond((!failure()).and(!cancelled()))
         .runs_on(runners::Runner::Small.to_string())
         .add_env(("PULUMI_HOME", "/pulumi"))
         .add_step(steps::checkout_v4())
@@ -214,13 +383,10 @@ fn deploy() -> Job {
 }
 
 fn get_project_name() -> Step<Use> {
-    steps::uses_local(
-        "Get project name",
-        xtask_paths::repo_dir!(".github/actions/get-project-name"),
-    )
-    .id("project-name")
-    .if_condition(Expression::new("${{ inputs.pulumi-stack-name == '' }}"))
-    .add_with(("service-name", "${{ inputs.service-name }}"))
+    LocalGetProjectName::new("Get project name", service_name())
+        .step()
+        .id(PROJECT_NAME.id())
+        .if_condition(input::<Str>("pulumi-stack-name").eq(""))
 }
 
 /// Pull the handoff tars from Namespace artifact storage into runner.temp
@@ -242,48 +408,109 @@ fn download_handoff_artifacts() -> Step<Run> {
               nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
             fi
         "#})
-        .if_condition(Expression::new(
-            "${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}",
-        ))
+        .if_condition(
+            SETUP
+                .outputs
+                .has_binaries
+                .read()
+                .is_set()
+                .or(SETUP.outputs.has_lambdas.read().is_set()),
+        )
         .shell("bash")
         .add_env(Env::new(
             "HAS_BINARIES",
-            "${{ needs.setup.outputs.has_binaries }}",
+            SETUP.outputs.has_binaries.read(),
         ))
         .add_env(Env::new(
             "HAS_LAMBDAS",
-            "${{ needs.setup.outputs.has_lambdas }}",
+            SETUP.outputs.has_lambdas.read(),
         ))
         .add_env(Env::new(
             "BASE",
-            "handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}",
+            format!(
+                "handoff/{}-{}/{}",
+                github().run_id(),
+                github().run_attempt(),
+                service_name()
+            ),
         ))
 }
 
 fn deploy_service() -> Step<Use> {
-    steps::uses_local(
-        "Deploy ${{ inputs.service-name }}",
-        xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
+    LocalDeployCloudStoragePulumi::new(
+        &format!("Deploy {}", service_name()),
+        vars::AWS_ACCESS_KEY,
+        vars::AWS_SECRET_ACCESS_KEY,
+        vars::PULUMI_ACCESS_TOKEN,
+        input::<Str>("pulumi-stack-name").or_else(PROJECT_NAME.outputs.project_name.read()),
+        vars::DD_APP_KEY,
+        vars::DD_API_KEY,
     )
-    .add_with(("environment", "${{ inputs.environment }}"))
-    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
-    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
-    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with((
-        "pulumi-service-name",
-        "${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}",
+    .environment(input::<Str>("environment"))
+    .use_namespace_builder("true")
+    .use_docker(input::<Bool>("use-docker"))
+    .use_lfs(input::<Bool>("use-lfs"))
+    .prebuilt_binaries_tar(handoff_tar_path(
+        &SETUP.outputs.has_binaries,
+        "prebuilt-binaries.tar.gz",
     ))
-    .add_with(("use-namespace-builder", "true"))
-    .add_with(("use-docker", "${{ inputs.use-docker }}"))
-    .add_with(("use-lfs", "${{ inputs.use-lfs }}"))
-    .add_with((
-        "prebuilt-binaries-tar",
-        "${{ needs.setup.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}",
+    .lambda_artifacts_tar(handoff_tar_path(
+        &SETUP.outputs.has_lambdas,
+        "lambda-artifacts.tar.gz",
     ))
-    .add_with((
-        "lambda-artifacts-tar",
-        "${{ needs.setup.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}",
-    ))
-    .add_with(("dd-app-key", vars::DD_APP_KEY))
-    .add_with(("dd-api-key", vars::DD_API_KEY))
+    .step()
+}
+
+/// The downloaded handoff tar when the service has one, else empty.
+fn handoff_tar_path(has: &JobOutput<Flag>, file: &str) -> Expr<Str> {
+    has.read().is_set().then_else(
+        format(
+            &format!("{{0}}/handoff/{file}"),
+            [runner().temp().into_ast()],
+        ),
+        "",
+    )
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Both builds read the binary cache, and every step that could sign into
+    /// it does so only on `main`.
+    #[test]
+    fn deploy_builds_read_the_nix_cache_and_write_it_only_from_main() {
+        let yaml = reusable_deploy_service()
+            .to_string()
+            .expect("workflow yaml");
+        let root: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("parsed yaml");
+        let jobs = root["jobs"].as_mapping().expect("jobs");
+
+        for job in ["build-service-binaries", "build-lambda-artifacts"] {
+            let steps = jobs[job]["steps"].as_sequence().expect("steps");
+            assert!(
+                steps
+                    .iter()
+                    .any(|step| step["with"]["nix-cache-url"].as_str()
+                        == Some(vars::NIX_CACHE_URL.to_string().as_str())),
+                "{job} reads the nix cache: {yaml}"
+            );
+        }
+
+        let mut signing_steps = 0;
+        for (name, job) in jobs {
+            for step in job["steps"].as_sequence().into_iter().flatten() {
+                let Some(key) = step["env"]["NIX_CACHE_SIGNING_KEY"].as_str() else {
+                    continue;
+                };
+                signing_steps += 1;
+                assert!(
+                    step["if"].as_str() == Some(on_main().ast().to_string().as_str())
+                        || key == signing_key_on_main().to_string(),
+                    "{name:?} signs off main: {step:?}"
+                );
+            }
+        }
+        assert_eq!(signing_steps, 2, "{yaml}");
+    }
 }

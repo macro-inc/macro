@@ -45,7 +45,7 @@ import { SelectedCalendarEvent } from '../views/selection/SelectedCalendarEvent'
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
-import { SetupStatus } from './SetupStatus';
+import { SetupBanner, SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -143,6 +143,11 @@ function CalendarPages() {
       <SyncStatus syncing={calendarPager.activeData()?.isSyncing() ?? false} />
       <RangeUnavailableBanner
         class={isMobile() ? 'order-last' : undefined}
+        fullWidth={isMobile()}
+      />
+      <SetupBanner
+        data={calendarPager.activeData()}
+        hasOverlayEvents={calendarPager.activeTeamEvents().length > 0}
         fullWidth={isMobile()}
       />
       <div
@@ -247,19 +252,15 @@ function WorkspaceContent(props: {
                 asidePreferenceKey="calendar"
                 resizable
                 aside={
-                  isMobile() || composerPinned()
-                    ? false
-                    : { preserveDuringResize: false }
+                  composerPinned() ? false : { preserveDuringResize: false }
                 }
                 main={{ preferredWidth: 640 }}
                 class="min-w-0 flex-1 !w-auto"
               >
-                <Show when={!isMobile()}>
-                  <ViewShell.Aside>
-                    <CalendarSidebar />
-                  </ViewShell.Aside>
-                </Show>
-                <ViewShell.Main>
+                <ViewShell.Aside>
+                  <CalendarSidebar />
+                </ViewShell.Aside>
+                <ViewShell.Main class="relative">
                   <Header presentation="workspace" />
                   <ViewTour tour={calendarTour} />
                   <ViewShell.Content class="flex min-h-0 flex-1">

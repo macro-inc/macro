@@ -116,6 +116,14 @@ fn acp_message_contains_an_acp_raw_jsonrpc_message() {
 }
 
 #[test]
+fn agents_changed_is_a_bare_hint() {
+    assert_eq!(
+        serde_json::to_value(ToRuntimeMessage::AgentsChanged).unwrap(),
+        json!({ "type": "agentsChanged" })
+    );
+}
+
+#[test]
 fn model_probe_messages_carry_no_session_id_and_no_correlation() {
     let request = ToRuntimeMessage::ModelProbeRequest;
     let response = ToServerMessage::ModelProbeResponse {
@@ -138,4 +146,49 @@ fn model_probe_messages_carry_no_session_id_and_no_correlation() {
             },
         })
     );
+}
+
+#[test]
+fn an_agent_environment_travels_by_name_and_debug_shows_no_value() {
+    let message = ToRuntimeMessage::ApplyAgent {
+        environment: AgentEnvironment(
+            [("MACRO_API_KEY".to_owned(), "mak_secret".to_owned())]
+                .into_iter()
+                .collect(),
+        ),
+        traceparent: None,
+    };
+
+    let wire = serde_json::to_value(&message).unwrap();
+    assert_eq!(
+        wire,
+        json!({ "type": "applyAgent", "environment": { "MACRO_API_KEY": "mak_secret" } })
+    );
+    let read: ToRuntimeMessage = serde_json::from_value(wire).unwrap();
+    let ToRuntimeMessage::ApplyAgent { environment, .. } = read else {
+        panic!("not an agent environment");
+    };
+    let debug = format!("{environment:?}");
+    assert!(debug.contains("MACRO_API_KEY"));
+    assert!(!debug.contains("mak_secret"));
+}
+
+#[test]
+fn an_agent_environment_carries_the_setup_trace_and_reads_without_it() {
+    let traceparent = "00-11111111111111111111111111111111-2222222222222222-01";
+    let message = ToRuntimeMessage::ApplyAgent {
+        environment: AgentEnvironment(Default::default()),
+        traceparent: Some(traceparent.to_owned()),
+    };
+    assert_eq!(
+        serde_json::to_value(&message).unwrap(),
+        json!({ "type": "applyAgent", "environment": {}, "traceparent": traceparent })
+    );
+
+    let read: ToRuntimeMessage =
+        serde_json::from_value(json!({ "type": "applyAgent", "environment": {} })).unwrap();
+    let ToRuntimeMessage::ApplyAgent { traceparent, .. } = read else {
+        panic!("not an agent environment");
+    };
+    assert_eq!(traceparent, None);
 }

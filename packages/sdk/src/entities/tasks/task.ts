@@ -83,7 +83,7 @@ export class Task extends Document {
       dueDate?: Date;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
-      /** Defaults to true. */
+      /** Defaults to team sharing, or private when the session cannot share. */
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
@@ -110,7 +110,7 @@ export class Task extends Document {
           markdown: opts.markdown ?? null,
           projectId: opts.project?.id ?? null,
           teamId: opts.team?.id ?? null,
-          shareWithTeam: opts.shareWithTeam ?? true,
+          shareWithTeam: opts.shareWithTeam,
           propertyValues: await initialProperties(client, opts),
         },
       }),
@@ -254,7 +254,7 @@ export class Task extends Document {
     return `${this.client.webAppUrl}/app/task/${this.id}`;
   }
 
-  /** Search tasks by name and content, most relevant first, auto-paginated. */
+  /** Search tasks by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: { sub_types: ['task'], task_filters: {} } },
     type: 'document',

@@ -22,8 +22,9 @@ use sqlx::{
 };
 use uuid::Uuid;
 
-/// A pool that counts connection checkouts. Each lookup statement checks out
-/// one connection, so the count is the number of statements the lookups ran.
+/// A pool that counts connection checkouts. Each lookup step checks out one
+/// connection (the document step reads its grants and its documents on the
+/// same one), so the count is the number of steps the lookups ran.
 async fn counting_pool(
     options: PgPoolOptions,
     connect: PgConnectOptions,

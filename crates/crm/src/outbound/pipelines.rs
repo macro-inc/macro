@@ -416,3 +416,13 @@ where
         Ok(true)
     }
 }
+
+impl<Database: Send + Sync> crate::domain::auth::CrmMemberAccess for PgPipelineRepo<Database> {
+    async fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, crate::domain::model::CrmError> {
+        super::member_access::member_has_crm_access(&self.pool, team_id, user_id).await
+    }
+}

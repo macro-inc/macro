@@ -1,0 +1,40 @@
+diff --git a/node_modules/@hey-api/openapi-ts/.bun-tag-32c96cc125ea837 b/.bun-tag-32c96cc125ea837
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/clients/core/serverSentEvents.ts b/dist/clients/core/serverSentEvents.ts
+index 16c6fbb780a3a399ac7d882e405bd24c82e57c7d..087978f091e9ee0e4b19189da219d4d8c04ab31c 100644
+--- a/dist/clients/core/serverSentEvents.ts
++++ b/dist/clients/core/serverSentEvents.ts
+@@ -140,7 +140,9 @@
+ 
+         const abortHandler = () => {
+           try {
+-            reader.cancel();
++            // An aborted fetch has already errored the body, so cancel()
++            // rejects with the abort: expected, never an unhandled rejection.
++            reader.cancel().catch(() => {});
+           } catch {
+             // noop
+           }
+@@ -201,6 +203,11 @@
+                 }
+               }
+ 
++              // An event arrived, so the connection works: a later failure
++              // backs off from the first delay again. Not on the response
++              // alone, or a stream that ends at once would retry every 3 s.
++              attempt = 1;
++
+               onSseEvent?.({
+                 data,
+                 event: eventName,
+@@ -218,6 +225,9 @@
+           reader.releaseLock();
+         }
+ 
++        // The server ended the stream (a restart, a deploy). Like EventSource,
++        // reconnect unless the caller stopped it: through the retry below.
++        if (!signal.aborted) throw new Error('SSE stream ended by the server');
+         break; // exit loop on normal completion
+       } catch (error) {
+         // connection failed or aborted; retry after delay

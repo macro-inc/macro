@@ -2,7 +2,13 @@ import type {
   ApiChannelWithLatest,
   ChannelType,
 } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import {
+  type IterationOptions,
+  iterate,
+  MacroError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
@@ -93,41 +99,85 @@ export class ChannelNamespace {
   }
 
   /**
-   * Every channel the authenticated user is a member of, auto-paginated.
+   * Every channel the authenticated user is a member of, auto-paginated; `maxItems` caps the total.
    * Iterate with `for await`; collect with `Array.fromAsync`.
    *
    * @readonly
    */
-  async *list(): AsyncGenerator<Channel> {
-    for await (const record of this.records()) {
-      yield Channel.byId(this.client, record.id);
+  list(opts?: IterationOptions): AsyncGenerator<Channel> {
+    return iterate('channels.list', opts, {}, () => this.listed());
+  }
+
+  /**
+   * The channels the authenticated user is a member of whose latest message
+   * or reply is at or after `after`: the ones worth reading after a gap,
+   * the most recently active first; `maxItems` caps how many. Pages through
+   * every channel before yielding; reads no messages.
+   *
+   * @readonly
+   */
+  activeSince(
+    after: Date | string,
+    opts?: IterationOptions,
+  ): AsyncGenerator<Channel> {
+    const since = (after instanceof Date ? after : new Date(after)).getTime();
+    if (Number.isNaN(since))
+      throw new MacroError(
+        `channels.activeSince: not an instant: ${String(after)}`,
+      );
+    return iterate('channels.activeSince', opts, {}, () => this.active(since));
+  }
+
+  private async *active(since: number): AsyncGenerator<Channel> {
+    const active: {
+      readonly latest: number;
+      readonly record: ApiChannelWithLatest;
+    }[] = [];
+    for await (const record of this.records(CHANNEL_PAGE_SIZE)) {
+      const latest = record.latest_message?.created_at;
+      if (latest !== undefined && Date.parse(latest) >= since)
+        active.push({ latest: Date.parse(latest), record });
+    }
+    active.sort((a, b) => b.latest - a.latest);
+    for (const { record } of active)
+      yield Channel.fromListing(this.client, record);
+  }
+
+  private async *listed(pageSize = CHANNEL_PAGE_SIZE): AsyncGenerator<Channel> {
+    for await (const record of this.records(pageSize)) {
+      yield Channel.fromListing(this.client, record);
     }
   }
 
   /**
-   * Search channels by name (case-insensitive substring match over every
-   * channel the user is a member of) or by content (server-side unified search).
+   * Search the user's channels by name (the default) or by content; `maxItems`
+   * caps the total. A name search matches, case-insensitively, channels whose
+   * name or other members' names contain every word of `query`; the server runs
+   * it, one request per page of matches, newest first. A blank query lists
+   * every channel.
    *
    * @readonly
    */
-  async *search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
-    if (!opts?.searchOn || opts.searchOn === 'name') {
-      const lower = query.toLowerCase();
-      for await (const record of this.records()) {
-        if (record.name?.toLowerCase().includes(lower)) {
-          yield Channel.byId(this.client, record.id);
-        }
-      }
-    } else {
-      yield* Channel.search(this.client, query, opts);
-    }
+  search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
+    // The server refuses a blank query; a blank name matches every channel.
+    if (!query.trim() && (opts?.searchOn ?? 'name') === 'name')
+      return iterate(
+        'channels.search',
+        opts,
+        { searchOn: true, pageSize: true },
+        () => this.listed(opts?.pageSize),
+      );
+    return Channel.search(this.client, query, {
+      ...opts,
+      searchOn: opts?.searchOn ?? 'name',
+    });
   }
 
-  private records(): AsyncGenerator<ApiChannelWithLatest> {
+  private records(pageSize: number): AsyncGenerator<ApiChannelWithLatest> {
     return paginate(async (cursor) => {
       const page = unwrap(
         await this.client.storage.getChannels({
-          query: { limit: CHANNEL_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+          query: { limit: pageSize, ...(cursor ? { cursor } : {}) },
         }),
       );
       return { items: page.items, nextCursor: page.next_cursor };

@@ -45,7 +45,15 @@ pub struct CrmCompanySoupCursor {
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
-pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
+pub trait CompaniesRepository:
+    super::email_privacy::EmailPrivacyRepository + super::auth::CrmMemberAccess
+{
+    /// Current membership and effective CRM access, without a permission cache.
+    fn current_member_access(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<(uuid::Uuid, bool)>, CrmError>> + Send;
+
     /// List authorized contacts across the viewer's teams. Apply visibility and
     /// predicates before choosing one record per lowercased full email (latest
     /// interaction, then highest ID). Deduplicate before seeking/limiting. An
@@ -77,7 +85,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
 
     /// Previews of the companies in `company_ids` that `viewer_id` may open,
     /// each as [`Self::get_company_for_team`] titles it after the access
-    /// check: the viewer belongs to the company's team, and a hidden company
+    /// check: the viewer has current membership and effective CRM access on
+    /// the company's team, and a hidden company
     /// is visible only to that team's admins and owners. Others are left out.
     fn preview_companies(
         &self,
@@ -87,7 +96,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
 
     /// Previews of the contacts in `contact_ids` that `viewer_id` may open,
     /// with [`Self::get_contact_for_team`]'s visibility after the access
-    /// check: the viewer belongs to the contact's team, and a hidden contact,
+    /// check: the viewer has current membership and effective CRM access on
+    /// the contact's team, and a hidden contact,
     /// or one under a hidden company, is visible only to its admins and
     /// owners. Others are left out.
     fn preview_contacts(
@@ -182,6 +192,24 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
+    /// [`Self::create_contact_for_team`] for an address on a company domain:
+    /// files the contact under the team's company for the address's domain,
+    /// creating that company as [`Self::populate_contact`] does when the team
+    /// has none (no name of its own, not `manually_created`, interactions
+    /// seeded from `now`). The contact stays without a company when the team
+    /// blocks the domain or its company is hidden. Returns
+    /// [`CrmError::ContactAlreadyExistsForCompany`] when that company, or a
+    /// contact without a company, already has the address. Records no mailbox
+    /// source and reads no mail. The caller rules out personal and generic
+    /// provider domains and ensures directory metadata for the domain.
+    fn create_contact_for_email_domain(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        name: &str,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
     /// The domains `team_id` keeps out of email sync, alphabetically.
     fn list_blocked_domains(
         &self,
@@ -190,6 +218,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
 
     /// Adds `domain` (lowercase) to the team's contribution exclusions.
     /// Preserves company/contact records and archive state. Idempotent.
+    /// Applies the domain mailbox guard against every member's connected
+    /// primary mailbox inside the write transaction.
     fn block_domain(
         &self,
         team_id: &uuid::Uuid,
@@ -437,7 +467,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
     /// True clears exact team exclusions and schedules consenting mailboxes
     /// for backfill. Personal and broader parent-domain blocks still apply.
     /// Hidden companies must be unhidden first. Privacy changes and ingestion
-    /// serialize through the same transaction lock.
+    /// serialize through the same transaction lock. Refuse exclusions covering
+    /// a team member's primary connected mailbox domain.
     fn set_email_sync(
         &self,
         team_id: &uuid::Uuid,
@@ -456,7 +487,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
     ///
     /// Hide additionally forces `email_sync = false`, blocking ingestion and
     /// team email access. Unhide leaves that exclusion in place until an admin
-    /// explicitly removes it with [`set_email_sync`].
+    /// explicitly removes it with [`set_email_sync`]. Refuse hiding when that
+    /// exclusion covers a team member's primary connected mailbox domain.
     ///
     /// Both branches hold the same per-`(team, domain)` advisory locks
     /// [`populate_contact`] takes so a populate-vs-hide race can't
@@ -687,6 +719,17 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         company_id: &uuid::Uuid,
         include_hidden: bool,
         include_contacts: bool,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
+    /// The team's company for `domain` (lowercase), read like
+    /// [`Self::get_company_for_team`] without its contacts. `Ok(None)` when
+    /// the team tracks no company at the domain, or when that company is
+    /// hidden and `include_hidden` is false.
+    fn get_company_by_domain_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Read the team's CRM configuration from `team_crm_settings`.

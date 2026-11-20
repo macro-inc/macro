@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use wiremock::{Request, Respond, matchers::path_regex};
 
 pub(super) const OWNER: &str = "macro|olivia@example.com";
-const INBOX: &str = "olivia@example.com";
+pub(super) const INBOX: &str = "olivia@example.com";
 pub(super) const TOKEN: &str = "graph-access-token";
 const EVENTS: &str = r"^/v1\.0/me/(calendars/[^/]+/)?events(/|$)";
 
@@ -628,7 +628,7 @@ async fn deleting_a_synced_outlook_event_deletes_it_in_graph_and_drops_it_from_t
 /// One series in Graph: its master, and its instances as `instances`
 /// returns them, which Macro patches, deletes or answers one at a time.
 #[derive(Clone)]
-struct GraphSeries(Arc<Mutex<(Value, Vec<Value>)>>);
+pub(super) struct GraphSeries(pub(super) Arc<Mutex<(Value, Vec<Value>)>>);
 
 impl Respond for GraphSeries {
     fn respond(&self, request: &Request) -> ResponseTemplate {
@@ -795,7 +795,7 @@ async fn writes(server: &MockServer) -> Vec<(String, String, Value)> {
         .collect()
 }
 
-fn mutations(
+pub(super) fn mutations(
     repo: PgCalendarRepository,
     api: OutlookApiClientRepository,
 ) -> CalendarMutationServiceImpl<

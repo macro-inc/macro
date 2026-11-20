@@ -11,7 +11,6 @@ import type {
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
-  AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
@@ -250,13 +249,6 @@ export const agentHarnessServiceClient = {
         body: JSON.stringify(request),
         errorResponseHandler: sessionError,
       }
-    );
-  },
-
-  getLog(sessionId: string) {
-    return fetchWithToken<AgentSessionLogResponse>(
-      `${agentHarnessHost}/agent-sessions/${sessionId}/log`,
-      { method: 'GET' }
     );
   },
 

@@ -1,5 +1,6 @@
 //! Saved-view policy and persistence ports. Configurations belong to their consumers.
 use crate::View;
+use model_entity::EntityAppearance;
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
@@ -106,6 +107,13 @@ pub trait ViewRepository: Send + Sync {
         changes: ViewChanges<'_>,
     ) -> impl Future<Output = Result<Option<View>, Self::Err>> + Send;
     /// Retire the ID and clear content only when the owner and revision match.
+    /// Replace presentation metadata only for the owner, without changing config revision or timestamps.
+    fn set_appearance(
+        &self,
+        id: Uuid,
+        owner: &str,
+        appearance: &EntityAppearance,
+    ) -> impl Future<Output = Result<Option<View>, Self::Err>> + Send;
     fn delete(
         &self,
         id: Uuid,
@@ -137,6 +145,13 @@ pub trait MembershipPort: Send + Sync {
         &self,
         viewer: &str,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+    /// Configuration kinds the viewer may no longer use. The composition owns
+    /// feature policy; generic saved-view storage does not interpret configurations.
+    fn denied_view_kinds(
+        &self,
+        viewer: &str,
+        kinds: &HashSet<String>,
+    ) -> impl Future<Output = Result<HashSet<String>, Self::Err>> + Send;
     /// All current members of a team, including its owner.
     fn team_members(
         &self,
@@ -235,12 +250,47 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         Ok(())
     }
 
+    async fn visible_configurations(
+        &self,
+        viewer: &str,
+        views: Vec<View>,
+    ) -> Result<Vec<View>, Error> {
+        let kinds = views
+            .iter()
+            .filter_map(|view| kind_of(&view.config))
+            .collect();
+        let denied = self
+            .membership
+            .denied_view_kinds(viewer, &kinds)
+            .await
+            .map_err(|error| Error::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        Ok(views
+            .into_iter()
+            .filter(|view| kind_of(&view.config).is_none_or(|kind| !denied.contains(&kind)))
+            .collect())
+    }
+
+    async fn require_configuration(&self, viewer: &str, config: &Value) -> Result<(), Error> {
+        let kinds = kind_of(config).into_iter().collect();
+        let denied = self
+            .membership
+            .denied_view_kinds(viewer, &kinds)
+            .await
+            .map_err(|error| Error::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        if denied.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::NotFound)
+        }
+    }
+
     async fn effective(
         &self,
         viewer: &str,
         views: Vec<View>,
         viewer_teams: &HashSet<Uuid>,
     ) -> Result<Vec<View>, Error> {
+        let views = self.visible_configurations(viewer, views).await?;
         let teams: HashSet<_> = views
             .iter()
             .filter_map(|view| view.shared_team_id)
@@ -425,6 +475,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         name: String,
         config: Value,
         team: Option<Uuid>,
+        appearance: Option<EntityAppearance>,
     ) -> Result<View, Error> {
         if let Some(existing) = self
             .repo
@@ -438,6 +489,10 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
             return self.get(viewer, id).await;
         }
         Self::validate(&name, &config)?;
+        if let Some(appearance) = &appearance {
+            appearance.validate().map_err(|_| Error::Invalid)?;
+        }
+        self.require_configuration(viewer, &config).await?;
         if let Some(team) = team {
             let members = self
                 .membership
@@ -451,6 +506,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         let mut view = View::new(viewer.to_owned(), name, config);
         view.id = id;
         view.shared_team_id = team;
+        view.appearance = appearance;
         let created = self
             .repo
             .create(&view)
@@ -487,6 +543,10 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
             .ok_or(Error::NotFound)?;
         if current.user_id != viewer {
             return Err(Error::NotFound);
+        }
+        self.require_configuration(viewer, &current.config).await?;
+        if let Some(config) = &change.config {
+            self.require_configuration(viewer, config).await?;
         }
         if current.revision != revision {
             return Err(Error::Conflict);
@@ -539,6 +599,41 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         self.get(viewer, saved.id).await
     }
 
+    /// Replace presentation metadata without advancing the configuration revision or timestamp.
+    #[tracing::instrument(name = "saved_view.set_appearance", skip_all, fields(view_id = %id), err)]
+    pub async fn set_appearance(
+        &self,
+        viewer: &str,
+        id: Uuid,
+        appearance: EntityAppearance,
+    ) -> Result<View, Error> {
+        let current = self
+            .repo
+            .get(id)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?
+            .ok_or(Error::NotFound)?;
+        if current.user_id != viewer {
+            return Err(Error::NotFound);
+        }
+        self.require_configuration(viewer, &current.config).await?;
+        appearance.validate().map_err(|_| Error::Invalid)?;
+        let saved = self
+            .repo
+            .set_appearance(id, viewer, &appearance)
+            .await
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?
+            .ok_or(Error::NotFound)?;
+        self.notifier
+            .views_changed(ViewsChanged {
+                kind: kind_of(&saved.config),
+                user: viewer.to_owned(),
+                teams: saved.shared_team_id.into_iter().collect(),
+            })
+            .await;
+        self.get(viewer, id).await
+    }
+
     /// Delete an owned definition, harmless on a repeated deletion.
     #[tracing::instrument(name = "saved_view.delete", skip_all, fields(view_id = %id, revision), err)]
     pub async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error> {
@@ -548,6 +643,9 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
             .get(id)
             .await
             .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        if let Some(view) = &deleting {
+            self.require_configuration(viewer, &view.config).await?;
+        }
         if self
             .repo
             .delete(id, viewer, revision)
@@ -586,6 +684,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         name: String,
         config: Value,
     ) -> Result<View, Error> {
+        self.require_configuration(viewer, &config).await?;
         let view = View::new(viewer.to_owned(), name, config);
         self.repo
             .create(&view)
@@ -596,10 +695,12 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
 
     /// Legacy REST listing includes only the caller's private definitions.
     pub async fn legacy_list(&self, viewer: &str) -> Result<Vec<View>, Error> {
-        self.repo
+        let views = self
+            .repo
             .legacy_list(viewer)
             .await
-            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))
+            .map_err(|e| Error::Internal(rootcause::Report::new(e).into_dynamic()))?;
+        self.visible_configurations(viewer, views).await
     }
 
     async fn require_legacy_owner(&self, viewer: &str, id: Uuid) -> Result<(), Error> {
@@ -612,7 +713,7 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         if view.user_id != viewer {
             return Err(Error::NotOwner);
         }
-        Ok(())
+        self.require_configuration(viewer, &view.config).await
     }
 
     /// Legacy REST PATCH, preserving its shallow JSON merge.
@@ -625,6 +726,9 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewService<R
         config: Option<&Value>,
     ) -> Result<(), Error> {
         self.require_legacy_owner(viewer, id).await?;
+        if let Some(config) = config {
+            self.require_configuration(viewer, config).await?;
+        }
         self.repo
             .legacy_patch(id, viewer, name, config)
             .await
@@ -668,6 +772,7 @@ pub trait SavedViewApi: Send + Sync {
         name: String,
         config: Value,
         team: Option<Uuid>,
+        appearance: Option<EntityAppearance>,
     ) -> Result<View, Error>;
     /// Update with an expected revision.
     async fn update(
@@ -676,6 +781,13 @@ pub trait SavedViewApi: Send + Sync {
         id: Uuid,
         revision: i64,
         change: Update,
+    ) -> Result<View, Error>;
+    /// Replace appearance without changing the configuration revision.
+    async fn set_appearance(
+        &self,
+        viewer: &str,
+        id: Uuid,
+        appearance: EntityAppearance,
     ) -> Result<View, Error>;
     /// Delete with an expected revision.
     async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error>;
@@ -706,8 +818,9 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewApi
         name: String,
         config: Value,
         team: Option<Uuid>,
+        appearance: Option<EntityAppearance>,
     ) -> Result<View, Error> {
-        SavedViewService::create(self, viewer, id, name, config, team).await
+        SavedViewService::create(self, viewer, id, name, config, team, appearance).await
     }
     async fn update(
         &self,
@@ -717,6 +830,14 @@ impl<R: ViewRepository, M: MembershipPort, N: ChangeNotifier> SavedViewApi
         change: Update,
     ) -> Result<View, Error> {
         SavedViewService::update(self, viewer, id, revision, change).await
+    }
+    async fn set_appearance(
+        &self,
+        viewer: &str,
+        id: Uuid,
+        appearance: EntityAppearance,
+    ) -> Result<View, Error> {
+        SavedViewService::set_appearance(self, viewer, id, appearance).await
     }
     async fn delete(&self, viewer: &str, id: Uuid, revision: i64) -> Result<Uuid, Error> {
         SavedViewService::delete(self, viewer, id, revision).await

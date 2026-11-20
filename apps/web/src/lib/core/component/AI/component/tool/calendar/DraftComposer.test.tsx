@@ -3,7 +3,7 @@ import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type ComponentProps, createSignal, For, type JSX } from 'solid-js';
+import { type ComponentProps, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   refetchLinks: vi.fn(),
   startAddInbox: vi.fn(),
   execute: vi.fn(),
-  quickCalls: () => ({ loading: false, enabled: true }),
   guestInvites: (): boolean => true,
   touch: false,
 }));
@@ -41,9 +40,6 @@ vi.mock(
 );
 vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
   useMacroMentionLinkResolver: () => () => undefined,
-}));
-vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => () => mocks.quickCalls(),
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => mocks.guestInvites(),
@@ -214,7 +210,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
-  mocks.quickCalls = () => ({ loading: false, enabled: true });
   mocks.guestInvites = () => true;
   mocks.touch = false;
   mocks.calendarError = false;
@@ -380,19 +375,6 @@ describe('AI calendar draft account selection', () => {
 });
 
 describe('AI calendar draft Macro calls', () => {
-  it('offers Macro calls under the quick-calls flag', () => {
-    const [flag, setFlag] = createSignal({ loading: false, enabled: false });
-    mocks.quickCalls = flag;
-    showDraft();
-    expect(screen.getByLabelText('Macro calls enabled').textContent).toBe(
-      'false'
-    );
-    setFlag({ loading: false, enabled: true });
-    expect(screen.getByLabelText('Macro calls enabled').textContent).toBe(
-      'true'
-    );
-  });
-
   it('opens on the conferencing the agent drafted', () => {
     showDraft(undefined, { addMacroCall: true });
     expect(screen.getByLabelText('Conference').textContent).toBe('macro');

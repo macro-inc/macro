@@ -104,7 +104,6 @@ export default {
     close: 'Cerrar',
     delete: 'Eliminar',
     rename: 'Cambiar nombre',
-    more: 'Más',
     search: 'Buscar',
     settings: 'Configuración',
   },
@@ -527,6 +526,11 @@ export default {
       other: '{{count}} elementos eliminados',
     },
     toastDeleteFailed: 'No se pudo eliminar',
+    toastPropertySet: {
+      one: '{{property}}: valor establecido',
+      many: '{{property}}: valor establecido para {{count}} de elementos',
+      other: '{{property}}: valor establecido para {{count}} elementos',
+    },
     toastAddedToFavorites: 'Añadido a favoritos',
     toastAddedCountToFavorites: {
       one: '{{count}} elemento añadido a favoritos',
@@ -611,10 +615,6 @@ export default {
       other: '{{accepted}} de {{count}} elementos marcados como no hechos',
     },
     toastMarkNotDoneFailed: 'No se pudo marcar como no hecho',
-    toastThreadStaysDone:
-      'Este hilo no tiene mensajes recibidos, así que sigue marcado como hecho',
-    toastThreadsStayDone:
-      'Estos hilos no tienen mensajes recibidos, así que siguen marcados como hechos',
     toastCountNotRestored: {
       one: 'No se pudo restaurar {{count}} elemento.',
       many: 'No se pudieron restaurar {{count}} de elementos.',
@@ -721,8 +721,6 @@ export default {
     create: 'Crear',
     getMobileApp: 'Obtener la app móvil',
     signedInAs: 'Sesión iniciada como {{name}}',
-    commandMenu: 'Menú de comandos',
-    searchEverything: 'Buscar en todo',
     customizeSidebar: 'Personalizar barra lateral',
     customizeSidebarDescription:
       'Elige qué apps aparecen en la barra lateral y arrástralas para reordenarlas. Inicio siempre aparece primero.',

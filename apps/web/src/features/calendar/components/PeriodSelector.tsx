@@ -1,3 +1,4 @@
+import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -12,7 +13,7 @@ import {
   Hotkey,
   Calendar as MiniCalendar,
 } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarNavigation } from '../context/calendar-navigation-context';
 import { CALENDAR_PERIODS } from '../core/periods';
@@ -192,25 +193,27 @@ export function PeriodSelector(props: {
 /** Period controls embedded in the mobile settings drawer. */
 export function MobilePeriodControls(props: { onSelect: () => void }) {
   const controls = createCalendarPeriodControls(props.onSelect);
+  const labelId = createUniqueId();
 
   return (
     <>
-      <MobileDrawer.Label>{t('calendar.periodLabel')}</MobileDrawer.Label>
-      <MobileDrawer.Section class="flex shrink-0 flex-col">
+      <MobileDrawer.Label id={labelId}>
+        {t('calendar.periodLabel')}
+      </MobileDrawer.Label>
+      <MobileDrawer.Section
+        role="radiogroup"
+        aria-labelledby={labelId}
+        class="flex shrink-0 flex-col"
+      >
         <For each={calendarViews()}>
           {(view) => (
-            <MobileDrawer.Item
-              aria-pressed={controls.activeView() === view.value}
-              onClick={() => controls.changeView(view.value)}
+            <MobileFilterDrawer.Option
+              selectionMode="single"
+              checked={controls.activeView() === view.value}
+              onChange={() => controls.changeView(view.value)}
             >
-              <span class="flex-1">{view.label}</span>
-              <CheckIcon
-                class="size-4 shrink-0 text-accent"
-                classList={{
-                  invisible: controls.activeView() !== view.value,
-                }}
-              />
-            </MobileDrawer.Item>
+              {view.label}
+            </MobileFilterDrawer.Option>
           )}
         </For>
       </MobileDrawer.Section>

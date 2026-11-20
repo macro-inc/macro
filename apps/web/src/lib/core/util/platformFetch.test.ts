@@ -8,6 +8,8 @@ vi.mock('../constant/servers', () => ({
     new URL('/auth', document.baseURI).href,
     'http://127.0.0.1:3006/sync',
   ],
+  SERVER_HOSTS: {},
+  SYNC_SERVICE_HOSTS: { worker: 'https://sync.example' },
 }));
 vi.mock('./platform', () => ({ isTauri: () => platform.native }));
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: nativeFetch }));
@@ -19,6 +21,8 @@ import {
   platformFetch,
   webviewFetch,
 } from './platformFetch';
+import { registerResponseObserver } from './response-observers';
+import { safeFetch } from './safeFetch';
 
 beforeEach(() => {
   platform.native = true;
@@ -30,6 +34,95 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+it('dispatches an unrelated fetch synchronously and returns its original promise', async () => {
+  const transport = Promise.resolve(new Response('unrelated'));
+  const sent = vi.fn<typeof fetch>().mockReturnValue(transport);
+  vi.stubGlobal('fetch', sent);
+  const stop = registerResponseObserver(() => undefined);
+  try {
+    const result = platformFetch('https://unrelated.example/asset');
+    expect(sent).toHaveBeenCalledOnce();
+    expect(result).toBe(transport);
+    await result;
+  } finally {
+    stop();
+  }
+});
+
+it('sends observer annotations without changing the caller request options', async () => {
+  const headers = new Headers({ 'x-original': 'kept' });
+  const init = Object.freeze({ headers, method: 'POST' });
+  const sent = vi.fn<typeof fetch>().mockResolvedValue(new Response('ok'));
+  vi.stubGlobal('fetch', sent);
+  const stop = registerResponseObserver((_input, request) => {
+    const outgoing = new Headers(request.headers);
+    outgoing.set('x-retirement-signal', '1');
+    request.headers = outgoing;
+  });
+  try {
+    await platformFetch('https://gateway.example/storage', init);
+    const outgoing = new Headers(sent.mock.calls[0][1]?.headers);
+    expect(outgoing.get('x-original')).toBe('kept');
+    expect(outgoing.get('x-retirement-signal')).toBe('1');
+    expect(headers.has('x-retirement-signal')).toBe(false);
+    expect(sent.mock.calls[0][1]).not.toBe(init);
+  } finally {
+    stop();
+  }
+});
+
+it('preserves inherited and non-enumerable fetch options in the observer copy', async () => {
+  const abort = new AbortController();
+  const headers = new Headers({ 'x-original': 'kept' });
+  class Options {
+    get method() {
+      return 'POST';
+    }
+    get body() {
+      return 'payload';
+    }
+    get signal() {
+      return abort.signal;
+    }
+    get headers() {
+      return headers;
+    }
+  }
+  const init = new Options();
+  const referrer = vi.fn(() => 'https://sender.example/');
+  Object.defineProperty(init, 'credentials', { value: 'include' });
+  Object.defineProperty(init, 'referrer', {
+    enumerable: true,
+    get: referrer,
+  });
+  Object.freeze(init);
+  const sent = vi.fn<typeof fetch>().mockResolvedValue(new Response('ok'));
+  vi.stubGlobal('fetch', sent);
+  const stop = registerResponseObserver((_input, request) => {
+    expect(request.method).toBe('POST');
+    const outgoing = new Headers(request.headers);
+    outgoing.set('x-retirement-signal', '1');
+    request.headers = outgoing;
+  });
+  try {
+    await platformFetch('https://gateway.example/storage', init);
+    const outgoing = sent.mock.calls[0][1];
+    expect(outgoing).toMatchObject({
+      method: 'POST',
+      body: 'payload',
+      credentials: 'include',
+      referrer: 'https://sender.example/',
+    });
+    expect(referrer).toHaveBeenCalledOnce();
+    expect(outgoing?.signal).toBe(abort.signal);
+    expect(new Headers(outgoing?.headers).get('x-original')).toBe('kept');
+    expect(headers.has('x-retirement-signal')).toBe(false);
+    expect(sent.mock.calls[0][1]).not.toBe(init);
+  } finally {
+    stop();
+  }
+});
 
 it.each([
   'ipc://localhost/',
@@ -204,3 +297,31 @@ it.each([
     expect(nativeFetch).not.toHaveBeenCalled();
   }
 );
+
+it('reports a native request that gets no response as a network error', async () => {
+  const failure =
+    'error sending request for url (https://sync.example/document/1/exists)';
+  nativeFetch.mockRejectedValue(failure);
+  vi.stubGlobal('fetch', initializePlatformFetch(vi.fn<typeof fetch>()));
+
+  await expect(platformFetch('https://sync.example/')).rejects.toThrow(
+    new TypeError(failure)
+  );
+  const result = await safeFetch('https://sync.example/document/1/exists', {
+    method: 'HEAD',
+  });
+  expect(result._unsafeUnwrapErr()).toEqual([
+    { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+  ]);
+});
+
+it('keeps a cancelled native request out of network errors', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  nativeFetch.mockRejectedValue('Request canceled');
+  vi.stubGlobal('fetch', initializePlatformFetch(vi.fn<typeof fetch>()));
+
+  await expect(
+    platformFetch('https://sync.example/', { signal: controller.signal })
+  ).rejects.toBe('Request canceled');
+});

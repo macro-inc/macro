@@ -6,6 +6,7 @@ use sqlx::{Pool, Postgres, Row};
 use super::*;
 use crate::domain::model::SeatPlan;
 
+mod crm_member_access;
 mod delete_team;
 mod invite_link;
 
@@ -1241,7 +1242,7 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
         .await?;
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &user_id).await?;
-    assert_eq!(removed_member.role, TeamRole::Admin);
+    assert_eq!(removed_member.member.role, TeamRole::Admin);
 
     team_repo
         .rollback_remove_user_from_team(&removed_member, false)
@@ -1505,6 +1506,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
     let team_repo = TeamRepositoryImpl::new(pool.clone());
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
@@ -1535,6 +1537,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
     let team_repo = TeamRepositoryImpl::new(pool.clone());
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Should Not Apply".to_string()),
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
@@ -1564,6 +1567,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
     let team_repo = TeamRepositoryImpl::new(pool);
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
@@ -1592,6 +1596,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 
     // Providing a value updates it.
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: None,
@@ -1604,6 +1609,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 
     // Omitting the field leaves it unchanged.
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Renamed".to_string()),
         slug: None,
         user_role_updates: None,
@@ -1616,6 +1622,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 
     // An explicit null turns default link sharing off.
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: None,
@@ -1941,7 +1948,7 @@ async fn test_included_seat_survives_remove_and_rollback(
     );
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &agent_id).await?;
-    assert_eq!(removed_member.user_id.as_ref(), agent_id.as_ref());
+    assert_eq!(removed_member.member.user_id.as_ref(), agent_id.as_ref());
     assert!(!team_repo.is_seat_included(&team_id, &agent_id).await?);
 
     team_repo

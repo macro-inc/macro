@@ -108,6 +108,11 @@ export function createStandaloneComposerSetup(
   return {
     model,
     saveError: editor.saveError,
+    replacementRequest: () => {
+      const submission = model.submission();
+      if (!submission) return;
+      return editor.replacementRequest(submission.values, submission.scope);
+    },
     suggestionsPending: suggestions.pending,
     guestInvitesEnabled,
     forwardEnabled,

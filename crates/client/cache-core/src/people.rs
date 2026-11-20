@@ -14,7 +14,22 @@ pub(crate) const CONTEXT_META: &str = "__meta:contact-search-context-v1";
 /// Hard limit on context patches, excluded people, and returned people.
 pub const MAX_PEOPLE_BATCH: usize = 500;
 /// Before-limit matching, exclusion and ranking contract advertised to clients.
-pub const PEOPLE_POLICY_VERSION: u32 = 5;
+/// Version 6 lists people with a positive interaction time first among
+/// word-start matches, counts an exact first name as an exact name, and
+/// renumbers `match_rank` (email prefix 6, identity 7, property self pin 8).
+/// Version 7 accepts `listPriority` and `onlyListed`. A list order replaces
+/// the messaged split: name stage, then list group, then recency.
+pub const PEOPLE_POLICY_VERSION: u32 = 7;
+/// Oldest suggestion policy a frontend still accepts. Native hosts (desktop,
+/// iOS, Android) compile this crate and update only with an app release, while
+/// the frontend ships over the air; their policy-5 windows differ only in order.
+pub const PEOPLE_MIN_POLICY_VERSION: u32 = 5;
+/// Most list groups one search may rank by.
+pub const MAX_LIST_GROUPS: usize = 16;
+/// Most list keys across all groups of one search.
+pub const MAX_LIST_KEYS: usize = 64;
+/// Longest list key; longer keys on a contact are ignored.
+pub const MAX_LIST_KEY_BYTES: usize = 128;
 /// Reference evidence is independent of suggestion matching and ordering.
 pub const PEOPLE_REFERENCE_POLICY_VERSION: u32 = 4;
 /// Two distinct matches suffice to disprove unique reference resolution.
@@ -136,6 +151,18 @@ pub struct PeopleSearch {
     pub now_ms: i64,
     /// Opaque continuation from this same account, generation and search policy.
     pub cursor: Option<String>,
+    /// Ordered groups of opaque contact list keys. Within a name stage, a
+    /// person ranks by the first group holding any of their lists, then by
+    /// recency; people in no group come last. A nonempty order supersedes the
+    /// policy 6 messaged split; empty keeps the policy 6 order.
+    /// Omitted when empty, which policy 5 and 6 hosts require.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(any(test, feature = "schema"), schemars(length(max = MAX_LIST_GROUPS)))]
+    pub list_priority: Vec<Vec<String>>,
+    /// Drop people in none of the `list_priority` groups instead of ranking them
+    /// last; with no groups, nobody is listed. The empty-browse self pin stays.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub only_listed: bool,
 }
 
 /// Fully materialized winning person; neither the cache key nor DM id replaces user_id.

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use cowlike::CowLike;
 use email::domain::ports::EmailService;
+use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use rootcause::Report;
 use soup::domain::{
@@ -16,7 +17,7 @@ use soup::domain::{
 use crate::domain::{
     models::{
         Candidate, CandidateKeying, CandidatePage, CandidateRequest, EntityFacts, FeedPosition,
-        MailFacts,
+        FeedViewer, MailFacts,
     },
     ports::CandidateSource,
 };
@@ -88,6 +89,7 @@ where
                         entity_id: after.entity_id,
                     }),
                     only: request.only,
+                    assume_attention: request.assume_attention,
                 },
                 request.viewer.team,
             )
@@ -112,5 +114,17 @@ where
                 entity_id: next.entity_id,
             }),
         })
+    }
+
+    async fn unread_keys(
+        &self,
+        viewer: &FeedViewer,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, Report> {
+        self.soup
+            .get_attention_unread_entities(viewer.user.clone(), types, limit)
+            .await
+            .map_err(|error| rootcause::report!("failed to find unread entities: {error}"))
     }
 }

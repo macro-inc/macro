@@ -1,12 +1,19 @@
+import {
+  createSavedViewCreation,
+  type SavedViewCreation,
+} from '@app/features/saved-views/primitives/create-saved-view-creation';
+import { SavedViewLeaveGuard } from '@app/features/saved-views/views/saved-view-leave-guard';
+import { lazy } from '@core/util/lazy';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { confirmDialog } from '@ui';
 import {
   createEffect,
   createSignal,
   For,
   type JSX,
-  lazy,
   onCleanup,
   onMount,
+  Show,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -36,6 +43,8 @@ import { Route } from '../solid/route';
 import { Router } from '../solid/router';
 import { useBeforeLeave } from '../solid/use-before-leave';
 import { createTestPolicy } from './fixtures';
+
+vi.mock('@ui', () => ({ confirmDialog: vi.fn() }));
 
 const counts = { drive: 0, document: 0, workspace: 0 };
 const documentTypeReads = vi.fn();
@@ -471,6 +480,201 @@ describe('split router Solid bindings', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByRole('button').textContent).toBe('sort:date');
     expect(history.read().search).toBe('?s0.list.sort=date');
+  });
+});
+
+describe('saved-view draft leave', () => {
+  let creation: SavedViewCreation;
+  let respond: (discard: boolean) => void;
+  let refuseSecondary = false;
+
+  function SecondaryGuard() {
+    useBeforeLeave(() => !refuseSecondary);
+    return null;
+  }
+  const discard = vi.fn(() => creation.discard());
+  const save = vi.fn();
+
+  function DraftView() {
+    creation = createSavedViewCreation({
+      kind: 'task',
+      viewerId: () => 'viewer',
+      capture: () => ({ filter: 'all' }),
+      list: () => [],
+      equal: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+    });
+    creation.begin({ filter: 'all' }, 'Draft', true);
+    onCleanup(
+      creation.registerSave(async (draft) => {
+        save(draft);
+        return {
+          id: draft.id,
+          ownerId: 'viewer',
+          name: draft.name,
+          config: draft.config,
+          sharedTeamId: draft.sharedTeamId,
+          revision: 1,
+        };
+      })
+    );
+    return (
+      <>
+        <Show when={creation.current()?.id} keyed>
+          <SavedViewLeaveGuard
+            creation={creation}
+            discard={discard}
+            selection={{ filters: ['status'] }}
+          />
+        </Show>
+        <SecondaryGuard />
+        <p>draft</p>
+      </>
+    );
+  }
+
+  const draftRoutes: SplitRoutes = {
+    ...routes,
+    definitions: [
+      routes.definitions[0]!,
+      defineRoute({
+        id: 'app',
+        children: [
+          ...paneRoutes,
+          defineRoute({
+            id: 'draft',
+            path: 'draft',
+            search: ['filters'],
+            component: DraftView,
+          }),
+        ],
+      }),
+    ],
+  };
+
+  function mountDraft() {
+    return renderRouter(
+      '/draft',
+      (router) => (
+        <For each={router.panes()}>{(pane) => <Outlet pane={pane} />}</For>
+      ),
+      draftRoutes
+    );
+  }
+
+  beforeEach(() => {
+    refuseSecondary = false;
+    discard.mockClear();
+    save.mockClear();
+    vi.mocked(confirmDialog).mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          respond = resolve;
+          onCleanup(() => resolve(false));
+        })
+    );
+  });
+
+  it('discards only after a confirmed navigation commits', async () => {
+    const { router, history } = mountDraft();
+    const pane = router.panes()[0]!;
+    const draft = creation.current()!;
+    const navigation = router.navigatePane(pane, '/home');
+    expect(discard).not.toHaveBeenCalled();
+    expect(creation.current()?.id).toBe(draft.id);
+    respond(true);
+    expect(await navigation).toMatchObject({ status: 'committed' });
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(creation.current()).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    expect(history.read().path).toBe('/home');
+  });
+
+  it('keeps editing when the confirmation is declined', async () => {
+    const { router, history } = mountDraft();
+    const pane = router.panes()[0]!;
+    const draft = creation.current()!;
+    const navigation = router.navigatePane(pane, '/home');
+    respond(false);
+    expect(await navigation).toMatchObject({ status: 'cancelled' });
+    expect(creation.current()?.id).toBe(draft.id);
+    expect(discard).not.toHaveBeenCalled();
+    expect(history.read().path).toBe('/draft');
+  });
+
+  it('does not ask to leave when a filter update keeps the selection unchanged', async () => {
+    const { router } = mountDraft();
+    const pane = router.panes()[0]!;
+    const draft = creation.current()!;
+    expect(
+      await router.updateSearch(pane, 'filters', { sort: ['date'] })
+    ).toMatchObject({ status: 'committed' });
+    expect(creation.current()?.id).toBe(draft.id);
+    expect(confirmDialog).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+  });
+
+  it('confirms the latest navigation when it supersedes an open prompt', async () => {
+    const { router, history } = mountDraft();
+    const pane = router.panes()[0]!;
+    const first = router.navigatePane(pane, '/home');
+    expect(confirmDialog).toHaveBeenCalledTimes(1);
+    const second = router.navigatePane(pane, '/home');
+    expect(confirmDialog).toHaveBeenCalledTimes(2);
+    expect(await first).toMatchObject({ status: 'cancelled' });
+
+    // Settling the old request must not release the new prompt's ownership.
+    const action = vi.fn();
+    creation.run(action);
+    expect(confirmDialog).toHaveBeenCalledTimes(2);
+    respond(true);
+    expect(await second).toMatchObject({ status: 'committed' });
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(action).not.toHaveBeenCalled();
+    expect(history.read().path).toBe('/home');
+  });
+
+  it('keeps the draft when a secondary guard refuses after confirmation', async () => {
+    refuseSecondary = true;
+    const { router, history } = mountDraft();
+    const draft = creation.current()!;
+    const navigation = router.navigatePane(router.panes()[0]!, '/home');
+    respond(true);
+    expect(await navigation).toMatchObject({ status: 'cancelled' });
+    expect(confirmDialog).toHaveBeenCalledTimes(1);
+    expect(creation.current()?.id).toBe(draft.id);
+    expect(discard).not.toHaveBeenCalled();
+    expect(history.read().path).toBe('/draft');
+  });
+
+  it('cancels a local action without saving or disposing the draft', async () => {
+    mountDraft();
+    const action = vi.fn();
+    const draft = creation.current()!;
+    creation.run(action);
+    respond(false);
+    await Promise.resolve();
+    expect(action).not.toHaveBeenCalled();
+    expect(creation.current()?.id).toBe(draft.id);
+    expect(discard).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('discards before running a confirmed local action without saving', async () => {
+    mountDraft();
+    let actionDone!: () => void;
+    const actionCompleted = new Promise<void>((resolve) => {
+      actionDone = resolve;
+    });
+    const action = vi.fn(() => {
+      expect(creation.current()).toBeUndefined();
+      actionDone();
+    });
+    creation.run(action);
+    respond(true);
+    await actionCompleted;
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
   });
 });
 

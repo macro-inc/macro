@@ -1,6 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
-import { enableProjects } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
@@ -45,13 +43,9 @@ export function InlineTaskProperties() {
 
   const { properties, refetch, addProperty, removeProperty } =
     useEntityProperties(blockId, entityType, false);
-  const projects = useFeatureFlag(enableProjects);
   const defaultDefinitionIds = () =>
     documentKind === 'task'
-      ? [
-          ...getDefaultPinnedProperties('task'),
-          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
-        ]
+      ? [...getDefaultPinnedProperties('task'), SYSTEM_PROPERTY_IDS.PROJECT]
       : [];
   const pins = createPinnedProperties(
     () => state.editor.md.editor,
@@ -60,7 +54,6 @@ export function InlineTaskProperties() {
   const titleProperties = () => {
     const fetched = properties();
     return documentKind === 'task' &&
-      projects().enabled &&
       !fetched.some(
         (property) =>
           property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
@@ -110,12 +103,7 @@ export function InlineTaskProperties() {
       (property) =>
         selected.includes(property.propertyId) &&
         !property.isMetadata &&
-        !tagDefinitionIds().has(property.propertyDefinitionId) &&
-        !(
-          documentKind === 'task' &&
-          !projects().enabled &&
-          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
-        )
+        !tagDefinitionIds().has(property.propertyDefinitionId)
     );
     if (documentKind !== 'task') return visible;
     const order: readonly string[] = [

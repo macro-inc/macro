@@ -33,6 +33,7 @@ fn parent_entity_type(stored: &str) -> Option<EntityType> {
         "initiative" => EntityType::Initiative,
         "crm_company" => EntityType::CrmCompany,
         "crm_contact" => EntityType::CrmContact,
+        "crm_pipeline" => EntityType::CrmPipeline,
         "call" => EntityType::Call,
         _ => return None,
     })

@@ -11,7 +11,10 @@ use crate::domain::models::{
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use std::{collections::HashMap, future::Future};
+use std::{
+    collections::{HashMap, HashSet},
+    future::Future,
+};
 use uuid::Uuid;
 
 /// Repository for accessing entity permissions from the database.
@@ -308,6 +311,36 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
+    /// Current visible CRM records among a bounded set of entity keys.
+    /// Adapters may share membership and pipeline-source reads across the batch.
+    fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> impl Future<Output = Result<HashSet<(EntityType, String)>, AccessError>> + Send {
+        async move {
+            let mut visible = HashSet::new();
+            for (kind, id) in entities {
+                let allowed = match kind {
+                    EntityType::CrmCompany => {
+                        self.get_crm_company_access(id, Some(user)).await?.is_some()
+                    }
+                    EntityType::CrmContact => {
+                        self.get_crm_contact_access(id, Some(user)).await?.is_some()
+                    }
+                    EntityType::CrmPipeline => {
+                        self.get_pipeline_access(id, Some(user)).await?.is_some()
+                    }
+                    _ => false,
+                };
+                if allowed {
+                    visible.insert((*kind, id.clone()));
+                }
+            }
+            Ok(visible)
+        }
+    }
+
     /// Check if a user is a member of the specified channels.
     ///
     /// Returns the subset of channel_ids that the user is a participant of.
@@ -454,6 +487,41 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
+
+    /// Visible CRM entity keys under the same current policy as individual view receipts.
+    fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> impl Future<Output = Result<HashSet<(EntityType, String)>, AccessError>> + Send {
+        async move {
+            let mut visible = HashSet::new();
+            for (kind, id) in entities {
+                if !matches!(
+                    kind,
+                    EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline
+                ) {
+                    continue;
+                }
+                match self
+                    .generate_entity_access_receipt::<ViewAccessLevel>(user, None, id, *kind)
+                    .await
+                {
+                    Ok(_) => {
+                        visible.insert((*kind, id.clone()));
+                    }
+                    Err(
+                        AccessError::Unauthorized
+                        | AccessError::UnauthorizedWithMessage(_)
+                        | AccessError::NotFound(_)
+                        | AccessError::BadRequest(_),
+                    ) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(visible)
+        }
+    }
 
     /// Mint view receipts for a distinct batch of email thread IDs.
     ///

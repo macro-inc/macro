@@ -268,6 +268,7 @@ impl<P: ProjectAgentInheritance, I: ProjectMemberships, A: ProjectAssignmentAcce
                 | PropertiesErr::DuplicateOptionValue
                 | PropertiesErr::ConflictingTeamLabel(_)
                 | PropertiesErr::SystemPropertyNotModifiable
+                | PropertiesErr::ReservedName(_)
                 | PropertiesErr::TeamMembershipRequired
                 | PropertiesErr::ManagedDefinition),
             ) => {

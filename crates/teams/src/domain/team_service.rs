@@ -38,6 +38,7 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use crate::domain::{
     contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
+    crm_member_access::{CrmAccessRollout, DisabledCrmAccessRollout},
     customer_repo::CustomerRepository,
     events::{
         OwnedEntityMetadata, TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata,
@@ -50,10 +51,10 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
-        RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
-        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-        TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
-        team_slug_from_name,
+        RemovedTeamMember, RestorePermissionsForTeamMembersError,
+        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
+        TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{
@@ -164,6 +165,8 @@ pub struct TeamServiceImpl<
     owned_entity_cleanup: OEC,
     /// Rewards whoever brought a new member onto the team.
     invite_rewarder: Arc<dyn InviteRewarder>,
+    /// Gates preference changes until every membership writer is upgraded.
+    crm_access_rollout: Arc<dyn CrmAccessRollout>,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
@@ -201,6 +204,7 @@ where
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
+            crm_access_rollout: self.crm_access_rollout.clone(),
         }
     }
 }
@@ -306,6 +310,7 @@ where
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
             invite_rewarder: Arc::new(NoOpInviteRewarder),
+            crm_access_rollout: Arc::new(DisabledCrmAccessRollout),
         }
     }
 }
@@ -693,6 +698,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -718,6 +724,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -743,7 +750,14 @@ where
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
+    }
+
+    /// Supply the rollout gate for CRM preference writes. Read enforcement is unconditional.
+    pub fn with_crm_access_rollout(mut self, rollout: Arc<dyn CrmAccessRollout>) -> Self {
+        self.crm_access_rollout = rollout;
+        self
     }
 
     /// Replaces the rewarder for whoever brought a new member onto a team.
@@ -799,12 +813,13 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
     async fn restore_after_channels_left(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
         seat_included: bool,
         subscription_id: Option<&stripe::SubscriptionId>,
         user_id: &MacroUserIdStr<'_>,
@@ -824,7 +839,7 @@ where
             .ok();
         if let Some(subscription_id) = subscription_id {
             self.customer_repository
-                .increment_seat_count(subscription_id, removed_member.plan, 1)
+                .increment_seat_count(subscription_id, removed_member.member.plan, 1)
                 .await
                 .inspect_err(|rollback_err| {
                     tracing::error!(
@@ -1037,7 +1052,7 @@ where
                     .schedule_seat_plan(subscription_id, user_id, None)
                     .await?;
                 self.customer_repository
-                    .decrement_seat_count(subscription_id, removed_member.plan, 1)
+                    .decrement_seat_count(subscription_id, removed_member.member.plan, 1)
                     .await
             }
             .await
@@ -1066,7 +1081,7 @@ where
             Err(error) => {
                 if let Some(subscription_id) = subscription_id.as_ref() {
                     self.customer_repository
-                        .increment_seat_count(subscription_id, removed_member.plan, 1)
+                        .increment_seat_count(subscription_id, removed_member.member.plan, 1)
                         .await
                         .inspect_err(|rollback_err| {
                             tracing::error!(
@@ -1165,16 +1180,16 @@ where
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
-            member_id: removed_member.user_id.clone().into_owned(),
+            member_id: removed_member.member.user_id.clone().into_owned(),
             removed_by_id: removed_by_id.clone(),
-            role: removed_member.role,
+            role: removed_member.member.role,
         })
         .await;
         self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
             team_id,
-            member_id: removed_member.user_id.into_owned(),
+            member_id: removed_member.member.user_id.into_owned(),
             removed_by: removed_by_id,
-            role: removed_member.role,
+            role: removed_member.member.role,
         }));
 
         Ok(())
@@ -1797,6 +1812,16 @@ where
 
         self.remove_member(team_id, agent_user_id, removed_by_id)
             .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn take_back_team_agent(
+        &self,
+        team_id: uuid::Uuid,
+        agent_user_id: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        self.remove_member(team_id, agent_user_id, removed_by).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -2623,7 +2648,7 @@ where
         self.team_repository.get_team_invites(&team_id).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %entity_access_receipt.entity().entity_id), err)]
     async fn patch_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -2636,6 +2661,22 @@ where
             .into_owned();
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        if let Some(change) = &req.member_crm_access {
+            self.crm_access_rollout.require_enabled().await?;
+            if req
+                .user_role_updates
+                .as_ref()
+                .is_some_and(|updates| !updates.is_empty())
+            {
+                return Err(TeamError::BadRequest(
+                    "change roles and CRM access in separate requests".into(),
+                ));
+            }
+            self.team_repository
+                .set_member_crm_access(team_id, &actor_user_id, &change.user_id, change.enabled)
+                .await?;
+        }
 
         if let Some(user_role_updates) = req.user_role_updates.as_ref() {
             if user_role_updates.iter().any(|u| u.role == TeamRole::Owner) {
@@ -2712,7 +2753,7 @@ where
         let _ = (entity_access_receipt, backfill);
         if !enabled {
             return Err(TeamError::BadRequest(
-                "CRM is available to every team member; manage individual email contribution in CRM settings".into(),
+                "Manage member CRM access separately from mailbox contribution consent".into(),
             ));
         }
         Ok(PatchTeamCrmSettingsResponse {

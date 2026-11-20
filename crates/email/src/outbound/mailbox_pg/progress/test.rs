@@ -2,12 +2,13 @@ use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
-    EmailApiError, GateLimit, MailboxMessage, RateLimitOrigin, StreamPosition,
+    EmailApiError, GateLimit, MailFolderCatalog, MailboxMessage, RateLimitOrigin, RoundStart,
+    StreamPosition,
 };
 use email_api_client::domain::request_count;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Provider double: answers message reads in order, sending `requests` Graph
@@ -29,15 +30,16 @@ impl Provider {
     }
 }
 
-impl MailboxGateway for Provider {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+impl MailboxGateway for Arc<Provider> {
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         self.pages.lock().unwrap().pop_front().unwrap()
     }
@@ -57,11 +59,13 @@ impl MailboxGateway for Provider {
     }
 }
 
+/// Live and import reads answer from the same queues.
 fn sync(
     repo: &PgMailboxSync,
     provider: Provider,
-) -> MailboxSyncService<PgMailboxSync, Provider, PgMailboxSync> {
-    MailboxSyncService::new(repo.clone(), provider, repo.clone())
+) -> MailboxSyncService<PgMailboxSync, Arc<Provider>, PgMailboxSync> {
+    let provider = Arc::new(provider);
+    MailboxSyncService::new(repo.clone(), provider.clone(), provider, repo.clone())
 }
 
 /// `attempts` is what the row had before its next claim adds one.
@@ -104,8 +108,9 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = enumerated_mailbox(&db).await;
-    queue(&db, link, "first", true, 2).await;
-    queue(&db, link, "second", true, 2).await;
+    // Import rows settle on their first read that Graph answers 404.
+    queue(&db, link, "first", true, 0).await;
+    queue(&db, link, "second", true, 0).await;
     let service = sync(
         &repo,
         Provider::answering(vec![Ok(None), Ok(None), Ok(None)]),
@@ -137,7 +142,7 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
             .all(|span| span["outlook.outcome"] == "absent")
     );
     assert_eq!(reconciled[0]["outlook.is_import"], "true");
-    assert_eq!(reconciled[0]["outlook.attempts"], "3");
+    assert_eq!(reconciled[0]["outlook.attempts"], "1");
     assert_eq!(reconciled[0]["outlook.graph_calls"], "2");
 }
 
@@ -162,12 +167,20 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = super::super::test::fixture(&db).await;
-    for (id, attempts) in [("window", 0), ("graph", 0), ("token", 0), ("moving", 0)] {
-        queue(&db, link, id, true, attempts).await;
+    // A live change whose message Graph does not return yet is read again.
+    // Live rows are claimed first, so it takes the first answer.
+    for (id, is_import) in [
+        ("moving", false),
+        ("window", true),
+        ("graph", true),
+        ("token", true),
+    ] {
+        queue(&db, link, id, is_import, 0).await;
     }
     let service = sync(
         &repo,
         Provider::answering(vec![
+            Ok(None),
             Err(EmailApiError::RateLimited {
                 retry_after: Some(Duration::from_secs(12)),
                 origin: RateLimitOrigin::Gate(GateLimit::Window),
@@ -179,7 +192,6 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
             Err(EmailApiError::CredentialsUnavailable {
                 message: "authentication unavailable".into(),
             }),
-            Ok(None),
         ]),
     );
 
@@ -201,10 +213,10 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
     assert_eq!(
         reasons,
         [
+            ("deferred", "location_unsettled", "30"),
             ("deferred", "gate_window", "12"),
             ("deferred", "graph_throttled", "7"),
             ("deferred", "token_unavailable", "30"),
-            ("deferred", "location_unsettled", "30"),
         ]
     );
     assert!(
@@ -226,10 +238,10 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
     assert_eq!(
         levels,
         [
+            (tracing::Level::WARN, "location_unsettled", link.to_string()),
             (tracing::Level::DEBUG, "gate_window", link.to_string()),
             (tracing::Level::WARN, "graph_throttled", link.to_string()),
             (tracing::Level::WARN, "token_unavailable", link.to_string()),
-            (tracing::Level::WARN, "location_unsettled", link.to_string()),
         ]
     );
     let parked = sqlx::query_scalar!(
@@ -287,8 +299,13 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn persistence_errors_name_their_sqlstate(db: PgPool) {
-    let failure = sqlx::query_scalar!(r#"SELECT 1 / $1::int AS "quotient""#, 0)
-        .fetch_one(&db)
+    let mut connection = db.acquire().await.unwrap();
+    sqlx::query_scalar!("SELECT set_config('statement_timeout', '1', false)")
+        .fetch_one(&mut *connection)
+        .await
+        .unwrap();
+    let failure = sqlx::query_scalar!(r#"SELECT 1 AS "one!" FROM pg_sleep(1)"#)
+        .fetch_one(&mut *connection)
         .await
         .unwrap_err();
 
@@ -296,11 +313,25 @@ async fn persistence_errors_name_their_sqlstate(db: PgPool) {
 
     assert_eq!(
         error.to_string(),
-        "mailbox persistence is unavailable: sqlstate 22012"
+        "mailbox persistence is unavailable: sqlstate 57014"
     );
     assert_eq!(
         crate::domain::mailbox::telemetry::defer_reason(&error),
         "persistence"
+    );
+    // A value the database refuses is the data's fault, not an outage.
+    let refused = sqlx::query_scalar!(r#"SELECT $1::text AS "text!""#, "a\0b")
+        .fetch_one(&db)
+        .await
+        .unwrap_err();
+    let error = super::super::db_error(refused);
+    assert_eq!(
+        error.to_string(),
+        "mailbox data cannot be stored: sqlstate 22021"
+    );
+    assert_eq!(
+        crate::domain::mailbox::telemetry::defer_reason(&error),
+        "unstorable"
     );
     // Projection effects that fail outside the database are reported apart.
     assert_eq!(
@@ -625,13 +656,14 @@ async fn notify(repo: &PgMailboxSync, attempt: Uuid) {
         MailboxWatchNotifications, WatchHint, WatchNotification,
     };
 
-    MailboxWatchNotifications(repo.clone())
+    MailboxWatchNotifications::new(repo.clone())
         .receive(
             attempt,
             vec![WatchNotification {
                 subscription_id: "sub".into(),
                 client_state: "secret".into(),
                 hint: WatchHint::Changed,
+                message: None,
             }],
         )
         .await

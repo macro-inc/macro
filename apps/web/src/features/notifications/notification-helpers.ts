@@ -1,15 +1,9 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
 import { isMutedItem } from '@entity/utils/notification';
-import { queryClient } from '@queries/client';
 import {
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
@@ -89,7 +83,7 @@ export function notificationIsRead(notification: UnifiedNotification): boolean {
  * @param entity
  * @returns boolean
  */
-export function entityHasUnreadNotifications(
+function entityHasUnreadNotifications(
   notificationSource: NotificationSource,
   entity: Entity
 ): boolean {
@@ -191,7 +185,7 @@ export async function markNotificationForEntityIdAsRead(
 }
 
 /** Cold imperative actions must load the full feed rather than act on an empty snapshot. */
-export async function ensureNotificationSourceLoaded(
+async function ensureNotificationSourceLoaded(
   notificationSource: NotificationSource
 ): Promise<void> {
   const query = notificationSource._notificationsQuery;
@@ -230,7 +224,7 @@ export async function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   const entityRef = toNotificationEntityRef(entity);
-  if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
+  if (entityRef) {
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
@@ -245,6 +239,19 @@ export async function markNotificationsForEntityAsRead(
   await notificationSource.bulkMarkAsRead(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
+}
+
+/**
+ * Marks every notification of the given channels as read. It writes by
+ * entity, so it never loads the notification feed to find them.
+ */
+export async function markChannelsAsRead(
+  channelIds: Iterable<string>
+): Promise<void> {
+  await updateNotificationsForEntities({
+    entities: [...new Set(channelIds)].map((id) => ({ type: 'channel', id })),
+    operation: 'MARK_SEEN',
+  });
 }
 
 /** Best-effort read marker for navigation/timer callers with no awaiting UI. */
@@ -291,11 +298,6 @@ export async function executeMarkNotificationsDone(
   } catch (err) {
     rollback();
     throw err;
-  } finally {
-    await queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    });
   }
 }
 
@@ -313,11 +315,6 @@ export async function executeMarkNotificationsUndone(
   } catch (err) {
     rollback();
     throw err;
-  } finally {
-    await queryClient.invalidateQueries({
-      queryKey: notificationKeys.user._def,
-      refetchType: 'none',
-    });
   }
 }
 

@@ -7,6 +7,7 @@ const { invoke, listen } = vi.hoisted(() => ({
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit: vi.fn() }));
 
+import { testAuthority } from '../authority-fixture';
 import {
   type EntityFilterCacheArgs,
   type LiveQueryUpdate,
@@ -42,9 +43,11 @@ describe('native retained view transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listen.mockResolvedValue(() => {});
-    invoke.mockImplementation(async (command: string) =>
-      command.startsWith('graphql_cache_entity_filter') ? update : null
-    );
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_authority')
+        return testAuthority('scope-1');
+      return command.startsWith('graphql_cache_entity_filter') ? update : null;
+    });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -166,9 +169,11 @@ describe('native retained view transport', () => {
 
   it('reads a fresh revision without transmitting a fragment for empty selections', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    invoke.mockImplementation(async (command: string) =>
-      command === 'graphql_cache_current_revision' ? '42' : null
-    );
+    invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_authority')
+        return testAuthority('scope-1');
+      return command === 'graphql_cache_current_revision' ? '42' : null;
+    });
     await expect(
       host.readRecordsByKeys({
         document: args.liveQuery!.document,

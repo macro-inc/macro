@@ -256,7 +256,7 @@ describe('CoordinatorCore', () => {
       expect.objectContaining({
         kind: 'reject-request',
         requestId: 2,
-        errorCode: 'owner-lock-unavailable',
+        errorCode: 'cache-superseded',
       }),
     ]);
 
@@ -282,6 +282,7 @@ describe('CoordinatorCore', () => {
         kind: 'notify-cache-unavailable',
         tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
+        superseded: true,
       },
     ]);
   });
@@ -366,6 +367,7 @@ describe('CoordinatorCore', () => {
         kind: 'notify-cache-unavailable',
         tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
+        superseded: true,
       },
     ]);
   });

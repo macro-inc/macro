@@ -1,16 +1,20 @@
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Button } from '@ui';
 import { type Accessor, Show } from 'solid-js';
+import type { EventReplacementRequest } from '../../core/event-replacement';
 import { createGuestInviteController } from '../../hooks/create-guest-invite-controller';
 import type { CalendarEvent } from '../../types';
 import { viewerReplacesGuests } from '../../utils/event-guest-editing';
-import { EventReplacementAction } from '../event-replacement';
+import { EventReplacement, useEventReplacement } from '../event-replacement';
 
-/** Keep the existing forwarding and provider-replacement workflows available. */
+/** Forward invitations and replace provider meetings with the current draft. */
 export function StandaloneComposerActions(props: {
   event: CalendarEvent;
   guestInvitesEnabled: Accessor<boolean>;
   forwardEnabled: Accessor<boolean>;
   disabled: boolean;
+  replacementRequest: () => EventReplacementRequest | undefined;
   onDone: () => void;
 }) {
   const invites = createGuestInviteController(
@@ -18,34 +22,33 @@ export function StandaloneComposerActions(props: {
     props.guestInvitesEnabled,
     props.forwardEnabled
   );
+  const replacement = useEventReplacement(() => props.event.eventId);
   const canReplace = () =>
     props.event.calendar.provider === 'outlook' &&
+    !!props.event.conferenceUrl &&
     !props.event.isCancelled &&
     viewerReplacesGuests(props.event);
+  const startReplacement = () => {
+    const request = props.replacementRequest();
+    if (request)
+      fireAndForget(replacement.start(request), 'calendar-replacement');
+  };
   return (
     <>
       <Show when={invites.canForward()}>
         <EventForwardInvitationAction event={props.event} invites={invites} />
       </Show>
       <Show when={canReplace()}>
-        <EventReplacementAction
-          target={{
-            eventId: props.event.eventId,
-            calendarId: props.event.calendarId,
-            recurrenceId: props.event.recurrenceId,
-          }}
-          hasConference={
-            props.event.conferenceUrl !== undefined &&
-            props.event.conferenceProvider !== undefined
-          }
-          recurring={
-            props.event.recurrenceLines.length > 0 ||
-            props.event.recurrenceId !== undefined
-          }
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={props.disabled}
-          onDone={props.onDone}
-        />
+          onClick={startReplacement}
+        >
+          Replace without meeting
+        </Button>
       </Show>
+      <EventReplacement controller={replacement} onDone={props.onDone} />
     </>
   );
 }

@@ -327,6 +327,47 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
         share::get_project_share_permission(&self.pool, project_id).await
     }
 
+    #[tracing::instrument(skip_all, fields(folder_id = %project_id), err)]
+    async fn folder_has_explicit_grant(
+        &self,
+        project_id: uuid::Uuid,
+        owner: &Owner,
+    ) -> Result<bool, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let ancestors =
+            entity_access_db_utils::walk_up_project_tree(&mut transaction, &project_id).await?;
+        let grants = entity_access_db_utils::project_grants::project_grant_sources(
+            &mut transaction,
+            &ancestors,
+        )
+        .await?;
+        Ok(grants
+            .iter()
+            .any(|grant| match (owner.as_user(), grant.source_type) {
+                (Some(user), entity_access_db_utils::EntityAccessSourceType::User) => {
+                    grant.source_id != user.as_ref()
+                }
+                _ => true,
+            }))
+    }
+
+    #[tracing::instrument(skip_all, fields(folder_id = %project_id), err)]
+    async fn folder_has_team_edit_grant(
+        &self,
+        project_id: uuid::Uuid,
+        team_id: uuid::Uuid,
+    ) -> Result<bool, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        let level = entity_access_db_utils::team_share::direct_level(
+            transaction.as_mut(),
+            &project_id,
+            model_entity::EntityType::Project,
+            team_id,
+        )
+        .await?;
+        Ok(level == Some(models_permissions::share_permission::access_level::AccessLevel::Edit))
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_team_share_facts(
         &self,
@@ -518,5 +559,13 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+}
+
+impl<B: BotFacts + 'static> crate::domain::ports::ProjectLifecycleReads for PgProjectRepo<B> {
+    #[tracing::instrument(skip(self), err)]
+    async fn project_is_live(&self, id: uuid::Uuid) -> anyhow::Result<bool> {
+        let project = self.get_basic_project(&id.to_string()).await?;
+        Ok(project.is_some_and(|project| project.deleted_at.is_none()))
     }
 }

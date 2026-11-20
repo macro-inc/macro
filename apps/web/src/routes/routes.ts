@@ -576,6 +576,12 @@ export const homeSplitRoute = defineRoute({
   search: '*' as const,
 });
 
+/** New Home's entry: it sends the split to the tab New Home was left on. */
+export const newHomeRoute = defineRoute({
+  id: 'view-new-home',
+  path: 'new-home',
+});
+
 export const recentRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'view-recent',
@@ -1004,7 +1010,6 @@ const debugComponentIds = [
         'user-icon',
         'dynamic-ui',
         'agent-ui',
-        'agent-replay',
         'agent-progress',
         'agent-changes-ui',
         'diff-view-ui',
@@ -1014,7 +1019,6 @@ const debugComponentIds = [
   ...(DEV_MODE_ENV
     ? [
         'document-where-playground',
-        'projection-playground',
         'md-parse',
         'md-builder',
         'collab-surface-demo',

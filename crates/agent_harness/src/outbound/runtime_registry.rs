@@ -25,9 +25,11 @@ use dashmap::DashMap;
 use harness_id::HarnessId;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tracing::Instrument as _;
 
 use crate::domain::ports::{
-    HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    RuntimeConnections,
 };
 
 #[cfg(test)]
@@ -49,8 +51,10 @@ pub struct LiveRuntimeSessions {
 
 /// A connection and the identity its presence reports carry.
 struct ListedConnection<Sender> {
+    /// Always `connection.id()`.
     id: RuntimeConnectionId,
     connection: Arc<RuntimeConnection<Sender>>,
+    accepts: RuntimeAccepts,
 }
 
 // Manual Clone impl: the sender itself is behind the Arc.
@@ -59,6 +63,7 @@ impl<Sender> Clone for ListedConnection<Sender> {
         Self {
             id: self.id,
             connection: Arc::clone(&self.connection),
+            accepts: self.accepts,
         }
     }
 }
@@ -122,6 +127,12 @@ where
         self.connections.contains_key(&harness)
     }
 
+    /// The dial a harness's runtime is connected on here, if any.
+    #[must_use]
+    pub fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.connections.get(&harness).map(|listed| listed.id)
+    }
+
     /// Ask a harness's live runtime to probe a fresh ACP process.
     ///
     /// Returns `None` when no live connection exists. The caller owns the
@@ -141,6 +152,34 @@ where
             .map(|entry| Arc::clone(&entry.connection))?;
         Some(connection.probe_models().await)
     }
+
+    /// Hand `harness`'s live runtime an agent teammate's environment, with
+    /// the setup trace its start joins. Returns whether this process holds a
+    /// connection for it.
+    pub async fn apply_agent(
+        &self,
+        harness: HarnessId,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        traceparent: Option<String>,
+    ) -> bool {
+        let Some(connection) = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry.connection))
+        else {
+            return false;
+        };
+        match connection.apply_agent(environment, traceparent).await {
+            Ok(()) => {
+                tracing::info!(%harness, "handed this harness's runtime its agent");
+                true
+            }
+            Err(error) => {
+                tracing::warn!(%harness, error = ?error, "could not hand this harness's runtime its agent");
+                false
+            }
+        }
+    }
 }
 
 impl<Sender> RuntimeRegistry<Sender>
@@ -157,9 +196,24 @@ where
     where
         Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
     {
+        self.attach_accepting(harness, carrier, RuntimeAccepts::default());
+    }
+
+    /// [`Self::attach`] a runtime that accepts the optional messages in
+    /// `accepts`.
+    pub fn attach_accepting<Carrier>(
+        self: &Arc<Self>,
+        harness: HarnessId,
+        carrier: Carrier,
+        accepts: RuntimeAccepts,
+    ) where
+        Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
+    {
+        let connection = RuntimeConnection::connect(carrier);
         let listed = ListedConnection {
-            id: RuntimeConnectionId::generate(),
-            connection: RuntimeConnection::connect(carrier),
+            id: connection.id(),
+            connection,
+            accepts,
         };
 
         // Listed before it is watched: a socket that dies immediately would
@@ -174,10 +228,13 @@ where
                 "a redialed runtime replaced this harness's connection"
             );
         }
-        let connected_write = self
-            .presence
-            .as_ref()
-            .map(|presence| tokio::spawn(Arc::clone(presence).connected(harness, listed.id)));
+        let connected_write = self.presence.as_ref().map(|presence| {
+            tokio::spawn(record_connected(
+                Arc::clone(presence),
+                harness,
+                listed.clone(),
+            ))
+        });
         if let Some(live_sessions) = &self.live_sessions {
             tokio::spawn(report_live_sessions(
                 harness,
@@ -189,6 +246,15 @@ where
     }
 
     /// Tell presence which connections this process still holds.
+    ///
+    /// A connection can close between the snapshot and the renewal's write,
+    /// which then restores the row its close deleted. A close leaves the
+    /// registry before it deletes its row, so a restored connection the
+    /// registry no longer holds closed in between, and is closed again. Off
+    /// the renewal's path: a close can wait on locks, and a late renewal lets
+    /// every lease here lapse. Each undo runs inside this renewal's span, so
+    /// the restore and its second close read as one trace; a replica holding
+    /// nothing renews nothing and opens no span.
     pub async fn renew_presence(&self) {
         let Some(presence) = &self.presence else {
             return;
@@ -199,9 +265,40 @@ where
             .iter()
             .map(|entry| (*entry.key(), entry.id))
             .collect();
-        if !live.is_empty() {
-            Arc::clone(presence).renew(live).await;
+        if live.is_empty() {
+            return;
         }
+        let span = tracing::info_span!(
+            "harness.registry.renew",
+            connections = live.len(),
+            restored = tracing::field::Empty,
+            undone = tracing::field::Empty,
+        );
+        let restored = Arc::clone(presence)
+            .renew(live)
+            .instrument(span.clone())
+            .await;
+        let _entered = span.enter();
+        span.record("restored", restored.len());
+        let mut undone = 0usize;
+        for (harness, connection) in restored {
+            if self.connection_of(harness) == Some(connection) {
+                continue;
+            }
+            undone += 1;
+            tracing::warn!(
+                telemetry_event = "harness_runtime_lease_restore_undone",
+                %harness,
+                %connection,
+                "a renewal restored a connection that closed while it ran; closing it again"
+            );
+            tokio::spawn(
+                Arc::clone(presence)
+                    .disconnected(harness, connection)
+                    .instrument(span.clone()),
+            );
+        }
+        span.record("undone", undone);
     }
 
     /// Drop `connection` from the registry once its transport ends.
@@ -253,6 +350,30 @@ where
                 "dropped this harness's closed runtime connection"
             );
         }
+    }
+}
+
+/// Record a dial with presence, and when that bound an agent, tell the
+/// runtime to re-read its agents.
+///
+/// A Macro computer gets its first agent on its first connect. Told now
+/// rather than at its next poll, the runtime covers that agent at once, so a
+/// session requested the moment the computer is ready reaches it. Only a
+/// runtime that said it accepts the message gets it: an older one would log
+/// every one it is sent as malformed.
+async fn record_connected<Sender>(
+    presence: Arc<dyn HarnessPresence>,
+    harness: HarnessId,
+    listed: ListedConnection<Sender>,
+) where
+    Sender: TransportSender<ToRuntimeMessage>,
+{
+    let recorded = presence.connected(harness, listed.id, listed.accepts).await;
+    if recorded != ConnectionRecorded::AgentBound || !listed.accepts.agents_changed {
+        return;
+    }
+    if let Err(error) = listed.connection.agents_changed().await {
+        tracing::debug!(%harness, error = %error, "could not tell the runtime its agents changed");
     }
 }
 
@@ -348,6 +469,10 @@ where
         self.registry.is_connected(harness)
     }
 
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.registry.connection_of(harness)
+    }
+
     async fn access_facts(
         &self,
         bot: BotId,
@@ -360,7 +485,7 @@ where
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
+    ) -> anyhow::Result<crate::domain::model::ListedSessions> {
         self.bindings
             .sessions_on_harness(harness, acp_sessions)
             .await

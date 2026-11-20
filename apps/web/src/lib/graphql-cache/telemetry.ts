@@ -104,6 +104,7 @@ export const CACHE_ERROR_CODES = [
   'opfs-quota',
   'opfs-io',
   'lock',
+  'superseded',
   'owner-lost',
   'protocol',
   'transport',
@@ -160,6 +161,53 @@ export const CACHE_ROLLOUT_COHORTS = [
 ] as const;
 export type CacheRolloutCohort = (typeof CACHE_ROLLOUT_COHORTS)[number];
 
+/**
+ * Error types a cache failure is recorded with. Engine, browser and storage
+ * errors name their type; anything else is `other`. Types never carry data.
+ */
+export const CACHE_ERROR_NAMES = [
+  'Error',
+  'RuntimeError',
+  'CompileError',
+  'LinkError',
+  'RangeError',
+  'TypeError',
+  'ReferenceError',
+  'SyntaxError',
+  'AbortError',
+  'TimeoutError',
+  'QuotaExceededError',
+  'NotFoundError',
+  'NotAllowedError',
+  'NotReadableError',
+  'NoModificationAllowedError',
+  'InvalidStateError',
+  'InvalidModificationError',
+  'SecurityError',
+  'DataError',
+  'OperationError',
+  'UnknownError',
+  'other',
+] as const;
+export type CacheErrorName = (typeof CACHE_ERROR_NAMES)[number];
+
+/**
+ * Known engine and browser failures, recognized from fixed phrases in the
+ * message so the message itself is never exported.
+ */
+export const CACHE_ERROR_DETAILS = [
+  'out-of-memory',
+  'unreachable',
+  'memory-out-of-bounds',
+  'stack-overflow',
+  'indirect-call',
+  'worker-terminated',
+  'fetch-failed',
+  'disk-full',
+  'other',
+] as const;
+export type CacheErrorDetail = (typeof CACHE_ERROR_DETAILS)[number];
+
 export type CacheTelemetryObservation = {
   name: CacheTelemetryEventName;
   /** Original fixed event name represented by an aggregate envelope. */
@@ -167,6 +215,8 @@ export type CacheTelemetryObservation = {
   operationCategory: CacheOperationCategory;
   outcome?: CacheTelemetryOutcome;
   errorCode?: CacheErrorCode;
+  errorName?: CacheErrorName;
+  errorDetail?: CacheErrorDetail;
   resetReason?: CacheResetReason;
   ownerEvent?: CacheOwnerEvent;
   persistence?: 'granted' | 'denied' | 'unknown';
@@ -251,6 +301,14 @@ function sanitizeObservation(
     ...(input.errorCode !== undefined &&
     CACHE_ERROR_CODES.includes(input.errorCode)
       ? { errorCode: input.errorCode }
+      : {}),
+    ...(input.errorName !== undefined &&
+    CACHE_ERROR_NAMES.includes(input.errorName)
+      ? { errorName: input.errorName }
+      : {}),
+    ...(input.errorDetail !== undefined &&
+    CACHE_ERROR_DETAILS.includes(input.errorDetail)
+      ? { errorDetail: input.errorDetail }
       : {}),
     ...(input.resetReason !== undefined &&
     CACHE_RESET_REASONS.includes(input.resetReason)
@@ -549,6 +607,8 @@ export function operationCategoryForRequest(
       'teardown',
       'clear',
       'current-storage-generation',
+      'current-authority',
+      'transition-authority',
       'inspect-mutations',
       () => 'lifecycle' as const
     )
@@ -613,6 +673,62 @@ export function classifyCacheError(error: unknown): CacheErrorCode {
   return 'unknown';
 }
 
+const ERROR_DETAIL_PATTERNS: ReadonlyArray<
+  readonly [RegExp, CacheErrorDetail]
+> = [
+  [/out of memory|could not allocate|allocation failed|oom\b/, 'out-of-memory'],
+  [/unreachable/, 'unreachable'],
+  [/memory access out of bounds|out of bounds memory/, 'memory-out-of-bounds'],
+  [/call stack|too much recursion|stack overflow/, 'stack-overflow'],
+  [/indirect call|null function|function signature mismatch/, 'indirect-call'],
+  [/worker (was )?terminated|worker.*(crash|died)/, 'worker-terminated'],
+  [/failed to fetch|networkerror|load failed/, 'fetch-failed'],
+  [/no space|disk (is )?full/, 'disk-full'],
+];
+
+function errorNameOf(error: unknown): CacheErrorName | undefined {
+  const name =
+    error instanceof Error || error instanceof DOMException
+      ? error.name
+      : typeof error === 'string'
+        ? /^(\w+(?:Error|Exception))\b/.exec(error)?.[1]
+        : undefined;
+  if (name === undefined) return;
+  return (CACHE_ERROR_NAMES as readonly string[]).includes(name)
+    ? (name as CacheErrorName)
+    : 'other';
+}
+
+function errorDetailOf(error: unknown): CacheErrorDetail | undefined {
+  const message =
+    error instanceof Error || error instanceof DOMException
+      ? error.message.toLowerCase()
+      : typeof error === 'string'
+        ? error.toLowerCase()
+        : '';
+  if (!message) return;
+  return (
+    ERROR_DETAIL_PATTERNS.find(([pattern]) => pattern.test(message))?.[1] ??
+    'other'
+  );
+}
+
+/**
+ * Describes a failure for cache telemetry: its class, its type, and the known
+ * engine failure it names, each from a fixed list. The message never leaves.
+ */
+export function describeCacheError(
+  error: unknown
+): Pick<CacheTelemetryObservation, 'errorCode' | 'errorName' | 'errorDetail'> {
+  const errorName = errorNameOf(error);
+  const errorDetail = errorDetailOf(error);
+  return {
+    errorCode: classifyCacheError(error),
+    ...(errorName === undefined ? {} : { errorName }),
+    ...(errorDetail === undefined ? {} : { errorDetail }),
+  };
+}
+
 export function resetReasonForError(error: unknown): CacheResetReason {
   const code = classifyCacheError(error);
   if (code === 'opfs-quota') return 'quota-failure';
@@ -670,6 +786,8 @@ export function isCacheTelemetryObservation(
       'operationCategory',
       'outcome',
       'errorCode',
+      'errorName',
+      'errorDetail',
       'resetReason',
       'ownerEvent',
       'persistence',

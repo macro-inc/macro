@@ -3,7 +3,6 @@ import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-
 import { AgendaSkeleton } from '@app/features/calendar/components/agenda/skeleton/AgendaSkeleton';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { isMobile } from '@core/mobile/isMobile';
 import { Show } from 'solid-js';
 import { CalendarMainSkeleton } from './views/calendar-header/CalendarMainSkeleton';
 
@@ -18,7 +17,7 @@ export function CalendarViewSkeleton(props: { period?: CalendarPeriodView }) {
   return (
     <ViewSkeleton.Root
       asidePreferenceKey="calendar"
-      aside={isMobile() ? false : { preserveDuringResize: false }}
+      aside={{ preserveDuringResize: false }}
     >
       <ViewSkeleton.Sidebar title="Calendar" createLabel="New" />
       <CalendarMainSkeleton title={monthTitle()} period={period()}>

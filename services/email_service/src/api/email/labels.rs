@@ -38,16 +38,23 @@ pub(crate) fn settings_error(
         email::domain::mailbox::MailboxError::Stale => {
             (axum::http::StatusCode::CONFLICT, Default::default())
         }
+        error if error.is_lock_timeout() => (axum::http::StatusCode::CONFLICT, Default::default()),
         _ => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Default::default(),
         ),
     };
+    // A lock timeout is a busy inbox the user can retry, not an outage.
+    let message = if error.is_lock_timeout() {
+        email::domain::mailbox::lifecycle::InboxLifecycleError::Contended.to_string()
+    } else {
+        error.to_string()
+    };
     (
         status,
         headers,
         axum::Json(model::response::ErrorResponse {
-            message: error.to_string().into(),
+            message: message.into(),
         }),
     )
         .into_response()

@@ -8,7 +8,6 @@ import {
   type ListFilterGroup,
   ListGroupDropdown,
   ListSortDropdown,
-  SearchBar,
   useViewControlHotkeys,
   ViewLayoutDropdown,
   ViewShell,
@@ -18,7 +17,7 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
-import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import {
   getSoupMenuEntities,
@@ -52,13 +51,11 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
-import {
-  PROJECT_GRID_COLUMNS,
-  ProjectListHeader,
-  ProjectRow,
-} from '../components/project-row';
+import { ProjectCollectionControls } from '../components/project-collection-controls';
 import { ProjectRowMenu } from '../components/project-row-menu';
+import { ProjectsEmptyState } from '../components/projects-empty-state';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
+import { useProjectSavedViews } from '../context/project-saved-views-context';
 import {
   type ProjectRow as ProjectRowData,
   useProjectsContext,
@@ -72,13 +69,29 @@ import type {
 } from '../primitives/project-collection';
 import { createProjectGanttRows } from '../primitives/project-gantt-rows';
 import {
+  PROJECT_GRID_COLUMNS,
+  PROJECT_TOUCH_GRID_COLUMNS,
+  ProjectListHeader,
+  ProjectRow,
+} from '../project-row';
+import {
   projectGroupMoveValue,
   projectGroupPropertyId,
 } from '../queries/project-group-move';
 import { projectTimelineDates } from '../queries/project-timeline';
+import {
+  ProjectSavedViewActions,
+  ProjectSavedViewStatus,
+} from './project-saved-views';
+import {
+  PROJECT_GROUP_OPTIONS,
+  PROJECT_SORT_OPTIONS,
+  type ProjectFilterGroup,
+  ProjectsFilterDrawer,
+} from './projects-filter-drawer';
 import { ProjectsGantt } from './projects-gantt';
 
-type FilterGroup = 'status' | 'priority' | 'assignee';
+type FilterGroup = ProjectFilterGroup;
 
 export function ProjectsCollection(props: {
   onOpen(id: string, metadata?: ProjectListActivation): void;
@@ -93,8 +106,8 @@ export function ProjectsCollection(props: {
   ganttEnabled: boolean;
   /** Whether the layout has room to open a project beside the list. */
   canOpenInNewSplit: Accessor<boolean>;
-  onCopyLink(id: string): void;
-  onCopyId(id: string): void;
+  onCopyLink(id: string): Promise<unknown>;
+  onCopyId(id: string): Promise<unknown>;
   onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
@@ -103,12 +116,27 @@ export function ProjectsCollection(props: {
   const collection = props.collection;
   const commands = context.createCommands();
   const definitions = context.createPropertyDefinitionsSource();
+  const savedViews = useProjectSavedViews();
+  const title = () => {
+    const view = savedViews?.draft.view();
+    if (view?.kind === 'saved') return view.record.name;
+    if (view?.kind === 'new') return 'New view';
+    return props.title ?? 'Projects';
+  };
+  const ready = () => {
+    const view = savedViews?.draft.view();
+    if (view?.kind === 'loading' || view?.kind === 'unavailable') return false;
+    return view?.kind !== 'saved' || view.issues.length === 0;
+  };
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  const [timestampHeaderWidth, setTimestampHeaderWidth] =
+    createSignal<number>();
   let grid: HTMLDivElement | undefined;
   let timeline: HTMLDivElement | undefined;
-  let searchInput: HTMLInputElement | undefined;
   let focusSearch: (() => void) | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const columns = () =>
+    isTouchDevice() ? PROJECT_TOUCH_GRID_COLUMNS : PROJECT_GRID_COLUMNS;
   const isGantt = () =>
     props.ganttEnabled && !isTouchDevice() && collection.layout() === 'gantt';
   const definition = (id: string) =>
@@ -166,7 +194,9 @@ export function ProjectsCollection(props: {
     Number(Boolean(collection.priority())) +
     Number(collection.mine()) +
     Number(Boolean(collection.dueAfter() || collection.dueBefore()));
-  const filtered = () => Boolean(collection.search().trim() || activeCount());
+  const filtered = () =>
+    collection.scope() !== 'all' ||
+    Boolean(collection.search().trim() || activeCount());
   const list = collection.list;
   const interaction = useListInteractions({
     controller: list,
@@ -209,11 +239,15 @@ export function ProjectsCollection(props: {
   }>();
   const [deletePending, setDeletePending] = createSignal(false);
   // The menu entry that opened a dialog no longer exists when it closes.
-  const returnFocusToList = (event: Event) => {
-    event.preventDefault();
+  // The timeline takes the grid's place, so focus follows the layout shown.
+  const focusList = () => {
     if (isGantt())
       timeline?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
     else grid?.focus();
+  };
+  const returnFocusToList = (event: Event) => {
+    event.preventDefault();
+    focusList();
   };
   const menuTargets = (entity: ProjectListEntity) =>
     getSoupMenuEntities(entity, getSoupRowEntities(list.selection.items()));
@@ -408,8 +442,7 @@ export function ProjectsCollection(props: {
     search: {
       description: 'Search projects',
       run: () => {
-        if (isTouchDevice()) searchInput?.focus();
-        else focusSearch?.();
+        focusSearch?.();
         return true;
       },
     },
@@ -467,10 +500,7 @@ export function ProjectsCollection(props: {
       size="icon-md"
       label="Sort projects"
       value={collection.sort()}
-      options={[
-        { id: 'updated', label: 'Updated' },
-        { id: 'created', label: 'Created' },
-      ]}
+      options={[...PROJECT_SORT_OPTIONS]}
       onChange={collection.setSort}
       open={openMenu() === 'sort'}
       onOpenChange={(open) => setOpenMenu(open ? 'sort' : undefined)}
@@ -482,44 +512,34 @@ export function ProjectsCollection(props: {
       size="icon-md"
       label="Group projects"
       value={collection.groupBy()}
-      options={[
-        { id: 'none', label: 'None' },
-        { id: 'status', label: 'Status' },
-        { id: 'priority', label: 'Priority' },
-        { id: 'assignee', label: 'Assignee' },
-      ]}
+      options={[...PROJECT_GROUP_OPTIONS]}
       onChange={collection.setGroupBy}
     />
   );
+  const isFilterSelected = (group: FilterGroup, id: string) => {
+    if (group === 'assignee') return collection.mine();
+    return (
+      (group === 'status' ? collection.status() : collection.priority()) === id
+    );
+  };
+  const selectFilter = (group: FilterGroup, id: string, selected: boolean) => {
+    if (group === 'assignee') collection.setMine(selected);
+    else if (group === 'status') collection.setStatus(selected ? id : '');
+    else collection.setPriority(selected ? id : '');
+  };
   const filterControl = () => (
-    <div class="relative shrink-0">
-      <ListFilterDropdown
-        grouped
-        size="icon-md"
-        label="Filter projects"
-        groups={filters()}
-        open={openMenu() === 'filters'}
-        onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
-        isSelected={(group, id) =>
-          group === 'assignee'
-            ? collection.mine()
-            : (group === 'status'
-                ? collection.status()
-                : collection.priority()) === id
-        }
-        onSelectionChange={(group, id, selected) => {
-          if (group === 'assignee') collection.setMine(selected);
-          else if (group === 'status') collection.setStatus(selected ? id : '');
-          else collection.setPriority(selected ? id : '');
-        }}
-        onClear={clearFilters}
-      />
-      <Show when={activeCount()}>
-        <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 not-touch:top-0.5 not-touch:right-0.5 not-touch:size-3.5 not-touch:translate-x-0 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-          {activeCount()}
-        </span>
-      </Show>
-    </div>
+    <ListFilterDropdown
+      grouped
+      size={activeCount() ? 'md' : 'icon-md'}
+      label="Filter projects"
+      activeCount={activeCount()}
+      groups={filters()}
+      open={openMenu() === 'filters'}
+      onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
+      isSelected={isFilterSelected}
+      onSelectionChange={selectFilter}
+      onClear={clearFilters}
+    />
   );
   const dueDateControl = () => (
     <Dropdown>
@@ -569,342 +589,353 @@ export function ProjectsCollection(props: {
     </Dropdown>
   );
   return (
-    <>
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <ListHeader
-            title={
-              <ViewSidebar.Title caret={false}>
-                {props.title ?? 'Projects'}
-              </ViewSidebar.Title>
-            }
-          >
-            <HeaderActionGroup label="Project filters" size="md">
-              {filterControl()}
-              {dueDateControl()}
-            </HeaderActionGroup>
-            <HeaderActionGroup label="Project view options" size="md">
-              {layoutControl()}
-              {sortControl()}
-              {groupControl()}
-            </HeaderActionGroup>
-            {props.createAction ?? (
-              <ViewCreateButton
-                aria-label="New project"
-                onClick={() => props.onCreate()}
-              />
-            )}
+    <MobileListLayout
+      header={
+        <ProjectCollectionControls
+          navigation={props.mobileNavigation}
+          search={
             <ListHeaderSearch
+              wide
               label="Search projects"
               value={collection.search()}
               onValueChange={collection.setSearch}
-              onEscape={() => grid?.focus()}
+              focusResults={focusList}
               registerFocus={(focus) => {
                 focusSearch = focus;
               }}
             />
-          </ListHeader>
-        }
-      >
-        <ViewShell.Header>
-          <div class="flex min-w-0 flex-col gap-3">
-            {props.mobileNavigation}
-            <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
-              <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-                {props.title ?? 'Projects'}
-              </h1>
-              <div class="ml-auto shrink-0">
-                <SidebarCreateButton
-                  label="New"
-                  onCreate={() => props.onCreate()}
-                />
-              </div>
-            </div>
-            <div class="flex min-w-0 items-center justify-between gap-3">
-              <SearchBar
-                ref={(element) => {
-                  searchInput = element;
-                }}
-                label="Search projects"
-                placeholder="Search projects"
-                value={collection.search()}
-                onValueChange={collection.setSearch}
-                onEscape={() => grid?.focus()}
-                class="max-w-md flex-1"
-                hotkey="cmd+f"
-              />
-              <div class="ml-auto flex shrink-0 items-center gap-2">
-                {sortControl()}
-                {groupControl()}
-                {filterControl()}
-                {dueDateControl()}
-              </div>
-            </div>
-          </div>
-        </ViewShell.Header>
+          }
+          filters={
+            <ProjectsFilterDrawer
+              collection={collection}
+              groups={filters()}
+              activeCount={activeCount()}
+              isSelected={isFilterSelected}
+              onSelectionChange={selectFilter}
+              onClear={clearFilters}
+            />
+          }
+          actions={<ProjectSavedViewActions />}
+        />
+      }
+    >
+      <Show when={!isTouchDevice()}>
+        <ListHeader
+          title={<ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>}
+        >
+          <ProjectSavedViewActions />
+          <HeaderActionGroup label="Project view options" size="md">
+            {layoutControl()}
+            {sortControl()}
+            {groupControl()}
+          </HeaderActionGroup>
+          {props.createAction ?? (
+            <ViewCreateButton
+              aria-label="New project"
+              onClick={() => props.onCreate()}
+            />
+          )}
+          <ListHeaderSearch
+            label="Search projects"
+            value={collection.search()}
+            onValueChange={collection.setSearch}
+            focusResults={focusList}
+            registerFocus={(focus) => {
+              focusSearch = focus;
+            }}
+          />
+          <HeaderActionGroup label="Project filters" size="md">
+            {filterControl()}
+            {dueDateControl()}
+          </HeaderActionGroup>
+        </ListHeader>
       </Show>
       <ViewShell.Content>
+        <ProjectSavedViewStatus />
         <Show
-          when={isGantt()}
+          when={ready()}
           fallback={
-            <div
-              ref={(element) => {
-                grid = element;
-              }}
-              role="grid"
-              aria-label="Projects"
-              aria-multiselectable="true"
-              aria-activedescendant={list.focus.key()}
-              tabIndex={0}
-              class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
-            >
-              <ProjectListHeader />
-              <Show when={backgroundError()}>
-                <p role="status" class="px-3 text-xs text-ink-muted">
-                  Could not refresh projects. Showing the last loaded list.
-                </p>
-              </Show>
-              <Switch>
-                <Match when={collection.state().kind === 'loading'}>
-                  <div class="grid flex-1 place-items-center text-ink-muted">
-                    <SpinnerIcon
-                      aria-hidden={false}
-                      class="size-5 animate-spin"
-                      aria-label="Loading projects"
-                    />
-                  </div>
-                </Match>
-                <Match when={sourceError()}>
-                  <div
-                    role="alert"
-                    class="grid flex-1 place-items-center gap-3 text-sm text-ink-muted"
-                  >
-                    <span>Projects couldn’t be loaded.</span>
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        fireAndForget(collection.refresh(), 'projects')
-                      }
+            <Show when={savedViews?.draft.view().kind === 'loading'}>
+              <p role="status" class="p-4 text-ink-muted">
+                Loading view…
+              </p>
+            </Show>
+          }
+        >
+          <Show
+            when={isGantt()}
+            fallback={
+              <div
+                ref={(element) => {
+                  grid = element;
+                }}
+                role="grid"
+                aria-label="Projects"
+                aria-multiselectable="true"
+                aria-activedescendant={list.focus.key()}
+                tabIndex={0}
+                class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden px-2 @min-[640px]/u-list:px-3 mobile:px-1 outline-none"
+                style={{
+                  '--task-updated-header-width':
+                    timestampHeaderWidth() === undefined
+                      ? undefined
+                      : `${timestampHeaderWidth()}px`,
+                }}
+              >
+                <Show when={!isTouchDevice()}>
+                  <ProjectListHeader
+                    onSortUpdated={() => collection.setSort('updated')}
+                    updatedSelected={collection.sort() === 'updated'}
+                    onTimestampWidthChange={setTimestampHeaderWidth}
+                  />
+                </Show>
+                <Show when={backgroundError()}>
+                  <p role="status" class="px-3 text-xs text-ink-muted">
+                    Could not refresh projects. Showing the last loaded list.
+                  </p>
+                </Show>
+                <Switch>
+                  <Match when={collection.state().kind === 'loading'}>
+                    <div class="grid flex-1 place-items-center text-ink-muted">
+                      <SpinnerIcon
+                        aria-hidden={false}
+                        class="size-5 animate-spin"
+                        aria-label="Loading projects"
+                      />
+                    </div>
+                  </Match>
+                  <Match when={sourceError()}>
+                    <div
+                      role="alert"
+                      class="grid flex-1 place-items-center gap-3 text-sm text-ink-muted"
                     >
-                      Try again
-                    </Button>
-                  </div>
-                </Match>
-                <Match when={collection.items().length === 0}>
-                  <div class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-                    <span>
-                      {filtered() ? 'No matching projects' : 'No projects yet'}
-                    </span>
-                    <Show when={!filtered()}>
+                      <span>Projects couldn’t be loaded.</span>
                       <Button
-                        variant="secondary"
-                        onClick={() => props.onCreate()}
+                        variant="ghost"
+                        onClick={() =>
+                          fireAndForget(collection.refresh(), 'projects')
+                        }
                       >
-                        New project
+                        Try again
                       </Button>
-                    </Show>
-                  </div>
-                </Match>
-                <Match when={true}>
-                  <ListViewport
-                    ref={(handle) => {
-                      setVirtualizer(handle);
-                      handle?.scrollTo(collection.scrollOffset());
-                    }}
-                    items={collection.items()}
-                    isSticky={(row) => row.kind === 'group-header'}
-                    focusedIndex={list.focus.index()}
-                    onScroll={checkNearEnd}
-                  >
-                    {(row) => (
-                      <Switch>
-                        <Match
-                          when={row.kind === 'group-header' ? row : undefined}
-                        >
-                          {(group) => (
-                            <TaskGroupHeader
-                              row={group()}
-                              columnCount={PROJECT_GRID_COLUMNS.length}
-                              groupBy={collection.groupBy()}
-                              expanded={collection.disclosure.isExpanded(
-                                group().groupId
-                              )}
-                              focused={list.focus.isFocused(group().id)}
-                              onFocus={() =>
-                                list.focus.set(group().id, {
-                                  reason: 'hover',
-                                })
-                              }
-                              onToggle={() =>
-                                list.activate.key(group().id, {
-                                  reason: 'pointer',
-                                })
-                              }
-                            />
-                          )}
-                        </Match>
-                        <Match when={row.kind === 'entity' ? row : undefined}>
-                          {(item) => (
-                            <ProjectMenu
-                              entity={item().entity}
-                              rowId={item().id}
-                            >
-                              <ProjectRow
-                                rowId={item().id}
-                                row={item().entity}
-                                highlighted={list.focus.isFocused(item().id)}
-                                checked={list.selection.isSelected(item().id)}
+                    </div>
+                  </Match>
+                  <Match when={collection.items().length === 0}>
+                    <ProjectsEmptyState
+                      filtered={filtered()}
+                      onCreate={() => props.onCreate()}
+                      onClearFilters={
+                        activeCount() || collection.search().trim()
+                          ? () => {
+                              clearFilters();
+                              collection.setSearch('');
+                            }
+                          : undefined
+                      }
+                    />
+                  </Match>
+                  <Match when={true}>
+                    <ListViewport
+                      touchInset
+                      ref={(handle) => {
+                        setVirtualizer(handle);
+                        handle?.scrollTo(collection.scrollOffset());
+                      }}
+                      items={collection.items()}
+                      isSticky={(row) => row.kind === 'group-header'}
+                      focusedIndex={list.focus.index()}
+                      onScroll={checkNearEnd}
+                    >
+                      {(row) => (
+                        <Switch>
+                          <Match
+                            when={row.kind === 'group-header' ? row : undefined}
+                          >
+                            {(group) => (
+                              <TaskGroupHeader
+                                row={group()}
+                                columnCount={columns().length}
+                                groupBy={collection.groupBy()}
+                                expanded={collection.disclosure.isExpanded(
+                                  group().groupId
+                                )}
+                                focused={list.focus.isFocused(group().id)}
                                 onFocus={() =>
-                                  list.focus.set(item().id, {
+                                  list.focus.set(group().id, {
                                     reason: 'hover',
                                   })
                                 }
-                                onChecked={(selected, range) =>
-                                  interaction.selection.set(
-                                    item().id,
-                                    selected,
-                                    {
-                                      range,
-                                    }
-                                  )
-                                }
-                                onOpen={(event) => {
-                                  if (event.ctrlKey || event.metaKey)
-                                    interaction.selection.toggle(item().id);
-                                  else
-                                    list.activate.key(item().id, {
-                                      reason: 'pointer',
-                                      metadata: {
-                                        event,
-                                        newSplit: event.shiftKey,
-                                      },
-                                    });
-                                }}
-                                onSave={(property, value) =>
-                                  commands.saveProperty(
-                                    item().entity.id,
-                                    property,
-                                    value
-                                  )
+                                onToggle={() =>
+                                  list.activate.key(group().id, {
+                                    reason: 'pointer',
+                                  })
                                 }
                               />
-                            </ProjectMenu>
-                          )}
-                        </Match>
-                        <Match
-                          when={row.kind === 'load-more' ? row : undefined}
-                        >
-                          {(more) => (
-                            <div role="row" id={more().id}>
-                              <div
-                                role="gridcell"
-                                aria-colspan={PROJECT_GRID_COLUMNS.length}
-                                class="flex justify-center py-2"
+                            )}
+                          </Match>
+                          <Match when={row.kind === 'entity' ? row : undefined}>
+                            {(item) => (
+                              <ProjectMenu
+                                entity={item().entity}
+                                rowId={item().id}
                               >
-                                <Button
-                                  variant="secondary"
-                                  disabled={collection.loadingMore()}
-                                  onClick={() =>
-                                    list.activate.key(more().id, {
-                                      reason: 'pointer',
+                                <ProjectRow
+                                  rowId={item().id}
+                                  row={item().entity}
+                                  definitions={definitions.properties()}
+                                  highlighted={list.focus.isFocused(item().id)}
+                                  checked={list.selection.isSelected(item().id)}
+                                  onFocus={() =>
+                                    list.focus.set(item().id, {
+                                      reason: 'hover',
                                     })
                                   }
+                                  onChecked={(selected, range) =>
+                                    interaction.selection.set(
+                                      item().id,
+                                      selected,
+                                      {
+                                        range,
+                                      }
+                                    )
+                                  }
+                                  onOpen={(event) => {
+                                    if (event.ctrlKey || event.metaKey)
+                                      interaction.selection.toggle(item().id);
+                                    else
+                                      list.activate.key(item().id, {
+                                        reason: 'pointer',
+                                        metadata: {
+                                          event,
+                                          newSplit: event.shiftKey,
+                                        },
+                                      });
+                                  }}
+                                  onSave={(property, value) =>
+                                    commands.saveProperty(
+                                      item().entity.id,
+                                      property,
+                                      value
+                                    )
+                                  }
+                                />
+                              </ProjectMenu>
+                            )}
+                          </Match>
+                          <Match
+                            when={row.kind === 'load-more' ? row : undefined}
+                          >
+                            {(more) => (
+                              <div role="row" id={more().id}>
+                                <div
+                                  role="gridcell"
+                                  aria-colspan={columns().length}
+                                  class="flex justify-center py-2"
                                 >
-                                  {collection.loadingMore()
-                                    ? 'Loading…'
-                                    : 'Load more projects'}
-                                </Button>
+                                  <Button
+                                    variant="secondary"
+                                    disabled={collection.loadingMore()}
+                                    onClick={() =>
+                                      list.activate.key(more().id, {
+                                        reason: 'pointer',
+                                      })
+                                    }
+                                  >
+                                    {collection.loadingMore()
+                                      ? 'Loading…'
+                                      : 'Load more projects'}
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </Match>
-                      </Switch>
-                    )}
-                  </ListViewport>
-                </Match>
-              </Switch>
-              <Show when={list.selection.count()}>
-                <EntitySelectionToolbarModal
-                  selectedCount={list.selection.count()}
-                  onClose={interaction.selection.clear}
-                />
-              </Show>
-            </div>
-          }
-        >
-          <ProjectsGantt
-            collection={collection}
-            items={ganttRows.items}
-            groupMoves={{
-              scope: groupMoveScope(),
-              canDrag: canDragProject,
-              canDrop: (move) => !!resolveGroupMove(move),
-              getPlacement: (move) =>
-                ganttGroupPlacement({
-                  items: ganttRows.items(),
-                  move,
-                  getEntity: (row) =>
-                    row.kind === 'entity' ? row.entity : undefined,
-                  getGroup: (row) =>
-                    row.kind === 'section-header' ? undefined : row.groupId,
-                  compare: (left, right) => {
-                    const key =
-                      collection.sort() === 'created'
-                        ? 'createdAt'
-                        : 'updatedAt';
-                    return compareDateDesc(
-                      left.project[key],
-                      right.project[key]
-                    );
-                  },
-                }),
-              onMove: moveProjectGroup,
-            }}
-            onOpen={props.onOpen}
-            createAssigneeName={props.createAssigneeName}
-            onCreate={
-              definition(SYSTEM_PROPERTY_IDS.DUE_DATE)?.valueType === 'DATE'
-                ? (dates) => createOnTimeline(dates.end)
-                : undefined
+                            )}
+                          </Match>
+                        </Switch>
+                      )}
+                    </ListViewport>
+                  </Match>
+                </Switch>
+                <Show when={list.selection.count()}>
+                  <EntitySelectionToolbarModal
+                    selectedCount={list.selection.count()}
+                    onClose={interaction.selection.clear}
+                  />
+                </Show>
+              </div>
             }
-            ref={(element) => {
-              timeline = element;
-            }}
-            renderEntity={(entity, label) => (
-              <ProjectMenu entity={entity()}>
-                <Gantt.Row>
-                  {label}
-                  <Gantt.Bar
-                    {...projectTimelineDates(entity())}
-                    title={entity().project.name}
-                    deadlineWarning={
-                      statusOptionId(entity()) !==
-                        PROPERTY_OPTION_IDS.STATUS.COMPLETED &&
-                      statusOptionId(entity()) !==
-                        PROPERTY_OPTION_IDS.STATUS.CANCELED
-                    }
-                    onClick={(event) =>
-                      props.onOpen(entity().id, {
-                        event,
-                        newSplit:
-                          event.shiftKey ||
-                          event.ctrlKey ||
-                          event.metaKey ||
-                          event.altKey,
-                      })
-                    }
-                  >
-                    <PropertyValueIcon
-                      optionId={statusOptionId(entity()) ?? ''}
-                      class="size-3.5 shrink-0"
-                    />
-                    <Gantt.BarTitle>{entity().project.name}</Gantt.BarTitle>
-                  </Gantt.Bar>
-                </Gantt.Row>
-              </ProjectMenu>
-            )}
-          />
+          >
+            <ProjectsGantt
+              collection={collection}
+              items={ganttRows.items}
+              groupMoves={{
+                scope: groupMoveScope(),
+                canDrag: canDragProject,
+                canDrop: (move) => !!resolveGroupMove(move),
+                getPlacement: (move) =>
+                  ganttGroupPlacement({
+                    items: ganttRows.items(),
+                    move,
+                    getEntity: (row) =>
+                      row.kind === 'entity' ? row.entity : undefined,
+                    getGroup: (row) =>
+                      row.kind === 'section-header' ? undefined : row.groupId,
+                    compare: (left, right) => {
+                      const key =
+                        collection.sort() === 'created'
+                          ? 'createdAt'
+                          : 'updatedAt';
+                      return compareDateDesc(
+                        left.project[key],
+                        right.project[key]
+                      );
+                    },
+                  }),
+                onMove: moveProjectGroup,
+              }}
+              onOpen={props.onOpen}
+              createAssigneeName={props.createAssigneeName}
+              onCreate={
+                definition(SYSTEM_PROPERTY_IDS.DUE_DATE)?.valueType === 'DATE'
+                  ? (dates) => createOnTimeline(dates.end)
+                  : undefined
+              }
+              ref={(element) => {
+                timeline = element;
+              }}
+              renderEntity={(entity, label) => (
+                <ProjectMenu entity={entity()}>
+                  <Gantt.Row>
+                    {label}
+                    <Gantt.Bar
+                      {...projectTimelineDates(entity())}
+                      title={entity().project.name}
+                      deadlineWarning={
+                        statusOptionId(entity()) !==
+                          PROPERTY_OPTION_IDS.STATUS.COMPLETED &&
+                        statusOptionId(entity()) !==
+                          PROPERTY_OPTION_IDS.STATUS.CANCELED
+                      }
+                      onClick={(event) =>
+                        props.onOpen(entity().id, {
+                          event,
+                          newSplit:
+                            event.shiftKey ||
+                            event.ctrlKey ||
+                            event.metaKey ||
+                            event.altKey,
+                        })
+                      }
+                    >
+                      <PropertyValueIcon
+                        optionId={statusOptionId(entity()) ?? ''}
+                        class="size-3.5 shrink-0"
+                      />
+                      <Gantt.BarTitle>{entity().project.name}</Gantt.BarTitle>
+                    </Gantt.Bar>
+                  </Gantt.Row>
+                </ProjectMenu>
+              )}
+            />
+          </Show>
         </Show>
         <Show when={renaming()} keyed>
           {(row) => (
@@ -935,6 +966,6 @@ export function ProjectsCollection(props: {
           )}
         </Show>
       </ViewShell.Content>
-    </>
+    </MobileListLayout>
   );
 }

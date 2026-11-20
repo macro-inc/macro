@@ -2,55 +2,69 @@
 //! Worker (`services/mcp-chatgpt-worker`) via wrangler. Generated into
 //! `deploy_mcp_chatgpt_worker.yml`.
 //!
-//! Dispatch-only until the server launches: merging never deploys it. Once it
-//! serves ChatGPT, add the path-gated push for `dev` and the
-//! `release-production` call for `prod` that
-//! [`crate::workflows::deploy_ai_editing_worker`] has.
+//! Deploys the way [`crate::workflows::deploy_sync_service`] does: call/dispatch
+//! only. Push deploys to dev come through [`crate::workflows::deploy_on_push`]
+//! (unconditionally, like every stage there) and prod deploys through
+//! `release-production`. Manual `workflow_dispatch` picks either env.
+//!
+//! Unlike sync-service the worker is stateless (no D1, no Durable Objects), so
+//! it has no migrations, no deferral wait and no live-version comparison: every
+//! run deploys. The one gate is the secrets check, which fails the job before
+//! `wrangler deploy` when a secret the worker needs outside local is missing,
+//! leaving the live version serving.
 
-use anyhow::Result;
+use gh_workflow::expr::typed::{Expr, Str, input};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowDispatch, WorkflowInput,
 };
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::{runners, steps, vars};
 
-const ENVIRONMENT: &str = "${{ inputs.environment }}";
+#[cfg(test)]
+mod test;
+
+/// Dispatches and calls both pass one; `dev` is the fallback.
+fn environment() -> Expr<Str> {
+    input::<Str>("environment").or_else("dev")
+}
 
 /// Build the workflow.
 pub fn deploy_mcp_chatgpt_worker() -> Workflow {
     Workflow::new("Deploy MCP ChatGPT Worker")
-        // The dispatch input block is filled in by `patch` below.
-        .on(Event::default().workflow_dispatch(WorkflowDispatch::default()))
+        // The `workflow_call` / `workflow_dispatch` input blocks are filled in
+        // by `patch` below.
+        .on(Event::default()
+            .workflow_dispatch(
+                WorkflowDispatch::default().add_input(
+                    "environment",
+                    WorkflowInput::choice(["dev", "prod"])
+                        .description("The environment to deploy to")
+                        .required(true)
+                        .default("dev"),
+                ),
+            )
+            .workflow_call(
+                WorkflowCall::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::string()
+                            .description("The environment to deploy to. e.g. (dev, prod)")
+                            .required(true),
+                    )
+                    .add_secret(
+                        "CLOUDFLARE_API_TOKEN",
+                        WorkflowCallSecret::default().required(true),
+                    ),
+            ))
         .concurrency(
-            Concurrency::new(Expression::new(format!(
-                "deploy-mcp-chatgpt-worker-{ENVIRONMENT}"
-            )))
-            .cancel_in_progress(false),
+            // Literal prefix rather than `github.workflow`: for workflow_call
+            // runs that expression expands to the *caller's* name.
+            Concurrency::new(format!("deploy-mcp-chatgpt-worker-{}", environment()))
+                .cancel_in_progress(false),
         )
         .add_job("deploy", deploy())
-}
-
-/// The `choice` dispatch input `gh_workflow` cannot express.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: choice
-                default: 'dev'
-                options:
-                  - dev
-                  - prod
-                description: The environment to deploy to
-        "#})?,
-    );
-    Ok(())
 }
 
 fn deploy() -> Job {
@@ -61,13 +75,14 @@ fn deploy() -> Job {
         .add_step(steps::setup_bun())
         .add_step(setup_node())
         .add_step(install_deps())
+        .add_step(check_secrets())
         .add_step(deploy_step())
 }
 
 fn setup_node() -> Step<Use> {
-    Step::new("Setup Node")
-        .uses("actions", "setup-node", "v4")
-        .add_with(("node-version", "22"))
+    ActionsSetupNode::new("Setup Node")
+        .node_version("22")
+        .step()
 }
 
 fn install_deps() -> Step<Run> {
@@ -76,11 +91,25 @@ fn install_deps() -> Step<Run> {
         .run("bun install --frozen-lockfile && (cd packages/sdk && bun install --frozen-lockfile)")
 }
 
+/// Fail before deployment when the environment lacks a secret the worker needs:
+/// a deployed worker without one fails every request, while a failed job leaves
+/// the live version serving.
+fn check_secrets() -> Step<Run> {
+    Step::new("Check required secrets")
+        .run("node scripts/check-deploy-secrets.mjs \"$DEPLOY_ENVIRONMENT\"")
+        .working_directory(xtask_paths::repo_dir!("services/mcp-chatgpt-worker"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
+        .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
+        .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
+}
+
 fn deploy_step() -> Step<Run> {
+    // On a direct dispatch `inputs.environment` is set; callers pass it too.
     // wrangler's build command generates the SDK tool catalog first.
     Step::new("Deploy with wrangler")
-        .run(format!("bunx wrangler deploy --env {ENVIRONMENT}"))
+        .run("bunx wrangler deploy --env \"$DEPLOY_ENVIRONMENT\"")
         .working_directory(xtask_paths::repo_dir!("services/mcp-chatgpt-worker"))
+        .add_env(("DEPLOY_ENVIRONMENT", environment()))
         .add_env(("CLOUDFLARE_API_TOKEN", vars::CLOUDFLARE_API_TOKEN))
         .add_env(("CLOUDFLARE_ACCOUNT_ID", vars::CLOUDFLARE_ACCOUNT_ID))
 }

@@ -109,8 +109,10 @@ pub async fn get_entity_audiences(
     let mut members: HashMap<GrantSource, Vec<String>> = HashMap::new();
     if !team_ids.is_empty() {
         let rows = sqlx::query!(
-            "SELECT team_id, user_id FROM team_user WHERE team_id = ANY($1)",
+            r#"SELECT team_id, user_id FROM team_user WHERE team_id = ANY($1)
+               AND ($2 <> 'crm_pipeline' OR crm_access OR team_role <> 'member')"#,
             &team_ids,
+            entity_type.as_ref(),
         )
         .fetch_all(&mut *tx)
         .await?;

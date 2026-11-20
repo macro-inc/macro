@@ -6,8 +6,8 @@
  */
 
 /**
- * Compatibility response for `PATCH /team/crm`. CRM records are always
-available; this endpoint does not enroll mailboxes or backfill emails.
+ * Compatibility response for `PATCH /team/crm`. Record access follows member
+permissions; this endpoint does not enroll mailboxes or backfill emails.
  */
 export interface PatchTeamCrmSettingsResponse {
   /**

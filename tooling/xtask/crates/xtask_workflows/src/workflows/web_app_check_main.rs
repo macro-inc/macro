@@ -1,15 +1,15 @@
 //! `Web App Pr Checks` — frontend and mobile PR checks.
 //! Generated into `web-app-check-main.yml`.
 
+use gh_workflow::expr::typed::{
+    Flag, JobHandle, JobOutput, Num, StepHandle, StepOutput, github, matrix,
+};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
+    Event, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall, ZizmorRule,
 };
 
-use crate::workflows::{
-    runners,
-    steps::{self, FluentBuilder},
-    vars,
-};
+use crate::workflows::actions::{ActionsCheckout, DornyPathsFilter};
+use crate::workflows::{runners, steps, vars};
 
 mod android_native_check;
 mod ios_native_check;
@@ -25,33 +25,107 @@ fn web_runner() -> String {
 
 /// The mid-size (16x32) profile on the web CI cache volume and remote sccache,
 /// for the jobs that scale with cores: the generated-code job compiles the
-/// schema binaries, the app build compiles the browser wasm packages and runs
+/// schema binaries (on its own cache tag), the app build compiles the browser wasm packages and runs
 /// Vite, typechecking runs the TS 7 compiler, and vitest runs about 1.9x faster
 /// on 16 cores than on the small profile's 8.
 fn mid_web_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
+struct PathCheckOutputs {
+    /// Whether the web checks should run at all.
+    should_run: JobOutput<Flag>,
+    /// Whether the change can alter generated code.
+    codegen_changed: JobOutput<Flag>,
+    /// Whether the change can alter the web bundle.
+    web_artifact_changed: JobOutput<Flag>,
+    /// Whether the interface language browser tests' surfaces changed.
+    i18n_changed: JobOutput<Flag>,
+    /// Whether the database grid browser tests' surfaces changed.
+    database_grid_changed: JobOutput<Flag>,
+    /// Whether the event details browser tests' surfaces changed.
+    calendar_details_changed: JobOutput<Flag>,
+}
+
+const PATH_CHECK: JobHandle<PathCheckOutputs> = JobHandle::new(
+    "path-check",
+    PathCheckOutputs {
+        should_run: JobOutput::new("path-check", "should_run"),
+        codegen_changed: JobOutput::new("path-check", "codegen_changed"),
+        web_artifact_changed: JobOutput::new("path-check", "web_artifact_changed"),
+        i18n_changed: JobOutput::new("path-check", "i18n_changed"),
+        database_grid_changed: JobOutput::new("path-check", "database_grid_changed"),
+        calendar_details_changed: JobOutput::new("path-check", "calendar_details_changed"),
+    },
+);
+
+const TYPESCRIPT: JobHandle<()> = JobHandle::new("typescript", ());
+const GENERATED_CODE: JobHandle<()> = JobHandle::new("generated-code", ());
+const BIOME_CHECK: JobHandle<()> = JobHandle::new("biome-check", ());
+const TEST: JobHandle<()> = JobHandle::new("test", ());
+const FUNCTIONAL: JobHandle<()> = JobHandle::new("functional", ());
+const BROWSER: JobHandle<()> = JobHandle::new("browser", ());
+const CYCLES: JobHandle<()> = JobHandle::new("cycles", ());
+const BUILD: JobHandle<()> = JobHandle::new("build", ());
+
+struct FilterOutputs {
+    /// The `should_run` filter's match.
+    should_run: StepOutput<Flag>,
+    /// The `web_artifact_changed` filter's match.
+    web_artifact_changed: StepOutput<Flag>,
+    /// The `codegen_inputs` filter's match.
+    codegen_inputs: StepOutput<Flag>,
+    /// The `i18n_changed` filter's match.
+    i18n_changed: StepOutput<Flag>,
+    /// The `database_grid_changed` filter's match.
+    database_grid_changed: StepOutput<Flag>,
+    /// The `calendar_details_changed` filter's match.
+    calendar_details_changed: StepOutput<Flag>,
+}
+
+const FILTER: StepHandle<FilterOutputs> = StepHandle::new(
+    "filter",
+    FilterOutputs {
+        should_run: StepOutput::new("filter", "should_run"),
+        web_artifact_changed: StepOutput::new("filter", "web_artifact_changed"),
+        codegen_inputs: StepOutput::new("filter", "codegen_inputs"),
+        i18n_changed: StepOutput::new("filter", "i18n_changed"),
+        database_grid_changed: StepOutput::new("filter", "database_grid_changed"),
+        calendar_details_changed: StepOutput::new("filter", "calendar_details_changed"),
+    },
+);
+
+struct CodegenOutputs {
+    /// [`detect_schema_changes`]'s verdict.
+    codegen_changed: StepOutput<Flag>,
+}
+
+const CODEGEN: StepHandle<CodegenOutputs> = StepHandle::new(
+    "codegen",
+    CodegenOutputs {
+        codegen_changed: StepOutput::new("codegen", "codegen_changed"),
+    },
+);
+
 /// Build the workflow.
 pub fn web_app_check_main() -> Workflow {
     Workflow::new("Web App Pr Checks")
         .on(Event::default().workflow_call(WorkflowCall::default()))
-        .add_job("path-check", path_check())
-        .add_job(android_native_check::JOB_ID, android_native_check())
-        .add_job("typescript", typescript())
-        .add_job("generated-code", generated_code())
-        .add_job("biome-check", biome_check())
-        .add_job("test", test())
-        .add_job("functional", functional())
-        .add_job("browser", browser())
-        .add_job("cycles", cycles())
-        .add_job("build", build())
-        .add_job(ios_native_check::JOB_ID, ios_native_check::job())
-        .add_job("status-check", status_check())
+        .add_job(PATH_CHECK, path_check())
+        .add_job(android_native_check::JOB, android_native_check())
+        .add_job(TYPESCRIPT, typescript())
+        .add_job(GENERATED_CODE, generated_code())
+        .add_job(BIOME_CHECK, biome_check())
+        .add_job(TEST, test())
+        .add_job(FUNCTIONAL, functional())
+        .add_job(BROWSER, browser())
+        .add_job(CYCLES, cycles())
+        .add_job(BUILD, build())
+        .add_job(ios_native_check::JOB, ios_native_check::job())
 }
 
-/// Always run so the required collector can distinguish a successful native
-/// check from a cancelled or skipped one, including frontend/backend-only PRs.
+/// Always runs, on frontend- and backend-only PRs too, so `CI gate` sees the
+/// native check pass rather than skip.
 fn android_native_check() -> Job {
     android_native_check::job()
 }
@@ -60,23 +134,29 @@ fn path_check() -> Job {
     Job::default()
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
-            "codegen_changed",
-            "${{ steps.codegen.outputs.codegen_changed }}",
+            PATH_CHECK.outputs.should_run.name(),
+            FILTER.outputs.should_run.read(),
         )
         .add_output(
-            "web_artifact_changed",
-            "${{ steps.filter.outputs.web_artifact_changed }}",
-        )
-        .add_output("i18n_changed", "${{ steps.filter.outputs.i18n_changed }}")
-        .add_output(
-            "database_grid_changed",
-            "${{ steps.filter.outputs.database_grid_changed }}",
+            PATH_CHECK.outputs.codegen_changed.name(),
+            CODEGEN.outputs.codegen_changed.read(),
         )
         .add_output(
-            "calendar_details_changed",
-            "${{ steps.filter.outputs.calendar_details_changed }}",
+            PATH_CHECK.outputs.web_artifact_changed.name(),
+            FILTER.outputs.web_artifact_changed.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.i18n_changed.name(),
+            FILTER.outputs.i18n_changed.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.database_grid_changed.name(),
+            FILTER.outputs.database_grid_changed.read(),
+        )
+        .add_output(
+            PATH_CHECK.outputs.calendar_details_changed.name(),
+            FILTER.outputs.calendar_details_changed.read(),
         )
         .add_step(path_check_checkout())
         .add_step(paths_filter())
@@ -88,16 +168,15 @@ fn path_check() -> Job {
 /// this one.
 fn typescript() -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true'",
-        ))
+        .add_needs(PATH_CHECK)
+        .cond(PATH_CHECK.outputs.should_run.read().is_set())
         .name("Typecheck")
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::prepare_blobless_checkout())
+        .add_step(steps::mount_web_check_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(
@@ -242,13 +321,13 @@ fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
 /// specs `gen-api` just wrote rather than rerunning it.
 fn generated_code() -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.codegen_changed == 'true'",
-        ))
+        .add_needs(PATH_CHECK)
+        .cond(PATH_CHECK.outputs.codegen_changed.read().is_set())
         .name("Generated Code Check")
         .timeout_minutes(25u32)
-        .runs_on(mid_web_runner())
+        // Its own volume, so the `target` directory it keeps is the one its
+        // last build left: the last job to finish on a tag replaces the volume.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CODEGEN_CACHE_TAG))
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
         // so every cargo call here (the build step, gen-api, the docs and DCS
@@ -260,7 +339,8 @@ fn generated_code() -> Job {
         // the same reason: RUSTFLAGS is part of every unit's fingerprint.
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(true))
+        .add_step(steps::mount_web_codegen_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
@@ -281,12 +361,14 @@ fn generated_code() -> Job {
         .add_step(check_specta_types())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 fn biome_check() -> Job {
     gated_web_job("Biome Check")
         .timeout_minutes(20u32)
         .add_step(checkout("Checkout Repo", true))
+        .add_step(steps::prepare_blobless_checkout())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
@@ -297,7 +379,7 @@ fn biome_check() -> Job {
 }
 
 fn test() -> Job {
-    gated_web_job("Test (${{ matrix.shard }}/6)")
+    gated_web_job(&format!("Test ({}/6)", matrix::<Num>("shard")))
         .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .strategy(
@@ -323,7 +405,7 @@ fn functional() -> Job {
         .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(true))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -380,7 +462,7 @@ fn build() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::mount_web_build_check_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
@@ -394,59 +476,43 @@ fn build() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// Always-run collector used as the required status check. Its name must stay
-/// stable because branch protection can reference it. New gates join the
-/// `needs` list (and [`check_job_results`]) rather than the ruleset: the
-/// [`ios_native_check`] job is required this way.
-fn status_check() -> Job {
-    Job::default()
-        .name("Web App Status Check")
-        .timeout_minutes(5u32)
-        .cond(Expression::new("always()"))
-        .needs(vec![
-            "path-check".to_string(),
-            android_native_check::JOB_ID.to_string(),
-            "typescript".to_string(),
-            "generated-code".to_string(),
-            "biome-check".to_string(),
-            "test".to_string(),
-            "functional".to_string(),
-            "browser".to_string(),
-            "cycles".to_string(),
-            "build".to_string(),
-            ios_native_check::JOB_ID.to_string(),
-        ])
-        .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_step(check_job_results())
-}
-
 fn gated_web_job(name: &str) -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
-        .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true'",
-        ))
+        .add_needs(PATH_CHECK)
+        .cond(PATH_CHECK.outputs.should_run.read().is_set())
         .name(name)
         .runs_on(web_runner())
 }
 
+/// `full_history` fetches every commit and tree but no blob up front: `biome
+/// --changed` needs the merge base and the icon permanence check a few old
+/// blobs, which git then fetches on demand. Fetching full history with every
+/// blob took Typecheck and Biome Check about 40 s.
 fn checkout(name: &str, full_history: bool) -> Step<Use> {
-    Step::new(name)
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .when(full_history, |step| step.add_with(("fetch-depth", 0)))
+    let checkout = ActionsCheckout::new(name);
+    let checkout = if full_history {
+        checkout.fetch_depth(0).filter("blob:none")
+    } else {
+        checkout
+    };
+    checkout.step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "check and preview steps run git and scripts from the checkout",
+    )
 }
 
 /// The filter reads the PR's files from the API and [`detect_schema_changes`]
 /// reads trees and a few blobs, so path-check fetches no blobs up front and
 /// writes almost no work tree: 18 s became 6 s on the tiny runner.
 fn path_check_checkout() -> Step<Use> {
-    checkout("Checkout Repo", false)
-        .add_with(("filter", "blob:none"))
-        .add_with(("sparse-checkout", ".github"))
+    ActionsCheckout::new("Checkout Repo")
+        .filter("blob:none")
+        .sparse_checkout(".github")
+        .step()
+        .zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "path-check runs git over the PR's commits",
+        )
 }
 
 /// Whether a pull request can change generated output. Schemas come from
@@ -458,11 +524,8 @@ fn path_check_checkout() -> Step<Use> {
 fn detect_schema_changes() -> Step<Run> {
     Step::new("Detect schema changes")
         .run(DETECT_SCHEMA_CHANGES)
-        .id("codegen")
-        .add_env((
-            "CODEGEN_INPUTS",
-            "${{ steps.filter.outputs.codegen_inputs }}",
-        ))
+        .id(CODEGEN.id())
+        .add_env(("CODEGEN_INPUTS", FILTER.outputs.codegen_inputs.read()))
 }
 
 /// The checkout is blobless, so `git diff` and `git show` fetch blobs as they
@@ -517,19 +580,14 @@ fn paths_filter() -> Step<Use> {
     // `calendar_details_changed` covers what the event details browser tests
     // render and the query modules their fixture replaces, whose exports the
     // fixture must keep matching.
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id("filter")
-        .add_with((
-            "filters",
+    DornyPathsFilter::new(
+        "Filter changed paths",
             format!(
                 "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
-        ))
+    )
+    .step()
+    .id(FILTER.id())
 }
 
 /// Build every schema binary the later steps run in one cargo invocation:
@@ -574,7 +632,10 @@ fn check_specta_types() -> Step<Run> {
         // features of one package's dependencies, which recompiled 101 and 131
         // crates for them. The other two need a `cli` feature that would change
         // the libraries every schema binary links, so they keep `cargo run -p`.
-        .add_env(("SPECTA_BIN_DIR", "${{ github.workspace }}/target/debug"))
+        .add_env((
+            "SPECTA_BIN_DIR",
+            format!("{}/target/debug", github().workspace()),
+        ))
 }
 
 /// The tail of `just update-generated` in `packages/sdk`: its first line reruns
@@ -653,7 +714,8 @@ fn with_wasm_pkg_cache(step: Step<Run>) -> Step<Run> {
 /// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bun run test --shard=${{ matrix.shard }}/6")
+        .run(r#"bun run test --shard="${SHARD}/6""#)
+        .add_env(("SHARD", matrix::<Num>("shard")))
         .add_env((
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
@@ -691,9 +753,7 @@ fn run_signup_browser_tests() -> Step<Run> {
 fn run_i18n_browser_tests() -> Step<Run> {
     Step::new("Interface Language Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-i18n-browser")
-        .if_condition(Expression::new(
-            "needs.path-check.outputs.i18n_changed == 'true'",
-        ))
+        .if_condition(PATH_CHECK.outputs.i18n_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -702,9 +762,7 @@ fn run_i18n_browser_tests() -> Step<Run> {
 fn run_database_browser_tests() -> Step<Run> {
     Step::new("Database Grid Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-database-browser")
-        .if_condition(Expression::new(
-            "needs.path-check.outputs.database_grid_changed == 'true'",
-        ))
+        .if_condition(PATH_CHECK.outputs.database_grid_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -714,9 +772,7 @@ fn run_database_browser_tests() -> Step<Run> {
 fn run_calendar_details_browser_tests() -> Step<Run> {
     Step::new("Calendar Event Details Browser Tests")
         .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
-        .if_condition(Expression::new(
-            "needs.path-check.outputs.calendar_details_changed == 'true'",
-        ))
+        .if_condition(PATH_CHECK.outputs.calendar_details_changed.read().is_set())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
@@ -746,7 +802,7 @@ const PR_WASM_ENV: [(&str, &str); 6] = [
     ("CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS", "16"),
 ];
 
-fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
+pub(crate) fn with_pr_wasm_env(step: Step<Run>) -> Step<Run> {
     with_wasm_pkg_cache(PR_WASM_ENV.into_iter().fold(step, Step::add_env))
 }
 
@@ -759,46 +815,4 @@ fn run_build() -> Step<Run> {
         ),
         Step::add_env,
     )
-}
-
-fn check_job_results() -> Step<Run> {
-    Step::new("Check job results").run(indoc::indoc! {r#"
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-native-check: ${{ needs.android-native-check.result }}"
-        echo "typescript: ${{ needs.typescript.result }}"
-        echo "generated-code: ${{ needs.generated-code.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "functional: ${{ needs.functional.result }}"
-        echo "browser: ${{ needs.browser.result }}"
-        echo "cycles: ${{ needs.cycles.result }}"
-        echo "build: ${{ needs.build.result }}"
-        echo "ios-native-check: ${{ needs.ios-native-check.result }}"
-
-        # The Android check always runs, so it must succeed. For the rest only
-        # success and skipped are OK: a job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose checks never ran.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
-          echo "Android Native Check did not succeed"
-          exit 1
-        fi
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.typescript.result }}" \
-          "${{ needs.generated-code.result }}" \
-          "${{ needs.biome-check.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.functional.result }}" \
-          "${{ needs.browser.result }}" \
-          "${{ needs.cycles.result }}" \
-          "${{ needs.build.result }}" \
-          "${{ needs.ios-native-check.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "All jobs passed or were skipped"
-    "#})
 }

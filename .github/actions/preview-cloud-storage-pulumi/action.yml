@@ -1,112 +1,100 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/preview_cloud_storage_pulumi.rs
 name: Preview cloud storage pulumi stack
 description: Run pulumi preview (dry run) for a pulumi stack from cloud-storage
-
 inputs:
   use-docker:
-    description: 'Whether to setup docker'
+    description: Whether to setup docker
     required: false
     default: 'true'
   use-lfs:
-    description: 'Whether to checkout LFS content'
+    description: Whether to checkout LFS content
     required: false
     default: 'false'
   environment:
-    description: 'Environment to preview'
+    description: Environment to preview
     required: false
-    default: 'dev'
+    default: dev
   aws-access-key:
-    description: 'AWS access key'
+    description: AWS access key
     required: true
   aws-secret-key:
-    description: 'AWS secret key'
+    description: AWS secret key
     required: true
   aws-region:
-    description: 'AWS region'
+    description: AWS region
     required: false
-    default: 'us-east-1'
+    default: us-east-1
   pulumi-access-token:
-    description: 'The access token for pulumi'
+    description: The access token for pulumi
     required: true
   pulumi-service-name:
-    description: 'The name of the pulumi service to preview. This will be the exact name of the folder containing your stacks.'
+    description: The name of the pulumi service to preview. This will be the exact name of the folder containing your stacks.
     required: true
   dd-app-key:
-    description: 'Datadog app key'
+    description: Datadog app key
     required: true
   dd-api-key:
-    description: 'Datadog api key'
+    description: Datadog api key
     required: true
   dd-host:
-    description: 'Datadog host'
+    description: Datadog host
     required: false
-    default: 'https://api.us5.datadoghq.com/'
+    default: https://api.us5.datadoghq.com/
   github-token:
-    description: 'GitHub token for PR comments'
+    description: GitHub token for PR comments
     required: false
     default: ''
   cloud-storage-service-name:
-    description: 'Optional service key from .github/services-config.json; used to build Lambda artifacts before preview'
+    description: Optional service key from .github/services-config.json; used to build Lambda artifacts before preview
     required: false
     default: ''
-
 runs:
   using: composite
   steps:
-    # checkout the repo
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] Pulumi programs and builds run after the checkout
       with:
         lfs: ${{ inputs.use-lfs }}
-
-    - name: Check Lambda config
-      if: ${{ inputs.cloud-storage-service-name != '' }}
-      id: check-lambdas
-      shell: bash
       env:
-        SERVICE: ${{ inputs.cloud-storage-service-name }}
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
+    - id: check-lambdas
+      name: Check Lambda config
+      if: inputs.cloud-storage-service-name != ''
       run: |
         has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
         echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
-
-    - name: Build Lambda artifacts for preview
-      if: ${{ inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true' }}
       shell: bash
       env:
         SERVICE: ${{ inputs.cloud-storage-service-name }}
+    - name: Build Lambda artifacts for preview
+      if: inputs.cloud-storage-service-name != '' && steps.check-lambdas.outputs.has_lambdas == 'true'
       run: |
         .github/scripts/build-cloud-storage-lambdas-nix.sh
         rm -rf target/lambda
         tar -xzf lambda-artifacts.tar.gz -C .
-
-    # setup docker
-    - uses: docker/setup-buildx-action@v3
-      if: ${{ inputs.use-docker == 'true' }}
-
-    # install bun
-    - uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: 1.2.0
-
-    # install dependencies in infra folder
-    - name: install infra dependencies
       shell: bash
+      env:
+        SERVICE: ${{ inputs.cloud-storage-service-name }}
+    - if: inputs.use-docker == 'true'
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.2.0'
+    - name: install infra dependencies
       run: |
         cd infra 
         bun install
-
-    # configure aws credentials
+      shell: bash
     - uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
       with:
+        aws-region: ${{ inputs.aws-region }}
         aws-access-key-id: ${{ inputs.aws-access-key }}
         aws-secret-access-key: ${{ inputs.aws-secret-key }}
-        aws-region: ${{ inputs.aws-region }}
-
-    # login to ecr to allow pulumi to pull down services for caching
     - name: login to ecr
-      shell: bash
       run: |
         aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 569036502058.dkr.ecr.us-east-1.amazonaws.com
-
-    # preview changes
+      shell: bash
     - uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
       with:
         command: preview

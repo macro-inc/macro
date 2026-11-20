@@ -11,12 +11,15 @@
 //! Replaces the `deploy-dev.yml` / `deploy-prod.yml` workflows in the old
 //! `macro-inc/solid-site` repository.
 
-use anyhow::Result;
+use gh_workflow::expr::typed::{Bool, Expr, Json, Str, format, from_json, input, matrix};
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Push, Run, Step, Strategy, Use, Workflow,
-    WorkflowCall, WorkflowDispatch,
+    Concurrency, Env, Event, Job, Push, Run, Step, Strategy, Use, Workflow, WorkflowCall,
+    WorkflowCallSecret, WorkflowDispatch, WorkflowInput, ZizmorRule,
 };
 
+use crate::workflows::actions::{
+    ActionsCheckout, AwsActionsConfigureAwsCredentials, PulumiActions,
+};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -24,13 +27,20 @@ mod test;
 
 /// The environments to deploy, as a JSON list. On push `inputs.environment` is
 /// empty, so push runs deploy `dev`; `both` deploys dev before prod.
-const ENVIRONMENTS: &str = r#"${{ fromJSON(inputs.environment == 'both' && '["dev","prod"]' || format('["{0}"]', inputs.environment || 'dev')) }}"#;
+fn environments() -> Expr<Json> {
+    let requested = input::<Str>("environment");
+    from_json(requested.clone().eq("both").then_else(
+        r#"["dev","prod"]"#,
+        format(r#"["{0}"]"#, [requested.or_else("dev").into_ast()]),
+    ))
+}
 
 /// The environment of the current matrix leg.
-const ENVIRONMENT: &str = "${{ matrix.environment }}";
+fn environment() -> Expr<Str> {
+    matrix("environment")
+}
 
-/// Build the workflow. The `workflow_dispatch`/`workflow_call` input blocks
-/// are filled in by [`patch`].
+/// Build the workflow.
 pub fn deploy_website() -> Workflow {
     Workflow::new("Deploy Website")
         .on(Event::default()
@@ -44,55 +54,46 @@ pub fn deploy_website() -> Workflow {
                     .add_path(xtask_paths::repo_glob!("apps/marketing/**"))
                     .add_path(xtask_paths::repo_glob!("infra/stacks/website/**")),
             )
-            .workflow_dispatch(WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .workflow_dispatch(
+                WorkflowDispatch::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::choice(["dev", "prod", "both"])
+                            .description(
+                                "The environment to deploy to (both deploys dev, then prod)",
+                            )
+                            .required(true)
+                            .default("dev"),
+                    )
+                    .add_input(
+                        "preview_only",
+                        WorkflowInput::boolean()
+                            .description("Preview resource changes without publishing")
+                            .default(false),
+                    ),
+            )
+            .workflow_call(
+                WorkflowCall::default()
+                    .add_input(
+                        "environment",
+                        WorkflowInput::string()
+                            .description("The environment to deploy to. e.g. (dev, prod, both)")
+                            .required(true),
+                    )
+                    .add_secret(
+                        "AWS_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "AWS_SECRET_ACCESS_KEY",
+                        WorkflowCallSecret::default().required(true),
+                    )
+                    .add_secret(
+                        "PULUMI_ACCESS_TOKEN",
+                        WorkflowCallSecret::default().required(true),
+                    ),
+            ))
         .add_job("build-deploy", build_deploy())
-}
-
-/// Input blocks `gh_workflow` cannot express: a `choice` dispatch input, and the
-/// `workflow_call` contract `release-production` deploys prod through.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_call".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: string
-                description: The environment to deploy to. e.g. (dev, prod, both)
-            secrets:
-              AWS_ACCESS_KEY:
-                required: true
-              AWS_SECRET_ACCESS_KEY:
-                required: true
-              PULUMI_ACCESS_TOKEN:
-                required: true
-        "#})?,
-    );
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              environment:
-                required: true
-                type: choice
-                default: 'dev'
-                options:
-                  - dev
-                  - prod
-                  - both
-                description: The environment to deploy to (both deploys dev, then prod)
-              preview_only:
-                type: boolean
-                default: false
-                description: Preview resource changes without publishing
-        "#})?,
-    );
-    Ok(())
 }
 
 fn build_deploy() -> Job {
@@ -102,7 +103,9 @@ fn build_deploy() -> Job {
         // One leg at a time, in list order: with fail-fast, a failed dev deploy
         // cancels the queued prod leg.
         .strategy(Strategy {
-            matrix: Some(serde_json::json!({ "environment": ENVIRONMENTS })),
+            matrix: Some(
+                serde_json::json!({ "environment": serde_json::Value::from(environments()) }),
+            ),
             fail_fast: Some(true),
             max_parallel: Some(1),
         })
@@ -112,8 +115,7 @@ fn build_deploy() -> Job {
         // workflow_call runs. Never cancel in-progress — that could leave the
         // stack half-applied.
         .concurrency(
-            Concurrency::new(Expression::new(format!("deploy-website-{ENVIRONMENT}")))
-                .cancel_in_progress(false),
+            Concurrency::new(format!("deploy-website-{}", environment())).cancel_in_progress(false),
         )
         .add_env(("CI", "true"))
         .add_step(checkout())
@@ -130,13 +132,13 @@ fn build_deploy() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("lfs", true))
+    ActionsCheckout::new("Checkout Repo")
+        .lfs(true)
+        .step()
+        .zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "deploy scripts run from the checkout",
+        )
 }
 
 /// Without LFS content the site would publish pointer files as its videos.
@@ -160,11 +162,16 @@ fn build() -> Step<Run> {
         // Canonical URLs, sitemap and robots are baked in at build time.
         .add_env(Env::new(
             "VITE_APP_BASE_URL",
-            "${{ matrix.environment == 'prod' && 'https://macro.com' || 'https://dev.macro.com' }}",
+            environment()
+                .eq("prod")
+                .then_else("https://macro.com", "https://dev.macro.com"),
         ))
         .add_env(Env::new(
             "VITE_GOOGLE_SSO_URL",
-            "${{ matrix.environment == 'prod' && 'https://gateway.macro.com/auth/login/sso?idp_name=google_gmail' || 'https://dev-gateway.macro.com/auth/login/sso?idp_name=google_gmail' }}",
+            environment().eq("prod").then_else(
+                "https://gateway.macro.com/auth/login/sso?idp_name=google_gmail",
+                "https://dev-gateway.macro.com/auth/login/sso?idp_name=google_gmail",
+            ),
         ))
 }
 
@@ -175,27 +182,18 @@ fn install_infra_dependencies() -> Step<Run> {
 }
 
 fn configure_aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS Credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        ) // v5
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-1"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS Credentials", "us-east-1")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 /// The stack's own `invalidate-cache` command invalidates `/*` after the sync.
 fn pulumi_up() -> Step<Use> {
-    Step::new("Deploy with Pulumi")
-        .uses(
-            "pulumi",
-            "actions",
-            "8e5e406f4007fca908480587cb9893c07090f58d",
-        ) // v6
-        .add_with(("command", "${{ inputs.preview_only && 'preview' || 'up' }}"))
-        .add_with(("stack-name", format!("macro-inc/{ENVIRONMENT}")))
-        .add_with(("work-dir", "./infra/stacks/website"))
+    PulumiActions::new("Deploy with Pulumi")
+        .command(input::<Bool>("preview_only").then_else("preview", "up"))
+        .stack_name(format!("macro-inc/{}", environment()))
+        .work_dir("./infra/stacks/website")
+        .step()
         .add_env(Env::new("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
 }

@@ -1,28 +1,41 @@
 //! `Deploy Production Release` — ships a published GitHub release to prod. The
 //! same order as [`crate::workflows::deploy_on_push`] for dev: cloud storage,
-//! then the sync service and the AI editing worker, then the web app, whose
+//! then the sync service and the Cloudflare workers, then the web app, whose
 //! build overlaps the backend deploy. The website deploys alongside, and the
 //! held iOS App Store version is released once the web app is live. Generated
 //! into `release-production.yml`, the name it had when it was hand-written,
 //! which is its identity in GitHub Actions.
 
-use anyhow::Result;
+use gh_workflow::expr::typed::{Bool, Expr, JobHandle, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
-    Workflow,
+    CallJob, Concurrency, Event, Job, Level, Permissions, Release, ReleaseType, Run, Step, Use,
+    Workflow, ZizmorRule,
 };
 
+use crate::workflows::actions::{
+    CallBuildWebApp, CallDeployAiEditingWorker, CallDeployAllServices, CallDeployMcpChatgptWorker,
+    CallDeploySyncService, CallDeployWebsite, CallIosAppStorePublish, SoftpropsActionGhRelease,
+};
 use crate::workflows::{build_web_app, deploy_web_app, runners, steps, vars};
 
 #[cfg(test)]
 mod test;
+
+pub(crate) const DEPLOY_CLOUD_STORAGE: JobHandle<()> = JobHandle::new("deploy-cloud-storage", ());
+pub(crate) const DEPLOY_SYNC_SERVICE: JobHandle<()> = JobHandle::new("deploy-sync-service", ());
+/// Builds the web app.
+pub(crate) const BUILD: JobHandle<()> = JobHandle::new("build", ());
+/// Deploys the web app.
+pub(crate) const DEPLOY: JobHandle<()> = JobHandle::new("deploy", ());
 
 /// What the release deploys to.
 const ENVIRONMENT: &str = "prod";
 
 /// Only a release triggers this workflow; the jobs that start it keep the
 /// guard the hand-written workflow had.
-const ON_RELEASE: &str = "github.event_name == 'release'";
+fn on_release() -> Expr<Bool> {
+    github().event_name().eq("release")
+}
 
 pub fn release_production() -> Workflow {
     Workflow::new("Deploy Production Release")
@@ -30,109 +43,76 @@ pub fn release_production() -> Workflow {
         .concurrency(
             // Never cancel an in-progress deployment: that could leave a stack
             // half-applied.
-            Concurrency::new(Expression::new("${{ github.workflow }}-production"))
+            Concurrency::new(format!("{}-production", github().workflow()))
                 .cancel_in_progress(false),
         )
         .add_env(("MODE", "production"))
-        .add_job("deploy-cloud-storage", deploy_cloud_storage())
-        .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job(DEPLOY_CLOUD_STORAGE, deploy_cloud_storage())
+        .add_job(DEPLOY_SYNC_SERVICE, deploy_sync_service())
         .add_job("deploy-ai-editing-worker", deploy_ai_editing_worker())
+        .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
         .add_job("deploy-website", deploy_website())
         .add_job("publish-ios", publish_ios())
-        .add_job("build", build())
-        .add_job("deploy", deploy())
+        .add_job(BUILD, build())
+        .add_job(DEPLOY, deploy())
         .add_job("upload", upload())
 }
 
-/// Add the caller jobs' `with:` and `secrets:`, and drop the `runs-on` that
-/// `Job::default()` injects (invalid alongside `uses:`).
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let callers = [
-        (
-            "deploy-cloud-storage",
-            true,
-            indoc::indoc! {r#"
-                AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-                AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-                DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-                DD_API_KEY: ${{ secrets.DD_API_KEY }}
-                NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
-            "#},
-        ),
-        ("deploy-sync-service", true, "inherit"),
-        ("deploy-ai-editing-worker", true, "inherit"),
-        (
-            "deploy-website",
-            true,
-            indoc::indoc! {r#"
-                AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-                AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-            "#},
-        ),
-        (
-            "publish-ios",
-            false,
-            "IOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}",
-        ),
-        (
-            "build",
-            true,
-            indoc::indoc! {r#"
-                SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-                POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-            "#},
-        ),
-    ];
-    for (id, takes_environment, secrets) in callers {
-        let job = crate::workflows::job_mut(root, id)?;
-        job.remove("runs-on");
-        if takes_environment {
-            job.insert(
-                "with".into(),
-                crate::workflows::yaml_fragment(&format!("environment: {ENVIRONMENT}"))?,
-            );
-        }
-        job.insert("secrets".into(), crate::workflows::yaml_fragment(secrets)?);
-    }
-    Ok(())
-}
-
-fn deploy_cloud_storage() -> Job {
-    Job::default()
+fn deploy_cloud_storage() -> CallJob {
+    CallDeployAllServices::new(ENVIRONMENT)
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .secret_dd_app_key(vars::DD_APP_KEY)
+        .secret_dd_api_key(vars::DD_API_KEY)
+        .secret_nix_cache_signing_key(vars::NIX_CACHE_SIGNING_KEY)
+        .job()
         .name("Deploy Cloud Storage Services")
-        .cond(Expression::new(ON_RELEASE))
-        .uses("./.github/workflows/deploy_all_services.yml")
+        .cond(on_release())
 }
 
 /// The worker calls DSS/SPS at prod URLs, so don't ship it ahead of them.
-fn deploy_sync_service() -> Job {
-    Job::default()
+fn deploy_sync_service() -> CallJob {
+    CallDeploySyncService::new(ENVIRONMENT)
+        .inherit_secrets()
+        .job()
         .name("Deploy Sync Service")
-        .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_sync_service.yml")
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
 }
 
 /// Calls DSS/search/auth at prod URLs and opens doc sessions against the prod
 /// sync-service, so it ships behind both. It must also move in lockstep with
 /// cloud-storage's EditDocument tool, which picks the worker's model chains.
-fn deploy_ai_editing_worker() -> Job {
-    Job::default()
+fn deploy_ai_editing_worker() -> CallJob {
+    CallDeployAiEditingWorker::new(ENVIRONMENT)
+        .inherit_secrets()
+        .job()
         .name("Deploy AI Editing Worker")
         .needs(vec![
-            "deploy-cloud-storage".to_string(),
-            "deploy-sync-service".to_string(),
+            DEPLOY_CLOUD_STORAGE.to_string(),
+            DEPLOY_SYNC_SERVICE.to_string(),
         ])
-        .uses("./.github/workflows/deploy_ai_editing_worker.yml")
+}
+
+/// Calls the backend at prod URLs through the SDK and takes its tokens from
+/// the MCP auth broker, so it ships behind cloud storage. Nothing waits on it.
+fn deploy_mcp_chatgpt_worker() -> CallJob {
+    CallDeployMcpChatgptWorker::new(ENVIRONMENT)
+        .inherit_secrets()
+        .job()
+        .name("Deploy MCP ChatGPT Worker")
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
 }
 
 /// Also owns the macro.com CloudFront distribution in front of the web app.
-fn deploy_website() -> Job {
-    Job::default()
+fn deploy_website() -> CallJob {
+    CallDeployWebsite::new(ENVIRONMENT)
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .job()
         .name("Deploy Website")
-        .cond(Expression::new(ON_RELEASE))
-        .uses("./.github/workflows/deploy_website.yml")
+        .cond(on_release())
 }
 
 /// Releases the iOS version Apple approved for the native changes in this
@@ -140,12 +120,13 @@ fn deploy_website() -> Job {
 /// build never goes live while prod still serves the previous web bundle (a
 /// release request cannot be cancelled). Nothing depends on it: an App Store
 /// Connect failure must not hold back the prod deploy.
-fn publish_ios() -> Job {
-    Job::default()
+fn publish_ios() -> CallJob {
+    CallIosAppStorePublish::new()
+        .secret_ios_release_doppler_token(vars::IOS_RELEASE_DOPPLER_TOKEN)
+        .job()
         .name("Publish iOS App Store Version")
-        .needs(vec!["deploy".to_string()])
+        .needs(vec![DEPLOY.to_string()])
         .permissions(Permissions::default().contents(Level::Read))
-        .uses("./.github/workflows/ios-app-store-publish.yml")
 }
 
 /// The same build as dev deploys and manual web deploys. It reuses unchanged
@@ -153,11 +134,13 @@ fn publish_ios() -> Job {
 /// Like them, it mounts only the Nix store and Bun's package cache from the
 /// cache volume, as the release's own build job did, and uses no shared
 /// sccache. No `needs`, so it overlaps the backend deploy.
-fn build() -> Job {
-    Job::default()
+fn build() -> CallJob {
+    CallBuildWebApp::new(ENVIRONMENT)
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Build Web App")
-        .cond(Expression::new(ON_RELEASE))
-        .uses("./.github/workflows/build_web_app.yml")
+        .cond(on_release())
 }
 
 /// New clients require the worker's sync protocol support before publication,
@@ -167,12 +150,15 @@ fn deploy() -> Job {
         .name("Deploy Web App")
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .needs(vec![
-            "build".to_string(),
-            "deploy-cloud-storage".to_string(),
-            "deploy-sync-service".to_string(),
+            BUILD.to_string(),
+            DEPLOY_CLOUD_STORAGE.to_string(),
+            DEPLOY_SYNC_SERVICE.to_string(),
         ])
         .add_env(("CI", "true"))
-        .add_step(build_web_app::checkout())
+        .add_step(build_web_app::checkout().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "release scripts run from the checkout",
+        ))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
@@ -191,8 +177,11 @@ fn upload() -> Job {
     Job::default()
         .name("Upload Release Artifacts")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .needs(vec!["build".to_string(), "deploy".to_string()])
-        .add_step(build_web_app::checkout())
+        .needs(vec![BUILD.to_string(), DEPLOY.to_string()])
+        .add_step(build_web_app::checkout().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "release scripts run from the checkout",
+        ))
         .add_step(deploy_web_app::download_dist(&build_web_app::artifact(
             ENVIRONMENT,
         )))
@@ -200,21 +189,21 @@ fn upload() -> Job {
         .add_step(attach_to_release())
 }
 
-const RELEASE_ARCHIVE: &str = "web-app-${{ github.ref_name }}.tar.gz";
+fn release_archive() -> String {
+    format!("web-app-{}.tar.gz", github().ref_name())
+}
 
 fn archive_dist() -> Step<Run> {
-    Step::new("Create Web App Artifact").run(format!(
-        "tar -czf {RELEASE_ARCHIVE} -C {} .",
-        xtask_paths::runtime_path!("apps/web/dist").as_str()
-    ))
+    Step::new("Create Web App Artifact")
+        .run(format!(
+            "tar -czf \"web-app-${{REF_NAME}}.tar.gz\" -C {} .",
+            xtask_paths::runtime_path!("apps/web/dist").as_str()
+        ))
+        .add_env(("REF_NAME", github().ref_name()))
 }
 
 fn attach_to_release() -> Step<Use> {
-    Step::new("Upload Release Artifacts")
-        .uses(
-            "softprops",
-            "action-gh-release",
-            "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
-        ) // v2
-        .add_with(("files", RELEASE_ARCHIVE))
+    SoftpropsActionGhRelease::new("Upload Release Artifacts")
+        .files(release_archive())
+        .step()
 }

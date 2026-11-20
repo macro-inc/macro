@@ -165,6 +165,47 @@ pub async fn fetch_inboxes_for_macro_id(
     Ok(service_links?)
 }
 
+/// An inbox email search can reach, and whether its disconnect has started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchInbox {
+    pub id: Uuid,
+    pub macro_id: String,
+    /// `deleting_at` is set: the mailbox is being disconnected and its rows
+    /// purged, and its documents stay in the search index until that ends.
+    pub deleting: bool,
+}
+
+/// The inboxes [`fetch_inboxes_for_macro_id`] returns, with only what email
+/// search scopes by and whether each is being disconnected.
+pub async fn fetch_search_inboxes_for_macro_id(
+    pool: &PgPool,
+    macro_id: &str,
+) -> anyhow::Result<Vec<SearchInbox>> {
+    if macro_id.is_empty() {
+        anyhow::bail!("macro_id cannot be empty");
+    }
+
+    let inboxes = sqlx::query_as!(
+        SearchInbox,
+        r#"
+        SELECT el.id AS "id!", el.macro_id AS "macro_id!",
+               el.deleting_at IS NOT NULL AS "deleting!"
+        FROM email_links el
+        WHERE el.macro_id = $1
+        UNION
+        SELECT el.id, el.macro_id, el.deleting_at IS NOT NULL
+        FROM email_links el
+        JOIN macro_user_links mul ON el.id = mul.link_id
+        WHERE mul.primary_macro_id = $1
+        "#,
+        macro_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(inboxes)
+}
+
 /// An accessible inbox plus the per-inbox details the links list endpoint
 /// renders: settings, latest backfill job status, and the self-contact photo.
 #[derive(Debug, Clone)]
@@ -185,6 +226,9 @@ pub struct InboxDetails {
     /// stop satisfying the capability check whenever Macro changes the scope
     /// set it requests.
     pub has_calendar_data: bool,
+    /// Whether folder discovery found that the provider serves no mailbox
+    /// for the account (Outlook only), so sync is waiting for one.
+    pub mailbox_unavailable: bool,
 }
 
 struct DbInboxDetailsRow {
@@ -196,6 +240,7 @@ struct DbInboxDetailsRow {
     is_sync_active: bool,
     is_primary: bool,
     needs_reauth: bool,
+    mailbox_unavailable: bool,
     last_sync_error_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -230,6 +275,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                l.is_sync_active as "is_sync_active!",
                l.is_primary as "is_primary!",
                l.needs_reauth as "needs_reauth!",
+               l.mailbox_unavailable_at IS NOT NULL as "mailbox_unavailable!",
                l.last_sync_error_at,
                l.created_at as "created_at!",
                l.updated_at as "updated_at!",
@@ -253,13 +299,15 @@ pub async fn fetch_inbox_details_for_macro_id(
         FROM (
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation,
+                   el.mailbox_unavailable_at
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation,
+                   el.mailbox_unavailable_at
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
@@ -313,6 +361,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                 provider_granted_scopes: row.provider_granted_scopes,
                 calendar_disabled: row.calendar_disabled,
                 has_calendar_data: row.has_calendar_data,
+                mailbox_unavailable: row.mailbox_unavailable,
             })
         })
         .collect()

@@ -116,6 +116,7 @@ fn the_report_counts_the_current_plan_and_lists_what_needs_attention() {
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: None,
         review_id: None,
+        review_session_id: None,
     };
 
     let report = report(Some(&run), &rows);
@@ -170,6 +171,7 @@ fn while_planning_the_report_carries_what_notion_has_shown_so_far() {
             data_sources: 12,
         }),
         review_id: None,
+        review_session_id: None,
     };
 
     assert_eq!(
@@ -289,6 +291,7 @@ fn a_plan_presented_while_it_is_decided_counts_what_is_undecided_under_the_runs_
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: None,
         review_id: Some(review),
+        review_session_id: None,
     };
 
     let report = report(Some(&run), &[imported, decided, undecided]);
@@ -298,4 +301,184 @@ fn a_plan_presented_while_it_is_decided_counts_what_is_undecided_under_the_runs_
     assert_eq!(report.deciding, 1);
     assert_eq!((report.copy, report.documents, report.databases), (1, 1, 0));
     assert_eq!((report.imported, report.waiting), (0, 1));
+}
+
+#[test]
+fn replacing_an_unshared_folder_reports_the_removed_sharing() {
+    let mut item = row(
+        "Folder",
+        ImportKind::Page,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    item.metadata["separateFolder"] =
+        serde_json::json!({"visibility":"shared", "reason":"sharing_removed"});
+    let report = report(None, &[item]);
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("sharing was removed"))
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|warning| !warning.contains("holds personal items"))
+    );
+}
+
+#[test]
+fn the_report_counts_assignees_omitted_to_keep_tasks_personal() {
+    let item = row(
+        "Tasks",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Tasks,
+        None,
+        None,
+    );
+    let count = TaskImportNoticeCount {
+        import_id: item.id,
+        reason: TaskImportNoticeReason::PersonalAssigneeOmitted,
+        count: 2,
+    };
+    let report = super::report(None, &[item], &[count]).unwrap();
+    assert!(
+        report.warnings.iter().any(
+            |warning| warning.contains("2 teammate assignees omitted to keep tasks owner-only")
+        )
+    );
+}
+
+#[test]
+fn tracker_omissions_are_one_source_warning() {
+    let rows: Vec<_> = (0..300)
+        .map(|_| {
+            let mut item = row(
+                "Issue",
+                ImportKind::Issue,
+                ImportStatus::Imported,
+                NotionDecision::Copy,
+                None,
+                None,
+            );
+            item.source = ImportSource::Linear;
+            item
+        })
+        .collect();
+    let counts: Vec<_> = rows
+        .iter()
+        .map(|item| TaskImportNoticeCount {
+            import_id: item.id,
+            reason: TaskImportNoticeReason::PersonalAssigneeOmitted,
+            count: 1,
+        })
+        .collect();
+    let report = super::report(None, &rows, &counts).unwrap();
+    assert_eq!(report.warnings.len(), 1);
+    assert!(report.warnings[0].contains("300 teammate assignees omitted"));
+}
+
+#[test]
+fn shared_re_reviews_clear_the_owner_only_omission_warning() {
+    let mut item = row(
+        "Tasks",
+        ImportKind::DataSource,
+        ImportStatus::Importing,
+        NotionDecision::Tasks,
+        None,
+        None,
+    );
+    item.metadata["plan"]["shared"] = true.into();
+    let count = TaskImportNoticeCount {
+        import_id: item.id,
+        reason: TaskImportNoticeReason::PersonalAssigneeOmitted,
+        count: 1,
+    };
+    let report = super::report(None, &[item], &[count]).unwrap();
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|warning| !warning.contains("omitted to keep tasks owner-only"))
+    );
+}
+
+fn report(run: Option<&ImportRun>, rows: &[ImportEntity]) -> NotionImportReport {
+    super::report(run, rows, &[]).unwrap()
+}
+
+#[test]
+fn invalid_folder_separation_reasons_fail_loudly() {
+    let mut item = row(
+        "Folder",
+        ImportKind::Page,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    item.metadata["separateFolder"] =
+        serde_json::json!({"visibility":"shared", "reason":"unknown"});
+    assert!(super::report(None, &[item], &[]).is_err());
+}
+
+#[test]
+fn notice_reads_exclude_shared_items_and_older_reviews() {
+    let old_review = Uuid::now_v7();
+    let review = Uuid::now_v7();
+    let mut old = row(
+        "Old",
+        ImportKind::Issue,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        Some(old_review),
+        None,
+    );
+    old.updated_at = Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap();
+    let personal = row(
+        "Personal",
+        ImportKind::Issue,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        Some(review),
+        None,
+    );
+    let mut shared = row(
+        "Shared",
+        ImportKind::Issue,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        Some(review),
+        None,
+    );
+    shared.metadata["plan"]["shared"] = true.into();
+    let expected = personal.id;
+    assert_eq!(
+        super::notice_import_ids(None, &[old, personal, shared]),
+        vec![expected]
+    );
+}
+
+#[test]
+fn shared_re_reviews_hide_historical_personal_relocations() {
+    let mut item = row(
+        "Tasks",
+        ImportKind::DataSource,
+        ImportStatus::Importing,
+        NotionDecision::Tasks,
+        None,
+        None,
+    );
+    item.metadata["plan"]["shared"] = true.into();
+    item.metadata["personalFolderId"] = Uuid::now_v7().to_string().into();
+    assert!(
+        report(None, &[item])
+            .warnings
+            .iter()
+            .all(|warning| !warning.contains("kept in Notion (personal)"))
+    );
 }

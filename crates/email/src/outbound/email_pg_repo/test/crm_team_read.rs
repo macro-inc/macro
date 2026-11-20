@@ -11,8 +11,131 @@ use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 use crate::outbound::email_pg_repo::dynamic::TeamReadTuning;
 use macro_user_id::cowlike::CowLike;
 
+mod viewed;
+
 const TEAM_GAMMA_ID: &str = "e0000003-0000-0000-0000-000000000003";
 const TEAM_DELTA_ID: &str = "e0000004-0000-0000-0000-000000000004";
+
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_crm_team_read"))
+)]
+async fn selected_and_all_mail_contributors_keep_the_same_pages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team = Uuid::parse_str(TEAM_GAMMA_ID)?;
+    sqlx::query!(
+        r#"INSERT INTO crm_email_rule_revisions (team_id, user_id, revision, link_id, schema_version, definition)
+           SELECT team_id, user_id, 1, link_id, 1, '{"schema_version":1,"include":[]}'::jsonb
+           FROM crm_email_consent WHERE team_id = $1 AND user_id = ANY($2)"#,
+        team,
+        &[user(0), user(1), user(2)],
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "UPDATE crm_email_consent SET enabled = FALSE WHERE team_id = $1 AND user_id = ANY($2)",
+        team,
+        &[user(1), user(2)]
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("UPDATE crm_email_consent SET mode = 'selected', selected_enabled = TRUE, active_rule_revision = 1 WHERE team_id = $1 AND user_id = ANY($2)", team, &[user(1), user(2)]).execute(&pool).await?;
+    // One selected contributor is empty; another contributes some overlapping
+    // conversations. The all-mail contributor must still win eligible copies.
+    sqlx::query!("INSERT INTO crm_email_rule_addresses (team_id, user_id, revision, address) VALUES ($1, $2, 1, 'p1@dense.test')", team, user(2)).execute(&pool).await?;
+    assert!(
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(1)],
+            &user(1),
+            &company(&["dense.test"]),
+            17
+        )
+        .await?
+            > 0
+    );
+
+    sqlx::query!(
+        "UPDATE crm_email_consent SET enabled = FALSE WHERE team_id = $1 AND user_id = $2",
+        team,
+        user(0)
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("UPDATE crm_email_consent SET mode = 'selected', selected_enabled = TRUE, active_rule_revision = 1 WHERE team_id = $1 AND user_id = $2", team, user(0)).execute(&pool).await?;
+    sqlx::query!("INSERT INTO crm_email_rule_domains (team_id, user_id, revision, domain) VALUES ($1, $2, 1, 'dense.test')", team, user(0)).execute(&pool).await?;
+    assert!(
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(0)],
+            &user(0),
+            &company(&["dense.test"]),
+            17
+        )
+        .await?
+            > 0
+    );
+    assert_eq!(
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(0)],
+            &user(0),
+            &company(&["absent.test"]),
+            17
+        )
+        .await?,
+        0
+    );
+    assert_parity(
+        &pool,
+        TEAM_GAMMA_ID,
+        &[link(2)],
+        &user(2),
+        &contact(&["p1@dense.test", "p2@sparse.test"]),
+        17,
+    )
+    .await?;
+    sqlx::query!(
+        "DELETE FROM crm_email_rule_domains WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "DELETE FROM crm_email_rule_addresses WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(0)],
+            &user(0),
+            &company(&["dense.test"]),
+            17
+        )
+        .await?,
+        0
+    );
+    sqlx::query!("INSERT INTO crm_email_rule_threads (team_id, user_id, revision, thread_id) SELECT $1, $2, 1, id FROM email_threads WHERE provider_id = 'ph:blocked-draft'", team, user(0)).execute(&pool).await?;
+    assert_eq!(
+        assert_parity(
+            &pool,
+            TEAM_GAMMA_ID,
+            &[link(0)],
+            &user(0),
+            &company(&["dense.test"]),
+            17
+        )
+        .await?,
+        1
+    );
+    Ok(())
+}
 
 fn link(i: u8) -> Uuid {
     Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | u128::from(i))
@@ -23,8 +146,15 @@ fn user(i: u8) -> String {
 }
 
 /// Every way the team read takes a page, by name.
-const READS: [(&str, TeamReadTuning); 4] = [
+const READS: [(&str, TeamReadTuning); 5] = [
     ("default", TeamReadTuning::DEFAULT),
+    (
+        "selection",
+        TeamReadTuning {
+            superset_limit: 100,
+            window_per_row: 100,
+        },
+    ),
     (
         "superset",
         TeamReadTuning {
@@ -101,13 +231,40 @@ async fn pages(
     limit: u32,
     read: Option<TeamReadTuning>,
 ) -> anyhow::Result<Vec<Vec<ThreadPreviewCursorDbRow>>> {
+    pages_sorted(
+        pool,
+        team,
+        caller_links,
+        caller,
+        filter,
+        limit,
+        read,
+        SimpleSortMethod::UpdatedAt,
+    )
+    .await
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "parity reader inputs plus the sort under test"
+)]
+async fn pages_sorted(
+    pool: &Pool<Postgres>,
+    team: &str,
+    caller_links: &[Uuid],
+    caller: &str,
+    filter: &Expr<EmailLiteral>,
+    limit: u32,
+    read: Option<TeamReadTuning>,
+    sort: SimpleSortMethod,
+) -> anyhow::Result<Vec<Vec<ThreadPreviewCursorDbRow>>> {
     let team = Uuid::parse_str(team)?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let filter = Arc::new(filter.clone());
     let mut pages = Vec::new();
     let mut cursor = None;
     loop {
-        let query = Query::new(cursor.take(), SimpleSortMethod::UpdatedAt, filter.clone());
+        let query = Query::new(cursor.take(), sort, filter.clone());
         let page = dynamic::dynamic_email_thread_cursor_with(
             pool,
             caller_links,
@@ -123,7 +280,7 @@ async fn pages(
             id: last.id,
             limit: limit as usize,
             val: CursorVal {
-                sort_type: SimpleSortMethod::UpdatedAt,
+                sort_type: sort,
                 last_val: last.sort_ts,
             },
             filter: filter.clone(),
@@ -500,6 +657,83 @@ async fn scope_fixture_pages_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
             let rows =
                 assert_parity(&pool, TEAM_ALPHA_ID, &[link], &caller, &filter, limit).await?;
             assert!(rows > 0, "{filter:?} matches the fixture");
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn thread_exclusions_apply_to_every_team_stream_and_competing_copy(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TEAM: &str = "e0000002-0000-0000-0000-000000000002";
+    let team = Uuid::parse_str(TEAM)?;
+    let inbox = Uuid::parse_str("d0000001-0000-0000-0000-000000000001")?;
+    let caller = owner_of(&pool, inbox).await?;
+    let preferred = Uuid::parse_str("55550001-0000-0000-0000-000000000001")?;
+    let other = Uuid::parse_str("55550002-0000-0000-0000-000000000001")?;
+    sqlx::query!("UPDATE email_threads SET is_signal = TRUE")
+        .execute(&pool)
+        .await?;
+    let filters = [
+        company(&["acme.example.com"]),
+        contact(&["vendor@acme.example.com"]),
+        signal(company(&["acme.example.com"])),
+        signal(contact(&["vendor@acme.example.com"])),
+    ];
+
+    for (exclude_preferred, exclude_other) in [
+        (false, false),
+        (true, false),
+        (true, true),
+        (false, true),
+        (false, false),
+    ] {
+        for (thread, excluded) in [(preferred, exclude_preferred), (other, exclude_other)] {
+            if excluded {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO crm_email_thread_exclusions (team_id, user_id, link_id, thread_id)
+                    SELECT $1, l.macro_id, l.id, t.id
+                    FROM email_threads t JOIN email_links l ON l.id = t.link_id
+                    WHERE t.id = $2
+                    ON CONFLICT DO NOTHING
+                    "#,
+                    team,
+                    thread,
+                )
+                .execute(&pool)
+                .await?;
+            } else {
+                sqlx::query!(
+                    "DELETE FROM crm_email_thread_exclusions WHERE team_id = $1 AND thread_id = $2",
+                    team,
+                    thread,
+                )
+                .execute(&pool)
+                .await?;
+            }
+        }
+
+        for filter in &filters {
+            let expected = pages(&pool, TEAM, &[inbox], &caller, filter, 1, None).await?;
+            for (name, tuning) in READS {
+                let actual = pages(&pool, TEAM, &[inbox], &caller, filter, 1, Some(tuning)).await?;
+                assert_eq!(printed(&actual), printed(&expected), "{name}: {filter:?}");
+                let ids: Vec<Uuid> = actual.into_iter().flatten().map(|row| row.id).collect();
+                assert_eq!(ids.contains(&preferred), !exclude_preferred, "{name}");
+                assert_eq!(
+                    ids.contains(&other),
+                    exclude_preferred && !exclude_other,
+                    "{name}"
+                );
+            }
         }
     }
     Ok(())

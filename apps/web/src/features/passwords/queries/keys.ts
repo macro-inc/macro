@@ -4,4 +4,9 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const passwordKeys = createQueryKeys('passwords', {
   items: (scope: string) => [scope, 'items'],
   folders: (scope: string) => [scope, 'folders'],
+  agentRequests: (scope: string, itemId: string) => [
+    scope,
+    'agent-requests',
+    itemId,
+  ],
 });

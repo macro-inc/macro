@@ -1,14 +1,14 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
 name: SDK Check
-'on':
+on:
   push:
     branches:
-    - main
+      - main
     paths:
-    - packages/sdk/**
-    - bun.lock
-    - '.github/workflows/sdk-check.yml'
+      - packages/sdk/**
+      - bun.lock
+      - .github/workflows/sdk-check.yml
   workflow_call: {}
 jobs:
   check-package:
@@ -16,34 +16,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        clean: 'false'
-        persist-credentials: 'false'
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: '1.3.5'
-    - name: Setup Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-      with:
-        node-version: '24'
-    - name: Install dependencies
-      run: bun install --frozen-lockfile
-      working-directory: packages/sdk
-    - name: Typecheck SDK
-      run: bun run check
-      working-directory: packages/sdk
-    - name: Test SDK
-      run: bun test
-      working-directory: packages/sdk
-    - name: Check endpoint coverage
-      run: bun run coverage
-      working-directory: packages/sdk
-    - name: Check packed SDK
-      run: bun run build && bun run check:pack
-      working-directory: packages/sdk
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.5'
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+        working-directory: packages/sdk
+      - name: Typecheck SDK
+        run: bun run check
+        working-directory: packages/sdk
+      - name: Test SDK
+        run: bun test
+        working-directory: packages/sdk
+      - name: Check endpoint coverage
+        run: bun run coverage
+        working-directory: packages/sdk
+      - name: Check packed SDK
+        run: bun run build && bun run check:pack
+        working-directory: packages/sdk
 concurrency:
   group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
   cancel-in-progress: true

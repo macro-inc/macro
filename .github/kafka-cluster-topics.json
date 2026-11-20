@@ -20,10 +20,12 @@
   "macro.mentions",
   "macro.messages",
   "macro.notifications",
+  "macro.passwords",
   "macro.projects",
   "macro.properties",
   "macro.soup",
   "macro.teams",
+  "macro.time_entries",
   "macro.users",
   "macro.webhooks"
 ]

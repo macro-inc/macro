@@ -18,6 +18,7 @@ use super::*;
 use crate::domain::models::ClearStatus;
 
 mod fake_clears;
+mod unread_rows;
 
 const CHANNEL: u128 = 0xC0;
 const ROOT: u128 = 0x7A;
@@ -224,6 +225,42 @@ async fn row_types_narrow_the_rows_and_drop_groups_without_any() {
     let rows = &page.entries[0].rows;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, row(&channel(), "top_level"));
+}
+
+#[tokio::test]
+async fn a_thread_is_listed_under_each_kind_it_shows() {
+    let listed = |page: InboxPage<&'static str>| -> Vec<InboxRowId> {
+        page.entries
+            .iter()
+            .flat_map(|entry| &entry.rows)
+            .map(|row| row.id.clone())
+            .collect()
+    };
+
+    // The mention thread has a reply, so replies list it too.
+    let with_reply = inbox();
+    let replies = with_reply
+        .service
+        .page(viewer(), query(vec![InboxRowType::ChannelThread]))
+        .await
+        .unwrap();
+    assert_eq!(listed(replies), vec![row(&channel(), &thread_slot())]);
+
+    // A reply that mentions the viewer is a thread mentions list too.
+    let reply_mention = harness(
+        vec![candidate("channel", channel().into_entity(), Some(9), None)],
+        vec![channel_mention(1, CHANNEL, 0x101, Some(ROOT), 9)],
+    );
+    let mentions = reply_mention
+        .service
+        .page(viewer(), query(vec![InboxRowType::ChannelMention]))
+        .await
+        .unwrap();
+    assert_eq!(
+        mentions.entries[0].rows[0].row_type,
+        InboxRowType::ChannelThread
+    );
+    assert_eq!(listed(mentions), vec![row(&channel(), &thread_slot())]);
 }
 
 #[tokio::test]
@@ -655,6 +692,146 @@ async fn clear_takes_only_the_rows_the_request_names() {
     for id in [1, 5] {
         assert_eq!(state(&harness, id), NotificationState::Unseen);
     }
+}
+
+#[tokio::test]
+async fn a_clear_of_a_kind_takes_the_rows_listed_under_it_whole() {
+    let channel_and_doc = || {
+        harness(
+            vec![
+                candidate("channel", channel().into_entity(), Some(9), None),
+                candidate("doc", entity(EntityType::Document, DOC), Some(7), None),
+            ],
+            vec![
+                // A thread whose second reply mentions the viewer.
+                channel_reply(1, CHANNEL, ROOT, 0x100, 8),
+                channel_mention(2, CHANNEL, 0x101, Some(ROOT), 9),
+                // Comments, one of which mentions the viewer.
+                doc_comment_mention(3, DOC, 0xA0, 0xA0, 6),
+                doc_reply(4, DOC, 0xA1, 0xA0, 7),
+            ],
+        )
+    };
+    let clear_kind = |row_type| {
+        clear_request(InboxScope {
+            row_types: vec![row_type],
+            ..Default::default()
+        })
+    };
+
+    let mentions = channel_and_doc();
+    let cleared = clear(&mentions, clear_kind(InboxRowType::ChannelMention)).await;
+    assert_eq!(cleared.rows, 1);
+    for id in [1, 2] {
+        assert_eq!(state(&mentions, id), NotificationState::Done, "{id}");
+    }
+    for id in [3, 4] {
+        assert_eq!(state(&mentions, id), NotificationState::Unseen, "{id}");
+    }
+
+    let comments = channel_and_doc();
+    let cleared = clear(&comments, clear_kind(InboxRowType::DiscussionMessages)).await;
+    assert_eq!(cleared.rows, 1);
+    for id in [3, 4] {
+        assert_eq!(state(&comments, id), NotificationState::Done, "{id}");
+    }
+    for id in [1, 2] {
+        assert_eq!(state(&comments, id), NotificationState::Unseen, "{id}");
+    }
+}
+
+#[tokio::test]
+async fn a_clear_of_mentions_takes_pull_requests_and_agent_sessions_that_mention_you() {
+    const MENTIONED_PR: u128 = 0xF1;
+    const OTHER_PR: u128 = 0xF2;
+    const SESSION: u128 = 0x5E;
+    let pull_request = |id: u128, pr: u128, tag: &str, extra: serde_json::Value, minute: u32| {
+        let mut content = json!({
+            "foreignEntityId": uuid(pr),
+            "githubKey": "macro-inc/macro#1",
+            "owner": "macro-inc",
+            "repo": "macro",
+            "number": 1,
+            "url": "https://github.com/macro-inc/macro/pull/1",
+            "displayName": "macro-inc/macro#1",
+            "title": "Fix the inbox",
+        });
+        for (key, value) in extra.as_object().unwrap() {
+            content[key] = value.clone();
+        }
+        notification(
+            id,
+            entity(EntityType::ForeignEntity, pr),
+            tag,
+            content,
+            minute,
+            NotificationState::Unseen,
+        )
+    };
+    let mention = json!({ "location": "comment", "textSnippet": "can you take a look?" });
+    let session_mention = notification(
+        3,
+        entity(EntityType::AgentSession, SESSION),
+        "agent_session_mentioned",
+        json!({
+            "sessionId": uuid(SESSION),
+            "sessionName": "Inbox triage",
+            "botId": uuid(0xB07),
+            "botName": "Scout",
+            "mentionedBy": "macro|colleague@example.com",
+            "actionId": uuid(0xAC),
+        }),
+        7,
+        NotificationState::Unseen,
+    );
+    let harness = harness(
+        vec![
+            candidate(
+                "mentioned",
+                entity(EntityType::ForeignEntity, MENTIONED_PR),
+                Some(9),
+                None,
+            ),
+            candidate(
+                "session",
+                entity(EntityType::AgentSession, SESSION),
+                Some(7),
+                None,
+            ),
+            candidate(
+                "other",
+                entity(EntityType::ForeignEntity, OTHER_PR),
+                Some(5),
+                None,
+            ),
+        ],
+        vec![
+            pull_request(1, MENTIONED_PR, "github_pr_mention", mention, 9),
+            pull_request(2, MENTIONED_PR, "github_review_requested", json!({}), 8),
+            session_mention,
+            pull_request(4, OTHER_PR, "github_review_requested", json!({}), 5),
+        ],
+    );
+
+    let cleared = clear(
+        &harness,
+        clear_request(InboxScope {
+            row_types: vec![
+                InboxRowType::ChannelMention,
+                InboxRowType::DiscussionMention,
+            ],
+            ..Default::default()
+        }),
+    )
+    .await;
+
+    // Both mentioning rows go whole; the pull request that only asks for a
+    // review stays.
+    assert_eq!(cleared.rows, 2);
+    for id in [1, 2, 3] {
+        assert_eq!(state(&harness, id), NotificationState::Done, "{id}");
+    }
+    assert_eq!(state(&harness, 4), NotificationState::Unseen);
 }
 
 #[tokio::test]
@@ -1332,4 +1509,34 @@ async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
         panic!("the task is unread again");
     };
     assert!(entry.rows.iter().all(|row| row.unseen));
+}
+
+#[tokio::test]
+async fn a_new_notification_listing_probes_the_inbox_candidate_query() {
+    let listed = entity(EntityType::Document, 1);
+    let source = FakeSource::with(vec![candidate("doc", listed.clone(), Some(1), None)]);
+
+    assert_eq!(
+        new_notification_listing(&source, &viewer(), listed.clone())
+            .await
+            .unwrap(),
+        Some("doc")
+    );
+    assert_eq!(
+        new_notification_listing(&source, &viewer(), entity(EntityType::Document, 2))
+            .await
+            .unwrap(),
+        None
+    );
+
+    let requests = source.requests.lock().unwrap();
+    assert_eq!(requests[0].only, Some(vec![listed]));
+    assert!(requests[0].assume_attention);
+    assert!(!requests[0].own_work);
+    assert_eq!(requests[0].keying, CandidateKeying::FiledEntity);
+    assert_eq!(requests[0].types, policy::CANDIDATE_TYPES.to_vec());
+    assert_eq!(
+        format!("{:?}", requests[0].filter),
+        format!("{:?}", policy::inbox_filter())
+    );
 }

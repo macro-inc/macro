@@ -14,7 +14,7 @@ use ::notification_inbox::domain::models::{
     ClearAction, ClearRun, ClearStatus, InboxActor, InboxChange, InboxClearRequest,
     InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow,
     InboxRowAction, InboxRowActionKind, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
-    StartedClear,
+    StartedClear, UnreadRows,
 };
 use async_graphql::futures_util::{StreamExt as _, future::BoxFuture, pin_mut};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -85,6 +85,7 @@ fn doc_entry() -> InboxEntry<SoupProjectionHydration> {
         rows: vec![InboxRow {
             id: thread_row_id(),
             row_type: InboxRowType::DiscussionThread,
+            also_listed_as: Vec::new(),
             thread_id: Some("a".to_string()),
             actor: Some(InboxActor::User(
                 MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
@@ -112,6 +113,24 @@ struct RecordingInboxService {
     clear_reads: Mutex<Vec<Option<Uuid>>>,
     undos: Mutex<Vec<(InboxScope, DoneReceipt)>>,
     seens: Mutex<Vec<(InboxScope, Vec<InboxRowId>)>>,
+    /// What the next count or recount of unread rows answers.
+    unread: Mutex<UnreadRows>,
+    /// Whether the next count or recount fails.
+    unread_fails: Mutex<bool>,
+    unread_counts: Mutex<usize>,
+    unread_recounts: Mutex<Vec<Vec<FeedKey>>>,
+    /// Signalled after every count and recount.
+    unread_answered: tokio::sync::Notify,
+}
+
+impl RecordingInboxService {
+    fn answer_unread(&self) -> Result<UnreadRows, FeedError> {
+        self.unread_answered.notify_one();
+        if *self.unread_fails.lock().unwrap() {
+            return Err(FeedError::InvalidInput("the count failed"));
+        }
+        Ok(self.unread.lock().unwrap().clone())
+    }
 }
 
 /// Shares the recording service between the schema and the assertions.
@@ -282,6 +301,21 @@ impl NotificationInboxGraphqlService for Recording {
     ) -> BoxFuture<'_, Result<Changes, FeedError>> {
         self.0.seens.lock().unwrap().push((scope, rows));
         Box::pin(async { Ok(vec![InboxChange::Upserted(doc_entry())]) })
+    }
+
+    fn unread_rows(&self, _viewer: FeedViewer) -> BoxFuture<'_, Result<UnreadRows, FeedError>> {
+        *self.0.unread_counts.lock().unwrap() += 1;
+        Box::pin(async { self.0.answer_unread() })
+    }
+
+    fn recount_unread_rows(
+        &self,
+        _viewer: FeedViewer,
+        _unread: UnreadRows,
+        groups: Vec<FeedKey>,
+    ) -> BoxFuture<'_, Result<UnreadRows, FeedError>> {
+        self.0.unread_recounts.lock().unwrap().push(groups);
+        Box::pin(async { self.0.answer_unread() })
     }
 }
 
@@ -835,4 +869,147 @@ async fn notification_inbox_updates_batch_recomputed_patches() {
     *triggers.sender.lock().unwrap() = None;
     let response = responses.next().await.expect("closing error");
     assert!(!response.errors.is_empty());
+}
+
+/// The unread rows of the document group, of these kinds.
+fn unread_doc(row_types: Vec<InboxRowType>) -> UnreadRows {
+    UnreadRows::of(std::collections::HashMap::from([(doc_group(), row_types)]))
+}
+
+#[tokio::test(start_paused = true)]
+async fn notification_inbox_unread_updates_send_counts_first_and_then_only_changes() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let triggers = ManualTriggers::default();
+    let mail = FeedKey::new(
+        ModelEntityType::EmailThread.with_entity_string(Uuid::from_u128(7).to_string()),
+    );
+    *service.unread.lock().unwrap() = UnreadRows::of(std::collections::HashMap::from([
+        (
+            doc_group(),
+            vec![
+                InboxRowType::DiscussionThread,
+                InboxRowType::DiscussionThread,
+            ],
+        ),
+        (mail, vec![InboxRowType::Email]),
+    ]));
+
+    let request = async_graphql::Request::new(
+        "subscription { notificationInboxUnreadUpdates { rowType count } }",
+    )
+    .data(viewer_id())
+    .data(context(&service, &triggers));
+    let responses = harness.schema.execute_stream(request);
+    pin_mut!(responses);
+
+    // The current counts arrive without any trigger, in the kinds' order.
+    let response = responses.next().await.expect("the current counts");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
+        serde_json::json!([
+            { "rowType": "EMAIL", "count": 1 },
+            { "rowType": "DISCUSSION_THREAD", "count": 2 },
+        ])
+    );
+    assert_eq!(
+        triggers.subscribed.lock().unwrap().as_slice(),
+        &[(CandidateKeying::FiledEntity, false)]
+    );
+    let sender = triggers.sender.lock().unwrap().clone().expect("subscribed");
+    service.unread_answered.notified().await;
+
+    // A change that leaves the counts as they were sends nothing; the
+    // payload that follows is the next change's.
+    let changed = FeedTrigger::Changed(vec![doc_group().into_entity()]);
+    sender.send(changed.clone()).await.unwrap();
+    let unchanged = tokio::spawn({
+        let service = Arc::clone(&service);
+        async move { service.unread_answered.notified().await }
+    });
+    tokio::select! {
+        biased;
+        response = responses.next() => panic!("unchanged counts were sent: {response:?}"),
+        _ = unchanged => {}
+    }
+    *service.unread.lock().unwrap() = unread_doc(vec![InboxRowType::DiscussionThread]);
+    sender.send(changed.clone()).await.unwrap();
+    let response = responses.next().await.expect("the changed counts");
+    assert_eq!(
+        response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
+        serde_json::json!([{ "rowType": "DISCUSSION_THREAD", "count": 1 }])
+    );
+    assert_eq!(
+        service.unread_recounts.lock().unwrap().as_slice(),
+        &[vec![doc_group()], vec![doc_group()]]
+    );
+    assert_eq!(*service.unread_counts.lock().unwrap(), 1);
+    service.unread_answered.notified().await;
+
+    // Missed changes count everything again too.
+    *service.unread.lock().unwrap() = unread_doc(vec![InboxRowType::Task]);
+    sender.send(FeedTrigger::Invalidated).await.unwrap();
+    let response = responses.next().await.expect("the recount");
+    assert_eq!(
+        response.data.into_json().unwrap()["notificationInboxUnreadUpdates"],
+        serde_json::json!([{ "rowType": "TASK", "count": 1 }])
+    );
+    assert_eq!(*service.unread_counts.lock().unwrap(), 2);
+
+    drop(sender);
+    *triggers.sender.lock().unwrap() = None;
+    let response = responses.next().await.expect("closing error");
+    assert!(!response.errors.is_empty());
+}
+
+/// The counts already sent are wrong once a recount fails, and no further
+/// change may come to correct them, so the stream ends and the client counts
+/// again.
+#[tokio::test(start_paused = true)]
+async fn notification_inbox_unread_updates_end_when_a_recount_fails() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let triggers = ManualTriggers::default();
+
+    let request = async_graphql::Request::new(
+        "subscription { notificationInboxUnreadUpdates { rowType count } }",
+    )
+    .data(viewer_id())
+    .data(context(&service, &triggers));
+    let responses = harness.schema.execute_stream(request);
+    pin_mut!(responses);
+
+    let response = responses.next().await.expect("the current counts");
+    assert!(response.errors.is_empty());
+
+    let sender = triggers.sender.lock().unwrap().clone().expect("subscribed");
+    *service.unread_fails.lock().unwrap() = true;
+    sender
+        .send(FeedTrigger::Changed(vec![doc_group().into_entity()]))
+        .await
+        .unwrap();
+    let response = responses.next().await.expect("the error");
+    assert!(!response.errors.is_empty());
+    assert!(responses.next().await.is_none());
+}
+
+#[tokio::test]
+async fn notification_inbox_unread_updates_end_when_the_first_count_fails() {
+    let harness = harness();
+    let service = Arc::new(RecordingInboxService::default());
+    let triggers = ManualTriggers::default();
+    *service.unread_fails.lock().unwrap() = true;
+
+    let request = async_graphql::Request::new(
+        "subscription { notificationInboxUnreadUpdates { rowType count } }",
+    )
+    .data(viewer_id())
+    .data(context(&service, &triggers));
+    let responses = harness.schema.execute_stream(request);
+    pin_mut!(responses);
+
+    let response = responses.next().await.expect("the error");
+    assert!(!response.errors.is_empty());
+    assert!(responses.next().await.is_none());
 }

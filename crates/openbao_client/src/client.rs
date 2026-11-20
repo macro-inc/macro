@@ -32,6 +32,7 @@ pub struct KvMetadata {
 pub struct Session {
     token: SecretString,
     namespace: Option<String>,
+    lease: Duration,
 }
 
 /// Thin typed client for fixed mounted OpenBao endpoints.
@@ -96,9 +97,11 @@ impl OpenBaoClient {
             .login_team(namespace, None, audit_id, &body)
             .await
             .map_err(|error| Error::generated(error, Operation::Login))?;
+        let auth = response.into_inner().auth;
         Ok(Session {
-            token: response.into_inner().auth.client_token,
+            token: auth.client_token,
             namespace: Some(namespace.into()),
+            lease: Duration::from_secs(auth.lease_duration),
         })
     }
 
@@ -119,9 +122,11 @@ impl OpenBaoClient {
             .login_lifecycle(None, audit_id, &body)
             .await
             .map_err(|error| Error::generated(error, Operation::Login))?;
+        let auth = response.into_inner().auth;
         Ok(Session {
-            token: response.into_inner().auth.client_token,
+            token: auth.client_token,
             namespace: None,
+            lease: Duration::from_secs(auth.lease_duration),
         })
     }
 
@@ -346,6 +351,11 @@ impl OpenBaoClient {
 }
 
 impl Session {
+    /// Token lifetime granted at login, counted from when the response arrived.
+    pub fn lease_duration(&self) -> Duration {
+        self.lease
+    }
+
     fn namespace(&self) -> Result<&str, Error> {
         self.namespace
             .as_deref()

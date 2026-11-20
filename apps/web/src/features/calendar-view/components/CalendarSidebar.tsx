@@ -30,7 +30,6 @@ import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
@@ -108,7 +107,12 @@ function NeedsReplySection() {
   const [open, setOpen] = createSignal(true);
 
   return (
-    <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+    <CollapsibleSection.Root
+      sectionId="upcoming"
+      sectionLabel="Upcoming events"
+      open={open()}
+      onOpenChange={setOpen}
+    >
       <CollapsibleSection.Header ref={tourTarget(CALENDAR_TOUR.upcoming)}>
         <CollapsibleSection.Trigger class="min-w-0 flex-1">
           <span class="min-w-0 truncate">{t('calendar.needsReply')}</span>
@@ -133,11 +137,18 @@ function CalendarSourcesSection() {
         .sources()
         .some((source) => source.id !== DEFAULT_CALENDAR_SOURCE.id)}
     >
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Calendars</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="calendars"
+        sectionLabel="Calendars"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Calendars</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <SourceControls
             ref={tourTarget(CALENDAR_TOUR.sources)}
@@ -307,7 +318,12 @@ function CalendarTeamOooSection() {
 
   return (
     <Show when={hasTeammates()}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+      <CollapsibleSection.Root
+        sectionId="team-ooo"
+        sectionLabel="Team out of office"
+        open={open()}
+        onOpenChange={setOpen}
+      >
         <CollapsibleSection.Header>
           <Checkbox
             size="sm"
@@ -338,20 +354,6 @@ function CalendarTeamOooSection() {
   );
 }
 
-function CalendarSidebarOverlayClose() {
-  const shell = useViewShell();
-  return (
-    <Show when={shell.aside.isOverlay() && isTouchDevice()}>
-      <ViewSidebar.Control
-        aria-label="Close calendar navigation"
-        onClick={shell.aside.collapse}
-      >
-        <CloseIcon class="size-4" />
-      </ViewSidebar.Control>
-    </Show>
-  );
-}
-
 export function CalendarSidebar() {
   const shell = useViewShell();
   const composerHost = useCalendarComposerHost();
@@ -362,6 +364,7 @@ export function CalendarSidebar() {
   return (
     <ViewSidebar.Root
       aria-label="Calendar navigation"
+      reorderId="calendar"
       data-calendar-sidebar=""
       class={composerHost?.drag()?.state.active ? 'invisible' : undefined}
     >
@@ -370,7 +373,6 @@ export function CalendarSidebar() {
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Calendar</ViewSidebar.Title>
         </div>
-        <CalendarSidebarOverlayClose />
       </ViewSidebar.Header>
       <ViewSidebar.Primary>
         <CalendarCreateMenu
@@ -401,7 +403,13 @@ export function CalendarSidebar() {
         >
           <TutorialSidebarItem tutorial="calendar" />
         </ViewSidebar.Nav>
-        <CalendarMiniCalendar />
+        <ViewSidebar.Section
+          id="month"
+          label={t('viewMenus.monthCalendar')}
+          headerless
+        >
+          <CalendarMiniCalendar />
+        </ViewSidebar.Section>
         <Show when={shell.breakpoints.narrow?.()}>
           <CalendarSchedulingActions sidebar />
         </Show>
@@ -413,7 +421,7 @@ export function CalendarSidebar() {
       </ViewSidebar.Content>
       {/* Outside the scrolling list, so a long list never slides it under Settings. */}
       <ConnectCalendarsPromotion class="px-(--sidebar-gutter) pt-2" />
-      <ViewSidebar.Footer class="border-0">
+      <ViewSidebar.Footer class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]">
         <ViewSidebar.Nav aria-label="Calendar tools">
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>

@@ -23,6 +23,8 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/filter_ast/**"),
     RepoGlob::new("crates/item_filters/**"),
     RepoGlob::new("crates/natural_time/**"),
+    RepoGlob::new("crates/password_import/**"),
+    RepoGlob::new("crates/password_import_wasm/**"),
     RepoGlob::new("static_assets/schema.graphql"),
     RepoGlob::new("Cargo.toml"),
     RepoGlob::new("Cargo.lock"),

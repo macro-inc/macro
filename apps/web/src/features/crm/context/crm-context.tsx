@@ -23,8 +23,14 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
+import type {
+  EmailPrivacy,
+  EmailPrivacyChange,
+  ExcludedThreads,
+} from '../core/email-privacy';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
+import type { PipelineEntryRecord } from '../core/pipeline-entry';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   BlockedDomainsSource,
@@ -37,6 +43,7 @@ import type {
   CrmEmailScope,
   CrmEmailSignal,
   CrmMutation,
+  CrmQuery,
   CrmStageInput,
   CrmStagesResult,
   DealStages,
@@ -49,7 +56,9 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type { EmailPolicySource } from './email-policy';
 import type {
+  AddToPipelineSource,
   PipelineEditor,
   PipelineEntriesView,
   PipelineSharing,
@@ -58,26 +67,44 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  /** Admitted record data; pending/error stay gated. Pipeline grants are separate. */
+  canAccess: Accessor<boolean>;
+  accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
+  retryAccess(): Promise<unknown>;
+  createEmailPolicy(): EmailPolicySource;
+  /** Owner-scoped email reference, available independently of CRM viewing access. */
+  EmailThreadMention: Component<{
+    threadId: string;
+    subject: string;
+    onOpened?: () => void;
+  }>;
   createEmailPrivacy(): {
-    query: import('./crm-sources').CrmQuery<
-      import('../core/email-privacy').EmailPrivacy
-    >;
-    update: CrmMutation<
-      import('../core/email-privacy').EmailPrivacyChange,
-      import('../core/email-privacy').EmailPrivacy
-    >;
+    createExcludedThreads(
+      after: Accessor<string | undefined>
+    ): CrmQuery<ExcludedThreads>;
+    query: CrmQuery<EmailPrivacy>;
+    update: CrmMutation<EmailPrivacyChange, EmailPrivacy>;
   };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
+  /** Call when the record page's Add to pipeline menu first opens. */
+  createAddToPipeline(
+    record: Accessor<PipelineEntryRecord>
+  ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */
   createContactPhoto?(email: string): Accessor<string | undefined>;
   contactInitials(name: string | null | undefined, email: string): string;
   userEmail(id: string): string;
-  copyViewLink(config: import('../core/saved-view').CrmViewConfig): void;
+  copyViewLink(
+    config: import('../core/saved-view').CrmViewConfig,
+    options?: { silent?: boolean }
+  ): Promise<boolean>;
   copyPipelineLink(pipelineId: string): void;
   copyRecordLink(target: {
     type: 'company' | 'contact';
@@ -86,7 +113,7 @@ export type CrmContext = {
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
-      target: { type: 'company' | 'contact'; id: string },
+      target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }
     ): void;
     showCompanies(): void;
@@ -94,7 +121,6 @@ export type CrmContext = {
     openEntity(entity: import('@entity').EntityData): void;
   };
   listsEnabled(): Accessor<boolean>;
-  pipelinesEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(

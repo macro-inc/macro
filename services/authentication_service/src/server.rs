@@ -620,7 +620,8 @@ async fn run_server() -> anyhow::Result<()> {
             feature_flags
                 .clone()
                 .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-                .unwrap_or_default(),
+                .unwrap_or_default()
+                .with_allowlist(config.computer_rollout_allowlist()?),
         ),
     );
     let gtm_invite_service = Arc::new(gtm_invite_service);
@@ -699,6 +700,13 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
+        match feature_flags.clone() {
+            Some(flags) => Arc::new(crate::outbound::crm_member_access::FlaggedCrmAccessRollout(
+                flags,
+            )),
+            None => Arc::new(teams::domain::crm_member_access::DisabledCrmAccessRollout),
+        };
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,
@@ -713,11 +721,13 @@ async fn run_server() -> anyhow::Result<()> {
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_crm_access_rollout(crm_access_rollout)
     .with_invite_rewarder(Arc::new(invite_rewards));
     let computer_rollout = feature_flags
         .clone()
         .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .with_allowlist(config.computer_rollout_allowlist()?);
     let computer_prices = config.computer_prices()?;
     let computer_repo =
         hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy);
@@ -757,6 +767,10 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         agent_credentials::rollout::PgAgentCreators::new(db.clone()),
         feature_flags.clone(),
+        team_agents::outbound::setup_notices::IngressSetupNotices::new(
+            notification_ingress_service.clone(),
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+        ),
         crate::outbound::agent_addresses::AgentAddresses,
     ));
     let domain_notice_service =
@@ -798,6 +812,18 @@ async fn run_server() -> anyhow::Result<()> {
         computer_service.clone(),
         computer_billing_stop.clone(),
     ));
+    // Takes back the agent teammate of a computer released after failing its
+    // first start; only where a Firecracker fleet runs.
+    if config.computer_agent_effects()? {
+        tracing::info!("computers agents worker on");
+        computer_billing.spawn(run_computer_agent_effects(
+            computer_service.clone(),
+            team_agents_service.clone(),
+            computer_billing_stop.clone(),
+        ));
+    } else {
+        tracing::info!("computers agents worker off (COMPUTERS_AGENT_EFFECTS unset)");
+    }
     computer_billing.close();
     // The Stripe event inbox: the webhook stores events; every replica's
     // worker applies due cursors (leased, so replicas never collide), and
@@ -888,6 +914,27 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    // Releases the Google identity links of refused and lapsed Gmail connect
+    // attempts; independent per round, so any replica may run it.
+    let auth_client = Arc::new(auth_client);
+    let identity_link_release = tokio::spawn({
+        let attempts = crate::outbound::google_identity_links::PgIdentityLinkAttempts(db.clone());
+        let remover =
+            crate::outbound::google_identity_links::FusionAuthIdentityLinks(auth_client.clone());
+        async move {
+            let mut interval = tokio::time::interval(IDENTITY_LINK_RELEASE_INTERVAL);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                // The round's span records its counts and any failure.
+                let _ = crate::domain::google_identity_links::release_identity_links(
+                    &attempts, &remover,
+                )
+                .await;
+            }
+        }
+    });
+
     let agent_api_keys = Arc::new(agent_api_keys::domain::AgentKeyService::new(
         agent_api_keys::outbound::PgAgentKeyRepo::new(db.clone()),
         agent_api_keys::outbound::KmsAgentKeyCipher::new(cursor_kms),
@@ -916,7 +963,7 @@ async fn run_server() -> anyhow::Result<()> {
             )),
             db,
             github_link_service: Arc::new(github_link_service_impl),
-            auth_client: Arc::new(auth_client),
+            auth_client,
             microsoft_auth,
             cursor_api_key_cipher,
             agent_api_keys,
@@ -997,6 +1044,8 @@ async fn run_server() -> anyhow::Result<()> {
 
     grant_cleanup.abort();
     let _ = grant_cleanup.await;
+    identity_link_release.abort();
+    let _ = identity_link_release.await;
     // A sweep interrupted here leaves nothing half done: each settlement
     // step commits on its own and the next sweep, on any replica, resumes.
     if let Some(sweep) = settlement_sweep {
@@ -1067,6 +1116,7 @@ const STRIPE_INBOX_READS_PER_SECOND: u32 = 2;
 /// Stripe reads for the daily audit, which one replica runs.
 const STRIPE_AUDIT_READS_PER_SECOND: u32 = 5;
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const IDENTITY_LINK_RELEASE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
@@ -1077,6 +1127,30 @@ const IOS_APP_BUNDLE_ID: &str = "com.macro.app.prod";
 
 /// How often due computer billing effects are carried out.
 const COMPUTER_BILLING_TICK: std::time::Duration = std::time::Duration::from_secs(10);
+
+async fn run_computer_agent_effects(
+    service: Arc<crate::api::context::ComputerServiceType>,
+    team_agents: Arc<crate::api::context::TeamAgentsServiceType>,
+    stop: CancellationToken,
+) {
+    let mut interval = tokio::time::interval(COMPUTER_BILLING_TICK);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        match service.run_agent_effects(team_agents.as_ref()).await {
+            Ok(_) => {}
+            Err(error) if error.is_storage_unavailable() => {
+                tracing::warn!("computer storage unavailable; agent effects pass skipped");
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "computer agent effects pass failed");
+            }
+        }
+    }
+}
 
 async fn run_computer_billing_effects(
     service: Arc<crate::api::context::ComputerServiceType>,

@@ -1,5 +1,6 @@
 //! Postgres adapter for [`ComputerRepo`].
 
+use crate::domain::ports::HostScope;
 use bot_id::BotId;
 use harness_id::HarnessId;
 
@@ -23,10 +24,16 @@ use crate::domain::size::{ComputerResources, ComputerSize};
 
 mod agents;
 pub use agents::PgComputerAgents;
+mod admission;
 mod apply;
+mod effect_signals;
+pub use effect_signals::PgEffectSignals;
+mod hosts;
+mod moves;
 mod records;
 mod reservations;
 mod row;
+mod usage;
 use row::{ComputerRow, ReservationRow};
 
 #[cfg(test)]
@@ -55,6 +62,23 @@ pub enum PgComputerError {
     /// Only fleet and billing effects are stored in the outbox.
     #[error("{0:?} effects are not stored in the outbox")]
     NotAnOutboxWorker(EffectWorker),
+    /// The host row's overcommit settings are incoherent.
+    #[error("host {name}: {error}")]
+    InvalidHostPolicy {
+        /// Host name.
+        name: crate::domain::models::HostName,
+        /// What is wrong.
+        error: crate::domain::overcommit::InvalidOvercommitPolicy,
+    },
+    /// A host row's endpoint is not a URL.
+    #[error("host {name} has an invalid endpoint")]
+    InvalidHostEndpoint {
+        /// Host name.
+        name: crate::domain::models::HostName,
+        /// Why it does not parse.
+        #[source]
+        error: url::ParseError,
+    },
 }
 
 impl From<sqlx::Error> for PgComputerError {
@@ -80,12 +104,26 @@ impl From<serde_json::Error> for PgComputerError {
     }
 }
 
+/// A scope's hosts as storage ids; `None` for every host.
+fn host_uuids(scope: &HostScope) -> Option<Vec<Uuid>> {
+    scope
+        .hosts()
+        .map(|hosts| hosts.iter().map(|host| host.into_inner()).collect())
+}
+
+/// A stored host name; an invalid one is corrupt data.
+fn host_name(name: &str) -> Result<crate::domain::models::HostName, PgComputerError> {
+    crate::domain::models::HostName::try_new(name)
+        .map_err(|error| PgComputerError::Corrupt(error.to_string()))
+}
+
 /// The outbox's `computer_effect_worker`: the workers that lease effects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "computer_effect_worker", rename_all = "snake_case")]
 enum OutboxWorker {
     Fleet,
     Billing,
+    Agents,
 }
 
 impl TryFrom<EffectWorker> for OutboxWorker {
@@ -94,6 +132,7 @@ impl TryFrom<EffectWorker> for OutboxWorker {
         match worker {
             EffectWorker::Fleet => Ok(Self::Fleet),
             EffectWorker::Billing => Ok(Self::Billing),
+            EffectWorker::Agents => Ok(Self::Agents),
             EffectWorker::Timers => Err(PgComputerError::NotAnOutboxWorker(worker)),
         }
     }
@@ -232,12 +271,14 @@ impl ComputerRepo for PgComputerRepo {
             reservation.host,
             reservation.id,
             reservation.resources,
+            now,
         )
         .await?;
         let (mut state, effects) = provision(
             billing,
             crate::domain::setup::SetupTimeline::started(reservation.created_at),
             reservation.provision_traceparent.clone(),
+            reservation.agent.is_some(),
             Context {
                 host: reservation.host,
                 enrollment_generation: Default::default(),
@@ -254,11 +295,11 @@ impl ComputerRepo for PgComputerRepo {
             })
             .unwrap_or_default();
         let waiting_for_capacity = state.waiting_for_capacity();
-        let phase = state.phase.clone();
+        let (phase, payment) = (state.phase.clone(), state.payment_progress());
         let finished_setup = state
             .setup
             .as_mut()
-            .map(|setup| setup.advance(&phase, false, waiting_for_capacity, now))
+            .map(|setup| setup.advance(&phase, false, waiting_for_capacity, payment, now))
             .unwrap_or_default();
         let (price_id, comp_reason) = match &reservation.funding {
             Funding::Stripe { price_id } => (Some(price_id.as_str()), None),
@@ -294,6 +335,9 @@ impl ComputerRepo for PgComputerRepo {
         )
         .execute(&mut *tx)
         .await?;
+        if effects.iter().any(Effect::starts_guest) {
+            Self::count_admitted_start(&mut tx, reservation.host, now).await?;
+        }
         Self::store_effects(&mut tx, reservation.id, effects, now).await?;
         let computer = Computer {
             id: reservation.id,
@@ -310,6 +354,7 @@ impl ComputerRepo for PgComputerRepo {
             created_by: reservation.created_by,
             created_at: reservation.created_at,
             enrolled_at: None,
+            hibernated_at: None,
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
@@ -407,7 +452,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE id = $1
             "#,
@@ -423,7 +468,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE team_id = $1
             ORDER BY created_at
@@ -452,7 +497,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE harness_id = $1
             "#,
@@ -470,7 +515,8 @@ impl ComputerRepo for PgComputerRepo {
             r#"
             SELECT id, harness_id AS "harness_id!"
             FROM hosted_runtime
-            WHERE awake AND harness_id IS NOT NULL
+            -- A hibernated guest runs no harnessd; asking would only fail.
+            WHERE awake AND hibernated_at IS NULL AND harness_id IS NOT NULL
             "#,
         )
         .fetch_all(&self.pool)
@@ -588,7 +634,7 @@ impl ComputerRepo for PgComputerRepo {
             SET setup_completed_at = COALESCE(setup_completed_at, $2)
             WHERE id = $1
             RETURNING id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             "#,
             computer_id.as_uuid(),
             now,
@@ -617,24 +663,37 @@ impl ComputerRepo for PgComputerRepo {
     async fn lease_effects(
         &self,
         worker: EffectWorker,
+        scope: HostScope,
         limit: u32,
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, PgComputerError> {
         let worker = OutboxWorker::try_from(worker)?;
+        let hosts = host_uuids(&scope);
         // Quarantine stops fleet work, but a billing item removal still runs:
-        // it only ever stops a charge, and its item is in the effect.
+        // it only ever stops a charge, and its item is in the effect. Taking
+        // back an agent reads only the computer's agent link.
         let healthy_ids = match worker {
-            OutboxWorker::Billing => {
+            OutboxWorker::Billing | OutboxWorker::Agents => {
                 sqlx::query_scalar!(
-                    "SELECT DISTINCT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2",
+                    r#"
+                    SELECT DISTINCT effect.computer_id AS "computer_id!"
+                    FROM hosted_runtime_effect effect
+                    LEFT JOIN hosted_runtime computer ON computer.id = effect.computer_id
+                    WHERE effect.worker = $1 AND effect.run_after <= $2
+                      AND ($3::UUID[] IS NULL OR computer.host_id = ANY($3))
+                    "#,
                     worker as OutboxWorker,
                     now,
+                    hosts.as_deref(),
                 )
                 .fetch_all(&self.pool)
                 .await?
             }
-            OutboxWorker::Fleet => self.healthy_effect_owners(worker, now).await?,
+            OutboxWorker::Fleet => {
+                self.healthy_effect_owners(worker, hosts.as_deref(), now)
+                    .await?
+            }
         };
         // Only each computer's oldest pending effect is due: a computer's
         // effects run in the order its transitions produced them.
@@ -656,7 +715,7 @@ impl ComputerRepo for PgComputerRepo {
                 LIMIT $2
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING id, computer_id, effect, attempts
+            RETURNING id, computer_id, effect, attempts, created_at
             "#,
             worker as OutboxWorker,
             i64::from(limit),
@@ -674,6 +733,7 @@ impl ComputerRepo for PgComputerRepo {
                     computer_id: ComputerId::new_from_uuid(row.computer_id),
                     effect: serde_json::from_value(row.effect)?,
                     attempts: u32::try_from(row.attempts)?,
+                    queued_at: row.created_at,
                 })
             })
             .collect()
@@ -730,6 +790,17 @@ impl ComputerRepo for PgComputerRepo {
         Ok(())
     }
 
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_effect SET run_after = $2 WHERE id = $1",
+            id,
+            run_after,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     async fn retry_effect(
         &self,
         id: i64,
@@ -753,10 +824,13 @@ impl ComputerRepo for PgComputerRepo {
 
     async fn due_timers(
         &self,
+        scope: HostScope,
         now: DateTime<Utc>,
         limit: u32,
     ) -> Result<Vec<DueTimer>, PgComputerError> {
-        let healthy_ids = self.healthy_timer_owners(now).await?;
+        let healthy_ids = self
+            .healthy_timer_owners(host_uuids(&scope).as_deref(), now)
+            .await?;
         let rows = sqlx::query!(
             r#"
             SELECT computer_id, kind AS "kind: TimerKind", fire_at FROM hosted_runtime_timer
@@ -842,32 +916,7 @@ impl ComputerRepo for PgComputerRepo {
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, PgComputerError> {
-        let awake = i32::try_from(registration.awake_capacity_units())?;
-        let sold = i32::try_from(registration.sold_capacity_units())?;
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (name) DO UPDATE
-            SET awake_capacity_units = EXCLUDED.awake_capacity_units,
-                sold_capacity_units = EXCLUDED.sold_capacity_units,
-                updated_at = now()
-            RETURNING id, name, awake_capacity_units, sold_capacity_units
-            "#,
-            Uuid::now_v7(),
-            registration.name,
-            awake,
-            sold,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(Host {
-            id: HostId::new(row.id),
-            name: row.name,
-            awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
-            sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
-        })
+        self.upsert_host(registration).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -887,6 +936,11 @@ impl ComputerRepo for PgComputerRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn hosts(&self) -> Result<Vec<crate::domain::models::HostRecord>, PgComputerError> {
+        self.host_rows().await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn allocation(&self) -> Result<Vec<HostAllocation>, PgComputerError> {
         // The same holdings `reserve` checks: live computers and every reservation.
         let rows = sqlx::query!(
@@ -897,6 +951,12 @@ impl ComputerRepo for PgComputerRepo {
                 UNION ALL
                 SELECT host_id, vcpus, memory_gib, disk_gib
                 FROM computer_reservation
+                UNION ALL
+                -- A moving computer also holds its units on the move's other host.
+                SELECT CASE WHEN computer.host_id = move.to_host THEN move.from_host ELSE move.to_host END,
+                       computer.vcpus, computer.memory_gib, computer.disk_gib
+                FROM computer_move move JOIN hosted_runtime computer ON computer.id = move.computer_id
+                WHERE move.stage IN ('seeding', 'cutting_over', 'verifying', 'rolling_back')
             )
             SELECT
                 host.id,
@@ -909,6 +969,8 @@ impl ComputerRepo for PgComputerRepo {
                 COALESCE(SUM(held.disk_gib), 0)::BIGINT AS "disk_gib!"
             FROM hosted_runtime_host host
             LEFT JOIN held ON held.host_id = host.id
+            -- The hosts purchases are placed on; see `reserve`.
+            WHERE host.admitting
             GROUP BY host.id
             ORDER BY host.id
             "#,
@@ -921,7 +983,7 @@ impl ComputerRepo for PgComputerRepo {
                 Ok(HostAllocation {
                     host: Host {
                         id: HostId::new(row.id),
-                        name: row.name,
+                        name: host_name(&row.name)?,
                         awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
                         sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
                     },

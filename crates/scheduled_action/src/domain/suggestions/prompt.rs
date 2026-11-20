@@ -44,17 +44,43 @@ pub struct BriefData<'a> {
     pub agent_model: &'a str,
     /// Whether code steps can be written.
     pub code: bool,
+    /// Whether a routine may start when mail arrives: the person is in the
+    /// event routines rollout and the deployment evaluates conditions.
+    pub events: bool,
+    /// Whether the person may add companies to a team's CRM, which a drafted
+    /// routine for possible clients does.
+    pub crm: bool,
     /// The SDK's routines guide.
     pub guide: &'a str,
 }
 
+/// How a drafted routine starts when the person may have event triggers.
+const START_ON_MAIL: &str = "start it when that kind of mail arrives \
+    (`email.message_received`, with a condition that names it) and handle what each \
+    message asks of them, or run it on a schedule that gathers that week's mail of that \
+    kind into one task or document for them";
+
+/// How a drafted routine starts when they may not: a check would refuse an
+/// event trigger.
+const START_ON_SCHEDULE: &str = "this user's routines can't start when mail \
+    arrives, so run it on a schedule: each morning, to handle what each message of that \
+    kind since the last run asks of them, or each week, to gather that week's mail of \
+    that kind into one task or document for them";
+
+/// What a drafted routine makes for a possible client, told only to a person
+/// who may add companies to a team's CRM: for anyone else the tool refuses,
+/// and a task for each step serves.
+const CRM_COMPANY: &str = "a company in their CRM for a company that may become a \
+    client (unless another app of theirs already keeps track of them), ";
+
 /// What a weekly routines session does before suggesting: review and retire.
-const WEEKLY_REVIEW: &str = "First, in one \
+const WEEKLY_REVIEW: &str = "Where this differs from the rest of the brief, \
+    this wins. First, in one \
     program, read what you suggested before with \
     `await macro.routines.review()` and the user's own routines with \
     `await macro.routines.list()`, and retire with `suggestion.retire(reason)` open \
     suggestions that no longer fit their work or duplicate one of their routines. Then \
-    suggest at most 2 new routines in all (not 3 per surface), and none unless the \
+    suggest at most 2 new routines in all, and none unless the \
     evidence is strong. Draft at most one routine the catalog lacks, and only one built \
     around something specific in their workspace that you name (a deal, vendor, \
     project, channel, label or report they keep), that discovers, evaluates or advances \
@@ -74,7 +100,10 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .join(", ");
     let occasion = match data.trigger {
         GenerationTrigger::Onboarding => {
-            "The user just signed up. Be quick: they are waiting.".to_owned()
+            "The user just signed up. Be quick: they are waiting. At signup their mail \
+             is what shows their work, so work from the mail below: don't search or \
+             list anything in their workspace."
+                .to_owned()
         }
         GenerationTrigger::Nightly => format!(
             "This is the week's run (routine suggestions come once a week). {WEEKLY_REVIEW}"
@@ -86,7 +115,16 @@ pub fn brief(data: &BriefData<'_>) -> String {
     };
     let task = TASK
         .replace("{surfaces}", &surfaces)
-        .replace("{occasion}", &occasion);
+        .replace("{occasion}", &occasion)
+        .replace("{crm}", if data.crm { CRM_COMPANY } else { "" })
+        .replace(
+            "{start}",
+            if data.events {
+                START_ON_MAIL
+            } else {
+                START_ON_SCHEDULE
+            },
+        );
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let model = data.agent_model;
     let timezone = data.timezone;

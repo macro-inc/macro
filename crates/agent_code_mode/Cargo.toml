@@ -22,6 +22,7 @@ email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
 futures = { workspace = true }
 import = { path = "../import" }
+lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
@@ -49,6 +50,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 jev = { path = "../jev", features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

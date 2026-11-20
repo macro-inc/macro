@@ -1,5 +1,6 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
@@ -21,10 +22,17 @@ import {
   createRequest,
   type DocumentInput,
   getOperationName,
+  type OperationResult,
   type RequestPolicy,
   stringifyDocument,
 } from '@urql/core';
-import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  untrack,
+} from 'solid-js';
 import type { ProjectIdentity } from '../core/project';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
@@ -41,6 +49,7 @@ export const projectDetailData = (project: InitiativeDetail) => ({
 export async function seedProjectDetail(
   userId: string | undefined,
   project: InitiativeDetail,
+  generation: string,
   host?: Pick<CacheHost, 'writeQuery' | 'disabled'>
 ) {
   if (!host || host.disabled || !userId) return;
@@ -49,7 +58,10 @@ export async function seedProjectDetail(
   const data = {
     user: {
       id: userId,
-      initiative: { __typename: 'GraphqlSoupInitiative', id: project.id },
+      visibleInitiative: {
+        __typename: 'GraphqlSoupInitiative',
+        id: project.id,
+      },
     },
   } satisfies OptimisticResponse<InitiativeQuery> &
     OptimisticResponse<InitiativeIdentityQuery>;
@@ -63,6 +75,7 @@ export async function seedProjectDetail(
         },
       ].map(({ document, operationName }) =>
         host.writeQuery({
+          generation,
           query: stringifyDocument(document),
           operationName,
           variables: { initiativeId: project.id },
@@ -78,12 +91,23 @@ export async function seedProjectDetail(
   }
 }
 
+type ProjectOf<QueryData extends { user: { visibleInitiative: unknown } }> =
+  NonNullable<QueryData['user']['visibleInitiative']>;
+
+/** A successful answer from the server rather than the cache, as the access latch reads it. */
+function isServerAnswer(
+  result: Pick<OperationResult, 'extensions'> & { error?: unknown }
+) {
+  const source = normalizedCacheResultMetadata(result)?.source;
+  return !result.error && (!source || source === 'live-network');
+}
+
 function createAuthorizedProjectQuery<
-  QueryData extends { user: { id: string; initiative?: unknown } },
+  QueryData extends { user: { id: string; visibleInitiative: unknown } },
   Result,
 >(
   document: DocumentInput<QueryData, InitiativeQueryVariables>,
-  select: (data: QueryData, failedRead: boolean) => Result,
+  select: (project: ProjectOf<QueryData>, failedRead: boolean) => Result,
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
@@ -113,6 +137,10 @@ function createAuthorizedProjectQuery<
     ]);
     return createQueryAuthorization(() => key, current.client);
   });
+  // The scope whose missing project the server has confirmed, or failed to
+  // answer, during this read.
+  const [confirmedScope, setConfirmedScope] =
+    createSignal<ReturnType<typeof scope>>();
   const query = createLiveQuery(
     document,
     () => (active() ? { initiativeId: scope().projectId } : undefined),
@@ -128,6 +156,8 @@ function createAuthorizedProjectQuery<
         keepPreviousData: false,
         onResult: (result) => {
           if (result.data && result.data.user.id !== current.viewerId) return;
+          if (result.error || isServerAnswer(result))
+            setConfirmedScope(() => current);
           auth.onResult(result);
         },
         select: (data) => ({ viewerId: data.user.id, value: data }),
@@ -160,19 +190,51 @@ function createAuthorizedProjectQuery<
     );
   });
   // A project the viewer cannot load (deleted, or never shared with them)
-  // comes back as a NOT_FOUND error beside a user without `initiative`, even
-  // though the schema declares that field non-null.
+  // reads as null. The cache keeps that null, and a stored null outranks the
+  // project's record when the record arrives later, as it does when the
+  // project is shared with the viewer again. So a cached null is shown only
+  // after the server has said it during this read, or after asking it failed;
+  // a request that was cancelled confirms nothing.
+  const unconfirmedMissing = createMemo(() => {
+    const result = query.data;
+    return (
+      active() &&
+      !authorization().error() &&
+      result !== undefined &&
+      result.viewerId === userId() &&
+      result.value.user.visibleInitiative === null &&
+      !isServerAnswer(query) &&
+      confirmedScope() !== scope()
+    );
+  });
+  let confirmingScope: ReturnType<typeof scope> | undefined;
+  createEffect(() => {
+    const current = scope();
+    if (
+      !unconfirmedMissing() ||
+      query.isFetching ||
+      confirmingScope === current
+    )
+      return;
+    confirmingScope = current;
+    fireAndForget(
+      refetch({ requestPolicy: 'network-only' }),
+      'project-identity.missing-confirmation'
+    );
+  });
+  // An errored field is omitted rather than nulled, so a failed read can also
+  // lack `visibleInitiative` despite the generated type.
   const data = createMemo(() => {
     const result = query.data;
+    const project = result?.value.user.visibleInitiative;
     if (
       !active() ||
       authorization().error() ||
-      !result ||
-      result.viewerId !== userId() ||
-      !result.value.user.initiative
+      result?.viewerId !== userId() ||
+      !project
     )
       return undefined;
-    return select(result.value, Boolean(query.error));
+    return select(project, Boolean(query.error));
   });
   return {
     get data() {
@@ -186,14 +248,16 @@ function createAuthorizedProjectQuery<
         active() &&
         !authorization().error() &&
         query.isSuccess &&
-        query.data?.viewerId === userId()
+        query.data?.viewerId === userId() &&
+        !unconfirmedMissing()
       );
     },
     get isPending() {
       return (
         !active() ||
         query.isPending ||
-        (query.isFetching && query.data?.viewerId !== scope().viewerId)
+        (query.isFetching && query.data?.viewerId !== scope().viewerId) ||
+        unconfirmedMissing()
       );
     },
     get isError() {
@@ -213,10 +277,8 @@ export function createProjectDetailQuery(
   const pendingAppearance = usePendingEntityAppearance();
   return createAuthorizedProjectQuery(
     InitiativeDocument,
-    (data, failedRead) => {
-      const result = projectDetailData(
-        mapInitiativeDetail(data.user.initiative)
-      );
+    (project, failedRead) => {
+      const result = projectDetailData(mapInitiativeDetail(project));
       const appearance = pendingAppearance(
         'initiative',
         result.project.id,
@@ -233,7 +295,7 @@ export function createProjectDetailQuery(
   );
 }
 
-/** Chips, previews, and labels read only id, name, appearance, and viewer access. */
+/** Chips, previews, and labels read only identity and viewer access. */
 export function createProjectIdentityQuery(
   client: () => Client,
   userId: Accessor<string | undefined>,
@@ -243,11 +305,12 @@ export function createProjectIdentityQuery(
   const pendingAppearance = usePendingEntityAppearance();
   return createAuthorizedProjectQuery(
     InitiativeIdentityDocument,
-    (data, failedRead): ProjectIdentity => {
-      const project = mapInitiativeIdentity(data.user.initiative);
+    (identity, failedRead): ProjectIdentity => {
+      const project = mapInitiativeIdentity(identity);
       return {
         id: project.id,
         name: project.name,
+        ownerId: project.ownerId,
         appearance:
           pendingAppearance('initiative', project.id, failedRead) ??
           project.appearance,

@@ -90,22 +90,38 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. A dial restores only sessions
+archived and managed sessions are skipped, and so are sessions already attached on
+the runtime's current connection. A session whose actor is still on the socket the
+redial displaced (each `RuntimeConnection` has a `RuntimeConnectionId`, which its
+sessions' attachments carry) is closed first, waiting for its `disconnected` frame,
+then attached to the new connection. A dial always restores sessions
 with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
-open when the session disconnected, from `agent_session.turn_interrupted`), a
-durable queue, or activity in the last hour (`modified_at`, or the listing's
-`updatedAt`); idle ones bind on their next prompt or delivery
-(`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
+open when the session disconnected, from `agent_session.turn_interrupted`), or a
+durable queue, however many; it fills the rest of `MAX_EAGER_PER_DIAL` (50) with
+sessions active in the last hour (`modified_at`, or the listing's `updatedAt`),
+most recent first. Recent sessions beyond the cap, and idle ones, bind on their
+next prompt or delivery (`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
 permits, each held until the session's `session/load` or `session/resume`
 finishes; a harness dialing again stops its previous dial from starting more.
 Permanent errors are not retried; others are, with jittered backoff, while the
 runtime stays connected. A session whose load keeps failing stays disconnected
 with its turn unfinished, so every dial tries it again (three attempts, under a
-permit). The `agent.runtime.reattach` span counts eager, lazy,
-skipped, failed and abandoned sessions and retries. macrod's herdr-acp lists
+permit). The `agent.runtime.reattach` span counts eager, lazy, capped (recent but
+left lazy by the cap), required (restored past any cap), dormant, skipped,
+failed and abandoned sessions and retries. macrod's herdr-acp lists
 native sessions whose Herdr agent still runs, each with `updatedAt` from its
 transcript's last write, so a session worked on in its Herdr pane within the
 hour is restored at dial time.
+
+`HarnessBindings::sessions_on_harness` resolves a dial's listed sessions in one
+query: archived ones are dropped, and dormant ones (`ListedSessions::dormant`:
+no `modified_at` or log activity for `DORMANT_AFTER`, 7 days, never the
+listing's `updatedAt`, and no unfinished or interrupted turn, queued prompt,
+pending tool approval, undelivered notification or current conversation) are
+only counted. A dial does no per-session work for them and nothing is stored;
+their next prompt or delivery reconnects them like any lazy session. Dormancy
+is invisible to users. A per-runtime cap on live sessions counts
+`ListedSessions::live` only.
 
 Each session's commands run one at a time on its command worker
 (`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
@@ -171,10 +187,37 @@ different replica than the socket it replaced, and a stalled replica can notice
 that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
 dial and reports it to `HarnessPresence`; a close removes only its own row, and
 each replica renews the leases of what it holds, so a crash reads offline within
-the lease. To debug a harness in Datadog, search `@harness:<id>` for
+the lease. A renewal that restores the row of a connection the registry no
+longer holds (it closed after the renewal's snapshot) closes it again through
+`HarnessPresence::disconnected`, so a Macro computer still gets its disconnect.
+To debug a harness in Datadog, search `@harness:<id>` for
 `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
-harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
-disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
+harness_runtime_lease_restored OR harness_runtime_lease_restore_undone)`: each
+carries `connection`, all but the undo carry `replica` (the undo's own close
+follows as a `harness_runtime_disconnected` that does, in the same trace), and a disconnect's
+`other_live_connections` above 0 is a stale close that changed nothing. A
+restore just before a connection's `harness_runtime_connected` is a renewal
+that beat the attach write, and harmless. Each renewal is one trace: a
+`harness.registry.renew` span (`connections`, `restored`, `undone`) around the
+adapter's `harness.presence.renew` (`replica`, `renewed`, `restored`, `error`),
+with each undo's `harness.presence.disconnected` under it.
+When recording a dial bound an agent (`HarnessPresence::connected` returns
+`ConnectionRecorded::AgentBound`: a Macro computer gets its first agent on its
+first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`,
+and macrod re-reads its agents and reopens its trigger stream at once instead
+of at its next poll. It goes only to a runtime that listed `agents-changed` in
+the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
+`inbound/runtime_gateway.rs`), so older runtimes never see it. Presence
+gets the `RuntimeAccepts` too: a Macro computer's macrod that doesn't list
+`apply-agent` can't take `ToRuntimeMessage::ApplyAgent`, so an agent
+teammate's computer fails its start at once (hosted_runtimes
+`Failure::AgentUnsupported`).
+
+Only directly authenticated users with edit access may answer ACP permissions or
+elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or
+cancel held tool calls, but cannot approve or approve and remember them; the
+HTTP boundary refuses any program (`macro_authorization::is_program_run`:
+agent or routine attribution, or the execution header).
 
 ## Checks
 
@@ -190,6 +233,9 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` opens with `<you>`, the
+  session bot's name and handle, so the agent can tell a message naming it
+  from one naming someone else.
 - Every composed prompt's `<m-agent-context>` states `<current_time>` in the
   sender's (else owner's) primary calendar time zone, via the
   `UserTimeZones` port, or UTC when unknown. Models have no other source

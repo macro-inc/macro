@@ -1,3 +1,5 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/setup_reqs_web.rs
 name: Setup Prereqs Web
 description: Checkout and Setup Prerequisite Dependencies for web app
 inputs:
@@ -5,43 +7,48 @@ inputs:
     description: Install Playwright and cache
     required: false
     default: ''
-
 runs:
   using: composite
   steps:
     - name: Setup Nix dev shell
       uses: ./.github/actions/setup-nix-dev-shell
-
     - name: Setup bunfig.toml
-      shell: bash
       run: |
         echo "[run]" >> bunfig.toml
         echo "bun = true" >> bunfig.toml
-
-    - name: Install Dependencies
       shell: bash
-      run: bun install --frozen-lockfile
-
+    - name: Install Dependencies
+      run: |
+        set -euo pipefail
+        key=$( { bun --version; cat bun.lock apps/web/patches/*; } | sha256sum | cut -d" " -f1)
+        marker=node_modules/.macro-install-key
+        if [ -d node_modules ] && [ "$(cat "$marker" 2>/dev/null)" != "$key" ]; then
+          find node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        fi
+        rm -f "$marker"
+        bun install --frozen-lockfile
+        echo "$key" > "$marker"
+      shell: bash
     - name: Get Playwright version (for caching)
       if: inputs.playwright == 'true'
+      run: echo "PW_VERSION=$(bunx playwright --version | cut -d' ' -f2)" >> $GITHUB_ENV # zizmor: ignore[github-env] exports the Playwright version for the cache key
       shell: bash
       working-directory: apps/web
-      run: echo "PW_VERSION=$(bunx playwright --version | cut -d' ' -f2)" >> $GITHUB_ENV
-    - name: Restore Playwright browsers
+    - id: pw-browsers
+      name: Restore Playwright browsers
       if: inputs.playwright == 'true'
-      id: pw-browsers
-      uses: runs-on/cache/restore@v4
+      uses: runs-on/cache/restore@a5f51d6f3fece787d03b7b4e981c82538a0654ed
       with:
         path: ~/.cache/ms-playwright
         key: pw-browsers-${{ runner.os }}-${{ env.PW_VERSION }}
     - name: Install Playwright Browsers
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
+      run: bunx playwright install --with-deps chromium
       shell: bash
       working-directory: apps/web
-      run: bunx playwright install --with-deps chromium
     - name: Save Playwright browsers to cache
       if: inputs.playwright == 'force' || (inputs.playwright == 'true' && steps.pw-browsers.outputs.cache-hit != 'true')
-      uses: runs-on/cache/save@v4
+      uses: runs-on/cache/save@a5f51d6f3fece787d03b7b4e981c82538a0654ed
       with:
         path: ~/.cache/ms-playwright
         key: pw-browsers-${{ runner.os }}-${{ env.PW_VERSION }}

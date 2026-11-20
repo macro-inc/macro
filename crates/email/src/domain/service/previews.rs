@@ -105,8 +105,7 @@ where
         let previews = self
             .email_repo
             .previews_for_view_cursor(query, macro_id.copied().into_owned())
-            .await
-            .map_err(anyhow::Error::from)?;
+            .await?;
 
         let thread_ids: Vec<Uuid> = previews.iter().map(|p| p.id).collect();
 
@@ -169,7 +168,7 @@ where
     /// Hydrate the Soup preview of each receipt-authorized thread. The
     /// receipts settled who may read the threads; the preview query only
     /// renders them, scoped to the inboxes that own them.
-    #[tracing::instrument(err, skip(self, receipts), fields(thread_count = receipts.len()))]
+    #[tracing::instrument(err, skip(self, viewer, receipts), fields(thread_count = receipts.len()))]
     pub(crate) async fn get_email_thread_previews_by_receipts_impl(
         &self,
         viewer: MacroUserIdStr<'static>,
@@ -194,7 +193,7 @@ where
     /// The preview of one thread in the caller's own or delegated inboxes,
     /// fresh from this service's pool. Ownership is checked here, never by
     /// the caller.
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn get_owned_email_thread_preview_impl(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -336,11 +335,16 @@ where
             item_filters::ast::CrmScope::Addresses(a) => (&[], a.as_slice()),
         };
 
+        let access = crm::domain::auth::CrmTeamReceipt::from_team_receipt(receipt.clone())
+            .map_err(|_| EmailErr::Unauthorized)?;
         let precheck = self
             .crm_service
-            .crm_scope_precheck(&team_id, domains, addresses)
+            .crm_scope_precheck(&access, domains, addresses)
             .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::anyhow!("crm precheck failed: {e}")))?;
+            .map_err(|error| match error {
+                crm::domain::model::CrmError::AccessDenied => EmailErr::Unauthorized,
+                error => EmailErr::RepoErr(anyhow::anyhow!("crm precheck failed: {error}")),
+            })?;
 
         if !precheck.crm_enabled {
             return Err(EmailErr::CrmDisabledForTeam);

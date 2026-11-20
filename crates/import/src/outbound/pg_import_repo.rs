@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod lifecycle;
 mod notion_run;
 mod plan;
 /// Canonical target transaction helpers for composition roots.
@@ -125,6 +126,7 @@ struct ImportRunDbRow {
     scanned_pages: Option<i32>,
     scanned_data_sources: Option<i32>,
     review_id: Option<Uuid>,
+    review_session_id: Option<Uuid>,
 }
 
 impl TryFrom<ImportRunDbRow> for ImportRun {
@@ -149,6 +151,7 @@ impl TryFrom<ImportRunDbRow> for ImportRun {
             updated_at: row.updated_at,
             scanned,
             review_id: row.review_id,
+            review_session_id: row.review_session_id,
         })
     }
 }
@@ -248,7 +251,9 @@ impl ImportRepo for PgImportRepo {
             INSERT INTO import_entity (user_id, source, kind, foreign_id, status, initiator, metadata)
             VALUES ($1, $2, $6, $3, 'staged', $4, $5)
             ON CONFLICT (user_id, source, foreign_id) DO UPDATE
-            SET metadata = EXCLUDED.metadata, updated_at = NOW()
+            SET metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', import_entity.metadata -> 'personalFolderId',
+                        'separateFolder', import_entity.metadata -> 'separateFolder')), updated_at = NOW()
             WHERE import_entity.status = 'staged'
             RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
                       initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
@@ -289,7 +294,7 @@ impl ImportRepo for PgImportRepo {
             SET status = 'imported', metadata = EXCLUDED.metadata,
                 entity_id = EXCLUDED.entity_id, entity_type = EXCLUDED.entity_type,
                 team_id = EXCLUDED.team_id, last_error = NULL, updated_at = NOW()
-            WHERE import_entity.status <> 'imported'
+            WHERE import_entity.status NOT IN ('imported', 'importing')
             RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
                       initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
                       updated_at
@@ -306,13 +311,21 @@ impl ImportRepo for PgImportRepo {
         )
         .fetch_optional(&self.pool)
         .await?;
-        match row {
-            Some(row) => row.try_into(),
+        if let Some(row) = row {
+            return row.try_into();
+        }
+        let stored = self
+            .get_own_by_foreign_id(user, source, foreign_id)
+            .await?
+            .ok_or_else(|| ImportError::Other(anyhow::anyhow!("imported upsert vanished")))?;
+        match stored.status {
             // Already imported: first mapping wins; return the stored row.
-            None => self
-                .get_own_by_foreign_id(user, source, foreign_id)
-                .await?
-                .ok_or_else(|| ImportError::Other(anyhow::anyhow!("imported upsert vanished"))),
+            ImportStatus::Imported => Ok(stored),
+            // The upsert only skips importing rows, so the row was held by a
+            // running import, which may have finished or failed since.
+            ImportStatus::Importing | ImportStatus::Staged | ImportStatus::Discarded => {
+                Err(ImportError::ImportRunning)
+            }
         }
     }
 
@@ -593,7 +606,7 @@ impl ImportRepo for PgImportRepo {
                    CASE WHEN status = 'running' THEN scanned_pages END AS scanned_pages,
                    CASE WHEN status = 'running' THEN scanned_data_sources END
                        AS scanned_data_sources,
-                   review_id
+                   review_id, review_session_id
             FROM import_run WHERE user_id = $1
             ORDER BY source
             "#,

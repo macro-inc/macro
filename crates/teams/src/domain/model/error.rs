@@ -23,6 +23,9 @@ pub enum TeamError {
     /// The team is not paying
     #[error("The team is not paying")]
     TeamNotPaying,
+    /// Preference writes are not enabled for this deployment yet.
+    #[error("CRM access changes are not available yet")]
+    CrmAccessChangesUnavailable,
     /// Underlying entity access error
     #[error("Access error")]
     AccessError(#[from] entity_access::domain::models::AccessError),

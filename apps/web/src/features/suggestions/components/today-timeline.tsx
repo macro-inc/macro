@@ -1,6 +1,19 @@
 import { formatLocale, t } from '@app/lib/i18n';
+import { Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
-import { CHIP_MAX_WIDTH, type DayEvent, type DayStrip } from '../core/day';
+import type { DayEvent, DayStrip } from '../core/day';
+
+/** The event's title and times, which a narrowed chip may cut off. */
+function eventTime(event: DayEvent) {
+  const start = Date.parse(event.start);
+  // Older WebKit throws on a range that ends before it starts.
+  const time = new Intl.DateTimeFormat(formatLocale(), {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).formatRange(start, Math.max(start, Date.parse(event.end)));
+
+  return t('suggestions.eventTime', { title: event.title, time });
+}
 
 function hourLabel(hour: number) {
   const time = new Date();
@@ -88,21 +101,26 @@ export function TodayTimeline(props: {
                   class="absolute"
                   style={{
                     left: `${chip.left}%`,
-                    'max-width': `${CHIP_MAX_WIDTH}%`,
+                    'max-width': `${chip.width}%`,
                     top: `${1.75 + chip.lane * 2.5}rem`,
                   }}
                 >
-                  <button
-                    type="button"
-                    class="block max-w-full truncate rounded-md border border-edge-muted bg-panel px-2 py-1 text-xs text-ink outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
-                    classList={{ 'text-ink-extra-muted': chip.past }}
-                    aria-label={t('suggestions.openEvent', {
-                      title: chip.event.title,
-                    })}
-                    onClick={() => props.onOpen(chip.event)}
-                  >
-                    {chip.event.title}
-                  </button>
+                  <Tooltip.Root placement="top">
+                    <Tooltip.Trigger
+                      type="button"
+                      class="block max-w-full truncate rounded-md border border-edge-muted bg-panel px-2 py-1 text-xs text-ink outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+                      classList={{ 'text-ink-extra-muted': chip.past }}
+                      aria-label={t('suggestions.openEvent', {
+                        title: chip.event.title,
+                      })}
+                      onClick={() => props.onOpen(chip.event)}
+                    >
+                      {chip.event.title}
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content>{eventTime(chip.event)}</Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
                 </li>
               )}
             </For>

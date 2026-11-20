@@ -1,6 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useLicenseStatus, useUserId } from '@core/context/user';
@@ -25,7 +23,6 @@ const PaywallComponent = (props: PaywallProps) => {
   const hasPaid = useHasPaidAccess();
   const licenseStatus = useLicenseStatus();
   const userId = useUserId();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
   const trialEligibility = useTrialEligibilityQuery({
@@ -54,7 +51,7 @@ const PaywallComponent = (props: PaywallProps) => {
             canManageBilling: currentSummary.can_manage_billing,
           }
         : undefined,
-      aiUsageEnabled: aiUsageBilling().enabled,
+      aiUsageEnabled: true,
       pending: false,
       trialEligible:
         trialEligibility.isSuccess && queryReadyGate(trialEligibility)

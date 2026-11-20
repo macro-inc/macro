@@ -407,6 +407,7 @@ function Fixture() {
                   groups={settingsGroups}
                   results={settingsResults()}
                   selectedResultId={selectedResult()?.id}
+                  searchable
                   searchQuery={settingsSearch()}
                   onSearchQueryChange={setSettingsSearch}
                   isItemActive={(tab) => settingsTab() === tab}
@@ -499,7 +500,10 @@ function Fixture() {
             unavailable={false}
             cancel={async () => {
               const r = receipt();
-              if (r) updateReceipt({ ...r.booking, status: 'cancelled' });
+              if (!r) throw new Error('No booking to cancel');
+              const booking = { ...r.booking, status: 'cancelled' as const };
+              updateReceipt(booking);
+              return booking;
             }}
             loadSlots={async (date) => sampleSlots(date)}
             reschedule={async (start) => {

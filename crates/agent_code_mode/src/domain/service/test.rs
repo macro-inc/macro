@@ -1,5 +1,6 @@
 use super::*;
 use agent_session::testing::test_agent_session;
+use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -74,20 +75,65 @@ impl ExecutionCredentials for Credentials {
         identity: &ExecutionIdentity,
         _: &str,
         _: CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
+    ) -> Result<IssuedRun, CodeModeError> {
         self.0
             .lock()
             .unwrap()
             .push((identity.owner.to_string(), identity.agent_id));
-        Ok(code_execution::domain::RunEnvironment {
-            token: "run-only-secret".into(),
-            ..Default::default()
+        Ok(IssuedRun {
+            environment: code_execution::domain::RunEnvironment {
+                token: "run-only-secret".into(),
+                ..Default::default()
+            },
+            acting_user: identity.owner.clone(),
         })
     }
 }
+/// PNG pixels named after their file, owned by the session owner; the file
+/// `missing` cannot be read.
+struct Pixels;
+#[async_trait]
+impl ModelImages for Pixels {
+    async fn load_png(
+        &self,
+        file: &StaticFileId,
+        owner: &MacroUserIdStr<'_>,
+    ) -> anyhow::Result<ModelImage> {
+        anyhow::ensure!(file.as_ref() != "missing", "no such file");
+        // test_agent_session's owner.
+        anyhow::ensure!(
+            owner.as_ref() == "macro|owner@example.com",
+            "the file belongs to someone else"
+        );
+        Ok(ModelImage {
+            r#type: ModelMediaType::Image,
+            media_type: ModelImageMediaType::Png,
+            data: format!("iVBORw0KGgo{}", file.as_ref()),
+        })
+    }
+}
+
 struct Executor;
 #[async_trait]
 impl ProgramExecutor for Executor {
+    /// Rejects a program that says `TYPE_ERROR`, as the checker would one
+    /// with a type error.
+    async fn check_program(
+        &self,
+        request: &ExecuteRequest,
+        shape: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        assert!(shape.session && shape.execution);
+        if request.source.contains("TYPE_ERROR") {
+            return Err(code_execution::domain::ExecutionFailure::new(
+                code_execution::domain::FailureCode::Compile,
+                "The program wasn't run: it doesn't type-check against the Macro SDK.",
+            )
+            .into());
+        }
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -115,6 +161,7 @@ fn service() -> (
             credentials.clone(),
             store.clone(),
             turns.clone(),
+            Arc::new(Pixels),
         ),
         credentials,
         store,
@@ -127,6 +174,39 @@ fn request() -> ExecuteRequest {
         timeout_ms: 1000,
     }
 }
+/// A program with type errors fails before the owner is asked to approve it
+/// or a credential is minted for it.
+#[tokio::test]
+async fn a_program_with_type_errors_stops_before_credentials() {
+    let (service, credentials, store, _) = service();
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let id = ExecutionId::mint();
+    let result = service
+        .execute(
+            &session,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            ExecuteRequest {
+                source: "export async function main() { return TYPE_ERROR; }".into(),
+                timeout_ms: 1000,
+            },
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.status, ExecutionStatus::Failed);
+    assert!(credentials.0.lock().unwrap().is_empty());
+    let record = store.get(session.id, id).await.unwrap();
+    assert_eq!(record.status, ExecutionStatus::Failed);
+    assert!(
+        record
+            .error
+            .unwrap()
+            .contains("doesn't type-check against the Macro SDK")
+    );
+}
+
 #[tokio::test]
 async fn run_uses_session_owner_and_records_source_and_result_without_credential() {
     let (service, credentials, store, _) = service();
@@ -328,6 +408,14 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
 struct ValueExecutor(serde_json::Value);
 #[async_trait]
 impl ProgramExecutor for ValueExecutor {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -354,6 +442,18 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
         (json!({"data": 42, "reviews": [{}]}), false),
         (json!({"reviews": []}), false),
         (json!({"data": 42, "extra": true}), false),
+        (
+            json!({"data": 42, "images": [{"id": "render-1", "url": "https://x"}]}),
+            true,
+        ),
+        (json!({"data": 42, "images": []}), true),
+        (
+            json!({"data": 42, "images": [{"id": "a"}, {"id": "b"}, {"id": "c"}]}),
+            false,
+        ),
+        (json!({"data": 42, "images": [{"id": "../file"}]}), false),
+        (json!({"data": 42, "images": [{"url": "https://x"}]}), false),
+        (json!({"data": 42, "images": {"id": "a"}}), false),
     ] {
         let store = Arc::new(MemoryStore::default());
         let service = CodeModeService::new(
@@ -361,6 +461,7 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
             Arc::new(Credentials::default()),
             store.clone(),
             Arc::new(TestTurns::default()),
+            Arc::new(Pixels),
         );
         let session =
             test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
@@ -393,6 +494,14 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
 struct ActivityExecutor;
 #[async_trait]
 impl ProgramExecutor for ActivityExecutor {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -437,6 +546,7 @@ async fn persists_live_activity_and_marks_unfinished_requests_unknown() {
         Arc::new(Credentials::default()),
         store.clone(),
         Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
     );
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let id = ExecutionId::mint();
@@ -546,6 +656,14 @@ impl ExecutionStore for SlowActivityStore {
 struct CancelActivityExecutor;
 #[async_trait]
 impl ProgramExecutor for CancelActivityExecutor {
+    async fn check_program(
+        &self,
+        _: &ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: CancellationToken,
+    ) -> Result<(), Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: ExecuteRequest,
@@ -580,6 +698,7 @@ async fn cancellation_is_not_blocked_by_a_stalled_activity_save() {
         Arc::new(Credentials::default()),
         store.clone(),
         Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
     );
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let cancel = CancellationToken::new();
@@ -679,4 +798,71 @@ async fn a_delayed_call_cannot_adopt_a_new_turn_or_receive_credentials() {
     assert!(matches!(result, Err(CodeModeError::Forbidden)));
     assert!(credentials.0.lock().unwrap().is_empty());
     assert!(store.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn returned_images_reach_the_model_as_pixels() {
+    let service = CodeModeService::new(
+        Some(Arc::new(ValueExecutor(json!({
+            "data": {"link": "https://macro.com/app/canvas/1"},
+            "images": [{"id": "render-1", "url": "https://static/file/render-1", "width": 10}],
+        })))),
+        Arc::new(Credentials::default()),
+        Arc::new(MemoryStore::default()),
+        Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
+    );
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let receipt = service
+        .execute(
+            &session,
+            ExecutionId::mint(),
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(json["status"], "succeeded");
+    assert_eq!(json["error"], serde_json::Value::Null);
+    assert_eq!(
+        json["modelMedia"],
+        json!([{"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgorender-1"}])
+    );
+    assert_eq!(json["result"]["images"][0]["id"], "render-1");
+}
+
+#[tokio::test]
+async fn an_unreadable_returned_image_is_reported_without_pixels() {
+    let service = CodeModeService::new(
+        Some(Arc::new(ValueExecutor(json!({
+            "data": 1,
+            "images": [{"id": "render-1"}, {"id": "missing"}],
+        })))),
+        Arc::new(Credentials::default()),
+        Arc::new(MemoryStore::default()),
+        Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
+    );
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let receipt = service
+        .execute(
+            &session,
+            ExecutionId::mint(),
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(json["status"], "succeeded");
+    assert!(json.get("modelMedia").is_none());
+    assert_eq!(
+        json["error"],
+        "main succeeded, but image missing could not be shown: return a PNG from the SDK, such as await canvas.render()."
+    );
 }

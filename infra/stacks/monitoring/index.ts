@@ -18,11 +18,13 @@ import './synthetics';
 
 // Declared here first.
 import './goalert';
+import { agentSessionsDashboard } from './monitors/agent-sessions';
 import './monitors/ai-editing';
 import './monitors/ai-providers';
 import './monitors/calls';
 import './monitors/computer-capacity';
 import './monitors/computers';
+import './monitors/firecracker';
 import './monitors/graphql-soup';
 import './monitors/harness-presence';
 import './monitors/harness-runtimes';
@@ -37,8 +39,11 @@ import './monitors/storage-pool';
 import './monitors/stripe-inbox';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';
+import { searchFreshnessDashboard } from './monitors/search-freshness';
 import { webPerformanceDashboard } from './dashboards/web-performance';
 
 export const notificationRetentionDashboardUrl =
   notificationRetentionDashboard.url;
 export const webPerformanceDashboardUrl = webPerformanceDashboard.url;
+export const searchFreshnessDashboardUrl = searchFreshnessDashboard.url;
+export const agentSessionsDashboardUrl = agentSessionsDashboard.url;

@@ -9,6 +9,7 @@ fn text_reply(text: &str) -> SendReply {
             mentions: vec![],
         },
         reply_to: None,
+        user_confirmation: None,
     }
 }
 

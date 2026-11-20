@@ -31,22 +31,46 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+  The agent-trigger stream covers the bound agents and reopens when they
+  change: at once on the service's `AgentsChanged` runtime message, else at
+  the 10 s poll. Every open sends `Last-Event-ID` (the last event seen, or a
+  floor minted before the runtime first dials), so the storage service
+  replays what was published while the stream did not cover an agent; a
+  session requested the instant a computer is ready is not lost. The opens ask
+  `resume=true`; the service repeats a few seconds before the cursor, and
+  `src/daemon/position.rs` drops repeats by event id, and events minted
+  before their agent was bound here (before the last agents read that did not
+  list it), which belonged to another runtime.
+  A service that sends `x-macro-stream-heartbeat` heartbeats the stream only
+  while its event source progresses; three heartbeats missed in a row with no
+  event (70 s at 20 s) end the stream as stalled, and it reopens from the
+  cursor. Without
+  the header (older service) there is no such deadline. `Daemon::trigger_stream_health`
+  publishes the stream's state (`src/daemon/health.rs`) for the panel.
+  A failed runtime dial and a dropped event stream retry after 250 ms,
+  doubling to 30 s, each delay jittered (`src/retry_delay.rs`); a runtime
+  connection that held 10 s is redialed at once, and an event stream that
+  held 10 s reopens at the first delay (one closed sooner keeps backing off).
+  The ACP agent starts before
+  each dial (and stays ready across failed ones), so a session that arrives
+  with the connection does not also wait for the agent's startup.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
   embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
-- `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
+- `src/enroll.rs`: `macrod enroll --from mmds|file:<path> --config <path>`,
   run as root by the box image's `macrod-enroll.service` on a Macro computer.
-  Reads the `hosted_runtimes` `Enrollment` (Incus guest API
-  `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
+  Reads the `hosted_runtimes` `Enrollment` (Firecracker MMDS v2: a session
+  token, then `firecracker_host_api::mmds::ENROLLMENT_POINTER` with
+  `Accept: application/json`; or a file), writes
   `macrod.toml` with the enrollment's typed deployment (API, storage, app and
   computer-reachable egress URLs; macrod.toml stays the one URL source at runtime).
   It claims the pre-approved pairing, chowns the config to its directory's owner,
   then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
-  retries are safe; a failed claim retries every 250 ms for up to five
-  minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
+  retries are safe; a failed claim retries every 250 ms (jittered a quarter
+  either way, `src/retry_delay.rs`) for up to five minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
   writes only the config, the credential and its markers: no systemd units,
   users or anything under `/etc`, which is read-only on the NixOS guest (the
   image declares every unit). The marker (`<computer id>\n<generation>`)
@@ -56,9 +80,12 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   pairing it was claimed from (`credentials.pairing_id`), so only a new
   pairing is claimed, and nothing else on the disk is touched. No enrollment
   in the source (removed after macrod connects) with a marker means enrolled.
-  An enrollment carrying `agent` (an agent teammate's computer) also writes
-  its environment to `/var/lib/macrod/agent.env` (0600, owned like the
-  config) for the guest's `macro-agent.service`; one without removes it.
+  An enrollment names the computer's `role` and never carries an agent's
+  credentials: on an agent teammate's computer the control plane hands the
+  agent's environment over macrod's socket (`ToRuntimeMessage::ApplyAgent`),
+  and `src/agent_env.rs` stages it whole at `/run/macro-agent-inbox/agent.env`
+  (0600) for the guest's root `macro-agent-apply` unit to install as
+  `/var/lib/macrod/agent.env`. A computer with no inbox refuses it.
 - `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
   computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
   session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
@@ -77,10 +104,34 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   header says "machine connected, service reports offline" instead of "paired,
   machine not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
-  sessions, config form, logs).
+  sessions, config form, logs). The theme is 24-bit RGB; every drawn frame
+  passes through `ColorSupport::fit_buffer` (`src/tui/ui/color_support.rs`),
+  which maps it to the 256 or 16-color palette when `COLORTERM`,
+  `TERM_PROGRAM` and `TERM` say the terminal has no truecolor (macOS
+  Terminal.app misreads RGB escapes). New draw calls must fit their frame too.
+- `src/tui/logging.rs`: the panel's logs. The Logs tab renders the last 500
+  lines; from startup (once the config lock is held) every line is also
+  appended to `logs/<config name>.log` beside the config (lines from before
+  the lock are written then), so `~/.macrod/logs/macrod.log` by default and
+  `~/.macrod/profiles/logs/<profile>.log` for a profile (`src/log_file.rs`, shared with the
+  update log; 0600, rotated at 10 MB to `.1`). Each run logs `macrod started`
+  (version, pid, config, handoff), the daemon's harness id, and why it ended:
+  quit, input closed, update restart, error, SIGHUP or SIGTERM. A panic is
+  logged as `macrod panicked`; in a spawned task the process keeps running. A
+  `macrod started` with no exit line before it means the previous process was
+  killed (SIGKILL, OOM). The file uses the Logs tab's filter (`RUST_LOG`,
+  default `info`); `RUST_LOG=trace` adds per-message ACP traces (direction
+  and size only).
+- `src/outbound/stream.rs`: the owner, bound-agent and presence lookups and
+  the event stream's response head each get `ANSWER_TIMEOUT` (10 s), so a
+  stalled request fails instead of holding up trigger processing. A failed
+  bound-agent refresh keeps the open stream and tries again on the next one.
+  `src/outbound/agent_session.rs` gives the session create and control calls a
+  trigger awaits inline `CALL_TIMEOUT` (60 s).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
-  (`hc`) by environment; both stay supported.
+  (`hc`, the binary the terminal's `HC_BIN` names; never `PATH`) by
+  environment; both stay supported.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`) and
   never npm's extensionless shell script beside them. The Claude Code adapter
@@ -190,8 +241,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
-- macrod never pulls into the operator's working branch — new herdr worktrees
-  start from a fresh fetch of `origin/main` (see README.md).
+- macrod never pulls into the operator's working branch — new session
+  worktrees start from a fresh fetch of `origin/main` (see README.md).
+- Each native session opens in its own herdr workspace/space, in the
+  background by default; never add it to macrod's or the operator's workspace.
 - Only release builds update themselves: the tag workflow compiles the tag in
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the
@@ -217,8 +270,18 @@ workspace on session start. The enrollment deployment's egress URL is
 stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
-Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
-with the marker's computer UUID as a resource attribute. Enrollment joins the
-setup trace from `Enrollment.traceparent`; its claim sends the setup
-`traceparent`. stdout remains the daemon protocol.
+Service telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, the default, or `http/protobuf`).
+`macrod enroll` exports to the enrollment's `deployment.telemetry_url`
+(OTLP/HTTP) and writes those two variables to `/var/lib/macrod/telemetry.env`,
+which a computer's `macrod.service` loads, with `OTEL_EXPORTER_OTLP_HEADERS`
+naming the computer (`x-macro-computer-id`). The analytics proxy does not
+honour it yet: it is unauthenticated, so the proxy still limits by client IP
+until the id is signed. Only setup spans (`run_enroll`,
+`macrod.enroll.*`, `macrod.agent.apply`) export, with the marker's computer
+UUID as a resource attribute. Enrollment joins the setup trace from
+`Enrollment.traceparent`; its claim sends the setup `traceparent`.
+`ApplyAgent.traceparent` parents `macrod.agent.apply` and is staged once, beside
+the agent's environment and never in it (a redelivery's fresh one would rewrite
+agent.env and restart the agent), at `/run/macro-agent-inbox/setup-traceparent`. stdout remains the daemon
+protocol.

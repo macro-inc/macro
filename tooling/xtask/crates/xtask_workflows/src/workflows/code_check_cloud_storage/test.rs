@@ -63,31 +63,6 @@ fn filter_binary_cache_is_trusted_only() {
     );
 }
 
-/// The required status check fails when any job it gathers failed, including
-/// the new Doppler job.
-#[test]
-fn status_check_covers_every_job() {
-    let status = serde_json::to_value(status_check()).unwrap();
-    let script = status["steps"][0]["run"].as_str().unwrap();
-    for needed in [
-        "path-check",
-        "check",
-        "doppler-config",
-        "test",
-        "build-service-bins",
-        "graphql-schema-compat",
-    ] {
-        let check = format!(r#""${{{{ needs.{needed}.result }}}}""#);
-        assert!(script.contains(&check), "{check}: {script}");
-        assert!(
-            status["needs"]
-                .as_array()
-                .unwrap()
-                .contains(&serde_json::json!(needed))
-        );
-    }
-}
-
 #[test]
 fn package_selection_does_not_pass_lib() {
     let script = include_str!("../scripts/run_tests.sh");
@@ -302,7 +277,6 @@ fn rust_jobs_have_timeouts() {
         doppler_config(),
         graphql_schema_compat(),
         test(),
-        status_check(),
     ] {
         let job = serde_json::to_value(job).unwrap();
         assert!(job["timeout-minutes"].is_u64(), "{job}");
@@ -317,18 +291,6 @@ fn rust_jobs_have_timeouts() {
             .expect("dev shell step");
         assert_eq!(shell["timeout-minutes"], vars::DEV_SHELL_TIMEOUT_MINUTES);
     }
-}
-
-/// A job that hits its timeout reports `cancelled`, so the required check can't
-/// treat only `failure` as a problem.
-#[test]
-fn status_check_rejects_cancelled_jobs() {
-    let status = serde_json::to_value(status_check()).unwrap();
-    let script = status["steps"][0]["run"].as_str().unwrap();
-    assert!(
-        script.contains(r#"[[ "$result" != "success" && "$result" != "skipped" ]]"#),
-        "{script}"
-    );
 }
 
 /// Plain `cargo test` here rebuilt hundreds of crates under different flags to run
@@ -367,8 +329,134 @@ fn service_bins_gate_covers_every_service_the_script_builds() {
 
     for service in services.split_whitespace() {
         assert!(
-            BUILD_SERVICE_BINS_CONDITION.contains(&format!("'{service}'")),
+            build_service_bins_condition()
+                .to_string()
+                .contains(&format!("'{service}'")),
             "{service} is built by the script but missing from the job's gate"
         );
+    }
+}
+
+/// The jobs that compile the workspace date the checkout for the `target` they
+/// keep, and rebuild everything when the pull request changes query data:
+/// `CARGO_TARGET_REBUILD_ALL` reads path-check's output, which reads the
+/// filter that lists `.sqlx` paths.
+#[test]
+fn compiling_jobs_rebuild_everything_when_query_data_changes() {
+    let workflow = serde_json::to_value(code_check_cloud_storage()).unwrap();
+    for id in ["check", "test", "build-service-bins", "doppler-config"] {
+        let job = &workflow["jobs"][id];
+        let reason = job["env"]["CARGO_TARGET_REBUILD_ALL"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            reason.contains("needs.path-check.outputs.query_data == 'true'"),
+            "{id}: {reason}"
+        );
+        let names: Vec<&str> = job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|step| step["name"].as_str().unwrap_or_default())
+            .collect();
+        assert!(
+            names.contains(&"Reuse the kept cargo target"),
+            "{id} reuses its target: {names:?}"
+        );
+    }
+
+    assert_eq!(
+        workflow["jobs"]["path-check"]["outputs"]["query_data"].as_str(),
+        Some("${{ steps.filter.outputs.query_data }}")
+    );
+    let with = serde_json::to_value(&paths_filter().value.with).unwrap();
+    let filters: serde_yaml::Value =
+        serde_yaml::from_str(with["filters"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        filters["query_data"],
+        serde_yaml::from_str::<serde_yaml::Value>("['**/.sqlx/**']").unwrap()
+    );
+}
+
+/// The test job compiles the crates whose `.env` names the test database
+/// against this run's schema, never a kept unit: those `.env` files exist only
+/// after `setup_test_envs`, and the databases are migrated after the dating.
+#[test]
+fn test_job_rebuilds_the_crates_that_check_queries_live() {
+    let run = serde_json::to_value(prepare_tests()).unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let at = |text: &str| run.find(text).unwrap_or_else(|| panic!("{text}: {run}"));
+    assert!(at("just setup_test_envs") < at(DATE_LIVE_QUERY_CRATES));
+    assert!(at(DATE_LIVE_QUERY_CRATES) < at("just initialize_dbs"));
+}
+
+/// [`DATE_LIVE_QUERY_CRATES`] looks for `.env` files under `crates` and
+/// `services`; one `setup_test_envs` writes anywhere else would compile against
+/// a kept unit.
+#[test]
+fn live_query_crates_are_where_the_dating_looks() {
+    let just = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../just/rust.just"
+    ));
+    let recipe = just
+        .split("\nsetup_test_envs:\n")
+        .nth(1)
+        .expect("setup_test_envs recipe");
+    let envs: Vec<&str> = recipe
+        .lines()
+        .take_while(|line| line.starts_with(' '))
+        .filter_map(|line| line.split(">> ./").nth(1))
+        .collect();
+    assert!(!envs.is_empty(), "{recipe}");
+    assert!(DATE_LIVE_QUERY_CRATES.contains("find crates services -name .env"));
+    for env in envs {
+        assert!(
+            env.ends_with("/.env") && (env.starts_with("crates/") || env.starts_with("services/")),
+            "{env}"
+        );
+    }
+}
+
+/// The content search target is `test = false`, and cargo's `--tests` drops it
+/// even when `--test` names it, so its step must never pass `--tests`, or a
+/// full run reports success without running it.
+#[test]
+fn the_content_search_step_runs_its_target_on_every_selection() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let stub_bin = tempfile::tempdir().unwrap();
+    let cargo = stub_bin.path().join("cargo");
+    std::fs::write(&cargo, "#!/bin/sh\necho \"$@\"\n").unwrap();
+    std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    for packages in ["all", "opensearch_client search_service"] {
+        let output = std::process::Command::new("bash")
+            .args([
+                "-c",
+                "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+            ])
+            // CI's dev shell sets BASH_ENV, which puts the real cargo back in
+            // front of the stand-in.
+            .env_remove("BASH_ENV")
+            .env("STUB_BIN", stub_bin.path())
+            .env(
+                "STUB_SCRIPT",
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/workflows/scripts/run_tests.sh"),
+            )
+            .env("RUST_PACKAGES", packages)
+            .env("NEXTEST_RUN_OPENSEARCH_TESTS", "true")
+            .output()
+            .unwrap();
+        let command = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{packages}: {output:?}");
+        assert!(
+            command.contains("--test content_search"),
+            "{packages}: {command}"
+        );
+        assert!(!command.contains("--tests"), "{packages}: {command}");
     }
 }
