@@ -36,6 +36,32 @@ export { PropertyDefinition, PropertyOption };
  * `deleteProperty`).
  *
  * @routing Use when defining custom properties or tags: adding a custom field to tasks or documents (hours spent, a priority), creating or editing a tag, or bulk-setting options; not setting a field an item already has, which its own methods do, or CRM pipeline fields.
+ *
+ * @agent
+ * A custom property is a field you define once and then set on items: tasks, documents, projects, channels, chats, email threads and CRM companies, each through its own `setProperty(property, value)`. Reuse an existing property with the same name before creating one, after checking its `dataType` is the kind you need; names are unique, so ask before changing a same-named property of another kind. Create it in the user's own scope (the default); pass `scope: 'team'` only when the user asks to share the field with the whole team, and say which scope you used. A property's `dataType` getter answers the stored kind (`'NUMBER'`), but `create` takes `dataType: {type: 'number'}`, and a value is `{type: 'number', value}` (see `properties.SetPropertyValue`). CRM pipeline fields belong to the pipeline, not here.
+ *
+ * ```typescript
+ * export async function main({macro}: CodeContext) {
+ *   // Reuse the user's own Hours Spent number field, or create it, then set it on one task.
+ *   const own = await macro.properties.list({scope: 'user'});
+ *   const names = await Promise.all(own.map((property) => property.displayName));
+ *   const kinds = await Promise.all(own.map((property) => property.dataType));
+ *   const index = names.indexOf('Hours Spent');
+ *   // Names are unique, so a same-named field of another kind can't be reused or recreated.
+ *   if (index !== -1 && kinds[index] !== 'NUMBER') {
+ *     return {data: {error: `Your Hours Spent field holds ${kinds[index]}, not a number; ask before changing it.`}};
+ *   }
+ *   const hours =
+ *     own[index] ??
+ *     (await macro.properties.create({displayName: 'Hours Spent', dataType: {type: 'number'}}));
+ *   const updated: string[] = [];
+ *   for await (const task of macro.tasks.search('launch checklist', {maxItems: 1})) {
+ *     await task.setProperty(hours, {type: 'number', value: 3.5});
+ *     updated.push(task.webUrl());
+ *   }
+ *   return {data: {property: hours.id, scope: 'user', updated}};
+ * }
+ * ```
  */
 export class PropertiesNamespace {
   constructor(private readonly client: MacroClient) {}
