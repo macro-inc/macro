@@ -52,7 +52,9 @@ export function ElicitationCard(props: ElicitationCardProps) {
         </Item>
       </Card.Header>
       <Card.Body class="flex min-h-0 flex-col gap-3 overflow-y-auto">
-        <p class="text-sm text-ink [overflow-wrap:anywhere]">{props.header.message}</p>
+        <p class="text-sm text-ink [overflow-wrap:anywhere]">
+          {props.header.message}
+        </p>
         <Show when={props.header.notice}>
           {(notice) => (
             <Card.Metadata class="leading-4">{notice()}</Card.Metadata>
