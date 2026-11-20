@@ -1469,7 +1469,8 @@ checked in `vite.base.ts`):
   (`:root::selection`, `.onboarding-flow::selection`); Chrome's highlight
   inheritance carries it to descendants, and `no-highlight-inheritance` on
   `<html>` turns on the per-element fallback elsewhere
-  (`core/util/highlightInheritance.ts`).
+  (`core/util/highlightInheritance.ts`). A subtree whose `--color-ink` varies
+  by element (`currentColor`) takes the `selection-root` utility.
 - Give a `… *` walk an ancestor class outside a list: `.x *` or
   `:where(.x) *`, never `:where(.x *)`, `:where(.a, .b) *`, or Tailwind's
   `**:` (use `[&_*]:`). One class per `:where()` keeps zero specificity.
