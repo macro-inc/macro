@@ -2028,7 +2028,14 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
   transition: none;
 }
 
-[data-press-surface] {
+/* No part of a pressed row draws WebKit's own tap highlight: not its surface,
+   not the soup row around it, and not the long-press element that holds it
+   (touchHandler and context menu triggers mark it). After a long press iOS keeps that element's
+   highlight and flashes it, over part of the long-pressed row, on later taps
+   whose own target has none. */
+[data-press-surface],
+[data-soup-entity],
+[data-long-press]:has([data-press-surface]) {
   -webkit-tap-highlight-color: transparent;
 }
 

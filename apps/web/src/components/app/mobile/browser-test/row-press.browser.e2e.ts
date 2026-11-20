@@ -249,3 +249,45 @@ test('a held press that starts scrolling drops the grey', async ({ page }) => {
   await touch(cdp, 'touchEnd');
   await expect(opened(page)).toHaveAttribute('data-opened', '');
 });
+
+/**
+ * The tap-highlight color of every element from a long-pressable row's
+ * owner (its long-press element or soup row container) down to its press
+ * surface. iOS flashes WebKit's own highlight over that owner on later taps.
+ */
+const ownerHighlightColors = (scope: Locator) =>
+  scope.evaluate((root) =>
+    [...root.querySelectorAll('[data-press-surface]')].flatMap((surface) => {
+      let owner: Element | undefined;
+      for (
+        let node: Element | null = surface;
+        node;
+        node = node.parentElement
+      ) {
+        if (node.matches('[data-long-press], [data-soup-entity]')) owner = node;
+        if (node === root) break;
+      }
+      const colors: string[] = [];
+      for (
+        let node: Element | null = surface;
+        node;
+        node = node.parentElement
+      ) {
+        colors.push(
+          getComputedStyle(node).getPropertyValue('-webkit-tap-highlight-color')
+        );
+        if (node === owner || node === root) break;
+      }
+      return colors;
+    })
+  );
+
+test('no part of a long-pressable row draws the tap highlight', async ({
+  page,
+}) => {
+  for (const row of ['home', 'list', 'agent-phone', 'project-menu']) {
+    const colors = await ownerHighlightColors(page.getByTestId(row));
+    expect(colors.length, row).toBeGreaterThan(1);
+    expect(new Set(colors), row).toEqual(new Set(['rgba(0, 0, 0, 0)']));
+  }
+});

@@ -57,7 +57,11 @@ read their code, and follow that pattern rather than inventing a new one.
   keep it until the open settles. A row that must paint its own pressed fill
   marks it `data-press-surface="self"`.
 - Long-press goes through the `touchHandler` directive, which ends the row's
-  press grey when the long press fires (`clearRowPress`). On scrollable rows,
+  press grey when the long press fires (`clearRowPress`) and marks its element
+  `data-long-press`, as context menu triggers are. A `data-soup-entity` row,
+  and a long-press element holding a press surface, draw no WebKit tap
+  highlight: iOS flashes the long-pressed element's highlight again on later
+  taps. On scrollable rows,
   selecting or dragging starts only after a long press; dedicated reorder
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge
