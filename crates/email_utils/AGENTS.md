@@ -89,7 +89,8 @@ sender/generic-address checks.
   scraper's tree sink, feeds the body a tag at a time and stops at the first
   limit a change would pass: `MAX_HTML_NODES` (attributes count a quarter
   node each, a text node only when it is new), `MAX_HTML_TEXT_BYTES` (text,
-  attributes and comments, each rebuilt element's attributes again),
+  attributes and comments as a serialization writes them, escapes and each
+  rebuilt element's attributes included),
   `MAX_ELEMENT_ATTRIBUTES`, `MAX_FORMATTING_DEPTH` (at most three copies of
   an identical tag count, as html5ever keeps no more) and `MAX_HTML_DEPTH`,
   reporting `clipped`. Each limit has a case in

@@ -245,6 +245,18 @@ fn oversized_bodies() -> Vec<(&'static str, String)> {
                 "<p>x".repeat(50_000)
             ),
         ),
+        // Serialized, each `"` in a value is written as `&quot;`: counted as
+        // read, this stored 96 MB.
+        (
+            "quoted title on rebuilt bold",
+            format!(
+                "<p>{}{}",
+                (0..5)
+                    .map(|i| format!("<b id={i} title='{}'>", "\"".repeat(4_000)))
+                    .collect::<String>(),
+                "<p>x".repeat(50_000)
+            ),
+        ),
         // Each `<body>` adds its attributes to the one body element.
         (
             "repeated body attributes",

@@ -28,10 +28,28 @@ pub const MAX_HTML_NODES: usize = 250_000;
 pub const ATTRIBUTES_PER_NODE: usize = 4;
 
 /// The most bytes of text, attribute names and values, and comments a parse
-/// builds. Rebuilt formatting elements share their attributes in the tree,
-/// but a serialization writes each copy out, so each counts again; this
-/// bounds the HTML the sanitizer hands ammonia.
+/// builds, counted as a serialization writes them: rebuilt formatting
+/// elements share their attributes in the tree but each copy is written out,
+/// and an `&` is written as `&amp;`. This bounds the HTML the sanitizer hands
+/// ammonia.
 pub const MAX_HTML_TEXT_BYTES: usize = 16 << 20;
+
+/// How many bytes html5ever's serializer writes for `text`, as text or as an
+/// attribute value: it escapes `&` and no-break spaces, and `"` in a value
+/// or `<` and `>` in text.
+fn serialized_len(text: &str, in_attribute: bool) -> usize {
+    let escapes: usize = text
+        .chars()
+        .map(|c| match c {
+            '&' => "&amp;".len() - 1,
+            '\u{a0}' => "&nbsp;".len() - '\u{a0}'.len_utf8(),
+            '"' if in_attribute => "&quot;".len() - 1,
+            '<' | '>' if !in_attribute => "&lt;".len() - 1,
+            _ => 0,
+        })
+        .sum();
+    text.len() + escapes
+}
 
 /// The most attributes one element may have. Serialized, they are one tag,
 /// and html5ever checks each attribute name in a tag against every earlier
@@ -207,7 +225,7 @@ impl BoundedSink {
         self.count_text_bytes(
             added
                 .iter()
-                .map(|attr| attr.name.local.len() + attr.value.len())
+                .map(|attr| attr.name.local.len() + serialized_len(&attr.value, true))
                 .sum(),
         );
         if total > MAX_ELEMENT_ATTRIBUTES {
@@ -244,7 +262,7 @@ impl BoundedSink {
                     if !follows_text {
                         self.count_node();
                     }
-                    self.count_text_bytes(text.len());
+                    self.count_text_bytes(serialized_len(text, false));
                 }
             }
         }
