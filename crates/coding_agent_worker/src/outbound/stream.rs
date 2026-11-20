@@ -33,6 +33,18 @@ const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 /// on the client would also end the long-lived event stream.
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The service refused this harness's credentials: unlike a failed request,
+/// retrying does not help, and nothing may keep reading as this harness.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "the service refused this harness's credentials ({status}) while trying to {what}; the \
+     harness was likely removed - press p to pair again"
+)]
+pub struct CredentialsRefused {
+    status: reqwest::StatusCode,
+    what: &'static str,
+}
+
 /// Map the harness's current team grants onto its webhook workspace scope.
 pub fn stream_scope(harness: &Harness) -> WebhookScope {
     if harness.shared_team_ids.is_empty() {
@@ -97,10 +109,7 @@ impl EventStreamClient {
             .context(format!("could not reach the service to {what}"))?;
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-            rootcause::bail!(
-                "the service refused this harness's credentials ({status}) while trying to \
-                 {what}; the harness was likely removed - press p to pair again"
-            );
+            return Err(rootcause::report!(CredentialsRefused { status, what }).into_dynamic());
         }
         if !status.is_success() {
             let message = response.text().await.unwrap_or_default();

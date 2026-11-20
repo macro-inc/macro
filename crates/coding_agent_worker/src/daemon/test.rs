@@ -322,7 +322,7 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
     let mut api: Config = toml::from_str(include_str!("../../config.example.toml")).unwrap();
     api.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
     let (seen, mut requests) = tokio::sync::mpsc::unbounded_channel();
-    tokio::spawn(serve_storage_stalling_one_refresh(storage, seen));
+    tokio::spawn(serve_storage_with_second_refresh(storage, seen, None));
     let client = EventStreamClient::new(
         &api.macro_api,
         &HarnessCredentials {
@@ -362,6 +362,38 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
     assert!(matches!(serving.await, ServeOutcome::Stopped));
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_refused_credential_on_refresh_ends_the_event_stream() {
+    let storage = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api: Config = toml::from_str(include_str!("../../config.example.toml")).unwrap();
+    api.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
+    let (seen, _requests) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(serve_storage_with_second_refresh(
+        storage,
+        seen,
+        Some("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+    ));
+    let client = EventStreamClient::new(
+        &api.macro_api,
+        &HarnessCredentials {
+            harness_id: harness_id::HarnessId::TEST_A,
+            token: "mhns_test".to_owned(),
+            pairing_id: None,
+        },
+    );
+    let cancel = CancellationToken::new();
+    let agents_changed = Notify::new();
+    let mut position = StreamPosition::new(std::time::SystemTime::now());
+
+    // The service checks credentials only when a stream opens, so a removed
+    // harness must not keep reading the one it has.
+    let outcome = serve_once(&client, &NoWork, &cancel, &agents_changed, &mut position).await;
+    let ServeOutcome::Ended(error) = outcome else {
+        panic!("the stream outlived a refused credential");
+    };
+    assert!(format!("{error}").contains("401"), "{error}");
+}
+
 /// Never runs: no event reaches it.
 struct NoWork;
 
@@ -375,11 +407,13 @@ impl crate::trigger::WorkExecutor for NoWork {
 }
 
 /// Storage for one bound agent: an event stream that stays open and quiet, and
-/// a bound-agent list that answers every time but the second, which never does.
-/// Each request's path goes to `seen`.
-async fn serve_storage_stalling_one_refresh(
+/// a bound-agent list that answers every time but the second, which gets
+/// `second_refresh` or, when that is `None`, never an answer. Each request's
+/// path goes to `seen`.
+async fn serve_storage_with_second_refresh(
     storage: tokio::net::TcpListener,
     seen: tokio::sync::mpsc::UnboundedSender<String>,
+    second_refresh: Option<&'static str>,
 ) {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
@@ -411,7 +445,11 @@ async fn serve_storage_stalling_one_refresh(
         let answer = match path.as_str() {
             "/harnesses/me/agents" => {
                 agent_lists += 1;
-                (agent_lists != 2).then_some(AGENTS)
+                if agent_lists == 2 {
+                    second_refresh
+                } else {
+                    Some(AGENTS)
+                }
             }
             "/harnesses/me" => Some(HARNESS),
             _ => Some(STREAM),
