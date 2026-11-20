@@ -9,6 +9,7 @@ import type { UnifiedSearchRequest } from '@service-search/generated/models';
 import { infiniteQueryOptions } from '@tanstack/solid-query';
 
 const COMPANY_SEARCH_PAGE_SIZE = 50;
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 /** The search service's name and domain match over the viewer's team CRM
  * companies, every other entity kind left out; archived companies stay out,
@@ -21,6 +22,9 @@ function companySearchBody(term: string): UnifiedSearchRequest {
     include_crm: true,
     filters: {
       ...QUERY_FILTERS_BASE,
+      // The search service leaves calls out only when `channel_ids` holds the
+      // nil id; `call_ids` alone still runs its accessible-call lookup.
+      call_filters: { call_ids: [NIL_UUID], channel_ids: [NIL_UUID] },
       crm_company_filters: { hidden: false },
     },
   };
