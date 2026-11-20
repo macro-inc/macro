@@ -10,6 +10,7 @@
 
 pub mod cli;
 pub mod command;
+pub mod egress;
 pub mod engine;
 pub mod host;
 pub mod hosted_unit;

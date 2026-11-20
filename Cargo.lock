@@ -4860,6 +4860,7 @@ dependencies = [
  "harnesses",
  "hex",
  "hosted_runtimes",
+ "ipnet",
  "lazy-regex",
  "macro_env_var",
  "macro_event_broker",

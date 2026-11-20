@@ -38,6 +38,19 @@ pub enum TeammateCommand {
         #[arg(value_parser = install_id)]
         install: TeammateInstallId,
     },
+    /// Print the egress ruleset for the JSON on stdin (`{"allow": [...],
+    /// "facts": {...}}`), for the image's egress test.
+    #[command(hide = true)]
+    Ruleset,
+}
+
+/// The input of `macrod teammate ruleset`.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RulesetInput {
+    #[serde(default)]
+    allow: Vec<super::egress::Allow>,
+    facts: super::egress::NetworkFacts,
 }
 
 fn install_id(value: &str) -> Result<TeammateInstallId, String> {
@@ -54,6 +67,18 @@ pub async fn run(command: TeammateCommand) -> rootcause::Result<()> {
             tail,
         } => logs(&install, follow, tail).await,
         TeammateCommand::SignIn { install } => sign_in(&install).await,
+        TeammateCommand::Ruleset => {
+            let input: RulesetInput = serde_json::from_reader(std::io::stdin())
+                .context("the input is not {\"allow\": [...], \"facts\": {...}}")?;
+            let allow = input
+                .allow
+                .into_iter()
+                .map(super::egress::Allow::validated)
+                .collect::<Result<Vec<_>, _>>()
+                .context("an allow entry is refused")?;
+            print!("{}", super::egress::ruleset(&allow, &input.facts));
+            Ok(())
+        }
     }
 }
 
