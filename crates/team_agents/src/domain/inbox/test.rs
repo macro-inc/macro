@@ -179,30 +179,16 @@ impl AgentMailboxes for FakeMailboxes {
         }
     }
 
-    async fn pause(
-        &self,
-        _agent: &MacroUserIdStr<'_>,
-        mailbox_id: Uuid,
-    ) -> Result<(), MailboxError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("pause {mailbox_id}"));
+    async fn pause(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), MailboxError> {
+        self.calls.lock().unwrap().push("pause".to_owned());
         match *self.answer.lock().unwrap() {
             Answer::Down => Err(down()),
             _ => Ok(()),
         }
     }
 
-    async fn release(
-        &self,
-        _agent: &MacroUserIdStr<'_>,
-        mailbox_id: Uuid,
-    ) -> Result<(), MailboxError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("release {mailbox_id}"));
+    async fn release(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), MailboxError> {
+        self.calls.lock().unwrap().push("release".to_owned());
         match *self.answer.lock().unwrap() {
             Answer::Down => Err(down()),
             _ => Ok(()),
@@ -381,7 +367,7 @@ async fn pausing_stops_the_mailbox_once_and_keeps_it() {
         .into_iter()
         .filter(|call| call.starts_with("pause"))
         .collect::<Vec<_>>();
-    assert_eq!(pauses, vec![format!("pause {MAILBOX}")]);
+    assert_eq!(pauses, vec!["pause".to_owned()]);
 }
 
 #[tokio::test]
@@ -412,7 +398,7 @@ async fn releasing_a_mailbox_still_being_made_finds_it_through_email_service() {
     service.release(&agent()).await.unwrap();
 
     assert_eq!(records.only().state, AgentInboxState::Released);
-    assert!(mailboxes.calls().contains(&format!("release {MAILBOX}")));
+    assert!(mailboxes.calls().contains(&"release".to_owned()));
 }
 
 #[tokio::test]
