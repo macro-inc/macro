@@ -45,6 +45,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  type CollectionSaveOutcome,
   EntityCollectionProperty,
   NonUserEntityChip,
 } from './EntityCollectionProperty';
@@ -96,12 +97,19 @@ export {
 } from './EntityTagsSection';
 
 export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
-  const { properties, isLoading, error, refetch, addProperty, removeProperty } =
-    useEntityProperties(
-      props.entityId,
-      props.entityType,
-      props.includeMetadata ?? false
-    );
+  const {
+    properties,
+    isLoading,
+    error,
+    refetch,
+    isCacheMaintained,
+    addProperty,
+    removeProperty,
+  } = useEntityProperties(
+    props.entityId,
+    props.entityType,
+    props.includeMetadata ?? false
+  );
   const allProperties = useAllProperties();
   const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
     Set<string>
@@ -262,7 +270,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const saveMutation = useBulkSaveEntityPropertiesMutation();
   const savePropertyValues = async (
     property: Property,
-    apiValues: PropertyApiValues
+    apiValues: PropertyApiValues,
+    onAccepted?: () => void
   ) => {
     await saveMutation.mutateAsync({
       properties: [
@@ -273,15 +282,19 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           apiValues,
         },
       ],
+      onAccepted,
     });
   };
   const saveOne = async (property: Property, apiValues: PropertyApiValues) => {
     await savePropertyValues(property, apiValues);
     await props.onPropertiesChanged?.();
   };
-  const refreshCollection = async () => {
-    await refetch();
-    await props.onPropertiesChanged?.();
+  const refreshCollection = async (outcome: CollectionSaveOutcome) => {
+    // The cache already holds a committed save; a network read could bring a
+    // lagging replica's older value back. A failed save or an uncached client
+    // has only the server to read from.
+    if (outcome === 'failed' || !isCacheMaintained()) await refetch();
+    if (outcome === 'saved') await props.onPropertiesChanged?.();
   };
 
   const saveHandler: PropertySaveHandler = {

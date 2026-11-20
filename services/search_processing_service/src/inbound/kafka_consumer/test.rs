@@ -3429,7 +3429,49 @@ async fn processing_records_its_lag_and_counts_a_drop() {
             .iter()
             .map(|point| (point.tags.clone(), point.value))
             .collect::<Vec<_>>(),
-        [(tags(&[("entity_type", "email"), ("outcome", "dropped")]), 1)]
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("outcome", "dropped"),
+                ("failure", "bulk_items"),
+            ]),
+            1
+        )]
+    );
+}
+
+#[tokio::test]
+async fn failed_items_count_by_the_last_attempts_failure() {
+    use super::metrics::{
+        FAILED_BULK_ITEMS,
+        test::{Recorded, tags},
+    };
+
+    let recorded = Recorded::new();
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
+    let replays = RecordedReplays(Mutex::default());
+
+    process_received(&recorded.metrics, &received, &replays, |_| async {
+        Err(exhausted(Failure::Overloaded))
+    })
+    .await;
+
+    // A refusal while OpenSearch protects itself, such as a drain's 429s,
+    // counts apart from items it failed.
+    assert_eq!(
+        recorded
+            .points(FAILED_BULK_ITEMS)
+            .iter()
+            .map(|point| (point.tags.clone(), point.value))
+            .collect::<Vec<_>>(),
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("outcome", "retry_queued"),
+                ("failure", "overloaded"),
+            ]),
+            1
+        )]
     );
 }
 
