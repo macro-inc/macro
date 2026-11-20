@@ -1,9 +1,12 @@
-// The real Notifications view on touch over a synthetic in-memory feed: its
-// swipe rows, list and done paths, with no network.
+// The real Notifications view over a synthetic in-memory feed, on touch (its
+// swipe rows) or with a pointer as the device has: its list, stacks and done
+// paths, with no network.
 import '@app/index.css';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import type { SplitRouter } from '@app/lib/split-router';
+import { SplitRouterProvider } from '@app/lib/split-router/solid/context';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import {
   SplitLayoutContext,
@@ -19,6 +22,7 @@ import {
   useHotKeyRoot,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { EntityProvider } from '@entity';
 import type { NotificationSource } from '@notifications';
@@ -57,7 +61,7 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
   authenticated: true,
 });
 
-document.documentElement.dataset.touchDevice = 'true';
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 document.documentElement.dataset.themeLight = 'true';
 for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
   document.documentElement.style.setProperty(`--color-${token}`, value);
@@ -182,6 +186,8 @@ const inboxContext: NotificationsInboxContext = {
   filterStorage: { read: () => null, write: () => {} },
 };
 
+const ROUTER = { href: () => '', panes: () => [] } as unknown as SplitRouter;
+
 function UndoButton() {
   const { undo } = useMutationUndoContext();
   return (
@@ -199,21 +205,29 @@ function Fixture() {
   useHotKeyRoot();
   const [attachSplit, scopeId] = useHotkeyDOMScope('notifications-split');
   const [shown, setShown] = createSignal<InboxShownRow>({ row: '', item: '' });
-  // The view reads only these parts of its split on touch.
+  // The view reads only these parts of its split.
   const panel = {
-    handle: { setDisplayName: () => {}, isFirst: () => true },
+    handle: {
+      id: 'notifications-split',
+      content: () => ({ type: 'component', id: 'unified-list' }),
+      setDisplayName: () => {},
+      isFirst: () => true,
+      isPopover: () => false,
+    },
     splitHotkeyScope: scopeId,
     isPanelActive: () => true,
     contentOffsetTop: () => 0,
     setContentOffsetTop: () => {},
-    panelSize: { width: 390, height: 844 },
+    panelSize: { width: window.innerWidth, height: window.innerHeight },
     layoutRefs: {},
   } as unknown as SplitPanelContextType;
-  // The preview guard registers what it shows; touch shows nothing.
+  // The preview guard registers what it shows; the fixture opens nothing.
   const layout = {
     manager: {
       registerOpenViews: () => () => {},
       findOpenView: () => undefined,
+      splits: () => [],
+      getVisibleSplitCount: () => 1,
     } as unknown as SplitManager,
   };
   return (
@@ -263,9 +277,12 @@ render(
                   <EmailLinksContextProvider>
                     <MobileSettingsProvider>
                       <MutationUndoProvider>
-                        <MemoryRouter>
-                          <Route path="*" component={Fixture} />
-                        </MemoryRouter>
+                        {/* The split header's menu links to the split. */}
+                        <SplitRouterProvider router={ROUTER}>
+                          <MemoryRouter>
+                            <Route path="*" component={Fixture} />
+                          </MemoryRouter>
+                        </SplitRouterProvider>
                       </MutationUndoProvider>
                     </MobileSettingsProvider>
                   </EmailLinksContextProvider>

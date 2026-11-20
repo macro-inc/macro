@@ -28,6 +28,7 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     { readonly reached: () => void; readonly open: Promise<void> }
   >();
   const broken = new Set<string>();
+  const reads: string[] = [];
   let listFailures = 0;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let dropped: ((at: Date) => void) | undefined;
@@ -66,6 +67,7 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     // Roots created or replied to after `after`, newest first, as the SDK
     // gives them.
     messagesAfter: async function* (after: string) {
+      reads.push(id);
       if (broken.has(id)) throw new Error(`no access to ${id}`);
       const gate = gates.get(id);
       gate?.reached();
@@ -94,12 +96,19 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
       },
     },
     channels: {
-      list: async function* () {
+      // Channels with a message at or after `after`, as the SDK lists them.
+      activeSince: async function* (after: string) {
         if (listFailures > 0) {
           listFailures -= 1;
           throw new Error('backend restarting');
         }
-        for (const id of channelIds) yield channel(id);
+        for (const id of channelIds)
+          if (
+            (history.get(id) ?? []).some(
+              (posted) => Date.parse(posted.at) >= Date.parse(after)
+            )
+          )
+            yield channel(id);
       },
       byId: (id: string) => channel(id),
     },
@@ -125,6 +134,8 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
         sender: { name: async () => 'Ada' },
       });
     },
+    /** The channels whose history a catch-up read, in order. */
+    reads,
     /** Listing channels fails this many more times, as while the backend restarts. */
     failListing: (times: number) => {
       listFailures = times;
@@ -261,6 +272,13 @@ test('a drop during a catch-up is caught up too, once the stream is back', async
   await Bun.sleep(10);
   await backend.live({ id: 'a1', at: '2026-11-18T17:44:00Z', text: 'hi' });
   expect((await first).id).toBe('a1');
+  // dm2 is active too, so a catch-up reads it.
+  const second = next();
+  await backend.live(
+    { id: 'd1', at: '2026-11-18T17:44:10Z', text: 'yo' },
+    'dm2'
+  );
+  expect((await second).id).toBe('d1');
 
   // The first catch-up reads dm1, then waits on dm2's history.
   const dm2 = backend.gate('dm2');
@@ -451,4 +469,22 @@ test('a root deleted while the stream was down is not delivered, its new reply i
     'gone-reply'
   );
   expect(await nothingWithin(next(), 500)).toBe('nothing');
+});
+
+test('a catch-up reads only the channels active since the drop', async () => {
+  const backend = fakeMacro(['quiet', 'busy']);
+  const next = listening(backend);
+
+  const pending = next();
+  await Bun.sleep(10);
+  backend.post(
+    { id: 'q', at: '2026-11-18T17:00:00Z', text: 'long ago' },
+    'quiet'
+  );
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.post({ id: 'b', at: '2026-11-18T17:45:30Z', text: 'news' }, 'busy');
+  backend.reconnect(new Date('2026-11-18T17:46:00Z'));
+
+  expect((await within(pending, 5_000, 'nothing was caught up')).id).toBe('b');
+  expect(backend.reads).toEqual(['busy']);
 });

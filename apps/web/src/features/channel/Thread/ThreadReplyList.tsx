@@ -8,6 +8,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -25,6 +26,7 @@ import {
   notifyElementOnMount,
 } from './message-element-lifecycle';
 import { buildThreadReplyListMeta } from './reply-list-meta';
+import { ThreadGutterSlot } from './ThreadGutterSlot';
 import { ThreadReplyMonorail } from './ThreadReplyMonorail';
 import { ThreadReplyRail } from './ThreadReplyRail';
 
@@ -61,6 +63,8 @@ export function ThreadReplyList(props: {
   asRoots?: boolean;
   /** An inline composer or footer continues the rail after the replies. */
   railContinues?: boolean;
+  /** Controls in the channel gutter beside a reply. */
+  gutter?: (replyId: string) => JSX.Element;
 }) {
   const listMetaByReplyId = createMemo(() =>
     buildThreadReplyListMeta(props.replies, props.isNewMessage)
@@ -137,6 +141,15 @@ export function ThreadReplyList(props: {
                   />
                 </Show>
               </Show>
+            </Show>
+            <Show when={props.gutter}>
+              {(gutter) => (
+                <ThreadGutterSlot
+                  grouped={displayMeta(id)?.isGroupedWithPrevious}
+                >
+                  {gutter()(id)}
+                </ThreadGutterSlot>
+              )}
             </Show>
             <MarkMessageNotifications
               messageId={id}

@@ -1,52 +1,35 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { Button } from '@ui';
-import { Show, Suspense } from 'solid-js';
+import { type Accessor, Show, Suspense } from 'solid-js';
 import { EventReplacementDialog } from '../components/EventReplacementDialog';
+import type { EventReplacementController } from '../context/event-replacement-source';
 import type { EventReplacementTarget } from '../core/event-replacement';
 import { createEventReplacement } from '../primitives/create-event-replacement';
 import {
   useCalendarProviderUrl,
   useEventReplacementSource,
 } from '../queries/event-replacement-source';
+import { useCalendarPreferences } from '../utils/preferences';
 
 /** App-facing composition: production adapters stay outside the injected controller. */
-export function EventReplacementAction(props: {
-  target: EventReplacementTarget;
-  hasConference: boolean;
-  recurring: boolean;
-  disabled: boolean;
+export function useEventReplacement(eventId: Accessor<string | undefined>) {
+  return createEventReplacement(useEventReplacementSource(eventId));
+}
+
+/** The replacement dialog `useEventReplacement`'s controller opens. */
+export function EventReplacement(props: {
+  controller: EventReplacementController;
   onDone: () => void;
 }) {
-  const source = useEventReplacementSource(() => props.target.eventId);
-  const state = createEventReplacement(
-    source,
-    () => props.target,
-    props.hasConference
-  );
+  const [preferences] = useCalendarPreferences();
   return (
-    <div class="flex flex-col gap-1 border-t border-edge-muted pt-3 text-sm">
-      <Button
-        variant="ghost"
-        disabled={props.disabled}
-        onClick={() => state.setOpen(true)}
-      >
-        Replace event…
-      </Button>
-      <p class="text-xs text-ink-muted">
-        {props.disabled
-          ? 'Save or discard your edits before replacing the event.'
-          : 'Reset guest RSVPs or remove Teams with a new invitation.'}
-      </p>
-      <EventReplacementDialog
-        controller={state}
-        hasConference={props.hasConference}
-        hasOccurrence={props.target.recurrenceId !== undefined}
-        recurring={props.recurring}
-        onOpenUrl={openExternalUrl}
-        onDone={props.onDone}
-      />
-    </div>
+    <EventReplacementDialog
+      controller={props.controller}
+      timeFormat={preferences.timeFormat}
+      onOpenUrl={openExternalUrl}
+      onDone={props.onDone}
+    />
   );
 }
 

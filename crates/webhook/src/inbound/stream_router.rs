@@ -8,12 +8,26 @@
 //! standard SSE `Last-Event-ID` header first receives the events this process
 //! still retains after that id (see [`StreamCursor`]); events older than the
 //! retention are missed and must be resynced out of band when needed.
+//!
+//! The response's `x-macro-stream-heartbeat` header gives the interval at which
+//! the stream sends `event: heartbeat` (data `{}`, no id) while this process's
+//! broker consumer is making progress. A client that hears neither an event
+//! nor a heartbeat for several intervals can reconnect and resume. The
+//! `: keep-alive` comments only keep idle proxies from closing the connection;
+//! they come from a timer here and say nothing about the event source. Like
+//! `Last-Event-ID`, the header and the heartbeat event are left out of the
+//! OpenAPI spec while macrod is their one client.
 
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{WebhookFilters, WebhookScope};
-use crate::domain::stream::{StreamCursor, WebhookEventStreamService, WebhookStreamError};
+use crate::domain::models::{
+    STREAM_HEARTBEAT_EVENT, STREAM_HEARTBEAT_HEADER, STREAM_HEARTBEAT_INTERVAL, WebhookFilters,
+    WebhookScope,
+};
+use crate::domain::stream::{
+    StreamCursor, StreamItem, WebhookEventStreamService, WebhookStreamError,
+};
 use axum::{
     Json, Router,
     extract::{FromRef, Query, State},
@@ -158,7 +172,10 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     Query(query): Query<StreamEventsQuery>,
     Query(resume): Query<ResumeQuery>,
 ) -> Result<
-    Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
+    (
+        [(&'static str, String); 1],
+        Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
+    ),
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
@@ -176,7 +193,14 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
         )
         .await?;
 
-    let events = events.filter_map(|event| async move {
+    let events = events.filter_map(|item| async move {
+        let event = match item {
+            StreamItem::Event(event) => event,
+            StreamItem::Heartbeat => {
+                // `{}`, not empty: SDK listeners JSON-parse every data line.
+                return Some(Ok(Event::default().event(STREAM_HEARTBEAT_EVENT).data("{}")));
+            }
+        };
         match Event::default()
             .id(&event.event_id)
             .event(&event.event_name)
@@ -191,10 +215,17 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
         }
     });
 
-    Ok(Sse::new(events).keep_alive(
-        KeepAlive::new()
-            .interval(KEEP_ALIVE_INTERVAL)
-            .text("keep-alive"),
+    let heartbeat = [(
+        STREAM_HEARTBEAT_HEADER,
+        STREAM_HEARTBEAT_INTERVAL.as_secs().to_string(),
+    )];
+    Ok((
+        heartbeat,
+        Sse::new(events).keep_alive(
+            KeepAlive::new()
+                .interval(KEEP_ALIVE_INTERVAL)
+                .text("keep-alive"),
+        ),
     ))
 }
 

@@ -88,9 +88,11 @@ to request again.
 This workflow also applies to the existing chat, folder, project, database, call,
 and agent-session Share menus, using the access levels that each supports.
 
-Reviewers see a pending count on **Share**. Entering an item with pending requests
+Reviewers see a pending count on **Share**, after its label (after the icon
+where the header hides the label), and its tooltip and accessible name read
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
-badge. On mobile, review requests in the **People** tab. **Permission requests**
+count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
