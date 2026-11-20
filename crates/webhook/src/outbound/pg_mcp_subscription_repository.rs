@@ -247,6 +247,13 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         user_ids: Vec<String>,
         event_name: &str,
     ) -> Result<Vec<McpEventSubscription>, Self::Err> {
+        // Its cost grows with the audience (at most 50 rows per user), so it
+        // runs under a timeout: ingestion retries the event rather than
+        // holding a connection.
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
         let rows = sqlx::query_as!(
             SubscriptionRow,
             r#"
@@ -259,8 +266,9 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             &user_ids,
             event_name,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await?;
+        transaction.commit().await?;
         into_subscriptions(rows)
     }
 }
