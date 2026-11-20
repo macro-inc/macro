@@ -1595,9 +1595,13 @@ test("CRM settings' Who can use CRM changes the same access as Members' ⋯", as
   const backend = await scriptAuthService(page, 2, {
     failedCrmSaves: 1,
     extraMembers: [{ user_id: ADMIN, role: 'admin' }],
+    agents: [ada('running')],
   });
   await page.goto('/?crm');
   await expect(page.getByText('Who can use CRM')).toBeVisible();
+  // The agent teammate is on the team but, as in Members, gets no switch.
+  await expect(page.getByRole('switch')).toHaveCount(3);
+  await expect(page.locator(`[data-team-member="${ADA}"]`)).toHaveCount(0);
 
   // Owners and admins stay on, with the reason on their row.
   for (const [id, name, summary] of [

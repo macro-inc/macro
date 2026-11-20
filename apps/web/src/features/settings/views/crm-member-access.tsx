@@ -47,9 +47,10 @@ export function CrmMemberAccessSection() {
 function MemberAccessList(props: { team: TeamWithMembers }) {
   const userId = useUserId();
   const save = usePatchTeamMutation();
-  const { agents } = useTeamAgents(() => props.team.team.id);
+  const { agents, settled } = useTeamAgents(() => props.team.team.id);
 
-  // Agent teammates have their own rows in Members, without CRM access.
+  // Agent teammates have their own rows in Members, without CRM access; the
+  // list waits for them so an agent never shows here with a switch.
   const people = createMemo(() => {
     const agentIds = agents().map((agent) => agent.userId);
     return sortTeamMembers(props.team.members).filter(
@@ -69,38 +70,43 @@ function MemberAccessList(props: { team: TeamWithMembers }) {
     });
 
   return (
-    <SettingsSection
-      title={t('crm.memberAccessTitle')}
-      description={t('crm.memberAccessDescription')}
-    >
-      {/* Scrolls inside the card past about eight people, as Members does. */}
-      <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
-        <Key each={people()} by="user_id">
-          {(member) => (
-            <TeamMemberRow
-              userId={member().user_id}
-              name={memberName(member())}
-              email={memberEmail(member())}
-              isCurrentUser={member().user_id === userId()}
-              isAgent={isAgentAccount(tryMacroId(member().user_id))}
-              summary={summary(member())}
-              menu={
-                <ToggleSwitch
-                  size="md"
-                  label={t('crm.memberAccessFor', {
-                    name: memberName(member()),
-                  })}
-                  labelClass="sr-only"
-                  class="shrink-0 justify-center touch:min-h-11 touch:min-w-11"
-                  checked={hasCrmAccess(member(), props.team.crm_member_access)}
-                  disabled={crmAccessFixed(member().role) || save.isPending}
-                  onChange={(enabled) => setAccess(member(), enabled)}
-                />
-              }
-            />
-          )}
-        </Key>
-      </SettingsCard>
-    </SettingsSection>
+    <Show when={settled()}>
+      <SettingsSection
+        title={t('crm.memberAccessTitle')}
+        description={t('crm.memberAccessDescription')}
+      >
+        {/* Scrolls inside the card past about eight people, as Members does. */}
+        <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
+          <Key each={people()} by="user_id">
+            {(member) => (
+              <TeamMemberRow
+                userId={member().user_id}
+                name={memberName(member())}
+                email={memberEmail(member())}
+                isCurrentUser={member().user_id === userId()}
+                isAgent={isAgentAccount(tryMacroId(member().user_id))}
+                summary={summary(member())}
+                menu={
+                  <ToggleSwitch
+                    size="md"
+                    label={t('crm.memberAccessFor', {
+                      name: memberName(member()),
+                    })}
+                    labelClass="sr-only"
+                    class="shrink-0 justify-center touch:min-h-11 touch:min-w-11"
+                    checked={hasCrmAccess(
+                      member(),
+                      props.team.crm_member_access
+                    )}
+                    disabled={crmAccessFixed(member().role) || save.isPending}
+                    onChange={(enabled) => setAccess(member(), enabled)}
+                  />
+                }
+              />
+            )}
+          </Key>
+        </SettingsCard>
+      </SettingsSection>
+    </Show>
   );
 }

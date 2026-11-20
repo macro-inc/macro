@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import { queryReadyGate } from '@queries/gate';
 import { useTeamAgentsQuery } from '@queries/team-agents/team-agents';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
@@ -42,12 +43,16 @@ export function hasCrmAccess(
 
 /**
  * A team's agent teammates, listed once `enable-agent-teammates` is on.
- * Loading is not on, so a roster read before the flag settles lists no agents.
+ * Loading is not on, so a roster read before the flag settles lists no agents;
+ * a failed refetch keeps the agents last read. `settled` is true once the
+ * flag and, when it is on, the first read of the agents have answered.
  */
 export function useTeamAgents(teamId: Accessor<string>) {
   const flag = useFeatureFlag(enableAgentTeammates);
   const enabled = () => !flag().loading && flag().enabled;
   const query = useTeamAgentsQuery(teamId, enabled);
-  const agents = () => (enabled() && query.isSuccess ? query.data.agents : []);
-  return { enabled, agents };
+  const agents = () =>
+    enabled() && queryReadyGate(query) ? query.data.agents : [];
+  const settled = () => !flag().loading && (!enabled() || !query.isPending);
+  return { enabled, agents, settled };
 }
