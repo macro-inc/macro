@@ -2170,3 +2170,82 @@ async fn a_resolved_password_request_reaches_only_the_requesting_agent() {
             .is_none()
     );
 }
+
+#[derive(Clone, Default)]
+struct RecordingMcpFanout {
+    calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    fail: bool,
+}
+
+impl McpEventFanout for RecordingMcpFanout {
+    async fn fan_out(
+        &self,
+        event: &NormalizedWebhookEvent,
+        audience: &[String],
+    ) -> Result<usize, McpSubscriptionError> {
+        lock(&self.calls).push((event.event_name.clone(), audience.to_vec()));
+        if self.fail {
+            return Err(McpSubscriptionError::NotFound);
+        }
+        Ok(audience.len())
+    }
+}
+
+#[tokio::test]
+async fn mcp_fan_out_gets_the_webhook_audience_after_webhooks_are_queued() {
+    let event = document_event_cases().remove(3).event;
+    let TestBrokerEvent::Document(document_event) = event else {
+        panic!("a document case");
+    };
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![
+            PERSONAL_WORKSPACE_ID.to_string(),
+            TEAM_WORKSPACE_ID.to_string(),
+        ],
+        vec![webhook("wh_personal", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let mcp = RecordingMcpFanout::default();
+    let service = service(access, repository, enqueuer.clone()).with_mcp_fanout(mcp.clone());
+
+    service
+        .ingest_document_event(document_event)
+        .await
+        .expect("fan-out succeeds");
+
+    assert_eq!(lock(&enqueuer.state).attempted_messages.len(), 1);
+    assert_eq!(
+        *lock(&mcp.calls),
+        vec![(
+            "document.copied".to_owned(),
+            vec![
+                PERSONAL_WORKSPACE_ID.to_string(),
+                TEAM_WORKSPACE_ID.to_string(),
+            ]
+        )]
+    );
+}
+
+#[tokio::test]
+async fn mcp_fan_out_failure_is_transient() {
+    let TestBrokerEvent::Document(document_event) = document_event_cases().remove(0).event else {
+        panic!("a document case");
+    };
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(vec![PERSONAL_WORKSPACE_ID.to_string()], Vec::new());
+    let mcp = RecordingMcpFanout {
+        fail: true,
+        ..RecordingMcpFanout::default()
+    };
+    let service =
+        service(access, repository, MockEnqueuer::default()).with_mcp_fanout(mcp);
+
+    let error = service
+        .ingest_document_event(document_event)
+        .await
+        .expect_err("fan-out failure fails ingestion");
+
+    assert!(matches!(error, WebhookEventIngestionError::McpFanout(_)));
+    assert!(error.is_transient());
+}

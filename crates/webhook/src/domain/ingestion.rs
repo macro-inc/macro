@@ -12,6 +12,7 @@ mod test;
 
 use crate::domain::{
     events::WebhookTopicEvent,
+    mcp::ports::{McpEventFanout, McpSubscriptionError, NoMcpFanout},
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
@@ -72,6 +73,9 @@ pub enum WebhookEventIngestionError {
     /// Failed to enqueue at least one matched webhook event.
     #[error("failed to enqueue webhook event: {0}")]
     Enqueue(#[source] anyhow::Error),
+    /// Failed to queue the event to matching MCP Events subscriptions.
+    #[error("failed to fan out to mcp subscriptions: {0}")]
+    McpFanout(#[source] McpSubscriptionError),
 }
 
 impl WebhookEventIngestionError {
@@ -89,6 +93,7 @@ impl WebhookEventIngestionError {
                 | Self::WorkspaceResolution(_)
                 | Self::Repository(_)
                 | Self::Enqueue(_)
+                | Self::McpFanout(_)
         )
     }
 }
@@ -155,10 +160,11 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
 
 /// Webhook event ingestion service implementation.
 #[derive(Clone)]
-pub struct WebhookEventIngestionServiceImpl<A, R, Q> {
+pub struct WebhookEventIngestionServiceImpl<A, R, Q, M = NoMcpFanout> {
     entity_access_service: Arc<A>,
     repository: R,
     enqueuer: Q,
+    mcp_fanout: M,
 }
 
 impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
@@ -168,15 +174,29 @@ impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
             entity_access_service,
             repository,
             enqueuer,
+            mcp_fanout: NoMcpFanout,
         }
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, M> WebhookEventIngestionServiceImpl<A, R, Q, M> {
+    /// Also queue each event to the MCP Events subscriptions of its audience.
+    pub fn with_mcp_fanout<N>(self, mcp_fanout: N) -> WebhookEventIngestionServiceImpl<A, R, Q, N> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            mcp_fanout,
+        }
+    }
+}
+
+impl<A, R, Q, M> WebhookEventIngestionServiceImpl<A, R, Q, M>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    M: McpEventFanout,
 {
     /// Resolve the users that currently have access to an entity.
     #[tracing::instrument(skip(self), err)]
@@ -232,6 +252,7 @@ where
             entity_id = %event.entity_id,
             workspace_count = workspace_ids.len(),
             match_count = tracing::field::Empty,
+            mcp_match_count = tracing::field::Empty,
         ),
         err
     )]
@@ -243,14 +264,23 @@ where
         let webhooks = self
             .repository
             .list_active_webhooks_matching_event(
-                workspace_ids,
+                workspace_ids.clone(),
                 event.event_name.clone(),
                 event.entity_id.clone(),
             )
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
         tracing::Span::current().record("match_count", webhooks.len());
-        self.enqueue_all(webhooks, event).await
+        // MCP subscribers are users, so of this audience only the personal
+        // workspaces (user ids) can match: the same people webhooks reach.
+        self.enqueue_all(webhooks, event.clone()).await?;
+        let mcp_match_count = self
+            .mcp_fanout
+            .fan_out(&event, &workspace_ids)
+            .await
+            .map_err(WebhookEventIngestionError::McpFanout)?;
+        tracing::Span::current().record("mcp_match_count", mcp_match_count);
+        Ok(())
     }
 
     async fn enqueue_all(
@@ -714,11 +744,12 @@ pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> Lifecycl
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, M> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q, M>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    M: McpEventFanout,
 {
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(
