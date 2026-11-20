@@ -355,11 +355,8 @@ vi.mock('../../queries', () => ({
       collections.flat().map((channel) => [channel.id, channel])
     ).values(),
   ],
-  useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  resolveReferencedChannels: () => mocks.referencedChannels,
 }));
 vi.mock('@queries/channel/by-ids', () => ({
-  useChannelsByIdsQuery: () => ({ isEnabled: false }),
   useCachedChannelsByIds: () => ({
     channels: () => mocks.referencedChannels,
     pendingIds: () => new Set(mocks.pendingReferenceIds),
@@ -367,6 +364,9 @@ vi.mock('@queries/channel/by-ids', () => ({
     unavailableIds: () => new Set(mocks.unavailableReferenceIds),
     error: () => undefined,
     isLoading: () => false,
+    isFetching: () => false,
+    isSettled: () => true,
+    batchCount: () => 1,
     retry: async () => {},
   }),
 }));
