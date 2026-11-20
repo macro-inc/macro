@@ -321,8 +321,8 @@ impl TursoStorage {
     /// Close failure exposes no recoverable session and requires replacing the
     /// worker before a recovery wipe.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageCloseFailure> {
-        let reason = self.latched_reason();
         self.checkpoint_before_close();
+        let reason = self.latched_reason();
         let Self {
             session,
             connection,
@@ -888,8 +888,8 @@ impl TursoStorage {
 
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
-        let reason = self.latched_reason();
         self.checkpoint_before_close();
+        let reason = self.latched_reason();
         self.connection.release_statements();
         self.connection.close().map_err(|_| {
             TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
@@ -919,19 +919,25 @@ impl TursoStorage {
     }
 
     /// Checkpoints and truncates the WAL once it holds 1,000 frames or more.
-    /// Run it between requests, never inside one; it reports whether it ran
-    /// and how many frames it copied into the database file.
+    /// Run it between requests, never inside one; it reports whether it ran,
+    /// whether it truncated and how many frames it copied into the database
+    /// file. A reader on another connection leaves the WAL untruncated.
+    ///
+    /// A failure other than a reader pinning the WAL latches a reset.
     pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
         self.require_healthy()?;
-        self.connection
-            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+        self.latch_result(
+            self.connection
+                .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES),
+        )
     }
 
     /// The truncating checkpoint Turso runs on close, which deferring turns
-    /// off; best effort, as Turso's own is.
+    /// off. A failure latches, so the close reports a reset: the WAL may hold
+    /// frames past Turso's reset position that the next open would scan.
     fn checkpoint_before_close(&self) {
         if self.connection.checkpoints_deferred() && self.latched_reason().is_none() {
-            let _ = self.connection.checkpoint_over(1);
+            let _ = self.latch_result(self.connection.checkpoint_over(1));
         }
     }
 

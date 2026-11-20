@@ -31,7 +31,7 @@ fn record(write: usize, index: usize) -> (EntityKey<'static>, Record) {
     let mut record = Record::default();
     record.fields.insert(
         "value".into(),
-        CacheValue::String(incompressible(write, index).into()),
+        CacheValue::String(incompressible(write, index)),
     );
     (EntityKey(format!("Document:{index}").into()), record)
 }
@@ -67,18 +67,20 @@ fn deferred_commits_leave_the_checkpoint_to_the_idle_call() {
 
     // Past Turso's 1,000-frame threshold, a COMMIT would have checkpointed
     // and the next write restarted the WAL; deferred, the WAL keeps growing.
+    // Some 26 frames a write: 60 writes pass 1,500 frames.
     let mut writes = 0;
-    while wal_frames(&path) < 1_500 {
+    while writes < 60 {
         write(&mut storage, writes);
         writes += 1;
     }
     let before = wal_frames(&path);
+    assert!(before >= 1_500, "the WAL holds {before} frames");
 
     let checkpoint = storage.checkpoint_if_due().unwrap();
-    assert!(checkpoint.ran);
-    assert!(checkpoint.wal_frames >= 1_500, "{checkpoint:?}");
-    assert!(checkpoint.backfilled_frames > 0, "{checkpoint:?}");
-    assert!(checkpoint.backfilled_frames <= before, "{checkpoint:?}");
+    assert!(checkpoint.ran && checkpoint.truncated, "{checkpoint:?}");
+    assert_eq!(checkpoint.wal_frames, before, "{checkpoint:?}");
+    // Every frame was left to this call: no COMMIT backfilled any of them.
+    assert_eq!(checkpoint.backfilled_frames, before, "{checkpoint:?}");
     assert_eq!(wal_frames(&path), 0, "the checkpoint truncates the WAL");
 
     // Nothing left to do, and writes after a truncation start a new WAL.
@@ -86,6 +88,7 @@ fn deferred_commits_leave_the_checkpoint_to_the_idle_call() {
         storage.checkpoint_if_due().unwrap(),
         WalCheckpoint {
             ran: false,
+            truncated: false,
             wal_frames: 0,
             backfilled_frames: 0
         }

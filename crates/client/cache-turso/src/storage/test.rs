@@ -19,6 +19,7 @@ mod search_prefilter;
 mod search_projection;
 mod search_streaming;
 mod startup;
+mod wal_checkpoint;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
 use std::sync::atomic::{AtomicU8, Ordering};

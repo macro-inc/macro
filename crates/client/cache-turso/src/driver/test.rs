@@ -255,3 +255,81 @@ fn a_text_is_kept_only_from_its_second_use() {
     assert_eq!(db.cached_texts(), 1, "one-off texts take no slot");
     assert_eq!(db.cached_copies(SELECT), 1);
 }
+
+fn deferred_pair(name: &str) -> (Db, Db) {
+    let database = Database::open(
+        Arc::new(MemoryIO::new()),
+        name,
+        OpenOptions::new(Arc::new(SqliteDialect)),
+    )
+    .unwrap();
+    let writer = Db::cached(database.connect().unwrap());
+    writer.defer_checkpoints();
+    execute(
+        &writer,
+        "CREATE TABLE t (id INTEGER PRIMARY KEY, label TEXT NOT NULL)",
+        vec![],
+    )
+    .unwrap();
+    (writer, Db::cached(database.connect().unwrap()))
+}
+
+fn write_pages(db: &Db, from: i64, rows: i64) {
+    write_transaction(db, || {
+        for id in from..from + rows {
+            execute(
+                db,
+                INSERT,
+                vec![Value::from_i64(id), Value::build_text("x".repeat(3_000))],
+            )?;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn a_reader_on_another_connection_gets_a_passive_checkpoint() {
+    let (writer, reader) = deferred_pair("checkpoint-reader.db");
+    write_pages(&writer, 0, 40);
+    execute(&reader, "BEGIN", vec![]).unwrap();
+    let rows = query(&reader, "SELECT count(*) FROM t", vec![]).unwrap();
+    assert_eq!(rows[0][0], Value::from_i64(40));
+
+    // The reader pins the WAL, so it is not truncated; its frames are still
+    // copied, and the log stays where Turso left it.
+    let pinned = writer.checkpoint_over(1).unwrap();
+    assert!(pinned.ran && !pinned.truncated, "{pinned:?}");
+    assert_eq!(pinned.backfilled_frames, pinned.wal_frames, "{pinned:?}");
+    write_pages(&writer, 40, 5);
+
+    execute(&reader, "COMMIT", vec![]).unwrap();
+    let released = writer.checkpoint_over(1).unwrap();
+    assert!(released.ran && released.truncated, "{released:?}");
+    let rows =
+        read_transaction(&writer, || query(&writer, "SELECT count(*) FROM t", vec![])).unwrap();
+    assert_eq!(rows[0][0], Value::from_i64(45));
+}
+
+#[test]
+fn a_busy_truncation_falls_back_without_failing() {
+    let (writer, _reader) = deferred_pair("checkpoint-busy.db");
+    write_pages(&writer, 0, 10);
+    arm_checkpoint_failure(CheckpointFault::TruncateBusy);
+    let busy = writer.checkpoint_over(1).unwrap();
+    assert!(busy.ran && !busy.truncated, "{busy:?}");
+    assert_eq!(busy.backfilled_frames, busy.wal_frames, "{busy:?}");
+}
+
+#[test]
+fn a_failed_checkpoint_requires_a_reset() {
+    let (writer, _reader) = deferred_pair("checkpoint-failure.db");
+    write_pages(&writer, 0, 10);
+    arm_checkpoint_failure(CheckpointFault::Fail);
+    assert_eq!(
+        writer.checkpoint_over(1),
+        Err(TursoStorageError::reset(
+            PhysicalResetReason::TransactionOutcomeUncertain
+        ))
+    );
+}
