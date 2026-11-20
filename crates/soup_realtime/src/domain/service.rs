@@ -199,14 +199,33 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
                 .context("failed to expand current user access")?
         };
 
+        // Each audience is counted once, where it is built: a roster read now
+        // when a patch is sent to its members, a looked-up list always (its
+        // entities are all access sources), and a named patch's own list below.
+        let mut recipient_sets = HashSet::new();
+        let mut counted_rosters = HashSet::with_capacity(current_rosters.len());
+        for source in patches
+            .iter()
+            .filter_map(|patch| patch.access_source.as_ref())
+        {
+            if let Some(users) = current_rosters.get(source)
+                && !users.is_empty()
+                && counted_rosters.insert(source)
+            {
+                recipient_sets.insert(users.clone());
+            }
+        }
+
         // Entities sharing access point at one deduplicated recipient list.
         let mut recipient_lists = Vec::with_capacity(shared_access.len());
         let mut recipient_list_by_source = HashMap::with_capacity(access_sources.len());
-        let mut recipient_sets = HashSet::new();
         for access in shared_access {
             let mut users = access.users;
             users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
             users.dedup();
+            if !users.is_empty() {
+                recipient_sets.insert(users.clone());
+            }
             for entity in access.entities {
                 recipient_list_by_source.insert(entity, recipient_lists.len());
             }
@@ -247,11 +266,11 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
                 );
                 users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
                 users.dedup();
+                if !users.is_empty() {
+                    recipient_sets.insert(users.clone());
+                }
                 Cow::Owned(users)
             };
-            if !users.is_empty() {
-                recipient_sets.insert(users.to_vec());
-            }
             let messages = users
                 .iter()
                 .map(|user_id| SoupRealtimeMessage::new(user_id.clone(), patch.patch.clone()))

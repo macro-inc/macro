@@ -501,6 +501,10 @@ async fn a_former_member_added_back_hears_only_the_members_patch() {
         ]
     );
     assert_eq!(delivery.publish_count, 3);
+    assert_eq!(
+        delivery.recipient_sets,
+        HashSet::from([vec![user("back"), user("member")], vec![user("gone")]])
+    );
     // One roster read now serves both patches; the cached lookup is not used.
     assert_eq!(harness.access_calls.load(Ordering::SeqCst), 0);
     assert_eq!(
@@ -557,6 +561,32 @@ async fn a_failed_roster_read_fails_the_batch_before_publishing() {
 
     assert!(result.is_err());
     assert!(harness.messages.lock().expect("messages lock").is_empty());
+}
+
+#[tokio::test]
+async fn patches_sharing_an_audience_count_it_once() {
+    let harness = harness(vec![user("one"), user("two")], false, HashSet::new());
+
+    let delivery = harness
+        .service
+        .notify_users(vec![
+            SoupRealtimePatch::for_entity(Patch::Updated(document(DOCUMENT_ID))),
+            SoupRealtimePatch::for_entity(Patch::Updated(document(OTHER_DOCUMENT_ID))),
+            SoupRealtimePatch::for_entity(Patch::Updated(channel(DOCUMENT_ID))),
+            SoupRealtimePatch::for_entity(Patch::Deleted(channel(DOCUMENT_ID))),
+            SoupRealtimePatch::only_for_former_members(
+                Patch::Deleted(channel(DOCUMENT_ID)),
+                vec![user("gone")],
+            ),
+        ])
+        .await
+        .expect("patches are published");
+
+    assert_eq!(delivery.publish_count, 9);
+    assert_eq!(
+        delivery.recipient_sets,
+        HashSet::from([vec![user("one"), user("two")], vec![user("gone")]])
+    );
 }
 
 #[tokio::test]

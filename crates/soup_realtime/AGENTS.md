@@ -80,8 +80,9 @@ tasks itself.
   (`UserAccessExpander::current_channel_members`), once per channel in a
   batch, and the members' update uses the same read: a removed member added
   back before the event is consumed gets only the members' update. Channel
-  events are keyed by channel id, so a removal and a re-add arrive in order.
-  Every channel settings patch raises `channel.updated`, so conversions and
+  side effects publish from separate tasks, so a re-add can be published
+  before the removal it follows; the removal's roster read still sees the
+  rejoin. Every channel settings patch raises `channel.updated`, so conversions and
   auto-join changes reach members too.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through

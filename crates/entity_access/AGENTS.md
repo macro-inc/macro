@@ -81,7 +81,10 @@ the entity-access domain service.
   channel members once per distinct source). CRM audiences always read current
   membership; other kinds and single ids use the cached per-entity
   `get_users_by_entity`. Keep it in step with
-  `get_entity_users`.
+  `get_entity_users`. Channel rosters there are cached for 10 s per process
+  (`get_channel_users`); `get_current_channel_users` reads one now, for a
+  caller reacting to a membership change (`soup_realtime`).
+  `tests/current_channel_users.rs` runs with that cache on.
 - `get_user_source_ids` is cached for 10 s per process and concurrent misses
   for one user share one query through `single_flight`. A failure then arrives
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
