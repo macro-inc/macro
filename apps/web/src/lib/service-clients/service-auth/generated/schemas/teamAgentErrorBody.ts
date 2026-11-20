@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TeamAgentErrorBodyCode } from './teamAgentErrorBodyCode';
+import type { TeamAgentErrorBodyReason } from './teamAgentErrorBodyReason';
+import type { TeamAgentErrorBodyResource } from './teamAgentErrorBodyResource';
 import type { TeamAgentErrorBodySize } from './teamAgentErrorBodySize';
 
 /**
@@ -15,5 +17,7 @@ export interface TeamAgentErrorBody {
   code?: TeamAgentErrorBodyCode;
   /** Human-readable message. */
   message: string;
+  reason?: TeamAgentErrorBodyReason;
+  resource?: TeamAgentErrorBodyResource;
   size?: TeamAgentErrorBodySize;
 }

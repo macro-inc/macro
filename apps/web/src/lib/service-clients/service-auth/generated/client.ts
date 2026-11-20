@@ -73,6 +73,7 @@ import type {
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
+  MoveTeammate,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -128,6 +129,7 @@ import type {
   TeamInviteLinkTokenRequest,
   TeamInvitesResponse,
   TeamMember,
+  TeammateHosts,
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
@@ -6741,8 +6743,10 @@ export const listTeamAgents = async (
 };
 
 /**
- * @summary Invite an agent teammate and buy its computer. Requires a team admin or
-owner using their own credential. The agent comes back `provisioning`.
+ * @summary Invite an agent teammate and buy its computer, or install it on one of the
+inviter's own machines (`computer: {kind: "own", harnessId}`). Requires a
+team admin or owner using their own credential. The agent comes back
+`provisioning`.
  */
 export type createTeamAgentResponse201 = {
   data: TeamAgent;
@@ -6765,8 +6769,13 @@ export type createTeamAgentResponse402 = {
 };
 
 export type createTeamAgentResponse403 = {
-  data: ErrorResponse;
+  data: TeamAgentErrorBody;
   status: 403;
+};
+
+export type createTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
 };
 
 export type createTeamAgentResponse409 = {
@@ -6792,6 +6801,7 @@ export type createTeamAgentResponseError = (
   | createTeamAgentResponse401
   | createTeamAgentResponse402
   | createTeamAgentResponse403
+  | createTeamAgentResponse404
   | createTeamAgentResponse409
   | createTeamAgentResponse500
   | createTeamAgentResponse502
@@ -6826,6 +6836,67 @@ export const createTeamAgent = async (
     status: res.status,
     headers: res.headers,
   } as createTeamAgentResponse;
+};
+
+/**
+ * @summary The acting admin's own machines, each with whether it can host an agent
+teammate now, for the Invite dialog.
+ */
+export type listTeammateHostsResponse200 = {
+  data: TeammateHosts;
+  status: 200;
+};
+
+export type listTeammateHostsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeammateHostsResponse403 = {
+  data: TeamAgentErrorBody;
+  status: 403;
+};
+
+export type listTeammateHostsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listTeammateHostsResponseSuccess = listTeammateHostsResponse200 & {
+  headers: Headers;
+};
+export type listTeammateHostsResponseError = (
+  | listTeammateHostsResponse401
+  | listTeammateHostsResponse403
+  | listTeammateHostsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listTeammateHostsResponse =
+  | listTeammateHostsResponseSuccess
+  | listTeammateHostsResponseError;
+
+export const getListTeammateHostsUrl = () => {
+  return `/team_agents/hosts`;
+};
+
+export const listTeammateHosts = async (
+  options?: RequestInit
+): Promise<listTeammateHostsResponse> => {
+  const res = await fetch(getListTeammateHostsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeammateHostsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeammateHostsResponse;
 };
 
 /**
@@ -7055,6 +7126,91 @@ export const setTeamAgentAvatar = async (
     status: res.status,
     headers: res.headers,
   } as setTeamAgentAvatarResponse;
+};
+
+/**
+ * @summary Move an agent on an own machine to another of the admin's own machines.
+The machine it leaves stops it first, so its last push lands; then it
+runs on the new machine with fresh credentials. Requires a team admin or
+owner using their own credential.
+ */
+export type moveTeamAgentResponse200 = {
+  data: TeamAgent;
+  status: 200;
+};
+
+export type moveTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type moveTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type moveTeamAgentResponse403 = {
+  data: TeamAgentErrorBody;
+  status: 403;
+};
+
+export type moveTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type moveTeamAgentResponse409 = {
+  data: TeamAgentErrorBody;
+  status: 409;
+};
+
+export type moveTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type moveTeamAgentResponseSuccess = moveTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type moveTeamAgentResponseError = (
+  | moveTeamAgentResponse400
+  | moveTeamAgentResponse401
+  | moveTeamAgentResponse403
+  | moveTeamAgentResponse404
+  | moveTeamAgentResponse409
+  | moveTeamAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type moveTeamAgentResponse =
+  | moveTeamAgentResponseSuccess
+  | moveTeamAgentResponseError;
+
+export const getMoveTeamAgentUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/install`;
+};
+
+export const moveTeamAgent = async (
+  agentUserId: string,
+  moveTeammate: MoveTeammate,
+  options?: RequestInit
+): Promise<moveTeamAgentResponse> => {
+  const res = await fetch(getMoveTeamAgentUrl(agentUserId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(moveTeammate),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: moveTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as moveTeamAgentResponse;
 };
 
 /**

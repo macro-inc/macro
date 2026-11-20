@@ -45,6 +45,7 @@ import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import teamMembers from './en/team-members';
+import teammateHosts from './en/teammate-hosts';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -99,6 +100,7 @@ export default {
   subRoutines,
   tabs,
   teamAgents,
+  teammateHosts,
   teamMembers,
   tutorials,
   viewMenus,

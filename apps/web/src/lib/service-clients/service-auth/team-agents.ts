@@ -10,6 +10,7 @@ import type {
   CreateTeamAgent,
   TeamAgent,
   TeamAgents,
+  TeammateHosts,
 } from './generated/schemas';
 import {
   type PurchaseRefusalErrorCode,
@@ -20,9 +21,14 @@ export type {
   AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
+  FloorResource,
+  HostEligibility,
+  HostIneligibility,
   TeamAgent,
   TeamAgentStatus,
   TeamAgents,
+  TeammateHost,
+  TeammateHosts,
 } from './generated/schemas';
 
 export type CreateTeamAgentErrorCode =
@@ -99,6 +105,19 @@ export const teamAgentsClient = {
       method: 'POST',
       signal,
       body: JSON.stringify(request),
+      errorResponseHandler: createError,
+    }),
+  /** The caller's own paired machines, and whether each can host an agent. */
+  hosts: () => fetchWithToken<TeammateHosts>(`${base}/hosts`),
+  /** Move an agent running on one of the caller's machines to another. */
+  move: (agentUserId: string, harnessId: string) =>
+    fetchWithToken<
+      TeamAgent,
+      CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
+    >(`${base}/${encodeURIComponent(agentUserId)}/install`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ harnessId }),
       errorResponseHandler: createError,
     }),
   remove: (agentUserId: string) =>

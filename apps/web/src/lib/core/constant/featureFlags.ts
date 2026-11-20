@@ -170,6 +170,17 @@ export const enableAgentTeammates = defineFlag({
 });
 
 /**
+ * *My own computer* in Invite an agent: the agent runs in the teammate
+ * runtime container on one of the inviter's own machines. The backend checks
+ * the same key on the acting person.
+ */
+export const enableSelfHostedTeammates = defineFlag({
+  key: 'enable-self-hosted-teammates',
+  env: 'ENABLE_SELF_HOSTED_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
+});
+
+/**
  * Auto in the agent composer's mode switch: the agent harness picks Chat or
  * Code per prompt. Macro employees only; the backend checks the same key.
  */
