@@ -75,12 +75,24 @@ An attachment whose copy keeps failing to download or store stops being tried
 the same way, counted on the attachment rather than on the projection event
 that tries it: after 3 refusals (`permanent`, `forbidden` or a 404) or 50
 failures of any other kind, a download Graph keeps cutting off included (about
-seven hours of one event's retries). Throttling, token failures, a lost lease
+a day of one event's retries). Throttling, token failures, a lost lease
 and lock timeouts never count. The attachment keeps its upload claim and gets
 `upload_abandoned_at`, an `"outlook attachment abandoned"` WARN names its
 `@attachment_id`, failures and `@defer_reason`, and the projection that waited
 on it completes. Nothing revives it: the app shows it as an attachment Macro
 holds no copy of, and opening one downloads it from Graph on demand.
+
+A projection event (what applies a synced change to what the app shows:
+reindexing, refreshes, notifications, CRM jobs, attachments) that keeps
+failing stops the same way as a message read, with the same bounds and
+backoff, and so does one whose claims keep ending with no outcome
+(`unfinished`, a worker that stopped mid-projection, five times). Its entry
+is deleted, and a `"mailbox projection abandoned"` WARN names its `@link_id`,
+`@event_id`, `@event_kind`, attempts and `@defer_reason`. The message itself
+is already stored; search and open views keep its previous state until a
+later event for the link supersedes it, which any further change to the
+message or its thread queues. Its notification and activity event are not
+sent.
 
 A message Graph answers 404 for is settled as gone (`@outlook.outcome:absent`).
 Live work is read twice more first, 30 and 60 s apart

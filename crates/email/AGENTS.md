@@ -615,6 +615,17 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
+- A projection event that keeps failing is given up as a message read is:
+  `MailboxProjectionService::project_leased` decides with `message_retry`
+  (backoff included), and `finish_projection` gives an uncounted claim back to
+  `attempts`. One whose claims keep ending without an outcome is given up
+  unprojected after `UNFINISHED_CLAIM_LIMIT`: `claim_projection` counts
+  `email_projection_outbox.unfinished_claims` from a lease still set when it
+  claims, since every recorded outcome deletes the entry or clears its lease.
+  A given-up entry is deleted, not parked: an event is projected once, a later
+  event for the link carries newer state, and a parked entry's `dedupe_key`
+  would swallow a re-enqueue of the same message version. It logs one
+  `mailbox projection abandoned` WARN holding only ids and kinds.
 - A projection's attachment download or upload that keeps failing is counted
   on the attachment (`email_attachments.upload_failures`), not the event, and
   abandoned at the limit `attachment_failure_limit` in

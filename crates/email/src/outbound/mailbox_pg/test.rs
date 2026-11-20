@@ -10,6 +10,7 @@ mod live_pass;
 mod lock_timeouts;
 mod outlook_import;
 mod outlook_subscriptions;
+mod projection_retries;
 mod retries;
 mod unstorable_values;
 
