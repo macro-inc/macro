@@ -7,8 +7,9 @@
 //! flight, the rest waiting their turn in the order they came, and one still
 //! waiting at the deadline refused rather than run late.
 //!
-//! A person and each agent or routine acting for them are separate callers,
-//! so a person's own searches never wait behind their agent's. Lanes live in
+//! A person in the app, the services searching for them, their API
+//! credentials and each agent or routine acting for them are separate callers,
+//! so a person's own app searches never wait behind a program's. Lanes live in
 //! this process's memory: every replica keeps its own, so what one caller has
 //! in flight across the service grows with the replica count, as with
 //! `agent_egress`'s connected-app lanes.
@@ -59,15 +60,31 @@ impl SearchCaller {
             actor,
         }
     }
+
+    /// Which kind of lane this caller waits in, as a span value.
+    pub fn lane_kind(&self) -> &'static str {
+        match self.actor {
+            SearchActor::App => "app",
+            SearchActor::Service => "service",
+            SearchActor::Api => "api",
+            SearchActor::Agent(_) => "agent",
+            SearchActor::Routine(_) => "routine",
+        }
+    }
 }
 
 /// Who acts with a user's access.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SearchActor {
-    /// The person: their app session, their API key, or a service searching
-    /// on their behalf.
-    Person,
-    /// An agent acting for them, by its bot id.
+    /// The person in one of the apps, on their own session.
+    App,
+    /// Another service searching for them, such as the AI tools of a chat or
+    /// an agent's native search tools.
+    Service,
+    /// An API credential of theirs that no agent or routine signs for: an API
+    /// key, the SDK or MCP.
+    Api,
+    /// An agent acting for them, by its bot id, across all its sessions.
     Agent(Uuid),
     /// A routine's run acting for them with no agent, by its routine id.
     Routine(Uuid),

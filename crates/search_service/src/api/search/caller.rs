@@ -19,14 +19,26 @@ pub(in crate::api::search) fn caller_label(user: &MacroUserAuthentication) -> &'
     }
 }
 
-/// Whose lane a search waits in: the user's own, or the agent's or routine's
-/// that the credential is signed for, so a person never waits behind a
-/// program acting for them.
+/// Whose lane a search waits in. A signed agent or routine is its own
+/// caller; otherwise the credential's kind decides, so the person's app
+/// searches never wait behind a service's or an API client's searches for
+/// them, which carry no agent even when an agent's tool sent them.
 pub(in crate::api::search) fn search_caller(user: &MacroUserAuthentication) -> SearchCaller {
-    let actor = match (user.agent_id, user.routine_id) {
-        (Some(agent), _) => SearchActor::Agent(agent.as_uuid()),
-        (None, Some(routine)) => SearchActor::Routine(routine),
-        (None, None) => SearchActor::Person,
+    let actor = match (user.agent_id, user.routine_id, &user.origin) {
+        (Some(agent), _, _) => SearchActor::Agent(agent.as_uuid()),
+        (None, Some(routine), _) => SearchActor::Routine(routine),
+        (None, None, CredentialOrigin::Session) => SearchActor::App,
+        (None, None, CredentialOrigin::Internal) => SearchActor::Service,
+        (
+            None,
+            None,
+            CredentialOrigin::MacroApiJwt
+            | CredentialOrigin::ScopedMacroApiJwt
+            | CredentialOrigin::UserApiKey
+            | CredentialOrigin::AccountManager(_)
+            | CredentialOrigin::Bot
+            | CredentialOrigin::Harness,
+        ) => SearchActor::Api,
     };
     SearchCaller::new(&user.user_context.user_id, actor)
 }

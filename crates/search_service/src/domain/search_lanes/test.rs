@@ -62,10 +62,7 @@ async fn a_person_never_waits_behind_their_own_agent() {
     });
 
     let own = lanes
-        .take_turn(SearchCaller::new(
-            "macro|a@example.com",
-            SearchActor::Person,
-        ))
+        .take_turn(SearchCaller::new("macro|a@example.com", SearchActor::App))
         .await
         .unwrap();
     assert!(!own.queued);
@@ -180,4 +177,68 @@ async fn waiting_searches_take_their_turns_in_the_order_they_came() {
     drop(early);
     let late = late.await.unwrap().unwrap();
     assert_eq!(late.waited, Duration::from_secs(2));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_search_cancelled_while_waiting_gives_up_its_place() {
+    let lanes = lanes();
+    let first = lanes
+        .take_turn(agent_of("macro|a@example.com"))
+        .await
+        .unwrap();
+    let _second = lanes
+        .take_turn(agent_of("macro|a@example.com"))
+        .await
+        .unwrap();
+
+    let mut cancelled = tokio::spawn({
+        let lanes = Arc::clone(&lanes);
+        async move { lanes.take_turn(agent_of("macro|a@example.com")).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), &mut cancelled)
+            .await
+            .is_err()
+    );
+    let mut next = tokio::spawn({
+        let lanes = Arc::clone(&lanes);
+        async move { lanes.take_turn(agent_of("macro|a@example.com")).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), &mut next)
+            .await
+            .is_err()
+    );
+
+    cancelled.abort();
+    assert!(cancelled.await.unwrap_err().is_cancelled());
+    drop(first);
+    let next = next.await.unwrap().unwrap();
+    assert_eq!(next.waited, Duration::from_secs(1));
+}
+
+#[tokio::test(start_paused = true)]
+async fn dropping_idle_lanes_keeps_a_busy_one() {
+    let lanes = Arc::new(SearchLanes::new(LanePolicy {
+        concurrency: 1,
+        max_wait: Duration::from_secs(20),
+    }));
+    let _busy = lanes
+        .take_turn(agent_of("macro|busy@example.com"))
+        .await
+        .unwrap();
+    for idle in 0..MAX_LANES {
+        let turn = lanes
+            .take_turn(agent_of(&format!("macro|idle-{idle}@example.com")))
+            .await
+            .unwrap();
+        drop(turn);
+    }
+
+    let refused = lanes
+        .take_turn(agent_of("macro|busy@example.com"))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.waited, Duration::from_secs(20));
+    assert!(lanes.lanes.lock().unwrap().len() < MAX_LANES);
 }

@@ -2,7 +2,7 @@ use crate::api::search::simple::filter::{
     EmailSearch, FilterVariantToSearchArgs, ScopedCalendarEventFilters, email_search,
 };
 use crate::domain::email_search::ThreadStates;
-use crate::domain::search_lanes::{LaneTurn, SearchLanes};
+use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
 use crate::api::search::caller::{caller_label, search_caller};
 use crate::api::search::crm_company;
@@ -382,6 +382,7 @@ fn unified_search_span(
         search.email_state_threads_checked = tracing::field::Empty,
         search.email_state_threads_kept = tracing::field::Empty,
         search.email_state_bound_reached = tracing::field::Empty,
+        search.lane = tracing::field::Empty,
         search.lane_wait_ms = tracing::field::Empty,
         search.lane_outcome = tracing::field::Empty,
     )
@@ -426,22 +427,30 @@ pub(in crate::api::search) async fn perform_unified_search(
 > {
     let span = unified_search_span(user, &query_params, &req);
     async {
-        let _turn = take_search_turn(&ctx.search_lanes, user).await?;
-        search_unified_sources(ctx, &user.user_context, crm_access, query_params, req)
-            .await
-            .inspect_err(|error| tracing::error!(error = %error))
+        search_unified_sources(
+            ctx,
+            &user.user_context,
+            search_caller(user),
+            crm_access,
+            query_params,
+            req,
+        )
+        .await
+        .inspect_err(|error| tracing::error!(error = %error))
     }
     .instrument(span)
     .await
 }
 
-/// Wait for the caller's turn to search, recording on the current span how
-/// long it waited and whether it got one. Held until the search ends.
+/// Wait for the caller's turn to search, recording on the current span which
+/// lane it waited in, how long, and whether it got a turn. Held until the
+/// search ends.
 async fn take_search_turn(
     lanes: &SearchLanes,
-    user: &MacroUserAuthentication,
+    caller: SearchCaller,
 ) -> Result<LaneTurn, SearchError> {
-    let turn = lanes.take_turn(search_caller(user)).await;
+    tracing::Span::current().record("search.lane", caller.lane_kind());
+    let turn = lanes.take_turn(caller).await;
     let (waited, outcome) = match &turn {
         Ok(turn) if turn.queued => (turn.waited, "queued"),
         Ok(turn) => (turn.waited, "immediate"),
@@ -463,6 +472,7 @@ async fn take_search_turn(
 async fn search_unified_sources(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
+    caller: SearchCaller,
     crm_access: Option<&CrmTeamReceipt<MemberTeamRole>>,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
@@ -545,6 +555,11 @@ async fn search_unified_sources(
             uuid::Uuid::parse_str(id).map_err(|_| SearchError::InvalidAgentSessionId(id.clone()))
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    // The request is valid as far as it can be told without reading anything,
+    // so it waits for its caller's turn only now: a malformed one fails at
+    // once instead of waiting behind the caller's other searches.
+    let _turn = take_search_turn(&ctx.search_lanes, caller).await?;
     let agent_sessions = ctx
         .agent_session_search()
         .scope(

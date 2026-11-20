@@ -58,18 +58,25 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
-- A unified search (`/search`, `/search/simple`, and the internal mount)
-  first takes its caller's turn in `domain::search_lanes`: two searches in
-  flight per caller per process, the rest waiting in arrival order, and one
-  still waiting after 20 s answered 429 (`SearchError::Busy`, `Retry-After`).
-  The caller is the user plus who acts (`api::search::caller::search_caller`):
-  the person, or the agent or routine the credential is signed for, so a
-  person never waits behind their own agent. OpenSearch has few search threads
-  per node, and one caller's burst of heavy searches filled them for everyone.
-  The turn covers the OpenSearch and Postgres search, not enrichment; the span
-  records `search.lane_wait_ms` and `search.lane_outcome` (`immediate`,
-  `queued`, `refused`). Lanes are per process, so a caller's bound grows with
-  the replica count; DSS builds one `SearchLanes` for both search mounts.
+- A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
+  for its caller's turn in `domain::search_lanes` once the request is
+  validated and before it reads anything: two searches in flight per caller
+  per process, the rest waiting in arrival order, and one still waiting after
+  20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
+  search threads per node, and one caller's burst of heavy searches filled
+  them for everyone. The caller (`api::search::caller::search_caller`) is the
+  user plus who acts: a signed agent (one lane across all its sessions for
+  that user) or routine, else the credential's kind: the app session, a
+  service searching for them (`Internal`: the AI tools, an agent's native
+  search tools, routine drafting), or an API credential. So a person's app
+  searches never wait behind a program's or a service's. The turn covers the
+  Postgres and OpenSearch search, not enrichment; the span records
+  `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
+  (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
+  bound grows with the replica count; DSS builds one `SearchLanes` for both
+  mounts. The internal mount runs under `connection_drop_prevention_handler`,
+  so a service search whose caller gave up keeps its place in the service's
+  lane and runs to the end.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call

@@ -18688,6 +18688,7 @@ dependencies = [
  "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
+ "macro_auth",
  "macro_authorization",
  "macro_db_client",
  "macro_user_id",
