@@ -687,6 +687,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "call",
+ "capsolver_emulator",
  "channels",
  "chat",
  "chrono",
@@ -4240,6 +4241,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629a66d692cb9ff1a1c664e41771b3dcaf961985a9774c0eb0bd1b51cf60a48"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "capsolver_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "macro_entrypoint",
+ "macro_env",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
