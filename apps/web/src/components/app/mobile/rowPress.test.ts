@@ -1,8 +1,11 @@
+import { touchHandler } from '@core/directive/touchHandler';
 import { fireEvent } from '@solidjs/testing-library';
+import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { holdRowPress, installRowPress } from './rowPress';
+import { clearRowPress, holdRowPress, installRowPress } from './rowPress';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
+vi.mock('@core/mobile/haptics', () => ({ hapticImpact: () => {} }));
 
 let uninstall: () => void;
 let row: HTMLElement;
@@ -94,6 +97,51 @@ describe('row press', () => {
       ],
     });
     expect(pressed()).toBe(false);
+  });
+
+  it('clears on a context menu, and when a row menu clears the press', () => {
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(100);
+    fireEvent.contextMenu(label);
+    expect(pressed()).toBe(false);
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    fireEvent.click(label);
+    expect(pressed()).toBe(false);
+
+    // A long press opens the row's action drawer, even mid-navigation.
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(100);
+    const event = new MouseEvent('click', { bubbles: true });
+    label.dispatchEvent(event);
+    holdRowPress(event);
+    clearRowPress(label);
+    expect(pressed()).toBe(false);
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    vi.advanceTimersByTime(1000);
+    expect(pressed()).toBe(false);
+
+    // A menu trigger that wraps the row clears the row inside it.
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(100);
+    clearRowPress(document.body);
+    expect(pressed()).toBe(false);
+  });
+
+  it('clears when a long press opens the row menu', () => {
+    const onLongPress = vi.fn();
+    createRoot((dispose) => {
+      touchHandler(row, () => ({ onLongPress }));
+      fireEvent.touchStart(label, touchAt(20));
+      vi.advanceTimersByTime(499);
+      expect(pressed()).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(onLongPress).toHaveBeenCalledOnce();
+      expect(pressed()).toBe(false);
+      fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+      vi.advanceTimersByTime(1000);
+      expect(pressed()).toBe(false);
+      dispose();
+    });
   });
 
   it('ends a press whose touched element left the page under the finger', () => {

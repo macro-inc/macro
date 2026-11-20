@@ -445,10 +445,11 @@ focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
 Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
 conversation and a pinned favorite), Home, a Soup list, the Notifications
-inbox, Agents and Search on phone and tablet: each shows the same rendered
-grey at its centre and edge, holds it after release and through a quick tap's
-click, and never shows it for a press that turns into a scroll
-(`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots).
+inbox, Agents (sidebar and phone list), Projects and Search on phone and
+tablet: each shows the same rendered grey at its centre and edge, holds it
+after release and through a quick tap's click, never shows it for a press that
+turns into a scroll, and drops it when a phone long press opens the row's
+action drawer (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots).
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,

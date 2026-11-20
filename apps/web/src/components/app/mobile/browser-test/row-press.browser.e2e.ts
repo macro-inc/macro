@@ -8,12 +8,23 @@ import {
 
 /**
  * The touch list rows of Chat (a conversation and a pinned favorite), Home,
- * Soup lists, the Notifications inbox, Agents and Search show the same
+ * Soup lists, the Notifications inbox, Agents (sidebar and phone list),
+ * Projects and Search show the same
  * pressed grey while pressed, through the app's one row press (rowPress.ts),
  * and drop it after the finger lifts or once the press turns into a scroll.
  */
 
-const ROWS = ['chat', 'pin', 'home', 'list', 'notification', 'agent', 'search'];
+const ROWS = [
+  'chat',
+  'pin',
+  'home',
+  'list',
+  'notification',
+  'agent',
+  'agent-phone',
+  'project',
+  'search',
+];
 const SCREENSHOTS = process.env.ROW_PRESS_SCREENSHOT_DIR;
 
 type Point = { x: number; y: number };
@@ -29,10 +40,10 @@ async function spotsIn(page: Page, row: string): Promise<Point[]> {
       { x: box.x + box.width / 2, y: box.y + 1 },
     ];
   }
-  // Agents and Soup list rows hold their time at the end, so look between
-  // title and time.
-  const timed = row === 'agent' || row === 'list';
-  const x = timed ? box.x + box.width / 2 : box.x + box.width - 14;
+  // Agents and Soup list rows hold their time at the end, and phone Agents
+  // and Projects rows their controls, so look between title and end.
+  const middle = ['agent', 'list', 'agent-phone', 'project'].includes(row);
+  const x = middle ? box.x + box.width / 2 : box.x + box.width - 14;
   return [
     { x, y: box.y + box.height / 2 },
     { x, y: box.y + 1 },
@@ -200,6 +211,27 @@ test('a press that turns into a scroll never shows the grey', async ({
   await page.waitForTimeout(400);
   await expect(page.locator('body')).not.toHaveAttribute('data-flashed');
   await expect(opened(page)).toHaveAttribute('data-opened', '');
+});
+
+test('a long press that opens the row menu drops the grey', async ({
+  page,
+}) => {
+  test.skip(
+    test.info().project.name === 'tablet',
+    'Tablets open the desktop context menu, which keeps the grey until 350ms after the lift'
+  );
+  const cdp = await page.context().newCDPSession(page);
+  const grey = await pressedSwatch(page);
+  const [spot] = await spotsIn(page, 'project-menu');
+
+  await touch(cdp, 'touchStart', spot);
+  await expect.poll(() => offGrey(page, spot, grey)).toBeLessThan(1);
+  await expect(opened(page)).toHaveAttribute('data-opened', 'project-menu');
+  // Still held, and already clear.
+  expect(await offGrey(page, spot, grey)).toBeGreaterThan(5);
+  await touch(cdp, 'touchEnd');
+  await page.waitForTimeout(400);
+  expect(await offGrey(page, spot, grey)).toBeGreaterThan(5);
 });
 
 test('a held press that starts scrolling drops the grey', async ({ page }) => {

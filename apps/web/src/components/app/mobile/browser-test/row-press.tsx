@@ -1,5 +1,5 @@
-// The real touch list rows of Chat, Home, Soup lists, Notifications, Agents
-// and Search over synthetic entities, with the app's row press installed;
+// The real touch list rows of Chat, Home, Soup lists, Notifications, Agents,
+// Projects and Search over synthetic entities, with the app's row press installed;
 // no network.
 import '@fontsource-variable/inter';
 import '../../../../index.css';
@@ -7,6 +7,7 @@ import '../../../../index.css';
 // @entity; enter it the same way.
 import '@entity';
 import { AgentSessionRow } from '@app/features/agents-view/components/AgentSessionRow';
+import { PhoneConversationRow } from '@app/features/agents-view/views/shared/phone-conversation-row/phone-conversation-row';
 import { ChannelFeedRow } from '@app/features/channels-view/components/ChannelFeedRow';
 import {
   ChannelPin,
@@ -14,6 +15,8 @@ import {
 } from '@app/features/channels-view/components/ChannelPins';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { NotificationRow } from '@app/features/notifications-inbox/components/notification-row';
+import { ProjectRowMenu } from '@app/features/projects/components/project-row-menu';
+import { ProjectRow } from '@app/features/projects/project-row';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -57,6 +60,16 @@ const channel = (id: string, name: string): ChannelEntity => {
     channelType: 'public',
     isParticipant: true,
   };
+};
+
+const project = {
+  project: {
+    id: 'project',
+    name: 'Launch',
+    updatedAt: '2026-11-01T09:00:00Z',
+    access: 'view' as const,
+  },
+  properties: [],
 };
 
 function Fixture() {
@@ -138,6 +151,66 @@ function Fixture() {
             timestamp="9:00 AM"
             onOpen={open('agent')}
           />
+        </section>
+        {/* Mounted as the phone Agents list mounts its rows, inside the
+            context menu's row container. */}
+        <section data-testid="agent-phone" data-soup-entity>
+          <PhoneConversationRow
+            conversation={{
+              id: 'agent-phone',
+              type: 'chat',
+              name: 'Draft the notes',
+              ownerId: 'macro|viewer@example.test',
+            }}
+            mode="chat"
+            actions={{
+              openPullRequest: () => {},
+              openBranch: () => {},
+              copyBranch: async () => true,
+              unarchive: async () => true,
+            }}
+            onOpen={open('agent-phone')}
+          />
+        </section>
+        <section data-testid="project">
+          <ProjectRow
+            rowId="project"
+            row={project}
+            highlighted={false}
+            checked={false}
+            onFocus={() => {}}
+            onOpen={open('project')}
+            onChecked={() => {}}
+            onSave={async () => {}}
+          />
+        </section>
+        {/* Long-pressed open its action drawer, as the phone Projects list
+            mounts its rows. */}
+        <section data-testid="project-menu">
+          <ProjectRowMenu
+            targets={() => [project]}
+            canOpenInNewSplit={false}
+            onOpenInNewSplit={() => {}}
+            onRename={() => {}}
+            onSetOption={() => {}}
+            onCopyLink={() => {}}
+            onCopyId={() => {}}
+            onDelete={() => {}}
+            onOpenChange={(menuOpen) => {
+              if (menuOpen) setOpened('project-menu');
+            }}
+          >
+            <ProjectRow
+              rowId="project-in-menu"
+              row={project}
+              highlighted={false}
+              checked={false}
+              onFocus={() => {}}
+              onOpen={open('project-in-menu')}
+              onChecked={() => {}}
+              onSave={async () => {}}
+            />
+          </ProjectRowMenu>
         </section>
         <section data-testid="search" class="px-2">
           <CommandMenuListItem class="min-h-11" onClick={open('search')}>

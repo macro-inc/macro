@@ -1,3 +1,4 @@
+import { clearRowPress } from '@components/app/mobile/rowPress';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
@@ -163,7 +164,11 @@ export function touchHandler(
       longPressTriggered = true;
       setLongPressActivated(true);
       hapticImpact('medium');
-      options().onLongPress?.(e);
+      const onLongPress = options().onLongPress;
+      if (!onLongPress) return;
+      // The long press opens the row's menu, which ends the row's press.
+      clearRowPress(element);
+      onLongPress(e);
     }, options().delay ?? 500);
   }
 

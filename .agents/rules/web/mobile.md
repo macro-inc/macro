@@ -56,7 +56,8 @@ read their code, and follow that pattern rather than inventing a new one.
   longer (it awaits a split or a load) calls `holdRowPress` from its click to
   keep it until the open settles. A row that must paint its own pressed fill
   marks it `data-press-surface="self"`.
-- Long-press goes through the `touchHandler` directive. On scrollable rows,
+- Long-press goes through the `touchHandler` directive, which ends the row's
+  press grey when the long press fires (`clearRowPress`). On scrollable rows,
   selecting or dragging starts only after a long press; dedicated reorder
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge

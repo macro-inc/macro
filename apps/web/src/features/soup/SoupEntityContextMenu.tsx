@@ -6,6 +6,7 @@ import type {
 import { makeAddTagAction } from '@app/features/next-soup/actions';
 import { createFolderRowDropTarget } from '@app/features/next-soup/actions/folder-drop-zone';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
+import { clearRowPress } from '@components/app/mobile/rowPress';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
@@ -73,7 +74,11 @@ export const SoupEntityContextMenu: FlowComponent<
   const drawerManager = useSoupEntityActionDrawer();
   const [menuPosition, setMenuPosition] = createSignal<SoupEntityMenuAnchor>();
   const [open, setOpen] = createSignal(false);
+  let trigger: HTMLElement | undefined;
   const changeOpen = (value: boolean) => {
+    // A touch long press opens this menu too (tablets); it ends the row's
+    // press, and so does the menu closing.
+    if (trigger) clearRowPress(trigger);
     setOpen(value);
     props.onOpenChange?.(value);
   };
@@ -146,6 +151,7 @@ export const SoupEntityContextMenu: FlowComponent<
           <ContextMenuTrigger
             as={props.as}
             ref={(element: HTMLElement) => {
+              trigger = element;
               tagDropTarget?.ref(element);
               folderDropTarget?.ref(element);
             }}

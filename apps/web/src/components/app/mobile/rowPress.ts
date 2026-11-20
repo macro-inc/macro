@@ -9,9 +9,9 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  * Timing follows UIKit table rows: a finger that rests 100ms on a row shows
  * the grey, a tap that lifts sooner shows it once its click arrives, and
  * either way it stays 350ms after release. Moving 5px (a scroll or a swipe),
- * a second finger or a cancelled touch removes it, so a press that turns into
- * a scroll never flashes, and neither does a tap that only stops a scroll
- * (no click follows it).
+ * a second finger, a cancelled touch or a long press's context menu removes
+ * it, so a press that turns into a scroll never flashes, and neither does a
+ * tap that only stops a scroll (no click follows it).
  */
 
 const PRESSED_CLASS = 'touch-highlight';
@@ -70,6 +70,23 @@ function hidePressedAfter(row: HTMLElement, delay: number) {
       row.classList.remove(PRESSED_CLASS);
     }, delay)
   );
+}
+
+/**
+ * Remove the grey from the row `element` is in and from the rows inside it,
+ * at once, even while a navigation from it runs: a long press that opens the
+ * row's action menu, and that menu closing, both end the press.
+ */
+export function clearRowPress(element: Element) {
+  const rows = [
+    pressedRow(element),
+    ...element.querySelectorAll<HTMLElement>(`.${PRESSED_CLASS}`),
+  ];
+  for (const row of rows) {
+    if (!row) continue;
+    cancelRelease(row);
+    row.classList.remove(PRESSED_CLASS);
+  }
 }
 
 /**
@@ -154,6 +171,8 @@ export function installRowPress(): () => void {
   document.addEventListener('touchmove', touchMove, options);
   document.addEventListener('touchend', touchEnd, options);
   document.addEventListener('touchcancel', cancel, options);
+  document.addEventListener('pointercancel', cancel, options);
+  document.addEventListener('contextmenu', cancel, options);
   document.addEventListener('click', click, true);
 
   return () => {
@@ -162,6 +181,8 @@ export function installRowPress(): () => void {
     document.removeEventListener('touchmove', touchMove, true);
     document.removeEventListener('touchend', touchEnd, true);
     document.removeEventListener('touchcancel', cancel, true);
+    document.removeEventListener('pointercancel', cancel, true);
+    document.removeEventListener('contextmenu', cancel, true);
     document.removeEventListener('click', click, true);
   };
 }
