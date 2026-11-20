@@ -168,6 +168,25 @@ export const auth = <T>(
 ) => call<T>(page, `${ORIGIN}/auth${path}`, method, body);
 
 /**
+ * Navigates, trying again when the navigation fails: on a machine with many
+ * network interfaces Chromium aborts navigations with ERR_NETWORK_CHANGED.
+ */
+export async function gotoRetrying(page: Page, url: string, timeout = 90_000) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await page.goto(url, { timeout });
+      return;
+    } catch (error) {
+      if (attempt >= 5) throw error;
+      console.log(
+        `goto ${new URL(url).pathname} failed, retrying: ${String(error).split('\n')[0]}`
+      );
+      await page.waitForTimeout(1000);
+    }
+  }
+}
+
+/**
  * Signs `address` in (registering it on first use) and, when `open`, lands a
  * page on the app past onboarding. The app's sign-in is these two requests;
  * the local auth service answers the first with the code.
@@ -179,7 +198,7 @@ export async function login(
   log: (line: string) => void
 ) {
   const page = await context.newPage();
-  await page.goto(`${ORIGIN}/auth/health`, { timeout: 90_000 });
+  await gotoRetrying(page, `${ORIGIN}/auth/health`);
   const status = await page.evaluate(async (address) => {
     const start = await fetch('/auth/login/passwordless', {
       method: 'POST',
@@ -203,7 +222,7 @@ export async function login(
   if (status >= 300)
     throw new Error(`sign-in of ${address} answered ${status}`);
   if (!open) return page;
-  await page.goto(`${ORIGIN}/app/home`, { timeout: 120_000 });
+  await gotoRetrying(page, `${ORIGIN}/app/home`, 120_000);
   const bypass = page.getByRole('button', { name: 'Bypass' });
   for (let i = 0; i < 5; i++) {
     await page.waitForTimeout(2000);

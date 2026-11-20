@@ -19,6 +19,7 @@ import {
   auth,
   clearSignUpCounter,
   dss,
+  gotoRetrying,
   lit,
   lostCalls,
   ORIGIN,
@@ -70,7 +71,7 @@ async function openViewer(viewer: Viewer, channels: Channel[]) {
   }
   const page = viewer.page;
   if (page.url().includes('/app/')) await page.reload({ timeout: 90_000 });
-  else await page.goto(`${ORIGIN}/app/home`, { timeout: 90_000 });
+  else await gotoRetrying(page, `${ORIGIN}/app/home`);
   for (let attempt = 0; ; attempt++) {
     try {
       await page.waitForLoadState('load');

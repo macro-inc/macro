@@ -12,6 +12,7 @@ import { judge, type Row, type Snap } from './compare';
 import {
   clearSignUpCounter,
   dss,
+  gotoRetrying,
   login,
   lostCalls,
   ORIGIN,
@@ -382,7 +383,7 @@ try {
     );
   }
 
-  await member.goto(`${ORIGIN}/app/home`);
+  await gotoRetrying(member, `${ORIGIN}/app/home`);
   await installOn(member, 'member');
   for (const scenario of SCENARIOS.filter((s) => s.name.includes(ONLY)))
     for (let repeat = 0; repeat < REPEATS; repeat++)
@@ -393,7 +394,7 @@ try {
   // side patches its cache on join), then a reader mounts again in the same
   // page, and again after a reload that restores the persisted cache.
   const stale: Record<string, unknown>[] = [];
-  await outsider.goto(`${ORIGIN}/app/home`);
+  await gotoRetrying(outsider, `${ORIGIN}/app/home`);
   await outsider.waitForLoadState('load');
   for (let repeat = 0; repeat < REPEATS; repeat++) {
     const made = await dss<{ id: string }>(owner, '/channels', 'POST', {
