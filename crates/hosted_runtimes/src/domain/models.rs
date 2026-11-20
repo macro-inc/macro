@@ -842,8 +842,9 @@ impl Computer {
                 }
                 Phase::Crashed { retry: Some(_), .. } => true,
                 // Restarting after a crash, or a boot whose macrod has
-                // already missed a check. A power-on, a move or a retry
-                // boots with no recent crash and no miss, and reads Starting.
+                // already missed a check. A retry clears the crashes and
+                // reads Starting; so does a power-on or a move with no crash
+                // inside the window.
                 Phase::Booting => {
                     self.state.macrod_misses >= 1
                         || self

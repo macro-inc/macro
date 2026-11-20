@@ -36,7 +36,8 @@ Their isolation and threat model is in
   `MACROD_GRACE` checks (`macrod_misses >= 1`, so a reconnect flap stays
   Ready; never while hibernated), `Crashed` with a restart scheduled, or
   `Booting` again after a crash inside `CRASH_WINDOW` or with a missed check
-  (a power-on, move or retry boot reads Starting). Before the first
+  (a retry boot, or a power-on or move with no recent crash, reads
+  Starting). Before the first
   connection the same states read as setting up; only a give-up reads Failed.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.

@@ -140,8 +140,8 @@ fn a_boot_whose_macrod_missed_a_check_reads_unhealthy() {
     assert_eq!(booting_with(vec![], 1), ComputerStatusKind::Unhealthy);
 }
 
-/// A power-on (or a move or a retry) boots with no recent crash and no miss.
-/// A crash older than the crash window no longer counts.
+/// A power-on or a move with no crash inside the window, or a retry (which
+/// clears the crashes), boots with no miss and reads Starting.
 #[test]
 fn a_computer_booting_after_a_power_on_reads_starting() {
     assert_eq!(booting_with(vec![], 0), ComputerStatusKind::Starting);
