@@ -1,5 +1,6 @@
 import { useMaybeBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
@@ -42,6 +43,7 @@ import {
   parseEntityType,
   usePropertyNameFocus,
 } from '../../utils';
+import { builtInPropertySuggestion } from '../../utils/builtInSuggestion';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
 
 // Derive DataTypeValue from the dropdown options
@@ -175,6 +177,11 @@ interface CreatePropertyModalProps {
   initialName?: string;
   entityId?: string;
   entityType?: EntityType;
+  /**
+   * Leaves creation for a built-in property. The dialog offers it when the
+   * typed name duplicates that property, and stays open while it settles.
+   */
+  onUseBuiltIn?: (propertyDefinitionId: string) => void | Promise<void>;
 }
 
 export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
@@ -198,6 +205,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     Array<{ id: string; value: number | ''; display_order: number }>
   >([]);
   const [error, setError] = createSignal<string | null>(null);
+  const [isSwitchingToBuiltIn, setIsSwitchingToBuiltIn] = createSignal(false);
 
   const addMutation = useAddEntityPropertyMutation();
   const currentTeamQuery = useCurrentTeamQuery();
@@ -524,7 +532,24 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   );
 
   const pending = () =>
-    createPropertyMutation.isPending || addMutation.isPending;
+    createPropertyMutation.isPending ||
+    addMutation.isPending ||
+    isSwitchingToBuiltIn();
+
+  const builtInSuggestion = createMemo(() =>
+    builtInPropertySuggestion(newPropertyName())
+  );
+  // Only an unrestricted entity property can hold a company or a contact.
+  const selectedTypeLinksCrmRecords = () => selectedDataType() === 'entity';
+
+  const switchToBuiltIn = async (propertyDefinitionId: string) => {
+    setIsSwitchingToBuiltIn(true);
+    try {
+      await props.onUseBuiltIn?.(propertyDefinitionId);
+    } finally {
+      setIsSwitchingToBuiltIn(false);
+    }
+  };
 
   const canSubmit = () => newPropertyName().trim().length > 0 && !pending();
 
@@ -595,6 +620,44 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 class={inputClass}
               />
             </EditorRow>
+
+            <Show when={builtInSuggestion()}>
+              {(suggestion) => (
+                <div class="flex gap-5 px-4 pb-3">
+                  <div class="w-22 shrink-0" />
+                  <div
+                    role="status"
+                    class="flex min-w-0 flex-1 flex-col items-start gap-2 rounded-md bg-accent-bg px-3 py-2 text-sm text-ink"
+                  >
+                    <p>
+                      The built-in {suggestion().name} property already links
+                      items to CRM {suggestion().records}, and they show on each{' '}
+                      {suggestion().record}’s record.
+                      <Show when={!selectedTypeLinksCrmRecords()}>
+                        {' '}
+                        The {selectedDataTypeOption().label} type can’t link to
+                        CRM records.
+                      </Show>
+                    </p>
+                    <Show when={props.onUseBuiltIn}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending()}
+                        onClick={() =>
+                          fireAndForget(
+                            switchToBuiltIn(suggestion().propertyDefinitionId),
+                            'property-create'
+                          )
+                        }
+                      >
+                        Use {suggestion().name}
+                      </Button>
+                    </Show>
+                  </div>
+                </div>
+              )}
+            </Show>
 
             <EditorRow label="Type">
               <Select<DataTypeOption>
