@@ -147,13 +147,15 @@ where
 
     /// Load a live external session onto its runtime's new connection.
     ///
-    /// Safe to repeat: a session already attached here keeps its actor, and
+    /// Safe to repeat: a session already attached here on the runtime's
+    /// current connection keeps its actor, one still on a displaced
+    /// connection is stopped and attached afresh, and
     /// an archived or managed one is never started by a runtime's dial.
     /// Answers whether the session is attached here with its durable queue
     /// loaded, so the caller can dispatch what it holds. That holds for a
     /// session an earlier attempt attached before failing to load its queue,
     /// so a retry finishes the job instead of stranding the queue.
-    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty))]
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty, agent.session.displaced_connection = tracing::field::Empty))]
     pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
         let span = tracing::Span::current();
         let session = self.sessions.get_session(session_id).await?;
@@ -164,13 +166,39 @@ where
             return Ok(false);
         }
         if self.sessions.attached_mcp_servers(session_id).is_some() {
-            span.record("agent.session.reattached", false);
-            self.ensure_hydrated(session_id).await?;
-            return Ok(true);
+            if self.on_current_connection(&session).await? {
+                span.record("agent.session.reattached", false);
+                self.ensure_hydrated(session_id).await?;
+                return Ok(true);
+            }
+            // Still bound to the socket this dial displaced: its actor is
+            // winding down but has not left yet. Wait for it to go, or the
+            // session would count as restored while the new connection drops
+            // its frames.
+            span.record("agent.session.displaced_connection", true);
+            self.sessions
+                .close_session(session_id)
+                .instrument(tracing::info_span!("agent.session.close_displaced"))
+                .await?;
         }
         self.reconnect(session_id).await?;
         span.record("agent.session.reattached", true);
         Ok(true)
+    }
+
+    /// Whether `session`'s live actor here rides on the connection its
+    /// runtime is connected on now, rather than one a redial displaced.
+    async fn on_current_connection(&self, session: &AgentSession) -> Result<bool> {
+        let Some(attached) = self.sessions.attached_connection(session.id) else {
+            return Ok(false);
+        };
+        let current = self
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)?
+            .and_then(|harness| self.runtimes.connection_of(harness));
+        Ok(current == Some(attached))
     }
 
     /// What a runtime's dial does with one of the sessions it listed.
