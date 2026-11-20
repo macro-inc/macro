@@ -417,7 +417,10 @@ async fn a_socket_nobody_reads_is_closed_even_while_its_sender_is_held() {
     let (mut client, _response) = tokio_tungstenite::connect_async(format!("ws://{address}"))
         .await
         .expect("raw client should connect");
-    let Channel { tx: held_sender, rx } = timeout(PROMPT, transport.accept())
+    let Channel {
+        tx: held_sender,
+        rx,
+    } = timeout(PROMPT, transport.accept())
         .await
         .expect("server accept should not hang")
         .expect("server should accept the connection");
@@ -503,4 +506,49 @@ async fn a_write_that_never_completes_does_not_hold_off_the_silence_check() {
         .await
         .expect("a write stuck on a dead path should not keep the socket open");
     assert!(ended.is_none(), "the pump should end when a write stalls");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn frames_queued_just_before_the_channel_is_dropped_still_go_out() {
+    const LAST_WORDS: usize = 200;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener should bind");
+    let address = listener.local_addr().expect("listener address");
+    let peer = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.expect("peer should accept");
+        let mut socket = tokio_tungstenite::accept_async(socket)
+            .await
+            .expect("peer should upgrade");
+        let mut texts = 0;
+        while let Some(Ok(frame)) = socket.next().await {
+            if frame.is_text() {
+                texts += 1;
+            }
+            if frame.is_close() {
+                break;
+            }
+        }
+        texts
+    });
+
+    let (stream, _response) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+        .await
+        .expect("runtime should connect");
+    let channel = connect_runtime::<ToServerMessage, ToRuntimeMessage, _>(stream);
+    // What a bridge ending does: queue its last messages, then drop the
+    // whole channel at once, reader and sender together.
+    for _ in 0..LAST_WORDS {
+        channel.tx.send(event()).unwrap();
+    }
+    drop(channel);
+
+    let received = timeout(PROMPT, peer)
+        .await
+        .expect("the socket should close")
+        .expect("the peer should finish");
+    assert_eq!(
+        received, LAST_WORDS,
+        "every frame queued before the drop should reach the peer"
+    );
 }

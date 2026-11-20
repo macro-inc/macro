@@ -61,6 +61,15 @@ const PING_INTERVAL: Duration = Duration::from_secs(2);
 /// succeeding into a connection that will never answer again.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(6);
 
+/// How long a socket nobody reads any more waits for its outgoing queue to
+/// end before closing anyway.
+///
+/// A caller tearing its channel down drops both halves at once, and the
+/// messages it queued last are still on their way to the socket; they end
+/// the queue within moments. A connection evicted while a session still
+/// holds its sender never ends the queue, and closes after this.
+const UNREAD_GRACE: Duration = PING_INTERVAL;
+
 /// A physical WebSocket frame type: one JSON text payload, or a ping.
 ///
 /// Implemented for both `axum`'s and `tokio-tungstenite`'s message types so
@@ -137,8 +146,9 @@ async fn bounded_write<Error>(write: impl Future<Output = Result<(), Error>>) ->
 /// are decoded and pushed onto `incoming`. When `outgoing` ends, this side
 /// sends its close frame and keeps reading until the peer closes (or goes
 /// silent), so nothing the peer already sent is lost. When `incoming`'s
-/// receiver is gone, nothing serves the connection any more, so the socket
-/// closes then too, however many senders are still held.
+/// receiver is gone, nothing serves the connection any more: the socket
+/// closes once `outgoing` ends, or after [`UNREAD_GRACE`] if a sender is
+/// still held.
 ///
 /// A frame that fails to decode as `Rx` is dropped with a warning rather than
 /// closing the connection - the rest of the logical stream is unaffected by
@@ -161,7 +171,16 @@ async fn run_pump<Rx, Socket, Frame, Error>(
     // Set once this side has nothing more to send: its close frame is out,
     // and the pump keeps reading until the peer closes too.
     let mut closing = false;
+    // When this side stops waiting for `outgoing` to end, once nothing reads
+    // what arrives.
+    let mut unread_deadline: Option<Instant> = None;
     loop {
+        let unread_grace_over = async move {
+            match unread_deadline {
+                Some(deadline) => tokio::time::sleep_until(deadline).await,
+                None => std::future::pending().await,
+            }
+        };
         tokio::select! {
             next_outgoing = outgoing.recv(), if !closing => {
                 let Some(payload) = next_outgoing else {
@@ -177,12 +196,16 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                     break;
                 }
             }
-            () = incoming.closed() => {
+            () = incoming.closed(), if unread_deadline.is_none() => {
+                if closing {
+                    break;
+                }
+                unread_deadline = Some(Instant::now() + UNREAD_GRACE);
+            }
+            () = unread_grace_over => {
                 // The peer sees the close and redials; without it, the pings
                 // would keep an unserved socket looking alive indefinitely.
-                if !closing {
-                    let _ = bounded_write(sink.close()).await;
-                }
+                let _ = bounded_write(sink.close()).await;
                 break;
             }
             next_incoming = stream.next() => {
@@ -193,10 +216,10 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                     Some(Ok(frame)) => {
                         let Some(text) = frame.into_text() else { continue };
                         match serde_json::from_str::<Rx>(&text) {
+                            // Nobody reading it is handled by the arm above,
+                            // which still lets this side's last frames out.
                             Ok(message) => {
-                                if incoming.send(message).is_err() {
-                                    break;
-                                }
+                                let _ = incoming.send(message);
                             }
                             Err(error) => {
                                 tracing::warn!(error = ?error, "dropping malformed WebSocket frame");
