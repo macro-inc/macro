@@ -210,8 +210,8 @@ export function applyUpdate(
  */
 export function verifyKey(markdown: string): string {
   return markdown.replace(
-    /(<m-[a-z-]+>)(\{[\s\S]*?\})(<\/m-[a-z-]+>)/g,
-    (_, open: string, json: string, close: string) =>
+    /(<m-([a-z-]+)>)(\{[\s\S]*?\})(<\/m-\2>)/g,
+    (_, open: string, _tag: string, json: string, close: string) =>
       open +
       json.replace(/"[A-Za-z_][A-Za-z0-9_]*":null,?/g, '').replace(/,}/g, '}') +
       close

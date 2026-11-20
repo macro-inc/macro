@@ -430,16 +430,7 @@ function reconcileChildren(
       }
     } else {
       current = $parseSerializedNode(news[j]);
-      const mark = previous?.getParent();
-      if (
-        previous &&
-        mark?.getType() === 'comment-mark' &&
-        mark.getLastChild() === previous
-      )
-        // A new run after a mark's last run goes beside the mark: the
-        // comment never grows to cover text its author did not quote.
-        mark.insertAfter(current);
-      else if (previous) previous.insertAfter(current);
+      if (previous) previous.insertAfter(current);
       else {
         const firstOld = olds.find(
           (item, k) => usedOld.has(k) && item.node.isAttached()
@@ -483,6 +474,12 @@ function spliceRuns(
   for (const node of newGap)
     for (const c of node.text ?? '')
       newChars.push({ c, format: formatOf(node) });
+  if (
+    oldChars.length === newChars.length &&
+    oldChars.every((ch, k) => ch.c === newChars[k].c) &&
+    oldChars.some((ch, k) => ch.format !== newChars[k].format)
+  )
+    return restyleRuns(oldGap, oldChars, newChars, counters);
   const sameChar = (
     a: { c: string; format: string },
     b: { c: string; format: string }
@@ -609,6 +606,48 @@ function spliceRuns(
     if (texts[run] === '') text.remove();
     else text.setTextContent(texts[run]);
     counters.textEdits++;
+  });
+  return true;
+}
+
+/**
+ * Same text, new formatting (a word bolded): split each old run where the
+ * format changes and restyle the pieces in place, so they stay in their
+ * parent, a comment mark included. False for code formatting.
+ */
+function restyleRuns(
+  oldGap: Item[],
+  oldChars: { run: number }[],
+  newChars: { format: string }[],
+  counters: ReconcileCounters
+): boolean {
+  if (newChars.some((ch) => ch.format === 'code')) return false;
+  const runs = oldGap.map(() => [] as number[]);
+  oldChars.forEach((ch, k) => runs[ch.run].push(k));
+  const plain = runs.every((positions, run) => {
+    const node = oldGap[run].node;
+    return (
+      !positions.length || ($isTextNode(node) && node.getType() === 'text')
+    );
+  });
+  if (!plain) return false;
+  runs.forEach((positions, run) => {
+    if (!positions.length) return;
+    const node = oldGap[run].node as TextNode;
+    const formats = positions.map((k) => Number(newChars[k].format));
+    const cuts: number[] = [];
+    for (let i = 1; i < formats.length; i++)
+      if (formats[i] !== formats[i - 1]) cuts.push(i);
+    const pieces = cuts.length ? node.splitText(...cuts) : [node];
+    let offset = 0;
+    for (const piece of pieces) {
+      const format = formats[offset];
+      if (piece.getFormat() !== format) {
+        piece.setFormat(format);
+        counters.textEdits++;
+      }
+      offset += piece.getTextContentSize();
+    }
   });
   return true;
 }
