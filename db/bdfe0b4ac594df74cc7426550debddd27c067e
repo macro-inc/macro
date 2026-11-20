@@ -1,0 +1,25 @@
+apps/web/src/features/email-view/components/EmailDetailView.test.tsx
+  s_98aee303631943::t_705b713935089f 2-12,17-102,104-158
+  s_98aee303631943::t_ee7f3b794f1c39 159-162
+  s_98aee303631943::t_0825844927be02 1,13-16,103
+apps/web/src/features/email-view/components/EmailDetailView.tsx
+  s_98aee303631943::t_98537370e52653 108-125
+  s_98aee303631943::t_ce655c4187d8af 142-144
+  s_98aee303631943::t_0825844927be02 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dbbdfe0b4ac594df74cc7426550debddd27c067e",
+  "prompts": {},
+  "sessions": {
+    "s_98aee303631943": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d0498375-8271-4cdf-8c73-6eecd25e0900",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
