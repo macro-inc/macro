@@ -341,6 +341,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
             agentPage: next,
             agentPageRequest: crypto.randomUUID(),
             createAgentKind: createKind,
+            // A drawer destination replaces a one-shot composer intent, not its draft store.
+            focusComposer: undefined,
+            composerAgentId: undefined,
+            draft: undefined,
           },
         },
       });

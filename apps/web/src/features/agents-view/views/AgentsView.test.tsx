@@ -711,3 +711,21 @@ it('lets an active editor intercept the phone page Back action', () => {
     dispose();
   }
 });
+
+it('clears one-shot composer navigation when the drawer opens Conversations', () => {
+  state.touch = true;
+  state.width = () => 390;
+  const [entry, setEntry] = createSignal<FakeEntry>(
+    composerEntry('request', 'Unsent draft')
+  );
+  state.entry.current = entry;
+  state.replace.current = (next) => setEntry({ content: next });
+  render(() => <AgentsView />);
+  expect(composer().value).toBe('Unsent draft');
+  expect(screen.queryByText('Agents list')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
+  expect(screen.getByText('Agents list')).toBeTruthy();
+  expect(entry().content.params?.focusComposer).toBeUndefined();
+  expect(entry().content.params?.composerAgentId).toBeUndefined();
+  expect(composer().value).toBe('Unsent draft');
+});
