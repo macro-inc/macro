@@ -68,6 +68,13 @@ rec {
     };
     # Control-plane log groups are kept this long.
     logRetentionDays = 30;
+    # The one cluster admin: an IAM role whose only AWS permission is reading
+    # the cluster, mapped to cluster admin. Who may assume it is an IAM tag on their IAM
+    # user, `<adminTag> = admin` (people, MFA required) or `automation`
+    # (agents and scripts, no MFA). Tagging an identity is the grant, so no
+    # person is named here.
+    adminRole = "observability-eks-admin";
+    adminTag = "observability-eks";
   };
 
   # Pod Identity: namespace -> service account -> what its role may do.

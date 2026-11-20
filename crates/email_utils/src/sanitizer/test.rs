@@ -1,4 +1,159 @@
 use super::*;
+use crate::bounded_html::{MAX_FORMATTING_DEPTH, MAX_HTML_DEPTH, MAX_HTML_NODES};
+
+/// Paragraphs of one letter: two nodes each.
+fn paragraphs(count: usize) -> String {
+    "<p>x</p>".repeat(count)
+}
+
+#[test]
+fn a_body_past_the_node_limit_is_clipped_with_a_notice() {
+    let html = format!("{}<p>past the limit</p>", paragraphs(MAX_HTML_NODES / 2));
+
+    let sanitized = sanitize_email_html(&html);
+
+    let kept = sanitized.matches("<p>x</p>").count();
+    assert!(
+        (MAX_HTML_NODES / 2 - 4..MAX_HTML_NODES / 2).contains(&kept),
+        "{kept}"
+    );
+    assert!(!sanitized.contains("past the limit"));
+    assert!(sanitized.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn a_4_mb_newsletter_is_not_clipped() {
+    let story = r#"<tr><td style="padding:16px;color:#333"><h2 style="margin:0">Headline for this week's story</h2><p style="line-height:1.5">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. <a href="https://example.com/read?id=456">Read more</a></p><img src="https://example.com/i/123.png" width="560" alt=""></td></tr>"#;
+    // Sending services indent their markup and wrap text with CRLF; the
+    // tokenizer splits text at each line break and character reference.
+    let indented = story
+        .replace("><", ">\r\n      <")
+        .replace(", ", ",\r\n        ")
+        .replace("week's", "week&#39;s");
+
+    for story in [story, indented.as_str()] {
+        let html = format!(
+            "<html><head><style>.a{{color:#333}}</style></head><body><table>{}<tr><td>Unsubscribe</td></tr></table></body></html>",
+            story.repeat((4 << 20) / story.len())
+        );
+
+        let sanitized = sanitize_email_html(&html);
+
+        assert!(sanitized.contains("Unsubscribe"));
+        assert!(!sanitized.contains(CLIPPED_NOTICE));
+    }
+}
+
+#[test]
+fn a_body_within_the_node_limit_is_not_clipped() {
+    let html = format!("{}<p>last</p>", paragraphs(MAX_HTML_NODES / 2 - 4));
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.ends_with("<p>last</p>"));
+}
+
+#[test]
+fn a_body_nested_past_the_depth_limit_is_clipped_with_a_notice() {
+    let nested = |depth: usize, text: &str| format!("{}{text}", "<div>".repeat(depth));
+
+    let shallow = sanitize_email_html(&nested(100, "shallow"));
+    let deep = sanitize_email_html(&nested(MAX_HTML_DEPTH, "deep"));
+
+    assert!(shallow.contains("shallow") && !shallow.contains(CLIPPED_NOTICE));
+    assert!(!deep.contains("deep"));
+    assert!(deep.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn formatting_nested_past_its_limit_is_clipped_with_a_notice() {
+    let nested = |depth: usize, text: &str| {
+        let open: String = (0..depth).map(|i| format!("<b id=b{i}>")).collect();
+        format!("{open}{text}")
+    };
+
+    let shallow = sanitize_email_html(&nested(MAX_FORMATTING_DEPTH, "shallow"));
+    let deep = sanitize_email_html(&nested(MAX_FORMATTING_DEPTH + 1, "deep"));
+
+    assert!(shallow.contains("shallow") && !shallow.contains(CLIPPED_NOTICE));
+    assert!(!deep.contains("deep"));
+    assert!(deep.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn unclosed_identical_formatting_tags_are_not_clipped() {
+    // Old mail often opens a font per line and never closes it; html5ever
+    // keeps only three copies of an identical tag, so they cost little.
+    let lines: String = (0..200)
+        .map(|i| format!("<font face=\"Arial\">Line {i}<br>\r\n"))
+        .collect();
+
+    let sanitized = sanitize_email_html(&lines);
+
+    assert!(sanitized.contains("Line 199"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
+fn formatting_in_nested_table_cells_counts_per_cell() {
+    // Each cell starts a new section of html5ever's formatting list.
+    let levels: String = (0..40)
+        .map(|i| format!("<table><tr><td><font color=\"#{i}\">Level {i}"))
+        .collect();
+
+    let sanitized = sanitize_email_html(&levels);
+
+    assert!(sanitized.contains("Level 39"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
+fn misnested_formatting_keeps_its_text() {
+    // Scraper's own tree dropped `lost` when closing the `<b>` moved the
+    // blocks it held.
+    let sanitized = sanitize_email_html("<b><div>a<p><div>lost</b>");
+
+    assert!(sanitized.contains("lost"), "{sanitized}");
+}
+
+#[test]
+fn style_text_counts_as_written_unescaped() {
+    // A serialization writes `<style>` text raw, so its `&` costs one byte,
+    // not the five of `&amp;`.
+    let html = format!("<style>{}</style><p>Reply</p>", "&".repeat(4 << 20));
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.contains("Reply"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
+fn noscript_text_counts_as_written_escaped() {
+    // Scraper serializes with scripting off, which escapes `<noscript>`
+    // text: 4 MiB of `&` is written as 20 MiB of `&amp;`.
+    let html = format!("<noscript>{}</noscript><p>Reply</p>", "&".repeat(4 << 20));
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(!sanitized.contains("Reply"));
+    assert!(sanitized.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn a_bodyless_document_past_the_node_limit_is_clipped_with_a_notice() {
+    // A frameset document has no body, so the fragment parse is cleaned.
+    let html = format!(
+        "<frameset></frameset>{}<p>past the limit</p>",
+        paragraphs(MAX_HTML_NODES / 2)
+    );
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.contains("<p>x</p>"));
+    assert!(!sanitized.contains("past the limit"));
+    assert!(sanitized.ends_with(CLIPPED_NOTICE));
+}
 
 #[test]
 fn inline_style_url_quotes_remain_escaped_after_html_round_trip() {

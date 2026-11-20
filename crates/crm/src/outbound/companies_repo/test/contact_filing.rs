@@ -95,9 +95,10 @@ async fn files_each_contact_by_its_domain_and_counts_what_it_left(
 
     let expected = ContactFilingBatch {
         examined: 10,
-        filed: 4,
+        filed: 3,
         companies_created: 1,
         skipped_not_manual: 1,
+        skipped_archived: 1,
         skipped_provider_domain: 2,
         skipped_blocked_domain: 1,
         skipped_hidden_company: 1,
@@ -141,8 +142,8 @@ async fn files_each_contact_by_its_domain_and_counts_what_it_left(
     assert_eq!(company_of(&pool, foreign.id).await?, None);
     assert_eq!(company_of(&pool, synced).await?, None);
 
-    // An archived contact is filed and stays archived.
-    assert_eq!(company_of(&pool, archived.id).await?, Some(tracked));
+    // An archived contact is left as it is, even at a tracked domain.
+    assert_eq!(company_of(&pool, archived.id).await?, None);
     assert_eq!(fetch_contact_hidden(&pool, archived.id).await?, Some(true));
 
     // Filing reads no mail.
@@ -158,7 +159,7 @@ async fn files_each_contact_by_its_domain_and_counts_what_it_left(
     assert_eq!(
         again,
         ContactFilingBatch {
-            examined: 6,
+            examined: 7,
             filed: 0,
             companies_created: 0,
             ..expected
@@ -235,5 +236,43 @@ async fn a_filed_contact_is_tied_to_its_company_like_a_synced_one(
             .await
             .is_err()
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_archived_contact_stays_without_a_company(pool: PgPool) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, "macro|owner@example.com").await?;
+    enable_crm_for_team(&pool, team).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let archived = repo
+        .create_contact_for_team(
+            &team,
+            Some("archived@gone.example.com"),
+            "Archived",
+            Utc::now(),
+        )
+        .await?;
+    repo.set_contact_hidden(&team, &archived.id, true).await?;
+
+    for dry_run in [true, false] {
+        let batch = service(&pool)
+            .file_unfiled_contacts(team, None, 100, dry_run)
+            .await?;
+        assert_eq!(
+            (batch.examined, batch.filed, batch.companies_created),
+            (1, 0, 0)
+        );
+        assert_eq!(batch.skipped_archived, 1);
+    }
+
+    // Email sync never creates a company for an archived contact, and
+    // neither does filing: no company appears for the domain.
+    assert_eq!(company_of(&pool, archived.id).await?, None);
+    assert_eq!(
+        fetch_company_for_domain(&pool, team, "gone.example.com").await?,
+        None
+    );
+    assert_eq!(fetch_contact_hidden(&pool, archived.id).await?, Some(true));
     Ok(())
 }

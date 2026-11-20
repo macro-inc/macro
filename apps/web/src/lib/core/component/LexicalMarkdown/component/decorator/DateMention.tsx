@@ -1,5 +1,6 @@
 import { DatePicker } from '@core/component/DatePicker';
 import {
+  formatMentionLabel,
   formatRelativeDay,
   formatTooltipDate,
   parseMentionDate,
@@ -30,9 +31,9 @@ export function DateMention(props: DateMentionDecoratorProps) {
   const [hovered, setHovered] = createSignal(false);
   let mentionRef!: HTMLSpanElement;
 
-  const displayFormat = createMemo(() => {
-    return formatRelativeDay(parseMentionDate(props.date));
-  });
+  const displayFormat = createMemo(() =>
+    formatMentionLabel(props.date, props.displayFormat)
+  );
 
   const isSelectedAsNode = () => {
     const sel = selection();

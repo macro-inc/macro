@@ -1,6 +1,8 @@
 use html2text::config::Config;
 use html2text::render::PlainDecorator;
 use html2text::{Element, Handle};
+use html5ever::tree_builder::QuirksMode;
+use scraper::Html;
 
 /// The line width html2text lays a body out at: wider than any line the first
 /// `MAX_HTML_BYTES` of HTML can make, so no text wraps. In raw mode nothing
@@ -27,12 +29,19 @@ const MAX_INDENT: usize = 128;
 /// so this caps a conversion near 250 MB.
 const MAX_HTML_BYTES: usize = 512 * 1024;
 
+/// The most nodes a conversion's bounded parse may build, below the
+/// sanitizer's limit: html2text's tree and render take 1.3 to 1.9 KB a node,
+/// so this keeps a conversion near 120 MB. Real mail within `MAX_HTML_BYTES`
+/// builds far fewer. A body past it gets no text.
+const MAX_TEXT_NODES: usize = 64_000;
+
 /// Convert `body_replyless` into plaintext with link footnotes.
 ///
 /// If the original message had no HTML body, `body_replyless` is already plaintext.
 /// Otherwise it's HTML and is parsed to plaintext using `html2text`: only its
-/// first `MAX_HTML_BYTES`, and `None` when it cannot be converted or its tables
-/// or nesting are too large to.
+/// first `MAX_HTML_BYTES`, and `None` when it cannot be converted, its tables
+/// or nesting are too large to, or it builds past a limit of
+/// [`crate::bounded_html`].
 pub fn compute_body_parsed(has_html: bool, body_replyless: &Option<String>) -> Option<String> {
     let text = body_replyless.as_ref()?;
 
@@ -74,8 +83,9 @@ pub fn compute_body_parsed_linkless(
 
 /// Convert an HTML fragment to block-aware plaintext: block elements and table
 /// cells are separated by newlines, but inline runs (`<strong>`, `<em>`, `<a>`,
-/// …) stay on one line. Returns `None` if conversion fails or the fragment's
-/// tables or nesting are too large to convert. Suitable for building a
+/// …) stay on one line. Returns `None` if conversion fails, the fragment's
+/// tables or nesting are too large to convert, or it builds past a limit of
+/// [`crate::bounded_html`]. Suitable for building a
 /// `text/plain` MIME alternative from a small HTML snippet (e.g. a signature).
 pub fn html_to_plaintext(html: &str) -> Option<String> {
     let config = html2text::config::plain()
@@ -115,6 +125,24 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
         );
     }
     let html = &html[..html.floor_char_boundary(MAX_HTML_BYTES)];
+    // html2text builds its tree with html5ever, which rebuilds every
+    // still-active formatting element inside each new paragraph: 13 KB can
+    // build a million nodes. The bounded parse finds such a body first, and
+    // one past its limits gets no text. html2text then reads the bounded
+    // tree's serialization, never the body: it parses with a newer html5ever
+    // whose rules differ (inside `<select>`, for one), and a well-formed
+    // serialization, parsed in the same quirks mode, builds it no more than
+    // the bounded parse did.
+    let parsed = crate::bounded_html::parse_document_for_text(html, MAX_TEXT_NODES);
+    if parsed.clipped {
+        tracing::warn!(
+            html_len = html.len(),
+            "email body builds too much to convert to text"
+        );
+        return None;
+    }
+    let html = serialize_in_its_quirks_mode(&parsed.html);
+    drop(parsed);
     // html2text panics on some malformed-but-real email HTML (e.g. a table
     // rowspan overhanging past the last row). A panic here takes down the
     // whole message-processing worker, so contain it and treat the body as
@@ -151,6 +179,26 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
             Some(trimmed)
         }
         Ok(Ok(None) | Err(_)) | Err(_) => None,
+    }
+}
+
+/// A doctype html5ever reads in limited-quirks mode.
+const LIMITED_QUIRKS_DOCTYPE: &str =
+    r#"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">"#;
+
+/// The document as HTML that parses in its own quirks mode. Scraper writes
+/// any doctype as `<!DOCTYPE html>`, so a page with a legacy doctype (common
+/// in Outlook mail) would be read again in no-quirks mode, where a paragraph
+/// before a table closes and the formatting around it is rebuilt: a
+/// different tree, and twice as large for crafted HTML.
+fn serialize_in_its_quirks_mode(document: &Html) -> String {
+    match document.quirks_mode {
+        QuirksMode::NoQuirks => document.html(),
+        // A document without a doctype parses in quirks mode.
+        QuirksMode::Quirks => document.root_element().html(),
+        QuirksMode::LimitedQuirks => {
+            format!("{LIMITED_QUIRKS_DOCTYPE}{}", document.root_element().html())
+        }
     }
 }
 

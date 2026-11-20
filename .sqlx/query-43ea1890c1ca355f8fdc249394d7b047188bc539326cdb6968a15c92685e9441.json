@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE",
+  "query": "SELECT id FROM email_messages WHERE id=$1 AND link_id=$2 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -11,6 +11,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -18,5 +19,5 @@
       false
     ]
   },
-  "hash": "f942ff57aa734a1a01e1323e0e886b3128f1a00405b4dc675b5fa0fa3a2713e4"
+  "hash": "43ea1890c1ca355f8fdc249394d7b047188bc539326cdb6968a15c92685e9441"
 }

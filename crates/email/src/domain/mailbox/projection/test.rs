@@ -1,5 +1,6 @@
 use super::*;
-use crate::domain::mailbox::{DatabaseFailure, EffectFailure, LOCK_NOT_AVAILABLE};
+use crate::domain::mailbox::{DatabaseFailure, EffectFailure};
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
 use models_email::service::{address::ContactInfo, link::UserProvider};
 
 fn context() -> ProjectionContext {
@@ -92,6 +93,7 @@ fn notification_retry_preserves_ids_and_staff_push_policy() {
         },
         from_current_generation: true,
         attempts: 1,
+        unfinished_claims: 0,
     };
     let first = notifications(&lease, &context);
     let retry = notifications(&lease, &context);

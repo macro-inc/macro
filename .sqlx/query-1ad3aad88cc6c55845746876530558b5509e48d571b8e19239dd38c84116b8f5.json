@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id,provider::text AS \"provider!\",email_address,sync_generation,grant_generation,is_sync_active,\n        (macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2)) AS \"authorized!\"\n        FROM email_links l WHERE id=ANY($1) ORDER BY id FOR UPDATE",
+  "query": "SELECT id,provider::text AS \"provider!\",email_address,sync_generation,grant_generation,is_sync_active,\n        (macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2)) AS \"authorized!\"\n        FROM email_links l WHERE id=ANY($1) ORDER BY id FOR SHARE",
   "describe": {
     "columns": [
       {
@@ -55,5 +55,5 @@
       null
     ]
   },
-  "hash": "928be7156f8acb8c6fe532d7f3e6e9d60a8c1480fd8ae1376ffe11fc620cc21e"
+  "hash": "1ad3aad88cc6c55845746876530558b5509e48d571b8e19239dd38c84116b8f5"
 }

@@ -64,3 +64,81 @@ async fn a_checkpoint_behind_a_locked_draft_message_fails_fast_then_commits(db: 
     .unwrap();
     assert_eq!(committed, Some(serde_json::to_value(&cp).unwrap()));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_conflict_resolution_runs_beside_a_population_and_gives_up_behind_a_worker(db: PgPool) {
+    use crate::domain::models::{EmailErr, mailbox_operation::*};
+    let (sync, repo, input, link) = setup(&db, true).await;
+    let lease = sync
+        .claim_draft(
+            Uuid::now_v7(),
+            crate::domain::mailbox::drafts::models::DraftClaimMode::All,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    sync.fail_draft(&lease, DraftFailure::Conflict)
+        .await
+        .unwrap();
+    let actor =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("outlook-test@example.com").unwrap();
+    let facts = repo
+        .message_operation_facts(&[input.db_id])
+        .await
+        .unwrap()
+        .remove(&input.db_id)
+        .unwrap();
+    let plan = || {
+        plan_resolution(
+            facts.clone(),
+            MessageResolutionRequest {
+                message_id: input.db_id,
+                revision: facts.revision,
+                remote_version: facts.remote_version.clone(),
+                action: MessageResolutionAction::UseProvider,
+                accept_duplicate_risk: false,
+            },
+        )
+        .unwrap()
+    };
+    let resolve = |plan| {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            repo.commit_message_resolution(&actor, plan),
+        )
+    };
+    let state = || async {
+        sqlx::query_scalar!(
+            "SELECT state FROM email_mailbox_drafts WHERE message_id = $1",
+            input.db_id
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap()
+    };
+    let failed = state().await;
+
+    // A mailbox worker or a disconnect holds the link exclusively.
+    let mut worker = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR UPDATE", link)
+        .fetch_one(&mut *worker)
+        .await
+        .unwrap();
+    let blocked = resolve(plan()).await.expect("waited past its lock timeout");
+    assert!(matches!(blocked, Err(EmailErr::Contended)), "{blocked:?}");
+    assert_eq!(state().await, failed);
+    worker.rollback().await.unwrap();
+
+    // A CRM contact population holds it this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+    resolve(plan())
+        .await
+        .expect("waited past its lock timeout")
+        .unwrap();
+    population.rollback().await.unwrap();
+    assert_ne!(state().await, failed);
+}

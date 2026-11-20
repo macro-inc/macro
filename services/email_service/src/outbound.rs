@@ -58,6 +58,8 @@ pub mod signature_settings;
 pub mod backfill_jobs;
 pub mod gmail_push;
 pub mod inbox_connection;
+/// The lock timeout of the writes that connect an inbox.
+pub(crate) mod link_lock;
 /// File-service and stored attachment deletion.
 pub mod sfs_deletion;
 /// URL-backed contact photos and self-contact refresh effects.

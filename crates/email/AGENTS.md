@@ -539,6 +539,20 @@ tools — hexagonal, heavily feature-gated.
   (link deletion) retries in the same delivery, each a bounded number of times
   inside its lease or visibility timeout. The purge's batches run in
   `email_db_client` without the timeout.
+- The user writes in `email_pg_repo` that lock an inbox's link row (draft
+  save and send admission, attachments, discard, resolution, transfer,
+  scheduling, Undo send, mailbox actions, sender policy) open with
+  `email_pg_repo::begin`, the same 5 s `lock_timeout`
+  (`email-link-lock-transactions-time-out`). Most take `FOR SHARE` on the
+  link: it fences the mailbox workers and a disconnect, which lock it
+  exclusively, while a CRM population, which share-locks it, runs alongside;
+  user writes on one draft serialize on its message row and advisory locks,
+  as Gmail's, which take no link lock, always have. Mailbox actions keep
+  `FOR UPDATE`, because a command's `accepted_order` is allocated under it,
+  and so does sender policy, like the settings worker. A timeout is
+  `EmailErr::Contended` (`AttachmentError::Contended`): 409 on REST, 503 with
+  `Retry-After` on attachment routes (whose 409 means the draft changed),
+  and GraphQL `INBOX_BUSY` with `retryable`.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,
@@ -623,6 +637,17 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
+- A projection event that keeps failing is given up as a message read is:
+  `MailboxProjectionService::project_leased` decides with `message_retry`
+  (backoff included), and `finish_projection` gives an uncounted claim back to
+  `attempts`. One whose claims keep ending without an outcome is given up
+  unprojected after `UNFINISHED_CLAIM_LIMIT`: `claim_projection` counts
+  `email_projection_outbox.unfinished_claims` from a lease still set when it
+  claims, since every recorded outcome deletes the entry or clears its lease.
+  A given-up entry is deleted, not parked: an event is projected once, a later
+  event for the link carries newer state, and a parked entry's `dedupe_key`
+  would swallow a re-enqueue of the same message version. It logs one
+  `mailbox projection abandoned` WARN holding only ids and kinds.
 - A projection's attachment download or upload that keeps failing is counted
   on the attachment (`email_attachments.upload_failures`), not the event, and
   abandoned at the limit `attachment_failure_limit` in
