@@ -49,6 +49,7 @@ and usage metering.
 ## Boundaries
 
 - Depends on: `ai_usage` (metering), `ai_toolset` (tool adapter trait),
+  `mcp_toolset` (the advertised name an MCP call replays under),
   `attachment`, `genai_telemetry`, `prompt`, `rig-core`/`rig-agent`.
 - Used by: `agent_inmem`, `ai_tools`, and most AI-surface crates that run a
   turn (directly or via `ai_tools`).
