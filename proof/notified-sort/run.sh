@@ -28,6 +28,10 @@ if ! command -v just >/dev/null || ! command -v psql >/dev/null; then
   exec nix develop "$PROOF_REPO" --command bash "${BASH_SOURCE[0]}" "$@"
 fi
 source "$here/env.sh"
+# The browser runs in its own network namespace (lib/chromium-netns.sh) and
+# reaches the dev servers through socat.
+: "${PROOF_SOCAT:=$(nix build --no-link --print-out-paths nixpkgs#socat)/bin/socat}"
+export PROOF_SOCAT
 run() { echo "== $*"; env "$@" node "$here/run.ts"; }
 seed_base="${PROOF_SEED_BASE:-1100}"
 mode="${1:-all}"

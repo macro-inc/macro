@@ -123,6 +123,15 @@ export const CLOSURES: Closure[] = [
     outcome:
       "Every row the branch reads is the row main shows at that position (the comparison checks the prefix row by row, and every field of it); main only shows rows further down sooner on a revisit, which the branch loads as the list scrolls. That is how every GraphQL Soup list main serves already behaves, and what users without the flag get.",
   },
+  {
+    id: 'R1',
+    match: /^live:[a-z]+:old-lists-rows-its-read-lacks$/,
+    title: "Main's live list shows a newly notified entity its own fresh read does not list",
+    cause:
+      "On a notification, main calls restoreSoupEntityToDoneFilteredQueries (main's lib/queries/notification/notification-soup.ts:88-93), which prepends the entity to the first page of every cached REST list whose filter leaves out done items (lib/queries/soup/normalized-cache/operations.ts:489-564), checked only by the caller's meta.itemFilter and insertFilter (:541-543), never by the server. The probe's generated-filter reads pass neither (probe.ts mount), so an email from another thread lands in a list confined to one thread. The branch's notified lists are GraphQL and re-read the server instead (lib/queries/notification/notification-soup.ts revalidateNotifiedGraphqlSoupLists). Seen in smoke seed 2100, lane v0, sequence 0, step 1 (notify on an email; the list is confined to another email thread and to documents and events not done): main's live list puts the email first, main's fresh read and the branch both leave it out. The class requires that the extra rows be the only difference from main's own fresh read.",
+    outcome:
+      "Visible on main only, and only for a caller without an item filter: the app's filtered callers pass one for this reason (features/dynamic-ui/widgets/List.tsx:332-337, features/next-soup/soup-view/soup-view-context.tsx:953-957), and Home passes its tab filter (features/home/queries/use-home-query.ts:169). The branch's list is the server's list within the live bound, as the harness checks on every step.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

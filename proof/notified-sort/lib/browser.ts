@@ -85,9 +85,23 @@ export function stopApp(app: AppServer) {
   app.process.kill('SIGTERM');
 }
 
+/**
+ * One headless Chromium for both apps. Unless PROOF_NETNS=0 it runs in a
+ * network namespace of its own (chromium-netns.sh), reaching only the two
+ * dev servers, so container restarts on the host cannot fail its requests.
+ */
 export async function launchBrowser(): Promise<Browser> {
+  const base = Number(process.env.PROOF_PORT_BASE ?? 30110);
+  const isolated = process.env.PROOF_NETNS !== '0';
+  if (isolated && !process.env.PROOF_SOCAT) throw new Error('set PROOF_SOCAT to a socat binary, or PROOF_NETNS=0');
   return chromium.launch({
     headless: true,
+    ...(isolated
+      ? {
+          executablePath: join(import.meta.dirname, 'chromium-netns.sh'),
+          env: { ...process.env, PROOF_CHROMIUM: chromium.executablePath(), PROOF_NETNS_PORTS: `${base},${base + 1}` },
+        }
+      : {}),
     args: ['--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
   });
 }

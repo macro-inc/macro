@@ -150,3 +150,19 @@ describe('mutants', () => {
     }
   });
 });
+
+describe('live closures', () => {
+  it('close only main-side live misses whose sole difference is rows main inserted, never a branch miss', () => {
+    expect(closureOf('live:random:old-lists-rows-its-read-lacks')?.id).toBe('R1');
+    expect(closureOf('live:home:old-lists-rows-its-read-lacks')?.id).toBe('R1');
+    for (const open of [
+      'live:random:old-not-within-bound',
+      'live:random:new-not-within-bound',
+      'live:home:new-not-within-bound:after-network-change',
+      'live:random:both-not-within-bound',
+      'live:random:new-lists-rows-its-read-lacks',
+    ]) {
+      expect(closureOf(open), open).toBeUndefined();
+    }
+  });
+});

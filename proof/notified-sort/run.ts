@@ -483,7 +483,14 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             if (o !== null && n === null) {
               tallyInto(classes, [classify({ signature: `live:${tag}:new-not-within-bound${changed[1]}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][1] ?? [], raw[i][1]) ?? ''}` })], 'sequences');
             } else if (o === null && n !== null) {
-              tallyInto(classes, [classify({ signature: `live:${tag}:old-not-within-bound${changed[0]}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][0] ?? [], raw[i][0]) ?? ''}` })], 'sequences');
+              // Main's REST cache prepends a notified entity to cached lists without
+              // asking the server (closure R1): told apart when those rows are the
+              // only difference from main's own fresh read.
+              const oldLive = lastLive[i][0] ?? [];
+              const extra = oldLive.filter((r) => !raw[i][0].some((x) => x.key === r.key));
+              const insertedOnly = extra.length > 0 && sameRows(oldLive.filter((r) => !extra.includes(r)), raw[i][0]);
+              const why = insertedOnly ? 'old-lists-rows-its-read-lacks' : `old-not-within-bound${changed[0]}`;
+              tallyInto(classes, [classify({ signature: `live:${tag}:${why}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][0] ?? [], raw[i][0]) ?? ''}` })], 'sequences');
             } else if (o === null && n === null) {
               tallyInto(classes, [classify({ signature: `live:${tag}:both-not-within-bound${changed[0] || changed[1]}`, kind: 'order', detail: JSON.stringify(at) })], 'sequences');
             }
