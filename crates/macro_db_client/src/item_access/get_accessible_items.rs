@@ -21,7 +21,9 @@ static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItem
 ///
 /// Callers that miss the cache at the same time for the same database, user and
 /// filters share one run of the queries. A failure reaches all of them as an
-/// `Arc<sqlx::Error>`.
+/// `Arc<sqlx::Error>`. A run whose callers all go away (searches cancelled as
+/// the user keeps typing) still finishes, so the document checks it reads are
+/// there for the next search, and a caller arriving meanwhile joins it.
 pub async fn get_user_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -83,7 +85,7 @@ async fn shared_accessible_items(
     // Boxed so the lookup adds one pointer, not its whole state machine, to
     // the future of every caller up the stack: services near rustc's layout
     // depth limit stop compiling otherwise.
-    Ok(Box::pin(RUNNING_LOOKUPS.run(key, lookup)).await?)
+    Ok(Box::pin(RUNNING_LOOKUPS.run_to_completion(key, lookup)).await?)
 }
 
 async fn query_accessible_items(
@@ -170,6 +172,7 @@ const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 50_000;
     fields(
         looked_up_by_grant = tracing::field::Empty,
         grants = tracing::field::Empty,
+        document_checks = tracing::field::Empty,
         documents_checked = tracing::field::Empty,
         documents_reused = tracing::field::Empty,
         documents_listed = tracing::field::Empty,
@@ -214,6 +217,7 @@ async fn accessible_documents(
             exclude_owned,
         )
         .await?;
+        span.record("document_checks", counts.outcome());
         span.record("documents_checked", counts.checked);
         span.record("documents_reused", counts.reused);
         ids

@@ -209,3 +209,83 @@ async fn when_the_work_panics_the_other_callers_run_it_themselves() {
     assert_eq!(flights.run("user-1", panics_on_first_run).await, Ok(4));
     assert_eq!(runs.load(Ordering::SeqCst), 3);
 }
+
+#[tokio::test]
+async fn a_run_to_completion_abandoned_by_every_caller_is_joined_by_the_next() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let (release, released) = watch::channel(None);
+
+    let mut abandoned: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", counted(&runs, &released)));
+    assert!(futures::poll!(abandoned.as_mut()).is_pending());
+    drop(abandoned);
+
+    let mut next: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", counted(&runs, &released)));
+    assert!(futures::poll!(next.as_mut()).is_pending());
+    release.send(Some(Ok(5))).unwrap();
+
+    assert_eq!(next.await, Ok(5));
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_run_to_completion_finishes_with_no_caller_left() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let (release, released) = watch::channel(None::<()>);
+    // The work holds the only sender, so work that is dropped unfinished
+    // closes the channel and fails the wait below instead of hanging it.
+    let (finish, mut finished) = watch::channel(false);
+    let work = move || {
+        let mut released = released.clone();
+        let finish = finish.clone();
+        async move {
+            released.wait_for(Option::is_some).await.unwrap();
+            finish.send(true).unwrap();
+            Ok(6)
+        }
+    };
+
+    let mut abandoned: Caller<'_> = Box::pin(flights.run_to_completion("user-1", work));
+    assert!(futures::poll!(abandoned.as_mut()).is_pending());
+    drop(abandoned);
+    release.send(Some(())).unwrap();
+
+    assert!(finished.wait_for(|done| *done).await.is_ok());
+}
+
+#[tokio::test]
+async fn when_a_run_to_completion_panics_the_other_callers_run_it_themselves() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let (release, released) = watch::channel(None::<()>);
+    let panics_on_first_run = || {
+        let runs = Arc::clone(&runs);
+        let mut released = released.clone();
+        async move {
+            let run = runs.fetch_add(1, Ordering::SeqCst);
+            released.wait_for(Option::is_some).await.unwrap();
+            assert_ne!(run, 0, "the first run panics");
+            Ok(4)
+        }
+    };
+
+    let mut started: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", panics_on_first_run));
+    let mut joined: Caller<'_> = Box::pin(flights.run_to_completion("user-1", panics_on_first_run));
+    assert!(futures::poll!(started.as_mut()).is_pending());
+    assert!(futures::poll!(joined.as_mut()).is_pending());
+    release.send(Some(())).unwrap();
+
+    assert!(AssertUnwindSafe(joined).catch_unwind().await.is_err());
+
+    assert_eq!(started.await, Ok(4));
+    assert_eq!(
+        flights
+            .run_to_completion("user-1", panics_on_first_run)
+            .await,
+        Ok(4)
+    );
+    assert_eq!(runs.load(Ordering::SeqCst), 3);
+}

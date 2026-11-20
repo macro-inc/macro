@@ -10,10 +10,12 @@
 //! The work belongs to every caller waiting on it, not to the one that started
 //! it. Whichever caller is polled drives it, so it keeps running when the
 //! caller that started it is cancelled, and it is dropped only when the last
-//! waiting caller goes away. An error is an output like any other: every
-//! waiting caller receives it and the next caller starts again. If the work
-//! panics, the panic stays with the caller that was driving it and every other
-//! waiting caller runs the work for itself.
+//! waiting caller goes away, unless it was started with
+//! [`SingleFlight::run_to_completion`], which keeps it running to its end. An
+//! error is an output like any other: every waiting caller receives it and the
+//! next caller starts again. If the work panics, the panic stays with the
+//! caller that was driving it and every other waiting caller runs the work for
+//! itself.
 
 use std::{
     collections::HashMap,
@@ -45,6 +47,13 @@ mod test;
 pub const COALESCED_FIELD: &str = "coalesced";
 
 type Runs<K, T> = Arc<Mutex<HashMap<K, Run<T>>>>;
+
+/// Who drives a run: its callers alone, or a task as well.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Callers {
+    Drive,
+    DriveWithTask,
+}
 type Panicked = Shared<oneshot::Receiver<()>>;
 
 struct Run<T> {
@@ -89,7 +98,32 @@ where
         F: Fn() -> Fut,
         Fut: Future<Output = T> + Send + 'static,
     {
-        let (shared, panicked, coalesced) = self.join_or_start(key, &work);
+        self.run_with(key, work, Callers::Drive).await
+    }
+
+    /// Like [`run`](Self::run), but the work also runs to its end when every
+    /// caller goes away, and a caller arriving before then joins it. A task on
+    /// the current Tokio runtime drives it alongside the callers.
+    ///
+    /// For work whose effects outlast the call, such as a lookup that leaves
+    /// what it read for the next one: when its callers give up (a search
+    /// cancelled because the user kept typing), the next caller would
+    /// otherwise start over. A panic in the task reaches no caller; the
+    /// waiting ones run the work themselves, as when a caller's poll panics.
+    pub async fn run_to_completion<F, Fut>(&self, key: K, work: F) -> T
+    where
+        F: Fn() -> Fut,
+        Fut: Future<Output = T> + Send + 'static,
+    {
+        self.run_with(key, work, Callers::DriveWithTask).await
+    }
+
+    async fn run_with<F, Fut>(&self, key: K, work: F, callers: Callers) -> T
+    where
+        F: Fn() -> Fut,
+        Fut: Future<Output = T> + Send + 'static,
+    {
+        let (shared, panicked, coalesced) = self.join_or_start(key, &work, callers);
         tracing::Span::current().record(COALESCED_FIELD, coalesced);
 
         // The panic signal is polled first: polling work that has panicked
@@ -106,6 +140,7 @@ where
         &self,
         key: K,
         work: &F,
+        callers: Callers,
     ) -> (Shared<BoxFuture<'static, T>>, Panicked, bool)
     where
         F: Fn() -> Fut,
@@ -144,6 +179,13 @@ where
                 started_by: tracing::Span::current(),
             };
             running.insert(key, run);
+        }
+
+        // The task holds the work, which keeps the run joinable while no
+        // caller waits. Like a caller, it stops at the panic signal rather
+        // than poll work that has panicked.
+        if callers == Callers::DriveWithTask {
+            tokio::spawn(select(panicked.clone(), shared.clone()).map(drop));
         }
 
         (shared, panicked, false)

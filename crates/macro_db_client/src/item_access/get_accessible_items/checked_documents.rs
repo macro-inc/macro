@@ -15,7 +15,7 @@ use uuid::Uuid;
 /// document moved to or restored from the Trash, and a purge (which removes
 /// the grants) count at once. Only a document given to another owner counts
 /// once this has passed.
-const CHECKS_KEPT_FOR: Duration = Duration::from_secs(3600);
+const CHECKS_KEPT_FOR: Duration = Duration::from_secs(600);
 
 /// Callers whose checks a process keeps, the least recently used dropped first.
 const CALLERS_KEPT: usize = 256;
@@ -46,6 +46,18 @@ static KEPT: LazyLock<Mutex<SizedCache<CheckKey, Arc<Checks>>>> =
 pub(super) struct CheckCounts {
     pub(super) checked: usize,
     pub(super) reused: usize,
+}
+
+impl CheckCounts {
+    /// `hit` when no granted document needed reading, `miss` when none of
+    /// them had been checked, `partial` otherwise.
+    pub(super) fn outcome(&self) -> &'static str {
+        match (self.checked, self.reused) {
+            (0, _) => "hit",
+            (_, 0) => "miss",
+            _ => "partial",
+        }
+    }
 }
 
 /// The ids among `granted` that are documents the caller can open: not in the

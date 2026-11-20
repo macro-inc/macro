@@ -128,6 +128,9 @@ data checks and explicit vault purge. It does not depend on a successful item.
 - `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
   and `call_record::get::get_accessible_call_ids` (uncached) share one run of
   their queries between concurrent identical callers through `single_flight`.
+  The accessible-items run uses `run_to_completion`: it finishes when every
+  caller has gone away (a cancelled search), so its document checks are kept
+  for the next search, and a caller arriving meanwhile joins it.
   The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
   covers the cached path and needs its own user ids per test.
 - `get_user_accessible_items` reads the caller's document grants first, up to
