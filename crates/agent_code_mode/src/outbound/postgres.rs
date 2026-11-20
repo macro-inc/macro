@@ -21,7 +21,7 @@ fn storage(error: sqlx::Error) -> CodeModeError {
 
 /// The record as JSONB accepts it. PostgreSQL rejects `\u0000` in JSONB text,
 /// which program sources, results and tool outputs can contain.
-fn jsonb(record: &ExecutionRecord) -> Result<Value, CodeModeError> {
+pub(super) fn jsonb(record: &ExecutionRecord) -> Result<Value, CodeModeError> {
     let mut value = serde_json::to_value(record)
         .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))?;
     strip_nul(&mut value);

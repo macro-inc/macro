@@ -263,6 +263,12 @@ impl UiCommandService {
         }
 
         let record = self.store.get(session, execution).await?;
+        // No tab waits on a background job.
+        if record.job.is_some() {
+            return Err(CodeModeError::Invalid(
+                "macro.ui.open is not available in a background job.".into(),
+            ));
+        }
         let active = self.active.active(session).await?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
             return Err(CodeModeError::Forbidden);

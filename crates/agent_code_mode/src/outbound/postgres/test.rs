@@ -21,6 +21,7 @@ async fn records_survive_reconnection_and_remain_scoped_to_their_session(pool: P
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        job: None,
     };
     let store = PgExecutionStore::new(pool.clone());
     store.create(session, &record).await.unwrap();
@@ -79,6 +80,7 @@ async fn records_with_nul_characters_are_saved_without_them(pool: PgPool) {
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        job: None,
     };
     let store = PgExecutionStore::new(pool);
     store.create(session, &record).await.unwrap();

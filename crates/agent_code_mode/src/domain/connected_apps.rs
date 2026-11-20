@@ -136,6 +136,21 @@ pub struct ConnectedAppUse {
     pub acting_as: ToolActor,
     /// That choice resolved against the current turn.
     pub user: MacroUserIdStr<'static>,
+    /// Set for a background job: the turn that launched it, whose authority
+    /// it keeps. A job only launches in a turn its owner prompted, so its
+    /// calls are never held for approval after that turn.
+    pub job_turn: Option<macro_uuid::Uuid>,
+}
+
+/// Discovering and adding servers wait on the turn's gate, which a job no
+/// longer has; a job uses the apps it was given.
+fn refuse_in_job(usage: &ConnectedAppUse) -> Result<(), CodeModeError> {
+    if usage.job_turn.is_some() {
+        return Err(CodeModeError::Invalid(
+            "A background job can't discover or add connected apps; do that in the foreground.".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// The session agent's connected apps, reached through the harness egress.
@@ -214,15 +229,29 @@ impl ConnectedAppService {
             return Err(CodeModeError::Forbidden);
         }
         let record = self.store.get(session, execution).await?;
-        let active = self.turns.active(session).await?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
             return Err(CodeModeError::Forbidden);
         };
-        if record.status != ExecutionStatus::Running || active != Some(turn) {
+        if record.status != ExecutionStatus::Running {
             return Err(CodeModeError::Forbidden);
         }
-
         let accounts = self.tools.accounts(session).await?;
+        // A running job is bound to itself, not to the session's current
+        // turn, and acts as the owner who launched it.
+        if record.job.is_some() {
+            if &accounts.owner != caller {
+                return Err(CodeModeError::Forbidden);
+            }
+            return Ok(ConnectedAppUse {
+                session,
+                acting_as,
+                user: caller.clone(),
+                job_turn: Some(turn),
+            });
+        }
+        if self.turns.active(session).await? != Some(turn) {
+            return Err(CodeModeError::Forbidden);
+        }
         let user = acting_as
             .resolve(&accounts.owner, accounts.requester.as_ref())
             .map_err(|_| CodeModeError::Forbidden)?;
@@ -233,6 +262,7 @@ impl ConnectedAppService {
             session,
             acting_as,
             user: caller.clone(),
+            job_turn: None,
         })
     }
 
@@ -281,6 +311,7 @@ impl ConnectedAppService {
         request: DiscoveryRequest,
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
         let usage = self.admit(access, caller, execution).await?;
+        refuse_in_job(&usage)?;
         self.tools.discover(&usage, request).await
     }
 
@@ -293,6 +324,7 @@ impl ConnectedAppService {
         server: ConnectMcpServer,
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
         let usage = self.admit(access, caller, execution).await?;
+        refuse_in_job(&usage)?;
         self.tools.add_server(&usage, server).await
     }
 

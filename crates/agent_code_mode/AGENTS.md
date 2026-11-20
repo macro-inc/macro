@@ -34,6 +34,32 @@ stacks. Process isolation belongs to
   into a top-level `modelMedia`, which `agent::tool_media` turns into image
   blocks as it does for `RenderCanvas`. The harness adapter is
   `agent_harness_service/src/code_mode/images.rs`.
+- `src/domain/service/jobs.rs`: background jobs. `ExecuteCode`'s
+  `background: {title}` launches the execution as a job that outlives its
+  turn, where `ExecutionCredentials::may_detach` allows it (harness rule:
+  the session owner prompted the launching turn, the session is not a
+  hidden background one, and the owner has PostHog
+  `enable-background-code-jobs`); elsewhere it runs in the foreground and
+  the receipt's `ranInForeground` says why. The launch type-checks and
+  mints a credential lasting the job's deadline (`RunLifetime::Job`, 10
+  minutes plus margin), returns a running receipt with `job`, and runs on
+  the `JobRuntime`'s own executor (4 slots a replica) on a `TaskTracker`,
+  without `watch_turn`: its row (`JobStore::control`, every second), its
+  session being archived or gone, a local cancel or shutdown stop it.
+  `JobStore::settle` writes the final record and its waking `job.settled`
+  notification in one transaction, at most once (`job_settled_at`).
+  Shutdown (`shutdown_jobs`, before the executors) settles running jobs as
+  `Interrupted`; `sweep_jobs` settles ones a dead replica left past deadline
+  plus `SWEEP_GRACE`. Caps (`JOB_CAPS`: 3 a session, 10 an account) are
+  checked in the launch transaction under an advisory lock per account.
+  Each state change logs `_macro/job_updated` (best effort). `CancelJob`
+  and `POST /agent-sessions/{id}/code-executions/{execution}/cancel` (a
+  person with edit access, never a program) set `job_cancel_requested_at`.
+  A job's connected-app calls keep its launching turn's authority and never
+  wait for approval; discovery, adding servers and `macro.ui.open` are
+  refused in a job. Spans: `agent.job.start`, `agent.job.run` (root, linked;
+  `agent.job.queue`, `agent.job.execute`), `agent.job.settle`,
+  `agent.job.sweep`, `agent.job.cancel`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.

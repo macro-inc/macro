@@ -2,3 +2,4 @@
 pub mod postgres;
 pub mod reviews;
 pub mod turns;
+pub mod jobs;

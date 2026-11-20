@@ -771,7 +771,9 @@ impl ReviewService {
         }
     }
 }
-pub(super) fn session_id(kind: EntityType, id: &str) -> Result<AgentSessionId, CodeModeError> {
+
+/// The agent session an entity-access receipt names.
+pub fn session_id(kind: EntityType, id: &str) -> Result<AgentSessionId, CodeModeError> {
     if kind != EntityType::AgentSession {
         return Err(CodeModeError::Forbidden);
     }

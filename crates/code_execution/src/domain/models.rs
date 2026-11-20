@@ -136,6 +136,9 @@ pub struct Limits {
     pub background: bool,
 }
 
+/// The longest any executor may let a program run: a background job's limit.
+pub const MAX_DURATION: Duration = Duration::from_secs(15 * 60);
+
 impl Default for Limits {
     fn default() -> Self {
         Self {
@@ -160,7 +163,7 @@ impl Limits {
         if !(1..=64).contains(&self.max_running)
             || self.max_queued > 1024
             || self.max_duration.is_zero()
-            || self.max_duration > Duration::from_secs(300)
+            || self.max_duration > MAX_DURATION
             || !(1..=1024 * 1024).contains(&self.max_source_bytes)
             || !(1024..=1024 * 1024).contains(&self.max_frame_bytes)
             || self.max_output_bytes < self.max_frame_bytes
