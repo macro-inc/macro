@@ -13,7 +13,6 @@ import { Permissions } from '../SharePermissions';
 import {
   ShareModal,
   ShareOptions,
-  ShareRequestsTrigger,
   ShareTrigger,
   shareLevelsFor,
 } from './ShareButton';
@@ -1591,30 +1590,6 @@ describe('native project sharing', () => {
       name: 'Share, 2 pending permission requests',
     });
     expect(share.textContent).toBe('Share2');
-  });
-
-  it('shows Share in a menu-only header just while permission requests wait', () => {
-    const onClick = vi.fn();
-    const mount = () =>
-      render(() => (
-        <ShareRequestsTrigger
-          onClick={onClick}
-          id="initiative-1"
-          blockType="initiative"
-        />
-      ));
-    mount();
-    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
-
-    cleanup();
-    mocks.pendingRequests = 1;
-    mount();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Share, 1 pending permission request',
-      })
-    );
-    expect(onClick).toHaveBeenCalledOnce();
   });
 
   it('copies the project link that pastes as a mention', () => {

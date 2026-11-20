@@ -90,8 +90,7 @@ and agent-session Share menus, using the access levels that each supports.
 
 Reviewers see a pending count on **Share**, after its label (after the icon
 where the header hides the label), and its tooltip and accessible name read
-"N pending permission requests". A phone header that keeps Share in a menu
-(a project's) shows Share with the count in its bar only while requests wait. Entering an item with pending requests
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
 count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team

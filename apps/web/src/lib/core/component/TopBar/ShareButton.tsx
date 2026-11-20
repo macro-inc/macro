@@ -1887,52 +1887,10 @@ export function ShareModal(props: ShareModalProps) {
   );
 }
 
-function shareItemType(type: ShareBlockType): ShareItemType {
-  return type === 'initiative' || type === 'external_chat'
-    ? type
-    : blockNameToItemType(type);
-}
-
 function pendingRequestsLabel(count: number) {
   return count === 1
     ? '1 pending permission request'
     : `${count} pending permission requests`;
-}
-
-/**
- * Share with its pending permission-request count, shown only while requests
- * wait: for a header that keeps Share in a menu, so reviewers still see them.
- * Like Share, it opens the dialog once per visit while requests wait.
- */
-export function ShareRequestsTrigger(props: {
-  onClick: () => void;
-  id: string;
-  blockType: ShareBlockType;
-}) {
-  const panel = useSplitPanel();
-  const requests = useShareRequestTrigger({
-    entity: () => shareEntity(shareItemType(props.blockType), props.id),
-    active: () => !panel?.isInlinePreview && (panel?.isPanelActive() ?? false),
-    open: () => props.onClick(),
-  });
-  return (
-    <span ref={requests.ref} class="inline-flex min-h-px min-w-px">
-      <Show when={requests.count() > 0}>
-        <HeaderActionGroup label="Sharing">
-          <HeaderActionButton
-            grouped
-            size="icon-md"
-            label="Share"
-            tooltip={`Share · ${pendingRequestsLabel(requests.count())}`}
-            count={requests.count()}
-            countLabel={pendingRequestsLabel(requests.count())}
-            icon={<IconShared class="size-4" />}
-            onClick={() => requests.open()}
-          />
-        </HeaderActionGroup>
-      </Show>
-    </span>
-  );
 }
 
 export function ShareTrigger(props: {
@@ -1972,7 +1930,12 @@ export function ShareTrigger(props: {
     throw new Error('<ShareTrigger> requires an explicit block id');
   };
 
-  const itemType = () => shareItemType(blockType());
+  const itemType = (): ShareItemType => {
+    const type = blockType();
+    return type === 'initiative' || type === 'external_chat'
+      ? type
+      : blockNameToItemType(type);
+  };
 
   // Hovering or focusing Share loads what the dialog shows first, so a click
   // opens it with its roster instead of waiting on the network.
