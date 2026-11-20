@@ -18,7 +18,11 @@ export type AgentInviteParts = {
   submit: JSX.Element;
 };
 
-/** Layout A: name with its face, then the computer, then the actions. */
+/**
+ * Layout A: name with its face, then the computer, then the actions. Body and
+ * footer share one 20px inset, so the cards, the fields and the buttons line
+ * up on both edges.
+ */
 export function AgentInviteLayoutA(props: AgentInviteParts) {
   return (
     <>
@@ -29,7 +33,7 @@ export function AgentInviteLayoutA(props: AgentInviteParts) {
           {props.notice}
         </div>
       </Panel.Body>
-      <Panel.Footer class="flex-wrap justify-end gap-2 px-4 py-3">
+      <Panel.Footer class="flex-wrap justify-end gap-2 px-5 py-3">
         {props.cancel}
         {props.submit}
       </Panel.Footer>

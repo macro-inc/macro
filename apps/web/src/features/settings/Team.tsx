@@ -555,9 +555,17 @@ export function InviteToTeamDialog(props: {
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
-      <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-        <Panel.Header class="px-3 gap-2">
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => !open && close()}
+      // The agent form is one column; the dialog's default width leaves it
+      // stretched across space it doesn't use.
+      class={kind() === 'agent' && !sent() ? 'w-[36rem]' : undefined}
+    >
+      <Panel depth={2} class="max-h-[75vh] w-full text-ink rounded-xl">
+        {/* A phone sheet has no close button, so its title takes the body's
+            inset. */}
+        <Panel.Header class="px-3 gap-2 mobile:px-5">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>

@@ -287,7 +287,12 @@ export function InviteAgentForm(props: {
         </div>
       }
       notice={
-        <div ref={notice} data-add-agent-state={props.state.kind}>
+        <div
+          ref={notice}
+          data-add-agent-state={props.state.kind}
+          // With nothing to say it takes no room, not a gap under the sizes.
+          class="empty:hidden"
+        >
           <Switch>
             <Match when={props.state.kind === 'declined'}>
               <FailureNotice
