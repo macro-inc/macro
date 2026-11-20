@@ -67,20 +67,21 @@ export function programEnded(options: {
 }
 
 /** One row of a program's operations: a step, or the same step repeated. */
-export interface ActivityRun {
-  item: ExecutionActivity;
+export interface ActivityRun<Step> {
+  item: Step;
   count: number;
 }
 
 /**
  * A program's operations as rows: back-to-back operations with the same label
  * and outcome fold into one, so a loop over one call reads as one step with
- * its count rather than a wall of identical rows.
+ * its count rather than a wall of identical rows. Every view that lists or
+ * counts the operations folds them this way, so their counts agree.
  */
-export function activityRuns(
-  activity: readonly ExecutionActivity[]
-): ActivityRun[] {
-  const runs: ActivityRun[] = [];
+export function activityRuns<Step extends { label: string; status: string }>(
+  activity: readonly Step[]
+): ActivityRun<Step>[] {
+  const runs: ActivityRun<Step>[] = [];
   for (const item of activity) {
     const last = runs.at(-1);
     if (last?.item.label === item.label && last.item.status === item.status) {

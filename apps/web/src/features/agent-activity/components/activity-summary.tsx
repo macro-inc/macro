@@ -1,3 +1,4 @@
+import { activityRuns } from '@app/features/block-agent/state/code-execution';
 import { DisclosureCaret, TextShimmer } from '@app/features/block-agent/ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, createUniqueId, Show } from 'solid-js';
@@ -5,14 +6,16 @@ import { ActivityRows, type ActivityRowView } from './activity-rows';
 
 /**
  * A finished run of steps as one line that opens to the steps. Failed steps
- * are counted on the line, so folding the run never hides that one failed.
+ * are counted on the line, so folding the run never hides that one failed. A
+ * step repeated back to back counts once, as its one row does.
  */
 export function ActivitySummary(props: { rows: readonly ActivityRowView[] }) {
   const [open, setOpen] = createSignal(false);
   const contentId = createUniqueId();
-  const count = () => props.rows.length;
+  const runs = () => activityRuns(props.rows);
+  const count = () => runs().length;
   const failed = () =>
-    props.rows.filter((row) => row.status === 'failed').length;
+    runs().filter((run) => run.item.status === 'failed').length;
   // A call held for permission can still finish after its run sealed.
   const running = () => props.rows.some((row) => row.status === 'running');
   return (

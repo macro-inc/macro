@@ -34,6 +34,7 @@ import {
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { useOpenPromptOrigin } from '../open-prompt-origin';
+import { activityRuns } from '../state/code-execution';
 import { isCodeModeSupportCall } from '../state/code-mode-support';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
@@ -212,11 +213,13 @@ function ToolGroupPart(props: {
       (row) => row.id === callId || row.id.startsWith(`${callId}:`)
     );
   const programSteps = (program: ReturnType<typeof programs>[number]) =>
-    program.steps() || receiptRows(program.id).length;
+    program.steps() || activityRuns(receiptRows(program.id)).length;
   const programFailures = (program: ReturnType<typeof programs>[number]) =>
     program.steps() > 0
       ? program.failures()
-      : receiptRows(program.id).filter((row) => row.status === 'failed').length;
+      : activityRuns(receiptRows(program.id)).filter(
+          (run) => run.item.status === 'failed'
+        ).length;
   const count = () =>
     programs().reduce(
       (total, program) => total + programSteps(program),

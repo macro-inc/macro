@@ -3,6 +3,7 @@ import type {
   ExecutionRecord,
   RecordedToolCall,
 } from '@service-agent-harness/generated/schemas';
+import { Key } from '@solid-primitives/keyed';
 import { For, Show } from 'solid-js';
 import { activityRuns, programEnded } from '../../state/code-execution';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
@@ -46,17 +47,19 @@ export function CodeExecutionToolCall(props: {
           trailing={props.common.trailing}
         />
       </Show>
-      <For each={runs()}>
+      {/* Runs are new objects with every poll. Keyed by their first step, a
+          row updates its count in place. */}
+      <Key each={runs()} by={(run) => run.item.id}>
         {(run) => (
           <div class="min-h-8 shrink-0">
             <ActivityRow
-              item={run.item}
-              count={run.count}
+              item={run().item}
+              count={run().count}
               turnActive={isToolActive(props.common.status)}
             />
           </div>
         )}
-      </For>
+      </Key>
       <Show when={props.record?.activityTruncated}>
         <p class="text-xs text-ink-extra-muted">
           Only the first 128 steps are listed.
@@ -106,10 +109,17 @@ function ActivityRow(props: {
   const uncertain = () =>
     props.item.status === 'unknown' ||
     (props.item.status === 'running' && !props.turnActive);
+  // A count replaces the card's own "Failed", so a folded run says it again.
+  const outcome = () => {
+    if (uncertain()) return 'Outcome unknown';
+    if (props.item.status === 'failed' && props.count > 1) return 'Failed';
+    return undefined;
+  };
   const trailing = () => {
     const times = props.count > 1 ? `×${props.count}` : undefined;
-    if (!uncertain()) return times;
-    return times ? `${times} · Outcome unknown` : 'Outcome unknown';
+    const said = outcome();
+    if (!times) return said;
+    return said ? `${times} · ${said}` : times;
   };
   return (
     <ToolCard
