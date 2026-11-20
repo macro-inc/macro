@@ -31,7 +31,7 @@ pub(super) mod test;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "EditDocument",
-    description = "Edit a Macro markdown document in place. Two ways: `edits` applies exact changes you already know, with no second model, much faster; `instructions` asks an AI editor to work the change out, which takes several seconds to a minute. Prefer `edits` whenever you can say the exact text: copy `old` from the block content ReadContent returned (each block's internal markdown, with its nodeId as the block id), and give `new`. Use `instructions` for open-ended rewrites, restructuring you can't spell out, or formatting you don't know the markup for. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips with `instructions`, include each referenced item's ids and details: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`. With `edits`, write chips and cards as the same `<m-...>` tags ReadContent shows."
+    description = "Edit a Macro markdown document in place. Two ways: `edits` applies exact changes you already know, with no second model, much faster; `instructions` asks an AI editor to work the change out, which takes several seconds to a minute. Prefer `edits` whenever you can say the exact text: copy `old` from the block content ReadContent returned (each block's internal markdown, with its nodeId as the block id), and give `new`. A block ReadContent lists without a nodeId (a top-level image, say) can only be reached by matching text around it; when an exact `old` comes back as no_match, the refusal lists the blocks as the editor reads them. Use `instructions` for open-ended rewrites, restructuring you can't spell out, or formatting you don't know the markup for. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips with `instructions`, include each referenced item's ids and details: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`. With `edits`, write chips and cards as the same `<m-...>` tags ReadContent shows."
 )]
 pub struct EditDocument {
     #[schemars(
@@ -124,6 +124,10 @@ impl EditDocument {
                 internal_error: anyhow::anyhow!("EditDocument instructions call with an edits-only flag"),
             }),
             (true, true) => Ok(None),
+            (false, false) if self.fast => Err(ToolCallError {
+                description: "`fast` applies to `instructions` only; `edits` run no AI editor".to_owned(),
+                internal_error: anyhow::anyhow!("EditDocument edits call with fast"),
+            }),
             (false, false) => Ok(Some(MarkdownEditRequest {
                 edits: self.edits.clone(),
                 base_revision: None,
@@ -161,7 +165,7 @@ impl EditDocument {
             biased;
             _ = request_context.cancel.cancelled() => {
                 return Err(ToolCallError {
-                    description: "cancelled".to_string(),
+                    description: "cancelled; the edits may have applied, read the document before retrying".to_string(),
                     internal_error: anyhow::anyhow!("direct edit cancelled by user; it may have applied"),
                 });
             }
@@ -181,7 +185,7 @@ impl EditDocument {
                     for block in &refusal.blocks {
                         text.push_str(&format!(
                             "\n- block {} ({} occurrence(s)): {}",
-                            block.block_id, block.occurrences, block.markdown
+                            block.block_id.as_str(), block.occurrences, block.markdown
                         ));
                     }
                     text

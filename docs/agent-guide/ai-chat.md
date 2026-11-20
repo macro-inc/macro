@@ -1376,7 +1376,8 @@ code mode, and needs those three tools: a turn without them fails, with no
 direct-tools fallback. Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
-(`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
+(`document.applyMarkdownEdits(edits, { base })` for exact changes and
+`document.edit(instructions)` otherwise; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
 `render`; `ReadCanvas`, `ApplyCanvasEdits`, `EditCanvas` and `RenderCanvas`
 are hidden, and the model sees a render a program returns in
@@ -1504,7 +1505,10 @@ backticks, which read the same way. The agent reads the symbols a program uses,
 together, before writing it. There is no runtime `sdk.help` or
 `sdk.ToolName` proxy. The actual SDK exposes `macro.ai.structuredCompletion` and
 `macro.ai.decide`; Handlebars is imported from `handlebars`. Edit a document or task
-body with `document.edit(instructions)`, and a canvas through `document.canvas()`.
+body with `document.applyMarkdownEdits(edits, { base })` (after
+`document.markdownBlocks()`) when the exact change is known, or
+`document.edit(instructions)` to describe it, and a canvas through
+`document.canvas()`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
 bundled at build time; no package downloads happen in a run, and Deno strips
@@ -2760,7 +2764,7 @@ open the row to inspect the generated object or estimates. In code mode, the
 same services are available through `macro.ai.structuredCompletion` and
 `macro.ai.decide`. The program chooses what evidence to include in its final result.
 Generation and classification do not edit a document. Use
-`document.edit(instructions)` for an AI edit.
+`document.applyMarkdownEdits` for an exact edit, or `document.edit(instructions)` for an AI edit.
 
 ### Code-mode review stacks
 

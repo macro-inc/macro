@@ -92,8 +92,9 @@ pub enum MarkdownEditOutcome {
     /// The batch conflicts with the document as it is now; nothing was
     /// written.
     Conflict(crate::domain::markdown_edits::MarkdownEditConflict),
-    /// The worker found the request invalid (a malformed base revision);
-    /// nothing was written. The message is the worker's.
+    /// The worker refused the request before committing (a malformed base
+    /// revision, sync-service refusing the token, a document over the size
+    /// limit); nothing was written. The message is the worker's.
     Invalid(String),
 }
 

@@ -333,7 +333,7 @@ pub enum MarkdownEditRefusalCode {
 #[serde(rename_all = "camelCase")]
 pub struct MarkdownEditMatchingBlock {
     /// The block.
-    pub block_id: String,
+    pub block_id: BlockId,
     /// How often `old` occurs in it (0 for a no-match suggestion).
     pub occurrences: u32,
     /// Its markdown as the batch saw it.

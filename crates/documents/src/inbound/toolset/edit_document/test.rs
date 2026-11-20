@@ -1147,7 +1147,7 @@ async fn a_refused_batch_names_the_code_and_the_matching_blocks() {
             message: "edit 1: old occurs 2 times; add block_id".into(),
             edit: Some(1),
             blocks: vec![MarkdownEditMatchingBlock {
-                block_id: "b1".into(),
+                block_id: BlockId::try_from("b1".to_owned()).unwrap(),
                 occurrences: 2,
                 markdown: "Q3 and Q3".into(),
             }],

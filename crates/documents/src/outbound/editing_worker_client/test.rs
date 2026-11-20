@@ -332,9 +332,17 @@ async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
                             },
                         })),
                     ),
-                    _ => (
+                    2 => (
                         StatusCode::CONFLICT,
                         Json(serde_json::json!({ "error": "the matched text is gone", "conflict": { "reason": "changed", "edit": 1 } })),
+                    ),
+                    3 => (
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        Json(serde_json::json!({ "error": "The document exceeds the 4 MiB snapshot limit." })),
+                    ),
+                    _ => (
+                        StatusCode::CONFLICT,
+                        Json(serde_json::json!({ "error": "The document changed since it was read." })),
                     ),
                 }
             }
@@ -360,6 +368,8 @@ async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
     let applied = client.edit_markdown("doc", &token, &request).await.unwrap();
     let refused = client.edit_markdown("doc", &token, &request).await.unwrap();
     let conflict = client.edit_markdown("doc", &token, &request).await.unwrap();
+    let too_large = client.edit_markdown("doc", &token, &request).await.unwrap();
+    let sync_conflict = client.edit_markdown("doc", &token, &request).await.unwrap();
 
     match applied {
         MarkdownEditOutcome::Applied(edited) => {
@@ -381,6 +391,17 @@ async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
         MarkdownEditOutcome::Conflict(MarkdownEditConflict {
             reason: MarkdownEditConflictReason::Changed,
             message: "the matched text is gone".into(),
+        })
+    );
+    assert!(
+        matches!(&too_large, MarkdownEditOutcome::Invalid(message) if message.contains("4 MiB")),
+        "a 4xx is not written: {too_large:?}"
+    );
+    assert_eq!(
+        sync_conflict,
+        MarkdownEditOutcome::Conflict(MarkdownEditConflict {
+            reason: MarkdownEditConflictReason::Changed,
+            message: "The document changed since it was read.".into(),
         })
     );
     assert_eq!(

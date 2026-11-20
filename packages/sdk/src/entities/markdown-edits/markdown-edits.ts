@@ -78,6 +78,8 @@ export class DocumentBlock {
 
 /** A markdown document's blocks and the revision they were read at. */
 export interface DocumentBlocks {
+  /** The document read. */
+  document: Document;
   /** Pass the whole read as `base` to `applyMarkdownEdits`. */
   revision: string;
   /** Top-level blocks in document order. */
@@ -326,6 +328,7 @@ export async function readBlocks(
     }),
   );
   return {
+    document,
     revision,
     blocks: blocks.map((block) =>
       DocumentBlock.read(document, block.id, {
@@ -344,6 +347,10 @@ export async function applyEdits(
   edits: MarkdownEditOperation[],
   options: MarkdownEditOptions,
 ): Promise<Omit<MarkdownEditResult, 'webUrl'>> {
+  if (options.base && options.base.document.id !== document.id)
+    throw new MacroError(
+      `base was read from document ${options.base.document.id}, not ${document.id}`,
+    );
   const result = await client.storage.editDocumentMarkdown({
     path: { document_id: document.id },
     body: {
@@ -357,10 +364,14 @@ export async function applyEdits(
   const failure = result.error as MarkdownEditFailure | undefined;
   if (status === 422 && failure?.refusal)
     throw new MarkdownEditsRefusedError(document, failure.refusal);
-  if (status === 409)
-    throw failure?.conflict === 'busy'
-      ? new DocumentBusyError(result.error)
-      : new DocumentChangedError(result.error);
+  if (status === 409) {
+    const conflict =
+      failure?.conflict === 'busy'
+        ? new DocumentBusyError(result.error)
+        : new DocumentChangedError(result.error);
+    if (failure?.message) conflict.message += ` ${failure.message}`;
+    throw conflict;
+  }
   if (status === 502 || status === 504)
     throw new EditOutcomeUnknownError(result.error, status);
   if (result.error !== undefined && result.response === undefined)

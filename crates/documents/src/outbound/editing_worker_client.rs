@@ -130,8 +130,10 @@ struct WorkerRefusal {
 #[cfg(feature = "ai_tools")]
 #[derive(serde::Deserialize)]
 struct WorkerConflict {
+    #[serde(default)]
     error: String,
-    conflict: WorkerConflictDetail,
+    #[serde(default)]
+    conflict: Option<WorkerConflictDetail>,
 }
 
 #[cfg(feature = "ai_tools")]
@@ -474,17 +476,26 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             let body: WorkerConflict = response.json().await?;
             return Ok(MarkdownEditOutcome::Conflict(
                 crate::domain::markdown_edits::MarkdownEditConflict {
-                    reason: body.conflict.reason,
+                    // A 409 without a reason (sync-service's own) is a change.
+                    reason: body.conflict.map_or(
+                        crate::domain::markdown_edits::MarkdownEditConflictReason::Changed,
+                        |conflict| conflict.reason,
+                    ),
                     message: body.error,
                 },
             ));
         }
-        if status == reqwest::StatusCode::BAD_REQUEST {
-            return Ok(MarkdownEditOutcome::Invalid(worker_error(response).await));
-        }
         if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
             let body: WorkerRefusal = response.json().await?;
             return Ok(MarkdownEditOutcome::Refused(body.refusal));
+        }
+        // Any other 4xx (a malformed base revision, sync-service refusing the
+        // token, a document over the size limit) failed before the commit.
+        if status.is_client_error() {
+            return Ok(MarkdownEditOutcome::Invalid(format!(
+                "{} (HTTP {status})",
+                worker_error(response).await
+            )));
         }
         anyhow::ensure!(
             status.is_success(),
