@@ -75,6 +75,7 @@ import {
   shareWithChannelHandler,
 } from './ChannelMutations';
 import {
+  cancelJobHandler,
   describeCodeToolsHandler,
   executeCodeHandler,
   readCodeDocsHandler,
@@ -217,6 +218,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
   ReadCodeDocs: readCodeDocsHandler,
+  CancelJob: cancelJobHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
   ListAgentUpdates: listAgentUpdatesHandler,
