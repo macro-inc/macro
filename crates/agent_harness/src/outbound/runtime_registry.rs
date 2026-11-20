@@ -248,16 +248,8 @@ where
     /// registry no longer holds closed in between, and is closed again. Off
     /// the renewal's path: a close can wait on locks, and a late renewal lets
     /// every lease here lapse. Each undo runs inside this renewal's span, so
-    /// the restore and its second close read as one trace.
-    #[tracing::instrument(
-        name = "harness.registry.renew",
-        skip_all,
-        fields(
-            connections = tracing::field::Empty,
-            restored = tracing::field::Empty,
-            undone = tracing::field::Empty,
-        )
-    )]
+    /// the restore and its second close read as one trace; a replica holding
+    /// nothing renews nothing and opens no span.
     pub async fn renew_presence(&self) {
         let Some(presence) = &self.presence else {
             return;
@@ -268,12 +260,20 @@ where
             .iter()
             .map(|entry| (*entry.key(), entry.id))
             .collect();
-        let span = tracing::Span::current();
-        span.record("connections", live.len());
         if live.is_empty() {
             return;
         }
-        let restored = Arc::clone(presence).renew(live).await;
+        let span = tracing::info_span!(
+            "harness.registry.renew",
+            connections = live.len(),
+            restored = tracing::field::Empty,
+            undone = tracing::field::Empty,
+        );
+        let restored = Arc::clone(presence)
+            .renew(live)
+            .instrument(span.clone())
+            .await;
+        let _entered = span.enter();
         span.record("restored", restored.len());
         let mut undone = 0usize;
         for (harness, connection) in restored {
