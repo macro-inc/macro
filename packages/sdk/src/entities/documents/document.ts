@@ -34,6 +34,14 @@ import type { Channel } from '../channels/channel';
 import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import {
+  applyEdits,
+  type DocumentBlocks,
+  type MarkdownEditOperation,
+  type MarkdownEditOptions,
+  type MarkdownEditResult,
+  readBlocks,
+} from '../markdown-edits/markdown-edits';
+import {
   MessageThread,
   type TimelineOptions,
   timeline,
@@ -60,14 +68,6 @@ import {
   type SetContentOptions,
   writeMarkdown,
 } from './markdown';
-import {
-  applyEdits,
-  type DocumentBlocks,
-  type MarkdownEditOperation,
-  type MarkdownEditOptions,
-  type MarkdownEditResult,
-  readBlocks,
-} from './markdown-edits';
 import type {
   PresentationCopy,
   PresentationEditOperation,
@@ -579,9 +579,10 @@ export class Document
   }
 
   /**
-   * A markdown document's or task body's top-level blocks, each with its id,
-   * type and internal markdown, and the revision they were read at: what
-   * `applyMarkdownEdits` matches against. Pass the whole read as `base`.
+   * Top-level blocks with ids and internal markdown, and their revision.
+   *
+   * Works on a markdown document or task body: it is what `applyMarkdownEdits`
+   * matches against. Pass the whole read as `base`.
    *
    * @readonly
    */
@@ -590,10 +591,12 @@ export class Document
   }
 
   /**
-   * Apply exact edits to a markdown document's or task body's text, with no
-   * AI: use it whenever you know the exact change, and `edit` only to describe
-   * a change in words. The batch applies whole or not at all, in well under a
-   * second, and nothing is billed.
+   * Apply exact markdown edits without AI; prefer it to `edit`.
+   *
+   * Works on a markdown document's or task body's text: use it whenever you
+   * know the exact change, and `edit` only to describe a change in words. The
+   * batch applies whole or not at all, much faster than `edit`, and nothing is
+   * billed.
    *
    * Edits, applied in order:
    * - `{ replace, with, in?, all? }` replaces exact internal markdown, copied

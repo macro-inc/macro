@@ -1451,7 +1451,7 @@ changes it reads `document.markdownBlocks()` and calls
 `document.applyMarkdownEdits([...], { base })`,
 which applies `replace`/`insert`/`remove`/`move` edits with no AI and keeps
 edited blocks' ids and comments (the `EditDocument` tool's `edits` field is the
-same engine). Use the
+same engine; its types are the `markdownEdits` code-mode entity). Use the
 direct `ListEntities` tool
 for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON

@@ -8,15 +8,18 @@ import type {
 } from '../../../generated/storage/types.gen';
 import type { MacroClient } from '../../utils/client';
 import { MacroApiError, MacroError, unwrap } from '../../utils/unwrap';
-import { EditOutcomeUnknownError } from './ai-edit';
-import type { Document } from './document';
-import { DocumentChangedError } from './markdown';
+import { EditOutcomeUnknownError } from '../documents/ai-edit';
+import type { Document } from '../documents/document';
+import { DocumentChangedError } from '../documents/markdown';
 
 /**
- * One top-level block of a markdown document: a paragraph, heading, list,
- * table… A block is not an entity of its own; it belongs to its document and
- * is changed with `Document.applyMarkdownEdits`. `markdown` and `type` are as
- * the block was last read, when it was.
+ * A top-level block of a markdown document: a paragraph, heading, list, table…
+ *
+ * A block is not an entity of its own; it belongs to its document and is
+ * changed with `Document.applyMarkdownEdits`. `markdown` and `type` are as the
+ * block was last read, when it was.
+ *
+ * @routing Use when making exact edits to a markdown document's blocks with `Document.applyMarkdownEdits` or reading them with `markdownBlocks`; not AI edits from instructions.
  */
 export class DocumentBlock {
   private constructor(
@@ -55,6 +58,7 @@ export class DocumentBlock {
     );
   }
 
+  /** Serialize identity with its owning document. */
   toJSON(): {
     id: string;
     documentId: string;

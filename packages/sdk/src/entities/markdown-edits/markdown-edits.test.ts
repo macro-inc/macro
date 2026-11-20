@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import type { EditDocumentMarkdownData } from '../../../generated/storage/types.gen';
+import {
+  DocumentBlock,
+  DocumentChangedError,
+  EditOutcomeUnknownError,
+  MarkdownEditsRefusedError,
+} from '../../macro';
 import type { MacroClient } from '../../utils/client';
-import { EditOutcomeUnknownError } from './ai-edit';
-import { Document } from './document';
-import { DocumentChangedError } from './markdown';
-import { DocumentBlock, MarkdownEditsRefusedError } from './markdown-edits';
+import { Document } from '../documents/document';
 
 type EditRequest = Pick<EditDocumentMarkdownData, 'path' | 'body'>;
 
