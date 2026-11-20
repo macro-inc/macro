@@ -20,15 +20,7 @@ import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
 import { cn, Layer, Select, Tabs, Tooltip } from '@ui';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
   REMINDER_OVERRIDES_MAX,
@@ -553,10 +545,9 @@ export function EventComposerConferencePill(
                 props.value === 'none' && !removed() && 'text-ink-extra-muted'
               )}
             >
-              <Switch fallback={selectState.selectedOption().label}>
-                <Match when={removed()}>No online meeting</Match>
-                <Match when={props.value === 'none'}>Add meeting link</Match>
-              </Switch>
+              {props.value === 'none' && !removed()
+                ? 'Add meeting link'
+                : selectState.selectedOption().label}
             </span>
           )}
         </Select.Value>

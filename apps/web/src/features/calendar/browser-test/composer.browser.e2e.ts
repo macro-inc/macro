@@ -121,7 +121,7 @@ async function turnOffTeams(page: Page) {
   await expect(meeting).toContainText('Microsoft Teams');
   await meeting.click();
   await page.getByRole('option', { name: 'No meeting link' }).click();
-  await expect(meeting).toContainText('No online meeting');
+  await expect(meeting).toContainText('No meeting link');
   return composer;
 }
 

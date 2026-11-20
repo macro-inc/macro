@@ -1569,7 +1569,7 @@ cancelled, declined, and free events do not count as conflicts. Calendar 12/24-h
 already-open invitation cards as well as the calendar view.
 
 Outlook cannot remove Teams from an existing event. In the editor of a writable
-Outlook event you organize, turning Teams off (the pill reads `No online meeting`)
+Outlook event you organize, turning Teams off (the pill reads `No meeting link`)
 disables Save and shows a notice with `Replace event…` and `Undo`; `Undo` turns
 Teams back on. `Replace event…` previews a replacement that carries the editor's
 unsaved changes (title, time, description, location, guests, reminders, repeat

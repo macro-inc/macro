@@ -407,7 +407,7 @@ it('turning Teams off on an Outlook event asks for a replacement until Undo brin
   expect(screen.getByText(TEAMS_REMOVAL_NOTICE)).toBeTruthy();
   expect(
     screen.getByRole('button', { name: /Video conferencing/ }).textContent
-  ).toContain('No online meeting');
+  ).toContain('No meeting link');
   expect((save as HTMLButtonElement).disabled).toBe(true);
   fireEvent.submit(save.closest('form')!);
   expect(onSubmit).not.toHaveBeenCalled();
