@@ -48,7 +48,19 @@ Their isolation and threat model is in
   is its fixed user-safe sentence, and the raw error stays in the logs and the
   operator page. `setup.stepStartedAt` is when the current setup step began
   (null for Booting, which records no start).
-- Keep literal purchase resources in the versioned `domain::size::current_catalog`.
+- Keep literal purchase resources in the versioned `domain::size::SIZE_SPECS`
+  (`current_catalog` maps it to offers). Each tier writes out every quantity;
+  the size tests fail if its root disk, `/home` disk or units disagree with
+  what the fleet derives from a recorded purchase:
+
+  | Tier | Catalog entry | vCPUs | Memory | Root disk | `/home` | Disk quota | Units |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | Standard | `standard@2026-11` | 4 | 8 GiB | 32 GiB | 68 GiB | 100 GiB | 1 |
+  | Large | `large@2026-11` | 8 | 16 GiB | 32 GiB | 168 GiB | 200 GiB | 2 |
+  | XL | `xl@2026-11` | 16 | 32 GiB | 32 GiB | 368 GiB | 400 GiB | 4 |
+
+  Prices are per-size Stripe config (`computer_billing`), not derived from
+  resources. `SizeOffer.memoryGb`/`diskGb` carry GiB despite their wire names.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
   reserves sold units on a host; starting checks awake units (`Context::host_has_room`).
 - A powered-on computer stays Running until the team turns it off (Stopped).
@@ -132,8 +144,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   Drift logs an operator error without resizing.
   Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
   The disk quota splits into a fixed `image::ROOT_DISK_GIB` (32 GiB) root disk
-  and a data disk of the rest (`image::data_disk_gib`; 68/168/368 GiB for the
-  current sizes); drift checks compare the root disk only.
+  and a data disk of the rest (`image::data_disk_gib`; per tier in the table above);
+  drift checks compare the root disk only.
   Subscription reconcile matches computer ids, never prices.
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
   Read configured offers without billing through `ComputerService::catalog()`
