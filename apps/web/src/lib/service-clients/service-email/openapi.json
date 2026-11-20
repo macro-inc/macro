@@ -7915,7 +7915,7 @@
         "properties": {
           "confirmation": {
             "type": ["string", "null"],
-            "description": "The owner's approval, quoted. Required when an agent's program sends."
+            "description": "The owner's approval, quoted. Required on every send and reply."
           },
           "idempotencyKey": {
             "type": "string",
@@ -7982,7 +7982,7 @@
           },
           "confirmation": {
             "type": ["string", "null"],
-            "description": "The owner's approval, quoted. Required when an agent's program sends."
+            "description": "The owner's approval, quoted. Required on every send and reply."
           },
           "idempotencyKey": {
             "type": "string",

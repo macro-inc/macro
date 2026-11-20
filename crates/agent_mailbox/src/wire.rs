@@ -30,7 +30,7 @@ pub enum AgentMailboxErrorCode {
     SendLimit,
     /// A malformed request. `400`.
     Invalid,
-    /// An agent's program sent without the owner's quoted approval. `403`.
+    /// A send or reply without the owner's quoted approval. `403`.
     ConfirmationRequired,
     /// No provider is configured. `503`.
     NotConfigured,
@@ -123,7 +123,7 @@ pub struct SendAgentMessageRequest {
     pub subject: String,
     /// Plain-text body.
     pub text_body: String,
-    /// The owner's approval, quoted. Required when an agent's program sends.
+    /// The owner's approval, quoted. Required on every send and reply.
     #[serde(default)]
     pub confirmation: Option<String>,
 }
@@ -137,7 +137,7 @@ pub struct ReplyAgentMessageRequest {
     pub idempotency_key: Uuid,
     /// Plain-text body.
     pub text_body: String,
-    /// The owner's approval, quoted. Required when an agent's program sends.
+    /// The owner's approval, quoted. Required on every send and reply.
     #[serde(default)]
     pub confirmation: Option<String>,
 }

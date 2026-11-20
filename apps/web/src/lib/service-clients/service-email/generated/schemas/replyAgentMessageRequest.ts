@@ -10,7 +10,7 @@ import type { ReplyAgentMessageRequestConfirmation } from './replyAgentMessageRe
  * A reply from the agent's mailbox.
  */
 export interface ReplyAgentMessageRequest {
-  /** The owner's approval, quoted. Required when an agent's program sends. */
+  /** The owner's approval, quoted. Required on every send and reply. */
   confirmation?: ReplyAgentMessageRequestConfirmation;
   /** Retry-stable: repeating a reply with the same key sends once. */
   idempotencyKey: string;

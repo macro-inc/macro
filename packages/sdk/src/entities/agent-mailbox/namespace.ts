@@ -16,7 +16,7 @@ export type AgentMailSendOptions = {
   subject: string;
   /** Plain-text body. */
   textBody: string;
-  /** The owner's approving reply, quoted. Required when an agent's program sends. */
+  /** The owner's approving reply, quoted. Required on every send and reply. */
   userConfirmation: string;
   /** Repeat a send with the same key to send it once; one is made when absent. */
   idempotencyKey?: string;

@@ -44,8 +44,8 @@ enforced by the ordinary backend APIs.
   Other processes (agent teammates, workers, npm users) set none.
 - `src/entities/agent-mailbox/`: `macro.agentMailbox`, an agent teammate's own
   mailbox over email `/email/agent-mailbox` (`docs/design/agent-mailboxes.md`).
-  No method names a mailbox; sends and replies need `userConfirmation`, and the
-  server refuses a program's send without it.
+  No method names a mailbox; every send and reply needs `userConfirmation`,
+  and the server refuses one without it.
 - `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
   (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the

@@ -13,14 +13,14 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use chrono::{DateTime, Utc};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal, is_agent_run,
+    UserOrInternal,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -28,7 +28,7 @@ use serde::Deserialize;
 
 use crate::domain::models::{
     AgentMailboxError, LocalPart, MailMessage, MessageList, MessagePage, OutgoingMessage,
-    ProviderMessageId, ProvisionRequest, ReplyMessage, SendAuthority, SentMessage,
+    OwnerApproval, ProviderMessageId, ProvisionRequest, ReplyMessage, SentMessage,
 };
 use crate::domain::service::AgentMailboxUseCases;
 use crate::wire::{
@@ -150,20 +150,6 @@ pub struct ListMessagesQuery {
     pub cursor: Option<String>,
     /// 1 to 50; 20 when absent.
     pub limit: Option<u8>,
-}
-
-/// Who is sending: an agent's program (signed for an agent, or sent from
-/// code mode) carries the owner's quoted approval, which the service checks.
-fn send_authority(
-    authorization: &MacroAuthorizationExtractor<impl MacroAuthorizationService, UserOrInternal>,
-    headers: &HeaderMap,
-    confirmation: Option<String>,
-) -> SendAuthority {
-    if is_agent_run(authorization.authorization.user.attribution(), headers) {
-        SendAuthority::Program { confirmation }
-    } else {
-        SendAuthority::Person
-    }
 }
 
 fn message_path(message_id: &str) -> Result<ProviderMessageId, AgentMailboxHttpError> {
@@ -320,10 +306,9 @@ pub async fn read_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
 pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizationService>(
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     State(state): State<AgentMailboxRouterState<Service, Auth>>,
-    headers: HeaderMap,
     Json(body): Json<SendAgentMessageRequest>,
 ) -> Result<(StatusCode, Json<SentMessage>), AgentMailboxHttpError> {
-    let authority = send_authority(&authorization, &headers, body.confirmation);
+    let approval = OwnerApproval(body.confirmation);
     let agent = &authorization.authorization.user.macro_user_id;
     let message = OutgoingMessage {
         to: body.to,
@@ -333,7 +318,7 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     };
     let sent = state
         .service
-        .send(agent, authority, body.idempotency_key, message)
+        .send(agent, approval, body.idempotency_key, message)
         .await?;
     Ok((StatusCode::CREATED, Json(sent)))
 }
@@ -359,11 +344,10 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
 pub async fn reply_to_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizationService>(
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     State(state): State<AgentMailboxRouterState<Service, Auth>>,
-    headers: HeaderMap,
     Path(message_id): Path<String>,
     Json(body): Json<ReplyAgentMessageRequest>,
 ) -> Result<(StatusCode, Json<SentMessage>), AgentMailboxHttpError> {
-    let authority = send_authority(&authorization, &headers, body.confirmation);
+    let approval = OwnerApproval(body.confirmation);
     let message = message_path(&message_id)?;
     let agent = &authorization.authorization.user.macro_user_id;
     let reply = ReplyMessage {
@@ -371,7 +355,7 @@ pub async fn reply_to_message<Service: AgentMailboxUseCases, Auth: MacroAuthoriz
     };
     let sent = state
         .service
-        .reply(agent, authority, &message, body.idempotency_key, reply)
+        .reply(agent, approval, &message, body.idempotency_key, reply)
         .await?;
     Ok((StatusCode::CREATED, Json(sent)))
 }

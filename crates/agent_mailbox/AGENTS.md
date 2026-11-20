@@ -45,8 +45,9 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
 - A send whose outcome is unknown keeps its cap slot; a retry reuses the
   provider idempotency key only inside `PROVIDER_REPLAY_WINDOW`, then answers
   `send_outcome_unknown`. Only a definite refusal cancels the reservation.
-- The send policy (a program quotes its owner's approval) is decided in the
-  domain from `SendAuthority`; inbound only says who is sending.
+- Every send and reply needs the owner's quoted approval (`OwnerApproval`),
+  decided in the domain: the caller is always an agent account, whatever
+  credential it uses.
 - Provider content (headers, injection scores, webhooks) never authorizes anything.
 - A `402` from the provider is `NotConfigured`; the adapter never pays.
 - The scoped key is KMS ciphertext bound to the mailbox and user (CS-72).

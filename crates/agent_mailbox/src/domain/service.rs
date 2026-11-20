@@ -15,9 +15,9 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AgentMailbox, AgentMailboxError, AgentMailboxId, AgentMailboxView, CreateMailbox, MailMessage,
-    MailboxState, MessageList, MessagePage, OutgoingMessage, ProviderMailboxId, ProviderMessageId,
-    ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage, Reservation,
-    SendAuthority, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant, VendorMode,
+    MailboxState, MessageList, MessagePage, OutgoingMessage, OwnerApproval, ProviderMailboxId,
+    ProviderMessageId, ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage,
+    Reservation, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant, VendorMode,
 };
 use crate::domain::ports::{
     AgentDirectory, AgentMailboxRepository, LeaseToken, MailboxClient, MailboxKeyCipher,
@@ -733,11 +733,11 @@ where
     pub async fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
-        authority: SendAuthority,
+        approval: OwnerApproval,
         idempotency_key: Uuid,
         message: OutgoingMessage,
     ) -> Result<SentMessage, AgentMailboxError> {
-        require_approval(&authority)?;
+        require_approval(&approval)?;
         validate_outgoing(&message)?;
         let (mailbox, provider_mailbox, key) = self.usable(agent).await?;
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
@@ -758,12 +758,12 @@ where
     pub async fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
-        authority: SendAuthority,
+        approval: OwnerApproval,
         message: &ProviderMessageId,
         idempotency_key: Uuid,
         reply: ReplyMessage,
     ) -> Result<SentMessage, AgentMailboxError> {
-        require_approval(&authority)?;
+        require_approval(&approval)?;
         validate_body(&reply.text_body)?;
         let (mailbox, provider_mailbox, key) = self.usable(agent).await?;
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
@@ -835,21 +835,17 @@ where
     }
 }
 
-/// The send policy every email send from a program follows: an agent's
-/// program must quote its owner's approval.
-fn require_approval(authority: &SendAuthority) -> Result<(), AgentMailboxError> {
-    match authority {
-        SendAuthority::Person => Ok(()),
-        SendAuthority::Program { confirmation } => {
-            let confirmed = confirmation
-                .as_deref()
-                .is_some_and(|quote| !quote.trim().is_empty());
-            if confirmed {
-                Ok(())
-            } else {
-                Err(AgentMailboxError::ConfirmationRequired)
-            }
-        }
+/// The send policy every email send from a program follows: an agent sends
+/// only with its owner's approval quoted.
+fn require_approval(approval: &OwnerApproval) -> Result<(), AgentMailboxError> {
+    let confirmed = approval
+        .0
+        .as_deref()
+        .is_some_and(|quote| !quote.trim().is_empty());
+    if confirmed {
+        Ok(())
+    } else {
+        Err(AgentMailboxError::ConfirmationRequired)
     }
 }
 
@@ -937,7 +933,7 @@ pub trait AgentMailboxUseCases: Send + Sync + 'static {
     fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
-        authority: SendAuthority,
+        approval: OwnerApproval,
         idempotency_key: Uuid,
         message: OutgoingMessage,
     ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send;
@@ -945,7 +941,7 @@ pub trait AgentMailboxUseCases: Send + Sync + 'static {
     fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
-        authority: SendAuthority,
+        approval: OwnerApproval,
         message: &ProviderMessageId,
         idempotency_key: Uuid,
         reply: ReplyMessage,
@@ -1010,20 +1006,20 @@ where
     fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
-        authority: SendAuthority,
+        approval: OwnerApproval,
         idempotency_key: Uuid,
         message: OutgoingMessage,
     ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send {
-        AgentMailboxService::send(self, agent, authority, idempotency_key, message)
+        AgentMailboxService::send(self, agent, approval, idempotency_key, message)
     }
     fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
-        authority: SendAuthority,
+        approval: OwnerApproval,
         message: &ProviderMessageId,
         idempotency_key: Uuid,
         reply: ReplyMessage,
     ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send {
-        AgentMailboxService::reply(self, agent, authority, message, idempotency_key, reply)
+        AgentMailboxService::reply(self, agent, approval, message, idempotency_key, reply)
     }
 }

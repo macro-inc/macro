@@ -12,7 +12,7 @@ import type { SendAgentMessageRequestConfirmation } from './sendAgentMessageRequ
 export interface SendAgentMessageRequest {
   /** Copied recipients. */
   cc?: string[];
-  /** The owner's approval, quoted. Required when an agent's program sends. */
+  /** The owner's approval, quoted. Required on every send and reply. */
   confirmation?: SendAgentMessageRequestConfirmation;
   /** Retry-stable: repeating a send with the same key sends once. */
   idempotencyKey: string;

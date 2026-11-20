@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     AgentMailboxId, EncryptedMailboxKey, LocalPart, MailMessage, MailboxKey, MailboxProvider,
-    MessageDirection, ProviderGrantId, SendAuthority,
+    MessageDirection, OwnerApproval, ProviderGrantId,
 };
 use crate::domain::ports::LeaseToken;
 
@@ -1137,12 +1137,22 @@ async fn repeating_a_send_with_the_same_key_sends_once() {
 
     let first = world
         .service
-        .send(&user(ADA), SendAuthority::Person, key, outgoing("Hi"))
+        .send(
+            &user(ADA),
+            OwnerApproval(Some("Send it.".to_owned())),
+            key,
+            outgoing("Hi"),
+        )
         .await
         .unwrap();
     let second = world
         .service
-        .send(&user(ADA), SendAuthority::Person, key, outgoing("Hi"))
+        .send(
+            &user(ADA),
+            OwnerApproval(Some("Send it.".to_owned())),
+            key,
+            outgoing("Hi"),
+        )
         .await
         .unwrap();
 
@@ -1164,7 +1174,7 @@ async fn sends_stop_at_the_hourly_cap() {
             .service
             .send(
                 &user(ADA),
-                SendAuthority::Person,
+                OwnerApproval(Some("Send it.".to_owned())),
                 Uuid::from_u128(100 + number),
                 outgoing("Hi"),
             )
@@ -1175,7 +1185,7 @@ async fn sends_stop_at_the_hourly_cap() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Person,
+            OwnerApproval(Some("Send it.".to_owned())),
             Uuid::from_u128(200),
             outgoing("Hi"),
         )
@@ -1200,7 +1210,7 @@ async fn a_refused_send_frees_its_slot_and_an_unknown_one_is_retried_once() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Person,
+            OwnerApproval(Some("Send it.".to_owned())),
             Uuid::from_u128(1),
             outgoing("Hi"),
         )
@@ -1209,7 +1219,7 @@ async fn a_refused_send_frees_its_slot_and_an_unknown_one_is_retried_once() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Person,
+            OwnerApproval(Some("Send it.".to_owned())),
             Uuid::from_u128(2),
             outgoing("Hi"),
         )
@@ -1218,7 +1228,7 @@ async fn a_refused_send_frees_its_slot_and_an_unknown_one_is_retried_once() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Person,
+            OwnerApproval(Some("Send it.".to_owned())),
             Uuid::from_u128(2),
             outgoing("Hi"),
         )
@@ -1259,7 +1269,7 @@ async fn a_reply_to_another_mailboxs_message_sends_nothing() {
         .service
         .reply(
             &user(BEN),
-            SendAuthority::Person,
+            OwnerApproval(Some("Send it.".to_owned())),
             &ProviderMessageId("m-ada".to_owned()),
             Uuid::from_u128(1),
             reply.clone(),
@@ -1269,7 +1279,7 @@ async fn a_reply_to_another_mailboxs_message_sends_nothing() {
         .service
         .reply(
             &user(ADA),
-            SendAuthority::Person,
+            OwnerApproval(Some("Send it.".to_owned())),
             &ProviderMessageId("m-ada".to_owned()),
             Uuid::from_u128(2),
             reply,
@@ -1299,7 +1309,12 @@ async fn malformed_sends_are_refused_before_the_provider() {
     for message in [no_recipient, bad_address, header_injection] {
         let result = world
             .service
-            .send(&user(ADA), SendAuthority::Person, Uuid::now_v7(), message)
+            .send(
+                &user(ADA),
+                OwnerApproval(Some("Send it.".to_owned())),
+                Uuid::now_v7(),
+                message,
+            )
             .await;
         assert!(matches!(result, Err(AgentMailboxError::Invalid(_))));
     }
@@ -1626,7 +1641,7 @@ async fn a_release_the_provider_keeps_failing_steps_aside_for_the_rest() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn an_agent_program_must_quote_its_owners_approval() {
+async fn every_send_must_quote_the_owners_approval() {
     let world = world();
     world
         .service
@@ -1638,7 +1653,7 @@ async fn an_agent_program_must_quote_its_owners_approval() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Program { confirmation: None },
+            OwnerApproval(None),
             Uuid::from_u128(1),
             outgoing("Hi"),
         )
@@ -1647,9 +1662,7 @@ async fn an_agent_program_must_quote_its_owners_approval() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Program {
-                confirmation: Some("  ".to_owned()),
-            },
+            OwnerApproval(Some("  ".to_owned())),
             Uuid::from_u128(2),
             outgoing("Hi"),
         )
@@ -1658,9 +1671,7 @@ async fn an_agent_program_must_quote_its_owners_approval() {
         .service
         .send(
             &user(ADA),
-            SendAuthority::Program {
-                confirmation: Some("yes, send it".to_owned()),
-            },
+            OwnerApproval(Some("yes, send it".to_owned())),
             Uuid::from_u128(3),
             outgoing("Hi"),
         )
@@ -1691,13 +1702,23 @@ async fn an_unknown_send_is_not_retried_once_the_provider_stops_deduplicating() 
     let key = Uuid::from_u128(9);
     let first = world
         .service
-        .send(&user(ADA), SendAuthority::Person, key, outgoing("Hi"))
+        .send(
+            &user(ADA),
+            OwnerApproval(Some("Send it.".to_owned())),
+            key,
+            outgoing("Hi"),
+        )
         .await;
     assert!(matches!(first, Err(AgentMailboxError::Unavailable)));
 
     let within_window = world
         .service
-        .send(&user(ADA), SendAuthority::Person, key, outgoing("Hi"))
+        .send(
+            &user(ADA),
+            OwnerApproval(Some("Send it.".to_owned())),
+            key,
+            outgoing("Hi"),
+        )
         .await;
     assert!(
         matches!(within_window, Err(AgentMailboxError::Unavailable)),
@@ -1709,7 +1730,12 @@ async fn an_unknown_send_is_not_retried_once_the_provider_stops_deduplicating() 
     }
     let after_window = world
         .service
-        .send(&user(ADA), SendAuthority::Person, key, outgoing("Hi"))
+        .send(
+            &user(ADA),
+            OwnerApproval(Some("Send it.".to_owned())),
+            key,
+            outgoing("Hi"),
+        )
         .await;
 
     assert!(matches!(

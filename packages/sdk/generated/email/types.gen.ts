@@ -1939,7 +1939,7 @@ export type RefreshEmailEvent = {
  */
 export type ReplyAgentMessageRequest = {
     /**
-     * The owner's approval, quoted. Required when an agent's program sends.
+     * The owner's approval, quoted. Required on every send and reply.
      */
     confirmation?: string | null;
     /**
@@ -1991,7 +1991,7 @@ export type SendAgentMessageRequest = {
      */
     cc?: Array<string>;
     /**
-     * The owner's approval, quoted. Required when an agent's program sends.
+     * The owner's approval, quoted. Required on every send and reply.
      */
     confirmation?: string | null;
     /**

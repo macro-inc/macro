@@ -444,18 +444,11 @@ pub enum VendorMode {
     Fake,
 }
 
-/// Who is asking to send, which decides whether the owner's approval must
-/// be quoted.
+/// The owner's approval of one send, quoted. Every mailbox belongs to an
+/// agent account, so every send or reply from one needs it, whatever
+/// credential the agent calls with.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SendAuthority {
-    /// A person sending from their own session.
-    Person,
-    /// An agent's program, with the owner's approving reply when it has one.
-    Program {
-        /// The owner's approval, quoted.
-        confirmation: Option<String>,
-    },
-}
+pub struct OwnerApproval(pub Option<String>);
 
 /// What callers see about a mailbox. No credentials.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -504,9 +497,9 @@ pub enum AgentMailboxError {
     /// The request is malformed.
     #[error("{0}")]
     Invalid(String),
-    /// An agent's program sent without its owner's quoted approval.
+    /// A send or reply without its owner's quoted approval.
     #[error(
-        "an agent's program cannot send email without its owner's approval; ask the owner, and send again with their reply quoted in `confirmation`"
+        "an agent cannot send email without its owner's approval; ask the owner, and send again with their reply quoted in `confirmation`"
     )]
     ConfirmationRequired,
     /// An earlier send with this key may have gone out and can no longer be

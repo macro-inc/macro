@@ -47,9 +47,9 @@ flowchart LR
   with the caller's scoped key, which cannot see another inbox; the service also
   checks the `inbox_id` the provider reports and answers `not_found` on a mismatch.
 - **Send policy.** The agent mailbox's send and reply routes count as sends for
-  a session scoped to sending nothing. An agent's program must quote its owner's approval
-  (`confirmation`) to send or reply, as with every other email send from a
-  program. Each mailbox is capped at 10 sends an hour and 40 a day, counting
+  a session scoped to sending nothing. Every send and reply must quote the owner's approval (`confirmation`),
+  whatever credential the agent calls with: every mailbox belongs to an agent
+  account, so this is the rule every other email send from a program follows. Each mailbox is capped at 10 sends an hour and 40 a day, counting
   sends in flight; the provider's own hourly cap is set to the same 10 as a
   backstop.
 - **Provider content is data.** Headers, the provider's prompt-injection score and
