@@ -1,7 +1,7 @@
 import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { setActiveScope, setPressedKeys } from '@core/hotkey/state';
 import { render, screen } from '@solidjs/testing-library';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ScreenStage, type ScreenStageHandlers } from './screen-stage';
 
@@ -58,6 +58,7 @@ describe('ScreenStage keyboard', () => {
         transform={undefined}
         driven
         drivingMe
+        ownsKeyboard
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}
@@ -114,6 +115,7 @@ describe('ScreenStage keyboard', () => {
         transform={undefined}
         driven
         drivingMe
+        ownsKeyboard
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}
@@ -164,6 +166,7 @@ describe('ScreenStage keyboard', () => {
         transform={undefined}
         driven
         drivingMe
+        ownsKeyboard
         stale={false}
         loupe={undefined}
         snapshot={() => undefined}
@@ -200,6 +203,70 @@ describe('ScreenStage keyboard', () => {
       })
     );
     expect(seen).toEqual(['keydown:z']);
+    unmount();
+  });
+
+  it("keeps the keyboard while a dropped drive reconnects: keys reach neither the app's hotkeys nor the guest", () => {
+    const openCreate = vi.fn(() => true);
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      useHotKeyRoot();
+      registerHotkey({
+        scopeId: 'global',
+        hotkey: 'c',
+        description: 'Create',
+        runWithInputFocused: true,
+        keyDownHandler: openCreate,
+      });
+    });
+    const typed: string[] = [];
+    const [driving, setDriving] = createSignal(true);
+    const [owns, setOwns] = createSignal(true);
+    const { unmount } = render(() => (
+      <ScreenStage
+        label="Scout's desktop"
+        keyboardLabel="Keyboard for Scout's desktop"
+        frame={{ width: 1920, height: 1080 }}
+        transform={undefined}
+        driven
+        drivingMe={driving()}
+        ownsKeyboard={owns()}
+        stale={false}
+        loupe={undefined}
+        snapshot={() => undefined}
+        handlers={handlers((event) => typed.push(event.key))}
+        containerRef={() => {}}
+        frameRef={() => {}}
+      />
+    ));
+    const keyboard = screen.getByRole('textbox', {
+      name: "Keyboard for Scout's desktop",
+    });
+    keyboard.focus();
+    const press = (key: string) => {
+      const event = new KeyboardEvent('keydown', {
+        key,
+        bubbles: true,
+        cancelable: true,
+      });
+      keyboard.dispatchEvent(event);
+      keyboard.dispatchEvent(
+        new KeyboardEvent('keyup', { key, bubbles: true })
+      );
+      return event;
+    };
+
+    // The socket dropped: no longer driving, still reconnecting the drive.
+    setDriving(false);
+    const swallowed = press('c');
+    expect(swallowed.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(keyboard);
+    expect(openCreate).not.toHaveBeenCalled();
+    expect(typed).toEqual([]);
+
+    // The lease went to someone else: the keyboard is the app's again.
+    setOwns(false);
+    expect(document.activeElement).not.toBe(keyboard);
     unmount();
   });
 });

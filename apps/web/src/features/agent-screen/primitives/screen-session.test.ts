@@ -837,4 +837,64 @@ describe('createScreenSession', () => {
       expect(session.store.server).toBeUndefined();
     });
   });
+
+  it('keeps the keyboard while it reconnects a session this tab drove, until the lease is settled', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const state = (
+      driver: { userId: string; name: string } | null,
+      drivingHere: boolean
+    ) => ({
+      driver,
+      agentHeld: driver !== null,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere,
+    });
+    const alice = { userId: 'user-alice', name: 'Alice' };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(session.holdsKeyboard()).toBe(false);
+      connections[0].handlers.onState(state(alice, true));
+      expect(session.holdsKeyboard()).toBe(true);
+
+      // A drop: not driving now, but the keys still aren't the app's.
+      connections[0].handlers.onEnded('connectionLost');
+      expect(session.drivingMe()).toBe(false);
+      expect(session.holdsKeyboard()).toBe(true);
+
+      // Back, with the lease on the old socket: taking it back keeps it.
+      await vi.advanceTimersByTimeAsync(500);
+      connections[1].handlers.onState(state(alice, false));
+      expect(connections[1].controls).toEqual(['takeOver']);
+      expect(session.holdsKeyboard()).toBe(true);
+      connections[1].handlers.onState(state(alice, true));
+      expect(session.drivingMe()).toBe(true);
+
+      // Another drop, and meanwhile someone else took the lease: let go.
+      connections[1].handlers.onEnded('connectionLost');
+      expect(session.holdsKeyboard()).toBe(true);
+      await vi.advanceTimersByTimeAsync(5_000);
+      connections[2].handlers.onState(
+        state({ userId: 'user-bob', name: 'Bob' }, false)
+      );
+      expect(session.holdsKeyboard()).toBe(false);
+      dispose();
+    });
+  });
 });

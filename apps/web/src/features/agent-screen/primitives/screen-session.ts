@@ -383,6 +383,15 @@ export function createScreenSession(options: ScreenSessionOptions) {
     });
   }
 
+  /**
+   * The viewer keeps the keyboard (keys swallowed, never the app's hotkeys)
+   * while it drives, and while it wins back a drive a drop interrupted: until
+   * the new connection settles the lease, the person is still typing at the
+   * remote computer.
+   */
+  const holdsKeyboard = () =>
+    drivingMe() || store.takingOver || controlLost()?.kind === 'reconnecting';
+
   const controlLost = (): ControlLost | undefined => {
     if (!store.controlLost) return undefined;
     const status = store.status.kind;
@@ -402,6 +411,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     drivingMe,
     drivingElsewhere,
     controlLost,
+    holdsKeyboard,
     /** The person read the control-lost banner and closed it. */
     dismissControlLost() {
       setStore('controlLost', false);

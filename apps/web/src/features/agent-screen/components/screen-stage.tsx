@@ -34,6 +34,11 @@ export function ScreenStage(props: {
   driven: boolean;
   /** This viewer drives: the input surface takes keyboard focus. */
   drivingMe: boolean;
+  /**
+   * The keyboard stays the viewer's: while driving, and while a dropped
+   * drive reconnects. Keys typed while not driving are swallowed, not sent.
+   */
+  ownsKeyboard: boolean;
   /** Grey the last picture out while it isn't live. */
   stale: boolean;
   loupe:
@@ -53,9 +58,9 @@ export function ScreenStage(props: {
   // the app, rather than keep typing invisibly into the hidden field.
   createEffect(
     on(
-      () => props.drivingMe,
-      (driving) => {
-        if (driving || !keyboardField) return;
+      () => props.ownsKeyboard,
+      (owns) => {
+        if (owns || !keyboardField) return;
         keyboardField.value = '';
         if (document.activeElement === keyboardField) keyboardField.blur();
       },
@@ -97,21 +102,24 @@ export function ScreenStage(props: {
       <textarea
         ref={keyboardField}
         aria-label={props.keyboardLabel}
-        tabIndex={props.drivingMe ? 0 : -1}
+        tabIndex={props.ownsKeyboard ? 0 : -1}
         // While driving every key belongs to the remote computer: the app's
         // hotkeys stand down (core/hotkey) and nothing bubbles past here.
-        data-owns-keyboard={props.drivingMe ? '' : undefined}
+        data-owns-keyboard={props.ownsKeyboard ? '' : undefined}
         autocomplete="off"
         inputmode="none"
         autocapitalize="off"
         spellcheck={false}
         class="pointer-events-none absolute top-0 left-0 size-px resize-none overflow-hidden border-0 p-0 opacity-0"
         onKeyDown={(event) => {
-          if (props.drivingMe) event.stopPropagation();
+          if (!props.ownsKeyboard) return props.handlers.onKeyDown(event);
+          event.stopPropagation();
+          // Reconnecting a drive: the key reaches nobody.
+          if (!props.drivingMe) return event.preventDefault();
           props.handlers.onKeyDown(event);
         }}
         onKeyUp={(event) => {
-          if (props.drivingMe) event.stopPropagation();
+          if (props.ownsKeyboard) event.stopPropagation();
           props.handlers.onKeyUp(event);
         }}
         onCompositionEnd={(event) => props.handlers.onCompositionEnd(event)}

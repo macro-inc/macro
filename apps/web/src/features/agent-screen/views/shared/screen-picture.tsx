@@ -61,6 +61,7 @@ export function ScreenPicture(props: {
         !!session.store.server?.driver && session.store.status.kind === 'live'
       }
       drivingMe={session.drivingMe()}
+      ownsKeyboard={session.holdsKeyboard()}
       stale={session.store.status.kind !== 'live'}
       loupe={loupe()}
       snapshot={(rect) => session.snapshot(rect)}
