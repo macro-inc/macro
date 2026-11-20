@@ -1,0 +1,24 @@
+crates/agent_egress/src/outbound/actor_mcp/test.rs
+  s_778a35fb352331::t_90ca19c2694bb0 271-314
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_778a35fb352331::t_90ca19c2694bb0 52-55
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_778a35fb352331::t_90ca19c2694bb0 110-128
+  s_778a35fb352331::t_fdfe24fecec1bb 30,68,106,129-141,155-156,188-192,194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "62a4871a319f7157adb605e7e2225ea3aea65a25",
+  "prompts": {},
+  "sessions": {
+    "s_778a35fb352331": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa6765a9-10bd-46c9-8814-4b0c87b4e29a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
