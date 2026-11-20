@@ -213,17 +213,20 @@ start=$(now)
 run_teammate 75
 wait_for_log 'starting the runtime at' 120 || fail "teammate-boot reached the runtime after the restart"
 echo "warm restart to teammate-boot's exec of the runtime: $(since "$start") s"
-if wait_for_healthy "${start%.*}" 180; then
-  echo "warm restart to a healthy boot: $(since "$start") s"
-else
-  fail "a healthy boot after the restart"
-fi
-sleep 15
-check "offline, the runtime stays up" test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+# Past the runtime's 3-minute listening deadline: offline, it must neither
+# exit nor count as healthy.
+sleep 200
+check "offline past the listening deadline, the runtime stays up" test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+check "offline is not a healthy boot (no last-good)" sh -c "! [ \"\$(docker exec $name stat -c %Y /teammate/state/last-good 2>/dev/null || echo 0)\" -ge ${start%.*} ]"
 check "offline is not a failed boot" sh -c "[ \"\$(docker exec $name cat /teammate/state/failed-boots 2>/dev/null || echo 0)\" = 0 ]"
 docker start "$server" >/dev/null
+online=$(now)
 # Back online: the agent's streams start again within their backoff.
-sleep 20
+if wait_for_healthy "${online%.*}" 150; then
+  echo "back online to a healthy boot: $(since "$online") s"
+else
+  fail "a healthy boot once back online"
+fi
 in_container sh -c 'mkdir -p /teammate/workspace/state/memory/test && echo moved > /teammate/workspace/state/memory/test/note.md'
 start=$(now)
 docker stop -t 90 "$name" >/dev/null
