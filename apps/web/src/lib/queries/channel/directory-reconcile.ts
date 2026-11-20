@@ -1,4 +1,6 @@
+import { sleep } from '@core/util/sleep';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type GraphqlChannelExpr,
@@ -17,7 +19,6 @@ import {
   ContactDirectoryScopeError,
   readContactCacheScope,
 } from '../contacts/cache-scope';
-import { sleep } from '@core/util/sleep';
 import { balancedOr } from '../soup/graphql/entity-input';
 import {
   CHANNEL_RECORD_PREFIX,
@@ -31,6 +32,9 @@ const DELETE_BATCH = 500;
 // before the pass fails: failing it pages the whole lane again.
 const RECONCILE_ATTEMPTS = 3;
 const RECONCILE_RETRY_MS = 1_000;
+// A channel the cache rewrote after a by-id read found it gone is read again,
+// in at most this many rounds in all, before the pass gives up on it.
+const VERIFY_ROUNDS = 3;
 const NEVER_ABORTED = new AbortController().signal;
 
 type FetchPage = (
@@ -134,6 +138,9 @@ type Reconciliation = {
   lane: GraphqlSoupInitialInput;
   candidates: readonly string[];
   fetch: FetchPage;
+  /** The cache session a removal is made in; the cache refuses a removal
+   * made in a session that has since ended. */
+  session: () => string;
   signal: AbortSignal | undefined;
 };
 
@@ -154,39 +161,85 @@ async function stillInScope(input: Reconciliation): Promise<boolean> {
   }
 }
 
-type ReconcileOutcome = 'incomplete' | 'scope_changed' | 'complete';
+type ReconcileOutcome =
+  | 'incomplete'
+  | 'scope_changed'
+  | 'unsettled'
+  | 'complete';
 
-/** Deletes the cached channels the viewer can no longer read: channels they
- * were removed from or that were deleted while no event reached them. */
+/** The search source hash of each of `ids` the cache holds a record of. */
+async function cachedHashes(
+  host: ReconcileHost,
+  ids: readonly string[],
+  signal: AbortSignal | undefined
+): Promise<Map<string, string>> {
+  const wanted = new Set(ids.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`));
+  const hashes = new Map<string, string>();
+  for (const { recordKey, sourceHash } of await listCachedChannelDocuments(
+    host,
+    signal
+  ))
+    if (wanted.has(recordKey))
+      hashes.set(recordKey.slice(CHANNEL_RECORD_PREFIX.length), sourceHash);
+  return hashes;
+}
+
+/**
+ * Deletes the cached channels the viewer can no longer read: channels they
+ * were removed from or that were deleted while no event reached them.
+ *
+ * A by-id read that found a channel gone is as of the moment it answered. A
+ * record the cache rewrote since (the viewer was added back, and the update
+ * landed before the delete) is read again instead of deleted. The check and
+ * the delete are separate cache calls, so a write that lands between them is
+ * still deleted; it comes back with the channel's next update or lane pass.
+ */
 async function removeUnreadableChannels(
   input: Reconciliation
 ): Promise<ReconcileOutcome> {
   return Telemetry.span('channel_directory.reconcile', async (span) => {
     span.setAttr('channel_directory.candidates', input.candidates.length);
-    const gone = await unreadableChannels(
-      input.lane,
-      input.candidates,
-      input.fetch,
-      input.signal
-    );
-    if (!gone) {
-      span.setAttr('channel_directory.reconcile_outcome', 'incomplete');
-      return 'incomplete';
-    }
-    // Delete only for the viewer and storage the evidence was read for.
-    if (!(await stillInScope(input))) {
-      span.setAttr('channel_directory.reconcile_outcome', 'scope_changed');
-      return 'scope_changed';
-    }
-    for (const batch of chunks(gone, DELETE_BATCH)) {
-      input.signal?.throwIfAborted();
-      await input.host.deleteRecords(
-        batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`)
+    let pending = input.candidates;
+    let removed = 0;
+    let round = 0;
+    const finish = (outcome: ReconcileOutcome) => {
+      span.setAttr('channel_directory.removed', removed);
+      span.setAttr('channel_directory.reconcile_rounds', round);
+      span.setAttr('channel_directory.reconcile_outcome', outcome);
+      return outcome;
+    };
+    while (pending.length > 0) {
+      if (round === VERIFY_ROUNDS) return finish('unsettled');
+      round += 1;
+      // Taken before the evidence, so a removal it proves is refused once the
+      // session it was read in has ended.
+      const session = input.session();
+      const before = await cachedHashes(input.host, pending, input.signal);
+      const gone = await unreadableChannels(
+        input.lane,
+        // A channel no longer cached needs no read.
+        pending.filter((id) => before.has(id)),
+        input.fetch,
+        input.signal
+      );
+      if (!gone) return finish('incomplete');
+      // Delete only for the viewer and storage the evidence was read for.
+      if (!(await stillInScope(input))) return finish('scope_changed');
+      const after = await cachedHashes(input.host, gone, input.signal);
+      const stale = gone.filter((id) => after.get(id) === before.get(id));
+      for (const batch of chunks(stale, DELETE_BATCH)) {
+        input.signal?.throwIfAborted();
+        await input.host.deleteRecords(
+          batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
+          session
+        );
+      }
+      removed += stale.length;
+      pending = gone.filter(
+        (id) => after.has(id) && after.get(id) !== before.get(id)
       );
     }
-    span.setAttr('channel_directory.removed', gone.length);
-    span.setAttr('channel_directory.reconcile_outcome', 'complete');
-    return 'complete';
+    return finish('complete');
   });
 }
 
@@ -265,7 +318,8 @@ async function reconcile(input: Reconciliation): Promise<void> {
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
   host: ReconcileHost | undefined = getGraphqlSoupCacheHost(),
-  fetch: FetchPage = fetchDirectoryPage
+  fetch: FetchPage = fetchDirectoryPage,
+  session: () => string = cacheSessionGeneration.capture
 ): Promise<FetchPage> {
   // Listed as the pass begins: a channel cached later by an event is not one
   // the pass could have missed.
@@ -302,6 +356,7 @@ export async function createChannelDirectoryBackfillFetcher(
         lane,
         candidates,
         fetch,
+        session,
         signal: options?.signal,
       });
     return page;

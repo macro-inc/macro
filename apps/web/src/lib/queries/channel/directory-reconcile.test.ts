@@ -359,6 +359,84 @@ describe('channel directory reconciliation', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('deletes under the cache session it read the evidence in', async () => {
+    const { host } = reconcileHost(['removed']);
+    let session = 's1';
+    const fetch = vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
+      // The session changes while the by-id read is out.
+      if (input.initial?.filters?.channelFilter) session = 's2';
+      return { nextCursor: null, entityIds: [] };
+    });
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch,
+      () => session
+    );
+
+    await fetchPage(FIRST);
+
+    expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith(
+      ['GraphqlSoupChannel:removed'],
+      's1'
+    );
+  });
+
+  it('reads a channel again when the cache rewrote it after a by-id read found it gone', async () => {
+    const { cache, host } = reconcileHost(['removed', 'readded']);
+    let readable: string[] = [];
+    let byIdReads = 0;
+    const fetch = vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
+      if (!input.initial?.filters?.channelFilter)
+        return { nextCursor: null, entityIds: [] };
+      byIdReads += 1;
+      if (byIdReads > 1) return { nextCursor: null, entityIds: readable };
+      // The viewer is added back just after this read answered, and the
+      // update reaches the cache before the deletes.
+      cache.put(
+        channelRecord('readded', { updatedAt: '2026-11-20T00:00:00Z' }),
+        {
+          sourceHash: 'readded-2',
+        }
+      );
+      readable = ['readded'];
+      return { nextCursor: null, entityIds: [] };
+    });
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
+    expect(byIdReads).toBe(2);
+  });
+
+  it('fails the last page when a channel keeps changing under its by-id reads', async () => {
+    const { cache, host } = reconcileHost(['busy']);
+    let byIdReads = 0;
+    const fetch = vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
+      if (input.initial?.filters?.channelFilter) {
+        byIdReads += 1;
+        cache.put(channelRecord('busy'), { sourceHash: `busy-${byIdReads}` });
+      }
+      return { nextCursor: null, entityIds: [] };
+    });
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await expect(fetchPage(FIRST)).rejects.toBeInstanceOf(
+      ChannelDirectoryPassUnproven
+    );
+    expect(byIdReads).toBe(3);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
   it('reads nothing by id after a pass that returned every cached channel', async () => {
     const { host } = reconcileHost(['joined']);
     const fetch = server([{ nextCursor: null, entityIds: ['joined'] }]);
