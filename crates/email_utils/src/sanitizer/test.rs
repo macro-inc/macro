@@ -108,6 +108,15 @@ fn formatting_in_nested_table_cells_counts_per_cell() {
 }
 
 #[test]
+fn misnested_formatting_keeps_its_text() {
+    // Scraper's own tree dropped `lost` when closing the `<b>` moved the
+    // blocks it held.
+    let sanitized = sanitize_email_html("<b><div>a<p><div>lost</b>");
+
+    assert!(sanitized.contains("lost"), "{sanitized}");
+}
+
+#[test]
 fn style_text_counts_as_written_unescaped() {
     // A serialization writes `<style>` text raw, so its `&` costs one byte,
     // not the five of `&amp;`.

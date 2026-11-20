@@ -525,8 +525,25 @@ impl TreeSink for BoundedSink {
     }
 
     fn reparent_children(&mut self, node: &NodeId, new_parent: &NodeId) {
-        if !self.clipped {
-            self.html.reparent_children(node, new_parent);
+        if self.clipped {
+            return;
+        }
+        // Scraper moves them with ego-tree's `reparent_from_id_append`, which
+        // gives only the first and last child their new parent; a later move
+        // of any other one dropped it from the tree, text and all
+        // (`<b><div>a<p><div>lost</b>`). So move them one at a time.
+        let children: Vec<NodeId> = self
+            .html
+            .tree
+            .get(*node)
+            .into_iter()
+            .flat_map(|node| node.children())
+            .map(|child| child.id())
+            .collect();
+        if let Some(mut new_parent) = self.html.tree.get_mut(*new_parent) {
+            for child in children {
+                new_parent.append_id(child);
+            }
         }
     }
 }

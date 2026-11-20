@@ -26,6 +26,18 @@ fn a_repeated_body_counts_only_the_attributes_it_adds() {
 }
 
 #[test]
+fn misnested_formatting_keeps_every_node_it_moves() {
+    // Closing the `<b>` moves the blocks it holds, which hold more than two
+    // children; scraper's own move dropped all but the first and last.
+    for html in ["<b><div>a<p><div>lost</b>", "<b><ul>a<p><div>lost</b>"] {
+        let parsed = parse_document(html);
+
+        let text: String = parsed.html.root_element().text().collect();
+        assert!(text.contains("lost"), "{html}: {}", parsed.html.html());
+    }
+}
+
+#[test]
 fn a_template_counts_its_contents_node() {
     let within = "<template></template>".repeat(120_000);
     let past = "<template></template>".repeat(130_000);

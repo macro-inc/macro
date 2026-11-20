@@ -117,6 +117,12 @@ sender/generic-address checks.
   stripping still recurses once per level (`get_previous_html_recursively`),
   so its own depth check must run before it: moving a node (misnested
   formatting) can nest it deeper than the parse inserted it.
+- `bounded_html`'s sink moves children itself in `reparent_children`.
+  Scraper's own implementation uses ego-tree's `reparent_from_id_append`,
+  which (in ego-tree 0.6.3) gives only the first and last moved child its new
+  parent, so a later move of any other one dropped it from the tree: plain
+  `Html::parse_document` loses `lost` in `<b><div>a<p><div>lost</b>`. Keep
+  the override until ego-tree fixes it.
 
 ## Related
 
