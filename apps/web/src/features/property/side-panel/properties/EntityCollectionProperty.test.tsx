@@ -36,10 +36,11 @@ vi.mock('@property', () => ({
 vi.mock('@property/context/PropertiesContext', () => ({
   usePropertiesContext: () => ({ canEdit: true, entityType: 'TASK' }),
 }));
-vi.mock('@property/hooks', () => ({
-  usePropertyEntityDisplay: (entityId: () => string) => ({
-    name: entityId,
-    icon: () => null,
+vi.mock('@property/hooks/usePropertyEntityLink', () => ({
+  usePropertyEntityLink: (reference: () => { entity_id: string }) => ({
+    display: { name: () => reference().entity_id, icon: () => null },
+    canOpen: () => true,
+    open: vi.fn(),
   }),
 }));
 vi.mock('@property/utils', () => ({
