@@ -106,6 +106,28 @@ async fn lists_filters_without_criteria_or_action() {
 }
 
 #[tokio::test]
+async fn list_decode_error_names_the_field_path_without_its_value() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/settings/filters"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "filter": [
+                {"id": "ok", "criteria": {"from": "first@example.com"}, "action": {}},
+                {"id": "odd", "criteria": {"hasAttachment": "second@example.com"}}
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let error = list_filters(&client(&server), "token").await.unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "Gmail API response decode error: unexpected value at filter[1].criteria.hasAttachment"
+    );
+}
+
+#[tokio::test]
 async fn delete_preserves_http_errors() {
     let server = MockServer::start().await;
     Mock::given(method("DELETE"))
