@@ -700,6 +700,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             }),
             endpoints: SdkEndpoints::default(),
             scopes: Arc::new(Scopes(scope)),
+            detach: Arc::new(NeverDetach),
         }
         .issue(&identity, "fixture", CancellationToken::new())
         .await
@@ -968,4 +969,21 @@ async fn suggestions_brief_programs_type_check() {
         );
     }
     service.shutdown().await;
+}
+
+/// Refuses every detach; these credentials are for foreground runs.
+struct NeverDetach;
+
+impl super::jobs::MayDetach for NeverDetach {
+    fn decide<'a>(
+        &'a self,
+        _: &'a ExecutionIdentity,
+    ) -> futures::future::BoxFuture<'a, Result<agent_code_mode::domain::Detach, CodeModeError>>
+    {
+        Box::pin(async {
+            Ok(agent_code_mode::domain::Detach::Refused(
+                "not in this test".into(),
+            ))
+        })
+    }
 }
