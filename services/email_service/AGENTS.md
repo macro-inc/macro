@@ -312,6 +312,15 @@ the gateway `/email` prefix.
   (`pubsub::util::sqlstate`).
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
+- Every contacts producer (address-book sync, inbox sync, the backfill's sent
+  seed and contacts step, the Outlook projection, `bin/backfill_contacts`)
+  publishes through `composition::ContactsProducer`: the legacy
+  owner-to-contact connections always, then `record_inbox_contacts` with the
+  inbox (`outbound/inbox_source.rs`: owner, link id, provider), which the
+  contacts crate's `ListWritesGate` sends only while the PostHog flag
+  `contacts-list-writes` is on (read with `POSTHOG_API_KEY`; on in a local
+  stack). A disconnect sends `directory_changed` for the owner after the purge,
+  through the same gate. Keep both sends until the legacy graph is retired.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see
