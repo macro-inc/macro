@@ -74,7 +74,7 @@ where
     Users: ChannelListUserRepo,
     Frec: AggregateFrecencyStorage,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip_all, fields(limit = ?req.limit, include_frecency = req.include_frecency))]
     async fn get_channels(
         &self,
         req: GetChannelsRequest,
