@@ -75,15 +75,23 @@ function typeText(text: string): Uint8Array[] {
 }
 
 const SET_ENCODINGS = 2;
-/** Cursor and VMware cursor pseudo-encodings. */
-const CURSOR_ENCODINGS = [-239, 0x574d5664];
+/**
+ * Pseudo-encodings a view-only noVNC must not ask for:
+ * - Cursor and VMware cursor, so the server draws the pointer into the
+ *   picture and watchers see the agent's cursor move.
+ * - ExtendedClipboard: view-only noVNC returns from an extended Provide
+ *   without reading its zlib payload, so a guest selection (Ctrl+A on a page)
+ *   desyncs the stream. Without it Xvnc sends a plain ServerCutText, which
+ *   noVNC reads and ignores.
+ */
+const STRIPPED_ENCODINGS = [-239, 0x574d5664, 0xc0a1e5ce | 0];
 
 /**
- * A SetEncodings message without the cursor pseudo-encodings, so the server
- * draws the pointer into the picture and watchers see the agent's cursor
- * move. Any other message comes back unchanged.
+ * A SetEncodings message without the pseudo-encodings a view-only noVNC
+ * must not ask for (`STRIPPED_ENCODINGS`). Any other message comes back
+ * unchanged.
  */
-export function withoutCursorEncodings(message: Uint8Array): Uint8Array {
+export function viewOnlyEncodings(message: Uint8Array): Uint8Array {
   if (message.length < 4 || message[0] !== SET_ENCODINGS) return message;
   const view = new DataView(
     message.buffer,
@@ -96,7 +104,7 @@ export function withoutCursorEncodings(message: Uint8Array): Uint8Array {
   const kept: number[] = [];
   for (let index = 0; index < count; index++) {
     const encoding = view.getInt32(4 + index * 4);
-    if (!CURSOR_ENCODINGS.includes(encoding)) kept.push(encoding);
+    if (!STRIPPED_ENCODINGS.includes(encoding)) kept.push(encoding);
   }
 
   const rewritten = new Uint8Array(4 + kept.length * 4);

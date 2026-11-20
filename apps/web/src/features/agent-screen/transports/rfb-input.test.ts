@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeInput, withoutCursorEncodings } from './rfb-input';
+import { encodeInput, viewOnlyEncodings } from './rfb-input';
 
 const bytes = (messages: Uint8Array[]) =>
   messages.map((message) => [...message]);
@@ -52,20 +52,21 @@ describe('encodeInput', () => {
   });
 });
 
-describe('withoutCursorEncodings', () => {
-  it('drops the cursor pseudo-encodings from SetEncodings', () => {
-    // Tight (7), Cursor (-239), Raw (0), VMware cursor (0x574d5664).
+describe('viewOnlyEncodings', () => {
+  it('drops the cursor and extended clipboard pseudo-encodings from SetEncodings', () => {
+    // Tight (7), Cursor (-239), Raw (0), VMware cursor (0x574d5664),
+    // ExtendedClipboard (0xc0a1e5ce).
     const message = new Uint8Array([
-      2, 0, 0, 4, 0, 0, 0, 7, 0xff, 0xff, 0xff, 0x11, 0, 0, 0, 0, 0x57, 0x4d,
-      0x56, 0x64,
+      2, 0, 0, 5, 0, 0, 0, 7, 0xff, 0xff, 0xff, 0x11, 0, 0, 0, 0, 0x57, 0x4d,
+      0x56, 0x64, 0xc0, 0xa1, 0xe5, 0xce,
     ]);
-    expect([...withoutCursorEncodings(message)]).toEqual([
+    expect([...viewOnlyEncodings(message)]).toEqual([
       2, 0, 0, 2, 0, 0, 0, 7, 0, 0, 0, 0,
     ]);
   });
 
   it('leaves other messages alone', () => {
     const update = new Uint8Array([3, 1, 0, 0, 0, 0, 7, 128, 4, 56]);
-    expect(withoutCursorEncodings(update)).toBe(update);
+    expect(viewOnlyEncodings(update)).toBe(update);
   });
 });

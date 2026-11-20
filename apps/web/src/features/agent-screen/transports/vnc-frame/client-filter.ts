@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import { withoutCursorEncodings } from '../rfb-input';
+import { viewOnlyEncodings } from '../rfb-input';
 
 /** The client's ProtocolVersion, e.g. `RFB 003.008\n`. */
 const VERSION_BYTES = 12;
@@ -55,7 +55,7 @@ function inputLength(bytes: Uint8Array): number | undefined {
 /**
  * Splits what the sandboxed frame sends towards the server into whole RFB
  * client messages and lets through only the handshake and the messages a
- * view-only client sends, with the cursor pseudo-encodings removed. Anything
+ * view-only client sends, with `viewOnlyEncodings` applied. Anything
  * it can't frame throws: the stream can't be trusted past it.
  */
 export function createRfbClientFilter() {
@@ -111,7 +111,7 @@ export function createRfbClientFilter() {
           continue;
         }
         if (allowed === undefined || rest.length < allowed) break;
-        out.push(withoutCursorEncodings(rest.slice(0, allowed)));
+        out.push(viewOnlyEncodings(rest.slice(0, allowed)));
         rest = rest.subarray(allowed);
       }
       buffer = rest.slice();
