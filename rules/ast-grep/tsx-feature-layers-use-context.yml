@@ -34,6 +34,7 @@ files:
   - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/notifications-inbox/components/**
   - apps/web/src/features/notifications-inbox/views/**
+  - apps/web/src/features/new-home/components/**
   - apps/web/src/features/command/queries/**
   - apps/web/src/features/document-composer/queries/**
   - apps/web/src/features/task-composer/queries/**
