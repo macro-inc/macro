@@ -952,6 +952,16 @@ describe('second review', () => {
     expect(marks).toEqual(['big cat']);
   });
 
+  it('bolding a word after an emoji restyles it in place', async () => {
+    const synced = new SyncedDocument(await buildSnapshot('Hi 🎉 big cat.'));
+    const { response, after } = await run(
+      { edits: [{ old: 'big cat', new: '**big** cat' }] },
+      synced
+    );
+    expect(response.outcome).toBe('committed');
+    expect(after.blocks[0].markdown).toBe('Hi 🎉 **big** cat.');
+  });
+
   it('linking part of a commented phrase is refused rather than shrinking the comment', async () => {
     const error = await runDirectEdit(
       DOC,
