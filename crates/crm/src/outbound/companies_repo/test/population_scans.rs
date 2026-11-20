@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 const OWNER: &str = "macro|owner@example.com";
 const CONTACT: &str = "person@client.example.com";
+const PERSONAL_DOMAIN: &str = "gmail.com";
 
 async fn setup(
     pool: &PgPool,
@@ -167,5 +168,35 @@ async fn a_job_that_changes_nothing_scans_no_history(pool: PgPool) -> anyhow::Re
 
     assert_eq!((duplicate, untracked), (0, 0));
     assert_eq!(contact_interactions(&pool, team).await?, recorded);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_personal_address_the_team_keeps_out_scans_no_history(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (team, link, gate, service) = setup(&pool).await?;
+    let personal = format!("jane@{PERSONAL_DOMAIN}");
+    let at = Utc::now() - Duration::days(1);
+    insert_interaction(&pool, link, &personal, at, true).await?;
+
+    // Teams keep personal-provider addresses out of the CRM by default.
+    let scans = scans_during(
+        &gate,
+        service.populate_contact(
+            &team,
+            &link,
+            "owner@example.com",
+            &personal,
+            None,
+            at,
+            at,
+            true,
+        ),
+    )
+    .await?;
+
+    assert_eq!(scans, 0);
+    assert!(contact_interactions(&pool, team).await?.is_empty());
     Ok(())
 }

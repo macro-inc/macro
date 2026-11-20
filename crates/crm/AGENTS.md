@@ -251,8 +251,9 @@ tools/HTTP/GraphQL surfaces over them.
   rows. Only shared team, mailbox and member row locks may precede a domain lock,
   and no domain-lock holder may lock those rows exclusively.
   A population scans the address history once, inside that transaction:
-  `may_contribute_contact` is admission only, and `populate_changes_nothing`
-  skips a job before any scan. Email sync queues a job per message and
+  `may_contribute_contact` is admission only, `populate_changes_nothing`
+  skips a company-domain job before any scan, and a personal-provider address
+  the team keeps out is refused before it. Email sync queues a job per message and
   address, so a busy contact's jobs are mostly duplicates; a scan ahead of the
   no-op check ran for each of them and hit the 15-second cap on large mailboxes.
   Manual creation retains domain/parent/entity ordering without email consent.

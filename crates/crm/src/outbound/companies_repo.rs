@@ -439,24 +439,10 @@ impl CompaniesRepositoryImpl {
         if !Self::team_exists(&mut tx, team_id).await? {
             return Ok(());
         }
-        let Some(interaction) = self
-            .eligible_interactions_with_authority(
-                &mut tx,
-                *team_id,
-                *link_id,
-                normalized_email,
-                authority,
-            )
-            .await?
-        else {
-            return Ok(());
-        };
 
-        Self::lock_team_domain(&mut tx, team_id, normalized_domain).await?;
-        let first_at = interaction.first_at;
-        let last_at = interaction.last_at;
-        let is_sent = interaction.is_sent;
-
+        // Refuse before the scan: personal emails stay out by default, and
+        // the shared privacy lock held above keeps this setting and the team's
+        // blocked domains from changing until commit.
         let admitted = sqlx::query_scalar!(
             r#"
                 SELECT COALESCE(
@@ -480,6 +466,24 @@ impl CompaniesRepositoryImpl {
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
             return Ok(());
         }
+
+        let Some(interaction) = self
+            .eligible_interactions_with_authority(
+                &mut tx,
+                *team_id,
+                *link_id,
+                normalized_email,
+                authority,
+            )
+            .await?
+        else {
+            return Ok(());
+        };
+
+        Self::lock_team_domain(&mut tx, team_id, normalized_domain).await?;
+        let first_at = interaction.first_at;
+        let last_at = interaction.last_at;
+        let is_sent = interaction.is_sent;
 
         // A personal email identifies a contact independently of its manually
         // selected company, whichever of the contact's addresses it is. Count
