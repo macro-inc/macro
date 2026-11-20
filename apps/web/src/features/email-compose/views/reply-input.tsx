@@ -19,7 +19,7 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { $getRoot } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_LOW, KEY_ESCAPE_COMMAND } from 'lexical';
 import {
   type Accessor,
   children,
@@ -283,6 +283,14 @@ function LoadedReplyInputView(
   };
   onMount(() => props.mobileCompose?.registerClose(requestClose));
   const isMobileCompose = () => props.mobileCompose !== undefined;
+  /** Escape discards an empty reply, and hands a written one back to its thread. */
+  const closeReply = () => {
+    if (collectDraft() === null) {
+      fireAndForget(deleteDraftAndReset(), 'email-compose');
+      return true;
+    }
+    return ctx.exitToThread('selected') || ctx.exitToThread('last');
+  };
   const composePortalScope = () =>
     isMobileCompose() ? ('local' as const) : undefined;
   // File sharing and editor plugin wiring belong to this view. The controller only
@@ -308,6 +316,19 @@ function LoadedReplyInputView(
     .withFloatingFormatMenu()
     .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
     .use(registerToggleAppendedThread)
+    // Below the editor menus, which close themselves first, and above the
+    // rich-text Escape, which would only blur the editor and cost a press.
+    .use((editor) =>
+      editor.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        (event) => {
+          if (isMobileCompose() || !closeReply()) return false;
+          event?.preventDefault();
+          return true;
+        },
+        COMMAND_PRIORITY_LOW
+      )
+    )
     .onChange(state.onContentChange)
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
@@ -424,16 +445,7 @@ function LoadedReplyInputView(
             requestClose();
             return true;
           }
-          const draft = collectDraft();
-          const isEmpty = draft === null;
-
-          if (isEmpty) {
-            // Delete draft and close reply
-            deleteDraftAndReset().catch(() => {});
-          } else {
-            // Move focus back to the message
-            ctx.exitToThread('selected');
-          }
+          closeReply();
           return true;
         },
         // Let editable fields handle Escape before closing the reply.

@@ -554,45 +554,23 @@ export function createThreadNavigation(
       return false;
     }
 
-    if (context.messages.hiddenChipFocused()) {
-      clearSelection();
-      return true;
-    }
-
-    if (keyboardSelecting() && listAnchor()) {
-      clearSelection();
-      return true;
-    }
-
     const focusedId = context.messages.focusedId();
-    if (!focusedId) {
-      if (keyboardSelecting()) {
-        clearSelection();
-        return true;
-      }
-      return false;
-    }
-
-    // If there's an active reply, just clear it (don't collapse the message)
-    if (context.messages.replyingToMessageId() === focusedId) {
+    if (focusedId && context.messages.replyingToMessageId() === focusedId) {
       context.messages.setReplyingToMessageId(undefined);
       return true;
     }
 
-    const target = getHotkeyTarget();
-    if (target && isMessageRenderedExpanded(target)) {
-      context.messages.setExpandedBodyId(focusedId, false);
-      return true;
-    }
-
+    // Selection, keyboard position and expanded bodies don't take a press of
+    // their own: the same Escape leaves the thread. 'o' collapses a message.
     clearSelection();
     if (
+      focusedId &&
       activeEl instanceof HTMLElement &&
       activeEl.closest(`[data-message-body-id="${CSS.escape(focusedId)}"]`)
     ) {
       activeEl.blur();
     }
-    return true;
+    return false;
   };
   const markDone = () => context.archiveThreadAndAdvance();
 
