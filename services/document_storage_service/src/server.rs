@@ -468,7 +468,9 @@ async fn run_server() -> anyhow::Result<()> {
         macro_service_urls::AuthServiceUrl::new()?.to_string(),
     ));
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -491,7 +493,9 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(readonly_db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),
@@ -524,6 +528,24 @@ async fn run_server() -> anyhow::Result<()> {
                 apns_voip_platform_arn: String::new(),
             },
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+        });
+    // State changes made through GraphQL are published, so every session of
+    // the viewer's hears them.
+    let graphql_notification_writer: Arc<crate::api::context::GraphqlNotificationWriter> =
+        Arc::new(NotificationReaderService {
+            repository: notification::outbound::repository::DbNotificationRepository::new(
+                db.clone(),
+            ),
+            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            platform_config: PlatformArnConfig {
+                apns_platform_arn: String::new(),
+                fcm_platform_arn: String::new(),
+                apns_voip_platform_arn: String::new(),
+            },
+            realtime: notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher::new(
+                macro_event_broker.clone(),
+            ),
         });
     tracing::trace!("initialized notification ingress service");
 
@@ -2332,11 +2354,12 @@ async fn run_server() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
-                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                    calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
                         (*conn_gateway_client).clone(),
                         db.clone(),
                         event_broker_tracker.clone(),
-                    ),
+                    )
+                    .with_sends(cfg!(feature = "connection_gateway")),
                 ),
             ),
             authorization_state.clone(),
@@ -2425,6 +2448,10 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    let api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets> =
+        Arc::new(RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        });
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
     let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
@@ -2573,6 +2600,10 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let api_context = ApiContext {
         search_term_matching,
+        search_lanes: Arc::new(search_service::SearchLanes::new(
+            search_service::LanePolicy::DEFAULT,
+        )),
+        api_key_search_buckets,
         saved_views,
         sync_sessions,
         dictation_state,
@@ -2743,6 +2774,7 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_notification_writer,
         graphql_active_notification_ids_context:
             complete_graph::ActiveNotificationIdsGraphqlContext::new(
                 notification::domain::active_notification_ids::ActiveNotificationIdService::new(

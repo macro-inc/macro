@@ -9,7 +9,6 @@ import type { MobileNavViewId } from './mobile-nav-views';
 
 const sources = vi.hoisted(() => ({
   view: vi.fn(),
-  project: vi.fn(),
   blocks: vi.fn(),
   openEvent: vi.fn(),
   openCalendarEvent: vi.fn(),
@@ -20,7 +19,6 @@ const sources = vi.hoisted(() => ({
 
 vi.mock('./use-mobile-nav', () => ({
   useForegroundMobileView: () => sources.view,
-  useForegroundProject: () => sources.project,
 }));
 vi.mock('@app/features/command/Launcher', () => ({
   useCreateMenuBlocks: () => sources.blocks,
@@ -63,13 +61,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(
-  view: MobileNavViewId = 'home',
-  project: () => boolean = () => false
-) {
+function setup(view: MobileNavViewId = 'home') {
   const [blocks, setBlocks] = createSignal<CreatableBlock[]>([]);
   sources.view.mockReturnValue(view);
-  sources.project.mockImplementation(project);
   sources.blocks.mockImplementation(blocks);
   render(() => <MobilePageCreateButton />);
   return { setBlocks };
@@ -130,21 +124,46 @@ describe('mobile create availability', () => {
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
-  it("leaves a project's tabs to the project's own Task pill", () => {
-    const [project, setProject] = createSignal(false);
-    const { setBlocks } = setup('tasks', project);
+  it('creates an initiative rather than a Drive folder from Projects', () => {
+    const { setBlocks } = setup('projects');
+    const createProject = vi.fn(() => true);
+    const createFolder = vi.fn(() => true);
     setBlocks([
       {
-        label: 'Task',
-        description: 'Create task',
-        blockName: 'task',
-        hotkeyToken: TOKENS.create.task,
-        keyDownHandler: vi.fn(() => true),
+        label: 'Folder',
+        description: 'Create folder',
+        blockName: 'project',
+        hotkeyToken: TOKENS.create.project,
+        keyDownHandler: createFolder,
+      },
+      {
+        label: 'Project',
+        description: 'Create project',
+        blockName: 'initiative',
+        hotkeyToken: TOKENS.create.initiative,
+        keyDownHandler: createProject,
       },
     ]);
-    expect(screen.getByRole('button', { name: 'New task' })).toBeTruthy();
-    setProject(true);
-    expect(screen.queryByRole('button', { name: 'New task' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    expect(createProject).toHaveBeenCalledOnce();
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a folder when project creation is unavailable', () => {
+    const { setBlocks } = setup('projects');
+    const createFolder = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Folder',
+        description: 'Create folder',
+        blockName: 'project',
+        hotkeyToken: TOKENS.create.project,
+        keyDownHandler: createFolder,
+      },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(sources.openMenu).toHaveBeenCalledWith(true);
+    expect(createFolder).not.toHaveBeenCalled();
   });
 
   it('uses a Calendar New menu', async () => {

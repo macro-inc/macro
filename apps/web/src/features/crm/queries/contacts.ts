@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
@@ -117,8 +118,10 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
         name: string;
       }) => throwOnErr(() => deps.storage.setContactName({ contactId, name })),
       onMutate: async ({ contactId, name }) => {
+        const canCache = captureQueryAuthorization();
         const queryKey = crmKeys.contact(contactId).queryKey;
         await deps.client.cancelQueries({ queryKey });
+        if (!canCache()) return;
         const previous = deps.client.getQueryData<CrmContactResponse>(queryKey);
         if (previous) {
           deps.client.setQueryData<CrmContactResponse>(queryKey, {
@@ -126,12 +129,12 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
             name,
           });
         }
-        return { previous, optimisticName: name };
+        return { previous, optimisticName: name, canCache };
       },
       // Roll back only if the cache still holds this mutation's optimistic
       // name — a stale failure must not clobber a newer rename's update.
       onError: (_err, { contactId }, context) => {
-        if (context?.previous) {
+        if (context?.canCache() && context.previous) {
           deps.client.setQueryData<CrmContactResponse>(
             crmKeys.contact(contactId).queryKey,
             (current) =>

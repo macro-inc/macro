@@ -30,6 +30,7 @@ pub enum OpensearchOperation {
     UpsertChatMessageChild,
     UpdateChatMetadata,
     UpdateChatProperties,
+    ReadIndexedChatMessages,
     UpsertEmailMessage,
     BulkUpsertEmailMessages,
     UpdateEmailThreadProperties,
@@ -44,14 +45,20 @@ pub enum OpensearchOperation {
     ReconcileAgentSessionBulk,
     ReconcileAgentSessionPrune,
     DeleteDocumentById,
+    DeleteStaleDocumentChunks,
     DeleteDocumentByOwnerId,
     DeleteChannelById,
     DeleteChannelMessageById,
     DeleteChatById,
     DeleteChatMessageById,
     DeleteChatByUserId,
-    DeleteEmailByLinkId,
+    BulkDeleteChatMessages,
+    StartEmailLinkDelete,
+    EmailDeleteTask,
+    RunningEmailLinkDeletes,
     DeleteEmailMessages,
+    DeleteEmailMessageById,
+    DeleteEmailMessageOutsideThread,
     RefreshEmailIndex,
     DeleteEmailByUserId,
     DeleteProjectById,
@@ -208,6 +215,21 @@ pub enum OpensearchClientError {
         operation: OpensearchOperation,
     },
 
+    /// OpenSearch answered a `_bulk` request but failed some of its items.
+    /// The items it wrote stay written; the request's work is not done.
+    #[error(
+        "opensearch failed {failed} of {total} bulk items. operation: {operation} refusal: {refusal:?} errors: {errors:?}"
+    )]
+    BulkItemsFailed {
+        failed: usize,
+        total: usize,
+        /// Set when OpenSearch refused at least one item to protect itself.
+        refusal: Option<WriteRefusal>,
+        /// The first few distinct item errors, as `type: reason`.
+        errors: Vec<String>,
+        operation: OpensearchOperation,
+    },
+
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 
@@ -282,6 +304,55 @@ impl OpensearchClientError {
             }
         )
     }
+
+    /// Whether OpenSearch refused the request, or one of its items, to protect
+    /// itself. Requests that keep OpenSearch's error body in `details` are read
+    /// from it: an error response's `status` and `error.type`, or a by-query
+    /// response's `failures`.
+    pub fn refusal(&self) -> Option<WriteRefusal> {
+        match self {
+            Self::WritesRefused { cause, .. } => Some(*cause),
+            Self::BulkItemsFailed { refusal, .. } => *refusal,
+            Self::NetworkError { status_code, .. } => {
+                write_refusal(*status_code, &serde_json::Value::Null)
+            }
+            Self::Unknown { details, .. } => refusal_in_body(details),
+            _ => None,
+        }
+    }
+
+    /// How many items of a bulk request OpenSearch failed.
+    pub fn failed_items(&self) -> usize {
+        match self {
+            Self::BulkItemsFailed { failed, .. } => *failed,
+            _ => 0,
+        }
+    }
+}
+
+/// The refusal, if any, in a request's or an item's status and `error`.
+pub(crate) fn write_refusal(status: u16, error: &serde_json::Value) -> Option<WriteRefusal> {
+    if error["type"].as_str() == Some("cluster_block_exception") {
+        return Some(WriteRefusal::ClusterBlock);
+    }
+    (status == 429).then_some(WriteRefusal::TooManyRequests)
+}
+
+fn refusal_in_body(body: &str) -> Option<WriteRefusal> {
+    let body = serde_json::from_str::<serde_json::Value>(body).ok()?;
+    let status_of = |value: &serde_json::Value| {
+        value["status"]
+            .as_u64()
+            .and_then(|status| u16::try_from(status).ok())
+            .unwrap_or_default()
+    };
+    // A by-query error keeps its `failures` list, alone or in the response.
+    let failures = body.as_array().or_else(|| body["failures"].as_array());
+    write_refusal(status_of(&body), &body["error"]).or_else(|| {
+        failures?
+            .iter()
+            .find_map(|failure| write_refusal(status_of(failure), &failure["cause"]))
+    })
 }
 
 /// reqwest's `Display` omits the cause (timeout, reset, refused connection),

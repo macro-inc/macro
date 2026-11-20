@@ -185,6 +185,20 @@ use webhook::{
 /// Event broker shared by DSS services.
 pub(crate) type DssEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
+/// The notification service behind the GraphQL mutations that change a
+/// notification's state. Unlike [`ai_tools::ToolNotificationService`], it
+/// publishes each change, so the viewer's other sessions and the server's
+/// own live feeds and unread counts hear a read or a done made here.
+pub(crate) type GraphqlNotificationWriter =
+    notification::domain::service::NotificationReaderService<
+        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        ai_tools::ToolNotificationQueue,
+        ai_tools::NoOpSnsEndpointManager,
+        notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher<
+            DssEventBroker,
+        >,
+    >;
+
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::companies_repo::CompaniesRepositoryImpl,
@@ -282,7 +296,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEntityMutationService,
     FavoritesMutationServiceType,
     DssChannelService,
-    ai_tools::ToolNotificationService,
+    GraphqlNotificationWriter,
     Arc<ai_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
@@ -330,7 +344,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
-        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
+        calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.
@@ -959,6 +973,10 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    /// Each caller's unified search lane, shared by both search mounts.
+    pub search_lanes: Arc<search_service::SearchLanes>,
+    /// The search allowance each account's user API keys share, in Redis.
+    pub api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets>,
     pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub passwords_agent_state:
         passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
@@ -978,6 +996,7 @@ pub(crate) struct ApiContext {
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_notification_writer: Arc<GraphqlNotificationWriter>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
@@ -1116,6 +1135,8 @@ impl From<&ApiContext> for SearchHandlerState {
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
             term_matching_rollout: ctx.search_term_matching.clone(),
+            search_lanes: ctx.search_lanes.clone(),
+            api_key_search_buckets: ctx.api_key_search_buckets.clone(),
         }
     }
 }

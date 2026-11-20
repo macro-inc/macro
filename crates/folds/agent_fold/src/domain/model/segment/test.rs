@@ -161,7 +161,7 @@ fn code_without_observed_requests_reads_as_workspace_work() {
         segments(&[part], true)[0].rows,
         [ActivityRow {
             id: "code-2".to_owned(),
-            label: "Worked in your workspace".to_owned(),
+            label: "Finished a step".to_owned(),
             detail: None,
             status: ActivityStatus::Completed,
             card: None,
@@ -186,10 +186,7 @@ fn code_through_the_public_server_reads_as_workspace_work() {
             error: None,
         },
     };
-    assert_eq!(
-        segments(&[part], true)[0].rows[0].label,
-        "Worked in your workspace"
-    );
+    assert_eq!(segments(&[part], true)[0].rows[0].label, "Finished a step");
 }
 
 #[test]
@@ -247,7 +244,7 @@ fn code_mode_lookups_are_not_steps() {
 }
 
 #[test]
-fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
+fn a_code_run_with_no_steps_says_only_how_far_it_got() {
     let code = |status: ToolStatus| MessagePart::ToolUse {
         id: ToolUseId("code-3".into()),
         name: ToolName::Mcp {
@@ -267,21 +264,59 @@ fn an_unfinished_or_failed_code_run_still_reads_as_workspace_work() {
     };
     assert_eq!(
         row(ToolStatus::Running, false),
-        (
-            "Working in your workspace".to_owned(),
-            ActivityStatus::Running
-        )
+        ("Working on it".to_owned(), ActivityStatus::Running)
     );
     assert_eq!(
         row(ToolStatus::Running, true),
-        (
-            "Worked in your workspace".to_owned(),
-            ActivityStatus::Interrupted
-        )
+        ("Step interrupted".to_owned(), ActivityStatus::Interrupted)
     );
     assert_eq!(
         row(ToolStatus::Failed, true),
-        ("Workspace step failed".to_owned(), ActivityStatus::Failed)
+        ("A step failed".to_owned(), ActivityStatus::Failed)
+    );
+}
+
+#[test]
+fn a_program_that_failed_or_was_cancelled_says_so_though_its_call_completed() {
+    let code = |detail: ToolDetail| MessagePart::ToolUse {
+        id: ToolUseId("code-5".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail,
+    };
+    let row = |detail: ToolDetail| {
+        let row = segments(&[code(detail)], true)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    let failed = ("A step failed".to_owned(), ActivityStatus::Failed);
+    assert_eq!(
+        row(ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"status": "failed", "activity": []})),
+            error: None,
+        }),
+        failed
+    );
+    assert_eq!(
+        row(ToolDetail::Other {
+            kind: "other".into(),
+            input: None,
+            result: Some(serde_json::json!({"status": "timed_out"})),
+            output: None,
+            error: None,
+        }),
+        failed
+    );
+    assert_eq!(
+        row(ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"status": "cancelled", "activity": []})),
+            error: None,
+        }),
+        ("Step interrupted".to_owned(), ActivityStatus::Interrupted)
     );
 }
 

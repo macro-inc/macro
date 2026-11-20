@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type {
   CacheHost,
   CalendarLinkWatermarkWire,
@@ -5,7 +6,7 @@ import type {
 import {
   CalendarChangesDocument,
   type CalendarChangesQuery,
-  CalendarsDocument,
+  CalendarListRefreshDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { fetchCached } from './network';
 import { calendarCacheAnswered } from './readiness';
@@ -49,7 +50,10 @@ export const fetchCalendarChanges: FetchCalendarChanges = async (since) =>
   (await fetchCached(CalendarChangesDocument, { input: { since } })).user
     .calendarChanges;
 
-export const refetchCalendarList = () => fetchCached(CalendarsDocument, {});
+// An in-flight Calendars cache read can satisfy a second request with the
+// same operation key. The refresh has its own key and writes the same field.
+export const refetchCalendarList = () =>
+  fetchCached(CalendarListRefreshDocument, {});
 
 /**
  * Keeps cached calendar data current. Every poke, reconnect, or other
@@ -108,7 +112,14 @@ export class CalendarSyncController {
       try {
         do {
           this.rerun = false;
-          await this.applyChanges();
+          try {
+            await this.applyChanges();
+          } catch (error) {
+            // The owner rejected only this old snapshot. Preserve an already
+            // requested fresh pass instead of waiting for another external poke.
+            if (!(error instanceof StaleCacheAuthorityError) || !this.rerun)
+              throw error;
+          }
         } while (this.rerun && !this.disposed);
       } finally {
         this.running = undefined;
@@ -125,6 +136,7 @@ export class CalendarSyncController {
   }
 
   private async applyChanges(): Promise<void> {
+    const generation = cacheSessionGeneration.capture();
     const state = await this.host.calendarRange(SYNC_STATE_RANGE);
     if (state.kind === 'unsupported' || !state.watermark?.length) return;
     let since = state.watermark;
@@ -138,10 +150,13 @@ export class CalendarSyncController {
       }));
       if (changes.resetRequired) {
         // Visible ranges observe the cleared coverage and refetch.
-        await this.host.calendarCommit({
-          reset: true,
-          watermark: { kind: 'merge', links: to },
-        });
+        await this.host.calendarCommit(
+          {
+            reset: true,
+            watermark: { kind: 'merge', links: to },
+          },
+          generation
+        );
         await this.refetchCalendars();
         return;
       }
@@ -149,19 +164,22 @@ export class CalendarSyncController {
       const removedLinkIds = since
         .map((link) => link.linkId)
         .filter((linkId) => !visible.has(linkId));
-      await this.host.calendarCommit({
-        replacedEvents: changes.events.map((change) => ({
-          eventKey: eventKey(change.event.id),
-          occurrenceKeys: change.occurrences.map((occurrence) =>
-            occurrenceKey(occurrence.id)
-          ),
-        })),
-        deletedEventKeys: changes.deletedEventIds.map(eventKey),
-        deletedCalendarKeys: changes.deletedCalendarIds.map(calendarKey),
-        removedLinkIds,
-        watermark: { kind: 'advance', since, to },
-        ...(changes.hasMore ? {} : { freshness: 'fresh' as const }),
-      });
+      await this.host.calendarCommit(
+        {
+          replacedEvents: changes.events.map((change) => ({
+            eventKey: eventKey(change.event.id),
+            occurrenceKeys: change.occurrences.map((occurrence) =>
+              occurrenceKey(occurrence.id)
+            ),
+          })),
+          deletedEventKeys: changes.deletedEventIds.map(eventKey),
+          deletedCalendarKeys: changes.deletedCalendarIds.map(calendarKey),
+          removedLinkIds,
+          watermark: { kind: 'advance', since, to },
+          ...(changes.hasMore ? {} : { freshness: 'fresh' as const }),
+        },
+        generation
+      );
       calendarsChanged ||=
         changes.calendars.length > 0 ||
         changes.deletedCalendarIds.length > 0 ||
@@ -189,3 +207,5 @@ export function setActiveCalendarSyncController(
 ): void {
   activeController = controller;
 }
+
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';

@@ -52,6 +52,11 @@ literal, because Lexical's export adds them to unlinked URL text (see
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
 
+A link's URL comes from saved content: check it with `isAllowedLinkUrl`
+(`utils/link-url.ts`) before it becomes a link node, an anchor, or a call to
+open it. Build transformer sets from `STANDARD_TRANSFORMERS`, never Lexical's
+`TRANSFORMERS` (its `LINK` keeps any URL; see `README.md`).
+
 Table cells import and export through their own transformer sets in
 `transformers/tables.ts`. Keep their chip entries matching the paragraph sets
 (`EXTERNAL_TRANSFORMERS` order for export), or a table drops chips a paragraph
@@ -69,3 +74,5 @@ per container. Each target selects a database/table/optional view for the
 existing `DocumentCardNode`; absent or failed targets remain named Notion links
 with a typed reason. Database mentions remain compact references. Keep the
 ordinal counter shared across recursive container imports and ignore code.
+
+Creation-time markdown snapshots write explicit root pins as `pending:<definitionId>`; omit initial pins to preserve the blank golden snapshot and implicit defaults.

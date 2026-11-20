@@ -139,8 +139,16 @@ export function soupNavigationTouchHighlight(container: HTMLElement) {
     if (element) scheduleTouchClear(element);
   };
 
-  const handleTouchCancel = () => {
+  const clearHighlight = () => {
     cancelTouchHighlight(state);
+    // A touch can end before the action drawer closes. Clear its delayed
+    // navigation highlight too, not only the currently active gesture.
+    for (const element of container.querySelectorAll<HTMLElement>(
+      `[data-soup-entity].${TOUCH_HIGHLIGHT_CLASS}`
+    )) {
+      clearPendingTouchClear(element);
+      element.classList.remove(TOUCH_HIGHLIGHT_CLASS);
+    }
   };
 
   container.addEventListener(
@@ -156,17 +164,24 @@ export function soupNavigationTouchHighlight(container: HTMLElement) {
   container.addEventListener('touchend', handleTouchEnd, touchListenerOptions);
   container.addEventListener(
     'touchcancel',
-    handleTouchCancel,
+    clearHighlight,
     touchListenerOptions
   );
 
+  container.addEventListener('pointercancel', clearHighlight, true);
+  container.addEventListener('pointerup', clearHighlight, true);
+  container.addEventListener('contextmenu', clearHighlight, true);
   onCleanup(() => {
-    cancelTouchHighlight(state);
+    clearHighlight();
     container.removeEventListener('touchstart', handleTouchStart, true);
     container.removeEventListener('touchmove', handleTouchMove, true);
     container.removeEventListener('touchend', handleTouchEnd, true);
-    container.removeEventListener('touchcancel', handleTouchCancel, true);
+    container.removeEventListener('touchcancel', clearHighlight, true);
+    container.removeEventListener('pointercancel', clearHighlight, true);
+    container.removeEventListener('pointerup', clearHighlight, true);
+    container.removeEventListener('contextmenu', clearHighlight, true);
   });
+  return clearHighlight;
 }
 
 export function persistSoupNavigationTouchHighlight(

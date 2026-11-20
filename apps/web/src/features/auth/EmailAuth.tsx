@@ -18,6 +18,8 @@ import {
   announceAlreadyConnected,
   announceConsentCancelled,
   announceLinkedInbox,
+  INBOX_CHANGED_MESSAGE,
+  INBOX_IDENTITY_CONFLICT_MESSAGE,
 } from '@core/email-link/link-outcome';
 import {
   consumeInboxLinkReturn,
@@ -402,6 +404,26 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
               toast.failure(
                 'A professional subscription is required to add another inbox.'
               );
+              navigateAfterLink();
+              return;
+            }
+            if (err.tag === 'InboxBeingRemoved') {
+              trackOutcome('inbox_being_removed');
+              toast.failure(
+                'This inbox is still being removed. Try again in a few minutes.'
+              );
+              navigateAfterLink();
+              return;
+            }
+            if (err.tag === 'IdentityConflict') {
+              trackOutcome('identity_conflict');
+              toast.failure(INBOX_IDENTITY_CONFLICT_MESSAGE);
+              navigateAfterLink();
+              return;
+            }
+            if (err.tag === 'Changed') {
+              trackOutcome('changed');
+              toast.failure(INBOX_CHANGED_MESSAGE);
               navigateAfterLink();
               return;
             }

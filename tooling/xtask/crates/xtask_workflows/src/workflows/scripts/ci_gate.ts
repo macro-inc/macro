@@ -30,7 +30,11 @@ export const GATE_JOB = 'CI gate';
 // The workflow whose jobs the fork step trusts, and the trees that define it:
 // the generated workflows and the Rust that generates them.
 export const PR_CI_PATH = '.github/workflows/pr-ci.yml';
-export const CI_SOURCES = ['.github', 'tooling/xtask/crates/xtask_workflows'] as const;
+export const CI_SOURCES = [
+  '.github',
+  'tooling/xtask/crates/xtask_workflows',
+  'tooling/xtask/crates/gh_workflow',
+] as const;
 export const STALE_MERGE =
   "PR CI can't start: this PR's merge commit predates PR CI. Merge main in, push, and add the run-ci label again.";
 export const CONFLICTS =

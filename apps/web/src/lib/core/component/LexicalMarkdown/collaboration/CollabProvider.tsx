@@ -15,6 +15,7 @@ import {
   initializeEditorWithVersionedState,
   isStateEmpty,
   loroSyncState,
+  recordChangedBlocks,
 } from '@core/component/LexicalMarkdown/utils';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -73,6 +74,7 @@ import {
 import { FLUSH_COLLABORATION_COMMAND } from './flush';
 
 type MutatedNodes = UpdateListenerPayload['mutatedNodes'];
+type LoroState = Parameters<LoroManager['syncToLoro']>[0];
 
 export type CollabProviderProps = {
   editor: LexicalEditor;
@@ -103,6 +105,8 @@ export type CollabProviderProps = {
   span?: Span;
   /** Optional status UI (e.g. the md block's CollabStatus chrome). */
   statusChrome?: JSX.Element;
+  /** Called after the viewer's own content change is written to the session. */
+  onLocalEdit?: () => void;
 };
 
 export const FROM_LORO_TAG = 'from-loro';
@@ -163,18 +167,35 @@ export function CollabProvider(props: CollabProviderProps) {
     if (!readOnly()) await syncEngine.syncStateToLoro(state);
   };
 
+  // Top-level blocks the editor changed since the last write from the update
+  // listener; writes compare only these with the stored state.
+  let changedBlocks = new Set<NodeKey>();
+
+  /** Writes `state`, keeping the stored derived fields of the content it leaves unchanged. */
+  const writeEditorState = (
+    state: EditorState,
+    changed?: ReadonlySet<NodeKey>
+  ) =>
+    writeStateToLoro(
+      (stored) =>
+        loroSyncState(state, {
+          stored: stored as unknown as SerializedEditorState | undefined,
+          changedBlocks: changed,
+        }) as unknown as LoroState
+    );
+
   onCleanup(
     props.editor.registerCommand(
       FLUSH_COLLABORATION_COMMAND,
       (complete) => {
-        const state = loroSyncState(props.editor.getEditorState());
+        const state = props.editor.getEditorState();
         const flush = async () => {
           try {
             if (!syncEngine.isRunning()) {
               complete(false);
               return;
             }
-            await writeStateToLoro({ ...state });
+            await writeEditorState(state);
             await walSyncer.flush();
             complete((await walSyncer.summary()).dirty === 0);
           } catch (error) {
@@ -397,8 +418,11 @@ export function CollabProvider(props: CollabProviderProps) {
           discrete: true,
           tag: CODE_HIGHLIGHT_IDS_TAG,
           onUpdate: async () => {
-            const stateToSync = loroSyncState(props.editor.getEditorState());
-            await writeStateToLoro(stateToSync as any);
+            // The update listener has recorded this update's blocks already.
+            await writeEditorState(
+              props.editor.getEditorState(),
+              new Set(changedBlocks)
+            );
             $afterSyncCursorUpdate(loroManager);
           },
         }
@@ -450,8 +474,12 @@ export function CollabProvider(props: CollabProviderProps) {
       }
 
       // Clean the state to remove any state properties that should not be synced
-      const stateToSync = loroSyncState(state);
-      await writeStateToLoro(stateToSync as any);
+      if (!readOnly()) {
+        const changed = changedBlocks;
+        changedBlocks = new Set();
+        await writeEditorState(state, changed);
+        if (changed.size > 0) props.onLocalEdit?.();
+      }
     }
 
     $afterSyncCursorUpdate(loroManager);
@@ -464,7 +492,13 @@ export function CollabProvider(props: CollabProviderProps) {
   function lexicalStateSyncPlugin() {
     return mergeRegister(
       props.editor.registerUpdateListener(
-        ({ editorState, tags, mutatedNodes }) => {
+        ({ editorState, tags, mutatedNodes, dirtyElements, dirtyLeaves }) => {
+          recordChangedBlocks(
+            editorState,
+            dirtyElements,
+            dirtyLeaves,
+            changedBlocks
+          );
           syncLexicalToLoro(editorState, mutatedNodes, tags).catch(
             reportSyncError
           );
@@ -474,8 +508,9 @@ export function CollabProvider(props: CollabProviderProps) {
       props.editor.registerCommand(
         FORCE_SYNC_COMMAND,
         () => {
-          const stateToSync = loroSyncState(props.editor.getEditorState());
-          writeStateToLoro(stateToSync as any).catch(reportSyncError);
+          writeEditorState(props.editor.getEditorState()).catch(
+            reportSyncError
+          );
           return true;
         },
         COMMAND_PRIORITY_NORMAL

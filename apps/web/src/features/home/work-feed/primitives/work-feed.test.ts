@@ -1,4 +1,5 @@
 import type { EntityData } from '@entity';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { ATTENTION_FEED_RESUBSCRIBE_DELAY_MS } from '@queries/attention-feed/live-attention-feed';
 import { createFakeAttentionFeedClient } from '@queries/attention-feed/tests/fake-client';
 import { createRoot } from 'solid-js';
@@ -87,6 +88,28 @@ const docC = documentEntry({
 });
 
 describe('createWorkFeed', () => {
+  it('keeps a delayed subscription patch stamped with its source across a same-access baseline correction', async () => {
+    vi.useFakeTimers();
+    const generation = cacheSessionGeneration.capture();
+    const { fake, itemIds } = setup();
+    await flush();
+    fake.queries[0].resolve(workFeedPage([docA, docB]));
+    await flush();
+    cacheSessionGeneration.initialize('corrected-feed-owner-generation');
+    fake.subscriptions[0].next({ workFeedUpdates: [upsertedPatch(docC)] });
+    await flush();
+    expect(itemIds()).toEqual([
+      'document:doc-a',
+      'document:doc-c',
+      'document:doc-b',
+    ]);
+    expect(fake.writes).toHaveLength(1);
+    expect(fake.writes[0].generation).toBe(generation);
+    expect(fake.writes[0].generation).not.toBe(
+      cacheSessionGeneration.capture()
+    );
+  });
+
   it('writes live changes into the cached pages without a read', async () => {
     vi.useFakeTimers();
     const { fake, itemIds } = setup();

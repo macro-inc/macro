@@ -4,6 +4,7 @@ import { Mirror } from '@loro-mirror/core';
 import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it } from 'vitest';
 import { MARKDOWN_LORO_SCHEMA } from '../markdown-loro-schema';
+import { markdownToLoroSnapshot } from '../markdown-loro-snapshot';
 
 describe('markdown-golden.bin', () => {
   it('ensures that the \"golden\" snapshot is properly blank as expected', async () => {
@@ -30,5 +31,54 @@ describe('markdown-golden.bin', () => {
       expect(paragraph.children).toHaveLength(1);
       expect(paragraph.children[0].text).toEqual('');
     }
+  });
+});
+
+describe('creation-time root pins', () => {
+  it.each(['', '# Task body'])(
+    'seeds explicit pins with markdown %j',
+    async (markdown) => {
+      const snapshot = await markdownToLoroSnapshot(markdown, [
+        'custom-field',
+        'custom-field',
+        'empty-field',
+      ]);
+      expect(snapshot).toBeDefined();
+      const doc = new LoroDoc();
+      doc.import(snapshot!);
+      const mirror = new Mirror({ doc, schema: MARKDOWN_LORO_SCHEMA });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      const state = mirror.getState() as {
+        root: { $: { pinnedPropertyIds?: string[] } };
+      };
+      expect(state.root.$.pinnedPropertyIds).toEqual([
+        'pending:custom-field',
+        'pending:empty-field',
+      ]);
+    }
+  );
+
+  it('keeps the canonical blank snapshot when pins are omitted', async () => {
+    const snapshot = await markdownToLoroSnapshot('');
+    const golden = readFileSync(
+      join(import.meta.dirname, '../../../static_assets/markdown-golden.1.bin')
+    );
+    expect(snapshot).toEqual(new Uint8Array(golden));
+  });
+
+  it('stores an explicit empty pin list instead of falling back to defaults', async () => {
+    const snapshot = await markdownToLoroSnapshot('', []);
+    const doc = new LoroDoc();
+    doc.import(snapshot!);
+    const mirror = new Mirror({ doc, schema: MARKDOWN_LORO_SCHEMA });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const state = mirror.getState() as {
+      root: { $: { pinnedPropertyIds?: string[] } };
+    };
+    expect(state.root.$.pinnedPropertyIds).toEqual([]);
   });
 });

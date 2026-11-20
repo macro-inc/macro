@@ -216,6 +216,7 @@ export async function fetchCalendarWindow(
   fetchPage: FetchCalendarOccurrencePage,
   signal?: AbortSignal
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   const watermarks: CalendarLinkWatermarkWire[][] = [];
   const sample = beginCalendarSyncStatusSample();
   let syncStatus: CalendarSyncStatus = CalendarSyncStatus.ready;
@@ -244,10 +245,13 @@ export async function fetchCalendarWindow(
     after = page.endCursor;
   }
   recordCalendarSyncStatus(syncStatus, sample);
-  await host.calendarCommit({
-    coverage: window.coverage,
-    watermark: { kind: 'merge', links: lowestWatermark(watermarks) },
-  });
+  await host.calendarCommit(
+    {
+      coverage: window.coverage,
+      watermark: { kind: 'merge', links: lowestWatermark(watermarks) },
+    },
+    generation
+  );
 }
 
 const occurrenceSelection = selectRecords(
@@ -457,3 +461,5 @@ export async function readCalendarRange(
   if (items === 'unsupported') return { kind: 'unsupported' };
   return { kind: 'range', data: { items, syncStatus: latestSyncStatus } };
 }
+
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';

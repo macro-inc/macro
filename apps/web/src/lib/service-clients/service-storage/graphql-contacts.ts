@@ -127,6 +127,7 @@ export async function hydrateGraphqlContacts(
     span.setAttr('contacts.page_count', data.user.contacts.nodes.length);
     const hydrated = await span.span('contacts.persist_page', () =>
       host.hydrateQuery({
+        generation: result.operation.context.cacheSessionGeneration,
         query: DOCUMENT,
         operationName: 'ContactDirectoryBackfill',
         variables,
