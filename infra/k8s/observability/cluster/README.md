@@ -53,7 +53,8 @@ cluster and its Pod Identity associations, and this directory is on `main`, run
 this from a clean checkout of `main` (the script refuses anything else):
 
 ```sh
-aws eks update-kubeconfig --name observability --region us-east-2 --alias observability
+aws eks update-kubeconfig --name observability --region us-east-2 --alias observability \
+  --role-arn arn:aws:iam::569036502058:role/observability-eks-admin   # ../aws/README.md "Cluster access"
 nix run .#bootstrap -- --context observability
 ```
 
@@ -244,8 +245,7 @@ with access to the system named:
 
 Nothing in AWS sends traffic to the cluster yet, and Loki and Tempo write to
 the cluster's own buckets, so testing touches nothing the host uses. From a
-machine with cluster access (`aws eks update-kubeconfig --name observability
---region us-east-2 --alias observability`):
+machine with cluster access (`../aws/README.md` "Cluster access"):
 
 - **Grafana**: `kubectl --context observability -n observability port-forward
   svc/grafana 3000:80`, open http://localhost:3000 and sign in with Google.

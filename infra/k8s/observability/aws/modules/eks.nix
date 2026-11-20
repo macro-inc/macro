@@ -46,16 +46,6 @@ in
   }) addonNames;
 
   variable = {
-    admin_principal_arns = {
-      type = "list(string)";
-      description = "IAM role ARNs granted cluster admin through EKS access entries.";
-      validation = [
-        {
-          condition = ref "length(var.admin_principal_arns) > 0 && alltrue([for arn in var.admin_principal_arns : can(regex(\"^arn:aws:iam::${settings.accountId}:(role|user)/\", arn))])";
-          error_message = "Give at least one IAM role or user ARN in account ${settings.accountId}.";
-        }
-      ];
-    };
     public_access_cidrs = {
       type = "list(string)";
       description = "CIDRs allowed to reach the cluster's public API endpoint.";
@@ -88,6 +78,28 @@ in
       node = {
         name = "observability-k8s-node";
         assume_role_policy = builtins.toJSON (iam.trust "ec2.amazonaws.com" [ "sts:AssumeRole" ]);
+      };
+      # Cluster admin for identities tagged `settings.cluster.adminTag`. It has
+      # no IAM policies: its only power is the access entry below.
+      admin = {
+        name = cluster.adminRole;
+        assume_role_policy = builtins.toJSON (
+          let
+            assumedBy = value: condition: {
+              Effect = "Allow";
+              Principal.AWS = "arn:aws:iam::${settings.accountId}:root";
+              Action = "sts:AssumeRole";
+              Condition = {
+                StringEquals."aws:PrincipalTag/${cluster.adminTag}" = value;
+              }
+              // condition;
+            };
+          in
+          iam.policy [
+            (assumedBy "admin" { Bool."aws:MultiFactorAuthPresent" = "true"; })
+            (assumedBy "automation" { })
+          ]
+        );
       };
     };
 
@@ -132,15 +144,13 @@ in
     };
 
     aws_eks_access_entry.admin = {
-      for_each = ref "toset(var.admin_principal_arns)";
       cluster_name = ref "aws_eks_cluster.observability.name";
-      principal_arn = ref "each.value";
+      principal_arn = ref "aws_iam_role.admin.arn";
       type = "STANDARD";
     };
     aws_eks_access_policy_association.admin = {
-      for_each = ref "aws_eks_access_entry.admin";
       cluster_name = ref "aws_eks_cluster.observability.name";
-      principal_arn = ref "each.value.principal_arn";
+      principal_arn = ref "aws_eks_access_entry.admin.principal_arn";
       policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy";
       access_scope.type = "cluster";
     };
