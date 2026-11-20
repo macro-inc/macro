@@ -768,6 +768,22 @@ row's author; unnamed group chats shorten to two names and a count
 regression is
 `bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
 
+On touch, a done row or stack notification folds away (`SwipableRow`'s
+`collapseRow`, through `setCollapseEntity`) before the feed hides it; the feed
+hides rows at once, so removing first drops the row before it can animate. The
+same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
+`NotificationsView` at phone width and checks it folds over frames before the
+feed takes it, the row below slides up without a jump, Undo restores it, and
+reduced motion skips the fold.
+
+A swipe row folds only what is inside it: draw a row's divider inside its
+`SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
+behind. A list that can keep a row after a done unfolds it through
+`setExpandEntity`: touch Notifications' Signal/Noise list (`HomeList`, whose
+work feed keeps own work) passes `expand` to `toEntityActionListState`, and
+`executeWithSoup` calls it once the done settles. Its regression is
+`bunx playwright test --config src/features/next-soup/soup-view/views/inbox/browser-test/playwright.config.ts`.
+
 ## Message notification reads
 
 Gate automatic message notification reads on the actual message element
