@@ -1,6 +1,52 @@
 # Contacts Service
 A service for adding and querying contacts
 
+## Contact list backfill and audit
+
+`contacts_backfill` (`src/bin/contacts_backfill.rs`, logic in
+`crates/contacts/src/domain/backfill.rs`) fills `contact_list_members`
+(`interacted`) and `contact_inbox_members` (`gmail`, `outlook`) from what the
+database already records, and audits the legacy `contacts_connections` graph.
+It reads `DATABASE_URL`, prints a JSON report on stdout, and logs progress.
+Running it against a hosted database is a separate, approved operation.
+
+```bash
+cargo run -p contacts_service --bin contacts_backfill -- audit
+cargo run -p contacts_service --bin contacts_backfill -- backfill --dry-run
+cargo run -p contacts_service --bin contacts_backfill -- backfill
+cargo run -p contacts_service --bin contacts_backfill -- backfill --after 2026-11-20T00:00:00Z --only channels,direct-messages
+```
+
+- `audit` writes nothing. It classifies each direction of every legacy edge
+  (teammate, shared channel, DM with a message, inbox; or reverse import,
+  empty DM, support channel, referral, disconnected inbox, no surviving
+  record) and projects `interacted` rows by channel size and type.
+- `backfill` runs three passes, all by default (`--only` picks some):
+  `channels` pairs every two Macro members of each channel that is not a DM
+  or a signup support channel, plus the people the April 2026 snapshot
+  (`contacts_backfill_outbox`) lists together; `direct-messages` pairs the two
+  people of each DM with a message from one of them; `inbox` writes each
+  legacy direction whose owner has an inbox that knows the contact. Writes
+  are idempotent, so a run can be repeated; nothing is notified.
+- `--dry-run` reads everything and reports the writes it would make.
+- `--after <RFC 3339>` re-derives only from channel joins and DM messages at
+  or after that time, and skips the April snapshot. The inbox pass has no
+  time index and always reads every legacy edge.
+- `--support-roster` overrides the signup support roster used to recognise
+  support channels (private, named `Macro Support x …`, holding a roster
+  address). The default is every address the roster has held; add new ones
+  to `SUPPORT_ROSTER` when `MACRO_SUPPORT_EMAILS` gains one.
+- `--page-size`, `--edge-page-size`, `--contact-page-size` and `--pause-ms`
+  bound each read and pace the run. Every statement has a 60 s timeout.
+- The run holds every channel's Macro members in memory (hundreds of
+  thousands of rows).
+
+Order: turn `contacts-list-writes` on, then `audit`, then `backfill
+--dry-run`, then `backfill`. The full run covers everything recorded before
+it starts, including the time before the flag was on. To repair a window
+the live producers may have missed (for example around the flag flip), run
+`backfill --after <a little before it> --only channels,direct-messages`.
+
 ## Local development SQS component
 ### Setting up local SQS with localstack and docker
 A small SQS worker has been made to aid in the rapid

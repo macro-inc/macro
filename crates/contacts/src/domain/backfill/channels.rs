@@ -3,9 +3,7 @@
 //! channel's `interacted` pairs can be planned. Participant rows number in the
 //! hundreds of thousands, so this fits in memory comfortably.
 
-use crate::domain::models::backfill::{
-    ChannelMember, ChannelRecord, ChannelSnapshot, ChannelType,
-};
+use crate::domain::models::backfill::{ChannelMember, ChannelRecord, ChannelSnapshot, ChannelType};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{HashMap, HashSet};
@@ -157,7 +155,10 @@ impl ChannelLoader {
     ) {
         let mut by_channel: HashMap<Uuid, Vec<ChannelMember>> = HashMap::new();
         for member in members {
-            by_channel.entry(member.channel_id).or_default().push(member);
+            by_channel
+                .entry(member.channel_id)
+                .or_default()
+                .push(member);
         }
 
         for record in channels {
@@ -199,7 +200,10 @@ impl ChannelLoader {
             let Some(&channel) = self.0.channel_index.get(&snapshot.channel_id) else {
                 continue;
             };
-            if !matches!(self.0.channels[channel as usize].kind, ChannelKind::Shared(_)) {
+            if !matches!(
+                self.0.channels[channel as usize].kind,
+                ChannelKind::Shared(_)
+            ) {
                 continue;
             }
 
@@ -276,13 +280,18 @@ impl ChannelDirectory {
     /// What `a`'s and `b`'s channels say about them. Walks the person in
     /// fewer channels and looks each one up in the other's, so a support
     /// roster member in every signup's channel costs little.
-    pub fn relation(&self, a: &MacroUserIdStr<'static>, b: &MacroUserIdStr<'static>) -> ChannelRelation {
+    pub fn relation(
+        &self,
+        a: &MacroUserIdStr<'static>,
+        b: &MacroUserIdStr<'static>,
+    ) -> ChannelRelation {
         let mut relation = ChannelRelation::default();
         let (Some(&a), Some(&b)) = (self.users.get(a), self.users.get(b)) else {
             return relation;
         };
 
-        let (fewer, more) = smaller_first(&self.memberships[a as usize], &self.memberships[b as usize]);
+        let (fewer, more) =
+            smaller_first(&self.memberships[a as usize], &self.memberships[b as usize]);
         for &(channel, position) in fewer {
             let Ok(found) = more.binary_search_by_key(&channel, |&(c, _)| c) else {
                 continue;
@@ -321,7 +330,11 @@ impl ChannelDirectory {
         let mut snapshot_rows: HashMap<u32, u64> = HashMap::new();
         for snapshot in &self.snapshots {
             let current = self.current_members(snapshot.channel);
-            let shared = snapshot.users.iter().filter(|u| current.contains(u)).count() as u64;
+            let shared = snapshot
+                .users
+                .iter()
+                .filter(|u| current.contains(u))
+                .count() as u64;
             let listed = snapshot.users.len() as u64;
             let rows = pair_rows(listed) - pair_rows(shared);
             *snapshot_rows.entry(snapshot.channel).or_default() += rows;
@@ -407,7 +420,12 @@ impl ChannelDirectory {
         &self,
         write: &InteractionWrite,
     ) -> (Vec<MacroUserIdStr<'static>>, Vec<MacroUserIdStr<'static>>) {
-        let name = |users: &[u32]| users.iter().map(|u| self.ids[*u as usize].clone()).collect();
+        let name = |users: &[u32]| {
+            users
+                .iter()
+                .map(|u| self.ids[*u as usize].clone())
+                .collect()
+        };
         (name(&write.users), name(&write.peers))
     }
 
@@ -447,7 +465,11 @@ impl ChannelDirectory {
             push_writes(channel.id, &joined, &current_users, writes);
         }
 
-        for left in channel.members.iter().filter(|member| member.left_at.is_some()) {
+        for left in channel
+            .members
+            .iter()
+            .filter(|member| member.left_at.is_some())
+        {
             let peers: Vec<u32> = channel
                 .members
                 .iter()

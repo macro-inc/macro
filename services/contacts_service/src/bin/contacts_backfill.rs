@@ -121,7 +121,10 @@ async fn main() -> Result<(), Report> {
     let cli = Cli::parse();
 
     let roster: Vec<String> = if cli.support_roster.is_empty() {
-        SUPPORT_ROSTER.iter().map(|email| (*email).to_owned()).collect()
+        SUPPORT_ROSTER
+            .iter()
+            .map(|email| (*email).to_owned())
+            .collect()
     } else {
         cli.support_roster
     };

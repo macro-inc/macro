@@ -49,12 +49,20 @@ fn shared_channel_writes_pair_every_two_members_once_in_bounded_chunks() {
     let members: Vec<_> = (0..23)
         .map(|n| member(1, &format!("macro|u{n:02}@example.com"), 1, None))
         .collect();
-    loader.add_channels(vec![channel(1, ChannelType::Public)], members, &HashSet::new());
+    loader.add_channels(
+        vec![channel(1, ChannelType::Public)],
+        members,
+        &HashSet::new(),
+    );
     let directory = loader.finish();
 
     let writes: Vec<_> = directory.interaction_writes(None).flatten().collect();
 
-    assert!(writes.iter().all(|w| w.users.len() <= USERS_PER_WRITE && w.peers.len() <= PEERS_PER_WRITE));
+    assert!(
+        writes
+            .iter()
+            .all(|w| w.users.len() <= USERS_PER_WRITE && w.peers.len() <= PEERS_PER_WRITE)
+    );
     assert_eq!(rows(&directory, &writes).len(), 23 * 22);
     // Triangular chunks: each unordered pair is attempted once, plus pairs
     // inside a users chunk, which appear in both orders.
@@ -82,7 +90,10 @@ fn dms_and_support_channels_pair_nobody_through_the_channel_pass() {
 
     assert_eq!(directory.interaction_writes(None).flatten().count(), 0);
     assert_eq!(
-        directory.relation(&mid("macro|new@example.com"), &mid("macro|support@macro.com")),
+        directory.relation(
+            &mid("macro|new@example.com"),
+            &mid("macro|support@macro.com")
+        ),
         ChannelRelation {
             support_channel: true,
             ..ChannelRelation::default()
@@ -132,13 +143,29 @@ fn a_dm_counts_only_once_one_of_them_sent_a_message() {
     assert_eq!(
         rows(&directory, &writes),
         vec![
-            ("macro|a@example.com".to_owned(), "macro|b@example.com".to_owned()),
-            ("macro|b@example.com".to_owned(), "macro|a@example.com".to_owned()),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|b@example.com".to_owned()
+            ),
+            (
+                "macro|b@example.com".to_owned(),
+                "macro|a@example.com".to_owned()
+            ),
         ]
     );
     let a = mid("macro|a@example.com");
-    assert_eq!(directory.relation(&a, &mid("macro|b@example.com")).direct_message, Some(true));
-    assert_eq!(directory.relation(&a, &mid("macro|c@example.com")).direct_message, Some(false));
+    assert_eq!(
+        directory
+            .relation(&a, &mid("macro|b@example.com"))
+            .direct_message,
+        Some(true)
+    );
+    assert_eq!(
+        directory
+            .relation(&a, &mid("macro|c@example.com"))
+            .direct_message,
+        Some(false)
+    );
 }
 
 #[test]
@@ -157,10 +184,26 @@ fn members_pair_only_when_their_memberships_overlapped() {
 
     let writes: Vec<_> = directory.interaction_writes(None).flatten().collect();
     let rows = rows(&directory, &writes);
-    assert!(rows.contains(&("macro|early@example.com".to_owned(), "macro|current@example.com".to_owned())));
-    assert!(rows.contains(&("macro|current@example.com".to_owned(), "macro|late@example.com".to_owned())));
-    assert!(!rows.contains(&("macro|early@example.com".to_owned(), "macro|late@example.com".to_owned())));
-    assert!(!directory.relation(&mid("macro|early@example.com"), &mid("macro|late@example.com")).shared_channel);
+    assert!(rows.contains(&(
+        "macro|early@example.com".to_owned(),
+        "macro|current@example.com".to_owned()
+    )));
+    assert!(rows.contains(&(
+        "macro|current@example.com".to_owned(),
+        "macro|late@example.com".to_owned()
+    )));
+    assert!(!rows.contains(&(
+        "macro|early@example.com".to_owned(),
+        "macro|late@example.com".to_owned()
+    )));
+    assert!(
+        !directory
+            .relation(
+                &mid("macro|early@example.com"),
+                &mid("macro|late@example.com")
+            )
+            .shared_channel
+    );
 }
 
 #[test]
@@ -177,14 +220,29 @@ fn after_pairs_only_people_who_joined_since_with_every_member() {
     );
     let directory = loader.finish();
 
-    let writes: Vec<_> = directory.interaction_writes(Some(at(5))).flatten().collect();
+    let writes: Vec<_> = directory
+        .interaction_writes(Some(at(5)))
+        .flatten()
+        .collect();
     assert_eq!(
         rows(&directory, &writes),
         vec![
-            ("macro|a@example.com".to_owned(), "macro|new@example.com".to_owned()),
-            ("macro|b@example.com".to_owned(), "macro|new@example.com".to_owned()),
-            ("macro|new@example.com".to_owned(), "macro|a@example.com".to_owned()),
-            ("macro|new@example.com".to_owned(), "macro|b@example.com".to_owned()),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|new@example.com".to_owned()
+            ),
+            (
+                "macro|b@example.com".to_owned(),
+                "macro|new@example.com".to_owned()
+            ),
+            (
+                "macro|new@example.com".to_owned(),
+                "macro|a@example.com".to_owned()
+            ),
+            (
+                "macro|new@example.com".to_owned(),
+                "macro|b@example.com".to_owned()
+            ),
         ]
     );
 }
@@ -209,7 +267,10 @@ fn the_snapshot_pairs_people_who_left_and_skips_dms() {
             id: 1,
             channel_id: Uuid::from_u128(1),
             taken_at: at(1),
-            users: vec![mid("macro|stayed@example.com"), mid("macro|gone@example.com")],
+            users: vec![
+                mid("macro|stayed@example.com"),
+                mid("macro|gone@example.com"),
+            ],
         },
         ChannelSnapshot {
             id: 2,
@@ -224,17 +285,37 @@ fn the_snapshot_pairs_people_who_left_and_skips_dms() {
     assert_eq!(
         rows(&directory, &writes),
         vec![
-            ("macro|gone@example.com".to_owned(), "macro|stayed@example.com".to_owned()),
-            ("macro|stayed@example.com".to_owned(), "macro|gone@example.com".to_owned()),
+            (
+                "macro|gone@example.com".to_owned(),
+                "macro|stayed@example.com".to_owned()
+            ),
+            (
+                "macro|stayed@example.com".to_owned(),
+                "macro|gone@example.com".to_owned()
+            ),
         ]
     );
-    assert!(directory.relation(&mid("macro|gone@example.com"), &mid("macro|stayed@example.com")).shared_channel);
-    assert!(!directory.relation(&mid("macro|x@example.com"), &mid("macro|y@example.com")).shared_channel);
+    assert!(
+        directory
+            .relation(
+                &mid("macro|gone@example.com"),
+                &mid("macro|stayed@example.com")
+            )
+            .shared_channel
+    );
+    assert!(
+        !directory
+            .relation(&mid("macro|x@example.com"), &mid("macro|y@example.com"))
+            .shared_channel
+    );
 
     let projection = directory.projections();
     assert_eq!(projection.len(), 1);
     assert_eq!((projection[0].rows, projection[0].snapshot_rows), (0, 2));
 
     // A snapshot from before `after` is not re-read.
-    assert_eq!(directory.interaction_writes(Some(at(2))).flatten().count(), 0);
+    assert_eq!(
+        directory.interaction_writes(Some(at(2))).flatten().count(),
+        0
+    );
 }

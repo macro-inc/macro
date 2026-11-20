@@ -121,7 +121,12 @@ impl LegacyDirectorySource for DbContactsRepository {
         Ok(ids)
     }
 
-    #[tracing::instrument(name = "contacts.backfill.inbox_owner_page", skip_all, fields(limit), err)]
+    #[tracing::instrument(
+        name = "contacts.backfill.inbox_owner_page",
+        skip_all,
+        fields(limit),
+        err
+    )]
     async fn inbox_owner_page(&self, after: &str, limit: i64) -> Result<Vec<InboxOwner>, Report> {
         let rows = sqlx::query_file!(
             "src/outbound/repository/backfill/inbox_owner_page.sql",

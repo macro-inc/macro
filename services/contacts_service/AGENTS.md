@@ -13,6 +13,9 @@ outbox worker that notifies `connection_gateway`.
   actual logic lives in `crates/contacts`, not here.
 - `src/config.rs`: env vars and per-environment DB pool sizing.
 - `src/health.rs`: health check endpoint.
+- `src/bin/contacts_backfill.rs`: clap CLI for the contact list backfill and
+  legacy-graph audit (`crates/contacts` `domain::backfill`); usage and run
+  order in `README.md`. Never run it against dev or prod without approval.
 
 ## Scope
 

@@ -1,7 +1,5 @@
 use crate::domain::backfill::audit::DirectionClass;
-use crate::domain::backfill::{
-    BackfillPass, BackfillRequest, BackfillSettings, DirectoryBackfill,
-};
+use crate::domain::backfill::{BackfillPass, BackfillRequest, BackfillSettings, DirectoryBackfill};
 use crate::outbound::repository::DbContactsRepository;
 use chrono::{TimeZone, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -21,7 +19,7 @@ fn backfill(pool: &PgPool) -> DirectoryBackfill<DbContactsRepository, DbContacts
             contact_page_size: 2,
             pause: Duration::ZERO,
             support_roster: HashSet::from([
-                MacroUserIdStr::try_from_email("support@macro.com").unwrap(),
+                MacroUserIdStr::try_from_email("support@macro.com").unwrap()
             ]),
         },
     }
@@ -66,7 +64,9 @@ async fn inbox_rows(pool: &PgPool) -> Vec<(String, String, String)> {
 }
 
 fn pairs(rows: &[(&str, &str)]) -> Vec<(String, String)> {
-    rows.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    rows.iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect()
 }
 
 #[sqlx::test(
@@ -92,16 +92,30 @@ async fn audit_classifies_every_legacy_direction(pool: PgPool) {
             (DirectionClass::NoSurvivingRecord, 1),
         ])
     );
-    assert_eq!((report.legacy.explained, report.legacy.unexplained), (10, 10));
+    assert_eq!(
+        (report.legacy.explained, report.legacy.unexplained),
+        (10, 10)
+    );
 
     let channels = &report.channels;
     assert_eq!(
-        (channels.shared, channels.support, channels.direct_messages, channels.direct_messages_with_message),
+        (
+            channels.shared,
+            channels.support,
+            channels.direct_messages,
+            channels.direct_messages_with_message
+        ),
         (1, 1, 2, 1)
     );
     // Public channel: a and c (2 rows); snapshot adds gone with a and c (4).
-    assert_eq!((report.interacted.channel_rows, report.interacted.dm_rows), (6, 2));
-    assert!(list_rows(&pool).await.is_empty(), "the audit writes nothing");
+    assert_eq!(
+        (report.interacted.channel_rows, report.interacted.dm_rows),
+        (6, 2)
+    );
+    assert!(
+        list_rows(&pool).await.is_empty(),
+        "the audit writes nothing"
+    );
 }
 
 #[sqlx::test(
@@ -131,19 +145,37 @@ async fn backfill_writes_interacted_and_inbox_rows_and_repeats_as_a_no_op(pool: 
     assert_eq!(
         inbox_rows(&pool).await,
         vec![
-            ("macro|a@example.com".to_owned(), "macro|d@example.com".to_owned(), "gmail".to_owned()),
-            ("macro|a@example.com".to_owned(), "macro|x@example.org".to_owned(), "gmail".to_owned()),
-            ("macro|f@example.com".to_owned(), "macro|a@example.com".to_owned(), "outlook".to_owned()),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|d@example.com".to_owned(),
+                "gmail".to_owned()
+            ),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|x@example.org".to_owned(),
+                "gmail".to_owned()
+            ),
+            (
+                "macro|f@example.com".to_owned(),
+                "macro|a@example.com".to_owned(),
+                "outlook".to_owned()
+            ),
         ]
     );
     assert_eq!(report.interacted_from_channels.unwrap().added_rows, 6);
-    assert_eq!(report.interacted_from_direct_messages.unwrap().added_rows, 2);
+    assert_eq!(
+        report.interacted_from_direct_messages.unwrap().added_rows,
+        2
+    );
     let inbox = report.inbox.unwrap();
     assert_eq!((inbox.owners, inbox.written.added_rows), (2, 3));
 
     let repeat = backfill.backfill(&request(None)).await.unwrap();
     assert_eq!(repeat.interacted_from_channels.unwrap().added_rows, 0);
-    assert_eq!(repeat.interacted_from_direct_messages.unwrap().added_rows, 0);
+    assert_eq!(
+        repeat.interacted_from_direct_messages.unwrap().added_rows,
+        0
+    );
     assert_eq!(repeat.inbox.unwrap().written.added_rows, 0);
 }
 
@@ -169,10 +201,13 @@ async fn after_rederives_only_recent_joins_and_messages(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query!("UPDATE comms_messages SET created_at = $1::timestamptz - interval '1 day'", after)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE comms_messages SET created_at = $1::timestamptz - interval '1 day'",
+        after
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let mut request = request(Some(after));
     request.passes = BTreeSet::from([BackfillPass::Channels, BackfillPass::DirectMessages]);

@@ -252,11 +252,25 @@ impl InteractedProjection {
     pub fn new(channels: &ChannelDirectory) -> Self {
         let mut buckets: Vec<SizeBucket> = std::iter::once("0-1".to_owned())
             .chain(SIZE_BUCKETS.iter().enumerate().map(|(index, upper)| {
-                let lower = if index == 0 { 2 } else { SIZE_BUCKETS[index - 1] + 1 };
-                if lower == *upper { upper.to_string() } else { format!("{lower}-{upper}") }
+                let lower = if index == 0 {
+                    2
+                } else {
+                    SIZE_BUCKETS[index - 1] + 1
+                };
+                if lower == *upper {
+                    upper.to_string()
+                } else {
+                    format!("{lower}-{upper}")
+                }
             }))
-            .chain(std::iter::once(format!("{}+", SIZE_BUCKETS[SIZE_BUCKETS.len() - 1] + 1)))
-            .map(|members| SizeBucket { members, ..SizeBucket::default() })
+            .chain(std::iter::once(format!(
+                "{}+",
+                SIZE_BUCKETS[SIZE_BUCKETS.len() - 1] + 1
+            )))
+            .map(|members| SizeBucket {
+                members,
+                ..SizeBucket::default()
+            })
             .collect();
 
         let mut projection = Self::default();
@@ -282,7 +296,11 @@ impl InteractedProjection {
                 .or_default() += rows;
         }
 
-        projections.sort_by(|a, b| b.members.cmp(&a.members).then(a.channel_id.cmp(&b.channel_id)));
+        projections.sort_by(|a, b| {
+            b.members
+                .cmp(&a.members)
+                .then(a.channel_id.cmp(&b.channel_id))
+        });
         projection.largest_channels = projections
             .iter()
             .take(LARGEST_CHANNELS)

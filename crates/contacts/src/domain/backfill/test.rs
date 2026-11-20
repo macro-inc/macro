@@ -63,7 +63,11 @@ impl LegacyDirectorySource for InboxOnlySource {
             .map(|peer| {
                 let n: usize = peer[7..12].parse().unwrap();
                 InboxContact {
-                    link_ids: if n < self.known { vec![INBOX] } else { Vec::new() },
+                    link_ids: if n < self.known {
+                        vec![INBOX]
+                    } else {
+                        Vec::new()
+                    },
                     peer,
                 }
             })
@@ -137,7 +141,10 @@ async fn inbox_contacts_are_written_in_chunks_of_500_across_read_pages() {
     let inbox = report.inbox.unwrap();
     assert_eq!((inbox.owners, inbox.legacy_contacts), (1, 1_500));
     assert_eq!((inbox.written.writes, inbox.written.added_rows), (3, 1_100));
-    assert_eq!(*backfill.lists.inbox_writes.lock().unwrap(), vec![500, 500, 100]);
+    assert_eq!(
+        *backfill.lists.inbox_writes.lock().unwrap(),
+        vec![500, 500, 100]
+    );
     assert!(report.channels.is_none());
 }
 
@@ -148,6 +155,9 @@ async fn a_dry_run_counts_without_writing() {
     let report = backfill.backfill(&inbox_request(true)).await.unwrap();
 
     let written = report.inbox.unwrap().written;
-    assert_eq!((written.writes, written.attempted_rows, written.added_rows), (2, 600, 0));
+    assert_eq!(
+        (written.writes, written.attempted_rows, written.added_rows),
+        (2, 600, 0)
+    );
     assert!(backfill.lists.inbox_writes.lock().unwrap().is_empty());
 }

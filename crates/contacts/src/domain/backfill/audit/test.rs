@@ -41,7 +41,10 @@ fn explained_evidence_wins_over_unexplained() {
         ..DirectionEvidence::default()
     };
     assert_eq!(empty_dm.class(), DirectionClass::EmptyDm);
-    assert_eq!(DirectionEvidence::default().class(), DirectionClass::NoSurvivingRecord);
+    assert_eq!(
+        DirectionEvidence::default().class(),
+        DirectionClass::NoSurvivingRecord
+    );
 }
 
 #[test]
@@ -52,10 +55,21 @@ fn an_import_explains_only_the_importers_direction() {
     imported.user1_inbox_has_user2 = true;
     audit.add_edge(&imported, &channels);
 
-    assert_eq!((audit.edges, audit.directions, audit.explained, audit.unexplained), (1, 2, 1, 1));
+    assert_eq!(
+        (
+            audit.edges,
+            audit.directions,
+            audit.explained,
+            audit.unexplained
+        ),
+        (1, 2, 1, 1)
+    );
     assert_eq!(
         audit.classes,
-        BTreeMap::from([(DirectionClass::Inbox, 1), (DirectionClass::ReverseImport, 1)])
+        BTreeMap::from([
+            (DirectionClass::Inbox, 1),
+            (DirectionClass::ReverseImport, 1)
+        ])
     );
 }
 
@@ -83,18 +97,28 @@ fn channel_evidence_applies_to_both_directions_and_bad_ids_are_counted() {
     let channels = loader.finish();
 
     let mut audit = LegacyAudit::default();
-    audit.add_edge(&edge("macro|A@example.com", "macro|b@example.com"), &channels);
+    audit.add_edge(
+        &edge("macro|A@example.com", "macro|b@example.com"),
+        &channels,
+    );
     audit.add_edge(&edge("macro|a@example.com", "not-a-user"), &channels);
 
     assert_eq!(
         audit.classes,
-        BTreeMap::from([(DirectionClass::SharedChannel, 2), (DirectionClass::InvalidId, 2)])
+        BTreeMap::from([
+            (DirectionClass::SharedChannel, 2),
+            (DirectionClass::InvalidId, 2)
+        ])
     );
     assert_eq!(audit.evidence.shared_channel, 2);
 
     let projection = InteractedProjection::new(&channels);
     assert_eq!(projection.channel_rows, 2);
-    let bucket = projection.by_channel_size.iter().find(|b| b.members == "2").unwrap();
+    let bucket = projection
+        .by_channel_size
+        .iter()
+        .find(|b| b.members == "2")
+        .unwrap();
     assert_eq!((bucket.channels, bucket.rows), (1, 2));
     assert_eq!(projection.by_channel_size.last().unwrap().members, "5001+");
 }

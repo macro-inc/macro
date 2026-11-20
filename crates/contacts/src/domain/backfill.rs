@@ -206,7 +206,10 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
 
     /// Load every channel's Macro members, the snapshot, and which DMs have
     /// a message from a person (sent at or after `since`).
-    async fn load_channels(&self, since: Option<DateTime<Utc>>) -> Result<ChannelDirectory, Report> {
+    async fn load_channels(
+        &self,
+        since: Option<DateTime<Utc>>,
+    ) -> Result<ChannelDirectory, Report> {
         let page_size = self.settings.page_size;
         let mut loader = ChannelLoader::default();
 
@@ -369,7 +372,11 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
             }
 
             if counts.writes.is_multiple_of(WRITES_PER_PAUSE) {
-                tracing::info!(writes = counts.writes, added_rows = counts.added_rows, "interaction writes");
+                tracing::info!(
+                    writes = counts.writes,
+                    added_rows = counts.added_rows,
+                    "interaction writes"
+                );
                 self.pause().await;
             }
         }
@@ -436,7 +443,12 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
         loop {
             let contacts = self
                 .source
-                .inbox_contact_page(&owner.owner, &link_ids, &cursor, self.settings.contact_page_size)
+                .inbox_contact_page(
+                    &owner.owner,
+                    &link_ids,
+                    &cursor,
+                    self.settings.contact_page_size,
+                )
                 .await?;
             let Some(last) = contacts.last() else {
                 break;
@@ -457,7 +469,8 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
                     inbox_contacts.insert(contact_id.clone());
                     if inbox_contacts.len() >= CONTACTS_PER_INBOX_WRITE {
                         let batch = std::mem::take(inbox_contacts);
-                        self.write_inbox(owner, owner_id, link_id, batch, dry_run, counts).await;
+                        self.write_inbox(owner, owner_id, link_id, batch, dry_run, counts)
+                            .await;
                     }
                 }
             }
@@ -470,7 +483,8 @@ impl<S: LegacyDirectorySource, L: ContactListRepository> DirectoryBackfill<S, L>
 
         for (link_id, batch) in pending {
             if !batch.is_empty() {
-                self.write_inbox(owner, owner_id, link_id, batch, dry_run, counts).await;
+                self.write_inbox(owner, owner_id, link_id, batch, dry_run, counts)
+                    .await;
             }
         }
         Ok(read)
