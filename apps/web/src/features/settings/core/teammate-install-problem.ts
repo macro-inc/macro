@@ -40,6 +40,9 @@ export function installProblemLine(
           t('teamAgents.failedIncompatibleRuntime', { host })
         )
         .with('crashLoop', () => t('teamAgents.failedCrashLoop', { host }))
+        .with('networkIsolationUnavailable', () =>
+          t('teamAgents.failedNetworkIsolation', { host })
+        )
         .with('hostUnsupported', () =>
           t('teamAgents.failedHostUnsupported', { host })
         )

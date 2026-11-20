@@ -22,6 +22,9 @@ describe('installProblemLine', () => {
       'It needs a newer runtime image than demo-laptop has.'
     );
     expect(line('crashLoop')).toBe('It kept crashing on demo-laptop.');
+    expect(line('networkIsolationUnavailable')).toBe(
+      "Couldn't lock down its network on demo-laptop, so it isn't running."
+    );
     expect(line('hostUnsupported')).toBe(
       "Agents can't run on demo-laptop. Move it to another computer."
     );

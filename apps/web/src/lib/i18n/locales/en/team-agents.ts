@@ -44,6 +44,8 @@ export default {
   failedIncompatibleRuntime:
     'It needs a newer runtime image than {{host}} has.',
   failedCrashLoop: 'It kept crashing on {{host}}.',
+  failedNetworkIsolation:
+    "Couldn't lock down its network on {{host}}, so it isn't running.",
   failedHostUnsupported:
     "Agents can't run on {{host}}. Move it to another computer.",
   rolledBackCrashLoop:
