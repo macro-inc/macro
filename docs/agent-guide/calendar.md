@@ -1569,12 +1569,21 @@ syncing, the copy past the first 20 events, or an email whose time differs from 
 cancelled, declined, and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
 
-For a writable Outlook event you organize, the editor's `Replace event…` action
-can reset guest RSVPs or remove its online meeting. Save or discard ordinary edits
-first. Choose the entire series or only this occurrence, review the saved event,
-and check the cancellation/reinvitation acknowledgement before `Replace event`.
-The old invitation is cancelled after the replacement is prepared; guests receive
-a new invitation and must respond again. `Check progress` and `Continue replacement`
+Outlook cannot remove Teams from an existing event. In the editor of a writable
+Outlook event you organize, turning Teams off (the pill reads `No meeting link`)
+disables Save and shows a notice with `Replace event…` and `Undo`; `Undo` turns
+Teams back on. `Replace event…` previews a replacement that carries the editor's
+unsaved changes (title, time, description, location, guests, reminders, repeat
+rule) without Teams; nothing is saved to the old event. It replaces this occurrence
+or all events as the editor's `Apply changes to` choice says. A time or repeat change
+on the whole series drops its changed and cancelled occurrences, as Outlook does;
+otherwise occurrences still showing the series' value take the edit, and guests
+added or removed on the series are added to or removed from every occurrence. Check the
+cancellation/reinvitation acknowledgement before `Replace event`. The old
+invitation is cancelled after the replacement is prepared; guests receive a new
+invitation and must respond again. Closing the dialog before confirming discards
+the preview. There is no other entry point: Google events remove Meet with an
+ordinary save. `Check progress` and `Continue replacement`
 resume that saved operation after an interrupted response. Recovery continues when
 the dialog closes. A conflict offers links to review both copies in Outlook; do
 not create another copy while the existing operation is unresolved. Events with

@@ -58,16 +58,35 @@ export const streamOutages = (trace: Trace, longest = longestOutageSpan) => {
   };
 };
 
+/** Where the incoming stream left off, so a restart resumes it. */
+const cursorName = 'stream-cursor.json';
+const StreamCursor = z.object({
+  eventId: z.string().optional(),
+  at: z.string(),
+});
+
 /** What chat adds to the agent's context: Macro, what it remembers of conversations, and who is waiting on it. */
 export const chatContext = (
   { macro, config, state, join, disk, log, trace }: Base,
   /** The agent's function names, from its catalog once it is built. */
   toolNames: () => Iterable<string> = () => []
 ) => {
+  const cursorFile = join(state.run(owner), cursorName);
   const sdk = sdkChat({
     macro,
     myName: config.identity.name,
+    trace,
     stream: streamOutages(trace),
+    cursor: {
+      read: async () => {
+        const text = await disk.read(cursorFile);
+        if (text === undefined) return undefined;
+        // A file that isn't a cursor throws: the catch-up then reads the
+        // whole window, not nothing.
+        return StreamCursor.parse(JSON.parse(text));
+      },
+      write: (cursor) => disk.write(cursorFile, JSON.stringify(cursor)),
+    },
   });
   const chat = { ...sdk, ...observeOutgoing(sdk, log, toolNames) };
   const unanswered = channel<Conversation>();
