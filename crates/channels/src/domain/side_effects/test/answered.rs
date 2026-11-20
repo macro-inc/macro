@@ -176,7 +176,7 @@ async fn a_bot_post_that_is_not_a_resolved_reply_tells_nobody_directly() {
 
     assert!(answered_mentions(&notifications).is_empty());
     let (recipients, _) = reply(&notifications);
-    assert_eq!(recipients, HashSet::from([follower()]));
+    assert_eq!(recipients, HashSet::from([asker(), follower()]));
 }
 
 /// Nobody is told directly when the reply names no person it answers: no

@@ -654,11 +654,10 @@ where
                 &message,
                 resolved_sender,
                 mentions,
-                answered.as_ref(),
             )
             .await
         {
-            Ok(context) => context,
+            Ok(context) => context.answering(answered.as_ref()),
             Err(err) => {
                 tracing::error!(error=?err, "unable to build channel notification context");
                 return;
@@ -712,7 +711,6 @@ where
         message: &MutatedMessage,
         resolved_sender: ResolvedNotificationSender,
         mentions: Vec<SimpleMention>,
-        answered: Option<&MacroUserIdStr<'static>>,
     ) -> anyhow::Result<PostedMessageNotificationContext> {
         let ResolvedNotificationSender {
             sender,
@@ -747,7 +745,6 @@ where
             .map(|user_id| user_id.as_ref().to_string())
             .into_iter()
             .chain(user_mentions.iter().cloned())
-            .chain(answered.map(|person| person.as_ref().to_owned()))
             .collect::<Vec<_>>();
         // Someone in a call can be outside its channel (a guest); only members
         // may hear about channel messages.
@@ -785,13 +782,10 @@ where
             excluded_user_ids.iter().map(String::as_str),
         )
         .collect();
-        // The person a reply answers is told as if mentioned, so whoever
-        // turned mentions off for the channel hears through the reply instead.
         let mentioned_members = recipients_excluding(
             user_mentions
                 .iter()
                 .map(String::as_str)
-                .chain(answered.map(|person| person.as_ref()))
                 .filter(|user_id| channel_members.contains(user_id)),
             sender.as_user().map(|user_id| user_id.as_ref()),
         )
@@ -1258,6 +1252,21 @@ fn answered_person(
         return AnsweredPerson::AlreadyMentioned;
     }
     AnsweredPerson::Notified(person)
+}
+
+impl PostedMessageNotificationContext {
+    /// Treat the person a resolved reply answers (a channel member, see
+    /// [`answered_person`]) as mentioned: they get the answered mention, are
+    /// left out of the reply or message, and stay its mention fallback, so
+    /// whoever turned mentions off for the channel hears through it instead.
+    fn answering(mut self, person: Option<&MacroUserIdStr<'static>>) -> Self {
+        if let Some(person) = person {
+            self.excluded_user_ids.push(person.as_ref().to_owned());
+            self.recipients_without_sender_and_mentions.remove(person);
+            self.mentioned_members.insert(person.clone());
+        }
+        self
+    }
 }
 
 /// Whether a participant principal id refers to a bot (e.g. `bot|<uuid>`).
