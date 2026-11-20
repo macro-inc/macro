@@ -75,6 +75,8 @@ import type {
   ReviewDecision,
   ReviewRecord,
   SandboxSizeBody,
+  ScreenTicket,
+  ScreenTicketRequest,
   SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
@@ -4427,6 +4429,73 @@ export const listCodingAgents = async (
     status: res.status,
     headers: res.headers,
   } as listCodingAgentsResponse;
+};
+
+/**
+ * @summary Issue a ticket to watch, or drive, a computer's screen.
+ */
+export type createComputerScreenTicketResponse200 = {
+  data: ScreenTicket;
+  status: 200;
+};
+
+export type createComputerScreenTicketResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type createComputerScreenTicketResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type createComputerScreenTicketResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type createComputerScreenTicketResponseSuccess =
+  createComputerScreenTicketResponse200 & {
+    headers: Headers;
+  };
+export type createComputerScreenTicketResponseError = (
+  | createComputerScreenTicketResponse403
+  | createComputerScreenTicketResponse404
+  | createComputerScreenTicketResponse503
+) & {
+  headers: Headers;
+};
+
+export type createComputerScreenTicketResponse =
+  | createComputerScreenTicketResponseSuccess
+  | createComputerScreenTicketResponseError;
+
+export const getCreateComputerScreenTicketUrl = (harnessId: string) => {
+  return `/computers/${harnessId}/screen/tickets`;
+};
+
+export const createComputerScreenTicket = async (
+  harnessId: string,
+  screenTicketRequest: ScreenTicketRequest,
+  options?: RequestInit
+): Promise<createComputerScreenTicketResponse> => {
+  const res = await fetch(getCreateComputerScreenTicketUrl(harnessId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(screenTicketRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createComputerScreenTicketResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createComputerScreenTicketResponse;
 };
 
 /**
