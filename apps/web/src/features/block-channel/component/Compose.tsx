@@ -19,6 +19,7 @@ import {
 import type { RecipientSourceInput } from '@core/user/recipient-source';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import InfoIcon from '@icon/system/regular/info.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useCreateChannelMutation } from '@queries/channel/channels';
@@ -148,7 +149,7 @@ export function ChannelCompose() {
             content,
             mentions,
             attachments,
-            navigate: { navigate: true, mergeHistory: true },
+            navigate: { navigate: false, mergeHistory: true },
             parentSpan: Telemetry.captureContext(),
           });
           span.setAttr(
@@ -159,6 +160,9 @@ export function ChannelCompose() {
             throw new Error(
               'Could not send your message. Your draft has been kept.'
             );
+          // The message is in: a failed navigation must not keep the draft,
+          // or sending it again would post it twice.
+          fireAndForget(sent.navigateToChannel(), 'channel-compose');
         }
       );
     }
