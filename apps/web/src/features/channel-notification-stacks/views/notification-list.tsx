@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import ChecksIcon from '@icon/system/regular/checks.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
@@ -78,7 +78,7 @@ export function NotificationList(props: {
 
   const toggleContent = () => (
     <>
-      <ChecksIcon class="size-4" />
+      <BellIcon class="size-4" />
       <Show when={stacks().length > 0}>
         <span class="tabular-nums">{stacks().length}</span>
       </Show>

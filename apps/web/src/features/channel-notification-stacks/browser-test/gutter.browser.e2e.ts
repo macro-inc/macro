@@ -40,6 +40,22 @@ test('a wide pane docks the list beside one check per stack', async ({
   );
   expect(listRight).toBeLessThanOrEqual(Math.min(...lanes) - 28);
 
+  // The toggle shows the notifications bell; marking keeps its checkmark.
+  await expect(toggle(page).locator('svg')).toHaveAttribute(
+    'data-macro-icon',
+    'bell'
+  );
+  await expect(checks(page).first().locator('svg')).toHaveAttribute(
+    'data-macro-icon',
+    'check'
+  );
+  await expect(
+    rows
+      .first()
+      .getByRole('button', { name: /^Mark done:/ })
+      .locator('svg')
+  ).toHaveAttribute('data-macro-icon', 'check');
+
   await rows
     .filter({ hasText: 'Thread reply' })
     .getByRole('button')
