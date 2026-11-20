@@ -50,9 +50,11 @@ CREATE UNIQUE INDEX agent_mailboxes_live_user_idx
     ON agent_mailboxes (user_id)
     WHERE state <> 'released';
 
+-- One live row per provider mailbox; a released row keeps its id for the
+-- record without blocking a provider that reuses ids.
 CREATE UNIQUE INDEX agent_mailboxes_provider_mailbox_idx
     ON agent_mailboxes (provider, provider_mailbox_id)
-    WHERE provider_mailbox_id IS NOT NULL;
+    WHERE provider_mailbox_id IS NOT NULL AND state <> 'released';
 
 -- The sweep's work: stalled provisioning, releases, and paused mailboxes.
 -- Ordered by updated_at so the sweep's ORDER BY ... LIMIT reads it in order

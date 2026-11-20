@@ -494,3 +494,51 @@ async fn only_agent_accounts_are_agents(pool: PgPool) {
     assert!(directory.is_agent(&ada()).await.unwrap());
     assert!(!directory.is_agent(&person).await.unwrap());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_released_mailbox_does_not_block_a_reused_provider_id(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let first = active_mailbox(&repository).await;
+    let now = Utc::now();
+    repository
+        .transition(first, &[MailboxState::Active], MailboxState::Releasing, now)
+        .await
+        .unwrap();
+    let teardown = token(9);
+    repository
+        .claim(first, teardown, now, TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repository
+            .finish_release(first, teardown, now)
+            .await
+            .unwrap()
+    );
+
+    let Reservation::New(second) = repository
+        .reserve(&request(2), AgentMailboxId::generate())
+        .await
+        .unwrap()
+    else {
+        panic!("expected a new reservation");
+    };
+    let lease = token(10);
+    repository
+        .claim(second.id, lease, now, TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    let reused = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
+
+    assert!(
+        repository
+            .record_created(second.id, lease, &reused)
+            .await
+            .unwrap()
+    );
+}
