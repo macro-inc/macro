@@ -1,6 +1,6 @@
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
-import type { StreamDrop } from '@macro-inc/sdk';
 import { channel } from '@macro-inc/muppet/core/event';
+import type { StreamDrop } from '@macro-inc/sdk';
 import { z } from 'zod';
 import type { Trace } from '../../agent/claude.ts';
 import type { Base } from '../../context/index.ts';

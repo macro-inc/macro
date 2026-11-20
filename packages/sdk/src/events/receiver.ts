@@ -25,7 +25,6 @@ type AnyHandler = (event: unknown) => void | Promise<void>;
 /** Sent by Macro when validating a newly registered endpoint; acked, never dispatched. */
 const VALIDATION_EVENT = 'webhook.validation.test';
 
-/** Options for {@link MacroEvents.listen}. */
 /** One drop of an event stream, as `onDisconnect` is told of it. */
 export interface StreamDrop {
   /** Why it dropped: the failed connection's error, or the server's end. */
@@ -34,6 +33,7 @@ export interface StreamDrop {
   readonly retried: boolean;
 }
 
+/** Options for {@link MacroEvents.listen}. */
 export interface ListenOptions {
   /**
    * Event/entity-id filters, identical to persisted webhook `filters`.
