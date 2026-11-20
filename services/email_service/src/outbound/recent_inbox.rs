@@ -30,11 +30,12 @@ mod test;
 /// Gmail message reads in flight per inbox. Stays under the Gmail gate's five
 /// requests per mailbox, leaving room for sync.
 const GMAIL_READS_PER_INBOX: usize = 3;
-/// How long a window read may take, from its list to its last read. Its list
+/// How long a window read keeps starting reads, from its list on. Its list
 /// and up to 500 reads cost about 2,500 quota units, more than one 10-second
 /// window of the backfill share of a mailbox's allowance (1,800), so the
 /// reads that don't fit wait out the gate's refusals for the next window. A
-/// read not started by then is left out.
+/// read not started by then is left out; one running then finishes, so the
+/// whole read can run past this by one read's own calls.
 const GMAIL_WINDOW_WAIT: Duration = Duration::from_secs(45);
 /// The wait after a refusal that names none.
 const GMAIL_REFUSED_RETRY: Duration = Duration::from_secs(1);

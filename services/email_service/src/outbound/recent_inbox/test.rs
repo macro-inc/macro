@@ -121,7 +121,10 @@ async fn a_read_running_at_its_deadline_finishes_and_none_starts_after() {
     tries.set(0);
     let started = Instant::now();
     let answer = wait_out_refusals(Some(started + GMAIL_WINDOW_WAIT), slow(3)).await;
-    assert!(matches!(answer, Err(EmailApiError::RateLimited { .. })));
+    assert!(matches!(
+        answer,
+        Err(EmailApiError::RateLimited { retry_after: Some(wait), .. }) if wait == Duration::from_secs(1)
+    ));
     assert_eq!(tries.get(), 2);
     assert_eq!(started.elapsed(), Duration::from_secs(61));
 }
