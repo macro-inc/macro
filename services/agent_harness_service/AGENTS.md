@@ -281,8 +281,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/scheduling.rs`).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
-  email_service's internal recent-messages route and the person's connected
-  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  email_service's internal recent-messages route, the person's connected
+  Pipedream apps, and whether CRM's company tools would let them add a
+  company (a team, and CRM access in it). Generations (`crates/suggestion_generation`) run their
   suggestions and routines sessions hidden on the free tier's model, each kind
   gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
   `scheduling.rs` sweeps generation sessions a stopped process left open

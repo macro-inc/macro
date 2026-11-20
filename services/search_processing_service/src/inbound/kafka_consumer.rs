@@ -248,8 +248,8 @@ const WORKER_COUNT: usize = 10;
 /// Maximum number of decoded events waiting for each sequential worker.
 ///
 /// Offsets are committed at handoff, so a crash can drop up to
-/// `WORKER_COUNT * WORKER_CHANNEL_CAPACITY` queued events, plus the
-/// agent-session events each queued reread absorbed. A graceful stop
+/// `WORKER_COUNT * WORKER_CHANNEL_CAPACITY` queued events, plus the events
+/// each queued reread absorbed. A graceful stop
 /// redelivers the queued ones: see [`SHUTDOWN_DRAIN_DEADLINE`].
 const WORKER_CHANNEL_CAPACITY: usize = 16;
 /// How long a gracefully stopping consumer lets the workers finish the events
@@ -454,12 +454,12 @@ fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
             Some(agent_session::reread_key(event))
         }
+        DeclaredMacroEvent::EmailMacroEvent(event) => email::reread_key(event),
         DeclaredMacroEvent::CalendarMacroEvent(_)
         | DeclaredMacroEvent::CallMacroEvent(_)
         | DeclaredMacroEvent::ChannelMacroEvent(_)
         | DeclaredMacroEvent::ChatMacroEvent(_)
         | DeclaredMacroEvent::DocumentMacroEvent(_)
-        | DeclaredMacroEvent::EmailMacroEvent(_)
         | DeclaredMacroEvent::MessageMacroEvent(_)
         | DeclaredMacroEvent::ProjectMacroEvent(_)
         | DeclaredMacroEvent::PropertyMacroEvent(_) => None,
@@ -471,7 +471,10 @@ fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
 /// While one reread for an entity waits in its worker's channel, later hints
 /// for that entity add nothing: the queued reread starts after them and reads
 /// newer state. Skipping them keeps one busy entity from filling its worker's
-/// channel, which would stop handoff for every topic and partition.
+/// channel, which would stop handoff for every topic and partition in its
+/// lane. Handing off any other event for the entity releases its claim: the
+/// reread runs before that event, so it no longer covers a hint published
+/// after it.
 #[derive(Debug, Default)]
 struct PendingRereads(Mutex<HashSet<String>>);
 
@@ -595,6 +598,10 @@ impl WorkerPool {
                 OutcomeRecord::skipped(EventOutcome::Coalesced),
             );
             return HandoffOutcome::Coalesced;
+        }
+        if reread_key.is_none() {
+            self.pending_rereads
+                .release(ordering_key(&event.event).as_ref());
         }
 
         match sender.send(event).await {
