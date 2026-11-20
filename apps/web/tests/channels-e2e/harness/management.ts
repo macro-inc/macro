@@ -193,7 +193,9 @@ export async function inviteByEmail(page: Page, email: string): Promise<void> {
   });
   await box.click();
   await box.fill(email);
-  await page.getByRole('option', { name: `Invite ${email}` }).click();
+  // The list first offers the typed address ("Invite <address>") and, once
+  // the person is found, their name in its place: either adds them.
+  await page.getByRole('option').filter({ hasText: email }).click();
   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(dialog).toBeHidden();
 }

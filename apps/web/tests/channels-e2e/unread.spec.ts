@@ -196,10 +196,6 @@ test('UNR-05 a mention of me in a channel I do not have open shows a count of me
   people,
   pageFor,
 }) => {
-  // Product defect: the row of a channel shows only the plain unread dot
-  // for a mention, never the "1 unread mention" count the list has for it,
-  // although the service holds the unseen mention.
-  knownDefect();
   const made = await channelsNamed(ada, [people.ben], 'open', 'other');
   await ada.post(made.other, 'earlier');
   await new ChannelView(page, made.open).open();
@@ -235,12 +231,7 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
   await expect(row).toBeVisible();
   await expect(mutedBell(row)).toHaveCount(0);
 
-  await chooseFromRowMenu(
-    page,
-    row,
-    'Mute notifications',
-    'Until I turn it off'
-  );
+  await chooseFromRowMenu(page, row, 'Mute', 'Until I turn it off');
   await expect(mutedBell(row)).toBeVisible();
 
   await ben.post(made.muted, 'while muted');
@@ -255,7 +246,7 @@ test('UNR-06 a muted channel shows a crossed bell and is not marked unread by ne
   await expect(unreadDot(row)).toHaveCount(0);
   await expect(mutedBell(row)).toBeVisible();
 
-  await chooseFromRowMenu(page, row, 'Unmute notifications');
+  await chooseFromRowMenu(page, row, 'Unmute');
   await expect(mutedBell(row)).toHaveCount(0);
   await ben.post(made.muted, 'after unmuting');
   await expect(
@@ -385,9 +376,6 @@ test('UNR-10 a row found with “Search conversations” is marked unread at onc
   ben,
   people,
 }) => {
-  // Known defect: rows shown while the list
-  // is being searched are not marked until the search is closed.
-  knownDefect();
   const made = await channelsNamed(ada, [people.ben], 'open', 'found');
   await ada.post(made.found, 'read before');
   await new ChannelView(page, made.open).open();

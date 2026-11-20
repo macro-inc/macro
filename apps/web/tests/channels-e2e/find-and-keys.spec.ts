@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { ChannelView } from './harness/channel';
-import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import { sidebarRow } from './harness/management';
 
 /**
@@ -211,19 +211,13 @@ test('KEY-06 Enter on a selected message opens a reply to that message', async (
   ada,
   people,
 }) => {
-  // Known defect on main: the reply box opens under the message but the
-  // cursor stays in the message list, so what the person types next is lost
-  // until they click into the box.
-  knownDefect();
   const channel = await ada.createChannel({ members: [people.ben] });
   const [first] = await ada.postAll(channel.id, ['first', 'second']);
   const view = new ChannelView(page, channel.id);
   await view.open();
   await view.expectEndsWith(['first', 'second']);
-  await view.composerText.click();
-
-  await page.keyboard.press('ArrowUp');
-  await expect(page.locator('[data-channel-message-list]')).toBeFocused();
+  // Escape, not ArrowUp, to reach the list: KEY-05 has the defect of ArrowUp.
+  await selectLast(view, 'second');
   await page.keyboard.press('ArrowUp');
   await expect(selected(view)).toContainText('first');
   await page.keyboard.press('Enter');
