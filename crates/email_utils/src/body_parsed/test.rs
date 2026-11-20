@@ -124,15 +124,20 @@ fn undecorated_text_has_no_emphasis_marks() {
     );
 }
 
-// 600 quote levels indent past the width; the conversion must still return
-// the text rather than html2text's "too narrow" error.
 #[test]
-fn deeply_nested_quotes_overflow_the_width_instead_of_failing() {
-    let html = format!("{}deep text", "<blockquote>".repeat(600));
+fn quotes_nested_to_the_limit_still_convert() {
+    let html = format!("{}deep text", "<blockquote>".repeat(64));
 
     let text = html_to_plaintext(&html);
 
-    assert!(text.is_some_and(|text| text.ends_with('t')));
+    assert!(text.is_some_and(|text| text.ends_with("deep text")));
+}
+
+#[test]
+fn quotes_nested_past_the_limit_get_no_text() {
+    let html = format!("{}deep text", "<blockquote>".repeat(65));
+
+    assert_eq!(html_to_plaintext(&html), None);
 }
 
 #[test]
@@ -164,7 +169,7 @@ fn a_footnoted_link_longer_than_the_width_stays_on_one_line() {
 }
 
 #[test]
-fn a_body_past_the_size_limit_converts_its_first_megabyte() {
+fn a_body_past_the_size_limit_converts_only_its_start() {
     let html = format!(
         "<p>opening line</p><p>{}</p><p>closing line</p>",
         "word ".repeat(250_000)

@@ -134,3 +134,30 @@ fn spanning_cells_convert_in_bounded_memory() {
         );
     }
 }
+
+#[test]
+fn deep_nesting_is_refused_cheaply() {
+    // Every quote or list level prefixes each line inside it. Past the width,
+    // the innermost text wraps every few characters, and each of those lines
+    // carries the whole prefix.
+    let quotes = format!("{}{}", "<blockquote>".repeat(1_000), "ab ".repeat(40_000));
+    let lists = format!(
+        "{}{}",
+        "<ol start=999999999><li>".repeat(128),
+        "x<br>".repeat(40_000)
+    );
+
+    for html in [quotes, lists] {
+        let mut text = Some(String::new());
+
+        let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
+
+        assert_eq!(text, None);
+        // Laid out, each of these peaked above 200 MB.
+        assert!(
+            peak < 32 << 20,
+            "{peak} bytes to refuse {} bytes of HTML",
+            html.len()
+        );
+    }
+}

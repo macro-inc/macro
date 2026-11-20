@@ -69,10 +69,12 @@ sender/generic-address checks.
   memory: it reads at most `MAX_HTML_BYTES`, renders at `TEXT_WIDTH` in raw mode (table cells
   stacked in reading order, never laid out in padded columns), and refuses a
   body whose tables exceed `MAX_TABLE_CELLS` (rows times widest row, since
-  html2text copies a table's column widths into every row). The count is
-  exact only because the same walk drops every cell's `rowspan` and
-  `colspan`, which raw mode does not need but html2text turns into filler
-  cells and columns. Keep all of it when changing the conversion;
+  html2text copies a table's column widths into every row) or whose quotes,
+  lists, definitions and headings nest past `MAX_NESTING` (each level
+  prefixes every line inside it). The cell count is exact only because the
+  same walk drops every cell's `rowspan` and `colspan`, which raw mode does
+  not need but html2text turns into filler cells and columns. Keep all of it
+  when changing the conversion;
   `tests/text_conversion_memory.rs` measures the peak.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
   sender's choice, and a deep enough message overflows the stack.
