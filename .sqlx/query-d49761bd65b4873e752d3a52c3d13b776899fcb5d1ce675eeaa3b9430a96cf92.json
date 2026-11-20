@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_code_execution SET record = $3, job_settled_at = now() WHERE id = $1 AND agent_session_id = $2 AND job_deadline IS NOT NULL AND job_settled_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d49761bd65b4873e752d3a52c3d13b776899fcb5d1ce675eeaa3b9430a96cf92"
+}
