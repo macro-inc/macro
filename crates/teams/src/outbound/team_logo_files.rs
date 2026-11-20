@@ -2,7 +2,9 @@
 
 use static_file_service_client::StaticFileServiceClient;
 
-use crate::domain::team_logo::{TeamLogoFile, TeamLogoFileFuture, TeamLogoFiles};
+use crate::domain::team_logo::{
+    TeamLogoFile, TeamLogoFileFuture, TeamLogoFiles, TeamLogoLookupError,
+};
 
 /// Reads authoritative file metadata through the static-file service.
 #[derive(Clone)]
@@ -30,7 +32,8 @@ impl TeamLogoFiles for StaticFileTeamLogos {
             Ok(self
                 .client
                 .get_file_metadata(&file_id.to_string())
-                .await?
+                .await
+                .map_err(TeamLogoLookupError::Unavailable)?
                 .map(|file| TeamLogoFile {
                     owner_id: file.owner_id,
                     content_type: file.content_type,

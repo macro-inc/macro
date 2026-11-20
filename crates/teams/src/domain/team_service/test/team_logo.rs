@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::team_logo::{TeamLogoFile, TeamLogoFileFuture, TeamLogoFiles};
+use crate::domain::team_logo::{
+    TeamLogoFile, TeamLogoFileFuture, TeamLogoFiles, TeamLogoLookupError,
+};
 
 const ADMIN: &str = "macro|admin@example.com";
 
@@ -163,5 +165,46 @@ async fn an_unwired_service_refuses_to_set_a_logo() {
         .await;
 
     assert!(matches!(result, Err(TeamError::StorageLayerError(_))));
+    assert!(repo_calls.lock().unwrap().is_empty());
+}
+
+/// Static file storage that never answers.
+#[derive(Debug)]
+struct UnreachableLogoFiles;
+
+impl TeamLogoFiles for UnreachableLogoFiles {
+    fn get_logo_file(&self, _file_id: uuid::Uuid) -> TeamLogoFileFuture<'_> {
+        Box::pin(async {
+            Err(TeamLogoLookupError::Unavailable(anyhow::anyhow!(
+                "static file service timed out"
+            )))
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_storage_outage_while_checking_the_logo_is_retryable_and_applies_nothing() {
+    let repo = MockTeamRepository::new(Vec::new(), "Test Team", Arc::new(Mutex::new(Vec::new())));
+    let repo_calls = repo.patch_team_name_calls.clone();
+    let service = TeamServiceImpl::new(
+        repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+    .with_logo_files(Arc::new(UnreachableLogoFiles));
+    let actor = MacroUserIdStr::parse_from_str(ADMIN).unwrap();
+
+    let result = service
+        .patch_team(
+            test_team_receipt::<AdminTeamRole>(uuid::Uuid::from_u128(1), &actor),
+            &logo_request(Some(Some(uuid::Uuid::from_u128(40)))),
+        )
+        .await;
+
+    assert!(matches!(result, Err(TeamError::LogoLookupUnavailable(_))));
     assert!(repo_calls.lock().unwrap().is_empty());
 }

@@ -2685,7 +2685,7 @@ where
                 .logo_files
                 .get_logo_file(logo_file_id)
                 .await
-                .map_err(TeamError::StorageLayerError)?;
+                .map_err(TeamError::from)?;
             check_logo_file(file, actor_user_id.as_ref())?;
         }
 

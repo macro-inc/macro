@@ -21,9 +21,33 @@ pub struct TeamLogoFile {
     pub content_type: String,
 }
 
+/// Why a proposed logo file could not be looked up.
+#[derive(Debug, thiserror::Error)]
+pub enum TeamLogoLookupError {
+    /// The service was built without static file storage, so it cannot check
+    /// a logo at all.
+    #[error("team logo uploads are not configured")]
+    NotConfigured,
+    /// Static file storage did not answer, or answered with an error. The
+    /// caller can try again.
+    #[error("static file storage is unavailable")]
+    Unavailable(#[source] anyhow::Error),
+}
+
+impl From<TeamLogoLookupError> for TeamError {
+    fn from(error: TeamLogoLookupError) -> Self {
+        match error {
+            TeamLogoLookupError::Unavailable(source) => TeamError::LogoLookupUnavailable(source),
+            not_configured @ TeamLogoLookupError::NotConfigured => {
+                TeamError::StorageLayerError(not_configured.into())
+            }
+        }
+    }
+}
+
 /// A boxed future, so the logo files port can be shared as a trait object.
 pub type TeamLogoFileFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<Option<TeamLogoFile>, anyhow::Error>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<Option<TeamLogoFile>, TeamLogoLookupError>> + Send + 'a>>;
 
 /// Looks up static files proposed as a team logo.
 pub trait TeamLogoFiles: std::fmt::Debug + Send + Sync + 'static {
@@ -38,7 +62,7 @@ pub struct UnavailableTeamLogoFiles;
 
 impl TeamLogoFiles for UnavailableTeamLogoFiles {
     fn get_logo_file(&self, _file_id: uuid::Uuid) -> TeamLogoFileFuture<'_> {
-        Box::pin(async { Err(anyhow::anyhow!("team logo uploads are not configured")) })
+        Box::pin(async { Err(TeamLogoLookupError::NotConfigured) })
     }
 }
 

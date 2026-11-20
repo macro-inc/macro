@@ -32,6 +32,9 @@ pub enum TeamError {
     /// Bad request
     #[error("Bad request: {0}")]
     BadRequest(String),
+    /// Static file storage could not be reached to check a new team logo.
+    #[error("the team logo could not be checked, try again")]
+    LogoLookupUnavailable(#[source] anyhow::Error),
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
