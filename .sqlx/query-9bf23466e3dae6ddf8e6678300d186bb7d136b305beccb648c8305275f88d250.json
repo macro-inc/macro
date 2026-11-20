@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_attachments SET\n                upload_failures = upload_failures + $2,\n                upload_claimed_at = CASE WHEN $3 THEN upload_claimed_at END,\n                upload_abandoned_at = CASE WHEN $3 THEN now() END\n            WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bf23466e3dae6ddf8e6678300d186bb7d136b305beccb648c8305275f88d250"
+}

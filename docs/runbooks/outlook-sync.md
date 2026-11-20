@@ -67,6 +67,17 @@ queued messages keep retrying every 30 minutes and are never abandoned. An
 invitation whose MIME source Graph won't return is retried twice
 (`calendar_parts`), then imported without its calendar parts.
 
+An attachment whose copy keeps failing to download or store stops being tried
+the same way, counted on the attachment rather than on the projection event
+that tries it: after 3 refusals (`permanent`, `forbidden` or a 404) or 50
+failures of any other kind, a download Graph keeps cutting off included (about
+seven hours of one event's retries). Throttling, token failures, a lost lease
+and lock timeouts never count. The attachment keeps its upload claim and gets
+`upload_abandoned_at`, an `"outlook attachment abandoned"` WARN names its
+`@attachment_id`, failures and `@defer_reason`, and the projection that waited
+on it completes. Nothing revives it: the app shows it as an attachment Macro
+holds no copy of, and opening one downloads it from Graph on demand.
+
 A message Graph answers 404 for is settled as gone (`@outlook.outcome:absent`).
 Live work is read twice more first, 30 and 60 s apart
 (`@outlook.defer_reason:location_unsettled`); import work settles at once.
@@ -196,8 +207,8 @@ More than 500 units of Outlook sync work in 15 minutes were deferred because
 their database writes failed. Failed Kafka, SQS or HTTP effects are deferred
 as `effect` instead and don't count here, and neither do values the database
 refuses (`unstorable`). A message reconciliation that hits one stops after 3
-tries; other sync work (catalogs, folder streams, projections) keeps retrying
-it, and no monitor counts it: search `"mailbox sync work deferred"` and
+tries, as does an attachment's; other sync work (catalogs, folder streams,
+projections) keeps retrying it, and no monitor counts it: search `"mailbox sync work deferred"` and
 `"mailbox sync work failed"` logs for `@defer_reason:unstorable`.
 
 - Group the deferral logs (`"mailbox sync work deferred"`) for

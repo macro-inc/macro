@@ -4,7 +4,10 @@ use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngre
 use email::domain::{
     events::EmailMacroEvent,
     invitation_extraction::InvitationExtractionRepository,
-    mailbox::{DatabaseFailure, EffectFailure, MailboxError, MailboxKey, projection::*},
+    mailbox::{
+        DatabaseFailure, EffectFailure, MailboxError, MailboxKey, projection::*,
+        telemetry::defer_reason,
+    },
     models::calendar_invitation::CalendarInvitation,
 };
 use macro_event_broker::MacroEventBroker;
@@ -24,6 +27,9 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use std::{collections::HashSet, sync::Arc};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 pub struct MailboxEffects<A, I, B, N, C> {
     pub db: sqlx::PgPool,
@@ -227,6 +233,7 @@ where
             UPDATE email_attachments a SET upload_claimed_at = NULL FROM email_messages m
             WHERE a.message_id = m.id AND m.link_id = $1 AND m.id = $2
                 AND a.upload_claimed_at < now() - interval '3 minutes'
+                AND a.upload_abandoned_at IS NULL
                 AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)
                 AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)
         "#,
@@ -316,15 +323,14 @@ where
                 Ok::<_, MailboxError>(())
             }
             .await;
-            if result.is_err() {
-                sqlx::query!(
-                    "UPDATE email_attachments SET upload_claimed_at = NULL WHERE id = $1",
-                    attachment_id
-                )
-                .execute(&self.db)
-                .await
-                .map_err(|error| database_failed(&error, Some(&error)))?;
-                return result;
+            if let Err(error) = result {
+                if self
+                    .settle_failed_attachment(mailbox.link_id, attachment_id, &error)
+                    .await?
+                {
+                    continue;
+                }
+                return Err(error);
             }
         }
         let pending = email_db_client::attachments::provider::upload::oldest_pending_upload_claim(
@@ -344,5 +350,65 @@ where
             ));
         }
         Ok(())
+    }
+}
+
+impl<A, I, B, N, C> MailboxEffects<A, I, B, N, C> {
+    /// Releases a failed attachment's claim for the event's next try, counting
+    /// the failure against it as `attachment_retry` says. An attachment that
+    /// failed too often keeps its claim and is marked abandoned instead, so no
+    /// claim takes it again and the projection stops waiting on it. Returns
+    /// whether it was abandoned.
+    async fn settle_failed_attachment(
+        &self,
+        link_id: Uuid,
+        attachment_id: Uuid,
+        error: &MailboxError,
+    ) -> Result<bool, MailboxError> {
+        let failures = sqlx::query_scalar!(
+            "SELECT upload_failures FROM email_attachments WHERE id = $1",
+            attachment_id
+        )
+        .fetch_optional(&self.db)
+        .await
+        .map_err(|error| database_failed(&error, Some(&error)))?;
+        // A deleted row took its claim with it.
+        let Some(failures) = failures else {
+            return Ok(false);
+        };
+
+        let retry = attachment_retry(error, failures.saturating_add(1));
+        let counted: i16 = match retry {
+            AttachmentRetry::Release => 0,
+            AttachmentRetry::Count | AttachmentRetry::Abandon => 1,
+        };
+        let abandoned = retry == AttachmentRetry::Abandon;
+        sqlx::query!(
+            r#"
+            UPDATE email_attachments SET
+                upload_failures = upload_failures + $2,
+                upload_claimed_at = CASE WHEN $3 THEN upload_claimed_at END,
+                upload_abandoned_at = CASE WHEN $3 THEN now() END
+            WHERE id = $1
+        "#,
+            attachment_id,
+            counted,
+            abandoned
+        )
+        .execute(&self.db)
+        .await
+        .map_err(|error| database_failed(&error, Some(&error)))?;
+
+        if abandoned {
+            tracing::warn!(
+                %link_id,
+                %attachment_id,
+                failures = failures.saturating_add(1),
+                defer_reason = defer_reason(error),
+                %error,
+                "outlook attachment abandoned"
+            );
+        }
+        Ok(abandoned)
     }
 }

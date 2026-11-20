@@ -6,7 +6,7 @@ use super::telemetry::{
 use super::{MailboxError, MailboxKey};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
-use email_api_client::domain::models::CalendarPart;
+use email_api_client::domain::models::{CalendarPart, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{link::Link, message::Message};
 use serde::{Deserialize, Serialize};
@@ -214,6 +214,57 @@ pub trait MailboxAttachmentAccess: Send + Sync + 'static {
         message_id: &str,
         attachment_id: &str,
     ) -> impl Future<Output = Result<Vec<u8>, MailboxError>> + Send;
+}
+
+/// What a failed attachment download or upload leaves for the next try.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachmentRetry {
+    /// The failure says nothing about the attachment, so it is not counted.
+    Release,
+    /// The failure counts against the attachment, which is tried again.
+    Count,
+    /// The attachment failed too often, so Macro stops storing a copy of it.
+    /// It reads as one that cannot be fetched: opening it still tries.
+    Abandon,
+}
+
+/// Counted failures after which an attachment the provider refuses outright
+/// (gone, forbidden, malformed), or whose data the database refuses, is
+/// abandoned.
+const PERMANENT_ATTACHMENT_FAILURES: i16 = 3;
+
+/// Counted failures after which an attachment that keeps failing for any
+/// other reason is abandoned. At the projection's backoff that is about seven
+/// hours of one event's retries.
+const ATTACHMENT_FAILURES: i16 = 50;
+
+/// How a failed attachment download or upload is retried. `failures` counts
+/// the attachment's counted failures, this one included. As for a message
+/// (`message_retry`), throttling and credential failures belong to the
+/// mailbox, and a lost lease or a lock timeout to the worker, so they are not
+/// counted. Unlike a message read, a transient download failure is: Graph can
+/// cut the same attachment's download every time while the mailbox's other
+/// reads succeed, and the message it belongs to is already stored.
+pub fn attachment_retry(error: &MailboxError, failures: i16) -> AttachmentRetry {
+    let limit = match error {
+        MailboxError::Provider(
+            EmailApiError::RateLimited { .. }
+            | EmailApiError::CredentialsUnavailable { .. }
+            | EmailApiError::AuthRequired,
+        )
+        | MailboxError::Stale => return AttachmentRetry::Release,
+        _ if error.is_lock_timeout() => return AttachmentRetry::Release,
+        MailboxError::Provider(
+            EmailApiError::Permanent { .. } | EmailApiError::Forbidden | EmailApiError::NotFound,
+        )
+        | MailboxError::Unstorable(_) => PERMANENT_ATTACHMENT_FAILURES,
+        _ => ATTACHMENT_FAILURES,
+    };
+    if failures >= limit {
+        AttachmentRetry::Abandon
+    } else {
+        AttachmentRetry::Count
+    }
 }
 
 pub struct MailboxProjectionService<R, E> {

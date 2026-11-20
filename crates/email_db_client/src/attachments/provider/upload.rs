@@ -641,6 +641,7 @@ pub struct PendingUploadClaim {
 }
 
 /// The message's oldest upload claim that hasn't stored its attachment yet.
+/// An abandoned attachment keeps its claim but is never stored, so it is left out.
 #[tracing::instrument(skip(db), err)]
 pub async fn oldest_pending_upload_claim(
     db: &Pool<Postgres>,
@@ -655,6 +656,7 @@ pub async fn oldest_pending_upload_claim(
         FROM email_attachments a
         WHERE a.message_id = $1
             AND a.upload_claimed_at IS NOT NULL
+            AND a.upload_abandoned_at IS NULL
             AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)
             AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)
         ORDER BY a.upload_claimed_at, a.id

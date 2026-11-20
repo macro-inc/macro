@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mailbox::{DatabaseFailure, EffectFailure, LOCK_NOT_AVAILABLE};
 use models_email::service::{address::ContactInfo, link::UserProvider};
 
 fn context() -> ProjectionContext {
@@ -157,4 +158,22 @@ async fn persisted_projection_restores_invocation_when_publishing_later() {
     )
     .unwrap();
     assert_eq!(legacy.agent_correlation_id(), None);
+}
+
+#[test]
+fn refused_attachments_stop_sooner_and_worker_failures_never_count() {
+    let gone = MailboxError::Provider(EmailApiError::NotFound);
+    assert_eq!(attachment_retry(&gone, 2), AttachmentRetry::Count);
+    assert_eq!(attachment_retry(&gone, 3), AttachmentRetry::Abandon);
+
+    let upload = MailboxError::Effect(EffectFailure::AttachmentUpload {
+        attachment_id: Uuid::nil(),
+    });
+    assert_eq!(attachment_retry(&upload, 49), AttachmentRetry::Count);
+    assert_eq!(attachment_retry(&upload, 50), AttachmentRetry::Abandon);
+
+    let lock_timeout = MailboxError::database(DatabaseFailure::Sqlstate(LOCK_NOT_AVAILABLE.into()));
+    for error in [lock_timeout, MailboxError::Stale] {
+        assert_eq!(attachment_retry(&error, 50), AttachmentRetry::Release);
+    }
 }
