@@ -1389,6 +1389,13 @@
       "crates/web_search",
       "crates/workspace-hack"
     ],
+    "agent_mailbox": [
+      "crates/agent_mailbox",
+      "crates/cowlike",
+      "crates/email_validator",
+      "crates/macro_user_id",
+      "crates/workspace-hack"
+    ],
     "agent_preview": [
       "crates/agent",
       "crates/agent_correlation",

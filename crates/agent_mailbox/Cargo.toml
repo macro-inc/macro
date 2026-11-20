@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "agent_mailbox"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+email_validator = { path = "../email_validator" }
+macro_user_id = { path = "../macro_user_id" }
+rootcause = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

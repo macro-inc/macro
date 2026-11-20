@@ -913,6 +913,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_mailbox"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "email_validator",
+ "macro_user_id",
+ "rootcause",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "agent_preview"
 version = "0.1.0"
 dependencies = [
