@@ -15,7 +15,14 @@ through while bounding the sustained rate.
   before the implementation.
 - `src/outbound/redis.rs`: the Redis-backed adapter for both;
   `src/outbound/redis/token_bucket.lua` refills and takes in one script on
-  Redis time, so processes with different clocks share one bucket.
+  Redis time, so processes with different clocks share one bucket. The
+  counter opens a connection per call on a `redis::Client`; the token bucket
+  runs on a `redis::aio::ConnectionManager`, one shared connection, because a
+  connection per take made a burst of concurrent takes wait hundreds of
+  milliseconds each. The manager reconnects only after an I/O error and keeps
+  any other failed connection setup (AUTH, SELECT, HELLO) until the process
+  restarts; DSS's URL has no password or database, so setup sends none of
+  those. Revisit before giving that URL a password or a database.
 - `src/domain/models.rs`: `RateLimitKey`/`RateLimitKeyBuilder` — callers
   build the key from whatever data should be rate-limited; the crate never
   interprets it.

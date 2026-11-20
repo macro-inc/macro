@@ -2449,7 +2449,9 @@ async fn run_server() -> anyhow::Result<()> {
 
     let api_key_search_buckets: Arc<dyn search_service::SearchTokenBuckets> =
         Arc::new(RedisRateLimitAdapter {
-            redis: redis_client.clone(),
+            redis: redis_client
+                .get_connection_manager_lazy(redis::aio::ConnectionManagerConfig::new())
+                .context("failed to configure the search allowance's redis connection")?,
         });
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 

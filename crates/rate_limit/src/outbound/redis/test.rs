@@ -281,6 +281,12 @@ async fn check_and_increment_sets_expiry_on_first_key() {
     );
 }
 
+async fn bucket_adapter() -> RedisRateLimitAdapter<redis::aio::ConnectionManager> {
+    RedisRateLimitAdapter {
+        redis: redis_client().get_connection_manager().await.unwrap(),
+    }
+}
+
 async fn redis_now_ms(client: &redis::Client) -> u64 {
     let (seconds, micros): (u64, u64) = redis::cmd("TIME")
         .query_async(&mut client.get_multiplexed_async_connection().await.unwrap())
@@ -291,7 +297,7 @@ async fn redis_now_ms(client: &redis::Client) -> u64 {
 
 #[tokio::test]
 async fn a_bucket_lets_its_capacity_through_at_once_then_waits_for_its_next_token() {
-    let adapter = adapter();
+    let adapter = bucket_adapter().await;
     let key = unique_key("bucket_capacity");
     let config = TokenBucketConfig {
         capacity: 3,
@@ -329,7 +335,7 @@ async fn a_bucket_lets_its_capacity_through_at_once_then_waits_for_its_next_toke
 #[tokio::test]
 async fn an_emptied_bucket_gains_one_token_per_refill_interval() {
     let client = redis_client();
-    let adapter = adapter();
+    let adapter = bucket_adapter().await;
     let key = unique_key("bucket_refill");
     let config = TokenBucketConfig {
         capacity: 200,
@@ -370,7 +376,7 @@ async fn an_emptied_bucket_gains_one_token_per_refill_interval() {
 #[tokio::test]
 async fn a_full_bucket_banks_no_time_beyond_its_capacity() {
     let client = redis_client();
-    let adapter = adapter();
+    let adapter = bucket_adapter().await;
     let key = unique_key("bucket_full");
     let config = TokenBucketConfig {
         capacity: 3,
@@ -394,7 +400,7 @@ async fn a_full_bucket_banks_no_time_beyond_its_capacity() {
 #[tokio::test]
 async fn a_full_bucket_starts_its_next_token_from_its_first_take() {
     let client = redis_client();
-    let adapter = adapter();
+    let adapter = bucket_adapter().await;
     let key = unique_key("bucket_full_restart");
     let config = TokenBucketConfig {
         capacity: 3,
@@ -433,9 +439,10 @@ async fn concurrent_takes_never_take_more_than_the_capacity() {
         refill_interval: Duration::from_secs(60),
     };
 
+    let adapter = bucket_adapter().await;
     let mut handles = Vec::new();
     for _ in 0..20 {
-        let adapter = adapter();
+        let adapter = adapter.clone();
         let key = key.clone();
         handles.push(tokio::spawn(async move {
             TokenBucketPort::take(&adapter, key, config).await
@@ -453,7 +460,7 @@ async fn concurrent_takes_never_take_more_than_the_capacity() {
 
 #[tokio::test]
 async fn each_key_has_its_own_bucket() {
-    let adapter = adapter();
+    let adapter = bucket_adapter().await;
     let emptied = unique_key("bucket_emptied");
     let other = unique_key("bucket_other");
     let config = TokenBucketConfig {
@@ -482,7 +489,7 @@ async fn each_key_has_its_own_bucket() {
 #[tokio::test]
 async fn a_bucket_expires_once_it_would_be_full_again() {
     let client = redis_client();
-    let adapter = adapter();
+    let adapter = bucket_adapter().await;
     let key = unique_key("bucket_expiry");
     let config = TokenBucketConfig {
         capacity: 3,
@@ -500,4 +507,52 @@ async fn a_bucket_expires_once_it_would_be_full_again() {
     .await
     .unwrap();
     assert!(ttl_ms > 0 && ttl_ms <= 3_000, "{ttl_ms}");
+}
+
+#[tokio::test]
+async fn concurrent_takes_share_the_managers_one_connection() {
+    let client = redis_client();
+    let manager = client.get_connection_manager().await.unwrap();
+    let name = format!("rtb-test-{}", uuid::Uuid::new_v4().simple());
+    let _: () = redis::cmd("CLIENT")
+        .arg("SETNAME")
+        .arg(&name)
+        .query_async(&mut manager.clone())
+        .await
+        .unwrap();
+    let adapter = RedisRateLimitAdapter { redis: manager };
+    let key = unique_key("bucket_shared_connection");
+    let config = TokenBucketConfig {
+        capacity: 50,
+        refill_interval: Duration::from_secs(60),
+    };
+
+    let mut handles = Vec::new();
+    for _ in 0..20 {
+        let adapter = adapter.clone();
+        let key = key.clone();
+        handles.push(tokio::spawn(async move {
+            TokenBucketPort::take(&adapter, key, config).await
+        }));
+    }
+    for handle in handles {
+        handle.await.unwrap().unwrap();
+    }
+
+    let clients: String = redis::cmd("CLIENT")
+        .arg("LIST")
+        .query_async(&mut client.get_multiplexed_async_connection().await.unwrap())
+        .await
+        .unwrap();
+    let name_field = format!("name={name}");
+    let named: Vec<&str> = clients
+        .lines()
+        .filter(|line| line.split(' ').any(|field| field == name_field))
+        .collect();
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert!(
+        named[0].split(' ').any(|field| field == "cmd=evalsha"),
+        "the takes ran on another connection: {}",
+        named[0]
+    );
 }
