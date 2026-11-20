@@ -530,3 +530,74 @@ async fn a_failed_download_names_its_attachment_on_the_projection(db: PgPool) {
         "{logged}"
     );
 }
+
+/// A download that fails while another transaction holds the attachment's
+/// row, so recording the failure waits past its lock timeout.
+struct LockedRowDownload {
+    db: PgPool,
+    lock: tokio::sync::Mutex<Option<sqlx::Transaction<'static, sqlx::Postgres>>>,
+}
+
+impl MailboxAttachmentAccess for LockedRowDownload {
+    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+        let mut lock = self.db.begin().await.unwrap();
+        sqlx::query!(
+            "SELECT id FROM email_attachments WHERE id = $1 FOR UPDATE",
+            IMAGE_ID
+        )
+        .fetch_one(&mut *lock)
+        .await
+        .unwrap();
+        *self.lock.lock().await = Some(lock);
+        Err(MailboxError::Provider(interrupted()))
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_failure_that_cannot_be_recorded_still_names_its_attachment(db: PgPool) {
+    use tracing::Instrument;
+
+    sqlx::query!("DELETE FROM email_attachments WHERE id = $1", VIDEO_ID)
+        .execute(&db)
+        .await
+        .unwrap();
+    let impatient = sqlx::postgres::PgPoolOptions::new()
+        .connect_with(
+            (*db.connect_options())
+                .clone()
+                .options([("lock_timeout", "200ms")]),
+        )
+        .await
+        .unwrap();
+    let downloads = LockedRowDownload {
+        db: db.clone(),
+        lock: tokio::sync::Mutex::new(None),
+    };
+    let effects = effects(impatient, downloads, UNUSED_URL);
+    let logs = Logs::default();
+    let capture = logs.capture();
+    let projection = tracing::info_span!(
+        "outlook.sync.project",
+        outlook.attachment_id = tracing::field::Empty
+    );
+
+    let error = effects
+        .attachments(MAILBOX, &context(), false)
+        .instrument(projection)
+        .await
+        .unwrap_err();
+    drop(capture);
+
+    assert!(error.is_lock_timeout(), "{error:?}");
+    let logged = logs.text();
+    assert!(
+        logged.contains(&format!("outlook.attachment_id={IMAGE_ID}")),
+        "{logged}"
+    );
+}
