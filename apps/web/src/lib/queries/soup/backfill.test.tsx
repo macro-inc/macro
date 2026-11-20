@@ -761,6 +761,30 @@ describe('runSoupBackfills', () => {
     ]);
   });
 
+  it("marks a lane that failed before saving a checkpoint in the cache's generation", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // Every attempt fails before its first checkpoint save.
+    for (let attempt = 0; attempt < 6; attempt += 1)
+      mockCacheHost.currentStorageGeneration.mockRejectedValueOnce(
+        new Error('cache temporarily unavailable')
+      );
+    const fetchPage = vi.fn(async () => ({ nextCursor: null }));
+
+    const running = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        lane('core-entities', fetchPage),
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(31_000);
+    await running;
+
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(soupBackfillLaneFailed('user-1', 'core-entities', 'storage-1')).toBe(
+      true
+    );
+  });
+
   it('does not hydrate through a disabled cache host', async () => {
     vi.useFakeTimers();
     graphqlMocks.getGraphqlSoupCacheHost.mockReturnValue({

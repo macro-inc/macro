@@ -587,29 +587,38 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
           }),
           Effect.matchEffect({
             onFailure: (error) =>
-              Effect.sync(() => {
-                const checkpoint = loadSoupBackfillCheckpoint(
-                  userId,
-                  lane.checkpointId
+              Effect.gen(function* () {
+                const checkpoint = yield* Effect.sync(() =>
+                  loadSoupBackfillCheckpoint(userId, lane.checkpointId)
                 );
-                recordSoupBackfillTelemetry({
-                  checkpointId: lane.checkpointId,
-                  durationMs: Date.now() - startedAt,
-                  pagesFetched,
-                  state: 'failed',
-                  totalPagesFetched: checkpoint.pagesFetched,
-                });
-                // Readers waiting for the lane to finish stop waiting.
-                if (checkpoint.storageGeneration !== null)
-                  markSoupBackfillLaneFailed(
-                    userId,
-                    lane.checkpointId,
-                    checkpoint.storageGeneration
+                // Readers check the cache's generation now. A lane that
+                // failed before it saved a page in it left only an older
+                // generation in its checkpoint.
+                const generation = yield* Effect.tryPromise(() =>
+                  host.currentStorageGeneration()
+                ).pipe(
+                  Effect.orElseSucceed(() => checkpoint.storageGeneration)
+                );
+                yield* Effect.sync(() => {
+                  recordSoupBackfillTelemetry({
+                    checkpointId: lane.checkpointId,
+                    durationMs: Date.now() - startedAt,
+                    pagesFetched,
+                    state: 'failed',
+                    totalPagesFetched: checkpoint.pagesFetched,
+                  });
+                  // Readers waiting for the lane to finish stop waiting.
+                  if (generation !== null)
+                    markSoupBackfillLaneFailed(
+                      userId,
+                      lane.checkpointId,
+                      generation
+                    );
+                  console.warn(
+                    '[graphql-soup-backfill] lane failed after retries',
+                    { checkpointId: lane.checkpointId, error }
                   );
-                console.warn(
-                  '[graphql-soup-backfill] lane failed after retries',
-                  { checkpointId: lane.checkpointId, error }
-                );
+                });
               }),
             onSuccess: () =>
               Effect.sync(() => {

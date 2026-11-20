@@ -44,6 +44,12 @@ function failureKey(checkpointKey: string): string {
   return `${checkpointKey}:failed`;
 }
 
+// What this tab wrote when storage refused it, so the tab still reads its
+// own lanes' progress; a later write that storage takes drops the copy. A
+// failure entry of null means this tab cleared the mark.
+const unsavedCheckpoints = new Map<string, SoupBackfillCheckpoint>();
+const unsavedFailures = new Map<string, string | null>();
+
 function notifySaved(key: string) {
   window.dispatchEvent(
     new CustomEvent<string>(CHECKPOINT_SAVED_EVENT, { detail: key })
@@ -94,6 +100,8 @@ export function loadSoupBackfillCheckpoint(
   userId: string,
   checkpointId: string
 ): SoupBackfillCheckpoint {
+  const unsaved = unsavedCheckpoints.get(checkpointKey(userId, checkpointId));
+  if (unsaved) return { ...unsaved };
   try {
     const saved = localStorage.getItem(checkpointKey(userId, checkpointId));
     if (!saved) return initialSoupBackfillCheckpoint(userId);
@@ -123,12 +131,18 @@ export function saveSoupBackfillCheckpoint(
   const key = checkpointKey(checkpoint.userId, checkpointId);
   try {
     localStorage.setItem(key, JSON.stringify(checkpoint));
-    // A saved page means the lane runs again.
-    localStorage.removeItem(failureKey(key));
+    unsavedCheckpoints.delete(key);
   } catch {
-    // A failed checkpoint write only causes already-cached pages to be fetched
-    // again after restart.
-    return;
+    // Pages already cached are fetched again after a restart; until then
+    // this tab reads the copy.
+    unsavedCheckpoints.set(key, { ...checkpoint });
+  }
+  // A saved page means the lane runs again.
+  try {
+    localStorage.removeItem(failureKey(key));
+    unsavedFailures.delete(key);
+  } catch {
+    unsavedFailures.set(key, null);
   }
   notifySaved(key);
 }
@@ -144,9 +158,10 @@ export function markSoupBackfillLaneFailed(
   const key = checkpointKey(userId, checkpointId);
   try {
     localStorage.setItem(failureKey(key), storageGeneration);
+    unsavedFailures.delete(key);
   } catch {
-    // Readers then keep waiting for the lane, as they did without the mark.
-    return;
+    // Other tabs keep waiting for the lane; this one reads the copy.
+    unsavedFailures.set(key, storageGeneration);
   }
   notifySaved(key);
 }
@@ -158,11 +173,11 @@ export function soupBackfillLaneFailed(
   checkpointId: string,
   storageGeneration: string
 ): boolean {
+  const key = checkpointKey(userId, checkpointId);
+  if (unsavedFailures.has(key))
+    return unsavedFailures.get(key) === storageGeneration;
   try {
-    return (
-      localStorage.getItem(failureKey(checkpointKey(userId, checkpointId))) ===
-      storageGeneration
-    );
+    return localStorage.getItem(failureKey(key)) === storageGeneration;
   } catch {
     return false;
   }
