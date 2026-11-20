@@ -34,6 +34,12 @@ internal-auth-key-authenticated requests.
 
 - `cargo test -p static_file_service_client` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- reqwest sends an empty body with no `Content-Length`, and S3 refuses a
+  presigned PUT without one (411 Length Required). Set the header on every
+  upload to a presigned URL, as `put_file.rs` does.
+
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md`

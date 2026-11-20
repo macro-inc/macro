@@ -1,9 +1,12 @@
 use super::StaticFileServiceClient;
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+#[cfg(test)]
+mod test;
 
 // HACK: duplicate logic. put into model crate later
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -218,10 +221,13 @@ impl StaticFileServiceClient {
         let presigned_url =
             macro_aws_config::transform_aws_url_for_internal_fetch(&put_file_data.upload_url);
 
+        // Without the explicit length an empty file goes out with no
+        // Content-Length at all, which storage refuses with 411.
         let upload_response = self
             .client
             .put(&presigned_url)
             .header(CONTENT_TYPE, content_type)
+            .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.to_vec())
             .send()
             .await?;
