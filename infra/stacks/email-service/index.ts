@@ -198,6 +198,28 @@ const crm_cleanup_queue = new Queue('email-service-crm-cleanup', {
 export const crmCleanupQueueArn = pulumi.interpolate`${crm_cleanup_queue.queue.arn}`;
 export const crmCleanupQueueName = pulumi.interpolate`${crm_cleanup_queue.queue.name}`;
 
+// CRM contact population runs on its own workers, never on backfill or inbox
+// sync. Each message's group is its mailbox, so SQS hands out one population
+// per mailbox at a time. Workers back off by hiding a message, and each back-off
+// costs a receive on the next delivery, so the redrive limit only catches a
+// message that never settles. The delay is a margin for a backfilled thread to
+// commit before its contacts are read; producers also ask again after it.
+const crm_population_queue = new Queue('email-service-crm-population', {
+  tags,
+  fifoQueue: true,
+  fifoHighThroughput: true,
+  maxReceiveCount: 100,
+  visibilityTimeoutSeconds: 60,
+  delaySeconds: 10,
+  messageRetentionSeconds: 1209600, // 14 days, so a rollback doesn't lose work
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 21600, // 6 hours
+  },
+});
+
+export const crmPopulationQueueArn = pulumi.interpolate`${crm_population_queue.queue.arn}`;
+export const crmPopulationQueueName = pulumi.interpolate`${crm_population_queue.queue.name}`;
+
 // Nightly at 08:00 UTC (midnight PT): EventBridge sends a static StartJob
 // payload straight to the crm cleanup queue; the pubsub worker creates the
 // job row and starts paging candidates.
@@ -291,6 +313,7 @@ const queueArns = [
   searchEventQueueArn,
   backfillQueueArn,
   crmCleanupQueueArn,
+  crmPopulationQueueArn,
   sfsUploaderQueueArn,
   sfsDeleteQueueArn,
   contactsQueueArn,

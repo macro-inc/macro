@@ -23,6 +23,18 @@ attachment storage, and Redis. Runtime code lives in `services/email_service`.
 - These tasks also consume inbox sync and Gmail operation queues. Changing task
   count scales their consumers and database connection pools as well.
 
+## Queues
+
+- `email-service-crm-population` is a high-throughput FIFO queue whose
+  message group is the mailbox, so SQS hands out one CRM population per
+  mailbox at a time. Workers back off by hiding a message, and each back-off
+  costs a receive on the next delivery: its redrive limit of 100 only catches
+  a message that never settles. Its 10 s delivery delay is a margin for a
+  backfilled thread to commit before its contacts are read. The oldest-message
+  alarm stops counting a message once it has been received three times, so a
+  mailbox stuck in back-off shows only in the dead-letter alarm. Deploy the
+  queue before any `pubsub_workers` release that sends to it.
+
 ## Checks
 
 - `bun run --cwd infra check` from the repository root.
