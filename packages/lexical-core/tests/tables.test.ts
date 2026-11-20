@@ -1457,6 +1457,12 @@ describe('isolatePipeTables', () => {
     ).toBe('\\| H |\n\\| --- |\n\\| B |\n\n| N |\n| --- |');
   });
 
+  it('pads a short body row with empty cells to the header width', () => {
+    expect(isolatePipeTables('| A | B | C |\n| --- | --- | --- |\n| x |')).toBe(
+      '| A | B | C |\n| --- | --- | --- |\n| x | | |'
+    );
+  });
+
   it('leaves pipe lines in fenced code alone', () => {
     const markdown = '```\n| a |\n| --- |\n| plain |\n```';
     expect(isolatePipeTables(markdown)).toBe(markdown);
