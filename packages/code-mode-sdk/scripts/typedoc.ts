@@ -290,7 +290,7 @@ function withOptionTypes(
   const lines: string[] = [];
   let bytes = 0;
   for (const name of named) {
-    const reference = symbols[name];
+    const reference = Object.hasOwn(symbols, name) ? symbols[name] : undefined;
     if (!reference?.startsWith('# Type Alias:')) continue;
     const declaration = reference.match(/^> \*\*[^*]+\*\* = (.+)$/m)?.[1];
     if (!declaration) continue;
