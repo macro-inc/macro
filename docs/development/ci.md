@@ -122,3 +122,14 @@ advisory in `deny.toml` with a reason.
 
 Locally, `cargo deny check advisories` reports every advisory, as the daily
 run does.
+
+## The macOS node_modules check
+
+`check node_modules nix` builds the Bun `node_modules` derivation on Linux and
+on a macOS runner, billed at ten times a Linux one. The macOS build runs only
+for a Darwin derivation that hasn't passed before: a pass leaves a marker in
+Namespace's remote cache, named after the derivation and kept per version of
+the workflow file, and later runs that evaluate the same derivation skip the
+macOS job. Fork PRs always run it. To make every PR run it again, change the
+workflow's source in `check_node_modules_nix.rs`; the new version has no
+markers.
