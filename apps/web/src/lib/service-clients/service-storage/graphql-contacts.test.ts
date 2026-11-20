@@ -2,6 +2,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { createPeopleCache } from '@graphql-cache/people/host';
 import { unsupportedPeopleTransport } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
   ContactReferencePageDocument,
@@ -58,7 +59,13 @@ beforeEach(() => {
 });
 
 it('fetches only a bounded page and admits it under the original scope before returning its cursor', async () => {
-  network.query.mockReturnValue({ toPromise: async () => ({ data }) });
+  const generation = cacheSessionGeneration.capture();
+  network.query.mockReturnValue({
+    toPromise: async () => ({
+      data,
+      operation: { context: { cacheSessionGeneration: generation } },
+    }),
+  });
   const commit = Promise.withResolvers<typeof cached>();
   const admitted = Promise.withResolvers<void>();
   const hydrateQuery = vi
@@ -77,6 +84,7 @@ it('fetches only a bounded page and admits it under the original scope before re
   expect(network.query.mock.calls[0][0]).not.toContain('@cacheOnly');
   expect(network.query.mock.calls[0][1]).toEqual({ limit: 500, after: null });
   expect(hydrateQuery.mock.calls[0][0]).toMatchObject({
+    generation,
     hydrationScope: { ...scope, contactFence: scope.storageGeneration },
     identity: scope.identity,
     data,
@@ -128,7 +136,13 @@ it('keeps exact reference fallback fetch-only and cancels obsolete pages', async
 });
 
 it('does not turn a rejected cache admission into a successful checkpoint', async () => {
-  network.query.mockReturnValue({ toPromise: async () => ({ data }) });
+  const generation = cacheSessionGeneration.capture();
+  network.query.mockReturnValue({
+    toPromise: async () => ({
+      data,
+      operation: { context: { cacheSessionGeneration: generation } },
+    }),
+  });
   const hydrateQuery = vi
     .fn<CacheHost['hydrateQuery']>()
     .mockRejectedValue(new Error('cache hydration scope changed'));

@@ -21,7 +21,7 @@ pub(super) async fn commit(
     blocked: bool,
     important: Option<bool>,
 ) -> Result<(), sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = super::begin(pool).await?;
     let binding=sqlx::query!(r#"SELECT l.sync_generation FROM email_links l WHERE l.id=$1 AND l.is_sync_active AND l.disconnect_requested_at IS NULL
         AND (l.macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2)) FOR UPDATE"#,link,actor.as_ref())
         .fetch_one(&mut *tx).await?;

@@ -132,6 +132,45 @@ it('switches mounted lists without exposing legacy or previous-account rows', as
   });
 });
 
+it("leaves the previous account's cached inboxes alone when the mounted inbox list switches accounts", () => {
+  const one = viewer();
+  const two = 'macro|two@example.com';
+  client.setQueryData(emailKeys.links(one).queryKey, {
+    links: [{ id: 'shared-inbox', settings: { signature: 'one' } }],
+  });
+  client.setQueryData(emailKeys.links(two).queryKey, {
+    links: [{ id: 'shared-inbox', settings: { signature: 'two' } }],
+  });
+  function Signatures() {
+    const links = useEmailLinksQuery();
+    return (
+      <>
+        {links.isSuccess
+          ? links.data.links.map((link) => link.settings?.signature).join()
+          : ''}
+      </>
+    );
+  }
+  const view = render(() => (
+    <QueryClientProvider client={client}>
+      <Signatures />
+    </QueryClientProvider>
+  ));
+  expect(view.container.textContent).toBe('one');
+  // The hook reconciles rows by id in place; it must do so on its own copy.
+  batch(() => {
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: two,
+      authenticated: true,
+    });
+    setViewer(two);
+  });
+  expect(view.container.textContent).toBe('two');
+  expect(client.getQueryData(emailKeys.links(one).queryKey)).toEqual({
+    links: [{ id: 'shared-inbox', settings: { signature: 'one' } }],
+  });
+});
+
 it('drops late settings results even after the mutation observer adopts another account', async () => {
   const pending =
     Promise.withResolvers<Ok<{ settings: { signature: string } }, unknown>>();

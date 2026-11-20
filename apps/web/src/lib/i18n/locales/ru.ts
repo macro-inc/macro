@@ -532,6 +532,12 @@ export default {
       other: 'Удалено {{count}} элемента',
     },
     toastDeleteFailed: 'Не удалось удалить',
+    toastPropertySet: {
+      one: '{{property}}: задано для {{count}} элемента',
+      few: '{{property}}: задано для {{count}} элементов',
+      many: '{{property}}: задано для {{count}} элементов',
+      other: '{{property}}: задано для {{count}} элемента',
+    },
     toastAddedToFavorites: 'Добавлено в избранное',
     toastAddedCountToFavorites: {
       one: 'Добавлен в избранное {{count}} элемент',

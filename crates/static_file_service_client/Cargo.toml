@@ -18,3 +18,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 macro_service_urls = { path = "../macro_service_urls" }
 tokio = { workspace = true }
+wiremock = { workspace = true }

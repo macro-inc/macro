@@ -1,7 +1,7 @@
 use crate::api::context::SearchHandlerState;
 use axum::{
     Json, Router,
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::post,
 };
@@ -69,6 +69,10 @@ pub enum SearchError {
     /// Too many Drive folders in one email search
     #[error("email_filters.project_ids takes at most {0} folders")]
     TooManyEmailProjects(usize),
+    /// The caller's other searches held every slot of its lane until the wait
+    /// ran out
+    #[error("too many of your searches are running at once; retry with fewer at once")]
+    Busy,
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -79,6 +83,10 @@ pub enum SearchError {
     #[error("internal error")]
     InternalError(#[from] anyhow::Error),
 }
+
+/// How soon a caller refused as busy may search again: by then one of its
+/// running searches has usually finished.
+const BUSY_RETRY_AFTER_SECONDS: &str = "1";
 
 impl IntoResponse for SearchError {
     fn into_response(self) -> Response {
@@ -99,17 +107,23 @@ impl IntoResponse for SearchError {
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
+            SearchError::Busy => StatusCode::TOO_MANY_REQUESTS,
             SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: self.to_string().into(),
-            }),
-        )
-            .into_response()
+        let body = Json(ErrorResponse {
+            message: self.to_string().into(),
+        });
+        match self {
+            SearchError::Busy => (
+                status_code,
+                [(header::RETRY_AFTER, BUSY_RETRY_AFTER_SECONDS)],
+                body,
+            )
+                .into_response(),
+            _ => (status_code, body).into_response(),
+        }
     }
 }
