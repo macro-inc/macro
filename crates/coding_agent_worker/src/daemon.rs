@@ -407,6 +407,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         }
     }
 
+    health.send_if_modified(TriggerStreamHealth::agents_bound);
     let filters = trigger_filters(bots.iter());
     let resume = position.resume_cursor();
     let mut stream = match client

@@ -2,6 +2,9 @@
 
 use tokio::time::Instant;
 
+#[cfg(test)]
+mod test;
+
 /// The agent-trigger stream's state, published on [`super::Daemon::trigger_stream_health`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TriggerStreamHealth {
@@ -25,4 +28,16 @@ pub enum TriggerStreamHealth {
         /// Why it ended, including a stall.
         last_error: String,
     },
+}
+
+impl TriggerStreamHealth {
+    /// An agent is bound again after none was: the stream is opening. A
+    /// reconnect keeps its attempt. Whether this changed the state.
+    pub(super) fn agents_bound(&mut self) -> bool {
+        let idle = matches!(self, Self::NoAgentsBound);
+        if idle {
+            *self = Self::Connecting;
+        }
+        idle
+    }
 }
