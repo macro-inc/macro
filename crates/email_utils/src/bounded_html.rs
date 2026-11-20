@@ -12,8 +12,9 @@
 use ego_tree::NodeId;
 use html5ever::driver::{self, Parser};
 use html5ever::tendril::{StrTendril, TendrilSink};
+use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
-use html5ever::{Attribute, ExpandedName, LocalName, Namespace, QualName};
+use html5ever::{Attribute, ExpandedName, LocalName, Namespace, ParseOpts, QualName};
 use scraper::{Html, Node};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -120,7 +121,27 @@ pub(crate) struct BoundedHtml {
 /// Parses a document as [`Html::parse_document`] does, within the bounds.
 pub(crate) fn parse_document(html: &str) -> BoundedHtml {
     feed(
-        driver::parse_document(BoundedSink::new(Html::new_document()), Default::default()),
+        driver::parse_document(
+            BoundedSink::new(Html::new_document(), MAX_HTML_NODES),
+            Default::default(),
+        ),
+        html,
+    )
+}
+
+/// Parses a document as html2text does, with scripting off so a `<noscript>`
+/// holds markup rather than text, within the bounds and at most `max_nodes`
+/// nodes.
+pub(crate) fn parse_document_for_text(html: &str, max_nodes: usize) -> BoundedHtml {
+    let opts = ParseOpts {
+        tree_builder: TreeBuilderOpts {
+            scripting_enabled: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    feed(
+        driver::parse_document(BoundedSink::new(Html::new_document(), max_nodes), opts),
         html,
     )
 }
@@ -134,7 +155,7 @@ pub(crate) fn parse_fragment(html: &str) -> BoundedHtml {
     );
     feed(
         driver::parse_fragment(
-            BoundedSink::new(Html::new_fragment()),
+            BoundedSink::new(Html::new_fragment(), MAX_HTML_NODES),
             Default::default(),
             context,
             Vec::new(),
@@ -164,6 +185,7 @@ fn feed(mut parser: Parser<BoundedSink>, html: &str) -> BoundedHtml {
 /// Scraper's tree, refusing every change once one would pass a bound.
 struct BoundedSink {
     html: Html,
+    max_nodes: usize,
     nodes: usize,
     attributes: usize,
     text_bytes: usize,
@@ -175,9 +197,10 @@ struct BoundedSink {
 }
 
 impl BoundedSink {
-    fn new(html: Html) -> Self {
+    fn new(html: Html, max_nodes: usize) -> Self {
         Self {
             html,
+            max_nodes,
             nodes: 0,
             attributes: 0,
             text_bytes: 0,
@@ -204,7 +227,7 @@ impl BoundedSink {
     }
 
     fn check_node_budget(&mut self) {
-        if self.nodes + self.attributes / ATTRIBUTES_PER_NODE > MAX_HTML_NODES {
+        if self.nodes + self.attributes / ATTRIBUTES_PER_NODE > self.max_nodes {
             self.clipped = true;
         }
     }

@@ -68,15 +68,20 @@ sender/generic-address checks.
   axis, because one message that exhausted it ran the email workers out of
   memory. It reads at most `MAX_HTML_BYTES` and renders in raw mode (table
   cells stacked in reading order, never laid out in padded columns) at
-  `TEXT_WIDTH`, wider than any line can be, so no text wraps. It refuses a
-  body whose `bounded_html` parse clips, before html2text builds its own
-  tree: html2text parses with html5ever too, so a byte cap alone lets 13 KB
-  build a million nodes. Calendar descriptions reach it as received. It
-  also refuses a body whose tables exceed `MAX_TABLE_CELLS` (rows times
-  widest row, since html2text copies a table's column widths into every
-  row) or whose quotes, lists, definitions and headings prefix a line with
-  more than `MAX_INDENT` columns (each prefixes every line inside it; an
-  ordered list as wide as its largest number). The cell count is exact only because the same walk
+  `TEXT_WIDTH`, wider than any line can be, so no text wraps. It first
+  parses with `bounded_html::parse_document_for_text` (scripting off, as
+  html2text parses, and `MAX_TEXT_NODES`, since html2text takes 1.3 to 1.9 KB
+  a node) and refuses a body that clips: html2text parses with html5ever too,
+  so a byte cap alone let 13 KB build a million nodes. html2text then
+  converts that tree's serialization, never the body: it parses with a newer
+  html5ever whose rules differ (inside `<select>`), so a check of the body
+  alone could be passed by markup the two read differently. Calendar
+  descriptions reach it as received. It also refuses a body whose tables
+  exceed `MAX_TABLE_CELLS` (rows times widest row, since html2text copies a
+  table's column widths into every row) or whose quotes, lists,
+  definitions and headings prefix a line with more than `MAX_INDENT`
+  columns (each prefixes every line inside it; an ordered list as wide as
+  its largest number). The cell count is exact only because the same walk
   drops every cell's `rowspan` and `colspan`, which raw mode does not need
   but html2text turns into filler cells and columns. Keep all of it when
   changing the conversion; `tests/text_conversion_memory.rs` measures the

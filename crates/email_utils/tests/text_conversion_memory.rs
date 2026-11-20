@@ -165,10 +165,9 @@ fn deep_nesting_is_refused_cheaply() {
         let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
 
         assert_eq!(text, None);
-        // Laid out, each of these peaked above 200 MB. Refused, the peak is
-        // the bounded parse's tree, checked first: about 36 MB here.
+        // Laid out, each of these peaked above 200 MB.
         assert!(
-            peak < 64 << 20,
+            peak < 32 << 20,
             "{peak} bytes to refuse {} bytes of HTML",
             html.len()
         );
@@ -186,7 +185,7 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
     let quoted_titles: String = (0..5)
         .map(|i| format!("<b id={i} title='{}'>", "\"".repeat(4_000)))
         .collect();
-    let bodies = [
+    let shallow = [
         // Each `<p>` closes the paragraph holding the bold tags, and html5ever
         // rebuilds them all inside the next: 13 KB that built a million nodes
         // and took 2.5 GB to convert.
@@ -195,9 +194,25 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
         format!("<p>{quoted_titles}{}", "<p>x".repeat(50_000)),
         // Each `</p>` scans the open elements for a paragraph: 28 s to parse.
         format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+        // Three identical bold tags rebuilt per paragraph stay within the
+        // sanitizer's node limit, but took html2text 457 MB.
+        format!("<p><b><b><b>{}", "<p>x".repeat(49_000)),
     ];
+    // html2text parses `<noscript>` with scripting off and `<select>` with a
+    // newer html5ever, so a check that read them otherwise let these through
+    // at full cost. Scripting off, `<noscript>` holds the same markup; inside
+    // `<select>` the bounded parse keeps only the text, and html2text reads
+    // that tree, so it converts cheaply.
+    let refused = shallow.iter().map(|body| (body.clone(), true)).chain(
+        shallow
+            .iter()
+            .map(|body| (format!("<noscript>{body}</noscript>"), true)),
+    );
+    let selects = shallow
+        .iter()
+        .map(|body| (format!("<select>{body}"), false));
 
-    for html in bodies {
+    for (html, refuses) in refused.chain(selects) {
         let body = Some(html.clone());
         let mut texts = (Some(String::new()), Some(String::new()));
         let started = std::time::Instant::now();
@@ -206,15 +221,17 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
             texts = (html_to_plaintext(&html), compute_body_parsed(true, &body));
         });
 
-        assert_eq!(texts, (None, None));
+        if refuses {
+            assert_eq!(texts, (None, None));
+        }
         assert!(
             peak < 32 << 20,
-            "{peak} bytes to refuse {} bytes of HTML",
+            "{peak} bytes to convert {} bytes of HTML",
             html.len()
         );
         assert!(
             started.elapsed() < std::time::Duration::from_secs(5),
-            "{:?} to refuse {} bytes of HTML",
+            "{:?} to convert {} bytes of HTML",
             started.elapsed(),
             html.len()
         );

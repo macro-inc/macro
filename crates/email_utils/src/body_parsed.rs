@@ -27,6 +27,12 @@ const MAX_INDENT: usize = 128;
 /// so this caps a conversion near 250 MB.
 const MAX_HTML_BYTES: usize = 512 * 1024;
 
+/// The most nodes a conversion's bounded parse may build, below the
+/// sanitizer's limit: html2text's tree and render take 1.3 to 1.9 KB a node,
+/// so this keeps a conversion near 120 MB. Real mail within `MAX_HTML_BYTES`
+/// builds far fewer. A body past it gets no text.
+const MAX_TEXT_NODES: usize = 64_000;
+
 /// Convert `body_replyless` into plaintext with link footnotes.
 ///
 /// If the original message had no HTML body, `body_replyless` is already plaintext.
@@ -117,17 +123,23 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
         );
     }
     let html = &html[..html.floor_char_boundary(MAX_HTML_BYTES)];
-    // html2text builds its own tree with html5ever, which rebuilds every
+    // html2text builds its tree with html5ever, which rebuilds every
     // still-active formatting element inside each new paragraph: 13 KB can
-    // build a million nodes. The bounded parse finds such a body before
-    // html2text builds anything, and a body past its limits gets no text.
-    if crate::bounded_html::parse_document(html).clipped {
+    // build a million nodes. The bounded parse finds such a body first, and
+    // one past its limits gets no text. html2text then reads the bounded
+    // tree's serialization, never the body: it parses with a newer html5ever
+    // whose rules differ (inside `<select>`, for one), and a well-formed
+    // serialization builds it no more than the bounded parse did.
+    let parsed = crate::bounded_html::parse_document_for_text(html, MAX_TEXT_NODES);
+    if parsed.clipped {
         tracing::warn!(
             html_len = html.len(),
             "email body builds too much to convert to text"
         );
         return None;
     }
+    let html = parsed.html.html();
+    drop(parsed);
     // html2text panics on some malformed-but-real email HTML (e.g. a table
     // rowspan overhanging past the last row). A panic here takes down the
     // whole message-processing worker, so contain it and treat the body as
