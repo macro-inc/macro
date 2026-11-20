@@ -716,6 +716,27 @@ class TokenUsage(unittest.TestCase):
         ])
         self.assertEqual([call["status"] for call in tokens["calls"]], ["matched", "matched"])
 
+    def test_a_per_turn_row_written_after_its_stop_frame_stays_with_its_turn_when_the_next_is_queued(self):
+        export = {
+            "session": {"id": "s"},
+            "frames": [prompt(0), end(10), prompt(10.2), end(30)],
+            "spans": {"tools": {}, "model_calls": [
+                span("gemini-3.8-flash", 1, 3, 100, 0, 0, 1),
+                span("gemini-3.8-flash", 4, 9, 200, 0, 0, 1),
+                span("gemini-3.8-flash", 11, 20, 300, 0, 0, 1),
+            ]},
+            "usage": [
+                # Turn 1's one row, written after its stop frame, once turn 2 has started.
+                row("t1", "gemini-3.8-flash", 10.5, 300, 0, 0, 2, 0.01),
+                row("t2", "gemini-3.8-flash", 20.5, 300, 0, 0, 1, 0.01),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([(found["id"], found["turn"], found["status"], found["calls"]) for found in tokens["rows"]], [
+            ("t1", 1, "matched", [0, 1]), ("t2", 2, "matched", [2]),
+        ])
+
     def test_a_span_with_no_usage_or_no_row_does_not_make_the_next_row_partial(self):
         export = {
             "session": {"id": "s"}, "frames": [prompt(0), end(20)],
