@@ -476,6 +476,24 @@ fn list_priority_is_bounded_and_part_of_the_cursor() {
     request.list_priority = vec![vec!["x".repeat(MAX_LIST_KEY_BYTES + 1)]];
     assert!(NameSearchRead::new(&request, Uuid::from_u128(2), VERSION).is_err());
 
+    // However many lists a contact is in, the one a caller ranks by counts.
+    request.list_priority = vec![vec!["teammates".into()]];
+    let customs = (0..70)
+        .map(|i| format!("custom:{i:02}"))
+        .collect::<Vec<_>>();
+    let mut lists = customs.iter().map(String::as_str).collect::<Vec<_>>();
+    lists.push("teammates");
+    let many = [listed(
+        &request,
+        "macro|many@example.com",
+        "Many",
+        0,
+        &lists,
+    )];
+    request.only_listed = true;
+    assert_eq!(listed_ids(&request, &many).len(), 1);
+    request.only_listed = false;
+
     request.list_priority = mention_priority();
     let rows = [
         listed(&request, "macro|a@example.com", "A", 0, &["teammates"]),

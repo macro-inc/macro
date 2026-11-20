@@ -1,6 +1,6 @@
 //! Shared matching and durable sort-key semantics for the name-first people path.
 //! The active menu reader is switched only with its storage/host integration.
-use super::{MAX_LIST_KEY_BYTES, MAX_LIST_KEYS, PeopleError};
+use super::{MAX_LIST_KEY_BYTES, PeopleError};
 use crate::value::{CacheValue, Record};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::BTreeSet;
@@ -111,13 +111,14 @@ impl NameSearch {
 pub const LISTS_FIELD: &str = "lists";
 
 /// The contact's list keys as both the index and the ranker read them: distinct,
-/// nonempty, at most `MAX_LIST_KEY_BYTES`, and the first `MAX_LIST_KEYS` in byte
-/// order. A missing or malformed field means no lists, never an error.
+/// nonempty and at most `MAX_LIST_KEY_BYTES`. The server bounds how many lists
+/// a contact is in; dropping some here could hide the one a caller ranks by. A
+/// missing or malformed field means no lists, never an error.
 pub fn contact_lists(record: &Record) -> BTreeSet<&str> {
     let Some(CacheValue::List(values)) = record.fields.get(LISTS_FIELD) else {
         return BTreeSet::new();
     };
-    let mut lists = values
+    values
         .iter()
         .filter_map(|value| match value {
             CacheValue::String(key) if !key.is_empty() && key.len() <= MAX_LIST_KEY_BYTES => {
@@ -125,11 +126,7 @@ pub fn contact_lists(record: &Record) -> BTreeSet<&str> {
             }
             _ => None,
         })
-        .collect::<BTreeSet<_>>();
-    while lists.len() > MAX_LIST_KEYS {
-        lists.pop_last();
-    }
-    lists
+        .collect()
 }
 
 /// Unambiguous prefix of a list's scoped rank keys: the key's length, then the
