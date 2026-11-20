@@ -18,6 +18,10 @@ export function SectionMuteMenu(props: { section: ChannelSectionKey }) {
   const rail = useChannelsRail();
   const muted = useMutedEntitiesQuery();
   const directory = useChannelDirectory();
+  // A built-in section holds every channel of its kind, known only once the
+  // directory is complete.
+  const builtIn = () =>
+    props.section !== 'favorites' && !props.section.startsWith('label:');
   const ids = () => {
     if (props.section === 'favorites')
       return rail
@@ -56,7 +60,12 @@ export function SectionMuteMenu(props: { section: ChannelSectionKey }) {
       label={t('channelSections.muteAllChannels')}
       unmuteLabel={t('channelSections.unmuteAllChannels')}
       muted={allMuted()}
-      disabled={rail.sectionNotificationsDisabled(props.section)}
+      // Until then whether every channel is muted is unknown, so neither
+      // Mute nor Unmute is the right offer.
+      disabled={
+        rail.sectionNotificationsDisabled(props.section) ||
+        (builtIn() && !directory.complete())
+      }
       onMute={(value) =>
         fireAndForget(rail.muteSection(props.section, value), 'channels-view')
       }
