@@ -1,6 +1,8 @@
 use super::*;
+use crate::domain::models::list::InboxProvider;
 use crate::domain::models::messages::ContactConnection;
 use std::sync::Mutex;
+use uuid::Uuid;
 
 #[derive(Default)]
 struct RecordingRepository {
@@ -28,15 +30,69 @@ impl ContactsRepository for RecordingRepository {
     }
 }
 
+impl ContactListRepository for RecordingRepository {
+    async fn record_interactions(
+        &self,
+        _users: &[MacroUserIdStr<'static>],
+        _peers: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+
+    async fn record_inbox_contacts(
+        &self,
+        _inbox: &InboxSource,
+        _contacts: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_user_lists(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+}
+
 struct NoopNotifier;
 
 impl ContactsNotifier for NoopNotifier {
     async fn invalidate_contacts_for_users(
         &self,
-        _user_ids: Vec<MacroUserIdStr<'_>>,
+        _invalidations: Vec<ContactsInvalidation>,
     ) -> Result<(), rootcause::Report> {
         Ok(())
     }
+}
+
+#[derive(Default)]
+struct RecordingQueue {
+    changes: Mutex<Vec<DirectoryChange>>,
+}
+
+impl ContactsIngressQueue for RecordingQueue {
+    async fn publish_nodes(&self, _message: ContactsNodes) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn publish_connections(
+        &self,
+        _message: ContactConnections,
+    ) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn publish_change(&self, message: DirectoryChange) -> Result<(), rootcause::Report> {
+        self.changes.lock().unwrap().push(message);
+        Ok(())
+    }
+}
+
+fn users(prefix: &str, count: usize) -> Vec<MacroUserIdStr<'static>> {
+    (0..count)
+        .map(|i| user(&format!("{prefix}{i}@example.com")))
+        .collect()
 }
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
@@ -92,4 +148,87 @@ fn test_message_from_aws_sqs() {
         panic!("Could not parse body as a contacts-nodes message");
     };
     assert_eq!(message.users.len(), 3);
+}
+
+#[tokio::test]
+async fn interactions_are_split_into_bounded_messages_covering_every_pair() {
+    let ingress = SqsContactsIngress {
+        queue: RecordingQueue::default(),
+    };
+    let members = users("user", 25);
+    let peers = users("peer", 1001);
+
+    ingress
+        .record_interactions(members.clone(), peers.clone())
+        .await
+        .unwrap();
+
+    let changes = ingress.queue.changes.lock().unwrap();
+    assert_eq!(changes.len(), 9);
+    let mut pairs = HashSet::new();
+    for change in changes.iter() {
+        let DirectoryChange::Interacted { users, peers } = change else {
+            panic!("expected an interactions message, got {change:?}");
+        };
+        assert!(users.len() <= 10 && peers.len() <= 500);
+        for user in users {
+            for peer in peers {
+                pairs.insert((user.clone(), peer.clone()));
+            }
+        }
+    }
+    assert_eq!(pairs.len(), members.len() * peers.len());
+}
+
+#[tokio::test]
+async fn inbox_contacts_are_split_into_messages_of_500() {
+    let ingress = SqsContactsIngress {
+        queue: RecordingQueue::default(),
+    };
+    let inbox = InboxSource {
+        owner: user("owner@example.com"),
+        link_id: Uuid::nil(),
+        provider: InboxProvider::Outlook,
+    };
+
+    ingress
+        .record_inbox_contacts(inbox.clone(), users("contact", 1001))
+        .await
+        .unwrap();
+
+    let sizes: Vec<_> = ingress
+        .queue
+        .changes
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|change| match change {
+            DirectoryChange::InboxContacts {
+                inbox: source,
+                contacts,
+            } if *source == inbox => contacts.len(),
+            other => panic!("expected inbox contacts, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(sizes, [500, 500, 1]);
+}
+
+#[tokio::test]
+async fn directory_changes_beyond_one_lookup_are_sent_as_unknown() {
+    let ingress = SqsContactsIngress {
+        queue: RecordingQueue::default(),
+    };
+
+    ingress
+        .directory_changed(users("member", 2), users("joiner", 501))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *ingress.queue.changes.lock().unwrap(),
+        [DirectoryChange::Changed {
+            users: users("member", 2),
+            changed: Vec::new(),
+        }]
+    );
 }

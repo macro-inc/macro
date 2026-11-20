@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsNotifier, ContactsOutboxService, ContactsRepository};
+use crate::domain::ports::{
+    ContactListRepository, ContactsNotifier, ContactsOutboxService, ContactsRepository,
+};
 use crate::domain::service::ContactsDomainService;
 use rootcause::report;
 use sqs_worker::SQSWorker;
@@ -17,7 +19,7 @@ pub struct ContactsWorker<R, N> {
     service: std::sync::Arc<ContactsDomainService<R, N>>,
 }
 
-impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
+impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier> ContactsWorker<R, N> {
     /// Creates a new worker with the given SQS client and domain service.
     pub fn new(sqs: SQSWorker, service: std::sync::Arc<ContactsDomainService<R, N>>) -> Self {
         Self { sqs, service }
