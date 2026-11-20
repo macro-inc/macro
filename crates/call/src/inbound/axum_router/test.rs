@@ -71,6 +71,22 @@ fn maps_domain_errors_to_status_codes() {
 }
 
 #[test]
+fn token_routes_refuse_a_program_by_its_signed_claims() {
+    use macro_authorization::CredentialAttribution;
+    let browser = axum::http::HeaderMap::new();
+    for program in [CredentialAttribution::Agent, CredentialAttribution::Routine] {
+        assert!(
+            matches!(
+                super::refuse_program_token(program, &browser),
+                Err(CallError::Forbidden(_))
+            ),
+            "{program:?}"
+        );
+    }
+    assert!(super::refuse_program_token(CredentialAttribution::Person, &browser).is_ok());
+}
+
+#[test]
 fn token_routes_refuse_code_execution_header() {
     let mut headers = axum::http::HeaderMap::new();
     headers.insert(
@@ -79,6 +95,10 @@ fn token_routes_refuse_code_execution_header() {
     );
     assert!(matches!(
         super::refuse_code_execution_token(&headers),
+        Err(CallError::Forbidden(_))
+    ));
+    assert!(matches!(
+        super::refuse_program_token(macro_authorization::CredentialAttribution::Person, &headers),
         Err(CallError::Forbidden(_))
     ));
 }
@@ -266,7 +286,9 @@ mod authenticated_join_routes {
             jwt: &str,
         ) -> Result<UserContext, Report<MacroAuthorizationError>> {
             let user_id = match jwt {
-                "member" | "program" | "api-jwt" | "agent-session" => "macro|member@example.com",
+                "member" | "program" | "api-jwt" | "agent-session" | "agent-jwt" | "routine" => {
+                    "macro|member@example.com"
+                }
                 "viewer" => "macro|viewer@example.com",
                 _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
             };
@@ -289,6 +311,16 @@ mod authenticated_join_routes {
                     "api-jwt" => credential.origin = CredentialOrigin::MacroApiJwt,
                     "agent-session" => {
                         credential.identity.agent_id = Some(bot_id::MACRO_NEW_BOT_ID);
+                    }
+                    // What a code-mode run carries: a Macro API JWT signed for
+                    // an agent, or for a routine run as its owner.
+                    "agent-jwt" => {
+                        credential.origin = CredentialOrigin::MacroApiJwt;
+                        credential.identity.agent_id = Some(bot_id::MACRO_AI_BOT_ID);
+                    }
+                    "routine" => {
+                        credential.origin = CredentialOrigin::MacroApiJwt;
+                        credential.identity.routine_id = Some(Uuid::nil());
                     }
                     _ => {}
                 }
@@ -316,7 +348,7 @@ mod authenticated_join_routes {
         ))
     }
 
-    fn router(service: MockCallService) -> axum::Router {
+    pub(super) fn router(service: MockCallService) -> axum::Router {
         router_with_flag(service, true)
     }
 
@@ -345,14 +377,13 @@ mod authenticated_join_routes {
 
     #[tokio::test]
     async fn join_route_preserves_programmatic_access_when_enabled() {
-        for actor in ["program", "api-jwt", "agent-session"] {
+        for actor in ["program", "api-jwt"] {
             let mut service = MockCallService::new();
-            let is_program = actor != "agent-session";
             service
                 .expect_join_call()
                 .times(1)
                 .returning(move |_, _, _, credential_is_program| {
-                    assert_eq!(credential_is_program, is_program);
+                    assert!(credential_is_program);
                     Box::pin(async { Err(CallError::Ended) })
                 });
 
@@ -364,16 +395,43 @@ mod authenticated_join_routes {
         }
     }
 
+    /// A program can drop the code-execution header with a raw `fetch`; its
+    /// credential's signed agent or routine claim still refuses the token.
     #[tokio::test]
-    async fn join_route_keeps_agent_attributed_sessions_gated() {
-        let mut service = MockCallService::new();
-        service.expect_join_call().never();
+    async fn token_routes_refuse_a_programs_signed_credential_without_the_header() {
+        for actor in ["agent-jwt", "agent-session", "routine"] {
+            // The channel start routes run the same `refuse_program_token`;
+            // this router's entity access can't admit a channel, so they are
+            // covered by the unit test above.
+            let requests = [
+                join(Uuid::now_v7(), actor),
+                Request::post(format!("/meetings/join/{}", "a".repeat(64)))
+                    .header("authorization", format!("Bearer {actor}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            ];
+            for request in requests {
+                let route = format!("{} {}", request.method(), request.uri());
+                let mut service = MockCallService::new();
+                service.expect_join_call().never();
+                service.expect_start_call().never();
+                service.expect_join_meeting().never();
+                service.expect_join_meeting_with_options().never();
+                // Refused before the feature-flag lookup.
+                service.expect_programmatic_calls_enabled().never();
 
-        let response = router_with_flag(service, false)
-            .oneshot(join(Uuid::now_v7(), "agent-session"))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+                let response = call_router(CallRouterState::new(
+                    Arc::new(service),
+                    Arc::new(NoOpEntityAccessService),
+                    MacroAuthorizationState::new(Arc::new(Auth)),
+                ))
+                .oneshot(request)
+                .await
+                .unwrap();
+                assert_eq!(response.status(), StatusCode::FORBIDDEN, "{actor} {route}");
+            }
+        }
     }
 
     #[tokio::test]
@@ -818,5 +876,140 @@ mod scoped_edits {
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
         assert_eq!(*shares.lock().unwrap(), [false, true]);
+    }
+}
+
+mod call_record_urls {
+    use macro_authorization::CredentialAttribution;
+    use uuid::Uuid;
+
+    fn recorded_call() -> crate::domain::models::CallRecord {
+        crate::domain::models::CallRecord {
+            discussion: crate::domain::models::CallDiscussion::CallChat {
+                call_id: Uuid::nil(),
+            },
+            call_id: Uuid::nil(),
+            channel_id: None,
+            room_name: None,
+            created_by: "macro|member@example.com".to_string(),
+            started_at: chrono::DateTime::UNIX_EPOCH,
+            ended_at: None,
+            duration_ms: None,
+            egress_id: None,
+            recording_started_at: None,
+            recording_key: Some("recordings/r1.mp4".to_string()),
+            preview_key: Some("recordings/r1.jpg".to_string()),
+            recording_url: Some("https://bucket.example/r1.mp4?X-Amz-Signature=secret".to_string()),
+            recording_preview_url: Some(
+                "https://bucket.example/r1.jpg?X-Amz-Signature=secret".to_string(),
+            ),
+            channel_name: None,
+            custom_name: None,
+            summary: None,
+            team_share_access_level: None,
+            share_with_team: false,
+            is_active: false,
+            status: None,
+            user_access_level: None,
+            viewer_has_declined: false,
+            participants: Vec::new(),
+            guests: Vec::new(),
+            transcript: Vec::new(),
+            source: None,
+        }
+    }
+
+    /// A presigned recording URL is a bearer secret for as long as it lasts:
+    /// a program reads the call without it and fetches the bytes through
+    /// Macro's recording route instead.
+    #[test]
+    fn a_program_reads_a_call_record_without_presigned_urls() {
+        let mut code_mode = axum::http::HeaderMap::new();
+        code_mode.insert(
+            macro_authorization::CODE_EXECUTION_HEADER,
+            "1".parse().unwrap(),
+        );
+        let browser = axum::http::HeaderMap::new();
+        for (program, attribution, headers) in [
+            ("an agent run", CredentialAttribution::Agent, &browser),
+            (
+                "an owner-identity routine run",
+                CredentialAttribution::Routine,
+                &browser,
+            ),
+            (
+                "the code-mode runtime",
+                CredentialAttribution::Person,
+                &code_mode,
+            ),
+        ] {
+            let record = super::super::without_presigned_urls_for_programs(
+                recorded_call(),
+                attribution,
+                headers,
+            );
+            assert_eq!(record.recording_url, None, "{program}");
+            assert_eq!(record.recording_preview_url, None, "{program}");
+            assert!(
+                record.recording_key.is_some(),
+                "{program}: the bytes stay reachable"
+            );
+        }
+        let person = super::super::without_presigned_urls_for_programs(
+            recorded_call(),
+            CredentialAttribution::Person,
+            &browser,
+        );
+        assert!(person.recording_url.is_some(), "a person keeps the URLs");
+    }
+}
+
+mod meeting_links {
+    use super::authenticated_join_routes::router;
+    use crate::domain::ports::MockCallService;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    async fn mint_link(bearer: &str, code_execution: bool) -> StatusCode {
+        let mut service = MockCallService::new();
+        service.expect_share_call().never();
+        let mut request = Request::post(format!("/record/{}/link", Uuid::nil()))
+            .header("authorization", format!("Bearer {bearer}"));
+        if code_execution {
+            request = request.header(macro_authorization::CODE_EXECUTION_HEADER, "1");
+        }
+        router(service)
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    /// A new meeting link for a call lets anyone holding it join as a guest,
+    /// so a program never mints one; a person shares the call from Macro.
+    #[tokio::test]
+    async fn a_program_cannot_mint_a_link_for_a_call() {
+        for (program, bearer, code_execution) in [
+            ("an agent run", "agent-jwt", false),
+            ("an owner-identity routine run", "routine", false),
+            ("the code-mode runtime", "member", true),
+        ] {
+            assert_eq!(
+                mint_link(bearer, code_execution).await,
+                StatusCode::FORBIDDEN,
+                "{program}"
+            );
+        }
+    }
+
+    /// A person passes the guard; this test router's access store then
+    /// answers, so anything but 403 shows the guard let it through.
+    #[tokio::test]
+    async fn a_person_passes_the_guard() {
+        assert_ne!(mint_link("member", false).await, StatusCode::FORBIDDEN);
     }
 }

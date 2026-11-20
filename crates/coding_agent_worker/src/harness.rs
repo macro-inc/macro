@@ -24,7 +24,7 @@ use agent_runtime_protocol::domain::connection::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinSet;
 
 #[cfg(test)]
@@ -71,6 +71,8 @@ pub enum BridgeEnd {
 /// its turns in `turns` and handing every ACP line to `tap` when there is
 /// one. `handoff` asks the bridge to stop at a line boundary and hand the
 /// agent over instead.
+/// `agents_changed` is raised when the service says the agents bound to this
+/// harness may have changed.
 #[expect(clippy::too_many_arguments, reason = "the bridge's whole input")]
 pub async fn bridge(
     harness: &Harness,
@@ -81,12 +83,12 @@ pub async fn bridge(
     adopted: Option<RunningAgent>,
     handoff: &mut Handoffs,
     computer: Option<Arc<Computer>>,
+    agents_changed: &Notify,
 ) -> Result<BridgeEnd, BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
-    let agent_process =
-        AcpProcess::new(&harness.command, harness.args.clone(), cwd).envs(harness.env.clone());
+    let agent_process = agent_process(harness, cwd);
 
     let RuntimeChannel {
         tx: to_service,
@@ -126,6 +128,7 @@ pub async fn bridge(
                 turns,
                 handoff,
                 computer.as_ref(),
+                agents_changed,
             )
             .await
         }
@@ -200,6 +203,7 @@ enum Relayed {
     HandedOff(()),
 }
 
+#[expect(clippy::too_many_arguments, reason = "the relay's whole input")]
 async fn relay(
     mut agent: AttachedAgent,
     to_service_slot: &mut Option<tokio::sync::mpsc::UnboundedSender<ToServerMessage>>,
@@ -208,6 +212,7 @@ async fn relay(
     turns: &ActiveTurns,
     handoff: &mut Handoffs,
     computer: Option<&Arc<Computer>>,
+    agents_changed: &Notify,
 ) -> Result<Relayed, BridgeError> {
     let to_service = to_service_slot
         .clone()
@@ -278,6 +283,15 @@ async fn relay(
                             let _ = to_service.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
+                    Some(ToRuntimeMessage::AgentsChanged) => agents_changed.notify_one(),
+                    Some(ToRuntimeMessage::ApplyAgent { environment }) => {
+                        // Read by the guest's agent units; outside a Macro
+                        // computer nothing installs it, so it does nothing.
+                        match apply_agent(&environment.0) {
+                            Ok(staged) => tracing::info!(?staged, "handled the agent teammate's environment"),
+                            Err(error) => tracing::error!(error = ?error, "could not stage the agent teammate's environment"),
+                        }
+                    }
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }
@@ -344,12 +358,12 @@ async fn hand_off(
         Ok(running) => match running.hand_off(active_prompts) {
             Ok(handed) => Some(handed),
             Err(error) => {
-                tracing::warn!(error = %error, "could not hand the agent off");
+                tracing::warn!(error = ?error, "could not hand the agent off");
                 None
             }
         },
         Err(error) => {
-            tracing::warn!(error = %error, "could not detach the agent");
+            tracing::warn!(error = ?error, "could not detach the agent");
             None
         }
     }
@@ -357,6 +371,26 @@ async fn hand_off(
 
 /// Relay one agent line, letting `self_knowledge` learn which session a
 /// `session/new` answer created.
+#[cfg(unix)]
+fn apply_agent(
+    environment: &std::collections::BTreeMap<String, String>,
+) -> rootcause::Result<crate::agent_env::Staged> {
+    crate::agent_env::stage_agent_env(
+        Path::new(crate::agent_env::AGENT_ENV_INBOX),
+        Path::new(crate::agent_env::AGENT_ENV_INSTALLED),
+        environment,
+    )
+}
+
+#[cfg(not(unix))]
+fn apply_agent(
+    _environment: &std::collections::BTreeMap<String, String>,
+) -> rootcause::Result<std::convert::Infallible> {
+    Err(rootcause::report!(
+        "agent teammates run only on Macro computers"
+    ))
+}
+
 fn forward_to_service(
     line: &str,
     to_service: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,
@@ -401,6 +435,11 @@ fn teach(
             .map_err(|error| BridgeError::Harness(format!("{error}")))?;
     }
     serde_json::from_value(value).map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+/// The harness's ACP agent, launched in `cwd`.
+pub(crate) fn agent_process(harness: &Harness, cwd: &Path) -> AcpProcess {
+    AcpProcess::new(&harness.command, harness.args.clone(), cwd).envs(harness.env.clone())
 }
 
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {

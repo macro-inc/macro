@@ -2,16 +2,14 @@ import {
   type EntityAppearance,
   sameAppearance,
 } from '@app/features/entity-appearance/core/appearance';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { createMemo } from 'solid-js';
@@ -97,6 +95,14 @@ function itemPreviewQueryOptions(
   };
 }
 
+function previewDenied(item: ItemEntity): boolean {
+  return (
+    crmSnapshotAuthorization().paused ||
+    (!crmAccessAllowed() &&
+      (item.type === 'crm_company' || item.type === 'crm_contact'))
+  );
+}
+
 function noAccessPreview(item: ItemEntity): PreviewItem {
   return {
     id: item.id,
@@ -110,14 +116,20 @@ export async function getItemPreview(
   item: ItemEntity,
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem> {
-  if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
+  if (previewDenied(item)) return noAccessPreview(item);
+  const epoch = crmSnapshotAuthorization().epoch;
+  const stale = () =>
+    !cacheSessionGeneration.isCurrent(epoch) || previewDenied(item);
+  if (isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);
+      if (stale()) return noAccessPreview(item);
       if (preview) return defaultNameTransform(preview);
     } catch {
       // Preserve the existing access/deletion result through the REST fallback.
     }
     const fallback = await fetchRestPreviewBatch([item]);
+    if (stale()) return noAccessPreview(item);
     // A failed request throws, as the dataloader's read below does.
     const errors = fallback.failed.get(item.id);
     if (errors) throw new ThrownResultError(errors);
@@ -127,6 +139,7 @@ export async function getItemPreview(
   }
 
   const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
+  if (stale()) return noAccessPreview(item);
   return defaultNameTransform(preview);
 }
 
@@ -135,18 +148,14 @@ function useItemPreviewQuery(
   restStaleTime = PREVIEW_STALE_TIME,
   includeProperties = true
 ) {
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-  const graphqlRequested = () => graphqlSoupFlag().enabled;
+  const enabled = () => !previewDenied(item());
   const graphqlQuery = createGraphqlItemPreviewQuery(
     item,
-    graphqlRequested,
-    includeProperties
+    includeProperties,
+    enabled
   );
   const usesGraphql = createMemo(
-    () =>
-      graphqlRequested() &&
-      isGraphqlPreviewItem(item()) &&
-      !graphqlQuery.shouldFallback()
+    () => isGraphqlPreviewItem(item()) && !graphqlQuery.shouldFallback()
   );
 
   // Previews render in every message row and building an observer costs more
@@ -154,11 +163,14 @@ function useItemPreviewQuery(
   const restQuery = createMemo(() =>
     usesGraphql()
       ? undefined
-      : useQuery(() => itemPreviewQueryOptions(item(), true, restStaleTime))
+      : useQuery(() =>
+          itemPreviewQueryOptions(item(), enabled(), restStaleTime)
+        )
   );
 
   return {
     data: () => {
+      if (previewDenied(item())) return noAccessPreview(item());
       if (usesGraphql()) return graphqlQuery.data();
       const rest = restQuery();
       return rest && queryReadyGate(rest) ? rest.data : undefined;
@@ -173,6 +185,7 @@ function useItemPreviewQuery(
         : (restQuery()?.isSuccess ?? false),
     usesGraphql,
     refetch: async () => {
+      if (!enabled()) return;
       if (usesGraphql()) await graphqlQuery.refetch();
       else await restQuery()?.refetch();
     },
@@ -242,7 +255,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       } as PreviewItem;
     }
     const dataWithName = defaultNameTransform(data);
-    if (channelMessageData) {
+    if (channelMessageData && isAccessiblePreviewItem(dataWithName)) {
       return {
         ...dataWithName,
         messageContext: channelMessageData,
@@ -306,21 +319,11 @@ export function useItemIdentity(
 
 /** Revalidates active previews without crossing their selected transport. */
 export function invalidatePreview(itemId?: string) {
-  if (!isFeatureEnabled(enableGraphqlSoup)) {
-    if (!itemId)
-      return queryClient.invalidateQueries({
-        queryKey: previewKeys._def,
-      });
-    return queryClient.invalidateQueries({
-      queryKey: previewKeys.item(itemId).queryKey,
-    });
-  }
-
   const graphqlRefresh = refreshActiveGraphqlPreviewQueries(itemId);
   const restRefresh = queryClient.invalidateQueries({
     queryKey: itemId ? previewKeys.item(itemId).queryKey : previewKeys._def,
-    // Under the GraphQL flag, only REST exceptions and fallbacks have an
-    // active TanStack observer. Disabled fallback queries must stay untouched.
+    // Only REST exceptions and fallbacks have an active TanStack observer.
+    // Disabled fallback queries must stay untouched.
     predicate: (query) => query.isActive(),
   });
   return Promise.all([graphqlRefresh, restRefresh]);
@@ -338,7 +341,7 @@ function getPreviewData(itemId: string): PreviewItem | undefined {
   );
 }
 
-/** Optimistically updates the selected transport's document file type. */
+/** Writes a REST preview cache entry. */
 function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   return queryClient.setQueryData<PreviewItem>(
     previewKeys.item(itemId).queryKey,
@@ -347,15 +350,11 @@ function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
 }
 
 export function setPreviewFileType(itemId: string, fileType: string) {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    const userId = cachedUserId();
-    if (!userId) return;
-    return runGraphqlPreviewWrite(
-      setGraphqlPreviewFileType(itemId, fileType, userId)
-    );
-  }
-  const prev = getPreviewData(itemId);
-  if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
+  const userId = cachedUserId();
+  if (!userId) return;
+  return runGraphqlPreviewWrite(
+    setGraphqlPreviewFileType(itemId, fileType, userId)
+  );
 }
 
 /** Patch a loaded REST preview without creating an inaccessible preview. */
@@ -384,7 +383,7 @@ export function setPreviewName({
   itemType?: Exclude<ItemType, 'calendar_event'>;
 }) {
   const item = { id: itemId, type: itemType } satisfies ItemEntity;
-  if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
+  if (isGraphqlPreviewItem(item)) {
     const userId = cachedUserId();
     if (!userId) return;
     return runGraphqlPreviewWrite(setGraphqlPreviewName(item, name, userId));
@@ -472,21 +471,25 @@ export function setPreviewName({
  * });
  */
 export function setPreviewOnCreate({
+  generation,
   itemId,
   itemType,
   name,
   fileType,
   subType,
 }: {
+  generation: string;
   itemId: string;
   itemType: Exclude<ItemType, 'calendar_event'>;
   name?: string;
   fileType?: string;
   subType?: { type: 'task' | 'snippet' | 'skill'; is_completed?: boolean };
 }) {
+  if (!cacheSessionGeneration.isCurrent(generation)) return;
   if (
-    isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
+    itemType === 'document' ||
+    itemType === 'chat' ||
+    itemType === 'project'
   ) {
     const userId = cachedUserId();
     if (userId && canWriteGraphqlPreviewCache()) {
@@ -499,7 +502,8 @@ export function setPreviewOnCreate({
             fileType,
             subType,
           },
-          userId
+          userId,
+          generation
         )
       );
     }

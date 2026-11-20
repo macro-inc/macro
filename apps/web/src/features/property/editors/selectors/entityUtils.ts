@@ -1,3 +1,4 @@
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import {
   type Bucket,
   type EntityItem,
@@ -7,7 +8,12 @@ import {
 } from '@core/context/quickAccess';
 import { BUCKET_COMBINATIONS } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
-import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  type FreshSortConfig,
+  NAME_MATCH_RANKING,
+  type TimestampedItem,
+} from '@core/util/freshSort';
 import type {
   ChannelEntity,
   ChatEntity,
@@ -20,7 +26,7 @@ import type {
   ProjectEntity,
   TaskEntity,
 } from '@entity';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
@@ -65,6 +71,23 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
 }
 
 /**
+ * The kinds the entity selector can search and pick: those with a source.
+ * Email threads come from their own search rather than Quick Access.
+ */
+export const PICKABLE_ENTITY_TYPES: readonly EntityType[] = Object.values(
+  EntityType
+).filter((type) => entityTypeToBuckets(type).length > 0);
+
+/** Whether a selector limited to `allowed` (unset: any kind) offers `type`. */
+export function allowsEntityType(
+  allowed: EntityType | EntityType[] | null | undefined,
+  type: EntityType
+): boolean {
+  if (!allowed) return true;
+  return Array.isArray(allowed) ? allowed.includes(type) : allowed === type;
+}
+
+/**
  * Hook to get QuickAccessItems for a given EntityType.
  * Returns items from the appropriate buckets based on entity type.
  */
@@ -72,7 +95,8 @@ export function useQuickAccessEntities<T extends EntityType>(
   entityType: Accessor<T | T[] | null | undefined>,
   searchTerm: Accessor<string> = () => '',
   enabled: Accessor<boolean> = () => true,
-  excludedPeople?: Accessor<ReadonlySet<string>>
+  excludedPeople?: Accessor<ReadonlySet<string>>,
+  readsCache?: Accessor<boolean>
 ) {
   const quickAccess = useQuickAccess();
 
@@ -106,6 +130,7 @@ export function useQuickAccessEntities<T extends EntityType>(
         enabled,
         peopleMode: 'property',
         excludedPeople,
+        readsCache,
       })
     );
   });
@@ -120,6 +145,12 @@ export function useQuickAccessEntities<T extends EntityType>(
     windowKey: () => (enabled() ? list()?.windowKey?.() : undefined),
     loadMore: async () => {
       if (enabled()) await list()?.loadMore();
+    },
+    // A list without its own retry reads its next page again.
+    retry: async () => {
+      const current = list();
+      if (!enabled() || !current) return;
+      await (current.retry ? current.retry() : current.loadMore());
     },
   };
 }
@@ -176,6 +207,10 @@ export function getEntitySearchText(entity: CombinedEntity): string {
   }
   if (entity.data.type === 'crm_contact') {
     return `${entity.data.name} | ${entity.data.email}`;
+  }
+  if (entity.data.type === 'crm_company') {
+    const domains = entity.data.domains.map(({ domain }) => domain).join(' ');
+    return domains ? `${entity.data.name} | ${domains}` : entity.data.name;
   }
 
   return entity.data.name ?? '';
@@ -281,6 +316,27 @@ export function createEntitySearchConfig<T extends CombinedEntity>(
     brevityWeight: 0.1,
     boostFn,
   };
+}
+
+/**
+ * Searches an explicit people-and-agents roster (assignees) by name match, as
+ * the @ menu does, so `rankAgentsAfterPeople` can tell how well each row matches.
+ */
+export function createRosterSearch(
+  currentUserDomain: Accessor<string | undefined>,
+  currentUserId: Accessor<string | undefined>
+) {
+  return createFreshSearch<CombinedEntity>({
+    config: {
+      ...createEntitySearchConfig(currentUserDomain, currentUserId),
+      ...NAME_MATCH_RANKING,
+    },
+    getName: getEntitySearchText,
+    getDisplayName: getEntityName,
+    isPersonItem: (entity) =>
+      entity.kind === 'user' && !isBotPrincipalId(entity.id),
+    getTimestamp: getEntityTimestampedItem,
+  });
 }
 
 /**

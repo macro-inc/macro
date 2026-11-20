@@ -109,9 +109,11 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             page_size: args.page_size,
             match_type: args.match_type,
             collapse: args.collapse,
-            ids_only: false, // Email is never ids only at the moment
+            ids_only: args.email_search_args.ids_only,
             thread_ids: args.email_search_args.thread_ids,
+            required_thread_ids: args.email_search_args.required_thread_ids,
             link_ids: args.email_search_args.link_ids,
+            exclude_link_ids: args.email_search_args.exclude_link_ids,
             sender: args.email_search_args.sender,
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
@@ -247,8 +249,17 @@ pub struct UnifiedDocumentSearchArgs {
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
     pub user_ids: Vec<String>,
+    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
+    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    pub ids_only: bool,
+    /// When non-empty, every hit's thread must be one of these, on top of
+    /// the access filter.
+    pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
+    /// Links no hit may come from, whatever else matches it.
+    pub exclude_link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
@@ -962,7 +973,14 @@ fn paginate_unified_hits(
     (results, cursor)
 }
 
-#[tracing::instrument(skip(client, args))]
+#[tracing::instrument(
+    skip(client, args),
+    fields(
+        opensearch_took_ms = tracing::field::Empty,
+        opensearch_query_ms = tracing::field::Empty,
+        opensearch_fetch_ms = tracing::field::Empty,
+    )
+)]
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
@@ -975,17 +993,23 @@ pub(crate) async fn search_unified(
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
+    // An index that does not exist yet — a newly added entity type before
+    // its create-index run, or an alias mid-reindex — otherwise fails the
+    // whole request with `index_not_found_exception`, taking down search
+    // for every entity rather than just that one. `ignore_unavailable`
+    // degrades to the indices that are present; `warn_on_shard_failures`
+    // still reports partial results from indices that do exist.
+    // `phase_took` splits `took` into query and fetch time for the span. The
+    // typed search builder has no parameter for it, so this is a raw request.
     let response = client
-        .search(opensearch::SearchParts::Index(&search_indices))
-        // An index that does not exist yet — a newly added entity type before
-        // its create-index run, or an alias mid-reindex — otherwise fails the
-        // whole request with `index_not_found_exception`, taking down search
-        // for every entity rather than just that one. Degrade to the indices
-        // that are present; `warn_on_shard_failures` still reports partial
-        // results from indices that do exist.
-        .ignore_unavailable(true)
-        .body(search_request)
-        .send()
+        .send(
+            opensearch::http::Method::Post,
+            &format!("/{}/_search", search_indices.join(",")),
+            opensearch::http::headers::HeaderMap::new(),
+            Some(&[("ignore_unavailable", "true"), ("phase_took", "true")]),
+            Some(opensearch::http::request::JsonBody::new(search_request)),
+            None,
+        )
         .await
         .map_client_error(OpensearchOperation::SearchUnified)
         .await?;
@@ -1006,6 +1030,13 @@ pub(crate) async fn search_unified(
         })?;
 
     result.warn_on_shard_failures(OpensearchOperation::SearchUnified);
+
+    let span = tracing::Span::current();
+    span.record("opensearch_took_ms", result.took);
+    if let Some(phase_took) = &result.phase_took {
+        span.record("opensearch_query_ms", phase_took.query);
+        span.record("opensearch_fetch_ms", phase_took.fetch);
+    }
 
     tracing::info!(
         response_body_bytes = bytes.len(),

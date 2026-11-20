@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useHasPaidAccess } from '@core/auth';
 import {
@@ -6,15 +5,9 @@ import {
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_EMAIL_SCHEDULED_SEND,
-  enableEmailSignatures,
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { trackMention } from '@core/signal/mention';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -39,7 +32,6 @@ import {
   transferEmailDraft,
   useDeleteDraftMutation,
 } from '@queries/email/draft';
-import { markThreadDraftSaved } from '@queries/email/draft-cache';
 import { subscribeToDraftLifecycleChanges } from '@queries/email/draft-lifecycle-events';
 import {
   assertEmailDraftQueueAvailable,
@@ -85,14 +77,11 @@ import { serverEmailSends } from '@queries/email/server-sends';
 import {
   fetchAndCacheThread,
   fetchFreshEmailThread,
-  type ThreadQueryTransport,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
-import type { ApiThread } from '@service-email/generated/schemas';
-import type { InfiniteData } from '@tanstack/solid-query';
 import { confirmDialog } from '@ui';
-import { type Accessor, getOwner } from 'solid-js';
+import { getOwner } from 'solid-js';
 import { createMessageOperationSource } from '../email-message/queries/message-operation';
 import { toEmailThread } from '../email-thread/queries/thread-source';
 import {
@@ -113,18 +102,16 @@ import {
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { queuedDraftSaveArgs } from './queries/queued-draft';
-import { watchEmailSendProgress } from './queries/send-progress';
+import {
+  watchEmailSendProgress,
+  watchSentThread,
+} from './queries/send-progress';
 import {
   restoreDraftBodyAfterUndo,
   runQueuedUndoSend,
   runUndoSend,
 } from './undo-send';
 import { uploadAttachmentDocuments } from './upload-documents';
-
-export type EmailComposeContextOptions = {
-  /** Transport of the thread read this surface sits under; a compose surface has none. */
-  threadTransport?: Accessor<ThreadQueryTransport | undefined>;
-};
 
 async function refreshEmailLists(
   threadId: string,
@@ -143,16 +130,8 @@ async function refreshEmailLists(
 }
 
 /** Construct under the composing surface's Solid owner to scope request progress. */
-export function createEmailComposeContext(
-  options: EmailComposeContextOptions = {}
-): EmailComposeContext {
+export function createEmailComposeContext(): EmailComposeContext {
   const accounts = useMailAccountsQuery();
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
-  const queueActive = () =>
-    draftQueueActive(
-      options.threadTransport?.() ??
-        (graphqlSoupFlag().enabled ? 'graphql' : 'rest')
-    );
   const sends = useQueuedEmailSends();
   // Attach handlers run as event handlers, which have no Solid owner of
   // their own; the dialog needs the surface's.
@@ -161,16 +140,13 @@ export function createEmailComposeContext(
   const paywall = usePaywallState();
   const viewerEmail = useEmail();
   const viewerId = useUserId();
-  const primaryId = () =>
-    accounts.isSuccess
-      ? findPrimaryEmailLinkId(accounts.data?.links ?? [], viewerId())
-      : undefined;
-  const headerId = (id: string | null | undefined) =>
-    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
     getDisplayName(tryMacroId(`macro|${email}`))
   );
-  const signatures = useFeatureFlag(enableEmailSignatures);
+  const primaryId = () =>
+    findPrimaryEmailLinkId(inboxSource.inboxes(), viewerId());
+  const headerId = (id: string | null | undefined) =>
+    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const calendarEvents = useCreateEmailEvent();
   const remove = useDeleteDraftMutation();
   const upload = useUploadDraftAttachmentsMutation();
@@ -199,7 +175,7 @@ export function createEmailComposeContext(
   const requireSavedDraftForDelivery = async (
     draftId: string | null | undefined
   ) => {
-    if (!queueActive() || !draftId) return;
+    if (!draftQueueActive() || !draftId) return;
     const local = await readLocalDraft(draftId);
     if (local && !localDraftReadyForDelivery(local))
       throw new Error(
@@ -210,25 +186,17 @@ export function createEmailComposeContext(
   // is read again, so every delivery change refetches it.
   const refreshThread = (threadId: string | undefined) => {
     if (!threadId) return;
-    if (isFeatureEnabled(enableGraphqlSoup)) {
-      void (async () => {
-        const result = await fetchAndCacheThread(threadId);
-        if (result.isErr())
-          reportError(
-            new Error(
-              `Failed to refresh email thread ${threadId}: ${result.error
-                .map((error) => `${error.code}: ${error.message}`)
-                .join(', ')}`
-            )
-          );
-      })().catch(reportError);
-      return;
-    }
-    void queryClient
-      .invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      })
-      .catch(reportError);
+    void (async () => {
+      const result = await fetchAndCacheThread(threadId);
+      if (result.isErr())
+        reportError(
+          new Error(
+            `Failed to refresh email thread ${threadId}: ${result.error
+              .map((error) => `${error.code}: ${error.message}`)
+              .join(', ')}`
+          )
+        );
+    })().catch(reportError);
   };
 
   // Queued writes address a draft by handles: the composer's minted ones, or a
@@ -239,7 +207,7 @@ export function createEmailComposeContext(
   }: SaveEmailDraft):
     | (DraftClientHandles & { threadId: string })
     | undefined => {
-    if (!queueActive()) return undefined;
+    if (!draftQueueActive()) return undefined;
     if (clientHandles?.threadId) {
       return { ...clientHandles, threadId: clientHandles.threadId };
     }
@@ -270,9 +238,10 @@ export function createEmailComposeContext(
       prepareSignatureLinks: interceptMailtoLinks,
       onUpgrade: () => paywall.showPaywall(PaywallKey.REMOVE_SIGNATURE),
       isTouch: isTouchDevice,
-      isMobile,
+      // Touch composes with its header actions at every width, so a new
+      // email in Mail's preview pane matches the phone composer.
+      isMobile: isTouchDevice,
       scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
-      signaturesEnabled: () => signatures().enabled,
     },
     editorFiles: {
       readDroppedFiles: readDroppedEmailFiles,
@@ -321,11 +290,12 @@ export function createEmailComposeContext(
               {
                 persistent: true,
                 dismissStyle: isDraftRecovery ? 'icon' : undefined,
+                replace: options.replace,
+                onDismiss: options.onDismiss,
               }
             );
           }
-          toast.failure(message, notice(options));
-          return undefined;
+          return toast.failure(message, notice(options));
         },
         alert: (message, options) => toast.alert(message, notice(options)),
         dismiss: toast.dismiss,
@@ -378,7 +348,7 @@ export function createEmailComposeContext(
             viewerEmail(),
         }),
       get retryDraft() {
-        return queueActive() ? retryEmailDraftSynchronization : undefined;
+        return draftQueueActive() ? retryEmailDraftSynchronization : undefined;
       },
       forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
@@ -401,6 +371,9 @@ export function createEmailComposeContext(
             });
           const local = await readLocalDraft(handles.draftId);
           const senderLinkId = local?.inboxId ?? inboxId ?? primaryId() ?? '';
+          const inbox = inboxSource
+            .inboxes()
+            .find((inbox) => inbox.id === senderLinkId);
           const outcome = await saveEmailDraftQueued({
             args: {
               ...queuedDraftSaveArgs({
@@ -412,18 +385,8 @@ export function createEmailComposeContext(
                     }
                   : handles,
                 senderLinkId,
-                senderAccount: accounts.isSuccess
-                  ? accounts.data?.links.find(
-                      (link) => link.id === senderLinkId
-                    )
-                  : undefined,
-                senderEmail:
-                  inboxSource
-                    .inboxes()
-                    .find((inbox) => inbox.id === senderLinkId)
-                    ?.email_address ??
-                  viewerEmail() ??
-                  '',
+                senderAccount: inbox,
+                senderEmail: inbox?.email_address ?? viewerEmail() ?? '',
               }),
               localRevision: local?.revision,
             },
@@ -458,14 +421,12 @@ export function createEmailComposeContext(
         try {
           const threadId = result.threadId;
           if (threadId) {
-            markThreadDraftSaved(threadId);
             fireAndForget(
               refreshEmailLists(threadId, !!completingThread),
               'email-compose'
             );
           }
           if (previousThreadId && previousThreadId !== threadId) {
-            markThreadDraftSaved(previousThreadId);
             invalidateSoupEntity(previousThreadId);
             void refetchSoupEntity(previousThreadId, 'emailThread').catch(
               reportError
@@ -478,7 +439,7 @@ export function createEmailComposeContext(
       },
       async deleteDraft({ completingThread, inboxId, ...input }) {
         assertEmailDraftQueueAvailable();
-        if (input.threadId && queueActive()) {
+        if (input.threadId && draftQueueActive()) {
           const outcome = await deleteEmailDraftQueued({
             draftId: input.draftId,
             draftGeneration: input.draftGeneration,
@@ -497,34 +458,15 @@ export function createEmailComposeContext(
         });
         try {
           publishDraftLifecycleChange(input.draftId, inboxId);
-          if (input.threadId) markThreadDraftSaved(input.threadId);
         } catch (error) {
           reportError(error);
         }
       },
       async restoreDraft({ threadId, draftId, draft, html, inboxId }) {
-        if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
-          queryClient.setQueryData<InfiniteData<ApiThread>>(
-            emailKeys.threadMessages(threadId).queryKey,
-            (old) =>
-              old
-                ? {
-                    ...old,
-                    pages: old.pages.map((page) => ({
-                      ...page,
-                      messages: page.messages.filter(
-                        (message) => message.db_id !== draftId
-                      ),
-                    })),
-                  }
-                : old
-          );
-          markThreadDraftSaved(threadId);
-        }
         if (draft && html !== undefined)
           await restoreDraftBodyAfterUndo(draft, html, inboxId ?? primaryId());
-        if (queueActive()) await reviveLocalDraft(draftId);
-        if (threadId && isFeatureEnabled(enableGraphqlSoup))
+        if (draftQueueActive()) await reviveLocalDraft(draftId);
+        if (threadId)
           fireAndForget(fetchAndCacheThread(threadId), 'email-compose');
       },
     },
@@ -596,6 +538,7 @@ export function createEmailComposeContext(
                 emailSendLocked(intent)
             )),
       watchSend: watchEmailSendProgress,
+      watchSentThread,
       async sendMessage({ inboxId, ...input }) {
         if (
           !inboxSource
@@ -630,14 +573,8 @@ export function createEmailComposeContext(
               draft: input.message,
               handles: { draftId, threadId },
               senderLinkId,
-              senderAccount: accounts.isSuccess
-                ? accounts.data?.links.find((link) => link.id === senderLinkId)
-                : undefined,
-              senderEmail:
-                inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
-                  ?.email_address ??
-                viewerEmail() ??
-                '',
+              senderAccount: inbox,
+              senderEmail: inbox.email_address,
             }),
             sendTime: input.sendTime,
           },
@@ -709,8 +646,8 @@ export function createEmailComposeContext(
           reportError(error);
         }
       },
-      archive: async ({ threadId, value }, inboxId) => {
-        await archiveEmailThread({ id: threadId, value }, headerId(inboxId));
+      archive: async ({ threadId, value }) => {
+        await archiveEmailThread({ id: threadId, value });
       },
       undoSend: async (input) => {
         if (input.sendAttemptId) {

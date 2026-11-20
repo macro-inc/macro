@@ -28,6 +28,8 @@ pub(super) struct State {
     pub primaries: Vec<String>,
     pub ready: bool,
     pub fail: Option<&'static str>,
+    /// Lifecycle calls that find the inbox locked before one gets through.
+    pub contended: u32,
     pub stall_probe: bool,
     pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -49,6 +51,7 @@ pub(super) fn service() -> (LinkManagerService<Fake, Fake, Fake, Fake, Fake, Fak
         primaries: vec![],
         ready: true,
         fail: None,
+        contended: 0,
         stall_probe: false,
         notified_at: None,
         link: Some(Link {
@@ -126,7 +129,12 @@ impl LinkManagerLifecycle for Fake {
     ) -> Result<bool, InboxLifecycleError> {
         self.step("prepare", Call::Prepare(link, reason.as_str().into()))
             .map_err(|_| InboxLifecycleError::Unavailable)?;
-        Ok(self.0.lock().unwrap().ready)
+        let mut state = self.0.lock().unwrap();
+        if state.contended > 0 {
+            state.contended -= 1;
+            return Err(InboxLifecycleError::Contended);
+        }
+        Ok(state.ready)
     }
     async fn deleted_user(&self, owner: &str) -> Result<(), InboxLifecycleError> {
         self.step("deleted_user", Call::DeletedUser(owner.into()))

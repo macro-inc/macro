@@ -53,6 +53,7 @@ use suggestions::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
 
 use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
 use self::state::{RoutineSuggestionState, Transition};
+use super::event_rollout::EVENT_ROUTINES_FLAG;
 use super::models::ActionPolicyError;
 use super::ports::{
     RequestSessions, RoutineCode, ScheduledActionService, SuggestionOrigin, SuggestionOrigins,
@@ -63,8 +64,6 @@ mod test;
 
 /// The PostHog flag that turns routine suggestions on for a person.
 pub const ROUTINE_SUGGESTIONS_FLAG: &str = "enable-routine-suggestions";
-/// The PostHog flag that lets a person save code steps.
-pub const ROUTINE_CODE_STEPS_FLAG: &str = "enable-routine-code-steps";
 /// Inbox messages a brief holds.
 pub const INBOX_MESSAGES: u16 = 100;
 /// Suggestions shown per surface: AI's, then Macro's templates.
@@ -85,6 +84,9 @@ pub struct RoutineBriefing {
     pub guide: &'static str,
     /// The model the Ask AI steps they write run on.
     pub agent_model: String,
+    /// Whether this deployment evaluates trigger conditions, which a
+    /// routine started on mail is drafted with.
+    pub conditions: bool,
 }
 
 pub(crate) const ALL_SURFACES: [Surface; 9] = [
@@ -290,7 +292,7 @@ where
             } => {
                 let check = self
                     .actions
-                    .check_action(principal, routine, created, None)
+                    .check_action(principal, routine, created, Vec::new(), None)
                     .await?;
                 if !check.ok {
                     return Ok(SuggestOutcome {
@@ -410,6 +412,7 @@ where
         routine.suggestions.inbox_messages = tracing::field::Empty,
         routine.suggestions.apps = tracing::field::Empty,
         routine.suggestions.code = tracing::field::Empty,
+        routine.suggestions.events = tracing::field::Empty,
     ), err)]
     async fn brief(
         &self,
@@ -418,8 +421,12 @@ where
         trigger: GenerationTrigger,
         timezone: Tz,
     ) -> Result<String> {
+        // A drafted routine starts on mail through a condition, and saving
+        // one needs both conditions and this flag: told otherwise, a session
+        // would draft what a check refuses.
         let flags = self.require_flag(user).await?;
-        let code = self.code.sdk().is_some() && flags.is_enabled(ROUTINE_CODE_STEPS_FLAG);
+        let events = self.briefing.conditions && flags.is_enabled(EVENT_ROUTINES_FLAG);
+        let code = self.code.sdk().is_some();
         let (inbox, apps, dismissed) = tokio::join!(
             self.sources.inbox(user, INBOX_MESSAGES),
             self.sources.apps(user),
@@ -435,6 +442,7 @@ where
         span.record("routine.suggestions.inbox_messages", inbox.len());
         span.record("routine.suggestions.apps", apps.len());
         span.record("routine.suggestions.code", code);
+        span.record("routine.suggestions.events", events);
         Ok(prompt::brief(&prompt::BriefData {
             surfaces,
             trigger,
@@ -444,6 +452,7 @@ where
             timezone: timezone.name(),
             agent_model: &self.briefing.agent_model,
             code,
+            events,
             guide: self.briefing.guide,
         }))
     }

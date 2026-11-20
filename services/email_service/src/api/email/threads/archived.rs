@@ -18,7 +18,7 @@ impl IntoResponse for ArchiveThreadError {
         let status = match &self.0 {
             EmailErr::ThreadNotFound | EmailErr::ThreadEmpty => StatusCode::NOT_FOUND,
             EmailErr::Unauthorized => StatusCode::FORBIDDEN,
-            EmailErr::ThreadHasNoInboundMessages => StatusCode::CONFLICT,
+            EmailErr::ThreadHasNoInboundMessages | EmailErr::Contended => StatusCode::CONFLICT,
             EmailErr::TooManyThreads(_) => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -55,7 +55,7 @@ pub struct ArchiveThreadRequest {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id), err(Debug))]
 pub async fn archived_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
@@ -103,7 +103,7 @@ pub struct ArchiveThreadsResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.authorization.user.user_context.user_id, thread_count=body.thread_ids.len()), err(Debug))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id, thread_count=body.thread_ids.len()), err(Debug))]
 pub async fn archived_batch_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,

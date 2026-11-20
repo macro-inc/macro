@@ -1977,7 +1977,7 @@ fn imported_entity_type(source: import::domain::models::ImportSource) -> model_e
 /// Whether an access-check failure means the caller cannot see the entity,
 /// as opposed to the check itself failing. A malformed id names nothing the
 /// caller can see, so it is refused too.
-fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
+pub(crate) fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
     use entity_access::domain::models::AccessError;
     matches!(
         error,

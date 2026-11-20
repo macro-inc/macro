@@ -25,7 +25,6 @@ import type { PropertyDefinitionResponse } from './generated/schemas/propertyDef
 import type { PropertyOption } from './generated/schemas/propertyOption';
 import type { PropertyOptionResponse } from './generated/schemas/propertyOptionResponse';
 import type { PropertyTargetEntityType } from './generated/schemas/propertyTargetEntityType';
-import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
 import type { TagPromotionConflictResponse } from './generated/schemas/tagPromotionConflictResponse';
 import type { TagSetResponse } from './generated/schemas/tagSetResponse';
 import type { UpdatePropertyOptionRequest } from './generated/schemas/updatePropertyOptionRequest';
@@ -40,6 +39,14 @@ type PropertiesEntityType = PropertyTargetEntityType;
 export const TAG_NAME_CONFLICT_CODE = 'TAG_NAME_CONFLICT' as const;
 
 type TagPromoteErrorCode = typeof TAG_NAME_CONFLICT_CODE;
+
+/**
+ * A create rejected because the name belongs to a built-in property. The
+ * error's message is the server's sentence, which names that property.
+ */
+export const PROPERTY_NAME_RESERVED_CODE = 'PROPERTY_NAME_RESERVED' as const;
+
+type CreateDefinitionErrorCode = typeof PROPERTY_NAME_RESERVED_CODE;
 
 /** safeFetch's default mapping for statuses the custom handler doesn't claim. */
 function defaultFetchError(response: Response) {
@@ -90,12 +97,6 @@ type GetEntityPropertiesArgs = {
   entity_type: PropertyTargetEntityType;
   entity_id: string;
   query: GetEntityPropertiesParams;
-};
-type SetEntityPropertyArgs = {
-  entity_type: PropertyTargetEntityType;
-  entity_id: string;
-  property_id: string;
-  body: SetEntityPropertyRequest;
 };
 type DeleteEntityPropertyArgs = {
   entity_property_id: string;
@@ -179,11 +180,21 @@ export const propertiesServiceClient = {
   },
 
   createPropertyDefinition: async (args: CreatePropertyDefinitionArgs) => {
-    return await propertiesFetch<PropertyDefinition>(
-      `/properties/definitions`,
+    return await fetchWithToken<PropertyDefinition, CreateDefinitionErrorCode>(
+      `${propertiesHost}/properties/definitions`,
       {
         method: 'POST',
         body: JSON.stringify(args.body),
+        errorResponseHandler: async (response) => {
+          // A built-in name is the only conflict a create answers with.
+          if (response.status === 409) {
+            return {
+              code: PROPERTY_NAME_RESERVED_CODE,
+              message: await response.text(),
+            };
+          }
+          return defaultFetchError(response);
+        },
       }
     );
   },
@@ -212,17 +223,6 @@ export const propertiesServiceClient = {
     return await propertiesFetch<EntityPropertiesResponse>(url, {
       method: 'GET',
     });
-  },
-
-  setEntityProperty: async (args: SetEntityPropertyArgs) => {
-    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}`;
-
-    const result = await propertiesFetch<{}>(url, {
-      method: 'PUT',
-      body: JSON.stringify(args.body),
-    });
-
-    return result.map(() => ({ success: true }));
   },
 
   deleteEntityProperty: async (args: DeleteEntityPropertyArgs) => {

@@ -203,23 +203,29 @@ export function computerFailureMessage(
   fallback: string
 ): string {
   if (!(error instanceof ThrownResultError)) return fallback;
-  return match(error.errors[0]?.code)
-    .with('TEAM_ON_TRIAL', () => t('computers.trialBlocked'))
-    .with('PURCHASE_CONFLICT', () => t('computers.errorPurchaseConflict'))
-    .with('PAYMENT_FAILED', () => t('computers.errorPaymentFailed'))
-    .with('NOT_PURCHASABLE', () => t('computers.errorNotPurchasable'))
-    .with('SALES_UNAVAILABLE', () => t('computers.errorSalesUnavailable'))
-    .with('COMPUTERS_UNAVAILABLE', () =>
-      t('computers.errorComputersUnavailable')
-    )
-    .with('NOT_RESTORABLE', () => t('computers.errorNotRestorable'))
-    .with('NAME_MISMATCH', () => t('computers.errorNameMismatch'))
-    .with('NO_PAID_PLAN', () => t('computers.noPaidPlan'))
-    .with('ROLLOUT_DISABLED', () => t('computers.rolloutDisabled'))
-    .with('BILLING_PROVIDER_FAILED', () => t('computers.errorBillingProvider'))
-    .with('TIMED_OUT', () => t('computers.errorTimedOut'))
-    .with('NETWORK_ERROR', () => t('computers.errorNetwork'))
-    .otherwise(() => fallback);
+  return (
+    match(error.errors[0]?.code)
+      .with('TEAM_ON_TRIAL', () => t('computers.trialBlocked'))
+      .with('PURCHASE_CONFLICT', () => t('computers.errorPurchaseConflict'))
+      .with('PAYMENT_FAILED', () => t('computers.errorPaymentFailed'))
+      .with('NOT_PURCHASABLE', () => t('computers.errorNotPurchasable'))
+      .with('SALES_UNAVAILABLE', () => t('computers.errorSalesUnavailable'))
+      .with('COMPUTERS_UNAVAILABLE', () =>
+        t('computers.errorComputersUnavailable')
+      )
+      .with('NOT_RESTORABLE', () => t('computers.errorNotRestorable'))
+      .with('NAME_MISMATCH', () => t('computers.errorNameMismatch'))
+      .with('NO_PAID_PLAN', () => t('computers.noPaidPlan'))
+      .with('ROLLOUT_DISABLED', () => t('computers.rolloutDisabled'))
+      // A 403 without ROLLOUT_DISABLED's code: the caller lacks the right.
+      .with('FORBIDDEN', () => t('computers.errorForbidden'))
+      .with('BILLING_PROVIDER_FAILED', () =>
+        t('computers.errorBillingProvider')
+      )
+      .with('TIMED_OUT', () => t('computers.errorTimedOut'))
+      .with('NETWORK_ERROR', () => t('computers.errorNetwork'))
+      .otherwise(() => fallback)
+  );
 }
 
 /** Why the sizes could not load, and what gets the team past it. */

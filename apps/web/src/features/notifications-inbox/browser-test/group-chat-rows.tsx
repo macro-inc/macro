@@ -25,6 +25,7 @@ import { NotificationRow } from '../components/notification-row';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
 import { describeInboxCard } from '../primitives/describe-row';
 import { InboxRowAvatar } from '../views/inbox-row-avatar';
+import { NotificationGenerationFixture } from './generation-fixture';
 
 const VIEWER_ID = 'macro|viewer@example.test';
 
@@ -87,6 +88,7 @@ const channelRow = (
   return {
     id,
     type: 'channel_messages',
+    alsoListedAs: [],
     revision: 'rev',
     latestAt: Date.parse('2026-11-12T09:00:00Z'),
     actor: { kind: 'user', id: idOf(senders[0] ?? '') },
@@ -141,6 +143,7 @@ const teamNotification: UnifiedNotification = {
 const teamRow: NotificationInboxRow = {
   id: 'vault-request',
   type: 'access_requested',
+  alsoListedAs: [],
   revision: 'rev-1',
   latestAt: Date.parse(teamNotification.created_at),
   unseen: true,
@@ -215,25 +218,29 @@ function Fixture() {
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <AnalyticsContextProvider>
-        <PosthogProvider>
-          <EntityProvider>
-            <UserContextProvider>
-              <ChannelsContextProvider>
-                <EmailLinksContextProvider>
-                  <MobileSettingsProvider>
-                    <StaticMarkdownContext>
-                      <MemoryRouter>
-                        <Route path="*" component={Fixture} />
-                      </MemoryRouter>
-                    </StaticMarkdownContext>
-                  </MobileSettingsProvider>
-                </EmailLinksContextProvider>
-              </ChannelsContextProvider>
-            </UserContextProvider>
-          </EntityProvider>
-        </PosthogProvider>
-      </AnalyticsContextProvider>
+      {new URLSearchParams(location.search).has('generation') ? (
+        <NotificationGenerationFixture />
+      ) : (
+        <AnalyticsContextProvider>
+          <PosthogProvider>
+            <EntityProvider>
+              <UserContextProvider>
+                <ChannelsContextProvider>
+                  <EmailLinksContextProvider>
+                    <MobileSettingsProvider>
+                      <StaticMarkdownContext>
+                        <MemoryRouter>
+                          <Route path="*" component={Fixture} />
+                        </MemoryRouter>
+                      </StaticMarkdownContext>
+                    </MobileSettingsProvider>
+                  </EmailLinksContextProvider>
+                </ChannelsContextProvider>
+              </UserContextProvider>
+            </EntityProvider>
+          </PosthogProvider>
+        </AnalyticsContextProvider>
+      )}
     </QueryClientProvider>
   ),
   document.getElementById('root') as HTMLElement

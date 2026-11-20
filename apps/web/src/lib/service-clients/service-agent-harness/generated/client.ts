@@ -1566,7 +1566,7 @@ export const deleteAgentSession = async (
 };
 
 /**
- * @summary Read activity using the same visibility capability as the session transcript.
+ * @summary Read session-visible activity after filtering CRM rows for the requester.
  */
 export type getAgentSessionActivityResponse200 = {
   data: AgentActivityPage;
@@ -4517,6 +4517,11 @@ export type startClaudeSignInResponse409 = {
   status: 409;
 };
 
+export type startClaudeSignInResponse410 = {
+  data: void;
+  status: 410;
+};
+
 export type startClaudeSignInResponse422 = {
   data: void;
   status: 422;
@@ -4540,6 +4545,7 @@ export type startClaudeSignInResponseError = (
   | startClaudeSignInResponse403
   | startClaudeSignInResponse404
   | startClaudeSignInResponse409
+  | startClaudeSignInResponse410
   | startClaudeSignInResponse422
   | startClaudeSignInResponse503
   | startClaudeSignInResponse504
@@ -4602,6 +4608,11 @@ export type completeClaudeSignInResponse409 = {
   status: 409;
 };
 
+export type completeClaudeSignInResponse410 = {
+  data: void;
+  status: 410;
+};
+
 export type completeClaudeSignInResponse422 = {
   data: void;
   status: 422;
@@ -4626,6 +4637,7 @@ export type completeClaudeSignInResponseError = (
   | completeClaudeSignInResponse403
   | completeClaudeSignInResponse404
   | completeClaudeSignInResponse409
+  | completeClaudeSignInResponse410
   | completeClaudeSignInResponse422
   | completeClaudeSignInResponse503
   | completeClaudeSignInResponse504

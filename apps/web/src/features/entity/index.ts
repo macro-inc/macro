@@ -4,6 +4,7 @@ export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { InlineEntity } from './composed/InlineEntity';
 export {
+  type EmailRowStyle,
   ListEntity,
   ListLayoutProvider,
   MaybeEntityRow,
@@ -42,7 +43,7 @@ export {
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export { createUpdateFileTypeMutation } from './queries/file-type';
-export { emailQueryKeyExcludesDone, queryKeys } from './queries/key';
+export { queryKeys } from './queries/key';
 export {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,
@@ -80,6 +81,7 @@ export {
   getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
+  taskCustomPropertyReferences,
 } from './utils/task-properties';
 export {
   formatDateAndTime,

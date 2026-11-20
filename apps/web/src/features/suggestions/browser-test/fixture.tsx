@@ -23,10 +23,11 @@ import {
   failedSuggestion,
   quietBackgroundSuggestion,
   replySuggestion,
+  reviewSuggestion,
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
-import { ForYouView } from '../views/for-you-view';
+import { ForYouRefresh, ForYouView } from '../views/for-you-view';
 import { HomePrioritiesView } from '../views/home-priorities-view';
 
 const PARAMS = new URLSearchParams(location.search);
@@ -54,6 +55,7 @@ const ALL: Suggestion[] = [
   composerSuggestion,
   routineSuggestion,
   waitingTwoDays(replySuggestion),
+  reviewSuggestion,
   quietBackgroundSuggestion,
   runningSuggestion,
   failedSuggestion,
@@ -63,10 +65,10 @@ const ALL: Suggestion[] = [
 /** Items by their ids, where the app would read their names and text. */
 const PARTS: SuggestionItemParts = {
   Source: (props) => (
-    <button type="button" data-suggestion-source onClick={() => props.onOpen()}>
-      {props.from ? `${props.from} · ` : ''}
+    <span class="truncate" data-suggestion-source>
       {props.target.entityType} {props.target.entityId}
-    </button>
+      {props.from ? ` · ${props.from}` : ''}
+    </span>
   ),
 };
 
@@ -94,7 +96,9 @@ function Fixture() {
       ? undefined
       : scenario === 'empty'
         ? []
-        : ALL
+        : scenario === 'done'
+          ? [doneSuggestion]
+          : ALL
   );
   const [failed, setFailed] = createSignal(scenario === 'error');
   const [log, setLog] = createSignal<string[]>([]);
@@ -108,6 +112,8 @@ function Fixture() {
 
   // Dismissed here, to put back when the dismissal is undone.
   let dismissedHere: Suggestion[] = [];
+  // Reply suggestions opened here, which the person's reply makes done.
+  const openedReplies = new Set<string>();
   const source: SuggestionsSource = {
     feed: () => {
       const list = suggestions();
@@ -132,16 +138,22 @@ function Fixture() {
       }
 
       change(id, (suggestion) =>
-        suggestion.kind === 'prompt' && suggestion.runMode === 'background'
-          ? {
-              ...suggestion,
-              status: 'running',
-              run: {
-                sessionId: `session-${id}`,
-                startedAt: '2026-11-09T09:00:00Z',
-              },
-            }
-          : { ...suggestion, status: 'done' }
+        match(suggestion)
+          .returnType<Suggestion>()
+          .with({ kind: 'prompt', runMode: 'background' }, (prompt) => ({
+            ...prompt,
+            status: 'running',
+            run: {
+              sessionId: `session-${id}`,
+              startedAt: '2026-11-09T09:00:00Z',
+            },
+          }))
+          // Opening a reply suggestion takes it on; only the reply makes it done.
+          .with({ kind: 'entity', action: 'reply' }, (reply) => {
+            openedReplies.add(id);
+            return { ...reply, isNew: false };
+          })
+          .otherwise((other) => ({ ...other, status: 'done' }))
       );
 
       return 'accepted';
@@ -235,20 +247,34 @@ function Fixture() {
       )
     );
 
+  /** Reply on the opened reply suggestions' threads, as the server's next answer would show. */
+  const sendReplies = () =>
+    setSuggestions((list) =>
+      list?.map((suggestion) =>
+        openedReplies.has(suggestion.id)
+          ? { ...suggestion, status: 'done' }
+          : suggestion
+      )
+    );
+
   return (
     <main class="flex h-dvh bg-page p-1.5 font-sans text-ink">
       <div class="flex min-w-0 flex-1 flex-col rounded-xl border border-edge-muted bg-panel">
+        <header class="flex h-12 shrink-0 items-center justify-end px-3">
+          <ForYouRefresh refresh={refresh} />
+        </header>
         <ForYouView
           feed={feed}
-          actions={actions}
           parts={PARTS}
-          refresh={refresh}
           focusedId={PARAMS.get('suggestion') ?? undefined}
           onRetry={source.retry}
         />
         <footer class="flex shrink-0 items-center gap-3 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <button type="button" onClick={finishRuns}>
             Finish runs
+          </button>
+          <button type="button" onClick={sendReplies}>
+            Send replies
           </button>
           <button type="button" onClick={finishGeneration}>
             Finish generation
@@ -289,6 +315,36 @@ const EVENTS = [
   },
 ];
 
+// `?day=evening`: a day seen at 18:15, with an event just before now and one
+// that starts too close to 20:00 for a chip's full width.
+const EVENING = new Date('2026-11-09T18:15:00');
+const EVENING_EVENTS = [
+  {
+    id: 'walkthrough',
+    title: 'Routines walkthrough',
+    start: at('10:00'),
+    end: at('13:00'),
+  },
+  { id: 'standup', title: 'Standup', start: at('10:15'), end: at('10:45') },
+  { id: 'crm', title: 'CRM sync', start: at('10:30'), end: at('11:00') },
+  { id: 'one-on-one', title: '1:1', start: at('13:30'), end: at('14:00') },
+  { id: 'deploy', title: 'Prod deploy', start: at('18:00'), end: at('18:30') },
+  {
+    id: 'release',
+    title: 'Release check',
+    start: at('19:30'),
+    end: at('20:00'),
+  },
+];
+
+function homeToday() {
+  if (PARAMS.get('calendar') === 'none') return undefined;
+  if (PARAMS.get('day') === 'evening') {
+    return { date: EVENING, strip: layoutDay(EVENING_EVENTS, EVENING) };
+  }
+  return { date: NOON, strip: layoutDay(EVENTS, NOON) };
+}
+
 /** Home's section over fixed events and the same suggestions. */
 function HomeFixture() {
   const [opened, setOpened] = createSignal('');
@@ -297,11 +353,7 @@ function HomeFixture() {
     <main class="h-dvh overflow-y-auto bg-panel p-8 font-sans text-ink">
       <div class="mx-auto max-w-180">
         <HomePrioritiesView
-          today={
-            PARAMS.get('calendar') === 'none'
-              ? undefined
-              : { date: NOON, strip: layoutDay(EVENTS, NOON) }
-          }
+          today={homeToday()}
           priorities={served(ALL).suggestions.slice(0, 5)}
           onOpenEvent={(event) => setOpened(`event ${event.id}`)}
           onOpenSuggestion={(suggestion) =>

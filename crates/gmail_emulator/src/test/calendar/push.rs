@@ -86,7 +86,7 @@ async fn a_watched_calendar_notifies_its_channel_until_the_channel_is_stopped() 
         .unwrap();
     let channel_id = Uuid::now_v7();
     let channel = client
-        .watch_calendar(&token, link, ADA, channel_id, &config)
+        .watch_calendar(&token, link, Uuid::now_v7(), ADA, channel_id, &config)
         .await
         .unwrap();
     let lifetime = channel.expires_at - emulator.now();
@@ -140,7 +140,7 @@ async fn a_watched_calendar_notifies_its_channel_until_the_channel_is_stopped() 
         .unwrap();
     let renewed_id = Uuid::now_v7();
     client
-        .watch_calendar(&token, link, ADA, renewed_id, &config)
+        .watch_calendar(&token, link, Uuid::now_v7(), ADA, renewed_id, &config)
         .await
         .unwrap();
     let renewed = received.recv().await.unwrap();
@@ -157,7 +157,14 @@ async fn a_notification_the_webhook_refuses_is_sent_again() {
     let (config, mut received) = webhook(2).await;
 
     calendar_client(&emulator)
-        .watch_calendar(&token, Uuid::now_v7(), ADA, Uuid::now_v7(), &config)
+        .watch_calendar(
+            &token,
+            Uuid::now_v7(),
+            Uuid::now_v7(),
+            ADA,
+            Uuid::now_v7(),
+            &config,
+        )
         .await
         .unwrap();
 
@@ -189,6 +196,7 @@ async fn a_calendar_that_cannot_be_watched_and_a_reused_channel_are_refused() {
         .watch_calendar(
             &token,
             link,
+            Uuid::now_v7(),
             "holidays@group.calendar.example.com",
             Uuid::now_v7(),
             &config,
@@ -202,11 +210,11 @@ async fn a_calendar_that_cannot_be_watched_and_a_reused_channel_are_refused() {
 
     let channel_id = Uuid::now_v7();
     client
-        .watch_calendar(&token, link, ADA, channel_id, &config)
+        .watch_calendar(&token, link, Uuid::now_v7(), ADA, channel_id, &config)
         .await
         .unwrap();
     let reused = client
-        .watch_calendar(&token, link, ADA, channel_id, &config)
+        .watch_calendar(&token, link, Uuid::now_v7(), ADA, channel_id, &config)
         .await
         .unwrap_err();
     assert_eq!(reused.kind(), CalendarProviderErrorKind::Permanent);

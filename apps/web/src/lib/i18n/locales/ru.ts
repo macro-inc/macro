@@ -103,7 +103,6 @@ export default {
     close: 'Закрыть',
     delete: 'Удалить',
     rename: 'Переименовать',
-    more: 'Ещё',
     search: 'Поиск',
     settings: 'Настройки',
   },
@@ -533,6 +532,12 @@ export default {
       other: 'Удалено {{count}} элемента',
     },
     toastDeleteFailed: 'Не удалось удалить',
+    toastPropertySet: {
+      one: '{{property}}: задано для {{count}} элемента',
+      few: '{{property}}: задано для {{count}} элементов',
+      many: '{{property}}: задано для {{count}} элементов',
+      other: '{{property}}: задано для {{count}} элемента',
+    },
     toastAddedToFavorites: 'Добавлено в избранное',
     toastAddedCountToFavorites: {
       one: 'Добавлен в избранное {{count}} элемент',
@@ -630,10 +635,6 @@ export default {
       other: 'Отмечено как невыполненные {{accepted}} из {{count}} элемента',
     },
     toastMarkNotDoneFailed: 'Не удалось отметить как невыполненное',
-    toastThreadStaysDone:
-      'В этой ветке нет полученных сообщений, поэтому она остаётся выполненной',
-    toastThreadsStayDone:
-      'В этих ветках нет полученных сообщений, поэтому они остаются выполненными',
     toastCountNotRestored: {
       one: 'Не удалось восстановить {{count}} элемент.',
       few: 'Не удалось восстановить {{count}} элемента.',
@@ -746,8 +747,6 @@ export default {
     create: 'Создать',
     getMobileApp: 'Скачать мобильное приложение',
     signedInAs: 'Вы вошли как {{name}}',
-    commandMenu: 'Меню команд',
-    searchEverything: 'Искать везде',
     customizeSidebar: 'Настроить боковую панель',
     customizeSidebarDescription:
       'Выберите приложения для боковой панели и перетащите их, чтобы изменить порядок. Главная всегда остаётся первой.',

@@ -69,10 +69,16 @@ const newEmail: Entry = {
 
 function run(
   to: Entry,
-  options: { touch?: boolean; path: string; externalSearch?: string }
+  options: {
+    touch?: boolean;
+    phone?: boolean;
+    path: string;
+    externalSearch?: string;
+  }
 ) {
   for (const handler of createAppSplitRouterMiddleware({
     isTouchDevice: () => options.touch ?? false,
+    isMobile: () => options.phone ?? options.touch ?? false,
   })) {
     const result = handler({
       routes,
@@ -99,10 +105,20 @@ describe('new email in the Email view', () => {
     });
   });
 
-  it('keeps the full-screen composer on touch', () => {
+  it('keeps the full-screen composer on phones', () => {
     expect(
       run(legacyCompose, { touch: true, path: '/component/email-compose' })
     ).toBeUndefined();
+  });
+
+  it('opens a new email in the Email view on wide touch', () => {
+    expect(
+      run(legacyCompose, {
+        touch: true,
+        phone: false,
+        path: '/component/email-compose',
+      })
+    ).toEqual({ type: 'redirect', to: '/mail/new' });
   });
 
   it('keeps the recipients a `?to=` link names', () => {

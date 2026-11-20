@@ -35,6 +35,7 @@ import {
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
+import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
@@ -84,6 +85,7 @@ export type ChannelRailSearch = {
   registerInput: (element: HTMLInputElement) => void;
   /** Moves keyboard focus from the search field into the results. */
   focusResults: () => void;
+  hasResults: () => boolean;
   retry: () => Promise<void>;
 };
 
@@ -110,6 +112,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             hotkey="cmd+f"
             onValueChange={props.search.setQuery}
             focusResults={props.search.focusResults}
+            hasResults={props.search.hasResults}
           />
         )}
       >
@@ -901,6 +904,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
+      <ChannelsLiveCallsSidebar />
       <div
         ref={(element) => {
           rail.registerRootRef(element);

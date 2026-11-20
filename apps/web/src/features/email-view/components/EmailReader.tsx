@@ -5,7 +5,7 @@ import EnvelopeOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
 import { createSignal, onCleanup, Suspense } from 'solid-js';
 import { type EmailListPane, EmailReaderPaneContext } from '../reader-pane';
 
-function EmailReaderEmpty() {
+export function EmailReaderEmpty() {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col items-center justify-center gap-1 px-6 text-center">
       <EnvelopeOpenIcon class="mb-2 size-6 text-ink-extra-muted" />

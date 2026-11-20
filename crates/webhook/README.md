@@ -191,6 +191,30 @@ the service supervisor restarts it and Kafka redelivers the event. Invalid
 entity IDs, invalid broker contracts, empty Kafka payloads, and undecodable
 Kafka messages are traced and skipped so they do not block a partition.
 
+## Live event stream and resuming
+
+`GET /webhook/events/stream` is ephemeral: each process consumes every event
+from the moment it starts and fans it out to its open streams. Each SSE event's
+`id` is the broker event id (a UUIDv7). The process also keeps the last two
+minutes of events, up to 4,096 (`StreamFeed`). A client that opens the stream
+with `resume=true` and the standard SSE `Last-Event-ID` header first receives the retained events
+minted from five seconds before it on (except the cursor's own event), through
+the same filters and access checks, then live events. Replicas consume the
+topics in their own order, so replay goes by when an event was minted rather
+than where it sits in this replica's feed, and the lookback repeats some events
+the client saw: the client drops repeats by id (macrod remembers its last 4,096, as many as the service retains).
+A cursor minted from a timestamp works the same way. A `Last-Event-ID` that is not
+a UUIDv7 is ignored and the stream opens live, never refused. Events older than the
+retention, or published while the process was not consuming, are still missed.
+macrod sends its last seen id on every reconnect, and a floor minted when it
+started on its first open, so a session requested before its stream covered a
+newly bound agent still reaches it. That floor uses macrod's clock against the
+service's, so it assumes the two agree to within the seconds between macrod
+starting and the first request. The header is the standard SSE one and is not
+listed in the OpenAPI spec, and without `resume=true` it is ignored: a browser
+`EventSource` reconnecting or an SDK listener gets exactly the live stream it
+always got.
+
 ## Queue contract, deduplication, and ordering
 
 The versioned SQS message contains a webhook ID and a normalized event. The

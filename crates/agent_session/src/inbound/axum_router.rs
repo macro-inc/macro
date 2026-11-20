@@ -1037,8 +1037,8 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
 }
 
 /// Who is asking, as control policy tells them apart. A user's credential
-/// used by an agent's program (a code-mode run, or a token carrying an
-/// agent's attribution) is `Program`: it acts for the user but sits in no
+/// used by a program (a code-mode run, or a token signed for an agent or a
+/// routine's run) is `Program`: it acts for the user but sits in no
 /// app tab. The app itself may hold a session or a bearer token.
 pub(crate) fn control_principal(
     caller: &UserBotOrHarnessAuthorization,
@@ -1048,7 +1048,7 @@ pub(crate) fn control_principal(
 
     match caller {
         UserBotOrHarnessAuthorization::User(user)
-            if macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+            if macro_authorization::is_program_run(user.attribution(), headers) =>
         {
             ControlPrincipal::Program
         }
@@ -1216,6 +1216,7 @@ pub async fn edit_queued_action_handler<
     _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    headers: axum::http::HeaderMap,
     Path((session_id, action_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<EditQueuedActionRequest>,
 ) -> Result<StatusCode, AgentSessionApiError> {
@@ -1237,6 +1238,7 @@ pub async fn edit_queued_action_handler<
             AgentActionId::from_uuid(action_id),
             request.prompt,
             actor,
+            control_principal(&caller.authorization, &headers).prompter(),
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
@@ -2351,7 +2353,8 @@ pub async fn create_agent_session_handler<
         Some(prompt) => {
             // The same rule as a control prompt's tab, so creating with a
             // prompt grants nothing prompting afterwards would not.
-            let client = control_principal(&caller.authorization, &headers)
+            let principal = control_principal(&caller.authorization, &headers);
+            let client = principal
                 .admit_client(
                     request
                         .prompt_client_id
@@ -2366,6 +2369,7 @@ pub async fn create_agent_session_handler<
                 prompt,
                 attachments: request.prompt_attachments,
                 client,
+                prompter: principal.prompter(),
             })
         }
         None if request.prompt_action_id.is_some()
@@ -2459,6 +2463,7 @@ pub async fn create_agent_session_handler<
                     }
                     if let Some(first_prompt) = first_prompt {
                         let client = first_prompt.client;
+                        let prompter = first_prompt.prompter;
                         let (action_id, action) = first_prompt.into_action();
                         state
                             .controls
@@ -2470,6 +2475,7 @@ pub async fn create_agent_session_handler<
                                     actor: Some(owner),
                                     context: None,
                                     client,
+                                    prompter,
                                 },
                             )
                             .await

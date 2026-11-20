@@ -13,6 +13,11 @@ means this is a Macro-managed team vault.
 - `src/domain/ports.rs`: provider, metadata, lock and per-user rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
+- `src/outbound/postgres/update_record.sql`: guarded update that locks the row by
+  primary key and updates it by ctid (a Tid Scan; no team-wide index scan under
+  stale statistics). `test/update_plan.rs` pins the plan. A concurrent change after
+  the statement snapshot is not re-checked, so every writer of a live item must
+  bump `revision`.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
 - `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
   (closed Login/API selectors, Agent grants, standing approval, requests, TOTP lifetime).
@@ -34,6 +39,13 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   verifies real OpenBao namespaces/JWT/CAS/TOTP; see its README for local settings.
 - Drain pool connections between independent lease assertions in database tests:
   SQLx queues rollback on transaction drop. Use a completion barrier, never sleeps.
+- Run the opt-in `import_performance` test with `PWCONC_MODE=after`, explicit
+  disposable OpenBao settings, and `DATABASE_URL` pointing to the local
+  `macrodb_pwconc` scratch database. It exports to the existing local collector
+  and prints timing, pool pressure, token retry counts and trace IDs. Use a
+  JSON-file Docker log driver for the fixture: journald can rate-limit its
+  redacted audit events during the sweep. Reproduction and audit summarization:
+  `src/outbound/postgres/import/test/benchmark.md`.
 
 ## Gotchas
 
@@ -52,6 +64,12 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   persist actor-specific capabilities in metadata or write intents.
   `canEdit` uses current edit grants or administrator access; management remains
   creator/administrator-only, and view grants still permit reveal and copy.
+- Favorites are private human preferences in `password_item_favorites`, projected
+  in one bounded lookup for list/match responses and one for detail. PUT/DELETE
+  `items/{item}/favorite` needs view access, no credential lease, version change
+  or shared Activity entry. Initial create/import seeds only the creator's star;
+  later credential saves never seed again. Item soft deletion clears preferences;
+  physical item deletion and member removal cascade through foreign keys.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
 - Missing provider username slots resolve as empty strings; malformed values still
   fail. Username spans record `empty`, `present` or `failed`; HTTP failures warn
@@ -75,14 +93,18 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
 - Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
-  login per team per lease (clamped to 60 s), single-flight (waiters share a failed
-  login), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
+  login per team per lease (clamped to 60 s), single-flight (waiters get the
+  failed login's error), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
   1024 teams; a slot with a caller is never evicted. A 401/403 on a cached token
   replaces it once and re-runs the whole operation, so every `with_session`
   closure must be safe to re-run. A denied fresh token is policy: no retry, no
   eviction. `passwords.openbao.authenticate` spans mark real logins only;
   operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
   purge) logins are never cached.
+- Nothing here creates namespaces. A missing one at team login (and only there) is
+  `Error::NotProvisioned`: HTTP 409 `vault_not_provisioned` (agent routes too), import item code
+  `vault_not_provisioned`, authenticate span `outcome=not_provisioned`. Locally,
+  `just passwords_provision` creates them (see `infra/local/openbao/README.md`).
 
 Run the ignored Rust provider and import tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private
@@ -233,9 +255,14 @@ and opaque source keys derive stable item, folder and target ids. Retries use th
 ordinary create recovery path; existing folders retain their current name and
 parent, and an existing TOTP enrollment is never replaced by an import.
 Per-item failures use fixed codes (`busy` for lease contention, `folder_missing`
-when a folder was deleted after the batch ensured it); a failed TOTP setup
-returns the created item id so retrying can finish enrollment. Items recheck
-membership once, after their lease (`admit_member`); the batch checked it first.
+when a folder was deleted before that item's create validation); a failed TOTP setup
+returns the created item id so retrying can finish enrollment. Admit one team
+lease for folder setup and all item futures; recheck membership for each item
+when it starts. Validate distinct derived item IDs before sharing that lease.
+Keep create and TOTP ordered within each item. Bound concurrency
+by `IMPORT_CONCURRENCY` and `Repository::import_capacity` (pool size minus its
+lease connection), and return results in input order. Other writers remain
+excluded for the whole batch; do not replace the team fence with item locks.
 `POST /teams/{team}/items/match` takes up to 500 names in the body (never a
 URL), already trimmed and lower-cased by the client, and returns visible
 metadata whose `lower(name)` equals one, for the client's duplicate check. Both routes answer a malformed JSON body with the fixed
@@ -244,6 +271,9 @@ match) are `password_import::vault` constants; don't write them out here.
 `password_import_activity` records one counts-and-format entry per completed
 batch attempt, including empty and fully failed batches; team purge removes it.
 Audit failure preserves per-item results and records `audit_failed` on the batch
-span. Import steps await `ItemLock::release` so a new step cannot contend with
-asynchronous rollback of its own previous lease.
+span. Await `ItemLock::release` after every item future drains; dropping the
+batch cancels its futures and drops the lease. `passwords.import.item` spans
+parent to the batch, which records effective concurrency. The
+`passwords.lease.hold` span records guard lifetime: normal completion includes
+awaited rollback; drop queues SQLx rollback.
 The 20,000-item import limit belongs to the browser parser/client.

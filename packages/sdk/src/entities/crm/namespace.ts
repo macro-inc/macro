@@ -9,7 +9,9 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { CrmEmailPrivacyNamespace } from '../crm-email-privacy/email-privacy';
 import type { Document } from '../documents/document';
+import type { SearchOpts } from '../search/options';
 import { Team } from '../teams/team';
 import { Company } from './company';
 import { Contact } from './contact';
@@ -18,7 +20,7 @@ import { type CompanyImport, pipelineImport } from './pipeline-entry';
 import { PipelineNamespace } from './pipelines';
 
 /**
- * @routing Use when working with CRM deals, pipelines, stages, companies or contacts; not generic databases, and not a search that merely names a company.
+ * @routing Use when working with CRM records and pipelines; not generic databases or email contribution.
  *
  * @agent
  * ## How CRM pipelines work
@@ -27,14 +29,20 @@ import { PipelineNamespace } from './pipelines';
  *
  * Create a pipeline with its stages and fields in one `crm.pipelines.create` call. Work with entries by name through the pipeline's own methods: `find` (filters by field name and stage label, with per-stage counts and number totals such as Revenue), `addRecords`, `updateEntries` (a stage by its label, a person as `'me'`), `removeRecords`, and `edit` for fields and stage options. `importCsv` / `exportCsv` move entries through CSV, and `crm.importCompaniesCsv` loads a companies list. `crm.pipelines.entriesFor` and `searchEntries` find a company's deals across pipelines. Reach for `applyOps` and column ids only for what these cannot express.
  *
+ * Find a company before creating one: `crm.companyByDomain` by its domain, `crm.searchCompanies` by its name. Create it only when neither finds it; `createCompany` refuses a domain the team already tracks.
+ *
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
  */
 export class CrmNamespace {
+  /** Your email contribution. */
+  readonly emailPrivacy: CrmEmailPrivacyNamespace;
+
   /** Pipelines, their records and sharing settings. */
   readonly pipelines: PipelineNamespace;
 
   constructor(private readonly client: MacroClient) {
     this.pipelines = new PipelineNamespace(client);
+    this.emailPrivacy = new CrmEmailPrivacyNamespace(client);
   }
 
   /**
@@ -84,6 +92,20 @@ export class CrmNamespace {
   }
 
   /**
+   * The team's company for a domain. Exact and current, unlike
+   * {@link searchCompanies}, so use it after `createCompany` reports the domain
+   * is already tracked. An archived company is returned to team admins only.
+   *
+   * @readonly
+   */
+  async companyByDomain(domain: string): Promise<Company | undefined> {
+    const { company } = unwrap(
+      await this.client.storage.getCompanyByDomain({ query: { domain } }),
+    );
+    return company ? Company.from(this.client, company) : undefined;
+  }
+
+  /**
    * Search the caller's current team's CRM contacts whose email or name
    * contains `query` (case-insensitive), most recently interacted first.
    * An empty query lists the most recent contacts.
@@ -105,7 +127,9 @@ export class CrmNamespace {
   }
 
   /**
-   * Create a CRM company for the caller's current team.
+   * Create a CRM company for the caller's current team. Look it up first with
+   * {@link companyByDomain} or {@link searchCompanies}: a domain the team
+   * already tracks is refused.
    *
    * @write
    */
@@ -117,9 +141,10 @@ export class CrmNamespace {
   }
 
   /**
-   * Create a contact without a company for the caller's current team. The
-   * email is optional and may be at any domain. To add someone to a company,
-   * use {@link Company.createContact}.
+   * Create a contact for the caller's current team. The email is optional; a
+   * work address links the contact to its domain's company, created if
+   * missing. To choose the company, find it with {@link companyByDomain} or
+   * {@link searchCompanies} and use {@link Company.createContact}.
    *
    * @write
    */
@@ -142,24 +167,26 @@ export class CrmNamespace {
   }
 
   /**
-   * Block a domain (like `acme.com`): email sync skips it, and the company
-   * that owns it, that company's contacts, and contacts without a company at
-   * the domain are hidden. A contact attached to another company follows that
-   * company's domains. Requires a team admin or owner.
+   * Block a domain from email sync without changing existing CRM records.
+   *
+   * Existing companies, contacts and their hidden states are preserved.
+   * Requires a team admin or owner.
    *
    * @destructive
    * @idempotent
+   * @throws When the domain equals or covers a member's connected primary
+   * mailbox domain. The error preserves the server's explanation.
    */
   async blockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
   }
 
   /**
-   * Unblock a domain: email sync resumes for addresses the team's
-   * personal-email and generic-provider filters allow. Contacts without a
-   * company at this domain are shown again. Its company and attached contacts
-   * stay hidden until the company's last blocked domain is removed, then are
-   * shown even if hidden by hand before blocking. Requires a team admin or owner.
+   * Resume eligible email sync for a domain without changing existing CRM records.
+   *
+   * Email sync resumes for addresses the team's personal-email and
+   * generic-provider filters allow. Existing companies, contacts and their
+   * hidden states are preserved. Requires a team admin or owner.
    *
    * @write
    * @idempotent
@@ -252,11 +279,11 @@ export class CrmNamespace {
   }
 
   /**
-   * Search CRM companies by name/domain, most relevant first, auto-paginated.
+   * Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  searchCompanies(query: string): AsyncGenerator<Company> {
-    return Company.search(this.client, query);
+  searchCompanies(query: string, opts?: SearchOpts): AsyncGenerator<Company> {
+    return Company.search(this.client, query, opts);
   }
 }

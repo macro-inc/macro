@@ -482,6 +482,8 @@ export function NativeShareSheet() {
         preventScrollbarShift={false}
         restoreFocus={false}
         noOutsidePointerEvents={false}
+        // Dismissing discards the shared files on iOS, without asking.
+        keepOpenOnNavigation
         onOpenChange={(open) => {
           const closeGuardActive =
             !open && isOpen() && awaitingFirstInteraction();

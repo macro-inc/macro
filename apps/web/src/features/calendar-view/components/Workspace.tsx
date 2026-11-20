@@ -37,7 +37,7 @@ import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
-import { SetupStatus } from './SetupStatus';
+import { SetupBanner, SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
@@ -140,6 +140,10 @@ function CalendarPages() {
           class={isMobile() ? 'order-last' : undefined}
           fullWidth={isMobile()}
         />
+        <SetupBanner
+          class={isMobile() ? 'order-last' : undefined}
+          fullWidth={isMobile()}
+        />
         <div
           ref={setViewport}
           class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
@@ -224,15 +228,13 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
             <ViewShell.Root
               asidePreferenceKey="calendar"
               resizable
-              aside={isMobile() ? false : { preserveDuringResize: false }}
+              aside={{ preserveDuringResize: false }}
               main={{ preferredWidth: 640 }}
             >
-              <Show when={!isMobile()}>
-                <ViewShell.Aside>
-                  <CalendarSidebar />
-                </ViewShell.Aside>
-              </Show>
-              <ViewShell.Main>
+              <ViewShell.Aside>
+                <CalendarSidebar />
+              </ViewShell.Aside>
+              <ViewShell.Main class="relative">
                 <Header presentation="workspace" />
                 <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">

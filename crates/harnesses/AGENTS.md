@@ -105,7 +105,7 @@ before acting"); paired machines keep it off until their owner turns it on.
   list, the directory and a patch's answer set `team_agent_user_id`, and
   `HarnessTeamAgents::harness_team_agent` (trusted) answers for one harness;
   bots and the session opener refuse such a harness. It stays in the listings,
-  where Bring your AI finds it by `computer_id`.
+  where Connect Claude plan finds it by `computer_id`.
 
 ## Recipes
 
@@ -121,6 +121,7 @@ before acting"); paired machines keep it off until their owner turns it on.
 
 ## Gotchas
 
+- `POST /harness-pairings/{code}/approve` refuses an agent's program (`macro_authorization::is_program_run`, 403): approval lets the daemon claim a long-lived harness token. A person approves in Settings, Machines.
 - `Harness.connected` reads `harness_runtime_connection`: true while a row has an
   unexpired lease. `agent_harness_service` writes those rows per connection. With
   no rows at all it falls back to `last_connected_at > last_disconnected_at`, for

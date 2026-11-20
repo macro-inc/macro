@@ -1,7 +1,5 @@
 import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableProjects } from '@core/constant/featureFlags';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
@@ -50,13 +48,11 @@ export function taskComposerWritableDefinitions(
 /** Keep the default order unless a host supplies its own visible property list. */
 export function taskComposerVisiblePropertyIds(
   requested: readonly string[] | undefined,
-  available: readonly PropertyDefinition[],
-  projectsEnabled: boolean
+  available: readonly PropertyDefinition[]
 ): string[] {
   const ids = new Set(available.map((definition) => definition.id));
   return [...new Set(requested ?? DEFAULT_TASK_COMPOSER_PROPERTY_IDS)].filter(
-    (id) =>
-      ids.has(id) && (id !== SYSTEM_PROPERTY_IDS.PROJECT || projectsEnabled)
+    (id) => ids.has(id)
   );
 }
 
@@ -343,8 +339,6 @@ export function createTaskComposerProperties(args: {
     );
   };
 
-  const projects = useFeatureFlag(enableProjects);
-
   // Host-controlled fields still belong to the draft even without separate pills.
   const selectedPropertyIds = () => {
     const values = args.values?.() ?? propertyValues;
@@ -363,14 +357,13 @@ export function createTaskComposerProperties(args: {
           ...(args.additionalPropertyIds?.() ?? []),
         ]),
       ],
-      availableDefinitions(),
-      projects().enabled
+      availableDefinitions()
     ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
       (definition) =>
         !visibleIds().includes(definition.id) &&
-        (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled)
+        !args.hiddenPropertyIds?.includes(definition.id)
     );
   const addProperty = async (
     id: string,
@@ -387,42 +380,46 @@ export function createTaskComposerProperties(args: {
     setVisiblePropertyIds((current) => [...current, id]);
   };
   const writableProperties = () =>
-    availableDefinitions()
-      .filter(
-        (definition) =>
-          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
-      )
-      .map((definition) =>
-        toPropertyDefinitionDomain(definition, options().get(definition.id))
-      );
+    availableDefinitions().map((definition) =>
+      toPropertyDefinitionDomain(definition, options().get(definition.id))
+    );
   const availableProperties = () =>
     writableProperties().filter(
       (definition) => !args.hiddenPropertyIds?.includes(definition.id)
     );
 
-  const properties = (): Property[] => {
-    return filterMap(visibleIds(), (id) => {
-      const definition = definitions().get(id);
-      if (!definition) return;
-      return {
-        propertyId: `compose-${definition.display_name}`,
-        propertyDefinitionId: definition.id,
-        displayName: definition.display_name,
-        isMultiSelect: definition.is_multi_select,
-        owner: definition.owner,
-        specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: new Date(0),
-        createdAt: new Date(0),
-        valueType: definition.data_type,
-        value: extractPropertyValue(
-          definition,
-          args.values?.() ?? propertyValues,
-          options()
-        ),
-        options: options().get(definition.id),
-      } as Property;
-    });
+  const draftProperty = (id: string): Property | undefined => {
+    const definition = definitions().get(id);
+    if (!definition) return;
+    return {
+      propertyId: `compose-${definition.display_name}`,
+      propertyDefinitionId: definition.id,
+      displayName: definition.display_name,
+      isMultiSelect: definition.is_multi_select,
+      owner: definition.owner,
+      specificEntityType: definition.specific_entity_type ?? null,
+      updatedAt: new Date(0),
+      createdAt: new Date(0),
+      valueType: definition.data_type,
+      value: extractPropertyValue(
+        definition,
+        args.values?.() ?? propertyValues,
+        options()
+      ),
+      options: options().get(definition.id),
+    } as Property;
   };
+  const properties = (): Property[] => filterMap(visibleIds(), draftProperty);
+  /**
+   * The pills plus the properties the host edits with its own control. An
+   * editor opened on one of those replaces its whole value, so it has to start
+   * from what the draft holds.
+   */
+  const draftProperties = (): Property[] =>
+    filterMap(
+      [...visibleIds(), ...(args.hiddenPropertyIds ?? [])],
+      draftProperty
+    );
 
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
@@ -467,6 +464,7 @@ export function createTaskComposerProperties(args: {
     propertyValues,
     setPropertyValues,
     properties,
+    draftProperties,
     visiblePropertyIds,
     setVisiblePropertyIds,
     selectedPropertyIds,

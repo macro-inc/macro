@@ -1,8 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useMaybePropertiesContext } from '@property/context/PropertiesContext';
+import { copyEntityReferences } from '@property/utils/copy-entity-references';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -62,7 +64,7 @@ export function EntityEditor(props: EntityEditorProps) {
 function createEntityEditorDraft() {
   const ctx = useProperty();
   const property = ctx.property() as EntityProperty;
-  const initialRefs: EntityReference[] = property.value ?? [];
+  const initialRefs = copyEntityReferences(property.value ?? []);
   const [selectedRefs, setSelectedRefs] =
     createSignal<EntityReference[]>(initialRefs);
   const [dirty, setDirty] = createSignal(false);
@@ -140,10 +142,13 @@ function EntityEditorSelector(
   const { items: people } = useQuickAccessEntities(() => 'USER');
   const users = createMemo(() => {
     if (!isAssignees) return team.users();
-    return scopedUserOptions(
-      [...agents(), ...team.users()],
-      people().map((item) => item.data),
-      propertiesContext?.retainedAssigneeIds() ?? []
+    return peopleBeforeAgents(
+      scopedUserOptions(
+        [...team.users(), ...agents()],
+        people().map((item) => item.data),
+        propertiesContext?.retainedAssigneeIds() ?? []
+      ),
+      (user) => user.id
     );
   });
   const showRosterStatus = () => {

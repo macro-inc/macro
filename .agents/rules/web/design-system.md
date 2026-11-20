@@ -25,7 +25,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Several short values picked from suggestions or typed (domains, people and companies) | `ChipCombobox`; message recipients use `RecipientSelector` | A comma-separated text `Input` |
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
 | Dialog or modal card | `Dialog`, or `elevated-surface` for a custom dialog root | `bg-dialog`/`bg-surface` with its own radius and shadow |
-| A card in a page or chat (agent tool cards, For you, routines) | `Card` (`variant="filled" depth={3}`) composed of `Card.Header` with an `Item`, `Card.Body`, `Card.Footer`; a block nested in one is `Card variant="filled" offset={1}` | A `rounded-xl border bg-panel` frame, hand-built tiles or pills, or a `primary` button inside the card |
+| A card in a page or chat (agent tool cards, routines) | `Card` (`variant="filled" depth={3}`) composed of `Card.Header` with an `Item`, `Card.Body`, `Card.Footer`; a block nested in one is `Card variant="filled" offset={1}` | A `rounded-xl border bg-panel` frame, hand-built tiles or pills, or a `primary` button inside the card |
 | Loading placeholder, view skeleton | `ListSkeleton` (`Root`, `Row`, `Bar`); `ViewSkeleton` with the view's tabs and `controls` | `animate-pulse` boxes with their own fill |
 | Transient notification or persistent notice | `toast` from `@core/component/Toast/Toast` | A second toast service or hand-built global notification overlay |
 
@@ -72,10 +72,10 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   Button uses the semantic pressed fill for its variant. Mark action toggles with
   `aria-pressed`, and expansion triggers with `aria-expanded`. A toggle whose
   label and icon flip with its state (call mic and camera: Mute/Unmute) omits
-  `aria-pressed` and keeps one fill. Do not restyle
-  buttons as tabs. The agent composer's Auto/Chat/Code switch remains
-  `Tabs variant="track"`, a flat pill sliding along the composer's tray. Keep all
-  tab treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
+  `aria-pressed` and keeps one fill. Do not restyle buttons as tabs. Use the same
+  grouped `Tabs` pill for the Agents composer's Auto/Chat/Code switch on desktop
+  and in the phone drawer; preserve Home's existing track tabs. Keep all tab
+  treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
 - **FE-65** Let `Tabs` own its touch styling: set its `touch` prop instead of
   swapping tab components or variants. For overflowing touch header sections,
   use a shared `MobileDrawer` selector instead of a scrolling tab strip.

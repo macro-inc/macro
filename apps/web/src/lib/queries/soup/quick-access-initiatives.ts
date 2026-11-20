@@ -1,6 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableProjects } from '@core/constant/featureFlags';
 import type { InitiativeEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
@@ -20,8 +18,6 @@ const STALE_TIME = 5 * 60 * 1000;
  * initiatives are opt-in.
  */
 export function useQuickAccessInitiativesQuery() {
-  const projectsFlag = useFeatureFlag(enableProjects);
-
   const query = useSoupItemsQuery(
     () => ({
       params: {
@@ -33,7 +29,7 @@ export function useQuickAccessInitiativesQuery() {
         initiative_filters: { include: true },
       },
     }),
-    () => ({ staleTime: STALE_TIME, enabled: projectsFlag().enabled })
+    () => ({ staleTime: STALE_TIME })
   );
 
   const initiatives = createMemo<InitiativeEntity[]>(() =>

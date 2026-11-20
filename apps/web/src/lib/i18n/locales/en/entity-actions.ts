@@ -107,7 +107,9 @@ export default {
   projectActions: 'Project actions',
   propertyOption: '{{property}}: {{option}}',
   actions: 'Actions',
+  view: 'View',
   clear: 'Clear',
+  clearSelection: 'Clear selection',
   selectedCount: { other: '{{count}} selected' },
   undo: 'Undo',
 
@@ -149,6 +151,10 @@ export default {
     other: '{{count}} drafts discarded',
   },
   toastDiscardDraftFailed: 'Failed to discard draft',
+  toastPropertySet: {
+    one: '{{property}} set',
+    other: '{{property}} set on {{count}} items',
+  },
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
@@ -190,6 +196,9 @@ export default {
     other: 'Unmuted {{succeeded}} of {{count}} items; {{failed}} failed',
   },
   toastUnmuteFailed: 'Failed to unmute notifications',
+  toastMentionsOnly: 'Notifying you for @mentions only',
+  toastAllMessages: 'Notifying you for all messages',
+  toastNotificationLevelFailed: 'Failed to update notifications',
   toastMarkedDone: 'Marked as done',
   toastMarkedDoneCount: {
     one: 'Marked {{count}} item as done',
@@ -223,10 +232,6 @@ export default {
     other: 'Marked {{accepted}} of {{count}} items as not done',
   },
   toastMarkNotDoneFailed: 'Failed to mark as not done',
-  toastThreadStaysDone:
-    'This thread has no received messages, so it stays done',
-  toastThreadsStayDone:
-    'These threads have no received messages, so they stay done',
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',
@@ -296,6 +301,13 @@ export default {
   download: 'Download',
   print: 'Print',
   downloadAsDocx: 'Download DOCX',
+  betaBadge: 'Beta',
+  folderActions: 'Folder actions',
+  downloadAsXlsx: 'Download as Excel (.xlsx)',
+  downloadAsCsv: 'Download as CSV',
+  chatAboutProject: 'Chat',
+  presentationActions: 'Presentation actions',
+  documentActions: 'Document actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',

@@ -7,6 +7,10 @@ import userEvent from '@testing-library/user-event';
 import { createMemo, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+vi.mock('@queries/calendar/first-sync', () => ({
+  useCalendarFirstSync: () => () => false,
+}));
+
 vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
   useMacroMentionLinkResolver: () => () => undefined,
 }));

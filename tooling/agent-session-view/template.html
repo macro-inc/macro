@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Session View</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" id="hljs-light" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" id="hljs-dark" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -15,16 +15,25 @@
   --model: #8b5cf6; --model-soft: #ede9fe; --tool: #10b981; --tool-soft: #d1fae5;
   --fail: #ef4444; --fail-soft: #fee2e2; --warn: #f59e0b; --warn-soft: #fef3c7;
   --msg: #2563eb; --msg-soft: #dbeafe; --code-bg: #f3f3f0; --chip: #eef2ff;
+  --p-system: #94a3b8; --p-guides: #8b5cf6; --p-sdk: #2563eb; --p-tools: #10b981; --p-history: #f59e0b; --p-results: #0891b2;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #111110; --panel: #1b1b19; --ink: #ececea; --muted: #9b9b95; --line: #2c2c29;
     --model: #a78bfa; --model-soft: #2e2547; --tool: #34d399; --tool-soft: #12352b;
     --fail: #f87171; --fail-soft: #3f1d1d; --warn: #fbbf24; --warn-soft: #3a2f12;
     --msg: #60a5fa; --msg-soft: #1b2a45; --code-bg: #161614; --chip: #23263a;
+    --p-system: #64748b; --p-guides: #a78bfa; --p-sdk: #60a5fa; --p-tools: #34d399; --p-history: #fbbf24; --p-results: #22d3ee;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #111110; --panel: #1b1b19; --ink: #ececea; --muted: #9b9b95; --line: #2c2c29;
+  --model: #a78bfa; --model-soft: #2e2547; --tool: #34d399; --tool-soft: #12352b;
+  --fail: #f87171; --fail-soft: #3f1d1d; --warn: #fbbf24; --warn-soft: #3a2f12;
+  --msg: #60a5fa; --msg-soft: #1b2a45; --code-bg: #161614; --chip: #23263a;
+  --p-system: #64748b; --p-guides: #a78bfa; --p-sdk: #60a5fa; --p-tools: #34d399; --p-history: #fbbf24; --p-results: #22d3ee;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
@@ -52,7 +61,7 @@ nav a .d { color: var(--muted); float: right; font-variant-numeric: tabular-nums
 nav a .p { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 nav a .f { color: var(--fail); }
 main { padding: 16px 24px 80px; min-width: 0; }
-.turn { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+.turn { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; overflow: clip; }
 .turn-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
 .turn-head h2 { margin: 0; font-size: 15px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .turn-head h2 .when { color: var(--muted); font-weight: 400; font-size: 12.5px; }
@@ -111,11 +120,65 @@ details.ctx { margin-top: 6px; font-size: 12px; color: var(--muted); }
 details.ctx pre { white-space: pre-wrap; }
 .end { color: var(--muted); font-size: 12.5px; padding: 6px 2px 0; }
 .hidden { display: none !important; }
+.card.literal { grid-column: 1 / -1; }
+.card.literal .part { margin: 3px 0; }
+.card.literal summary { cursor: pointer; }
+.status { display: inline-block; border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 600; }
+.status.ok { background: var(--tool-soft); color: var(--ink); }
+.status.bad { background: var(--fail); color: #fff; }
+.status.warn { background: var(--warn-soft); color: var(--ink); border: 1px solid var(--warn); }
+.status.muted { background: var(--chip); color: var(--muted); }
+.warn-text { color: var(--warn); }
+.literal-error { background: var(--fail-soft); border: 1px solid var(--fail); color: var(--ink); border-radius: 6px; padding: 4px 8px; margin: 6px 0; font-weight: 600; }
+pre.literal-text { max-height: 480px; }
+.stream { margin: 4px 0 6px; }
+.stream .label { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.stream.bad pre { background: var(--fail-soft); }
+.theme { margin-left: auto; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px; }
+.keys { color: var(--muted); font-size: 11.5px; }
+.keys kbd { font-family: var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; background: var(--bg); }
+.turn-bar { position: sticky; top: var(--header-h, 160px); z-index: 3; background: var(--panel); border-bottom: 1px solid var(--line); padding: 6px 16px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 12.5px; }
+.turn-bar .title { font-weight: 600; color: var(--ink); text-decoration: none; }
+.turn-bar .took { color: var(--muted); font-variant-numeric: tabular-nums; }
+.turn-bar button.jump { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 12px; }
+.strip { display: flex; flex-wrap: wrap; gap: 2px; flex: 1 1 260px; min-width: 0; }
+.strip button { width: 9px; height: 14px; padding: 0; border: 0; border-radius: 2px; background: var(--tool); opacity: .75; cursor: pointer; }
+.strip button.failed { background: var(--fail); opacity: 1; }
+.strip button.soft { background: var(--warn); opacity: 1; }
+.strip button.code { box-shadow: inset 0 -4px 0 rgba(0,0,0,.28); }
+.strip button.lit { outline: 2px solid var(--ink); outline-offset: 1px; opacity: 1; }
+.flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.flag { border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px; padding: 2px 8px; font-size: 12px; text-align: left; cursor: default; }
+.flag.warn { background: var(--warn-soft); border-color: var(--warn); }
+.flag[data-tools] { cursor: pointer; }
+.flag code { font-family: var(--mono); font-weight: 600; font-size: 11.5px; }
+.flag .sep { color: var(--muted); margin: 0 6px; }
+.badge { display: inline-block; border-radius: 999px; padding: 0 7px; font-size: 11.5px; font-weight: 600; background: var(--warn-soft); color: var(--ink); border: 1px solid var(--warn); }
+.context { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); font-size: 12.5px; min-width: 0; }
+.card h5 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.card .big { font-size: 16px; font-weight: 600; }
+.card .big.bad { color: var(--fail); }
+.card .muted, .muted { color: var(--muted); }
+.card .names { display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0; }
+.card .names .chip { font-family: var(--mono); font-size: 11.5px; }
+.card .names .chip.used { background: var(--tool-soft); }
+.card a.chip { color: var(--ink); text-decoration: none; }
+.card details summary { cursor: pointer; color: var(--muted); }
+.stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--line); margin: 4px 0; }
+.stack i { display: block; height: 100%; min-width: 1px; }
+.stack.mini { height: 8px; width: 160px; margin: 0; }
+.parts { display: grid; grid-template-columns: auto 1fr auto; gap: 1px 8px; font-variant-numeric: tabular-nums; }
+.parts i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-top: 4px; }
+.parts span:nth-child(3n) { text-align: right; }
+.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 3px var(--warn); } to { box-shadow: 0 0 0 3px transparent; } }
 mark { background: var(--warn-soft); color: inherit; }
 @media (max-width: 860px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   nav { display: none; }
   header { position: static; padding: 14px 16px 10px; }
+  .turn-bar { top: 0; }
   main { padding: 12px 16px 60px; }
 }
 </style>
@@ -130,8 +193,11 @@ mark { background: var(--warn-soft); color: inherit; }
     <input type="search" id="search" placeholder="Filter steps by text…">
     <label><input type="checkbox" id="expandThinking"> expand thinking</label>
     <label><input type="checkbox" id="expandTools"> expand tool calls</label>
+    <label><input type="checkbox" id="expandCode" checked> show code runs</label>
     <label><input type="checkbox" id="onlyFailures"> failures only</label>
     <label><input type="checkbox" id="hideThinking"> hide thinking</label>
+    <span class="keys"><kbd>n</kbd>/<kbd>p</kbd> next/previous failure · <kbd>j</kbd>/<kbd>k</kbd> next/previous turn</span>
+    <button class="theme" id="theme" title="switch light / dark">◐ theme</button>
   </div>
 </header>
 <div class="layout">
@@ -146,6 +212,23 @@ const parseTime = s => Date.parse(String(s).replace(' ', 'T').replace(/(\.\d{3})
 const secs = ms => ms == null ? '–' : ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round(ms % 60000 / 1000)}s`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const el = (tag, attrs = {}, html = '') => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); n.innerHTML = html; return n; };
+
+// The language of each code tool's program; ExecuteCode's is in
+// `rawInput.source`, the others' in `rawInput.input`.
+const CODE_LANGUAGES = { ExecuteCode: 'javascript', BashCodeExecution: 'bash', TextEditorCodeExecution: 'plaintext' };
+
+function takeInput(item, raw) {
+  if (!raw || typeof raw !== 'object') return;
+  const input = { ...raw };
+  let code = input.source;
+  delete input.source;
+  if (code === undefined && item.name !== 'ExecuteCode' && CODE_LANGUAGES[item.name] && input.input !== undefined) {
+    code = input.input;
+    delete input.input;
+  }
+  if (code !== undefined) item.source = typeof code === 'string' ? code : JSON.stringify(code, null, 2);
+  Object.assign(item.input, input);
+}
 
 function buildTurns(frames) {
   // A provider can reuse a tool call id: updates go to its latest call, and
@@ -169,15 +252,16 @@ function buildTurns(frames) {
       if (previous && previous.kind === k) { previous.text += text; previous.end = t; }
       else turn.items.push({ kind: k, text, start: t, end: t });
     } else if (kind === 'tool_call') {
-      const input = { ...(update.rawInput || {}) }, source = input.source;
-      delete input.source;
-      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input, source, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input: {}, source: undefined, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      takeInput(item, update.rawInput);
       item.occurrence = occurrences[update.toolCallId] = (occurrences[update.toolCallId] ?? -1) + 1;
       tools[update.toolCallId] = item;
       turn.items.push(item);
     } else if (kind === 'tool_call_update') {
       const item = tools[update.toolCallId];
       if (!item) continue;
+      // A streamed call sends its arguments, code included, after it starts.
+      takeInput(item, update.rawInput);
       if (update.status) item.status = update.status;
       if (update.rawOutput !== undefined) item.output = update.rawOutput;
       if (update.content) item.content = update.content;
@@ -214,6 +298,8 @@ function buildTurns(frames) {
     turn.toolMs = unionMs(turn.tools.map(i => [i.start, i.end]));
     turn.totalMs = turn.end - turn.start;
     turn.calls = (DATA.spans?.model_calls || []).filter(call => call.start_ms >= turn.start && call.start_ms <= turn.end);
+    turn.context = DATA.turn_context?.[turn.n - 1] || null;
+    turn.flags = turn.context?.flags || [];
   }
   return turns;
 }
@@ -314,16 +400,39 @@ function toolBody(item) {
   const body = el('div', { class: 'body' });
   if (Object.keys(item.input).length) { body.append(el('h4', {}, 'Arguments')); body.append(jsonBlock(item.input)); }
   if (item.source) {
-    body.append(el('h4', {}, 'Code'));
-    const pre = el('pre', { class: 'code' }), code = el('code', { class: 'language-javascript' });
+    body.append(el('h4', {}, `Code · ${item.source.split('\n').length} lines`));
+    const pre = el('pre', { class: 'code' }), code = el('code', { class: `language-${CODE_LANGUAGES[item.name] || 'javascript'}` });
     code.textContent = item.source;
     pre.append(code); body.append(pre);
     if (window.hljs) hljs.highlightElement(code);
   }
   const out = item.output !== undefined ? item.output : item.content;
   body.append(el('h4', {}, `Result · ${esc(item.status)}${item.softFail ? ' (reported failure)' : ''}`));
-  body.append(out === undefined || out === null ? el('div', { class: 'event' }, 'no output recorded') : jsonBlock(out));
+  if (out === undefined || out === null) body.append(el('div', { class: 'event' }, 'no output recorded'));
+  else body.append(...codeResult(out), jsonBlock(out));
   return body;
+}
+
+// The parts of a code run's result worth reading first: its error, and a
+// shell's output streams. The whole result follows them.
+function codeResult(out) {
+  if (!out || typeof out !== 'object') return [];
+  const parts = [];
+  const block = (label, text, cls = '') => {
+    if (text === undefined || text === null || text === '') return;
+    const wrap = el('div', { class: `stream ${cls}` }, `<div class="label">${esc(label)}</div>`);
+    const pre = el('pre', { class: 'json' });
+    pre.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
+    wrap.append(pre);
+    parts.push(wrap);
+  };
+  block('error', out.error, 'bad');
+  const shell = out.content && typeof out.content === 'object' && !Array.isArray(out.content) ? out.content : null;
+  if (shell && ('stdout' in shell || 'stderr' in shell)) {
+    block(`stdout${shell.return_code != null ? ` · exit ${shell.return_code}` : ''}`, shell.stdout);
+    block('stderr', shell.stderr, 'bad');
+  }
+  return parts;
 }
 
 function renderTool(item) {
@@ -331,6 +440,7 @@ function renderTool(item) {
   const status = item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : item.status === 'completed' ? 'ok' : 'pending';
   const node = el('details', { class: `tool ${status}`, id: item.dom });
   node.dataset.tool = item.name;
+  node.dataset.code = item.source ? '1' : '';
   node.dataset.failed = status === 'failed' || status === 'soft' ? '1' : '';
   node.append(el('summary', {}, `<span class="dot"></span><span class="num">#${item.n}</span><span class="name">${esc(item.name)}</span>` +
     `<span class="args-inline">${esc(item.source ? item.source.replace(/\s+/g, ' ').slice(0, 160) : oneLine(item.input))}</span>` +
@@ -387,14 +497,207 @@ function renderModelLane(turn) {
 
 function renderModelCalls(turn) {
   const count = n => n == null ? '' : Math.round(n).toLocaleString();
+  const scale = Math.max(...turn.calls.map(call => promptTotal(call.prompt_bytes)), 1);
   const details = el('details', { class: 'ctx' }, `<summary>${turn.calls.length} model calls · ${secs(turn.calls.reduce((a, c) => a + c.end_ms - c.start_ms, 0))}</summary>`);
   const rows = turn.calls.map(call => {
     const largest = Object.entries(call.prompt_bytes || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, bytes]) => `${esc(name)} ${(bytes / 1000).toFixed(0)} KB`).join(', ');
     return `<tr><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}</td>` +
-      `<td>${count(call.input_tokens)}</td><td>${count(call.cache_read_tokens)}</td><td>${count(call.cache_write_tokens)}</td><td>${count(call.output_tokens)}</td><td>${largest}</td></tr>`;
+      `<td>${count(call.input_tokens)}</td><td>${count(call.cache_read_tokens)}</td><td>${count(call.cache_write_tokens)}</td><td>${count(call.output_tokens)}</td>` +
+      `<td>${count(call.eager_tools)}${call.loaded_tools ? ' + ' + count(call.loaded_tools) : ''}</td><td>${promptStack(call.prompt_bytes, scale, true).outerHTML}</td><td>${largest}</td></tr>`;
   }).join('');
-  details.append(el('div', { class: 'calls' }, `<table class="calls"><tr><th>at</th><th>took</th><th>first chunk</th><th>model</th><th>input</th><th>cache read</th><th>cache write</th><th>output</th><th>largest prompt parts</th></tr>${rows}</table>`));
+  details.append(el('div', { class: 'calls' }, `<table class="calls"><tr><th>at</th><th>took</th><th>first chunk</th><th>model</th><th>input</th><th>cache read</th><th>cache write</th><th>output</th><th>tools</th><th>prompt</th><th>largest prompt parts</th></tr>${rows}</table>`));
   return details;
+}
+
+// Prompt parts by group, as turn_context.PROMPT_GROUPS stacks them.
+const PROMPT_GROUPS = [
+  ['system', 'var(--p-system)', ['preamble', 'identity', 'session_instructions', 'session_note', 'opener_note', 'memory', 'model_id', 'connected_integrations', 'unsectioned']],
+  ['macro prompt + area guides', 'var(--p-guides)', ['macro_prompt']],
+  ['<macro_sdk>', 'var(--p-sdk)', ['sdk_docs']],
+  ['tools', 'var(--p-tools)', ['tools.eager', 'tools.loaded']],
+  ['history', 'var(--p-history)', ['history']],
+  ['tool results', 'var(--p-results)', ['tool_results']],
+];
+// A span value as text: numbers from an export are not trusted to be numbers.
+const num = value => value == null ? '?' : esc(value);
+const kb = bytes => bytes == null ? '? KB' : `${(bytes / 1000).toFixed(1)} KB`;
+const promptTotal = parts => Object.values(parts || {}).reduce((a, b) => a + b, 0);
+
+// A stacked bar of a model call's prompt parts, scaled to `scale` bytes.
+function promptStack(parts, scale, mini = false) {
+  const bar = el('div', { class: `stack${mini ? ' mini' : ''}` });
+  for (const [group, color, names] of PROMPT_GROUPS) {
+    for (const name of names) {
+      const bytes = parts?.[name];
+      if (!bytes) continue;
+      const part = el('i', { title: `${name} (${group}) · ${kb(bytes)}` });
+      part.style.background = color; part.style.width = `${(bytes / Math.max(scale, 1) * 100).toFixed(2)}%`;
+      bar.append(part);
+    }
+  }
+  return bar;
+}
+
+function jumpTo(dom) {
+  const target = document.getElementById(dom);
+  if (!target) return;
+  target.closest('.step')?.classList.remove('hidden');
+  target.open = true;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+}
+
+function renderFlags(turn) {
+  const row = el('div', { class: 'flags' });
+  for (const found of turn.flags) {
+    const badge = el('button', { class: `flag ${found.level}`, title: found.level === 'warn' ? 'warning' : 'note' }, `<code>${esc(found.id)}</code><span class="sep">—</span>${esc(found.text)}`);
+    if (found.tools?.length) {
+      badge.dataset.tools = found.tools.join(',');
+      badge.innerHTML += ` <span class="muted">→ ${found.tools.map(n => '#' + n).join(' ')}</span>`;
+      badge.onclick = () => {
+        const strip = document.getElementById(`strip-${turn.n}`);
+        strip?.querySelectorAll('button').forEach(b => b.classList.toggle('lit', found.tools.includes(Number(b.dataset.n))));
+        jumpTo(`tool-${turn.n}-${found.tools[0]}`);
+      };
+    }
+    row.append(badge);
+  }
+  return row;
+}
+
+function nameChips(names, used) {
+  return `<div class="names">${names.map(name => `<span class="chip ${used.has(name) ? 'used' : ''}" title="${used.has(name) ? 'called this turn' : 'not called'}">${esc(name)}</span>`).join('')}</div>`;
+}
+
+// What the model had: the docs Jev selected, the tools offered, and the
+// prompt's parts. Names, counts and sizes only; prompt text is not logged.
+function renderContext(turn) {
+  const context = turn.context;
+  const wrap = el('div', { class: 'context' });
+  const docs = context.documentation;
+  wrap.append(el('div', { class: 'card' }, docs
+    ? `<h5>SDK docs (select_documentation)</h5><div class="big ${docs.selected === 0 || docs.status !== 'selected' ? 'bad' : ''}">${num(docs.selected)} entities selected</div>` +
+      `<div>status <b>${esc(docs.status)}</b> · &lt;macro_sdk&gt; ${kb(docs.bytes)} · guidance ${esc(docs.guidance)}</div>` +
+      `<div class="muted">trace <code>${esc(docs.trace_id)}</code></div>` +
+      (docs.entities.length ? `<div class="names">${docs.entities.map(name => `<span class="chip">${esc(name)}</span>`).join('')}</div>` : `<div class="muted">catalog only: no entity index in the prompt</div>`)
+    : `<h5>SDK docs</h5><div class="muted">no select_documentation span for this turn</div>`));
+
+  const tools = context.tools, eager = tools.eager;
+  const used = new Set(turn.tools.map(item => item.name));
+  const eagerNames = eager.names == null
+    ? `<div class="big bad">names unknown</div><div>the eager lists in the source could not be read</div>`
+    : nameChips(eager.names, used) + (eager.count != null && eager.names.length !== eager.count ? `<div class="muted">${eager.names.length} of ${num(eager.count)} named from the source's eager lists</div>` : '');
+  const loaded = tools.loaded.length
+    ? `<div class="names">${tools.loaded.map(entry => `<a class="chip ${used.has(entry.name) ? 'used' : ''}" href="#tool-${turn.n}-${entry.tool}" data-dom="tool-${turn.n}-${entry.tool}" title="loaded by ${esc(entry.via)} #${entry.tool}">${esc(entry.name)}</a>`).join('')}</div>`
+    : `<div class="muted">none loaded this turn</div>`;
+  const card = el('div', { class: 'card' },
+    `<h5>Tools</h5><div><b>${num(eager.count)}</b> eager, full schema · ${kb(eager.bytes)}</div>${eagerNames}` +
+    `<div><b>${num(tools.loaded_count)}</b> loaded · ${kb(tools.loaded_bytes)}</div>${loaded}` +
+    (tools.deferred == null
+      ? `<div class="muted">deferred tools unknown: ${num(tools.offered)} listed, eager not named</div>`
+      : `<details><summary>${tools.deferred.length} deferred MCP tools of ${num(tools.offered)} listed${tools.offered_cut ? ' (listing cut short)' : ''}</summary>${nameChips(tools.deferred, used)}</details>`));
+  card.querySelectorAll('a[data-dom]').forEach(a => a.onclick = e => { e.preventDefault(); jumpTo(a.dataset.dom); });
+  wrap.append(card);
+  if (context.literal) wrap.append(renderLiteral(context.literal));
+
+  const largest = context.prompt.largest;
+  if (largest) {
+    const parts = Object.assign({}, ...largest.map(group => group.parts));
+    const total = promptTotal(parts);
+    const promptCard = el('div', { class: 'card' }, `<h5>Largest prompt of ${context.prompt.calls} model calls</h5><div><b>${kb(total)}</b> in all</div>`);
+    promptCard.append(promptStack(parts, total));
+    promptCard.append(el('div', { class: 'parts' }, PROMPT_GROUPS.map(([group, color, names]) => {
+      const bytes = names.reduce((a, name) => a + (parts[name] || 0), 0);
+      return `<i style="background:${color}"></i><span>${esc(group)}</span><span>${kb(bytes)}</span>`;
+    }).join('')));
+    wrap.append(promptCard);
+  }
+  return wrap;
+}
+
+const LITERAL_STATUS = {
+  verified: ['ok', '✓ verified'], mismatch: ['bad', '✕ MISMATCH'], unverified: ['warn', 'unverified'], 'not reconstructed': ['muted', 'not reconstructed'],
+};
+
+// The turn's prompt parts as rebuilt from source at the commit that served
+// it, each checked against the bytes and hash the span recorded.
+function renderLiteral(literal) {
+  const card = el('div', { class: 'card literal' });
+  const commit = literal.commit;
+  const where = commit
+    ? `reconstructed from source at <code>${esc(commit.sha.slice(0, 11))}</code> · ${commit.exact ? 'exact' : '<b class="warn-text">inferred</b>'}: ${esc(commit.reason)}`
+    : '';
+  card.innerHTML = `<h5>Literal prompt parts</h5><div class="muted">${where}</div>`;
+  if (literal.error) {
+    card.append(el('div', { class: 'literal-error' }, `Not rebuilt: ${esc(literal.error)}`));
+    return card;
+  }
+  const wrong = literal.parts.filter(part => part.status === 'mismatch');
+  if (wrong.length) card.append(el('div', { class: 'literal-error' }, `MISMATCH: ${wrong.map(part => esc(part.label)).join(', ')} differ from what the span recorded`));
+  for (const part of literal.parts) {
+    const [tone, label] = LITERAL_STATUS[part.status] || ['muted', esc(part.status)];
+    const size = part.bytes == null
+      ? `span ${kb(part.span_bytes)}`
+      : `${kb(part.bytes)}${part.span_bytes != null && part.span_bytes !== part.bytes ? ` vs span ${kb(part.span_bytes)}` : ''}${part.span_hash ? ` · hash ${esc(part.hash)}${part.span_hash !== part.hash ? ` vs span ${esc(part.span_hash)}` : ''}` : ''}`;
+    const head = `<span class="status ${tone}">${label}</span> <b>${esc(part.label)}</b> <span class="muted">${size}${part.note ? ' · ' + esc(part.note) : ''}</span>`;
+    const text = part.hash ? DATA.literal_texts?.[part.hash] : null;
+    if (text == null) { card.append(el('div', { class: 'part' }, head)); continue; }
+    const details = el('details', { class: 'part' }, `<summary>${head}</summary>`);
+    let shown = false;
+    details.addEventListener('toggle', () => {
+      if (!details.open || shown) return;
+      const pre = el('pre', { class: 'json literal-text' });
+      pre.textContent = text;
+      details.append(pre);
+      shown = true;
+    });
+    card.append(details);
+  }
+  return card;
+}
+
+// A sticky bar per turn: its number, flags and one square per tool call,
+// so a long turn can be scanned and jumped through.
+function renderTurnBar(turn) {
+  const bar = el('div', { class: 'turn-bar' });
+  const warnings = turn.flags.filter(found => found.level === 'warn').length;
+  bar.append(el('a', { class: 'title', href: `#turn-${turn.n}` }, `Turn ${turn.n}`));
+  bar.append(el('span', { class: 'took' }, `${secs(turn.totalMs)} · ${turn.tools.length} tools${turn.failures ? ` · <span style="color:var(--fail)">${turn.failures} failed</span>` : ''}`));
+  if (warnings) bar.append(el('span', { class: 'badge', title: 'warning flags' }, `⚑ ${warnings}`));
+  const strip = el('div', { class: 'strip', id: `strip-${turn.n}` });
+  for (const item of turn.tools) {
+    const status = item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : '';
+    const square = el('button', { class: `${status} ${item.source ? 'code' : ''}`, title: `#${item.n} ${item.name} · ${secs(item.end - item.start)}${item.errorText ? ' · ' + item.errorText.slice(0, 100) : ''}` });
+    square.dataset.n = item.n;
+    square.onclick = () => jumpTo(item.dom);
+    strip.append(square);
+  }
+  bar.append(strip);
+  if (turn.failures) {
+    const next = el('button', { class: 'jump', title: 'next failed tool call in this turn' }, 'next failure ↓');
+    next.onclick = () => jumpFailure(1, turn.n);
+    bar.append(next);
+  }
+  return bar;
+}
+
+// The next (or previous) failed tool call below (or above) the middle of the
+// screen, in `turnNumber` only when given.
+function jumpFailure(direction, turnNumber) {
+  const selector = turnNumber ? `#turn-${turnNumber} details.tool[data-failed="1"]` : 'details.tool[data-failed="1"]';
+  const failed = [...document.querySelectorAll(selector)].filter(node => !node.closest('.step')?.classList.contains('hidden'));
+  const middle = window.innerHeight / 2 + 1;
+  const ordered = direction > 0 ? failed : failed.reverse();
+  const target = ordered.find(node => direction > 0 ? node.getBoundingClientRect().top > middle : node.getBoundingClientRect().top < middle - 2) || ordered[0];
+  if (target) jumpTo(target.id);
+}
+
+function jumpTurn(direction) {
+  const turns = [...document.querySelectorAll('section.turn')];
+  const offset = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 160) + 4;
+  const ordered = direction > 0 ? turns : turns.reverse();
+  const target = ordered.find(node => direction > 0 ? node.getBoundingClientRect().top > offset + 2 : node.getBoundingClientRect().top < offset - 2);
+  if (target) window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - offset + 4, behavior: 'smooth' });
 }
 
 function renderTurn(turn) {
@@ -414,10 +717,12 @@ function renderTurn(turn) {
     `<span><b>${secs(turn.totalMs)}</b> total</span><span>gaps ${secs(modelMs)} (${Math.round(modelMs / Math.max(turn.totalMs, 1) * 100)}%)</span>` +
     `<span>recorded tool time ${secs(turn.toolMs)}</span><span>${turn.tools.length} tool calls</span>` +
     `<span style="color:var(--fail)">${turn.failures ? turn.failures + ' failed' : ''}</span><span>${turn.stop ? 'stop: ' + esc(turn.stop) : 'no stop frame (still running or crashed)'}</span>`));
+  if (turn.flags.length) head.append(renderFlags(turn));
+  if (turn.context) head.append(renderContext(turn));
   head.append(renderTimeline(turn));
   if (turn.calls.length) head.append(renderModelLane(turn), renderModelCalls(turn));
   head.append(el('div', { class: 'legend' }, `<span><i style="background:var(--model-soft);border:1px solid var(--model)"></i>model / unrecorded</span><span><i style="background:var(--tool)"></i>tool</span><span><i style="background:var(--warn)"></i>tool reported failure</span><span><i style="background:var(--fail)"></i>tool failed</span><span><i style="background:var(--msg);opacity:.5"></i>reply</span>`));
-  section.append(head);
+  section.append(renderTurnBar(turn), head);
 
   const items = el('div', { class: 'items' });
   let previousEnd = turn.start;
@@ -479,6 +784,7 @@ function render() {
   document.getElementById('stats').innerHTML = [
     [turns.length, 'turns'], [allTools.length, 'tool calls'], [failures, 'failed'], [secs(active), 'active time'],
     [`${Math.round((active - toolMs) / Math.max(active, 1) * 100)}%`, 'outside recorded tool time'], [(DATA.frames || []).length, 'log frames'],
+    ...(DATA.turn_context?.length ? [[turns.reduce((a, t) => a + t.flags.filter(f => f.level === 'warn').length, 0), 'warning flags']] : []),
   ].map(([v, l]) => `<div class="stat"><b>${v}</b> ${l}</div>`).join('');
 
   const counts = {};
@@ -496,7 +802,8 @@ function render() {
     const { body } = splitContext(promptText(turn.prompt));
     nav.append(el('a', { href: `#turn-${turn.n}` }, `<span class="n">Turn ${turn.n}</span><span class="d">${secs(turn.totalMs)}</span>` +
       `<span class="p">${esc(body.replace(/<m-[a-z-]+>[\s\S]*?<\/m-[a-z-]+>/g, '[…]').slice(0, 90)) || '(empty)'}</span>` +
-      `<span class="p">${turn.tools.length} tools${turn.failures ? ` · <span class="f">${turn.failures} failed</span>` : ''}</span>`));
+      `<span class="p">${turn.tools.length} tools${turn.failures ? ` · <span class="f">${turn.failures} failed</span>` : ''}` +
+      `${turn.flags.some(f => f.level === 'warn') ? ` · <span class="badge" title="${esc(turn.flags.filter(f => f.level === 'warn').map(f => f.id).join(', '))}">⚑ ${turn.flags.filter(f => f.level === 'warn').length}</span>` : ''}</span>`));
     main.append(renderTurn(turn));
   }
   if (!turns.length) main.append(el('p', {}, 'No prompts in this session log.'));
@@ -524,6 +831,28 @@ render();
 document.getElementById('search').addEventListener('input', () => { clearTimeout(window.searchTimer); window.searchTimer = setTimeout(applyFilters, 200); });
 for (const id of ['onlyFailures', 'hideThinking']) document.getElementById(id).addEventListener('change', applyFilters);
 document.getElementById('expandThinking').addEventListener('change', e => document.querySelectorAll('details.thought').forEach(d => d.open = e.target.checked));
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const keys = { n: () => jumpFailure(1), p: () => jumpFailure(-1), j: () => jumpTurn(1), k: () => jumpTurn(-1) };
+  if (keys[e.key]) { e.preventDefault(); keys[e.key](); }
+});
+// Light or dark on request, else the system's; remembered per browser.
+function setTheme(theme) {
+  if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
+  const dark = theme ? theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.getElementById('hljs-light').media = dark ? 'not all' : 'all';
+  document.getElementById('hljs-dark').media = dark ? 'all' : 'not all';
+}
+try { setTheme(localStorage.getItem('asv-theme')); } catch { setTheme(null); }
+document.getElementById('theme').onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const next = dark ? 'light' : 'dark';
+  setTheme(next);
+  try { localStorage.setItem('asv-theme', next); } catch {}
+};
+const openCode = open => document.querySelectorAll('details.tool[data-code="1"]').forEach(d => d.open = open);
+openCode(document.getElementById('expandCode').checked);
+document.getElementById('expandCode').addEventListener('change', e => openCode(e.target.checked));
 document.getElementById('expandTools').addEventListener('change', e => document.querySelectorAll('details.tool').forEach(d => d.open = e.target.checked));
 </script>
 </body>

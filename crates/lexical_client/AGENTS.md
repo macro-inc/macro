@@ -39,6 +39,10 @@ to read or render document content.
 
 ## Gotchas
 
+- Read a document an agent will see with `get_agent_markdown`: the lossless
+  internal format, whose `<m-*>` tags survive a write-back. `External` writes
+  mentions as plain text; keep it for email, GitHub and routine-condition
+  excerpts.
 - `LexicalClient::new` embeds `infra/local/certs/ca.pem` via `include_str!`
   and only trusts it when the URL is `localhost`/`127.0.0.1` over HTTPS —
   don't point this client at a real HTTPS host expecting that cert to help.

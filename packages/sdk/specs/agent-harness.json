@@ -1157,7 +1157,7 @@
     "/agent-sessions/{session_id}/activity": {
       "get": {
         "tags": ["agent-sessions"],
-        "summary": "Read activity using the same visibility capability as the session transcript.",
+        "summary": "Read session-visible activity after filtering CRM rows for the requester.",
         "operationId": "get_agent_session_activity",
         "parameters": [
           {
@@ -3889,6 +3889,9 @@
           "409": {
             "description": ""
           },
+          "410": {
+            "description": ""
+          },
           "422": {
             "description": ""
           },
@@ -3948,6 +3951,9 @@
             "description": ""
           },
           "409": {
+            "description": ""
+          },
+          "410": {
             "description": ""
           },
           "422": {
@@ -6839,7 +6845,7 @@
           },
           "source": {
             "type": "string",
-            "description": "The submitted JavaScript module."
+            "description": "The submitted TypeScript module."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",

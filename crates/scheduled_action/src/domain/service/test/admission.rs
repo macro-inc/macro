@@ -36,10 +36,17 @@ async fn manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_
             1
         );
         service
-            .update_action(edit_receipt(id), update(configuration(false)))
+            .update_action(
+                edit_receipt(id),
+                update(configuration(false)),
+                Requester::Person,
+            )
             .await
             .unwrap();
-        service.set_enabled(edit_receipt(id), false).await.unwrap();
+        service
+            .set_enabled(edit_receipt(id), false, Requester::Person)
+            .await
+            .unwrap();
         service
             .get_execution_records(view_receipt(id))
             .await

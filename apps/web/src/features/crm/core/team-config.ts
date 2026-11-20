@@ -38,9 +38,9 @@ export type TeamCrmConfig = {
  * Field-wise partial update of the shared config. Omitted fields keep
  * their current values; `null` clears `defaultTeamViewId`; `teamViews`
  * replaces the whole list. Pass a function for `teamViews` to derive the
- * new list from the latest cached value at execution time — mutations are
- * serialized (shared scope), so queued updates see the previous write
- * instead of a stale snapshot.
+ * new list from a fresh server read at execution time. Mutations are serialized
+ * (shared scope), so queued updates include the previous committed write even
+ * when its response could not enter the cache. A failed read prevents the PUT.
  */
 export type TeamCrmConfigPatch = {
   permissions?: Partial<CrmPermissions>;

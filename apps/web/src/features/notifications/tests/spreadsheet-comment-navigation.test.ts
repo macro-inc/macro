@@ -37,8 +37,6 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => (type === 'task' ? 'md' : type),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: false,
-  enableProjects: { key: 'enable-projects' },
   enableReminders: false,
   isFeatureEnabled: vi.fn(),
   USE_MACRO_PR_SUMMARY_BLOCK: true,
@@ -118,6 +116,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => {
     ...actual,
     Telemetry: {
       ...actual.Telemetry,
+      error: vi.fn(),
       span: <T>(name: string, operation: (span: ObservedSpan) => Promise<T>) =>
         runSpan(name, undefined, operation),
     },
@@ -296,30 +295,6 @@ it('opens a project notification at the exact discussion in a native component v
   expect(open).not.toHaveBeenCalled();
 });
 
-it('does not open project notifications when the rollout is disabled', async () => {
-  vi.mocked(isFeatureEnabled).mockReturnValue(false);
-  const open = vi.fn();
-  const activate = vi.fn();
-  const layout = {
-    getSplitByContent: vi.fn(() => ({ activate })),
-    openWithSplit: open,
-  };
-  const notification = {
-    entity_id: 'project',
-    entity_type: 'initiative',
-    notification_metadata: {
-      tag: 'initiative_discussion',
-      content: { messageId: 'discussion' },
-    },
-  } as UnifiedNotification;
-  const result = await openNotification(
-    notification,
-    layout as unknown as SplitManager
-  );
-  expect(result.isErr()).toBe(true);
-  expect(open).not.toHaveBeenCalled();
-  expect(activate).not.toHaveBeenCalled();
-});
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchChannelTarget: vi.fn(async () => {}),
 }));

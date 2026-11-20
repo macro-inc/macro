@@ -1,21 +1,40 @@
 //! Poll durable mailbox work. Notifications only change when that work is due.
 
 use crate::util::redis::RedisClient;
+use email::domain::mailbox::live_pass::LiveImportPass;
 use email::domain::mailbox::progress::{MailboxProgressRepository, MailboxProgressService};
 use email::domain::mailbox::telemetry::defer_reason;
 use email::domain::mailbox::{
     MailboxError, MailboxGateway, MailboxIngest, MailboxSyncRepository, MailboxSyncService,
 };
 use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
+use feature_flags::{ServiceContext, ServiceFeatureFlags};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
+
+#[cfg(test)]
+mod test;
 
 /// How often each worker flushes its import counts and one worker logs the
 /// Outlook health snapshot.
 const HEALTH_INTERVAL: Duration = Duration::from_secs(60);
 
+/// PostHog flag that turns on newest-first Outlook imports and the live pass
+/// that stores a folder's new mail during its import round.
+pub const LIVE_IMPORT_PASS_FLAG: &str = "enable-outlook-import-live-pass";
+
+/// The service identity [`LIVE_IMPORT_PASS_FLAG`] is evaluated for.
+const LIVE_IMPORT_PASS_CONTEXT: ServiceContext = ServiceContext::new("outlook-mailbox-sync");
+
+/// How often the workers read [`LIVE_IMPORT_PASS_FLAG`].
+const LIVE_IMPORT_PASS_REFRESH: Duration = Duration::from_secs(60);
+
 /// Domain services own sync and retry decisions; this loop only schedules work
 /// and stops accepting work during shutdown. Interrupted work retains its lease.
+///
+/// A due folder page is claimed before every message read. An import keeps
+/// its folders' next pages due, so a folder with new mail would otherwise wait
+/// behind each worker's whole cycle of queued messages.
 pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
     service: MailboxSyncService<R, P, I>,
     cancellation: CancellationToken,
@@ -23,12 +42,15 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
     loop {
         let cycle = async {
             let mut worked = reported(service.discover_once().await);
-            worked |= reported(service.enumerate_once().await);
             for _ in 0..32 {
-                if !reported(service.reconcile_once().await) {
+                let enumerated = reported(service.enumerate_once().await);
+                let reconciled = reported(service.reconcile_once().await);
+                worked |= enumerated || reconciled;
+                // With no message to read, the next cycle checks the folder
+                // catalogs again instead of reading up to 32 more pages first.
+                if !reconciled {
                     break;
                 }
-                worked = true;
             }
             worked
         };
@@ -45,6 +67,73 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
             }
         }
     }
+}
+
+/// Sets `switch` from [`LIVE_IMPORT_PASS_FLAG`] about once a minute. Without
+/// flags, or while a read fails, the switch is off, as the sync ran before it
+/// existed; a failing read warns once until one succeeds.
+pub async fn run_live_import_pass<F: ServiceFeatureFlags>(
+    flags: Option<F>,
+    switch: LiveImportPass,
+    cancellation: CancellationToken,
+) {
+    let Some(flags) = flags else {
+        tracing::warn!(
+            flag = LIVE_IMPORT_PASS_FLAG,
+            "no PostHog project key; the Outlook import live pass stays off"
+        );
+        return;
+    };
+    let mut interval = tokio::time::interval(LIVE_IMPORT_PASS_REFRESH);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut failing = false;
+    loop {
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            _ = interval.tick() => {},
+        }
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            read = refresh_live_import_pass(&flags, &switch, failing) => failing = !read,
+        }
+    }
+}
+
+/// One read of the flag; returns whether it succeeded.
+#[tracing::instrument(
+    name = "outlook.live_import_pass.refresh",
+    skip_all,
+    fields(feature_flag.key = LIVE_IMPORT_PASS_FLAG, feature_flag.enabled = tracing::field::Empty)
+)]
+async fn refresh_live_import_pass<F: ServiceFeatureFlags>(
+    flags: &F,
+    switch: &LiveImportPass,
+    failing: bool,
+) -> bool {
+    let (enabled, read) = match flags.load_service(LIVE_IMPORT_PASS_CONTEXT).await {
+        Ok(snapshot) => (snapshot.is_enabled(LIVE_IMPORT_PASS_FLAG), true),
+        Err(error) => {
+            if !failing {
+                tracing::warn!(
+                    error = ?error,
+                    flag = LIVE_IMPORT_PASS_FLAG,
+                    "could not read the Outlook import live pass flag; it is off"
+                );
+            }
+            (false, false)
+        }
+    };
+    tracing::Span::current().record("feature_flag.enabled", enabled);
+    if switch.set(enabled) != enabled {
+        tracing::info!(
+            flag = LIVE_IMPORT_PASS_FLAG,
+            enabled,
+            "outlook import live pass switched"
+        );
+    }
+    read
 }
 
 /// For units that log their own deferrals and failures with their mailbox.

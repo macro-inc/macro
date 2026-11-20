@@ -23,7 +23,12 @@ local stack, without Microsoft accounts.
   reported `@removed`. As measured against Graph, a page holds as many
   entries as the request's `Prefer: odata.maxpagesize` asks for (10 without
   it), the round ends on the first short page, and `$top` caps the whole
-  round. A token from before `expire_delta_tokens`, or older
+  round. The first request may also ask for `$orderby=receivedDateTime desc`
+  (every round of the chain then lists newest first) and a `$filter` of
+  `receivedDateTime ge` or `gt` a time (every round reports only the changes
+  of mail it admits, but every removal, as Graph does; a filtered round lists
+  at most 5,000 messages); the tokens carry them, as they carry `$select` and
+  `$top`. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
   `SyncStateNotFound`.
 - `POST /subscriptions` posts a validation token to the notification URL and
@@ -117,6 +122,11 @@ local stack, without Microsoft accounts.
 
 ## Recipes
 
+- A mailbox has a profile photo (`GET /me/photo/$value`) only when its seed
+  gives one (`SeedMailbox.photo`, a `SeedPhoto`), and a contact has one
+  (`GET /me/contactFolders/{id}/contacts/{id}/photo/$value`) only when
+  `SeedContact.photo` gives it; without, either is 404. A request body may
+  be up to 4 MB, so one range of an upload session fits.
 - In a test: `OutlookEmulator::start(Seed::parse(yaml)?)`, then
   `OutlookApiClientRepository::for_graph_url(&MicrosoftGraphUrl::from(emulator.graph_url()))`
   and `emulator.access_token("a@example.com")`.
@@ -152,9 +162,17 @@ local stack, without Microsoft accounts.
   `--allow-http-notification-urls`. Put a TLS front before the service and
   pass its certificate authority with `--trust-certificate`.
 - New mail: `POST /_emulator/mailboxes/{email}/messages` (`deliver`). A change
-  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. Provider failure:
+  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. A folder emptied out of
+  Deleted Items: `DELETE …/folders/{id or name}` (`delete_folder`), which
+  takes its subfolders and their messages with it. Provider failure:
   `POST /_emulator/faults` (`inject_fault`) with a `route` such as
-  `messages.get` and an `error` such as `rate_limit`. Time:
+  `messages.get` and an `error` such as `rate_limit`. A `folder` (`inbox`)
+  with route `messages.list` or `messages.delta` fails only that folder's
+  listing or delta (a single-message read names no folder), and
+  `continuation: true` only requests carrying a `$skiptoken`, so a delta
+  round can be held after its first page while a new round of the folder
+  reads; faults apply in the order injected, so one with no `error` and
+  `times: 1` first lets one request through. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`;
   what it sent subscribers: `GET /_emulator/notifications`.
 - Calendars: seed them under a mailbox (`time_zone`, `calendars`, each with
@@ -190,6 +208,17 @@ local stack, without Microsoft accounts.
   understand answers 400, and an unknown path answers 400 with no route in
   the request log. Add support instead of loosening that: a silent default
   would hide a query our code starts sending.
+- A `POST` or `PATCH` with neither `Content-Length` nor `Transfer-Encoding`
+  answers 411 with an HTML page before any route runs, as Graph's front end
+  does: a bodyless `send` or `createReply` must still name a length of 0.
+- An attachment's `size` is larger than its file, as in Graph, where it
+  counts the attachment's other properties too. Never compare it for equality
+  with the uploaded length.
+- A subject written by creating or patching a message keeps its first 255
+  characters, Exchange's limit; the rest is dropped without an error.
+  That includes a subject given in the `message` of `createReply` or
+  `createForward`; the subject those derive from the parent, and delivered
+  mail, are not cut. Whether Graph refuses instead is not checked against it.
 - Links (`@odata.nextLink`, `@odata.deltaLink`, upload URLs) are on the
   emulator's own origin, because the client refuses to send its bearer token
   to a host other than its Graph root. Delta links use the OData key form
@@ -212,7 +241,12 @@ local stack, without Microsoft accounts.
 - Waiting is event driven (`wait_for_notifications`); don't add sleep loops.
 - The authentication-service stand-in is not a Microsoft API. It exists so the
   service can run without FusionAuth, and answers like the real routes: 404
-  for an unknown link, 401 for a revoked grant.
+  for an unknown link, 401 for a revoked grant. A link is refused
+  once every grant described for it (`microsoft_grant` with its id, or with
+  the attempt `link_attempt` made it from) is released; a link no grant was
+  described for is answered for until its mailbox is revoked. Describing a
+  grant for a mailbox whose last one was released starts a new grant, as a
+  consent does.
 - ID tokens name Microsoft's issuer, not the emulator's address, because
   `fusionauth` only accepts Microsoft's. The discovery document says the same,
   as Microsoft's does for `common`. Tokens are dated by the real clock, the

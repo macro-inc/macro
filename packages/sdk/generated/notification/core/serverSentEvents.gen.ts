@@ -142,7 +142,9 @@ export function createSseClient<TData = unknown>({
 
         const abortHandler = () => {
           try {
-            reader.cancel();
+            // An aborted fetch has already errored the body, so cancel()
+            // rejects with the abort: expected, never an unhandled rejection.
+            reader.cancel().catch(() => {});
           } catch {
             // noop
           }

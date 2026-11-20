@@ -214,8 +214,19 @@ export async function cancelEmailSendAndConfirm(
     );
     if (latest) current = latest;
     else {
-      // Another tab may have restored or retired it. Absence alone is not Undo.
-      const attempt = await fetchEmailSendStatus(current);
+      // Recovery may finish before this poll. Its receipt confirms the same
+      // attempt without another request to the service.
+      try {
+        const session = await emailStorageSession();
+        if (await localDraftStore.takeCancellationReceipt(session, intent.uuid))
+          return;
+      } catch {
+        // The service can still confirm when local storage is unavailable.
+      }
+      // The row can also disappear after delivery or in an older tab.
+      const attempt = await fetchEmailSendStatus(
+        current.metadata.payload.input.attempt
+      );
       if (attempt?.status === 'CANCELLED') return;
       if (attempt?.status === 'SENT' || attempt?.status === 'SENDING')
         throw new EmailSendCancellationTooLate();
@@ -224,11 +235,10 @@ export async function cancelEmailSendAndConfirm(
 }
 
 /** A status check never resubmits a message. */
-export async function fetchEmailSendStatus(intent: EmailSendIntent) {
-  return await readEmailSendStatus(
-    intent.metadata.payload.input.attempt,
-    AbortSignal.timeout(15_000)
-  );
+export async function fetchEmailSendStatus(
+  attempt: SendEmailAttemptInput['attempt']
+) {
+  return await readEmailSendStatus(attempt, AbortSignal.timeout(15_000));
 }
 
 /** Restore the existing draft identity so uploaded and forwarded files stay attached. */

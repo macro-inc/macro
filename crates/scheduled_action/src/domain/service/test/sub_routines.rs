@@ -23,6 +23,7 @@ fn from_code(routine: &ScheduledAction) -> RunCaller {
     RunCaller {
         routine: routine.id,
         correlation: None,
+        requester: Requester::Program,
     }
 }
 
@@ -43,10 +44,19 @@ async fn create(
 }
 
 async fn top_level(service: &TestService, name: &str) -> ScheduledAction {
-    create(service, name, RunCaller::default(), None)
-        .await
-        .unwrap()
-        .into_action()
+    create(
+        service,
+        name,
+        RunCaller {
+            routine: None,
+            correlation: None,
+            requester: Requester::Person,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .into_action()
 }
 
 async fn names(service: &TestService, scope: ListScope) -> Vec<String> {
@@ -142,6 +152,7 @@ async fn an_agent_steps_session_creates_its_runs_sub_routines() {
     let from_session = RunCaller {
         routine: None,
         correlation: Some(id(CORRELATION)),
+        requester: Requester::Program,
     };
     let child = create(&service, "child", from_session, None)
         .await
@@ -153,6 +164,7 @@ async fn an_agent_steps_session_creates_its_runs_sub_routines() {
     let elsewhere = RunCaller {
         routine: None,
         correlation: Some(id(CHILD_RUN)),
+        requester: Requester::Program,
     };
     let own = create(&service, "own", elsewhere, None)
         .await
@@ -198,7 +210,17 @@ async fn the_same_key_updates_the_sub_routine_instead_of_adding_another() {
 async fn a_key_outside_a_routines_run_is_refused() {
     let service = service(false);
 
-    let refused = create(&service, "keyed", RunCaller::default(), Some("task-1")).await;
+    let refused = create(
+        &service,
+        "keyed",
+        RunCaller {
+            routine: None,
+            correlation: None,
+            requester: Requester::Person,
+        },
+        Some("task-1"),
+    )
+    .await;
 
     assert_policy(refused, ActionPolicyError::KeyOutsideRun);
     assert!(stored_actions(&service).is_empty());
@@ -218,12 +240,16 @@ async fn sub_routines_pause_with_their_parent_and_only_those_resume_with_it() {
         .unwrap()
         .into_action();
     service
-        .set_enabled(edit_receipt(off_by_hand.id.unwrap()), false)
+        .set_enabled(
+            edit_receipt(off_by_hand.id.unwrap()),
+            false,
+            Requester::Person,
+        )
         .await
         .unwrap();
 
     service
-        .set_enabled(edit_receipt(parent.id.unwrap()), false)
+        .set_enabled(edit_receipt(parent.id.unwrap()), false, Requester::Person)
         .await
         .unwrap();
     let paused = stored(&service, follows.id.unwrap());
@@ -241,12 +267,16 @@ async fn sub_routines_pause_with_their_parent_and_only_those_resume_with_it() {
     renamed.name = "follows, renamed".into();
     renamed.enabled = None;
     service
-        .update_action(edit_receipt(follows.id.unwrap()), renamed)
+        .update_action(
+            edit_receipt(follows.id.unwrap()),
+            renamed,
+            Requester::Person,
+        )
         .await
         .unwrap();
 
     service
-        .set_enabled(edit_receipt(parent.id.unwrap()), true)
+        .set_enabled(edit_receipt(parent.id.unwrap()), true, Requester::Person)
         .await
         .unwrap();
     let resumed = stored(&service, follows.id.unwrap());
@@ -260,7 +290,7 @@ async fn a_run_of_a_paused_routine_creates_sub_routines_that_wait_for_it() {
     let service = service(false);
     let parent = top_level(&service, "parent").await;
     service
-        .set_enabled(edit_receipt(parent.id.unwrap()), false)
+        .set_enabled(edit_receipt(parent.id.unwrap()), false, Requester::Person)
         .await
         .unwrap();
     // Its owner ran it by hand while it was off.
@@ -286,7 +316,7 @@ async fn a_run_of_a_paused_routine_creates_sub_routines_that_wait_for_it() {
     assert!(again.sub_routine.unwrap().paused_by_parent);
 
     service
-        .set_enabled(edit_receipt(parent.id.unwrap()), true)
+        .set_enabled(edit_receipt(parent.id.unwrap()), true, Requester::Person)
         .await
         .unwrap();
     assert!(stored(&service, child.id.unwrap()).enabled);
@@ -410,11 +440,11 @@ async fn a_keyed_create_under_a_paused_parent_marks_a_sub_routine_that_was_off_b
         .unwrap()
         .into_action();
     service
-        .set_enabled(edit_receipt(child.id.unwrap()), false)
+        .set_enabled(edit_receipt(child.id.unwrap()), false, Requester::Person)
         .await
         .unwrap();
     service
-        .set_enabled(edit_receipt(parent.id.unwrap()), false)
+        .set_enabled(edit_receipt(parent.id.unwrap()), false, Requester::Person)
         .await
         .unwrap();
 
@@ -427,8 +457,62 @@ async fn a_keyed_create_under_a_paused_parent_marks_a_sub_routine_that_was_off_b
     assert!(held.sub_routine.unwrap().paused_by_parent);
 
     service
-        .set_enabled(edit_receipt(parent.id.unwrap()), true)
+        .set_enabled(edit_receipt(parent.id.unwrap()), true, Requester::Person)
         .await
         .unwrap();
     assert!(stored(&service, child.id.unwrap()).enabled);
+}
+
+#[tokio::test]
+async fn a_repeated_key_keeps_its_sub_routines_look_and_refuses_an_unknown_icon() {
+    use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance, macro_icon_names};
+    let look = |name: &str| EntityAppearance {
+        icon: Some(AppearanceIcon::Macro { name: name.into() }),
+        color: Some(AppearanceColor::Teal),
+    };
+    let keyed = |appearance: EntityAppearance| ActionConfiguration {
+        name: "follow up".into(),
+        appearance: Some(appearance),
+        ..configuration(false)
+    };
+    let key = || Some(SubRoutineKey::new("task-1").unwrap());
+    let service = service(false);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    let first = look(macro_icon_names()[0]);
+    let created = service
+        .create_action_from(
+            &user_principal(),
+            keyed(first.clone()),
+            from_code(&parent),
+            key(),
+        )
+        .await
+        .unwrap()
+        .into_action();
+    assert_eq!(created.appearance, first);
+
+    let refused = service
+        .create_action_from(
+            &user_principal(),
+            keyed(look("not-an-icon")),
+            from_code(&parent),
+            key(),
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("not-an-icon"), "{refused}");
+
+    let again = service
+        .create_action_from(
+            &user_principal(),
+            keyed(look(macro_icon_names()[1])),
+            from_code(&parent),
+            key(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(again, SavedAction::Updated(_)));
+    assert_eq!(stored(&service, created.id.unwrap()).appearance, first);
 }

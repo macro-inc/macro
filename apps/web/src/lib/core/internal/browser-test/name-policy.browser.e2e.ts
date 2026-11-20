@@ -29,9 +29,7 @@ test('partial local recipients keep reversed-word matches and reject arbitrary g
     '["macro|outside@example.com","macro|person50@example.com"]'
   );
   await input.fill('prsn');
-  await expect(
-    page.getByText('No matches in this page or cached snapshot.')
-  ).toBeVisible();
+  await expect(page.getByText('No matching options.')).toBeVisible();
   await expect(page.getByRole('option')).toHaveCount(0);
   await input.fill('person50@example.com');
   await expect(page.getByRole('option')).toHaveCount(1);

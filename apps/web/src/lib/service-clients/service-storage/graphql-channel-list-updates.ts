@@ -1,8 +1,17 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { cacheNewChannelUnread } from '@queries/channel/unread-cache';
 import type { Client } from '@urql/core';
 import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import type { SoupUpdatesSubscription } from './graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
+
+/** A channel this recent is new to its members, allowing for clock skew. */
+const NEW_CHANNEL_AGE_MS = 5 * 60_000;
+
+function isNewChannel(createdAt: string): boolean {
+  return Date.now() - Date.parse(createdAt) < NEW_CHANNEL_AGE_MS;
+}
 
 /** Patch delivered unread evidence locally, then reconcile bounded edges. */
 export function createChannelListUpdatesHandler(
@@ -25,13 +34,22 @@ export function createChannelListUpdatesHandler(
       GraphqlNotificationPatch,
       { __typename: 'GraphqlNewNotification' }
     >,
-    generation: number
+    generation: number,
+    responseGeneration: string
   ): Promise<void> => {
     await previous;
-    const isCurrent = () => !disposed && generation === cacheGeneration;
+    const isCurrent = () =>
+      !disposed &&
+      generation === cacheGeneration &&
+      cacheSessionGeneration.isCurrent(responseGeneration);
     if (!cache || !isCurrent()) return;
     try {
-      await cacheNewChannelUnread(cache, patch.notification, isCurrent);
+      await cacheNewChannelUnread(
+        cache,
+        patch.notification,
+        isCurrent,
+        responseGeneration
+      );
     } catch (error) {
       console.warn('Failed to cache channel unread notification', error);
     }
@@ -52,11 +70,27 @@ export function createChannelListUpdatesHandler(
         pendingPatch = applyNewNotification(
           pendingPatch,
           patch,
-          cacheGeneration
+          cacheGeneration,
+          cacheSessionGeneration.capture()
         );
         return pendingPatch;
       }
       coordinator.onPatch(patch, normalized);
+    },
+    /** A new DM, group chat or channel reaches lists that do not show it yet. */
+    onSoupUpdates(patches: SoupUpdatesSubscription['soupUpdates']) {
+      if (disposed) return;
+      for (const patch of patches) {
+        if (patch.__typename !== 'SoupUpdated') continue;
+        const channel = patch.item;
+        if (channel.__typename !== 'GraphqlSoupChannel') continue;
+        if (!channel.isParticipant || !isNewChannel(channel.createdAt))
+          continue;
+        coordinator.expectChannel({
+          id: channel.id,
+          channelType: channel.channelType,
+        });
+      }
     },
     reconnect: () => coordinator.reconnect(),
     dispose() {

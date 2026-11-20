@@ -1,8 +1,10 @@
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
   type Accessor,
+  children,
   createMemo,
   createSignal,
   type JSX,
@@ -21,8 +23,14 @@ export function EntityDetailTopBar(
     /** Collapses while `compact`, so the title keeps its room. */
     navigation?: (compact: Accessor<boolean>) => JSX.Element;
     titleMenu?: JSX.Element;
+    /**
+     * A phone's bar keeps its room for the open entity's name: crumbs that
+     * can compact (the view's return crumb, an editable icon) do.
+     */
+    compact?: boolean;
   }>
 ) {
+  const titleMenu = children(() => props.titleMenu);
   const [topBar, setTopBar] = createSignal<HTMLDivElement>();
   const size = createElementSize(topBar);
   const compact = createMemo(
@@ -36,20 +44,30 @@ export function EntityDetailTopBar(
         props.navigation && 'gap-3'
       )}
     >
-      <ViewBreadcrumbs.Outlet
-        aria-label="Task location"
-        fallback={<EntityDetailBreadcrumbSkeleton />}
-      >
-        {props.titleMenu}
-      </ViewBreadcrumbs.Outlet>
+      <ViewShell.TopBarTitle>
+        <ViewBreadcrumbs.Outlet
+          aria-label="Task location"
+          activeItem={titleMenu()}
+          data-compact={props.compact ? '' : undefined}
+          class={cn(
+            'group/location',
+            // A crumb compacted to a back arrow needs no separator after it.
+            props.compact &&
+              '[&>:has([data-compact-back])~svg:first-of-type]:hidden'
+          )}
+          fallback={<EntityDetailBreadcrumbSkeleton />}
+        />
+      </ViewShell.TopBarTitle>
       <Show when={props.navigation}>
-        {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
+        {(navigation) => (
+          <HeaderIsland class="px-1">{navigation()(compact)}</HeaderIsland>
+        )}
       </Show>
-      <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+      <ViewShell.TopBarActions class="not-touch:gap-2">
         <SidePanel.HeaderActionsOutlet />
         {props.children}
         <SidePanel.Toggle />
-      </div>
+      </ViewShell.TopBarActions>
     </ViewShell.TopBar>
   );
 }

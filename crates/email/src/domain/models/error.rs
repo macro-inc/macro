@@ -2,15 +2,26 @@ use frecency::domain::models::FrecencyQueryErr;
 use thiserror::Error;
 use uuid::Uuid;
 
+/// The SQLSTATE of a statement that gave up waiting for a lock.
+pub const LOCK_NOT_AVAILABLE: &str = "55P03";
+
 /// Errors that can occur in the email domain.
 #[derive(Debug, Error)]
 pub enum EmailErr {
+    /// Another transaction held the inbox's rows past the lock timeout; the
+    /// same request succeeds once it finishes.
+    #[error("inbox is busy; retry the operation")]
+    Contended,
     /// A send attempt was reused with a different approved snapshot.
     #[error("Send attempt payload does not match the original request")]
     SendAttemptConflict,
     /// A send snapshot is invalid or its attachments have changed.
     #[error("Invalid send snapshot: {0}")]
     InvalidSendSnapshot(String),
+    /// Live selected-rule expansion could not be completed within its budget.
+    #[cfg(feature = "ports")]
+    #[error(transparent)]
+    EmailRuleLimitExceeded(#[from] crm::domain::email_rule_discovery::EmailRuleLimitExceeded),
     /// A repository/infrastructure error.
     #[error(transparent)]
     RepoErr(#[from] anyhow::Error),

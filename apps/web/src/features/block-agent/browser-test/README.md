@@ -11,7 +11,9 @@ bunx playwright test --config src/features/block-agent/browser-test/playwright.c
 `queued.html` renders the queued-message rows over the real composer
 (`?count=N` entries, `?light` for the light theme) with an in-page log of
 edits, removals and steers; `queued.browser.e2e.ts` checks that an open row
-shows its text once and that Up / Enter / Escape edit, save and restore.
+shows its text once, that Up / Enter / Escape edit, save and restore, and
+that a long prompt's closed preview ends in an ellipsis before the row's
+controls on desktop and phone.
 
 `activity.html` replays one long agent turn through the transcript's message
 view: a run of 74 steps across programs, direct calls and thoughts, with one

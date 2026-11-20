@@ -323,13 +323,11 @@ function Properties(props: { class?: string }) {
               />
             )}
           </For>
-          <Show when={composer.showCustomerContact}>
-            <CustomerContactPill
-              values={composer.propertyValues}
-              onChange={composer.setPropertyValues}
-              editor={pickers.propertyEditor}
-            />
-          </Show>
+          <CustomerContactPill
+            values={composer.propertyValues}
+            onChange={composer.setPropertyValues}
+            editor={pickers.propertyEditor}
+          />
           <Show when={composer.tagLayoutMode() === 'bottom'}>
             <Dynamic
               component={pickers.tagsPill}
@@ -340,9 +338,8 @@ function Properties(props: { class?: string }) {
             />
           </Show>
           <TaskComposerPropertyEditor
-            name={composer.title()}
             definitions={composer.availableProperties()}
-            properties={composer.properties()}
+            properties={composer.draftProperties()}
             onAdd={composer.addProperty}
             onSave={(id, value) => composer.setPropertyValues(id, value)}
           />

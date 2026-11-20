@@ -9,6 +9,8 @@ const window = vi.hoisted(() => ({
 vi.mock('@queries/contacts/directory-query', () => ({
   createContactDirectoryWindow: () => ({
     inputKey: () => window.key,
+    search: () => '',
+    continued: () => false,
     data: () => ({
       users: [],
       nextCursor: {
@@ -57,7 +59,7 @@ it('does not keep advancing an empty window after its scope or eligibility chang
   });
 });
 
-it('still limits an explicit pagination action to four empty windows', async () => {
+it('still limits one load to four empty pages', async () => {
   await createRoot(async (dispose) => {
     try {
       const list = createPersonList({

@@ -100,7 +100,6 @@ where
     // The sender's address is personal data, and errors can quote addresses;
     // the span keeps the policy only.
     #[tracing::instrument(skip_all, fields(
-        user_id=?request_context.user_id,
         policy=?self.policy,
     ))]
     async fn call(

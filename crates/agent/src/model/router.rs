@@ -24,6 +24,7 @@ use ai_toolset::RequestContext;
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
 use macro_env_var::env_var;
+use macro_service_urls::GoogleGenerativeAiApiUrl;
 use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
 use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
@@ -443,8 +444,11 @@ impl ModelRouter {
         // ride the compatible-provider registry: a `<provider>/` segment routes
         // to the client registered under that name. Gemini uses GenerateContent
         // so tool-call thought signatures survive the multi-step tool loop.
+        // Google's host unless `OVERRIDE_GOOGLE_GENERATIVE_AI_API_URL` names
+        // `crates/model_emulator`, which a local stack runs in its place.
         let gemini = gemini::Client::builder()
             .api_key(env.google_generative_ai_api_key.to_string())
+            .base_url(GoogleGenerativeAiApiUrl::new()?.as_str())
             .http_client(MeteredHttpClient::new(
                 http.clone(),
                 GOOGLE_PROVIDER,

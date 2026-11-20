@@ -493,6 +493,36 @@ impl From<LexicalResponseItem> for MarkdownParseResult {
     }
 }
 
+/// An answer from the lexical service other than `200 OK`. Its message is the
+/// answer's body.
+#[derive(Debug)]
+pub struct UnexpectedResponse {
+    status: reqwest::StatusCode,
+    body: String,
+}
+
+/// The message the lexical service answers with when the sync service holds
+/// no copy of a document.
+const DOCUMENT_NOT_FOUND: &str = "Document not found";
+
+impl UnexpectedResponse {
+    /// Whether the lexical service answered that the sync service holds no
+    /// copy of the document, as opposed to a 404 from a route or gateway.
+    pub fn is_document_not_found(&self) -> bool {
+        self.status == reqwest::StatusCode::NOT_FOUND
+            && serde_json::from_str::<serde_json::Value>(&self.body)
+                .is_ok_and(|body| body["message"] == DOCUMENT_NOT_FOUND)
+    }
+}
+
+impl std::fmt::Display for UnexpectedResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.body)
+    }
+}
+
+impl std::error::Error for UnexpectedResponse {}
+
 pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
     if response.status() == reqwest::StatusCode::OK {
         return Ok(response);
@@ -500,7 +530,7 @@ pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwes
     let status = response.status();
     let body = response.text().await?;
     tracing::error!(body=%body, status=%status, "unexpected response from lexical service");
-    anyhow::bail!(body);
+    Err(UnexpectedResponse { status, body }.into())
 }
 
 impl LexicalClient {
@@ -524,6 +554,15 @@ impl LexicalClient {
         );
         let response: MarkdownResponse = self.get_json(&url).await?;
         Ok(response.data)
+    }
+
+    /// Fetches a document as agents read it: lossless internal markdown, with
+    /// mentions, tables and other rich nodes as `<m-*>` tags, so the text can be
+    /// written back (SDK `setContent`) without losing them. Use this for every
+    /// read that reaches an agent; external markdown is for email and GitHub.
+    pub async fn get_agent_markdown(&self, document_id: &str) -> Result<String> {
+        self.get_markdown(document_id, MarkdownTarget::Internal)
+            .await
     }
 
     /// Fetches the document body rendered as [embedding-format markdown](EmbeddingMarkdown),

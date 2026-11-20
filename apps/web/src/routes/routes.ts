@@ -1004,7 +1004,6 @@ const debugComponentIds = [
         'user-icon',
         'dynamic-ui',
         'agent-ui',
-        'agent-replay',
         'agent-progress',
         'agent-changes-ui',
         'diff-view-ui',

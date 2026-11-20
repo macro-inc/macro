@@ -29,6 +29,11 @@ fragment CalendarEventTimeFields on GraphqlEventTime {
 	}
 }
 
+fragment CalendarEventIdentity on GraphqlCalendarEvent {
+	__typename
+	id
+}
+
 fragment CalendarEventFields on GraphqlCalendarEvent {
 	__typename
 	id
@@ -163,6 +168,15 @@ query CalendarOccurrences($input: CalendarRangeInput!) {
 }
 
 query Calendars {
+	user {
+		id
+		calendars {
+			...CalendarFields
+		}
+	}
+}
+
+query CalendarListRefresh {
 	user {
 		id
 		calendars {

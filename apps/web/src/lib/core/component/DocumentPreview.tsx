@@ -1232,6 +1232,7 @@ export function PopupPreview(
             previewInfo={props.previewInfo}
             snapshotInfo={props.snapshotInfo}
             useFallbackData={props.useFallbackData}
+            onOpened={props.onOpened}
           />
         </Suspense>
       </Card>

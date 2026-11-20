@@ -6,6 +6,7 @@
 
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::ports::{NotificationIngressQueue, NotificationQueue, NotificationRepository};
+use crate::domain::section_settings::{ChannelSectionMembershipReader, NoChannelSections};
 use crate::domain::service::NotificationIngressService;
 use std::time::Duration;
 
@@ -15,20 +16,21 @@ use std::time::Duration;
 /// them, and processes each through [`NotificationIngressService::process_from_queue`].
 /// Successfully processed messages are deleted from the queue; failures are left
 /// for SQS retry via visibility timeout.
-pub struct IngressWorker<N, Q, S, IQ> {
-    service: NotificationIngressService<N, Q, S>,
+pub struct IngressWorker<N, Q, S, IQ, M = NoChannelSections> {
+    service: NotificationIngressService<N, Q, S, M>,
     queue: IQ,
 }
 
-impl<N, Q, S, IQ> IngressWorker<N, Q, S, IQ>
+impl<N, Q, S, IQ, M> IngressWorker<N, Q, S, IQ, M>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
     IQ: NotificationIngressQueue,
+    M: ChannelSectionMembershipReader,
 {
     /// Create a new ingress worker.
-    pub fn new(service: NotificationIngressService<N, Q, S>, queue: IQ) -> Self {
+    pub fn new(service: NotificationIngressService<N, Q, S, M>, queue: IQ) -> Self {
         Self { service, queue }
     }
 

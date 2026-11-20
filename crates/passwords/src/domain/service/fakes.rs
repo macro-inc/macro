@@ -17,7 +17,10 @@ pub struct FakeEnrollment {
 }
 
 pub struct FakeRepository {
+    pub import_capacity: AtomicUsize,
+    pub live_leases: Arc<AtomicUsize>,
     pub records: Mutex<HashMap<Uuid, Record>>,
+    pub favorites: Mutex<HashSet<(TeamId, ItemId, String)>>,
     pub staged: Mutex<HashMap<Uuid, Record>>,
     /// Held across every staging check and insert, like the operation-id lock:
     /// an intent and an enrollment never reserve the same id.
@@ -50,7 +53,10 @@ pub struct FakeRepository {
 impl FakeRepository {
     pub fn new() -> Self {
         Self {
+            import_capacity: AtomicUsize::new(25),
+            live_leases: Arc::new(AtomicUsize::new(0)),
             records: Mutex::new(HashMap::new()),
+            favorites: Mutex::new(HashSet::new()),
             staged: Mutex::new(HashMap::new()),
             reservations: Mutex::new(()),
             intent_agents: Mutex::new(HashMap::new()),
@@ -75,7 +81,12 @@ impl FakeRepository {
         }
     }
 }
-struct FakeLock;
+struct FakeLock(Arc<AtomicUsize>);
+impl Drop for FakeLock {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 #[async_trait]
 impl ItemLock for FakeLock {
     async fn release(self: Box<Self>) -> Result<(), Error> {
@@ -84,6 +95,10 @@ impl ItemLock for FakeLock {
 }
 #[async_trait]
 impl Repository for FakeRepository {
+    fn import_capacity(&self) -> std::num::NonZeroUsize {
+        std::num::NonZeroUsize::new(self.import_capacity.load(Ordering::SeqCst))
+            .expect("nonzero fixture capacity")
+    }
     async fn is_human(
         &self,
         user: &macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -144,6 +159,10 @@ impl Repository for FakeRepository {
             .lock()
             .unwrap()
             .retain(|_, record| record.metadata.team_id != team);
+        self.favorites
+            .lock()
+            .expect("fixture")
+            .retain(|(stored_team, _, _)| *stored_team != team);
         self.imports.lock().unwrap().retain(|entry| entry.0 != team);
         self.folders.lock().unwrap().retain(|key, _| key.0 != team);
         Ok(())
@@ -291,13 +310,11 @@ impl Repository for FakeRepository {
         Ok(())
     }
 
-    async fn lock(&self, _: TeamId, item: ItemId) -> Result<Box<dyn ItemLock>, Error> {
+    async fn lock(&self, _: TeamId, _item: ItemId) -> Result<Box<dyn ItemLock>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.lock_calls.fetch_add(1, Ordering::SeqCst);
-        if self.busy_items.lock().unwrap().contains(&item.0) {
-            return Err(Error::Busy);
-        }
-        Ok(Box::new(FakeLock))
+        self.live_leases.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(FakeLock(self.live_leases.clone())))
     }
     async fn stage(
         &self,
@@ -306,6 +323,14 @@ impl Repository for FakeRepository {
         publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if self
+            .busy_items
+            .lock()
+            .unwrap()
+            .contains(&record.metadata.id.0)
+        {
+            return Err(Error::Busy);
+        }
         if self
             .closed_teams
             .lock()
@@ -448,6 +473,39 @@ impl Repository for FakeRepository {
             .cloned()
             .collect())
     }
+    async fn favorites(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        items: &[ItemId],
+    ) -> Result<Vec<ItemId>, Error> {
+        let favorites = self.favorites.lock().expect("fixture");
+        Ok(items
+            .iter()
+            .copied()
+            .filter(|item| favorites.contains(&(team, *item, actor.user_id.to_string())))
+            .collect())
+    }
+    async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error> {
+        let record = self.get(team, item).await?;
+        if record.deleting {
+            return Err(Error::NotFound);
+        }
+        let key = (team, item, actor.user_id.to_string());
+        let mut favorites = self.favorites.lock().expect("fixture");
+        if favorite {
+            favorites.insert(key);
+        } else {
+            favorites.remove(&key);
+        }
+        Ok(())
+    }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let record = self
@@ -474,12 +532,39 @@ impl Repository for FakeRepository {
             (None, None) => {}
             _ => return Err(Error::Conflict),
         }
+        if expected.is_none()
+            && record.metadata.favorite
+            && self
+                .memberships
+                .lock()
+                .expect("fixture")
+                .get(record.user_id.as_ref())
+                .is_some_and(|teams| teams.contains(&record.metadata.team_id))
+        {
+            self.favorites.lock().expect("fixture").insert((
+                record.metadata.team_id,
+                record.metadata.id,
+                record.user_id.to_string(),
+            ));
+        }
+        if record.deleting {
+            self.favorites
+                .lock()
+                .expect("fixture")
+                .retain(|(team, item, _)| {
+                    *team != record.metadata.team_id || *item != record.metadata.id
+                });
+        }
         let mut record = record.clone();
         record.revision += 1;
         records.insert(record.metadata.id.0, record);
         Ok(())
     }
-    async fn delete(&self, _: TeamId, item: ItemId) -> Result<(), Error> {
+    async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+        self.favorites
+            .lock()
+            .expect("fixture")
+            .retain(|(stored_team, stored_item, _)| *stored_team != team || *stored_item != item);
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.erased_items.lock().unwrap().insert(item.0);
         if let Some(record) = self.records.lock().expect("fixture lock").get_mut(&item.0) {
@@ -593,6 +678,28 @@ impl Repository for FakeRepository {
     }
 }
 type UsernameGate = (Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>);
+pub struct WriteGate {
+    pub started: tokio::sync::Notify,
+    pub release: tokio::sync::Semaphore,
+    pub finished: tokio::sync::Notify,
+    pub panic: AtomicBool,
+}
+impl WriteGate {
+    pub fn new() -> Self {
+        Self {
+            started: tokio::sync::Notify::new(),
+            release: tokio::sync::Semaphore::new(0),
+            finished: tokio::sync::Notify::new(),
+            panic: AtomicBool::new(false),
+        }
+    }
+}
+struct ActiveWrite<'a>(&'a AtomicUsize);
+impl Drop for ActiveWrite<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 pub struct FakeProvider {
     pub calls: AtomicUsize,
     pub stored: Mutex<HashMap<Uuid, (i32, Uuid, SecretValues)>>,
@@ -608,8 +715,21 @@ pub struct FakeProvider {
     pub revoke_on_username: Mutex<Option<Arc<FakeRepository>>>,
     pub revoke_on_disclosure: Mutex<Option<Arc<FakeRepository>>>,
     pub username_gate: Mutex<Option<UsernameGate>>,
+    pub write_gates: Mutex<HashMap<Uuid, Arc<WriteGate>>>,
+    pub all_writes_gate: Mutex<Option<Arc<WriteGate>>>,
+    pub writes_completed: Mutex<Vec<Uuid>>,
+    pub writes_in_flight: AtomicUsize,
+    pub max_writes_in_flight: AtomicUsize,
+    /// Every value operation fails as an OpenBao team login to a missing namespace would.
+    pub unprovisioned: AtomicBool,
 }
 impl FakeProvider {
+    fn login(&self) -> Result<(), Error> {
+        if self.unprovisioned.load(Ordering::SeqCst) {
+            return Err(Error::NotProvisioned);
+        }
+        Ok(())
+    }
     fn revoke_during_disclosure(&self) {
         if let Some(repository) = self.revoke_on_disclosure.lock().unwrap().take() {
             repository.memberships.lock().unwrap().clear();
@@ -631,6 +751,12 @@ impl FakeProvider {
             revoke_on_username: Mutex::new(None),
             revoke_on_disclosure: Mutex::new(None),
             username_gate: Mutex::new(None),
+            write_gates: Mutex::new(HashMap::new()),
+            all_writes_gate: Mutex::new(None),
+            writes_completed: Mutex::new(vec![]),
+            writes_in_flight: AtomicUsize::new(0),
+            max_writes_in_flight: AtomicUsize::new(0),
+            unprovisioned: AtomicBool::new(false),
         }
     }
 }
@@ -646,6 +772,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn username(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretString, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         let gate = self.username_gate.lock().expect("fixture lock").clone();
         if let Some((started, release)) = gate {
             started.notify_one();
@@ -669,6 +796,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn current_version(&self, _: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         if self
             .tombstones
             .lock()
@@ -686,6 +814,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn status(&self, _: TeamId, item: ItemId) -> Result<Option<(i32, Uuid)>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.reads.fetch_add(1, Ordering::SeqCst);
         if self
             .tombstones
@@ -711,16 +840,44 @@ impl SecretProvider for FakeProvider {
         values: &SecretValues,
     ) -> Result<i32, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
+        let gate = self
+            .write_gates
+            .lock()
+            .expect("fixture lock")
+            .get(&item.0)
+            .cloned()
+            .or_else(|| self.all_writes_gate.lock().expect("fixture lock").clone());
+        let active = self.writes_in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+        let _active = ActiveWrite(&self.writes_in_flight);
+        self.max_writes_in_flight
+            .fetch_max(active, Ordering::SeqCst);
+        if let Some(gate) = gate.as_ref() {
+            gate.started.notify_one();
+            gate.release.acquire().await.expect("write gate").forget();
+            assert!(
+                !gate.panic.load(Ordering::SeqCst),
+                "synthetic provider panic"
+            );
+        }
         let mut stored = self.stored.lock().expect("fixture lock");
         let actual = stored.get(&item.0).map(|stored| stored.0).unwrap_or(0);
         if actual != expected {
             return Err(Error::Conflict);
         }
         stored.insert(item.0, (expected + 1, operation, values.clone()));
+        self.writes_completed
+            .lock()
+            .expect("fixture lock")
+            .push(item.0);
+        if let Some(gate) = gate {
+            gate.finished.notify_one();
+        }
         Ok(expected + 1)
     }
     async fn read(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.revoke_during_disclosure();
         self.reads.fetch_add(1, Ordering::SeqCst);
         let stored = self.stored.lock().expect("fixture lock");
@@ -732,6 +889,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn delete(&self, _: TeamId, item: ItemId) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         if self.fail_delete.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
         }
@@ -745,12 +903,14 @@ impl SecretProvider for FakeProvider {
     }
     async fn history(&self, _: TeamId, _: ItemId) -> Result<Vec<Version>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.revoke_during_disclosure();
         Ok(vec![])
     }
 
     async fn set_totp(&self, _: TeamId, key: TotpKeyId, seed: &SecretString) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.totp_seeds
             .lock()
             .expect("fixture lock")
@@ -762,6 +922,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn delete_totp(&self, _: TeamId, key: TotpKeyId) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         if self.fail_delete.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
         }
@@ -774,6 +935,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn totp(&self, _: TeamId, key: TotpKeyId) -> Result<TotpCode, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.revoke_during_disclosure();
         if !self
             .totp_seeds

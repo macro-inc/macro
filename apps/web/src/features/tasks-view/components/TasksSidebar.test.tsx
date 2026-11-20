@@ -4,14 +4,20 @@ import { registerScope, removeScope } from '@core/hotkey/utils';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { TasksTab } from '../types';
 
 const fixtures = vi.hoisted(() => ({
   scopeId: 'tasks-sidebar-test-scope',
   setTab: vi.fn(),
+  selectProjectScope: vi.fn(),
+  tab: 'my-tasks' as TasksTab,
   projectId: (() => undefined) as () => string | undefined,
   selectedTask: (() => undefined) as () => { id: string } | undefined,
 }));
 
+vi.mock('@app/features/projects/context/project-saved-views-context', () => ({
+  useProjectSavedViews: () => ({ selectScope: fixtures.selectProjectScope }),
+}));
 vi.mock('@app/components/view-shell', async () => ({
   useViewTabHotkeys: (
     await import('@app/components/view-shell/use-view-tab-hotkeys')
@@ -57,9 +63,13 @@ vi.mock('@queries/favorites/favorites', () => ({
 vi.mock('../tasks-create-action', () => ({ TasksCreateAction: () => null }));
 vi.mock('../tasks-view-context', () => ({
   useTasksView: () => ({
-    state: { tab: 'my-tasks', search: '' },
+    state: {
+      get tab() {
+        return fixtures.tab;
+      },
+      search: '',
+    },
     setState: vi.fn(),
-    projectsEnabled: () => true,
     setTab: fixtures.setTab,
     selectedTask: () => fixtures.selectedTask(),
     isSidebarSectionOpen: () => true,
@@ -73,6 +83,9 @@ vi.mock('../views/task-saved-views', () => ({
 import { TasksSidebar } from './TasksSidebar';
 
 beforeEach(() => {
+  fixtures.tab = 'my-tasks';
+  fixtures.projectId = () => undefined;
+  fixtures.selectedTask = () => undefined;
   registerScope({
     parentScopeId: 'global',
     scopeId: fixtures.scopeId,
@@ -140,4 +153,17 @@ it('leaves Tab to focus order while a project or task is open, mounted after its
 
   expect(pressTab().defaultPrevented).toBe(true);
   expect(fixtures.setTab).toHaveBeenCalledExactlyOnceWith('team-tasks');
+});
+
+it('clears a saved project view when a hotkey selects a built-in project tab', () => {
+  fixtures.tab = 'created-by-me';
+  render(() => {
+    useHotKeyRoot();
+    return <TasksSidebar />;
+  });
+  expect(pressTab().defaultPrevented).toBe(true);
+  expect(fixtures.selectProjectScope).toHaveBeenCalledExactlyOnceWith(
+    'assigned-to-me'
+  );
+  expect(fixtures.setTab).not.toHaveBeenCalled();
 });

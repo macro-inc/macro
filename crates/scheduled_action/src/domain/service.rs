@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
@@ -15,19 +16,20 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
+use routine_program::{CodeIdentity, RoutineProgram};
 use tokio::sync::mpsc::Sender;
 
-use super::appearance::ChangeAppearance;
+use super::appearance::{AppearanceChooser, AppearanceSet, ChangeAppearance, check_pick};
 use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
-use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
+use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades, UpgradeOutcome};
 use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
     CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
-    MAX_DESCRIPTION_CHARS, OwnerNotUserError, RoutineCheck, RunCaller, RunningRun, ScheduledAction,
-    SubRoutine, SubRoutineKey,
+    MAX_DESCRIPTION_CHARS, OwnerNotUserError, Requester, RoutineCheck, RunCaller, RunningRun,
+    ScheduledAction, SubRoutine, SubRoutineKey,
 };
 use super::ports::{
     CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, SavedAction,
@@ -316,6 +318,12 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(())
     }
 
+    /// Every create goes through here, so only a person creates a routine
+    /// that writes as them, whichever route it comes by.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each create route sets a different subset"
+    )]
     async fn create(
         &self,
         principal: &CreationPrincipal,
@@ -324,6 +332,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         appearance: EntityAppearance,
         suggestion_id: Option<Uuid>,
         sub_routine: Option<SubRoutine>,
+        requester: Requester,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -331,14 +340,27 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Code: RoutineCode,
         Rollout: EventRoutineRollout,
     {
+        if requester == Requester::Program && writes_as_owner(&input.task) {
+            return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
+        }
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        appearance
-            .validate()
-            .map_err(ActionPolicyError::InvalidAppearance)?;
         let mut input = input;
+        // An agent's pick stands in for the default, or a template's look.
+        let appearance = match input.appearance.take() {
+            Some(pick) => {
+                check_pick(&pick)?;
+                pick
+            }
+            None => {
+                appearance
+                    .validate()
+                    .map_err(ActionPolicyError::InvalidAppearance)?;
+                appearance
+            }
+        };
         input.task = named_steps(&input.task);
         let description = description(&input.description)?;
         self.check_event_management(&input.trigger, owner_user)
@@ -402,6 +424,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let mut steps = Vec::new();
         let found = [
             description(&input.description).map(|_| ()),
+            input
+                .appearance
+                .as_ref()
+                .map_or(Ok(()), check_pick)
+                .map_err(anyhow::Error::from),
             self.check_event_management(&input.trigger, owner).await,
             self.check_conditions(&input.trigger),
             self.targets.validate_task(&input.task, owner).await,
@@ -431,6 +458,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             problems,
             steps,
             routine: input,
+            missing_apps: Vec::new(),
         })
     }
 
@@ -482,25 +510,117 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     }
 
     /// Replace a routine's configuration, then make its sub-routines follow
-    /// a change of whether it is on.
+    /// a change of whether it is on. A program may rename, describe or switch
+    /// off a routine that writes as its owner, but not switch one to, change
+    /// what one does (its task or trigger), or switch one on.
     async fn replace_configuration(
         &self,
         action: ScheduledAction,
         input: ActionConfiguration,
+        requester: Requester,
     ) -> Result<ScheduledAction>
     where
         Rpo: SubRoutines,
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
     {
+        if requester == Requester::Program
+            && writes_as_owner(&input.task)
+            && (!writes_as_owner(&action.task)
+                || !same_task(&action.task, &named_steps(&input.task))
+                || !same_trigger(&action.trigger, &input.trigger)
+                || (!action.enabled && input.enabled))
+        {
+            return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
+        }
         let was_enabled = action.enabled;
         let updated = self.replace_one(action, input, false).await?;
         if updated.sub_routine.is_none() && updated.enabled != was_enabled {
-            self.follow_parent(&updated).await;
+            self.follow_parent(&updated, requester).await;
         }
         Ok(updated)
+    }
+
+    /// Store an agent's pick for `action`'s look, unless its owner chose one:
+    /// the appearance it has afterwards.
+    #[tracing::instrument(name = "routine.pick_appearance", skip_all, fields(
+        routine.id = tracing::field::Empty,
+        routine.appearance.picked = tracing::field::Empty,
+    ), err)]
+    async fn pick_appearance(
+        &self,
+        action: &ScheduledAction,
+        pick: EntityAppearance,
+        attribution: activity::Attribution,
+    ) -> Result<EntityAppearance> {
+        let id = action.id.ok_or(ActionPolicyError::NotFound)?;
+        let span = tracing::Span::current();
+        span.record("routine.id", tracing::field::display(id));
+        let set = self
+            .repo
+            .set_appearance(ChangeAppearance {
+                id,
+                appearance: pick.clone(),
+                chooser: AppearanceChooser::Agent,
+                attribution,
+                event_id: macro_uuid::generate_uuid_v7(),
+                occurred_at: Utc::now(),
+            })
+            .await?;
+        span.record("routine.appearance.picked", set.changed());
+        // The look the row holds once locked, not `action`'s: an owner's
+        // choice may have committed since the configuration was saved.
+        Ok(match set {
+            AppearanceSet::Changed { .. } => pick,
+            AppearanceSet::Kept { current } => current,
+        })
+    }
+
+    /// Refuse saving a routine that writes as its owner while any of its
+    /// code steps holds code a model wrote in an upgrade (a step the rewrite
+    /// changed, saved while the routine wrote as Macro, however many releases
+    /// ago) that the owner hasn't changed since: that code would act under
+    /// their name. Checked on every save, not only the one that switches the
+    /// identity, so restoring the model's code later is refused too.
+    async fn refuse_owner_identity_over_a_rewrite(
+        &self,
+        action: &ScheduledAction,
+        task: &serde_json::Value,
+    ) -> Result<()>
+    where
+        Upgrades: CodeUpgrades,
+    {
+        let (Ok(next), Some(id)) = (RoutineProgram::from_task(task), action.id) else {
+            return Ok(());
+        };
+        if next.code_identity() != CodeIdentity::Owner {
+            return Ok(());
+        }
+        // The sources each rewrite wrote: its steps whose code differs from
+        // the task it rewrote.
+        let mut written = std::collections::HashSet::new();
+        for upgrade in self.upgrades.list_upgrades(id).await? {
+            let (UpgradeOutcome::Rewritten, Some(rewrite)) = (upgrade.outcome, upgrade.task) else {
+                continue;
+            };
+            let before = code_sources(&upgrade.previous_task);
+            written.extend(
+                code_sources(&rewrite)
+                    .into_iter()
+                    .filter(|source| !before.contains(source)),
+            );
+        }
+        if next
+            .code_steps()
+            .into_iter()
+            .any(|step| written.contains(&step.source))
+        {
+            return Err(ActionPolicyError::UnreviewedRewrite.into());
+        }
+        Ok(())
     }
 
     /// Replace one routine's configuration. `with_parent` marks a
@@ -515,6 +635,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
         Code: RoutineCode,
+        Upgrades: CodeUpgrades,
         Rollout: EventRoutineRollout,
     {
         require_explicit_selection(&action.task, &input.task)?;
@@ -546,6 +667,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if !disable_only {
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
+                .await?;
+            self.refuse_owner_identity_over_a_rewrite(&action, &input.task)
                 .await?;
             input.task = checked_task(self.code.as_ref(), &input.task, Some(&action.task)).await?;
             if input.enabled {
@@ -624,6 +747,76 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
         }
         _ => Err(ActionPolicyError::NotFound.into()),
     }
+}
+
+/// Who an appearance write is attributed to: the person, or the bot and the
+/// person it acts for. Nobody for an internal or anonymous request.
+fn attribution(
+    auth: &entity_access::domain::models::EntityAccessAuth,
+) -> Option<activity::Attribution> {
+    use entity_access::domain::models::EntityAccessAuth;
+    match auth {
+        EntityAccessAuth::Authenticated(user) => Some(activity::Attribution::direct(
+            activity::Actor::new_from_user(user.clone()),
+        )),
+        EntityAccessAuth::Bot(bot) => Some(activity::Attribution::new(
+            activity::Actor::new_from_bot(bot.bot_id()),
+            bot.scope().acting_user_id().cloned(),
+        )),
+        EntityAccessAuth::Internal | EntityAccessAuth::Unauthenticated => None,
+    }
+}
+
+/// The most apps a check keeps as missing.
+const MAX_MISSING_APPS: usize = 10;
+/// The longest app slug or name a check keeps.
+const MAX_APP_TEXT: usize = 100;
+
+/// The apps a routine draft's session `named` as missing, as a check keeps
+/// them ([`missing_apps`]), never one `task` already requires. The session
+/// found them in the catalog; whether they are connected is the person's to
+/// see.
+pub(crate) fn named_missing_apps(
+    named: Vec<AgentMcpServer>,
+    task: &serde_json::Value,
+) -> Vec<AgentMcpServer> {
+    let required = RoutineProgram::from_task(task)
+        .map(|program| program.mcp_servers)
+        .unwrap_or_default();
+    missing_apps(named, &required)
+}
+
+/// `apps` as a routine may name them missing: trimmed, each slug once, never
+/// one in `required`, and only ones shaped like an app (a slug of letters,
+/// digits, `_` and `-`, and a name), at most [`MAX_MISSING_APPS`].
+pub(crate) fn missing_apps(
+    apps: Vec<AgentMcpServer>,
+    required: &[AgentMcpServer],
+) -> Vec<AgentMcpServer> {
+    let mut kept: Vec<AgentMcpServer> = Vec::new();
+    for app in apps {
+        let slug = app.app_slug.trim();
+        let name = app.server_name.trim();
+        let shaped = !slug.is_empty()
+            && slug.len() <= MAX_APP_TEXT
+            && slug
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            && !name.is_empty()
+            && name.chars().count() <= MAX_APP_TEXT;
+        let seen = |other: &AgentMcpServer| other.app_slug == slug;
+        if !shaped || required.iter().any(seen) || kept.iter().any(seen) {
+            continue;
+        }
+        kept.push(AgentMcpServer {
+            app_slug: slug.to_owned(),
+            server_name: name.to_owned(),
+        });
+        if kept.len() == MAX_MISSING_APPS {
+            break;
+        }
+    }
+    kept
 }
 
 /// An error the routine's author can fix, as a problem to show them; any
@@ -807,6 +1000,7 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
+        // No route says who sends it, so it is taken for a program's.
         self.create(
             principal,
             input,
@@ -814,6 +1008,7 @@ where
             EntityAppearance::default(),
             None,
             None,
+            Requester::Program,
         )
         .await
     }
@@ -834,8 +1029,15 @@ where
         key: Option<SubRoutineKey>,
     ) -> Result<SavedAction> {
         let span = tracing::Span::current();
+        if caller.requester == Requester::Program && writes_as_owner(&input.task) {
+            span.record("routine.create.outcome", "refused_owner_identity");
+            return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
+        }
         let saved = match self.creating_run(principal, caller).await? {
-            Some(run) => self.create_sub_routine(principal, input, run, key).await,
+            Some(run) => {
+                self.create_sub_routine(principal, input, run, key, caller.requester)
+                    .await
+            }
             None if key.is_some() => Err(ActionPolicyError::KeyOutsideRun.into()),
             None => self
                 .create(
@@ -845,6 +1047,7 @@ where
                     EntityAppearance::default(),
                     None,
                     None,
+                    caller.requester,
                 )
                 .await
                 .map(SavedAction::Created),
@@ -878,6 +1081,7 @@ where
         routine.check.ok = tracing::field::Empty,
         routine.check.problems = tracing::field::Empty,
         routine.check.failing_steps = tracing::field::Empty,
+        routine.check.missing_apps = tracing::field::Empty,
         routine.check.draft = tracing::field::Empty,
     ), err)]
     async fn check_action(
@@ -885,17 +1089,20 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         created: Vec<CreatedItem>,
+        missing_apps: Vec<AgentMcpServer>,
         correlation: Option<Uuid>,
     ) -> Result<RoutineCheck> {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        let check = self.check(owner_user, input).await?;
+        let mut check = self.check(owner_user, input).await?;
+        check.missing_apps = named_missing_apps(missing_apps, &check.routine.task);
         let span = tracing::Span::current();
         span.record("routine.check.ok", check.ok);
         span.record("routine.check.problems", check.problems.len());
         span.record("routine.check.failing_steps", check.steps.len());
+        span.record("routine.check.missing_apps", check.missing_apps.len());
         self.hand_back(owner_user, correlation, &check, &created)
             .await;
         Ok(check)
@@ -907,9 +1114,18 @@ where
         input: ActionConfiguration,
         template_id: Uuid,
         appearance: EntityAppearance,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id), appearance, None, None)
-            .await
+        self.create(
+            principal,
+            input,
+            Some(template_id),
+            appearance,
+            None,
+            None,
+            requester,
+        )
+        .await
     }
 
     async fn create_action_from_suggestion(
@@ -917,6 +1133,7 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         suggestion_id: Uuid,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
         let created = self
             .create(
@@ -926,6 +1143,7 @@ where
                 EntityAppearance::default(),
                 Some(suggestion_id),
                 None,
+                requester,
             )
             .await?;
         // Accepts by who suggested, kind and surface, for the suggestions
@@ -985,10 +1203,25 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         input: ActionConfigurationUpdate,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
         let action = self.load_granted(&receipt).await?;
-        let input = input.into_configuration(&action);
-        self.replace_configuration(action, input).await
+        let mut input = input.into_configuration(&action);
+        let pick = input.appearance.take();
+        if let Some(pick) = &pick {
+            check_pick(pick)?;
+        }
+        let mut updated = self.replace_configuration(action, input, requester).await?;
+        // Only an agent acting for the owner picks the look of their routine.
+        let for_owner = receipt
+            .acting_user_id()
+            .is_some_and(|user| updated.owner.as_user() == Some(user));
+        if let (Some(pick), Some(attribution), true) =
+            (pick, attribution(receipt.auth()), for_owner)
+        {
+            updated.appearance = self.pick_appearance(&updated, pick, attribution).await?;
+        }
+        Ok(updated)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -1002,25 +1235,12 @@ where
             .map_err(ActionPolicyError::InvalidAppearance)?;
         let action = self.load_granted(&receipt).await?;
         let id = action.id.ok_or(ActionPolicyError::NotFound)?;
-        let attribution = match receipt.auth() {
-            entity_access::domain::models::EntityAccessAuth::Authenticated(user) => {
-                activity::Attribution::direct(activity::Actor::new_from_user(user.clone()))
-            }
-            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
-                activity::Attribution::new(
-                    activity::Actor::new_from_bot(bot.bot_id()),
-                    bot.scope().acting_user_id().cloned(),
-                )
-            }
-            entity_access::domain::models::EntityAccessAuth::Internal
-            | entity_access::domain::models::EntityAccessAuth::Unauthenticated => {
-                return Err(ActionPolicyError::NotFound.into());
-            }
-        };
+        let attribution = attribution(receipt.auth()).ok_or(ActionPolicyError::NotFound)?;
         self.repo
             .set_appearance(ChangeAppearance {
                 id,
                 appearance: appearance.clone(),
+                chooser: AppearanceChooser::Owner,
                 attribution,
                 event_id: macro_uuid::generate_uuid_v7(),
                 occurred_at: Utc::now(),
@@ -1033,6 +1253,7 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         enabled: bool,
+        requester: Requester,
     ) -> Result<ScheduledAction> {
         let action = self.load_granted(&receipt).await?;
         if action.enabled == enabled {
@@ -1046,8 +1267,9 @@ where
             enabled,
             run_visibility: action.run_visibility,
             description: action.description.clone(),
+            appearance: None,
         };
-        self.replace_configuration(action, input).await
+        self.replace_configuration(action, input, requester).await
     }
 
     async fn delete_action(&self, receipt: EntityAccessReceipt<OwnerAccessLevel>) -> Result<()> {
@@ -1094,4 +1316,33 @@ where
         };
         self.upgrades.list_upgrades(id).await
     }
+
+    async fn get_unusable_knobs(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<super::knob_entities::UnusableKnob>> {
+        let action = self.load_granted(&receipt).await?;
+        self.targets
+            .unusable_knobs(&action.task, action.owner_user()?)
+            .await
+    }
+}
+
+/// Whether `task` is a routine whose code writes as its owner.
+fn writes_as_owner(task: &serde_json::Value) -> bool {
+    RoutineProgram::from_task(task)
+        .is_ok_and(|program| program.code_identity() == CodeIdentity::Owner)
+}
+
+/// The source of each of `task`'s code steps, in order.
+fn code_sources(task: &serde_json::Value) -> Vec<String> {
+    RoutineProgram::from_task(task)
+        .map(|program| {
+            program
+                .code_steps()
+                .into_iter()
+                .map(|step| step.source.clone())
+                .collect()
+        })
+        .unwrap_or_default()
 }

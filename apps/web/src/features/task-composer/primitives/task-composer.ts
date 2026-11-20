@@ -76,10 +76,7 @@ import {
   areTemplateFieldsDirty as templateFieldsDiffer,
 } from '../core/template-state';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
-import {
-  CUSTOMER_CONTACT_PROPERTY_IDS,
-  customerContactEnabled,
-} from '../customer-contact';
+import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../customer-contact';
 import {
   initialTaskPinDefinitionIds,
   TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
@@ -341,13 +338,11 @@ export function createTaskComposer(
     }
   };
 
-  // Read once per opening, so a flag change leaves an open draft's row alone.
-  const showCustomerContact = customerContactEnabled();
-
   const {
     propertyValues,
     setPropertyValues,
     properties,
+    draftProperties,
     selectedPropertyIds: visiblePropertyIds,
     setVisiblePropertyIds,
     availableProperties,
@@ -361,9 +356,7 @@ export function createTaskComposer(
   } = createTaskComposerProperties({
     initialValues: initialState.propertyValues,
     initialVisiblePropertyIds: initialState.visiblePropertyIds,
-    hiddenPropertyIds: showCustomerContact
-      ? CUSTOMER_CONTACT_PROPERTY_IDS
-      : undefined,
+    hiddenPropertyIds: CUSTOMER_CONTACT_PROPERTY_IDS,
     allDefinitions: true,
   });
   const definitionsReady = () =>
@@ -1058,7 +1051,7 @@ export function createTaskComposer(
     applyTitleTag,
     deleteTitleTagsAtStart,
     properties,
-    showCustomerContact,
+    draftProperties,
     propertyValues,
     setPropertyValues,
     templateSelection,

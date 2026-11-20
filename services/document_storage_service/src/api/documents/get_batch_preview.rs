@@ -9,7 +9,9 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
+use macro_authorization::{
+    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+};
 use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
 use model::response::{GenericErrorResponse, GenericResponse};
 use reqwest::StatusCode;
@@ -42,17 +44,27 @@ pub async fn get_batch_preview_handler(
     let unique_document_ids: HashSet<String> = req.document_ids.iter().cloned().collect();
     let document_ids: Vec<String> = unique_document_ids.into_iter().collect();
 
+    let viewer_id = user
+        .authorization
+        .as_ref()
+        .and_then(UserOrInternalServiceAuthorization::acting_user)
+        .map(|user| &user.macro_user_id);
+
     let document_preview_results =
-        macro_db_client::document::preview::batch_get_document_preview_v2(&ctx.db, &document_ids)
-            .await
-            .map_err(|err| {
-                tracing::error!(error=?err, "unable to get document preview");
-                GenericResponse::builder()
-                    .message("failed to retrive document previews")
-                    .is_error(true)
-                    .send(StatusCode::INTERNAL_SERVER_ERROR)
-                    .into_response()
-            })?;
+        macro_db_client::document::preview::batch_get_document_preview_v2(
+            &ctx.db,
+            &document_ids,
+            viewer_id,
+        )
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "unable to get document preview");
+            GenericResponse::builder()
+                .message("failed to retrive document previews")
+                .is_error(true)
+                .send(StatusCode::INTERNAL_SERVER_ERROR)
+                .into_response()
+        })?;
 
     let result: Vec<DocumentPreview> = document_preview_results
         .iter()
