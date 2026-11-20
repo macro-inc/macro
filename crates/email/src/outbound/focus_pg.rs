@@ -298,7 +298,8 @@ impl FocusStore for FocusPgRepository {
     #[tracing::instrument(skip(self, record), fields(thread_id = %record.thread_id), err)]
     async fn save(&self, record: &FocusRecord) -> Result<bool, Report> {
         let scores = serde_json::to_value(record.answers)?;
-        // A slower classification of an older message never replaces a newer one.
+        // A slower classification of an older message never replaces a newer one,
+        // in the order the worker picks the latest message and the reads compare it.
         let result = sqlx::query!(
             r#"
             INSERT INTO email_thread_focus (
@@ -332,7 +333,8 @@ impl FocusStore for FocusPgRepository {
                 due_at = EXCLUDED.due_at,
                 event_over_at = EXCLUDED.event_over_at,
                 dates_classified_at = EXCLUDED.dates_classified_at
-            WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts
+            WHERE (email_thread_focus.classified_message_ts, email_thread_focus.classified_message_id)
+                <= (EXCLUDED.classified_message_ts, EXCLUDED.classified_message_id)
             "#,
             record.thread_id,
             record.link_id,

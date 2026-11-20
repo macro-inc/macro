@@ -260,7 +260,9 @@ tools — hexagonal, heavily feature-gated.
   stored; `FOLLOW_UP_AFTER_DAYS` and the time are passed in. `focus_thread_ids` and
   `focus_for_threads` restate the same tests; change both. "No mail since the
   classified message" compares `(at, id)` in the order the worker picks its latest
-  message, so another message at the same instant can count as newer. The dates
+  message, so another message at the same instant can count as newer; `save`
+  keeps the newer verdict by the same pair, or a late verdict on the message
+  that sorts first would read as mail since it. The dates
   count only while `dates_classified_at` equals `classified_at`: a writer from
   before them (a rolling deploy's old worker, a rollback) sets `classified_at`,
   even for the same message, and leaves them, and `thread_inbox` reads them the

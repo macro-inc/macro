@@ -543,6 +543,37 @@ async fn an_older_classification_never_replaces_a_newer_one(
     Ok(())
 }
 
+/// Mail at one instant is ordered by id, as the worker and the reads order it,
+/// so a late classification of the message that sorts first is the older one.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_classification_of_mail_at_the_same_instant_that_sorts_first_is_older(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let at = Utc::now() - Duration::hours(1);
+    let first = uuid::uuid!("00000000-0000-0000-0000-00000000f0a1");
+    let second = uuid::uuid!("00000000-0000-0000-0000-00000000f0a2");
+    assert!(repo.save(&record(INVOICE, second, at, 80)).await?);
+    assert!(!repo.save(&record(INVOICE, first, at, 10)).await?);
+    let classified = load_thread(&repo, INVOICE).await?.unwrap().classified;
+    assert_eq!(classified.map(|stored| stored.message_id), Some(second));
+    let stored = repo
+        .focus_for_threads(&owner(), &[INVOICE], Utc::now(), Utc::now())
+        .await?;
+    assert_eq!(stored.get(&INVOICE).expect("stored").importance, 80);
+
+    // The same message is decided again.
+    assert!(repo.save(&record(INVOICE, second, at, 70)).await?);
+    let stored = repo
+        .focus_for_threads(&owner(), &[INVOICE], Utc::now(), Utc::now())
+        .await?;
+    assert_eq!(stored.get(&INVOICE).expect("stored").importance, 70);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_focus"))
