@@ -42,6 +42,7 @@ fn posted(
         mentions,
         has_attachments: false,
         notification_policy: PostMessageNotificationPolicy::Default,
+        finalized_reply: false,
     }
 }
 

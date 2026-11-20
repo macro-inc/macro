@@ -94,6 +94,16 @@ DMs, and the shared message store other domains discuss things on.
   Completing a resolved request's notification attempts every recipient before
   returning a recipient update error.
 
+- A bot's pending reply resolved into its answer (a `NotifyAsPostedMessage`
+  edit, `finalized_reply` on `MessagePosted`) tells the member it was posted
+  for (`triggered_by`) as a `channel_mention` (`AnsweredMention`), not a
+  thread reply, so a mentions-only channel or one with replies off still
+  reaches whoever asked, while a mute still silences it; one who turned
+  mentions off gets the reply instead (mention fallback). Its id derives from
+  the message and answer, so a redelivered resolution notifies once. The
+  `channel.message_posted_notifications` span's `answered_person` names the
+  decision.
+
 - A person's message shares every item it links; a bot message posted for a
   person (`triggered_by`) shares, as that person, only the linked items the
   sending bot created for them while answering: `created` rows in

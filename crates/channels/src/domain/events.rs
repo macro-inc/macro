@@ -79,6 +79,9 @@ pub enum ChannelEvent {
         has_attachments: bool,
         /// Internal notification policy for this post.
         notification_policy: PostMessageNotificationPolicy,
+        /// Whether this is a bot's pending reply just patched into its
+        /// answer (a `NotifyAsPostedMessage` edit) rather than a new post.
+        finalized_reply: bool,
     },
     /// A user added a reaction to a message by another user.
     ReactionAdded {
