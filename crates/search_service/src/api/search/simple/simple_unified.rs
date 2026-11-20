@@ -2,8 +2,9 @@ use crate::api::search::simple::filter::{
     EmailSearch, FilterVariantToSearchArgs, ScopedCalendarEventFilters, email_search,
 };
 use crate::domain::email_search::ThreadStates;
+use crate::domain::search_lanes::{LaneTurn, SearchLanes};
 
-use crate::api::search::caller::caller_label;
+use crate::api::search::caller::{caller_label, search_caller};
 use crate::api::search::crm_company;
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
@@ -381,6 +382,8 @@ fn unified_search_span(
         search.email_state_threads_checked = tracing::field::Empty,
         search.email_state_threads_kept = tracing::field::Empty,
         search.email_state_bound_reached = tracing::field::Empty,
+        search.lane_wait_ms = tracing::field::Empty,
+        search.lane_outcome = tracing::field::Empty,
     )
 }
 
@@ -423,12 +426,38 @@ pub(in crate::api::search) async fn perform_unified_search(
 > {
     let span = unified_search_span(user, &query_params, &req);
     async {
+        let _turn = take_search_turn(&ctx.search_lanes, user).await?;
         search_unified_sources(ctx, &user.user_context, crm_access, query_params, req)
             .await
             .inspect_err(|error| tracing::error!(error = %error))
     }
     .instrument(span)
     .await
+}
+
+/// Wait for the caller's turn to search, recording on the current span how
+/// long it waited and whether it got one. Held until the search ends.
+async fn take_search_turn(
+    lanes: &SearchLanes,
+    user: &MacroUserAuthentication,
+) -> Result<LaneTurn, SearchError> {
+    let turn = lanes.take_turn(search_caller(user)).await;
+    let (waited, outcome) = match &turn {
+        Ok(turn) if turn.queued => (turn.waited, "queued"),
+        Ok(turn) => (turn.waited, "immediate"),
+        Err(refusal) => (refusal.waited, "refused"),
+    };
+    let waited_ms = u64::try_from(waited.as_millis()).unwrap_or(u64::MAX);
+    let span = tracing::Span::current();
+    span.record("search.lane_wait_ms", waited_ms);
+    span.record("search.lane_outcome", outcome);
+    turn.map_err(|_| {
+        tracing::warn!(
+            waited_ms,
+            "search refused: the caller's searches kept every slot busy"
+        );
+        SearchError::Busy
+    })
 }
 
 async fn search_unified_sources(
@@ -1071,6 +1100,7 @@ async fn search_unified_sources(
             (status = 200, body=SimpleSearchResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds."),
             (status = 500, body=ErrorResponse),
     )
 )]

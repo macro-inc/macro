@@ -1,5 +1,6 @@
 //! Which kind of caller a search came from, as far as its credential says.
 
+use crate::domain::search_lanes::{SearchActor, SearchCaller};
 use macro_authorization::{CredentialOrigin, MacroUserAuthentication};
 
 /// The credential a search arrived with, as a span value. A session is one of
@@ -16,4 +17,16 @@ pub(in crate::api::search) fn caller_label(user: &MacroUserAuthentication) -> &'
         CredentialOrigin::Harness => "harness",
         CredentialOrigin::Internal => "internal",
     }
+}
+
+/// Whose lane a search waits in: the user's own, or the agent's or routine's
+/// that the credential is signed for, so a person never waits behind a
+/// program acting for them.
+pub(in crate::api::search) fn search_caller(user: &MacroUserAuthentication) -> SearchCaller {
+    let actor = match (user.agent_id, user.routine_id) {
+        (Some(agent), _) => SearchActor::Agent(agent.as_uuid()),
+        (None, Some(routine)) => SearchActor::Routine(routine),
+        (None, None) => SearchActor::Person,
+    };
+    SearchCaller::new(&user.user_context.user_id, actor)
 }

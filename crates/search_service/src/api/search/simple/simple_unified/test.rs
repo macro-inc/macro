@@ -947,3 +947,120 @@ async fn a_checked_page_counts_hits_as_an_unfiltered_page_does() {
     assert_eq!(content.hits.len(), 100);
     assert_eq!(rounds.rounds, 1);
 }
+
+// ============ Tests for the caller's turn (search lanes) ============
+
+fn agent_of_caller() -> MacroUserAuthentication {
+    MacroUserAuthentication {
+        agent_id: Some(bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA9E7))),
+        ..caller(macro_authorization::CredentialOrigin::MacroApiJwt)
+    }
+}
+
+fn one_at_a_time() -> SearchLanes {
+    SearchLanes::new(crate::domain::search_lanes::LanePolicy {
+        concurrency: 1,
+        max_wait: std::time::Duration::from_secs(20),
+    })
+}
+
+fn search_span() -> tracing::Span {
+    unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::MacroApiJwt),
+        &SearchPaginationParams {
+            page: None,
+            page_size: None,
+            cursor: None,
+        },
+        &UnifiedSearchRequest {
+            query: "quarterly plan".to_string(),
+            match_type: MatchType::Partial,
+            filters: Default::default(),
+            search_on: SearchOn::NameContent,
+            include_crm: false,
+            calendar_event_scope: Default::default(),
+            term_matching: Default::default(),
+            collapse: None,
+        },
+    )
+}
+
+/// A search waits in its caller's lane and the span says how long and how
+/// it ended, so a slow search can be told apart from a queued one.
+#[tokio::test(start_paused = true)]
+async fn a_search_records_its_wait_for_the_callers_turn_on_its_span() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let lanes = one_at_a_time();
+
+    let running = take_search_turn(&lanes, &agent_of_caller())
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "immediate");
+    assert_eq!(span["search.lane_wait_ms"], "0");
+
+    let refused = take_search_turn(&lanes, &agent_of_caller())
+        .instrument(search_span())
+        .await;
+    assert!(matches!(refused, Err(SearchError::Busy)));
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "refused");
+    assert_eq!(span["search.lane_wait_ms"], "20000");
+
+    let mut waiting = tokio::spawn({
+        let lanes = std::sync::Arc::new(lanes);
+        async move {
+            take_search_turn(&lanes, &agent_of_caller())
+                .instrument(search_span())
+                .await
+                .map(|turn| turn.waited)
+        }
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), &mut waiting)
+            .await
+            .is_err()
+    );
+    drop(running);
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        std::time::Duration::from_secs(3)
+    );
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "queued");
+    assert_eq!(span["search.lane_wait_ms"], "3000");
+}
+
+/// The person's own search, from their app session, never waits behind the
+/// agent acting for them, even while the agent's lane is full.
+#[tokio::test(start_paused = true)]
+async fn a_persons_own_search_never_waits_behind_their_agents() {
+    let lanes = one_at_a_time();
+    let _agents = take_search_turn(&lanes, &agent_of_caller()).await.unwrap();
+
+    let own = take_search_turn(
+        &lanes,
+        &caller(macro_authorization::CredentialOrigin::Session),
+    )
+    .await
+    .unwrap();
+    assert!(!own.queued);
+
+    let routine = MacroUserAuthentication {
+        routine_id: Some(Uuid::from_u128(0x2007)),
+        ..caller(macro_authorization::CredentialOrigin::MacroApiJwt)
+    };
+    let routines = take_search_turn(&lanes, &routine).await.unwrap();
+    assert!(!routines.queued);
+}
+
+/// A refused search is a 429 the caller can pace on, not a failure.
+#[test]
+fn a_refused_search_is_answered_too_many_requests_with_retry_after() {
+    let response = axum::response::IntoResponse::into_response(SearchError::Busy);
+    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "1");
+}

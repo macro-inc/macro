@@ -18676,6 +18676,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "calendar_events",
  "channels",
  "chrono",

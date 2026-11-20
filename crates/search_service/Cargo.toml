@@ -59,4 +59,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
 tracing-subscriber = { workspace = true }
