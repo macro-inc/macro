@@ -560,6 +560,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
       let permanentError: Error | undefined;
 
       const pending = [];
+      let threw = false;
       const host = getGraphqlCacheHost();
       const prepareGrouped = host
         ? createGroupedPropertyPreparation(host)
@@ -593,6 +594,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
               }
               return { kind: 'result' as const, result };
             } catch (error) {
+              threw = true;
               return {
                 kind: 'error' as const,
                 error:
@@ -607,7 +609,8 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
           // Preserve layer ordering for relation recipes, not HTTP completion.
           await enqueued;
         }
-        input.onAccepted?.();
+        // A save that threw this early was never written or queued.
+        if (!threw) input.onAccepted?.();
         for (const settled of await Promise.all(pending)) {
           if (settled.kind === 'error') {
             permanentError ??= settled.error;
