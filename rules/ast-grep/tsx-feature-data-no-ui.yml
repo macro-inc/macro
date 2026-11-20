@@ -19,6 +19,7 @@ files:
   - apps/web/src/features/passwords/primitives/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
+  - apps/web/src/features/channel-notification-stacks/primitives/**
   - apps/web/src/features/command/queries/**
   - apps/web/src/features/document-composer/queries/**
   - apps/web/src/features/task-composer/queries/**

@@ -406,6 +406,11 @@ and every answer, on desktop and phone, and wraps from the requester name stored
 the event (backend-free):
 `bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
+The desktop channel gutter's Mark done checks and notification list (docked in
+a wide pane, a popover in a narrow one, hidden when the gutter has no room)
+have a backend-free regression over the real checks, list and stacking:
+`bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`.
+
 Channel history keeps the message being read in place when a split opens or
 closes beside the channel (the pane rewraps every message); the backend-free
 regression over the production `ThreadList` is

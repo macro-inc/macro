@@ -1091,6 +1091,33 @@ brings that row back into the inbox, displays the reaction and channel name, and
 opens the reacted-to message. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
+## Marking notifications done in the channel gutter
+
+Desktop only, behind `enable-channel-notification-gutter`, which is on in
+local development (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER` overrides it).
+Open a channel in a pane at least 1400px wide, so the list docks in the
+gutter, with notifications from another account: new top-level messages, a
+thread reply, and a mention. Then narrow the pane to see the popover and the
+hidden states. Check that:
+
+- A round check sits in the gutter left of each stack's newest message. For a
+  thread, it sits beside the newest notified reply, or beside the top-level
+  message while the thread is collapsed. Clicking it removes the check and
+  marks that stack's notifications done in Home.
+- A toggle with the notifications bell and a count sits at the top left of
+  the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
+  card docked in the gutter. Narrower panes open the list as a popover. Not
+  done and Unread switch which stacks it lists. Clicking a row scrolls to its
+  message, and the row's check marks it done (or read, in Unread). While a
+  list's notifications load it says so, and if the read fails it offers Retry
+  instead of an empty list.
+- Unseen stacks show an unread dot before their icon, and the toggle shows
+  one after its count while any not-done stack is unseen. Reading a stack (here, in Home, or
+  on another device) clears its dot.
+- With nothing left to mark done, the bell and the list hide (an open popover
+  closes); a new notification brings the bell back.
+- Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
+
 ## Requests to join
 
 Opening a private or team channel you are not in shows **You don't have access
