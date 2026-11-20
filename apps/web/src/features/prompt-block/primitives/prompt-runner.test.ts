@@ -161,6 +161,36 @@ describe('createPromptRunner', () => {
     expect(started).toEqual([]);
   });
 
+  it('starts nothing when the account changed after the viewer confirmed', async () => {
+    const [accountId, setAccountId] = createSignal('macro|viewer@example.com');
+    const { runner, started } = setup({ accountId });
+
+    const confirmedAs = accountId();
+    setAccountId('macro|other@example.com');
+
+    expect(await runner.run('Draft a reply', confirmedAs)).toBe('unavailable');
+    expect(started).toEqual([]);
+  });
+
+  it('starts nothing when the coder Auto chose stopped being available', async () => {
+    const [roster, setRoster] = createSignal([MACRO, CURSOR]);
+    let answer!: (mode: 'chat' | 'code') => void;
+    const { runner, started } = setup({
+      roster,
+      chooseMode: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+
+    const run = runner.run('Fix the flaky test');
+    setRoster([MACRO, { ...CURSOR, unavailableReason: 'Connect Cursor' }]);
+    answer('code');
+
+    expect(await run).toBe('unavailable');
+    expect(started).toEqual([]);
+  });
+
   it('starts nothing for an empty prompt', async () => {
     const { runner, started } = setup();
 

@@ -1,10 +1,7 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect as baseExpect, type Page, test } from '@playwright/test';
 
-declare global {
-  interface Window {
-    openedSplits: { content: unknown; options?: unknown }[];
-  }
-}
+// The first prompt card loads the run controls' chunk from the dev server.
+const expect = baseExpect.configure({ timeout: 15_000 });
 
 const PROMPT_START = 'I am joining the team.';
 

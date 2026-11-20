@@ -25,6 +25,7 @@ export function PromptBlockControlsView(props: { prompt: () => string }) {
   const confirmAndRun = async () => {
     // The text confirmed is the text that runs, even if the block changes meanwhile.
     const prompt = props.prompt();
+    const accountId = context.accountId();
     if (!prompt.trim() || runner.running()) return;
     const confirmed = await confirmDialog({
       title: t('promptBlock.confirmTitle'),
@@ -33,7 +34,7 @@ export function PromptBlockControlsView(props: { prompt: () => string }) {
       cancelLabel: t('promptBlock.cancel'),
     });
     if (!confirmed) return;
-    if ((await runner.run(prompt)) === 'unavailable')
+    if ((await runner.run(prompt, accountId)) === 'unavailable')
       toast.failure(t('promptBlock.unavailable'));
   };
 

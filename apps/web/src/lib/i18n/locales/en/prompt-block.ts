@@ -1,6 +1,8 @@
 export default {
   // Header of a prompt block: text written to be sent to an agent.
   label: 'Prompt',
+  // Code block type menu entry that turns the block into a prompt block.
+  executablePrompt: 'Executable prompt',
   // Agent picker beside the Run button.
   agent: 'Agent to run with',
   auto: 'Auto',

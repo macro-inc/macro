@@ -11,7 +11,7 @@ import {
   runnableAgents,
 } from '../core/prompt-agents';
 
-/** Why a run did not start a session. */
+/** What a run did: started a session, or why it did not. */
 export type PromptRunOutcome = 'started' | 'empty' | 'busy' | 'unavailable';
 
 /**
@@ -30,25 +30,34 @@ export function createPromptRunner(context: PromptBlockContext) {
     return id;
   };
 
-  const agentFor = async (prompt: string): Promise<RosterAgent | undefined> => {
+  /** The agent to run, choosing for Auto; looked up again once Auto has chosen. */
+  const agentIdFor = async (prompt: string): Promise<string | undefined> => {
     const id = choice();
-    if (id !== AUTO_AGENT_CHOICE)
-      return agents().find((agent) => agent.id === id);
+    if (id !== AUTO_AGENT_CHOICE) return id;
     const macro = macroAgent(agents());
     const coder = autoCoder(agents(), context.recentAgentIds());
-    if (!coder) return macro;
-    return (await context.chooseMode(prompt)) === 'code' ? coder : macro;
+    if (!coder) return macro?.id;
+    return (await context.chooseMode(prompt)) === 'code' ? coder.id : macro?.id;
   };
 
-  const run = async (prompt: string): Promise<PromptRunOutcome> => {
+  /**
+   * Starts a session with `prompt`. `accountId` is the account the viewer
+   * confirmed as; a run whose account has changed since starts nothing.
+   */
+  const run = async (
+    prompt: string,
+    accountId = context.accountId()
+  ): Promise<PromptRunOutcome> => {
     const text = prompt.trim();
     if (!text) return 'empty';
     if (running()) return 'busy';
-    const accountId = context.accountId();
     setRunning(true);
     try {
-      const agent = await agentFor(text);
+      const id = await agentIdFor(text);
       if (context.accountId() !== accountId) return 'unavailable';
+      const agent: RosterAgent | undefined = agents().find(
+        (option) => option.id === id
+      );
       if (!agent) return 'unavailable';
       context.start({ prompt: text, botId: agent.botId });
       return 'started';

@@ -170,7 +170,7 @@ function CodeLanguageSelector(props: {
               >
                 <TerminalIcon class="size-4 shrink-0" />
                 <span class="flex-1 truncate">
-                  {LanguageDefinitions.prompt.label}
+                  {t('promptBlock.executablePrompt')}
                 </span>
               </Dropdown.Item>
             </Dropdown.Group>
