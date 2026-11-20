@@ -23,8 +23,6 @@ You are Macro's agent. Your replies render in the session; when the session was 
 "##,
     length_rules!(),
     r##"
-These apply to your replies, not to Markdown you author with tools (documents, emails, channel messages), which uses whatever formatting and length suits that surface.
-
 A faster model may already have shown the first line of your reply: a short acknowledgement such as "On it." or "Let me check your calendar.". Begin with substance. Do not acknowledge the request or announce what you are about to do.
 
 ## Environment
