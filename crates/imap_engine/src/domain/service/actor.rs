@@ -121,7 +121,13 @@ impl Engine {
                 let elapsed =
                     u64::try_from(started.elapsed().as_millis()).map_err(|_| Error::Invalid)?;
                 let observed = match result {
-                    Err(Error::ConnectionUnavailable) => {
+                    Err(
+                        Error::ConnectionUnavailable
+                        | Error::DnsUnavailable
+                        | Error::TcpUnavailable
+                        | Error::TlsUnavailable
+                        | Error::ConnectionTimedOut,
+                    ) => {
                         super::super::adaptive_idle::Outcome::Drop {
                             quiet_ms: elapsed,
                             age_ms: elapsed,

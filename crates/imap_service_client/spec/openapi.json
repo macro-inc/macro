@@ -493,6 +493,10 @@
           "credentials_rejected",
           "credentials_unavailable",
           "connection_unavailable",
+          "dns_unavailable",
+          "tcp_unavailable",
+          "tls_unavailable",
+          "connection_timed_out",
           "send_rejected",
           "throttled"
         ],

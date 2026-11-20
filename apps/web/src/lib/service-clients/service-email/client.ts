@@ -160,6 +160,10 @@ async function imapConnectionError(response: Response) {
     'invalid',
     'throttled',
     'connection_unavailable',
+    'dns_unavailable',
+    'tcp_unavailable',
+    'tls_unavailable',
+    'connection_timed_out',
     'conflict',
   ];
   return {

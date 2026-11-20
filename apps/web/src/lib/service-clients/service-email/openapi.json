@@ -2297,6 +2297,36 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
           }
         }
       }

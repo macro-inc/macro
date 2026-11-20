@@ -21,3 +21,6 @@ source DTOs and injects tracing through its pre-hook.
 
 Never accept arbitrary upload URLs. Upload identifiers are scoped by the link,
 and the service validates the credential binding before reading any bytes.
+
+- Regenerate the error schema when adding a closed engine failure category;
+  network failures must remain distinct from verified credential rejection.

@@ -68,6 +68,9 @@ fn data_block(wire: &str) -> Result<(Vec<u8>, u64), Error> {
 #[cfg(test)]
 mod extensions_test;
 
+#[cfg(test)]
+mod authentication_test;
+
 pub(super) struct Pooled {
     stream: Stream,
     extensions: Extensions,
@@ -160,40 +163,7 @@ impl ProtocolTransport {
             advertised = ehlo(&mut stream).await?;
         }
         let extensions = Extensions::parse(&advertised);
-        let code = if extensions.plain {
-            let token = zeroize::Zeroizing::new(STANDARD.encode(format!(
-                "\0{}\0{}",
-                login.endpoint.username, login.password.0
-            )));
-            let auth = zeroize::Zeroizing::new(format!("AUTH PLAIN {}\r\n", token.as_str()));
-            stream
-                .write_all(auth.as_bytes())
-                .await
-                .map_err(|_| Error::ConnectionUnavailable)?;
-            response(&mut stream).await?.0
-        } else if extensions.login {
-            command(&mut stream, b"AUTH LOGIN\r\n", 334).await?;
-            let username = zeroize::Zeroizing::new(format!(
-                "{}\r\n",
-                STANDARD.encode(&login.endpoint.username)
-            ));
-            command(&mut stream, username.as_bytes(), 334).await?;
-            let password =
-                zeroize::Zeroizing::new(format!("{}\r\n", STANDARD.encode(&login.password.0)));
-            stream
-                .write_all(password.as_bytes())
-                .await
-                .map_err(|_| Error::ConnectionUnavailable)?;
-            response(&mut stream).await?.0
-        } else {
-            return Err(Error::Forbidden);
-        };
-        if matches!(code, 535 | 534 | 530) {
-            return Err(Error::CredentialsRejected);
-        }
-        if code != 235 {
-            return Err(Error::ConnectionUnavailable);
-        }
+        authenticate(&mut stream, &extensions, login).await?;
         Ok((stream, extensions))
     }
     pub(super) async fn submit_inner(
@@ -375,3 +345,65 @@ async fn submission_command<S: AsyncRead + AsyncWrite + Unpin>(
 
 #[cfg(test)]
 mod transcript_test;
+
+// Authentication replies have different semantics from message-submission replies.
+#[tracing::instrument(name = "smtp.authenticate", skip_all, fields(mail.stage = "smtp-auth"), err)]
+async fn authenticate<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
+    stream: &mut S,
+    extensions: &Extensions,
+    login: &Login,
+) -> Result<(), Error> {
+    let code = if extensions.plain {
+        let token = zeroize::Zeroizing::new(STANDARD.encode(format!(
+            "\0{}\0{}",
+            login.endpoint.username, login.password.0
+        )));
+        let auth = zeroize::Zeroizing::new(format!("AUTH PLAIN {}\r\n", token.as_str()));
+        stream
+            .write_all(auth.as_bytes())
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        response(stream).await?.0
+    } else if extensions.login {
+        auth_command(stream, b"AUTH LOGIN\r\n", 334).await?;
+        let username =
+            zeroize::Zeroizing::new(format!("{}\r\n", STANDARD.encode(&login.endpoint.username)));
+        auth_command(stream, username.as_bytes(), 334).await?;
+        let password =
+            zeroize::Zeroizing::new(format!("{}\r\n", STANDARD.encode(&login.password.0)));
+        stream
+            .write_all(password.as_bytes())
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        response(stream).await?.0
+    } else {
+        return Err(Error::Forbidden);
+    };
+    if code == 535 {
+        return Err(Error::CredentialsRejected);
+    }
+    if matches!(code, 530 | 534 | 538) {
+        return Err(Error::Forbidden);
+    }
+    if code != 235 {
+        return Err(Error::ConnectionUnavailable);
+    }
+    Ok(())
+}
+
+async fn auth_command<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
+    stream: &mut S,
+    bytes: &[u8],
+    expected: u16,
+) -> Result<(), Error> {
+    stream
+        .write_all(bytes)
+        .await
+        .map_err(|_| Error::ConnectionUnavailable)?;
+    match response(stream).await?.0 {
+        code if code == expected => Ok(()),
+        535 => Err(Error::CredentialsRejected),
+        530 | 534 | 538 => Err(Error::Forbidden),
+        _ => Err(Error::ConnectionUnavailable),
+    }
+}

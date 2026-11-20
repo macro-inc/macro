@@ -94,6 +94,11 @@ Google Workspace and enabled Outlook connections offer provider consent.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields full-screen.
+A verified sign-in refusal shows **Sign-in was rejected. Check your username
+and app password.** The provider's **Create an app password** link stays
+available. Server settings and confirmation remain; re-enter the cleared
+password and retry. DNS, TCP, TLS and timeout failures show their own guidance
+instead of guessing that a password was wrong.
 **Connect new** and **Add another inbox** open the provider chooser immediately.
 If providers cannot load, **Try again** retries the read without starting an
 OAuth flow. Check that retry restores the offered providers and that calendar

@@ -137,6 +137,78 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   expect(result).not.toHaveBeenCalled();
 });
 
+it('retains confirmed settings and provider help after a rejected login, then retries with new secrets', async () => {
+  mail.discover.mockResolvedValueOnce(
+    ok({
+      imap: {
+        host: 'imap.example.com',
+        username: 'incoming-user',
+        port: 993,
+        tls: 'implicit',
+      },
+      smtp: {
+        host: 'smtp.example.com',
+        username: 'outgoing-user',
+        port: 465,
+        tls: 'implicit',
+      },
+      helpUrl: 'https://example.com/app-password',
+      hostConfirmationRequired: true,
+    })
+  );
+  mail.connect
+    .mockResolvedValueOnce(
+      err([
+        { code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' },
+      ])
+    )
+    .mockResolvedValueOnce(ok({ linkId: 'connected-inbox' }));
+  const result = vi.fn();
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={result}
+      emailAddress="owner@example.com"
+    />
+  ));
+  const password = await screen.findByLabelText('Password or app password');
+  const confirm = screen.getByRole('checkbox', { name: /I trust/ });
+  fireEvent.click(confirm);
+  fireEvent.input(password, { target: { value: 'incorrect-test-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'Sign-in was rejected. Check your username and app password.'
+  );
+  expect(password).toHaveProperty('value', '');
+  expect(confirm).toHaveProperty('checked', true);
+  expect(
+    screen
+      .getByRole('link', { name: 'Create an app password' })
+      .getAttribute('href')
+  ).toBe('https://example.com/app-password');
+  const imap = screen.getByRole('group', { name: 'Incoming mail (IMAP)' });
+  expect(within(imap).getByLabelText('Server name')).toHaveProperty(
+    'value',
+    'imap.example.com'
+  );
+  expect(within(imap).getByLabelText('Username')).toHaveProperty(
+    'value',
+    'incoming-user'
+  );
+  fireEvent.input(password, { target: { value: 'corrected-test-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  await vi.waitFor(() => expect(result).toHaveBeenCalledWith('connected'));
+  expect(mail.connect).toHaveBeenCalledTimes(2);
+  expect(mail.connect.mock.calls[1][0].imap.password).toBe(
+    'corrected-test-password'
+  );
+  expect(mail.connect.mock.calls[1][0].requestId).not.toBe(
+    mail.connect.mock.calls[0][0].requestId
+  );
+  expect(password).toHaveProperty('value', '');
+});
+
 it('discards discovery when the signed-in account changes', async () => {
   const outcome = Promise.withResolvers<Result<Discovery, never>>();
   mail.discover.mockReturnValue(outcome.promise);

@@ -95,9 +95,12 @@ impl IntoResponse for ApiError {
             Error::Conflict => StatusCode::CONFLICT,
             Error::CursorOutdated => StatusCode::GONE,
             Error::CredentialsRejected => StatusCode::UNAUTHORIZED,
-            Error::CredentialsUnavailable | Error::ConnectionUnavailable => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            Error::CredentialsUnavailable
+            | Error::ConnectionUnavailable
+            | Error::DnsUnavailable
+            | Error::TcpUnavailable
+            | Error::TlsUnavailable
+            | Error::ConnectionTimedOut => StatusCode::SERVICE_UNAVAILABLE,
             Error::SendRejected => StatusCode::UNPROCESSABLE_ENTITY,
             Error::Throttled => StatusCode::TOO_MANY_REQUESTS,
         };

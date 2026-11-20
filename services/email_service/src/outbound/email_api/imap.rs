@@ -308,7 +308,11 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
         models::Error::NotFound => EmailApiError::NotFound,
         models::Error::Conflict => EmailApiError::Conflict,
         models::Error::CursorOutdated => EmailApiError::OutdatedCursor,
-        models::Error::ConnectionUnavailable => EmailApiError::Transient {
+        models::Error::ConnectionUnavailable
+        | models::Error::DnsUnavailable
+        | models::Error::TcpUnavailable
+        | models::Error::TlsUnavailable
+        | models::Error::ConnectionTimedOut => EmailApiError::Transient {
             message: "IMAP service is temporarily unavailable".into(),
         },
         models::Error::SendRejected => EmailApiError::SendRejected {

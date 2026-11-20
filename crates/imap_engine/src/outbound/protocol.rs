@@ -19,6 +19,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt},
     time::{Duration, timeout},
 };
+use tracing::Instrument;
 use wire::{address, command, flag_name, imap_error, line, quoted, response, without_bcc};
 
 const IO_TIMEOUT: Duration = Duration::from_secs(60);
@@ -94,13 +95,28 @@ impl ProtocolTransport {
             stream
         };
         let client = async_imap::Client::new(stream);
-        let mut session = timeout(
-            IO_TIMEOUT,
-            client.login(&login.endpoint.username, &login.password.0),
-        )
-        .await
-        .map_err(|_| Error::ConnectionUnavailable)?
-        .map_err(|(e, _)| imap_error(e, true))?;
+        let mut session = async {
+            timeout(
+                IO_TIMEOUT,
+                client.login(&login.endpoint.username, &login.password.0),
+            )
+            .await
+            .map_err(|_| Error::ConnectionTimedOut)?
+            .map_err(|(error, _)| {
+                let classified = imap_error(error, true);
+                tracing::warn!(
+                    mail.stage = "imap-login",
+                    error.code = %classified,
+                    "Mail authentication failed"
+                );
+                classified
+            })
+        }
+        .instrument(tracing::info_span!(
+            "imap.authenticate",
+            mail.stage = "imap-login"
+        ))
+        .await?;
         // Capabilities obtained before STARTTLS are untrusted; query again after TLS+login.
         session
             .capabilities()
@@ -182,7 +198,7 @@ impl MailTransport for ProtocolTransport {
     async fn verify_features(&self, c: &Credentials) -> Result<Option<ServerFeatures>, Error> {
         timeout(IO_TIMEOUT, self.verify_inner(c))
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?
+            .map_err(|_| Error::ConnectionTimedOut)?
             .map(Some)
     }
     #[tracing::instrument(skip_all, err)]

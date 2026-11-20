@@ -1,3 +1,4 @@
+mod authentication;
 use super::*;
 use crate::outbound::network::LocalEndpoints;
 use std::collections::BTreeMap;

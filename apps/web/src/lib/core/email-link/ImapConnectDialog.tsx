@@ -111,7 +111,15 @@ function connectionError(code?: string): string {
     case 'disabled':
       return 'New IMAP connections are temporarily unavailable.';
     case 'credentials_rejected':
-      return 'Your mail provider declined the login. Check your usernames and passwords.';
+      return 'Sign-in was rejected. Check your username and app password.';
+    case 'dns_unavailable':
+      return 'Could not find the mail server. Check the server name and try again.';
+    case 'tcp_unavailable':
+      return 'Could not reach the mail server. Check its port and try again.';
+    case 'tls_unavailable':
+      return 'Could not establish a secure connection. Check the server name and TLS settings.';
+    case 'connection_timed_out':
+      return 'The mail server took too long to respond. Try again in a few minutes.';
     case 'invalid':
     case 'forbidden':
       return 'Check the server names, ports and usernames, then confirm the servers.';
@@ -274,7 +282,16 @@ function ConnectForm(props: ImapConnectProps) {
       else setError(connectionError(code));
       // A definitive refusal is a new verification on next submit. A lost
       // response keeps its id so the server can return the completed link.
-      if (code && code !== 'connection_unavailable')
+      if (
+        code &&
+        ![
+          'connection_unavailable',
+          'dns_unavailable',
+          'tcp_unavailable',
+          'tls_unavailable',
+          'connection_timed_out',
+        ].includes(code)
+      )
         requestId = crypto.randomUUID();
     } finally {
       clearPasswords();

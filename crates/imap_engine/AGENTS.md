@@ -77,3 +77,8 @@ accepts bearer access to a remote mail server.
 - Negotiate SMTPUTF8 for internationalized envelopes or MIME headers and
   8BITMIME for 8-bit data before sending MAIL. Unsupported capabilities are
   definite rejections; a lost DATA acknowledgment remains Unknown.
+
+- Classify explicit IMAP authentication response codes before diagnostic prose.
+  SMTP authentication replies are separate from submission replies: 535 rejects
+  credentials, temporary failures and transport closes never imply bad passwords.
+  Trace closed stage/error fields only; never emit login commands or provider text.

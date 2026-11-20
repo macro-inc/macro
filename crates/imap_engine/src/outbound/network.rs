@@ -21,6 +21,7 @@ use tokio_rustls::{
         pki_types::{CertificateDer, ServerName, pem::PemObject},
     },
 };
+use tracing::Instrument;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_LITERAL: usize = 25 * 1024 * 1024;
@@ -70,6 +71,7 @@ impl Connector {
         })
     }
     /// Validate endpoint syntax and standard protocol ports before resolving.
+    #[tracing::instrument(name = "mail.endpoint.validate", skip_all, fields(mail.stage = "endpoint-validation"), err)]
     pub fn validate(e: &Endpoint, imap: bool) -> Result<(), Error> {
         let allowed = if imap {
             matches!(
@@ -126,11 +128,45 @@ impl Connector {
             .map_err(|_| Error::Throttled)?;
         let key = format!("{}:{}", e.host.to_ascii_lowercase(), e.port);
         let attempt = self.health.admit(key.clone())?;
-        let addresses = if let Some(address) = self.local.addresses.get(&key) {
+        let addresses = match self.resolve(e, &key).await {
+            Err(Error::Forbidden) => {
+                attempt.ignore();
+                return Err(Error::Forbidden);
+            }
+            result => result?,
+        };
+        let mut timed_out = false;
+        for address in addresses {
+            match timeout(CONNECT_TIMEOUT, TcpStream::connect(address))
+                .instrument(tracing::info_span!("mail.tcp.connect", mail.stage = "tcp"))
+                .await
+            {
+                Ok(Ok(socket)) => {
+                    socket
+                        .set_nodelay(true)
+                        .map_err(|_| Error::TcpUnavailable)?;
+                    return Ok(Stream::plain(socket, permit, attempt));
+                }
+                Err(_) => timed_out = true,
+                Ok(Err(_)) => {}
+            }
+        }
+        let error = if timed_out {
+            Error::ConnectionTimedOut
+        } else {
+            Error::TcpUnavailable
+        };
+        tracing::warn!(mail.stage = "tcp", error.code = %error, "Mail connection failed");
+        Err(error)
+    }
+
+    #[tracing::instrument(name = "mail.dns.resolve", skip_all, fields(mail.stage = "dns"), err)]
+    async fn resolve(&self, e: &Endpoint, key: &str) -> Result<Vec<SocketAddr>, Error> {
+        let addresses = if let Some(address) = self.local.addresses.get(key) {
             timeout(CONNECT_TIMEOUT, tokio::net::lookup_host(address.as_str()))
                 .await
-                .map_err(|_| Error::ConnectionUnavailable)?
-                .map_err(|_| Error::ConnectionUnavailable)?
+                .map_err(|_| Error::ConnectionTimedOut)?
+                .map_err(|_| Error::DnsUnavailable)?
                 .collect::<Vec<SocketAddr>>()
         } else {
             let values = timeout(
@@ -138,30 +174,23 @@ impl Connector {
                 tokio::net::lookup_host((e.host.as_str(), e.port)),
             )
             .await
-            .map_err(|_| Error::ConnectionUnavailable)?
-            .map_err(|_| Error::ConnectionUnavailable)?
+            .map_err(|_| Error::ConnectionTimedOut)?
+            .map_err(|_| Error::DnsUnavailable)?
             .collect::<Vec<_>>();
             // Reject the whole mixed answer rather than allowing an internal-address side channel.
             if values.is_empty()
                 || values.len() > 16
                 || values.iter().any(|a| egress_guard::is_blocked_ip(a.ip()))
             {
-                attempt.ignore();
                 return Err(Error::Forbidden);
             }
             values
         };
-        for address in addresses {
-            if let Ok(Ok(socket)) = timeout(CONNECT_TIMEOUT, TcpStream::connect(address)).await {
-                socket
-                    .set_nodelay(true)
-                    .map_err(|_| Error::ConnectionUnavailable)?;
-                return Ok(Stream::plain(socket, permit, attempt));
-            }
-        }
-        Err(Error::ConnectionUnavailable)
+        Ok(addresses)
     }
+
     /// Upgrade only the checked connection, using the original hostname for SNI/certificate verification.
+    #[tracing::instrument(name = "mail.tls.connect", skip_all, fields(mail.stage = "tls"), err)]
     pub async fn tls(&self, e: &Endpoint, socket: Stream) -> Result<Stream, Error> {
         let Stream {
             inner,
@@ -175,8 +204,8 @@ impl Connector {
             TlsConnector::from(self.tls.clone()).connect(name, inner),
         )
         .await
-        .map_err(|_| Error::ConnectionUnavailable)?
-        .map_err(|_| Error::ConnectionUnavailable)?;
+        .map_err(|_| Error::ConnectionTimedOut)?
+        .map_err(|_| Error::TlsUnavailable)?;
         if let Some(attempt) = attempt {
             attempt.success();
         }

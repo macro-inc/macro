@@ -2064,3 +2064,7 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   retry on availability errors; never silently start Gmail on a failed read.
   Chooser capabilities omit the optional admin-consent callback and use a
   separate account/session cache variant from signed approval links.
+
+- Keep confirmed IMAP server settings after verification refusal, clear secret
+  fields, and offer the catalog app-password help link. Render only whitelisted
+  error guidance; a connection failure must never imply a rejected password.

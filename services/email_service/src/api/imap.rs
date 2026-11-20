@@ -87,6 +87,18 @@ impl IntoResponse for ConnectionError {
             ImapConnectionError::Provider(
                 Error::CursorOutdated | Error::ConnectionUnavailable | Error::SendRejected,
             ) => (StatusCode::BAD_GATEWAY, "connection_unavailable"),
+            ImapConnectionError::Provider(Error::DnsUnavailable) => {
+                (StatusCode::BAD_GATEWAY, "dns_unavailable")
+            }
+            ImapConnectionError::Provider(Error::TcpUnavailable) => {
+                (StatusCode::BAD_GATEWAY, "tcp_unavailable")
+            }
+            ImapConnectionError::Provider(Error::TlsUnavailable) => {
+                (StatusCode::BAD_GATEWAY, "tls_unavailable")
+            }
+            ImapConnectionError::Provider(Error::ConnectionTimedOut) => {
+                (StatusCode::GATEWAY_TIMEOUT, "connection_timed_out")
+            }
         };
         (
             status,
@@ -128,7 +140,23 @@ pub(crate) async fn discover(
     ))
 }
 
-#[utoipa::path(post,path="/email/links/imap",operation_id="imap_connect",request_body=ImapConnectRequest,responses((status=200,body=ImapConnectResponse),(status=400,body=ImapConnectionErrorResponse),(status=403,body=ImapConnectionErrorResponse),(status=409,body=ImapConnectionErrorResponse),(status=422,body=ImapConnectionErrorResponse),(status=429,body=ImapConnectionErrorResponse)))]
+#[utoipa::path(
+    post,
+    path = "/email/links/imap",
+    operation_id = "imap_connect",
+    request_body = ImapConnectRequest,
+    responses(
+        (status = 200, body = ImapConnectResponse),
+        (status = 400, body = ImapConnectionErrorResponse),
+        (status = 403, body = ImapConnectionErrorResponse),
+        (status = 409, body = ImapConnectionErrorResponse),
+        (status = 422, body = ImapConnectionErrorResponse),
+        (status = 429, body = ImapConnectionErrorResponse),
+        (status = 502, body = ImapConnectionErrorResponse),
+        (status = 503, body = ImapConnectionErrorResponse),
+        (status = 504, body = ImapConnectionErrorResponse),
+    )
+)]
 #[tracing::instrument(skip_all, err)]
 pub(crate) async fn connect(
     State(ctx): State<ApiContext>,
@@ -146,3 +174,6 @@ pub(crate) async fn connect(
         .await?;
     Ok(Json(ImapConnectResponse { link_id }))
 }
+
+#[cfg(test)]
+mod test;

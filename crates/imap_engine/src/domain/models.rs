@@ -333,6 +333,18 @@ pub enum Error {
     /// Transient provider or database failure.
     #[error("connection unavailable")]
     ConnectionUnavailable,
+    /// The public mail-server hostname could not be resolved.
+    #[error("mail server DNS unavailable")]
+    DnsUnavailable,
+    /// The resolved mail server did not accept a TCP connection.
+    #[error("mail server TCP unavailable")]
+    TcpUnavailable,
+    /// The server's authenticated TLS handshake failed.
+    #[error("mail server TLS unavailable")]
+    TlsUnavailable,
+    /// A bounded connection or verification operation timed out.
+    #[error("mail connection timed out")]
+    ConnectionTimedOut,
     /// Send rejected before acceptance.
     #[error("send rejected")]
     SendRejected,
