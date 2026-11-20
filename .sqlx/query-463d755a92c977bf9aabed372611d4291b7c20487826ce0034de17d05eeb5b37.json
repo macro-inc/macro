@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_captcha_solves (solve_id, run_id, user_id)\n               VALUES ($1, $2, $3) ON CONFLICT (solve_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "463d755a92c977bf9aabed372611d4291b7c20487826ce0034de17d05eeb5b37"
+}

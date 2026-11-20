@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, outcome AS \"outcome: Json<SolveOutcome>\",\n                      created_at < now() - make_interval(secs => $2) AS \"abandoned!\"\n               FROM agent_captcha_solves WHERE solve_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "outcome: Json<SolveOutcome>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "abandoned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "96388809da9e75bc5803d6cd93dc637194bc9a241cc6c1770a6525c234840a30"
+}

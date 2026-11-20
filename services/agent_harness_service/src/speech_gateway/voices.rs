@@ -216,6 +216,7 @@ impl VoiceProvider for VoiceCatalog {
         }
 
         self.0
+            .access
             .admission
             .admit(actor, AiFeature::AgentSession)
             .await

@@ -4,6 +4,10 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_credentials::AgentCreators;
+use ai_billing::{AiAdmissionError, AiAdmissionService};
+use ai_usage::AiFeature;
+use axum::http::{HeaderMap, StatusCode};
+use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
 use feature_flags::FeatureFlags;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -66,11 +70,61 @@ impl BrainRollout {
         }
     }
 
+    /// Every agent is enabled: only `brain_bench`, which has no flags.
+    #[cfg(feature = "brain-bench")]
+    pub(crate) fn always_on() -> Self {
+        Self {
+            evaluate: Some(Arc::new(|_| Box::pin(async { true }))),
+        }
+    }
+
     pub(crate) async fn enabled(&self, agent: &MacroUserIdStr<'static>) -> bool {
         let Some(evaluate) = &self.evaluate else {
             return false;
         };
         evaluate(agent.clone()).await
+    }
+}
+
+/// What the brain routes outside `/brain/anthropic` check before serving an
+/// agent: its key, `enable-agent-teammates` for its creator, and admission to
+/// spend Macro credits.
+#[derive(Clone)]
+pub(crate) struct BrainAccess {
+    pub(crate) brains: Arc<dyn BrainAuthenticator>,
+    pub(crate) rollout: BrainRollout,
+    pub(crate) admission: Arc<dyn AiAdmissionService>,
+}
+
+impl BrainAccess {
+    /// The agent behind the bearer key: 401 for no or an unknown key, 403
+    /// when agent teammates are off or admission refuses, 503 when a lookup
+    /// fails.
+    pub(crate) async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, StatusCode> {
+        let bearer = headers
+            .typed_get::<Authorization<Bearer>>()
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let brain = self
+            .brains
+            .authenticate(bearer.token())
+            .await
+            .map_err(|error| {
+                tracing::error!(error = ?error, "could not authenticate a brain");
+                StatusCode::SERVICE_UNAVAILABLE
+            })?
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+        if !self.rollout.enabled(&brain.user_id).await {
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        self.admission
+            .admit(&brain.user_id, AiFeature::AgentSession)
+            .await
+            .map_err(|error| match error {
+                AiAdmissionError::Denied(_) => StatusCode::FORBIDDEN,
+                AiAdmissionError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            })?;
+        Ok(brain)
     }
 }
 

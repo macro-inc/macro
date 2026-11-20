@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (\n                          WHERE finished_at IS NULL\n                            AND created_at >= now() - make_interval(secs => $2)\n                      ) AS \"in_flight!\",\n                      count(*) FILTER (WHERE created_at > now() - interval '1 hour') AS \"hourly!\",\n                      count(*) AS \"daily!\"\n               FROM agent_captcha_solves\n               WHERE user_id = $1 AND created_at > now() - interval '1 day'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "in_flight!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "hourly!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "daily!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0483731be3a6d3ae5e3403a886aeb6fca8cadb4f5b247a16261ad22530b96137"
+}

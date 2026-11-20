@@ -8,6 +8,7 @@ import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import { type Tab, withTab } from '@macro-inc/muppet/utilities/browser';
 import type { Base } from '../../context/index.ts';
 import { type BrowserConfig, browserConfig } from './config.ts';
+import { type DriverPorts, driverPorts } from './driver.ts';
 
 export type BrowserPorts = {
   readonly config: BrowserConfig;
@@ -15,6 +16,8 @@ export type BrowserPorts = {
   readonly withTab: <Value>(
     use: (tab: Tab) => Promise<Value>
   ) => Promise<Value>;
+  /** Who drives the screen, and the CAPTCHA solver's lease on it. */
+  readonly driving: DriverPorts;
 };
 
 export const browserPorts = (base: Base): BrowserPorts => {
@@ -22,6 +25,11 @@ export const browserPorts = (base: Base): BrowserPorts => {
   return {
     config,
     withTab: (use) => withTab(config.endpoint, use),
+    driving: driverPorts({
+      advisory: config.screenDriver,
+      lease: config.solverLease,
+      now: () => base.clock.now().epochMilliseconds,
+    }),
   };
 };
 

@@ -9,12 +9,15 @@ what the agent signs in to. DevTools at `MUPPET_BROWSER_CDP_URL` (the image sets
 | ------------ | ----------------------------------------------------------------------------------------------- |
 | `config.ts`  | The endpoint (from startup) and the screenshots directory.                                      |
 | `browse.ts`  | The steps over muppet's `Tab`, each a `browser.step` span. Pure.                                |
-| `context.ts` | The real port: muppet's `withTab` on the endpoint.                                              |
+| `context.ts` | The real port: muppet's `withTab` on the endpoint, and the driver files.                        |
+| `driver.ts`  | Who drives the screen: the agent, its owner (the harness's take-over file), or the CAPTCHA solver. |
 | `index.ts`   | `openPage`, `readPage`, `clickOn`, `typeInto`, `pasteInto`, `pressKey`, `screenshotPage`.       |
 
 - **Each step connects, works in the newest tab of the default context, and disconnects.** For
   anything the steps don't cover, a script drives the same browser with Playwright's
   `connectOverCDP` (the module's docs).
+- **One driver at a time.** Every step first checks `driver.ts`: while the owner has taken over
+  the screen (`$HOME/state/screen-driver`) or the CAPTCHA solver holds its lease, the step refuses.
 - **A secret never passes through the agent:** `copySecret` puts it on the display's clipboard,
   `pasteInto` focuses the field and sends Chromium's `paste` editing command, which reads that
   clipboard. Typing a password with `typeInto` is what the docs tell it never to do.

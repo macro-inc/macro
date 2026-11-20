@@ -3463,6 +3463,13 @@
       "crates/workspace-hack",
       "services/call_recording_preview_handler"
     ],
+    "capsolver_emulator": [
+      "crates/capsolver_emulator",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/workspace-hack"
+    ],
     "channel_bots": [
       "crates/activity",
       "crates/agent",

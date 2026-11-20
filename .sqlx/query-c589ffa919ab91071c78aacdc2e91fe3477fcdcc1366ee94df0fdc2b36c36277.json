@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_captcha_runs AS run SET ended_at = now()\n               WHERE run.id = (SELECT run_id FROM agent_captcha_solves WHERE solve_id = $1)\n                 AND run.ended_at IS NULL AND run.solves_used >= $2\n                 AND NOT EXISTS (\n                     SELECT 1 FROM agent_captcha_solves AS solve\n                     WHERE solve.run_id = run.id AND solve.finished_at IS NULL\n                 )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c589ffa919ab91071c78aacdc2e91fe3477fcdcc1366ee94df0fdc2b36c36277"
+}

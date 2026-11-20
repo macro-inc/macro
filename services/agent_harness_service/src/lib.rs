@@ -23,6 +23,9 @@ mod agent_runtime_directory;
 mod anthropic_gateway;
 mod api;
 mod bots_directory;
+#[cfg(feature = "brain-bench")]
+pub mod brain_bench;
+mod captcha_gateway;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
@@ -31,6 +34,7 @@ mod config;
 mod containers;
 mod conversation_admission;
 mod external_session_requests;
+mod fireworks_gateway;
 mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
@@ -43,6 +47,7 @@ mod routine_sessions;
 mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
+mod solver_runs;
 mod speech_gateway;
 mod trigger;
 mod voice_gateway;
@@ -1490,6 +1495,47 @@ pub async fn run() -> anyhow::Result<()> {
         speech_gateway::LIVEKIT_INFERENCE_URL,
         speech_gateway::DEEPGRAM_MODELS_URL,
     )?);
+    let brain_access = anthropic_gateway::brain::BrainAccess {
+        brains: brains.clone(),
+        rollout: brain_rollout.clone(),
+        admission: admission.clone(),
+    };
+    // No CapSolver key turns CAPTCHA solving off: every solve answers
+    // `notConfigured`; no Fireworks key makes every model call a 503. Either
+    // missing, a solver run answers `notConfigured`.
+    let capsolver = match config.capsolver_api_key.value().map(str::trim) {
+        Some(key) if !key.is_empty() => Some(captcha_gateway::Capsolver::new(
+            key,
+            macro_service_urls::CapsolverApiUrl::new()?.as_str(),
+        )?),
+        _ => None,
+    };
+    let firework_api_key = config
+        .firework_api_key
+        .value()
+        .map(str::trim)
+        .filter(|key| !key.is_empty());
+    let run_limits = solver_runs::RunLimits::default();
+    let solver_runs = Arc::new(solver_runs::pg::PgSolverRuns::new(pool.clone(), run_limits));
+    let captcha = captcha_gateway::CaptchaGateway::new(
+        brain_access.clone(),
+        capsolver,
+        firework_api_key.is_some(),
+        recorder.clone(),
+        captcha_gateway::Ledgers {
+            runs: solver_runs.clone(),
+            solves: solver_runs.clone(),
+            run_limits,
+            solve_limits: captcha_gateway::SolveLimits::default(),
+        },
+    );
+    let fireworks = fireworks_gateway::FireworksGateway::new(
+        brain_access,
+        recorder.clone(),
+        solver_runs,
+        fireworks_gateway::FIREWORKS_API_URL,
+        firework_api_key,
+    )?;
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
@@ -1501,7 +1547,9 @@ pub async fn run() -> anyhow::Result<()> {
         )?
         .with_brains(brains, brain_rollout),
     )
-    .merge(speech_gateway::router(speech.clone()));
+    .merge(speech_gateway::router(speech.clone()))
+    .merge(captcha_gateway::router(captcha))
+    .merge(fireworks_gateway::router(fireworks));
     let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(

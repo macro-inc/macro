@@ -42,7 +42,8 @@ startup loudly.
   `GoogleOauthCertsUrl`, `GoogleOauthAuthorizationUrl`, `GoogleOauthTokenUrl`,
   `GoogleOauthRevokeUrl`, `GoogleOauthTokenInfoUrl` for `crates/gmail_emulator`;
   `MicrosoftGraphUrl` for `crates/outlook_emulator`;
-  `GoogleGenerativeAiApiUrl` for `crates/model_emulator`; `TypesafeApiUrl` for
+  `GoogleGenerativeAiApiUrl` for `crates/model_emulator`; `CapsolverApiUrl`
+  for `crates/capsolver_emulator`; `TypesafeApiUrl` for
   the model stand-in of `crates/email_e2e`): the provider's host in
   every environment, with the override as the only way to point elsewhere.
   They are not part of the hand-copied table below.

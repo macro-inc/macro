@@ -1,0 +1,23 @@
+[package]
+edition = "2024"
+name = "capsolver_emulator"
+publish = false
+version = "0.1.0"
+description = "Test support: a scripted stand-in for the CapSolver createTask/getTaskResult API the agent harness's CAPTCHA gateway calls, in process or as a standalone binary. Each site key is answered a scripted outcome; no CAPTCHA is solved."
+
+[dependencies]
+axum = { workspace = true }
+clap = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+reqwest = { workspace = true }
