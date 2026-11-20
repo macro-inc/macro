@@ -605,7 +605,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     try {
       await execute(targets, restoreFocus, { ...opts, navigateBack });
     } finally {
-      if (folded) unfoldKeptRows(soup, targets);
+      // Only a delegating list keeps rows on purpose; elsewhere a row still
+      // listed now is about to leave with the next read.
+      const kept = targets.filter(
+        (entity) => options.delegate?.()?.canComplete(entity) !== undefined
+      );
+      if (folded) unfoldKeptRows(soup, kept);
     }
   };
 
@@ -615,6 +620,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 /**
  * Unfolds the rows a done folded away that the list still shows once the done
  * settles: own work the feed keeps in place, or rows a failed done restored.
+ * Lists key swipe rows their own way, so `expandEntity` takes entity ids.
  */
 function unfoldKeptRows(
   soup: EntityActionListState,

@@ -1,8 +1,10 @@
-// The Signal list's touch rows (InboxListEntity in the swipe rows soup gives
-// them) over an in-memory list, marked done through the real mark-done
-// action with a delegate that completes rows the way the work feed does: it
-// hides them at once, except own work, which stays.
+// Touch Notifications' Signal rows as HomeList wires them: InboxListEntity in
+// swipe rows keyed by occurrence, over an in-memory list, marked done through
+// the real mark-done action and list adapter, with a delegate that completes
+// rows the way the work feed does: it hides them at once, except own work,
+// which stays.
 import '@app/index.css';
+import type { ListController } from '@app/components/list';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { macroLightTheme } from '@app/features/theme/themes/macro-light';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
@@ -24,10 +26,9 @@ import { MutationUndoProvider } from '@queries/undo';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
-import type { EntityActionListState } from '../../../../actions/entity-action-context';
+import { toEntityActionListState } from '../../../../actions/entity-action-context';
 import { makeMarkDoneAction } from '../../../../actions/make-mark-done-action';
 import type { MarkDoneDelegate } from '../../../../actions/mark-done-delegate';
-import type { SoupRow } from '../../../../create-soup-state';
 import { InboxListEntity } from '../InboxListEntity';
 
 declare global {
@@ -102,32 +103,37 @@ function Fixture() {
     delegate: () => delegate,
   });
 
-  const rowAt = (index: number) => {
-    const entity = entities()[index];
-    return entity
-      ? ({ id: entity.id, original: entity } as unknown as SoupRow)
-      : undefined;
-  };
-  const listState: EntityActionListState = {
-    focus: { id: () => undefined, index: () => -1, set: () => {} },
-    navigate: { peekOffset: () => undefined },
+  // Swipe rows are keyed by occurrence, not by entity, as in HomeList.
+  const rowIdOf = (entityId: string) => `row|${entityId}`;
+  const controller = {
     items: {
-      count: () => entities().length,
-      get: (id) => rowAt(entities().findIndex((entity) => entity.id === id)),
-      at: rowAt,
+      all: entities,
+      keyOf: (entity: EntityData) => rowIdOf(entity.id),
     },
-    selection: { clear: () => {} },
-    collapseEntity: { callback: collapse, shouldCollapse: () => true },
-    expandEntity: { callback: expand },
-  };
+    focus: { key: () => undefined, set: () => false, clear: () => {} },
+    selection: { isSelected: () => false, clear: () => {} },
+  } as unknown as ListController<EntityData, unknown>;
+  const listState = toEntityActionListState({
+    controller,
+    getEntity: (entity) => entity,
+    collapse: {
+      enabled: () => true,
+      run: async (entityId) => {
+        await collapse()?.(rowIdOf(entityId));
+      },
+    },
+    expand: (entityId) => expand()?.(rowIdOf(entityId)),
+  });
 
   return (
     <div class="fixed inset-0 overflow-y-auto bg-panel text-ink">
       <SwipableRowProvider
         container={() => list}
         canSwipeLeft={() => true}
-        onSwipeLeft={(id) => {
-          const entity = entities().find((candidate) => candidate.id === id);
+        onSwipeLeft={(rowId) => {
+          const entity = entities().find(
+            (candidate) => rowIdOf(candidate.id) === rowId
+          );
           if (!entity) return;
           fireAndForget(
             markDone.executeWithSoup([entity], listState),
@@ -142,6 +148,7 @@ function Fixture() {
             {(entity, index) => (
               <InboxListEntity
                 entity={entity}
+                occurrenceKey={rowIdOf(entity.id)}
                 hideCheckbox
                 isLastInGroup={index() === entities().length - 1}
               />

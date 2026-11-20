@@ -1258,7 +1258,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                           .catch(reportSoupViewError);
                       }}
                       setCollapseEntity={soup.collapseEntity.set}
-                      setExpandEntity={soup.expandEntity.set}
                     >
                       <SoupList
                         cache={readListEntryState()?.virtualCache}

@@ -815,8 +815,9 @@ reduced motion skips the fold.
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
 behind. A list that can keep a row after a done unfolds it through
-`setExpandEntity`; touch's Signal/Noise list (soup) does it in
-`executeWithSoup` once the done settles. Its regression is
+`setExpandEntity`: touch Notifications' Signal/Noise list (`HomeList`, whose
+work feed keeps own work) passes `expand` to `toEntityActionListState`, and
+`executeWithSoup` calls it once the done settles. Its regression is
 `bunx playwright test --config src/features/next-soup/soup-view/views/inbox/browser-test/playwright.config.ts`.
 
 ## Message notification reads

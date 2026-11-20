@@ -34,8 +34,9 @@ async function stayLocal(page: Page) {
   });
 }
 
+/** A document's swipe row; rows are keyed by occurrence, as in HomeList. */
 const row = (page: Page, id: string) =>
-  page.locator(`[data-swipe-row][data-swipe-id="${id}"]`);
+  page.locator(`[data-swipe-row][data-swipe-id="row|${id}"]`);
 
 async function openList(page: Page, search = '') {
   await stayLocal(page);
@@ -90,7 +91,7 @@ test('a row swiped done folds away with its divider', async ({ page }) => {
     window.__sampling = true;
     const sample = () => {
       const swipe = document.querySelector<HTMLElement>(
-        '[data-swipe-row][data-swipe-id="doc-notes"]'
+        '[data-swipe-row][data-swipe-id="row|doc-notes"]'
       );
       window.__frames.push({
         phase: swipe?.dataset.swipePhase ?? null,
