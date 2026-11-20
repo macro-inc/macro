@@ -115,6 +115,12 @@ const directMessage = 'direct_message';
 const catchUpWindowMs = 24 * 60 * 60_000;
 /** Read from this much before the cursor: events minted near it may land after it. */
 const catchUpMarginMs = 60_000;
+/**
+ * How often a catch-up retries a channel that keeps failing with something
+ * other than "can't read" before it skips it, so one persistent error can't
+ * hold the cursor and every later catch-up for the rest of the process.
+ */
+const catchUpChannelAttempts = 5;
 /** Bounds on one catch-up: channels read, and messages read per channel. */
 const catchUpChannels = 50;
 const catchUpMessages = 200;
@@ -212,7 +218,12 @@ export const sdkChat = ({
   const myId = () => {
     me ??= connect()
       .then((macro) => macro.users.me())
-      .then((user) => user.id);
+      .then((user) => user.id)
+      .catch((error: unknown) => {
+        // Asked again next time: one failure must not stick.
+        me = undefined;
+        throw error;
+      });
     return me;
   };
   type Message = Awaited<
@@ -330,7 +341,16 @@ export const sdkChat = ({
     listening: () => listening.promise,
     incoming: pushed<Incoming>(async (emit) => {
       const macro = await connect();
-      const mine = await myId();
+      // Before the stream opens, so retried like the round trip: one failed
+      // call here would otherwise fail a good boot.
+      let mine: string | undefined;
+      for (let attempt = 0; mine === undefined; attempt += 1) {
+        try {
+          mine = await myId();
+        } catch {
+          await sleep(Math.min(1_000 * 2 ** attempt, 30_000));
+        }
+      }
       const channelNames = new Map<string, string>();
       const senderNames = new Map<string, string>([[mine, myName]]);
       type Channel = ReturnType<Macro['channels']['byId']>;
@@ -427,9 +447,16 @@ export const sdkChat = ({
       // What was posted after `after` in the channels active since: each
       // root posted or replied to since, and its replies. Bounded, and
       // counted on the span.
-      const catchUpFrom = (after: string) =>
+      // What earlier attempts at one gap got through, so a retry starts at
+      // the channel that failed and gives up on one that keeps failing.
+      type Progress = {
+        readonly done: Set<string>;
+        readonly failures: Map<string, number>;
+      };
+      const catchUpFrom = (after: string, progress: Progress) =>
         trace('agent.chat.catch_up', async (span) => {
           const since = Date.parse(after);
+          let failed = 0;
           let channels = 0;
           let messages = 0;
           let skipped = 0;
@@ -451,6 +478,12 @@ export const sdkChat = ({
           if (ordered.length > catchUpChannels)
             span.set('chat.catch_up.capped', true);
           for (const channel of ordered.slice(0, catchUpChannels)) {
+            if (progress.done.has(channel.id)) continue;
+            const failures = progress.failures.get(channel.id) ?? 0;
+            if (failures >= catchUpChannelAttempts) {
+              failed += 1;
+              continue;
+            }
             channels += 1;
             const missed: Incoming[] = [];
             let roots = 0;
@@ -486,7 +519,10 @@ export const sdkChat = ({
                 }
               }
             } catch (error) {
-              if (!unreadable(error)) throw error;
+              if (!unreadable(error)) {
+                progress.failures.set(channel.id, failures + 1);
+                throw error;
+              }
               skipped += 1;
             }
             if (roots >= catchUpMessages) messagesCapped += 1;
@@ -495,8 +531,10 @@ export const sdkChat = ({
             );
             messages += missed.length;
             for (const incoming of missed) deliver(incoming);
+            progress.done.add(channel.id);
           }
           span.set('chat.catch_up.channels', channels);
+          span.set('chat.catch_up.failed', failed);
           span.set('chat.catch_up.messages', messages);
           span.set('chat.catch_up.skipped', skipped);
           span.set('chat.catch_up.messages_capped', messagesCapped);
@@ -525,6 +563,7 @@ export const sdkChat = ({
       // during a catch-up leaves it set for another pass.
       let pending = stored?.at;
       let lastEvent: Date | undefined;
+      let openedAt: Date | undefined;
       // The gap the running pass reads.
       let reading: string | undefined;
       const instant = (at: string | undefined) =>
@@ -541,9 +580,10 @@ export const sdkChat = ({
             reading = after;
             pending = undefined;
             await sleep(Math.random() * catchUpSpreadMs);
+            const progress: Progress = { done: new Set(), failures: new Map() };
             for (let attempt = 0; ; attempt += 1) {
               try {
-                await catchUpFrom(from(new Date(after)));
+                await catchUpFrom(from(new Date(after)), progress);
                 // Read: what it found is in `unhandled` now.
                 reading = undefined;
                 saveCursor();
@@ -590,11 +630,17 @@ export const sdkChat = ({
         },
         onDrop: (droppedAt) => {
           open = false;
-          const gap = (lastEvent ?? droppedAt).toISOString();
+          // From the last event this connection carried, or its open if it
+          // carried none: before the open, the previous gap covered it.
+          const gap = new Date(
+            Math.max(lastEvent?.getTime() ?? 0, openedAt?.getTime() ?? 0) ||
+              droppedAt.getTime()
+          ).toISOString();
           if (pending === undefined || Date.parse(gap) < Date.parse(pending))
             pending = gap;
         },
-        onOpen: () => {
+        onOpen: (at) => {
+          openedAt = at;
           open = true;
           if (!opened) {
             opened = true;

@@ -34,6 +34,22 @@ const fakeMacro = () => {
   let meFailures = 0;
   let unreadable = false;
   let failures = 0;
+  let broken = false;
+  // A channel the backend always fails, listed first.
+  const brokenChannel = {
+    id: 'broken',
+    name: async () => 'Broken',
+    type: async () => 'public',
+    messagesAfter: (_after: string): AsyncIterable<never> => ({
+      [Symbol.asyncIterator]: () => ({
+        next: async () => {
+          reads += 1;
+          throw Object.assign(new Error('cannot serialize'), { status: 500 });
+        },
+      }),
+    }),
+  };
+  let reads = 0;
   let held: Promise<void> | undefined;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let options: ListenOptions | undefined;
@@ -107,6 +123,7 @@ const fakeMacro = () => {
       activeSince: async function* (after: string | Date) {
         activeSince.push(new Date(after).toISOString());
         await held;
+        if (broken) yield brokenChannel;
         yield channel;
       },
       byId: () => channel,
@@ -132,6 +149,11 @@ const fakeMacro = () => {
     options: () => options,
     post: (message: Posted) => posted.push(message),
     /** The DM's history can't be read, as one the agent lost access to. */
+    /** A channel the backend always fails is active too; how often it was read. */
+    breakChannel: () => {
+      broken = true;
+    },
+    brokenReads: () => reads,
     /** Reading history fails this many more times, as a backend coming back does. */
     failReads: (times: number) => {
       failures = times;
@@ -461,4 +483,39 @@ test('a catch-up the backend fails is tried again, and what it missed still arri
     (await within(caught, 'the failed read was never retried')).entry.id
   ).toBe('gap');
   expect(backend.activeSince).toHaveLength(2);
+});
+
+test('a channel the backend always fails is given up on, and the rest is still caught up', async () => {
+  const backend = fakeMacro();
+  backend.breakChannel();
+  backend.post({ id: 'gap', at: '2026-11-19T11:59:30Z', text: 'you there?' });
+  const spans: Record<string, unknown>[] = [];
+  const { next, written } = listening(
+    backend,
+    { at: '2026-11-19T11:59:20Z' },
+    spans
+  );
+
+  const caught = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  expect((await within(caught, 'the rest was never caught up')).entry.id).toBe(
+    'gap'
+  );
+  await Bun.sleep(20);
+  expect(backend.brokenReads()).toBe(5);
+  expect(spans.at(-1)).toMatchObject({ 'chat.catch_up.failed': 1 });
+  // The pass ended: the cursor moves on once the gap is handled.
+  expect(written.at(-1)?.at).toBe('2026-11-19T11:59:30.000Z');
+});
+
+test("a first lookup of the agent's own id that fails is tried again", async () => {
+  const backend = fakeMacro();
+  backend.failMe(1);
+  const { chat, next } = listening(backend, undefined);
+  void next();
+  await Bun.sleep(10);
+
+  backend.options()?.onOpen?.(now);
+  await within(chat.listening(), 'the failed lookup failed the boot');
 });

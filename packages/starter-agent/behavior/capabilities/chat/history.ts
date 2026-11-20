@@ -57,6 +57,8 @@ export const history = ({
       known = disk
         .read(file(channelId))
         .then((text) => new Set(parseLines(Entry, text).map(({ id }) => id)));
+      // A failed read is read again next time, not kept.
+      known.catch(() => ids.delete(channelId));
       ids.set(channelId, known);
     }
     return known;
