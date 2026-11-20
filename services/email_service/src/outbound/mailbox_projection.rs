@@ -11,6 +11,7 @@ use email::domain::{
     },
     models::calendar_invitation::CalendarInvitation,
 };
+use email_db_client::attachments::provider::upload::ClaimedAttachment;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
@@ -25,10 +26,7 @@ use models_email::{
     },
 };
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use uuid::Uuid;
 
@@ -265,10 +263,7 @@ where
         .map_err(|error| {
             database_failed(&error, error.chain().find_map(|cause| cause.downcast_ref()))
         })?;
-        let claims = self
-            .claim_times(documents.iter().chain(&media).map(|a| a.attachment_db_id))
-            .await?;
-        for (attachment, destination) in documents
+        for (claimed, destination) in documents
             .into_iter()
             .map(|a| (a, AttachmentUploadDestination::Dss))
             .chain(
@@ -277,6 +272,10 @@ where
                     .map(|a| (a, AttachmentUploadDestination::Sfs)),
             )
         {
+            let ClaimedAttachment {
+                metadata: attachment,
+                claimed_at,
+            } = claimed;
             let attachment_id = attachment.attachment_db_id;
             let result = async {
                 let data = self
@@ -335,15 +334,9 @@ where
             }
             .await;
             if let Err(error) = result {
-                if let Some(claimed_at) = claims.get(&attachment_id)
-                    && self
-                        .settle_failed_attachment(
-                            mailbox.link_id,
-                            attachment_id,
-                            *claimed_at,
-                            &error,
-                        )
-                        .await?
+                if self
+                    .settle_failed_attachment(mailbox.link_id, attachment_id, claimed_at, &error)
+                    .await?
                 {
                     continue;
                 }
@@ -371,38 +364,14 @@ where
 }
 
 impl<A, I, B, N, C> MailboxEffects<A, I, B, N, C> {
-    /// When this pass claimed each attachment, read before any download, which
-    /// can outlast the three minutes after which another pass may take a claim.
-    async fn claim_times(
-        &self,
-        attachment_ids: impl Iterator<Item = Uuid>,
-    ) -> Result<HashMap<Uuid, DateTime<Utc>>, MailboxError> {
-        let attachment_ids: Vec<Uuid> = attachment_ids.collect();
-        if attachment_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-        let rows = sqlx::query!(
-            r#"SELECT id, upload_claimed_at AS "upload_claimed_at!" FROM email_attachments
-            WHERE id = ANY($1) AND upload_claimed_at IS NOT NULL"#,
-            &attachment_ids
-        )
-        .fetch_all(&self.db)
-        .await
-        .map_err(|error| database_failed(&error, Some(&error)))?;
-        Ok(rows
-            .into_iter()
-            .map(|row| (row.id, row.upload_claimed_at))
-            .collect())
-    }
-
     /// Releases a failed attachment's claim for the event's next try, counting
     /// the failure against it unless `attachment_failure_limit` says it isn't
     /// counted. At the limit the attachment keeps its claim and is marked
     /// abandoned instead, so no claim takes it again and the projection stops
     /// waiting on it. Each write applies only while the claim is still the one
-    /// this pass took at `claimed_at`: a pass that lost it may find the
-    /// attachment stored, or abandoned, by the pass that took it next. Returns
-    /// whether it was abandoned.
+    /// this pass's claiming query set at `claimed_at`: a pass that lost it may
+    /// find the attachment stored, or abandoned, by the pass that took it next.
+    /// Returns whether it was abandoned.
     async fn settle_failed_attachment(
         &self,
         link_id: Uuid,
