@@ -365,12 +365,19 @@ fn test_chat_history_missing_entry() {
 fn test_chat_history_deleted() {
     let now = chrono::Utc::now();
 
-    // Test 1: Chat that exists but is soft-deleted
-    let input_deleted = vec![create_test_response(
-        "11111111-1111-1111-1111-111111111111",
-        "11111111-1111-1111-1111-111111111111",
-        Some(vec!["hello world".to_string()]),
-    )];
+    // Test 1: a chat in the Trash is dropped, a live one beside it is kept
+    let input_deleted = vec![
+        create_test_response(
+            "11111111-1111-1111-1111-111111111111",
+            "11111111-1111-1111-1111-111111111111",
+            Some(vec!["hello world".to_string()]),
+        ),
+        create_test_response(
+            "33333333-3333-3333-3333-333333333333",
+            "44444444-4444-4444-4444-444444444444",
+            Some(vec!["hello again".to_string()]),
+        ),
+    ];
 
     let mut chat_histories = HashMap::new();
     chat_histories.insert(
@@ -386,15 +393,27 @@ fn test_chat_history_deleted() {
             user_id: "user_1".to_string(),
         },
     );
+    chat_histories.insert(
+        "33333333-3333-3333-3333-333333333333".to_string(),
+        macro_db_client::chat::get::ChatHistoryInfo {
+            item_id: "33333333-3333-3333-3333-333333333333".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            deleted_at: None,
+            name: "live".to_string(),
+            user_id: "user_1".to_string(),
+        },
+    );
 
     let result = construct_search_result(input_deleted, chat_histories, HashMap::new()).unwrap();
 
-    // Deleted chat should be returned with metadata including deleted_at
-    assert_eq!(result.len(), 1);
-    assert!(result[0].metadata.is_some());
-    let metadata = result[0].metadata.as_ref().unwrap();
-    assert_eq!(metadata.deleted_at, Some(now));
-    assert_eq!(metadata.project_id, Some("project_1".to_string()));
+    let ids: Vec<String> = result.iter().map(|r| r.extra.chat_id.to_string()).collect();
+    assert_eq!(
+        ids,
+        vec!["33333333-3333-3333-3333-333333333333".to_string()]
+    );
 
     // Test 2: Chat that doesn't exist in DB (OpenSearch has stale data)
     let input_not_found = vec![create_test_response(
