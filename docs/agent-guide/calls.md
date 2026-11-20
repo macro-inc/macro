@@ -309,6 +309,10 @@ the front card's buttons usable. Clicking the stack (or the `Show all N
 incoming calls` strip under it, which is the keyboard path) fans every call out
 below with its own buttons, under an `N incoming calls` label and `Show less`;
 the stack folds back by itself once the calls it was opened with are gone.
+A call in a conversation that is open on screen (a split, a popover or an
+inline preview such as Chat's; not a background desktop tab) is left out of the
+stack, since that conversation has its own call controls; it comes back as
+soon as the conversation is closed or navigated away from while it still rings.
 Cards sit below the macOS title bar, take no focus, and put the buttons below
 the caller in a narrow window. Phones and tablets (touch) don't show the stack:
 they answer channel calls from Chat and the native call screens, and meeting

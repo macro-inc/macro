@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
         createdBy: string | null;
       }[]),
   splitManager: { current: {} as object | undefined },
+  openChannels: undefined as undefined | (() => string[]),
 }));
 
 vi.mock('@app/features/block-call/sidebar/incoming-calls', () => ({
@@ -73,6 +74,16 @@ const RINGING = [
 ];
 const [ringing, setRinging] = createSignal(RINGING);
 mocks.ringing = ringing;
+const [openChannels, setOpenChannels] = createSignal<string[]>([]);
+mocks.openChannels = openChannels;
+
+/** A split manager whose open conversations follow `openChannels`. */
+const SPLIT_MANAGER = {
+  findOpenView: (content: { type: string; id: string }) =>
+    content.type === 'channel' && openChannels().includes(content.id)
+      ? { owner: 'split-1', content }
+      : undefined,
+};
 
 let dispose = () => {};
 
@@ -87,7 +98,8 @@ beforeEach(() => {
   mocks.joinChannelCall.mockReset();
   mocks.dismissIncomingCallEverywhere.mockReset();
   mocks.toastFailure.mockReset();
-  mocks.splitManager.current = {};
+  mocks.splitManager.current = SPLIT_MANAGER;
+  setOpenChannels([]);
   setRinging(RINGING);
 });
 
@@ -176,4 +188,38 @@ it('leaves calls to the Chat sidebar where joining has no split layout', () => {
   mocks.splitManager.current = undefined;
 
   expect(create().calls()).toEqual([]);
+});
+
+const ringingIds = (incoming: ReturnType<typeof create>) =>
+  incoming.calls().map((call) => call.callId);
+
+it('hides a call while its conversation is open on screen', () => {
+  setOpenChannels(['design']);
+
+  expect(ringingIds(create())).toEqual(['call-dm', 'call-group']);
+});
+
+it('shows the call again as soon as its conversation is closed', () => {
+  const incoming = create();
+  setOpenChannels(['design']);
+  expect(ringingIds(incoming)).not.toContain('call-design');
+
+  setOpenChannels(['dm']);
+  expect(ringingIds(incoming)).toEqual(['call-design', 'call-group']);
+
+  setOpenChannels([]);
+  expect(ringingIds(incoming)).toEqual([
+    'call-design',
+    'call-dm',
+    'call-group',
+  ]);
+});
+
+it('keeps a call the same object while it is hidden and shown again', () => {
+  const incoming = create();
+  const before = incoming.calls()[0];
+  setOpenChannels(['design']);
+  setOpenChannels([]);
+
+  expect(incoming.calls()[0]).toBe(before);
 });

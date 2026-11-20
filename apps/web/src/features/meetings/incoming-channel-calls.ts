@@ -48,7 +48,8 @@ async function joinIncomingCall(channelId: string, callId: string) {
 
 /**
  * Ringing channel and DM calls for the top-of-window stack, answered with the
- * same actions as the Chat sidebar's inline Join and Decline. Joining opens
+ * same actions as the Chat sidebar's inline Join and Decline, except calls in
+ * a conversation that is open on screen, which has its own. Joining opens
  * the channel in a split, so pages without the split layout (a meeting page's
  * discussion panel) leave these to the sidebar. Each call keeps one object for
  * as long as it rings, so its banner stays mounted while others come and go.
@@ -58,6 +59,9 @@ export function createIncomingChannelCalls() {
   const channelsCtx = useChannelsContext();
   const ringing = useVisibleIncomingCalls();
   const canJoin = () => ENABLE_CALLS && !!globalSplitManager();
+  /** Open in any split, popover or inline preview (a parked tab doesn't count). */
+  const isOnScreen = (channelId: string) =>
+    !!globalSplitManager()?.findOpenView({ type: 'channel', id: channelId });
 
   const described = mapArray(
     ringing,
@@ -78,7 +82,12 @@ export function createIncomingChannelCalls() {
   );
 
   return {
-    calls: () => (canJoin() ? described() : []),
+    // A call in a conversation that's already on screen is answered from that
+    // conversation's own call bar; it rings here again once it's closed.
+    calls: () =>
+      canJoin()
+        ? described().filter((call) => !isOnScreen(call.channelId))
+        : [],
     // Same join as the sidebar row; its `call.join` trace records the session
     // and outcome.
     join: (call: IncomingChannelCall) =>
