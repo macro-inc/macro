@@ -92,25 +92,65 @@ fn only_outermost_provider_blocks_are_split_in_document_order() {
     );
 }
 
+#[test]
+fn blocks_moved_by_the_parser_are_split_in_document_order() {
+    let join = JOIN.replace('&', "&amp;");
+    // A `div` inside a table but outside its cells is moved before the
+    // table, after the cell's `div` was created.
+    let body = format!(
+        "<table><tr><td><div class=\"me-email-a\">A <a href=\"{join}\">Join</a></div></td></tr><div class=\"me-email-b\">B</div></table>"
+    );
+
+    let (description, meeting) = split(&body, JOIN).unwrap();
+
+    assert_eq!(
+        meeting,
+        format!(
+            "<div class=\"me-email-b\">B</div><div class=\"me-email-a\">A <a href=\"{join}\">Join</a></div>"
+        )
+    );
+    assert_eq!(
+        description,
+        "<table><tbody><tr><td></td></tr></tbody></table>"
+    );
+}
+
+#[test]
+fn a_provider_class_on_the_html_tag_marks_no_block() {
+    // A fragment parse merges `<html>`'s attributes into its root element,
+    // which holds everything and is no block of its own.
+    let body = format!(
+        "<html class=\"me-email-x\"><body>{}</body></html>",
+        teams_block()
+    );
+
+    assert!(split(&body, JOIN).is_err());
+}
+
 /// Bodies whose parse would build far more than `bounded_html` allows, each
-/// after a meeting block the split would otherwise find.
-fn crafted_bodies() -> Vec<(&'static str, String)> {
+/// after a meeting block the split would otherwise find, and the most memory
+/// its refusal may take.
+fn crafted_bodies() -> Vec<(&'static str, String, usize)> {
     // Each `<p>` closes the paragraph holding the 1,000 still-active `<b>`s,
     // and the parser rebuilds them all inside the next one: 13 KB that
     // builds a million nodes.
     let distinct_bold: String = (0..1_000).map(|i| format!("<b id={i}>")).collect();
     vec![
+        // The node limit itself: 69 MB.
         (
             "paragraphs",
             "<p>x</p>".repeat(bounded_html::MAX_HTML_NODES),
+            96 << 20,
         ),
         (
             "distinct bold",
             format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)),
+            8 << 20,
         ),
         (
             "nested divs",
             format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+            8 << 20,
         ),
         (
             "long title on rebuilt bold",
@@ -121,13 +161,14 @@ fn crafted_bodies() -> Vec<(&'static str, String)> {
                     .collect::<String>(),
                 "<p>x".repeat(50_000)
             ),
+            8 << 20,
         ),
     ]
 }
 
 #[test]
 fn a_crafted_body_is_refused_in_bounded_memory() {
-    for (name, crafted) in crafted_bodies() {
+    for (name, crafted, most) in crafted_bodies() {
         let body = format!("{}{crafted}", teams_block());
         let mut result = None;
 
@@ -136,10 +177,9 @@ fn a_crafted_body_is_refused_in_bounded_memory() {
         let error = result.unwrap().expect_err(name);
         assert_eq!(error.message(), TOO_LARGE, "{name}");
         // Parsed whole, the rebuilt bold peaked at 326 MB and 1.7 GB and the
-        // nested divs took minutes; clipped, the node limit itself peaks at
-        // 69 MB and the rest below 4 MB.
+        // nested divs took minutes.
         assert!(
-            peak < 96 << 20,
+            peak < most,
             "{peak} bytes to split {} bytes of {name}",
             body.len()
         );
@@ -151,9 +191,9 @@ fn markup_inside_noscript_stays_text_through_the_split() {
     // With scripting on, as `bounded_html` parses, `<noscript>` holds text:
     // this is one node. A second parse of the raw body with scripting off
     // (html2text's) would build the million nodes the crafted markup asks for.
-    let (_, crafted) = crafted_bodies()
+    let (_, crafted, _) = crafted_bodies()
         .into_iter()
-        .find(|(name, _)| *name == "distinct bold")
+        .find(|(name, _, _)| *name == "distinct bold")
         .unwrap();
     let body = format!("<noscript>{crafted}</noscript>{}", teams_block());
     let mut result = None;
