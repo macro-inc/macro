@@ -225,8 +225,8 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
-    /// Claims in a row before this one that ended without recording an
-    /// outcome: their worker stopped while it held the lease.
+    /// Claims of this revision in a row before this one that ended without
+    /// recording an outcome: their worker stopped while it held the lease.
     pub unfinished_claims: i32,
     /// The newest change notification that queued this message.
     pub notification: Option<Notification>,

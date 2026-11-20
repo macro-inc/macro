@@ -399,9 +399,12 @@ impl MailboxSyncRepository for PgMailboxSync {
             )
             -- Only the first attempt joins the notification's trace. Every
             -- recorded outcome deletes the row or clears its lease, so a lease
-            -- still set here expired under a worker that stopped.
+            -- still set here expired under a worker that stopped; a revision
+            -- newer than the last claim read starts the count over.
             UPDATE email_message_reconciliation q SET lease_id = $1, lease_until = now() + interval '3 minutes', attempts = attempts + 1,
-                unfinished_claims = CASE WHEN q.lease_id IS NULL THEN 0 ELSE q.unfinished_claims + 1 END,
+                unfinished_claims = CASE WHEN q.lease_id IS NULL OR q.revision <> q.claimed_revision THEN 0
+                    ELSE q.unfinished_claims + 1 END,
+                claimed_revision = q.revision,
                 notified_traceparent = NULL
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id

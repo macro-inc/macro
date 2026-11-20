@@ -597,6 +597,49 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "changed", 0).await;
+    for _ in 0..4 {
+        repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+        expire_lease(&db, link, "changed").await;
+    }
+    // The fifth claim's worker stops too, but a new change to the message
+    // arrives while it still holds the lease.
+    repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &stream,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("changed").unwrap()],
+            removed: Vec::new(),
+            position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    expire_lease(&db, link, "changed").await;
+    let service = sync(
+        &repo,
+        Provider::answering(vec![Ok(Some(snapshot(
+            link,
+            "changed",
+            MailboxState::default(),
+            "v2",
+        )))]),
+    );
+
+    assert!(service.reconcile_once().await.unwrap());
+
+    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     queue(&db, link, "flaky", 0).await;

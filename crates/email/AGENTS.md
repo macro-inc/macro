@@ -605,8 +605,10 @@ tools — hexagonal, heavily feature-gated.
   holding the lease) is abandoned unread on the claim after five
   (`UNFINISHED_CLAIM_LIMIT`, `defer_reason=unfinished`): `claim_message`
   counts `unfinished_claims` from a lease still set when it claims, since
-  every recorded outcome deletes the row or clears the lease, and the first
-  claim after a recorded release starts the count over.
+  every recorded outcome deletes the row or clears the lease. The first claim
+  after a recorded release, or of a revision newer than the last claim read
+  (`claimed_revision`), starts the count over, so a change that arrives
+  during an unfinished claim is read.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
