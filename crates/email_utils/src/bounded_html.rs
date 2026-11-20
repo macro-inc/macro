@@ -95,8 +95,13 @@ impl BoundedSink {
         }
     }
 
-    /// Whether `child` can go into `parent`.
-    fn admits(&mut self, parent: NodeId, child: &NodeOrText<NodeId>) -> bool {
+    /// Whether `child` can go into `parent`, after `previous`.
+    fn admits(
+        &mut self,
+        parent: NodeId,
+        previous: Option<NodeId>,
+        child: &NodeOrText<NodeId>,
+    ) -> bool {
         if !self.clipped {
             match child {
                 // An element was counted when it was created.
@@ -108,7 +113,16 @@ impl BoundedSink {
                         self.clipped = true;
                     }
                 }
-                NodeOrText::AppendText(_) => self.count_node(),
+                // The tokenizer splits text at every line break and character
+                // reference; scraper joins text that follows text.
+                NodeOrText::AppendText(_) => {
+                    let follows_text = previous
+                        .and_then(|previous| self.html.tree.get(previous))
+                        .is_some_and(|previous| previous.value().is_text());
+                    if !follows_text {
+                        self.count_node();
+                    }
+                }
             }
         }
         !self.clipped
@@ -120,6 +134,22 @@ impl BoundedSink {
             .get(node)
             .and_then(|node| node.parent())
             .map(|parent| parent.id())
+    }
+
+    fn last_child_of(&self, node: NodeId) -> Option<NodeId> {
+        self.html
+            .tree
+            .get(node)
+            .and_then(|node| node.last_child())
+            .map(|child| child.id())
+    }
+
+    fn previous_sibling_of(&self, node: NodeId) -> Option<NodeId> {
+        self.html
+            .tree
+            .get(node)
+            .and_then(|node| node.prev_sibling())
+            .map(|sibling| sibling.id())
     }
 }
 
@@ -167,7 +197,8 @@ impl TreeSink for BoundedSink {
     }
 
     fn append(&mut self, parent: &NodeId, child: NodeOrText<NodeId>) {
-        if self.admits(*parent, &child) {
+        let previous = self.last_child_of(*parent);
+        if self.admits(*parent, previous, &child) {
             self.html.append(parent, child);
         }
     }
@@ -178,8 +209,13 @@ impl TreeSink for BoundedSink {
         prev_element: &NodeId,
         child: NodeOrText<NodeId>,
     ) {
-        let parent = self.parent_of(*element).unwrap_or(*prev_element);
-        if self.admits(parent, &child) {
+        // Scraper inserts before `element` when it has a parent, else appends
+        // to `prev_element`.
+        let (parent, previous) = match self.parent_of(*element) {
+            Some(parent) => (parent, self.previous_sibling_of(*element)),
+            None => (*prev_element, self.last_child_of(*prev_element)),
+        };
+        if self.admits(parent, previous, &child) {
             self.html
                 .append_based_on_parent_node(element, prev_element, child);
         }
@@ -216,7 +252,10 @@ impl TreeSink for BoundedSink {
     fn append_before_sibling(&mut self, sibling: &NodeId, new_node: NodeOrText<NodeId>) {
         // Without a parent the sibling takes nothing.
         let admitted = match self.parent_of(*sibling) {
-            Some(parent) => self.admits(parent, &new_node),
+            Some(parent) => {
+                let previous = self.previous_sibling_of(*sibling);
+                self.admits(parent, previous, &new_node)
+            }
             None => !self.clipped,
         };
         if admitted {

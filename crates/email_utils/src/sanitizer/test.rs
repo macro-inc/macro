@@ -24,15 +24,24 @@ fn a_body_past_the_node_limit_is_clipped_with_a_notice() {
 #[test]
 fn a_4_mb_newsletter_is_not_clipped() {
     let story = r#"<tr><td style="padding:16px;color:#333"><h2 style="margin:0">Headline for this week's story</h2><p style="line-height:1.5">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. <a href="https://example.com/read?id=456">Read more</a></p><img src="https://example.com/i/123.png" width="560" alt=""></td></tr>"#;
-    let html = format!(
-        "<html><head><style>.a{{color:#333}}</style></head><body><table>{}<tr><td>Unsubscribe</td></tr></table></body></html>",
-        story.repeat((4 << 20) / story.len())
-    );
+    // Sending services indent their markup and wrap text with CRLF; the
+    // tokenizer splits text at each line break and character reference.
+    let indented = story
+        .replace("><", ">\r\n      <")
+        .replace(", ", ",\r\n        ")
+        .replace("week's", "week&#39;s");
 
-    let sanitized = sanitize_email_html(&html);
+    for story in [story, indented.as_str()] {
+        let html = format!(
+            "<html><head><style>.a{{color:#333}}</style></head><body><table>{}<tr><td>Unsubscribe</td></tr></table></body></html>",
+            story.repeat((4 << 20) / story.len())
+        );
 
-    assert!(sanitized.contains("Unsubscribe"));
-    assert!(!sanitized.contains(CLIPPED_NOTICE));
+        let sanitized = sanitize_email_html(&html);
+
+        assert!(sanitized.contains("Unsubscribe"));
+        assert!(!sanitized.contains(CLIPPED_NOTICE));
+    }
 }
 
 #[test]
