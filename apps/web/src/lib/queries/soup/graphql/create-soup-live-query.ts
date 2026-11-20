@@ -97,6 +97,28 @@ export type SoupLiveQueryOptions = {
 const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
   page.user?.soup != null;
 
+const NO_NOTIFIED_AT: ReadonlyMap<string, string> = new Map();
+
+/** Notification times NOTIFIED_AT pages list for their items, by record key.
+ * An item two loaded pages list (a refresh that kept a stale later page) keeps
+ * the newest time, so its row never moves back. */
+function pageNotifiedAt(
+  pages: readonly (SoupQuery | ChannelListSoupQuery)[]
+): ReadonlyMap<string, string> {
+  const stamps = new Map<string, string>();
+  for (const page of pages) {
+    const soup = page.user?.soup;
+    if (!soup || !('notifiedAt' in soup)) continue;
+    for (const { graphqlTypeName, entityId, notifiedAt } of soup.notifiedAt) {
+      const key = `${graphqlTypeName}:${entityId}`;
+      const known = stamps.get(key);
+      if (known === undefined || Date.parse(notifiedAt) > Date.parse(known))
+        stamps.set(key, notifiedAt);
+    }
+  }
+  return stamps.size ? stamps : NO_NOTIFIED_AT;
+}
+
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
  * This is the one GraphQL Soup list source; feature code reads it through
@@ -168,6 +190,7 @@ export function createSoupLiveQuery(
     pageParams: readonly (string | null)[];
     records: Accessor<GraphqlSoupItem[]>;
     baseline: Accessor<GraphqlSoupItem[]>;
+    notifiedAt: Accessor<ReadonlyMap<string, string>>;
   };
   type LocalProjection = {
     input: GraphqlSoupInput;
@@ -382,6 +405,7 @@ export function createSoupLiveQuery(
         soupPages.flatMap<GraphqlSoupItem>(
           (page) => querySnapshot(page).user.soup.items
         ),
+      notifiedAt: () => pageNotifiedAt(soupPages),
     };
   };
 
@@ -1143,6 +1167,9 @@ export function createSoupLiveQuery(
       );
     }),
     fetchedRecords: () => query.data?.records() ?? [],
+    /** When the viewer was last notified about each fetched record, by key;
+     * listed only by NOTIFIED_AT pages, whose sort key it is. */
+    fetchedNotifiedAt: () => query.data?.notifiedAt() ?? NO_NOTIFIED_AT,
     cachedMail,
     error,
     fetchError: () => query.error ?? undefined,

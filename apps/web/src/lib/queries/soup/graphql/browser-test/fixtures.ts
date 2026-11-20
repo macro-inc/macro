@@ -103,7 +103,7 @@ export function response(ids: readonly number[]): SoupQuery {
           settings: { signature: null, signatureOnRepliesForwards: false },
         },
       ],
-      soup: { nextCursor: null, items: ids.map(thread) },
+      soup: { nextCursor: null, items: ids.map(thread), notifiedAt: [] },
     },
   };
 }

@@ -23,8 +23,10 @@ redirect to standalone pages when folded.
 
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
-move into **Last few minutes** and show unread without reloading, including when
-notifications use GraphQL but Home's notified-at list uses REST. Read the DM,
+move into **Last few minutes** and show unread without reloading, whether Home's
+notified-at list is served by REST or by GraphQL Soup (which re-reads it after
+new notifications, at most every two seconds and again three seconds after the
+last, having no local projection for that sort). Read the DM,
 return to Home, and repeat; also check a row previously marked done and a thread
 reply. Delay the Home list response while allowing single-entity hydration to
 finish: hydration must not cancel the list refresh or leave an old notification

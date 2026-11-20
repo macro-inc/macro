@@ -31,10 +31,9 @@ export function useHomeUnreadQuery(): Accessor<boolean> {
     { tab: 'signal', facets: { read: ['unread'] } },
     { enabled: () => !enabled() }
   );
-  // Notified-at sorting is REST-only, and presence does not depend on order:
-  // the witness keeps the updated-at candidate page whatever Home's list sorts
-  // by, instead of the REST list, whose rows read the notification feed.
-  // Disabled queries must not compile an unsupported AST either.
+  // Presence does not depend on order: the witness keeps the updated-at
+  // candidate page whatever Home's list sorts by, which skips the notified
+  // read and its enrichment. Disabled queries must not compile an AST either.
   const variables = createMemo(() => {
     if (!enabled()) return undefined;
     const context = legacy.viewContext();

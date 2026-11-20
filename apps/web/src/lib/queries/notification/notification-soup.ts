@@ -1,7 +1,9 @@
+import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
 import { match, P } from 'ts-pattern';
+import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import {
   bumpSoupEntityNotifiedAt,
   hasSoupEntity,
@@ -10,6 +12,10 @@ import {
   restoreSoupEntityToDoneFilteredQueries,
   type SoupEntityTag,
 } from '../soup/normalized-cache';
+import {
+  ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+  createVisibleRefresh,
+} from '../visible-refresh';
 
 function notificationEntityTypeToSoupTag(
   entityType: UnifiedNotification['entity_type']
@@ -48,8 +54,12 @@ function notificationEntityTypeToSoupTag(
     .exhaustive(() => null);
 }
 
-/** Keep REST-backed Home rows live even when notifications use GraphQL. */
+/** Keep Home rows live, on REST and GraphQL lists alike. */
 export function updateSoupForNotification(notification: UnifiedNotification) {
+  // Before the tag check: a re-read needs no tag, and Home lists kinds the
+  // REST normalizer has none for (projects).
+  revalidateNotifiedGraphqlSoupLists();
+
   const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
   if (!soupTag) return;
 
@@ -91,4 +101,53 @@ export function updateSoupForNotification(notification: UnifiedNotification) {
       notification.state
     );
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Whether a mounted Soup list is ordered by notification. Grouped lists are
+ * not: they sort each group by update time.
+ */
+function isNotifiedList(body: unknown): boolean {
+  if (!isRecord(body) || !isRecord(body.params)) return false;
+  return (
+    body.params.sort_method === 'notified_at' && body.groupBy === undefined
+  );
+}
+
+/** Soup lists read a replica, which can answer the first re-read without the
+ * notification; a second read this long after the last one catches it. */
+const REPLICA_LAG_REREAD_DELAY_MS = 3000;
+
+let notifiedListReread: ReturnType<typeof createVisibleRefresh> | undefined;
+
+/** Created on first use, so importing this module adds no listener. */
+function notifiedListRereader() {
+  notifiedListReread ??= createVisibleRefresh(
+    () => refreshActiveGraphqlSoupQueries({ where: isNotifiedList }),
+    { intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS }
+  );
+  return notifiedListReread;
+}
+
+const rereadAfterReplicaLag = debounce(
+  () => notifiedListRereader().markDirty(),
+  REPLICA_LAG_REREAD_DELAY_MS
+);
+
+/**
+ * GraphQL lists ordered by notification have no local projection: the cache
+ * can neither place a newly notified entity in them nor move a row up, and
+ * the notified-at floor only applies when a row is mapped again. They read
+ * their loaded pages again instead, which carries the new stamps. Each read
+ * runs the notified page query, whose cost grows with the viewer's
+ * notifications, for every loaded page: a burst reads at most once per
+ * interval, and a hidden tab reads once when it is shown.
+ */
+function revalidateNotifiedGraphqlSoupLists(): void {
+  notifiedListRereader().markDirty();
+  rereadAfterReplicaLag();
 }

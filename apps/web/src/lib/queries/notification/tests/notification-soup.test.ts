@@ -1,4 +1,5 @@
 import type { UnifiedNotification } from '@notifications/types';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
   bumpSoupEntityNotifiedAt,
   hasSoupEntity,
@@ -6,7 +7,7 @@ import {
   refetchSoupEntity,
   restoreSoupEntityToDoneFilteredQueries,
 } from '@queries/soup/normalized-cache';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateSoupForNotification } from '../notification-soup';
 
 vi.mock('@queries/soup/normalized-cache', () => ({
@@ -17,6 +18,11 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   restoreSoupEntityToDoneFilteredQueries: vi.fn(),
 }));
 
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
+}));
+
+const mockRefreshGraphqlLists = vi.mocked(refreshActiveGraphqlSoupQueries);
 const mockBumpNotifiedAt = vi.mocked(bumpSoupEntityNotifiedAt);
 const mockHasSoupEntity = vi.mocked(hasSoupEntity);
 const mockUpdateUpdatedAt = vi.mocked(optimisticUpdateSoupItemUpdatedAt);
@@ -273,4 +279,80 @@ describe('updateSoupForNotification', () => {
       expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('GraphQL notified list re-reads', () => {
+  const setVisibility = (value: DocumentVisibilityState) =>
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(value);
+
+  beforeEach(async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'],
+    });
+    setVisibility('visible');
+    // Showing the tab resets the module re-reader's spacing; then let the
+    // previous test's replica-lag read run out.
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('re-reads flat lists ordered by notification, then again after replica lag', async () => {
+    updateSoupForNotification(createMockNotification());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(1);
+    const where = mockRefreshGraphqlLists.mock.calls[0]?.[0]?.where;
+    expect(where?.({ params: { sort_method: 'notified_at' } })).toBe(true);
+    expect(
+      where?.({ params: { sort_method: 'notified_at' }, groupBy: {} })
+    ).toBe(false);
+    expect(where?.({ params: { sort_method: 'updated_at' } })).toBe(false);
+    expect(where?.(undefined)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(2);
+  });
+
+  it('spaces the re-reads of a burst', async () => {
+    for (const entityId of ['a', 'b', 'c', 'd', 'e'])
+      updateSoupForNotification(
+        createMockNotification({ entity_id: entityId })
+      );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    // The burst's follow-up, then the replica-lag read.
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(3);
+  });
+
+  it('re-reads for kinds the REST normalizer does not track', async () => {
+    updateSoupForNotification(
+      createMockNotification({ entity_type: 'initiative' })
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(1);
+    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
+  });
+
+  it('waits for a hidden tab to be shown', async () => {
+    setVisibility('hidden');
+    updateSoupForNotification(createMockNotification());
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mockRefreshGraphqlLists).not.toHaveBeenCalled();
+
+    setVisibility('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockRefreshGraphqlLists).toHaveBeenCalledTimes(1);
+  });
 });

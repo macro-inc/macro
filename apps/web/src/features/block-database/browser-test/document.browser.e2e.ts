@@ -98,7 +98,7 @@ async function fixture(page: Page, multipleTables = false) {
                 version: detail.tables[0].table.version,
               },
             }
-          : { soup: { nextCursor: null, items } };
+          : { soup: { nextCursor: null, items, notifiedAt: [] } };
       await route.fulfill({ json: { data: { user } } });
       return;
     }

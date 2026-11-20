@@ -46,6 +46,7 @@ type GraphqlExprInput<TLiteral> =
   | { not: GraphqlExprInput<TLiteral> }
   | { literal: TLiteral };
 
+import { groupedSortMethod } from '../grouped/api';
 import type { GroupByField } from '../grouped/types';
 import type { SoupAstBody, SoupParams } from '../items';
 
@@ -802,7 +803,7 @@ function mapSortMethod(
     case 'touched_by_me':
       return unsupported('sort_method touched_by_me');
     case 'notified_at':
-      return unsupported('sort_method notified_at');
+      return 'NOTIFIED_AT';
     case 'property':
       return 'PROPERTY';
     case 'name':
@@ -945,6 +946,11 @@ export function makeGraphqlSoupInput(args: {
     };
   }
 
+  // Notified pages are keyset-ordered newest first; the server rejects ASC.
+  if (args.params.sort_method === 'notified_at' && sortDirection === 'ASC') {
+    unsupported('sort_method notified_at ascending');
+  }
+
   return {
     initial: {
       limit: args.params.limit ?? undefined,
@@ -996,7 +1002,9 @@ export function makeGraphqlGroupedSoupInput(args: {
     initial: {
       groupBy: makeGraphqlGroupByInput(args.groupBy),
       limit: args.params.limit ?? undefined,
-      sortMethod: mapSortMethod(args.params.sort_method),
+      // Grouped reads sort the way the REST grouped endpoint does: feeds
+      // built from their own source (notified_at, ...) group by update time.
+      sortMethod: mapSortMethod(groupedSortMethod(args.params.sort_method)),
       sortPropertyDefinitionId: args.params.sort_property_definition_id,
       sortDirection: mapSortDirection(args.params.sort_direction),
       filters: makeGraphqlFilters(body),

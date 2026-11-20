@@ -7,6 +7,8 @@ query Soup($input: SoupInput!) {
 				...SoupItemFields
 			}
 			nextCursor
+			# Per-page sort key of NOTIFIED_AT pages; empty for other sorts.
+			notifiedAt { graphqlTypeName entityId notifiedAt }
 		}
 	}
 }

@@ -98,6 +98,7 @@ struct CountingSoupService {
     raw_response: Arc<Mutex<Option<Vec<SoupItem<()>>>>>,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
+    frecency_response: Arc<Mutex<Option<Vec<soup::domain::models::EnrichedSoupItem>>>>,
     grouped_calls: Arc<AtomicUsize>,
 }
 
@@ -205,6 +206,13 @@ impl CountingSoupService {
     fn set_raw_response(&self, items: Vec<SoupItem<()>>) {
         *self.raw_response.lock().expect("raw response lock") = Some(items);
     }
+
+    fn set_frecency_response(&self, items: Vec<soup::domain::models::EnrichedSoupItem>) {
+        *self
+            .frecency_response
+            .lock()
+            .expect("frecency response lock") = Some(items);
+    }
 }
 
 impl SoupService for CountingSoupService {
@@ -291,7 +299,19 @@ impl SoupService for CountingSoupService {
         if team_receipt.is_some() {
             self.frecency_team_receipts.fetch_add(1, Ordering::SeqCst);
         }
-        Err(test_soup_err())
+        let response = self
+            .frecency_response
+            .lock()
+            .expect("frecency response lock")
+            .clone();
+        match response {
+            Some(items) => {
+                let page: PaginatedCursor<_, String, SimpleSortMethod, T> =
+                    Paginated::from_parts(items, None);
+                Ok(soup::domain::ports::SoupOutput::Simple(page))
+            }
+            None => Err(test_soup_err()),
+        }
     }
 
     async fn get_user_soup_with_properties_and_frecency<T>(
@@ -2534,6 +2554,70 @@ async fn soup_passes_team_receipt_to_frecency_enriched_path() {
     );
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 1);
+}
+
+fn notified_document(
+    id: Uuid,
+    notified_at: Option<&str>,
+) -> soup::domain::models::EnrichedSoupItem {
+    let mut item = soup::domain::models::EnrichedSoupItem::from(grouped_document(id));
+    item.notified_at = notified_at.map(|stamp| {
+        chrono::DateTime::parse_from_rfc3339(stamp)
+            .expect("test stamp")
+            .to_utc()
+    });
+    item
+}
+
+#[tokio::test]
+async fn notified_soup_page_lists_each_items_notification_time() {
+    let harness = harness();
+    harness.soup_service.set_frecency_response(vec![
+        notified_document(Uuid::from_u128(1), Some("2026-11-18T10:00:00Z")),
+        notified_document(Uuid::from_u128(2), None),
+    ]);
+
+    let response = harness
+        .execute(
+            "{ user { soup(input: {initial: {sortMethod: NOTIFIED_AT}}) { \
+             items { id } notifiedAt { graphqlTypeName entityId notifiedAt } } } }",
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["user"]["soup"]["notifiedAt"],
+        serde_json::json!([{
+            "graphqlTypeName": "GraphqlSoupDocument",
+            "entityId": Uuid::from_u128(1).to_string(),
+            "notifiedAt": "2026-11-18T10:00:00+00:00",
+        }])
+    );
+    // Selecting the stamps alone reads the enriched page that carries them.
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn other_sorts_select_notification_times_without_the_enriched_read() {
+    let harness = harness();
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
+
+    let response = harness
+        .execute(
+            "{ user { soup(input: {initial: {sortMethod: UPDATED_AT}}) { \
+             items { id } notifiedAt { entityId } } } }",
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["user"]["soup"]["notifiedAt"], serde_json::json!([]));
+    assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

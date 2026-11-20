@@ -72,7 +72,8 @@ Marking a notification done removes only that notification's contribution immedi
 other active notifications can keep the entity in the list. Seen/reopen operations
 update filter membership on the authoritative reply, not from a guessed optimistic
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
-other entity partitions, and notified-at sorting still use the network path.
+other entity partitions, and notified-at sorting still use the network path: a
+new notification re-reads mounted notified-at lists.
 
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting

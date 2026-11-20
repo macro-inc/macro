@@ -163,6 +163,36 @@ pub struct SoupPage<E: SoupEntityEdges> {
     items: Vec<GraphqlSoupEntity<E>>,
     /// Opaque cursor for the next page, if one exists.
     next_cursor: Option<String>,
+    /// When the viewer was last notified about each item, listed only on
+    /// pages sorted by `NOTIFIED_AT`, whose order it is; empty otherwise. It
+    /// is a fact of this page, not of the item records, which other lists
+    /// share without it.
+    notified_at: Vec<SoupItemNotifiedAt>,
+}
+
+/// When the viewer was last notified about one item of a Soup page.
+#[derive(SimpleObject)]
+pub struct SoupItemNotifiedAt {
+    /// Concrete GraphQL object type of the item, as in its cache key.
+    graphql_type_name: String,
+    /// The item's `id`.
+    entity_id: ID,
+    /// Time of the viewer's latest notification about the item, in RFC 3339.
+    notified_at: String,
+}
+
+impl SoupItemNotifiedAt {
+    /// The stamp of one enriched item, if it carries one and has a GraphQL type.
+    fn from_enriched<E: SoupEntityEdges>(item: &EnrichedSoupItem) -> Option<Self> {
+        let notified_at = item.notified_at?;
+        let entity = item.item.entity();
+        let graphql_type_name = GraphqlSoupEntity::<E>::graphql_type_name_for(entity.entity_type)?;
+        Some(Self {
+            graphql_type_name,
+            entity_id: ID(entity.entity_id.to_string()),
+            notified_at: notified_at.to_rfc3339(),
+        })
+    }
 }
 
 impl<E: SoupEntityEdges> SoupPage<E> {
@@ -171,6 +201,7 @@ impl<E: SoupEntityEdges> SoupPage<E> {
         Self {
             items: page.items.into_iter().map(GraphqlSoupEntity::new).collect(),
             next_cursor: page.next_cursor,
+            notified_at: Vec::new(),
         }
     }
 
@@ -183,11 +214,17 @@ impl<E: SoupEntityEdges> SoupPage<E> {
                 .map(GraphqlSoupEntity::new_with_projection)
                 .collect(),
             next_cursor: page.next_cursor,
+            notified_at: Vec::new(),
         }
     }
 
     /// Construct a GraphQL page from frecency-enriched Soup items.
     pub fn new_from_enriched(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
+        let notified_at = page
+            .items
+            .iter()
+            .filter_map(SoupItemNotifiedAt::from_enriched::<E>)
+            .collect();
         Self {
             items: page
                 .items
@@ -195,13 +232,20 @@ impl<E: SoupEntityEdges> SoupPage<E> {
                 .map(GraphqlSoupEntity::new_from_enriched)
                 .collect(),
             next_cursor: page.next_cursor,
+            notified_at,
         }
     }
 
-    /// Construct a GraphQL page from server-fact hydration carrying frecency.
+    /// Construct a GraphQL page from server-fact hydration carrying frecency
+    /// and, on a notified page, each item's notification time.
     pub fn new_from_enriched_with_projection(
         page: PaginatedOpaqueCursor<SoupProjectionHydration<EnrichedSoupItem>>,
     ) -> Self {
+        let notified_at = page
+            .items
+            .iter()
+            .filter_map(|hydration| SoupItemNotifiedAt::from_enriched::<E>(&hydration.item))
+            .collect();
         Self {
             items: page
                 .items
@@ -209,6 +253,7 @@ impl<E: SoupEntityEdges> SoupPage<E> {
                 .map(GraphqlSoupEntity::new_from_enriched_with_projection)
                 .collect(),
             next_cursor: page.next_cursor,
+            notified_at,
         }
     }
 }

@@ -12599,6 +12599,24 @@ input SoupInput @oneOf {
 }
 
 """
+When the viewer was last notified about one item of a Soup page.
+"""
+type SoupItemNotifiedAt {
+	"""
+	Concrete GraphQL object type of the item, as in its cache key.
+	"""
+	graphqlTypeName: String!
+	"""
+	The item's `id`.
+	"""
+	entityId: ID!
+	"""
+	Time of the viewer's latest notification about the item, in RFC 3339.
+	"""
+	notifiedAt: String!
+}
+
+"""
 Page returned by `Query.soup`.
 """
 type SoupPage {
@@ -12610,6 +12628,13 @@ type SoupPage {
 	Opaque cursor for the next page, if one exists.
 	"""
 	nextCursor: String
+	"""
+	When the viewer was last notified about each item, listed only on
+	pages sorted by `NOTIFIED_AT`, whose order it is; empty otherwise. It
+	is a fact of this page, not of the item records, which other lists
+	share without it.
+	"""
+	notifiedAt: [SoupItemNotifiedAt!]!
 }
 
 """

@@ -159,6 +159,7 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
               input.initial.filters.documentFilter.literal.id === id
           ),
           nextCursor: null,
+          notifiedAt: [],
         }),
         soupEntity: ({ input }: { input: SoupEntityInput }) =>
           items.find(({ id }) => id === input.entityId) ?? null,

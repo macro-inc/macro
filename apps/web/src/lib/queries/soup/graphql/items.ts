@@ -97,11 +97,14 @@ export function createGraphqlSoupAstItemsQuery(
     key: string;
     record: GraphqlSoupItem;
     fetched?: GraphqlSoupItem;
+    /** The page's notification time for this item, on NOTIFIED_AT pages. */
+    notifiedAt?: string;
   };
   const records = createMemo((previous: ProjectionRow[]) => {
     const fetched = new Map(
       source.fetchedRecords().map((record) => [soupItemKey(record), record])
     );
+    const stamps = source.fetchedNotifiedAt();
     const visible = new Map(fetched);
     for (const record of source.data() ?? [])
       visible.set(soupItemKey(record), record);
@@ -109,25 +112,32 @@ export function createGraphqlSoupAstItemsQuery(
     return [...visible].map(([key, record]) => {
       const row = old.get(key);
       const baseline = fetched.get(key);
-      return row?.record === record && row.fetched === baseline
+      const notifiedAt = stamps.get(key);
+      return row?.record === record &&
+        row.fetched === baseline &&
+        row.notifiedAt === notifiedAt
         ? row
-        : { key, record, fetched: baseline };
+        : { key, record, fetched: baseline, notifiedAt };
     });
   }, []);
   const projected = createKeyedProjection(
     records,
     (row) => row.key,
-    ({ record, fetched }) => {
+    ({ record, fetched, notifiedAt }) => {
       const sort = sortMethod();
       const showSupportedForeignEntities = showForeign();
       const view = { emailView: input()?.emailView };
-      const item = mapGraphqlSoupItem(record, view);
+      // REST items carry `notified_at` themselves; GraphQL lists it on the
+      // page, since it orders this list rather than describing the record.
+      const mapItem = (value: GraphqlSoupItem) => {
+        const mapped = mapGraphqlSoupItem(value, view);
+        return mapped && notifiedAt
+          ? { ...mapped, notified_at: notifiedAt }
+          : mapped;
+      };
+      const item = mapItem(record);
       const fetchedItem =
-        fetched === record
-          ? item
-          : fetched
-            ? mapGraphqlSoupItem(fetched, view)
-            : undefined;
+        fetched === record ? item : fetched ? mapItem(fetched) : undefined;
       return {
         key: soupItemKey(record),
         item: () => item,
