@@ -58,7 +58,7 @@ async function connect(waitForApp = false) {
       for (let ready = 0; ready < 120; ready++) {
         if (
           await evaluate(
-            `!!window.__TAURI_INTERNALS__ && !!document.documentElement.style.getPropertyValue('--dvh') && (${!waitForApp} || document.body.innerText.trim().length > 30)`
+            `!!window.__TAURI_INTERNALS__ && !!document.documentElement.style.getPropertyValue('--tauri-inset-top') && (${!waitForApp} || document.body.innerText.trim().length > 30)`
           )
         )
           return;
@@ -243,23 +243,20 @@ try {
     Math.abs(shown.viewportHeight - start.viewportHeight) < 1,
     'IME must not resize the WebView; the layout root shrinks through --dvh'
   );
+  // The keyboard reaches only the elements that read it (#root's height,
+  // sheets), never <html>; the sheets' offset is unit-tested with the insets.
   const css = await evaluate(
-    `(() => {
-      const probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;height:calc(var(--dvh)*100);pointer-events:none';
-      document.body.append(probe);
-      const dvh = probe.getBoundingClientRect().height;
-      probe.remove();
-      return {dvh,offset:document.documentElement.style.getPropertyValue('--virtual-keyboard-height')};
-    })()`
+    `({dvh: document.getElementById('root').getBoundingClientRect().height,
+      onRoot: document.documentElement.style.getPropertyValue('--virtual-keyboard-height')})`
   );
   assert.ok(
     Math.abs(css.dvh - (shown.viewportHeight - shown.imeHeight)) < 1,
     'The layout root must shrink by exactly the keyboard height'
   );
-  assert.ok(
-    Math.abs(Number.parseFloat(css.offset) - shown.imeHeight) < 1,
-    'Fixed sheets lift by the keyboard height'
+  assert.equal(
+    css.onRoot,
+    '',
+    'The keyboard must not be written on <html>, where every element inherits it'
   );
   await adbRun('shell', 'input', 'keyevent', '4');
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -310,7 +307,7 @@ try {
   );
   await pause(500);
   await evaluate(
-    `document.getElementById('android-smoke-input').style.top = 'calc(var(--dvh)*100 - 100px)'`
+    `document.getElementById('android-smoke-input').style.top = 'calc(100dvh - 100px)'`
   );
   await adbRun(
     'shell',

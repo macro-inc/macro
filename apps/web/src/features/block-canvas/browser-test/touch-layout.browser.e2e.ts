@@ -467,11 +467,12 @@ const sceneBox = (page: Page) =>
  */
 const middleOfView = (page: Page) =>
   page.evaluate(() => {
-    const covered = Number.parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        '--mobile-content-inset-bottom'
-      )
-    );
+    // The bottom chrome (the float host), which `--mobile-content-inset-bottom`
+    // publishes to the elements that clear it.
+    const covered =
+      document
+        .querySelector('[data-float-region]')
+        ?.parentElement?.getBoundingClientRect().height ?? 0;
     const screen = { x: innerWidth / 2, y: (innerHeight - covered) / 2 };
     const { x, y, scale } = window.canvasTouchFixture.editor.getCamera();
     return {

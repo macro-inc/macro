@@ -146,9 +146,6 @@ export function RootFrame(props: ParentProps) {
   onCleanup(observeAiUsageLimitMutations(queryClient));
 
   useAppSquishHandlers();
-  // The app frame shrinks above the keyboard (the `--dvh` squish).
-  const appRoot = document.getElementById('root');
-  if (appRoot) followViewportHeight(appRoot);
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
   // render without app chrome (login, booking, meetings).
   useDesktopZoom();

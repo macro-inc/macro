@@ -8,4 +8,3 @@ if (native === 'ios') {
   });
 }
 document.documentElement.dataset.touchDevice = 'true';
-

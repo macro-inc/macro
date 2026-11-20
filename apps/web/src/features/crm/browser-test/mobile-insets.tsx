@@ -1,3 +1,4 @@
+import { publishContentInsetBottom } from '@core/mobile/viewport-insets';
 import '@app/index.css';
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
@@ -22,6 +23,8 @@ const headerHeight = ['company', 'contact', 'reviews'].includes(surface)
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 function Fixture() {
+  // Bottom chrome the content clears, as the float host would publish it.
+  publishContentInsetBottom(80);
   const [tab, setTab] = createSignal('active');
   const [search, setSearch] = createSignal('');
   const [section, setSection] = createSignal('overview');
@@ -31,7 +34,6 @@ function Fixture() {
       style={{
         '--safe-top': `${safeTop}px`,
         '--mobile-content-inset-top': `${safeTop + headerHeight}px`,
-        '--mobile-content-inset-bottom': '80px',
       }}
     >
       <Switch>
