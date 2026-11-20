@@ -17,6 +17,7 @@ import KeyIcon from '@icon/system/regular/key.svg';
 import KeyboardIcon from '@icon/system/regular/keyboard.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import BotIcon from '@icon/system/regular/robot.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import SwatchesIcon from '@icon/system/regular/swatches.svg';
 import TagIcon from '@icon/system/regular/tag-simple.svg';
@@ -183,6 +184,24 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: SwatchesIcon,
         keywords: ['theme', 'dark', 'light', 'color'],
       }),
+      tabItem('tabDock', {
+        tab: 'Dock',
+        icon: SidebarIcon,
+        keywords: [
+          'sidebar',
+          'rail',
+          'taskbar',
+          'toolbar',
+          'position',
+          'left',
+          'right',
+          'top',
+          'bottom',
+          'size',
+          'small',
+          'large',
+        ],
+      }),
       tabItem('tabNotifications', {
         tab: 'Notifications',
         icon: BellIcon,
@@ -309,6 +328,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Subscription: 'subscription',
   Organization: 'organization',
   Appearance: 'appearance',
+  Dock: 'dock',
   Mobile: 'mobile',
   'AI Memory': 'ai-memory',
   Inbox: 'inbox',
@@ -390,6 +410,8 @@ export const useSettingsTabAvailable = () => {
         return true;
       case 'Connected':
         return true;
+      // The dock is the desktop rail; touch devices have their own dock.
+      case 'Dock':
       case 'Shortcuts':
         return !isTouchDevice();
       case 'Mobile App':

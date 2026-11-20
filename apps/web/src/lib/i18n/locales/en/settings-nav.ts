@@ -17,6 +17,7 @@ export default {
   tabCrm: 'CRM',
   tabAccount: 'Account',
   tabAppearance: 'Appearance',
+  tabDock: 'Dock',
   tabNotifications: 'Notifications',
   tabShortcuts: 'Keyboard shortcuts',
   tabUsage: 'Usage',

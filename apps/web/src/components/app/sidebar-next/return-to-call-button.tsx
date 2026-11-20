@@ -11,6 +11,7 @@ import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { CallWaveform } from '../../../features/channel/Call/components/CallWaveform';
 import { useActiveCallCompanion } from '../../../features/channel/Call/primitives/use-active-call-companion';
+import { dockPopoverPlacement } from '../dock-prefs';
 
 const ActiveCallPopover = lazyNamed(
   () => import('../../../features/channel/Call/views/ActiveCallPopover'),
@@ -50,22 +51,25 @@ function ReturnToCallButtonContent() {
       <Popover
         open={popupOpen()}
         onOpenChange={setPopupOpen}
-        placement="right-end"
+        placement={dockPopoverPlacement('end')}
         gutter={8}
       >
         <Popover.Trigger
           as={Button}
           variant="success"
           size="icon-md"
-          class="size-10 cursor-default rounded-xl"
+          class="size-(--rail-button-size) cursor-default rounded-xl"
           aria-label={t('nav.returnToCall')}
-          tooltip={{ content: t('nav.returnToCall'), placement: 'right' }}
+          tooltip={{
+            content: t('nav.returnToCall'),
+            placement: dockPopoverPlacement(),
+          }}
           draggable={false}
           data-sidebar-next-item="active-call"
         >
           <CallWaveform
             live
-            class="size-5"
+            class="size-(--rail-icon-size)"
             callId={call?.activeCallId() ?? undefined}
           />
         </Popover.Trigger>

@@ -361,7 +361,8 @@ fall back to legacy document routes. This uses touch detection, not the native-a
 check: in DevTools, enable touch emulation rather than only narrowing the viewport.
 Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
 
-The outer navigation rail uses 20px icons in 40px buttons with 4px gaps.
+The outer navigation rail uses 20px icons in 40px buttons with 4px gaps (16px
+icons in 32px buttons when Settings → Dock is set to **Small**).
 Command and create-menu headers have 20px horizontal and 12px vertical padding.
 
 Splits: the app is a tiling window manager. Active light-theme panes are white;
@@ -582,7 +583,8 @@ the main title when hidden, with separate preferences per block type.
 Desktop splits, including a single split in the browser or native app, appear as
 individually bordered panels with 8px corners and 6px top, right, and bottom
 insets and 6px resizable gaps between them, side by side and stacked. The
-leftmost panels sit flush against the app rail, which has no right divider.
+panels sit flush against the app rail, which has no divider; the inset is on
+every other side (6px top, right, and bottom with the default left dock).
 Touch layouts keep their existing presentation.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
@@ -619,6 +621,15 @@ stay centered and the preview body fills the remaining height below the divider.
 ## Sidebar (a11y names are load-bearing)
 
 The outer sidebar is an icon rail; labels appear in tooltips.
+
+**Settings → Dock** (`/app/settings/dock`, desktop only) moves the rail to the
+left (default), top, right, or bottom edge of the window, and sets it **Large**
+(56px bar, 40px buttons) or **Small** (44px bar, 32px buttons). The choice is
+saved per device (`macro:dock` in localStorage, read by the boot shell in
+`index.html`) and applies at once. Tooltips and rail menus open away from the
+dock's edge; on the top or bottom edge the apps run left to right, with the
+footer actions at the far end. Verify each edge and size, a rail tooltip, and
+the More menu.
 
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused

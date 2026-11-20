@@ -166,6 +166,18 @@ const SETTINGS: Setting[] = [
     keywords: 'hover hints help',
   },
   {
+    tab: 'Dock',
+    title: 'Dock position',
+    target: 'Position',
+    keywords: 'sidebar rail taskbar toolbar move left right top bottom edge',
+  },
+  {
+    tab: 'Dock',
+    title: 'Dock size',
+    target: 'Size',
+    keywords: 'sidebar rail taskbar toolbar small large icons compact',
+  },
+  {
     tab: 'Notifications',
     title: 'Notification delivery',
     target: 'Delivery',

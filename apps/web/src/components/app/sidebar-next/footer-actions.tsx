@@ -15,6 +15,7 @@ import GearIcon from '@icon/system/regular/gear.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
 import { createMemo, Show } from 'solid-js';
+import { dockPopoverPlacement, isDockHorizontal } from '../dock-prefs';
 import { useAppUpdate } from './app-update';
 import { HelpMenu } from './help-menu';
 import { NavGlyph } from './nav-glyph';
@@ -64,17 +65,23 @@ const MobileAppButton = () => {
         variant="ghost"
         size="icon-md"
         class={cn(
-          'size-10 cursor-default rounded-xl',
+          'size-(--rail-button-size) cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        tooltip={{ content: t('nav.getMobileApp'), placement: 'right' }}
+        tooltip={{
+          content: t('nav.getMobileApp'),
+          placement: dockPopoverPlacement(),
+        }}
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item="mobile-app"
         {...pressHandlers(open)}
       >
-        <NavGlyph icon={DeviceMobileDownloadIcon} class="size-5" />
+        <NavGlyph
+          icon={DeviceMobileDownloadIcon}
+          class="size-(--rail-icon-size)"
+        />
       </Button>
     </Show>
   );
@@ -117,7 +124,12 @@ export const FooterActions = (props: {
   };
 
   return (
-    <div class="flex w-full shrink-0 flex-col items-center gap-1">
+    <div
+      class={cn(
+        'flex shrink-0 items-center gap-1',
+        isDockHorizontal() ? 'h-full flex-row' : 'w-full flex-col'
+      )}
+    >
       {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
       <Show when={!isTouchDevice() && update()?.id} keyed>
         {(_id) => (
@@ -135,14 +147,14 @@ export const FooterActions = (props: {
         onOpenCurrentSplit={() => openSettings(currentTab())}
         onOpenNewSplit={() => openSettingsInSplit(currentTab())}
         onOpenChange={props.onMenuOpenChange}
-        triggerClass="size-10"
+        triggerClass="size-(--rail-button-size)"
       >
         <Button
           aria-label={t('nav.settings')}
           variant="ghost"
           size="icon-md"
           class={cn(
-            'size-10 cursor-default rounded-xl',
+            'size-(--rail-button-size) cursor-default rounded-xl',
             isSettingsActive() && 'bg-hover text-ink'
           )}
           aria-description={
@@ -152,7 +164,7 @@ export const FooterActions = (props: {
           }
           tooltip={{
             content: t('nav.settings'),
-            placement: 'right',
+            placement: dockPopoverPlacement(),
             hotkey: TOKENS.global.toggleSettings,
           }}
           draggable={false}

@@ -5,7 +5,9 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { For, Match, Suspense, Switch } from 'solid-js';
+import { cn } from '@ui';
+import { For, type JSX, Match, Suspense, Switch } from 'solid-js';
+import { type DockSize, dockSize, isDockHorizontal } from '../dock-prefs';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -28,8 +30,31 @@ function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
 }
 
 /**
- * The app sidebar: a single always-narrow column of 40px icon buttons, labels
- * in tooltips.
+ * Button, glyph and bar sizes for each dock size, read by every rail button
+ * through CSS variables so the buttons need no size props of their own.
+ */
+const DOCK_SIZE_VARIABLES = {
+  large: {
+    '--rail-thickness': '3.5rem',
+    '--rail-padding': '0.5rem',
+    '--rail-button-size': '2.5rem',
+    '--rail-icon-size': '1.25rem',
+    '--rail-help-icon-size': '1.5rem',
+  },
+  small: {
+    '--rail-thickness': '2.75rem',
+    '--rail-padding': '0.375rem',
+    '--rail-button-size': '2rem',
+    '--rail-icon-size': '1rem',
+    '--rail-help-icon-size': '1.25rem',
+  },
+} satisfies Record<DockSize, JSX.CSSProperties>;
+
+/**
+ * The app sidebar (the dock): a single always-narrow bar of icon buttons,
+ * labels in tooltips. It sits against the left, right, top or bottom edge, in
+ * a large or small size, as chosen in Settings → Dock; menus and tooltips open
+ * away from that edge.
  *
  * Always narrow by design — there is no slim mode or hover-peek overlay.
  * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
@@ -61,13 +86,30 @@ export const SidebarRail = () => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden bg-page px-2 pb-3 pt-2"
+      style={DOCK_SIZE_VARIABLES[dockSize()]}
+      class={cn(
+        'relative flex shrink-0 items-center gap-1 overflow-hidden bg-page',
+        isDockHorizontal()
+          ? 'h-(--rail-thickness) w-full flex-row py-(--rail-padding) pl-(--rail-padding) pr-3'
+          : 'h-full w-(--rail-thickness) flex-col px-(--rail-padding) pt-(--rail-padding) pb-3'
+      )}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav class="min-h-0 overflow-y-auto pt-4">
-        <ul class="flex flex-col items-center gap-1">
+      <nav
+        class={
+          isDockHorizontal()
+            ? 'min-w-0 overflow-x-auto pl-4'
+            : 'min-h-0 overflow-y-auto pt-4'
+        }
+      >
+        <ul
+          class={cn(
+            'flex items-center gap-1',
+            isDockHorizontal() ? 'flex-row' : 'flex-col'
+          )}
+        >
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
@@ -116,7 +158,7 @@ export const SidebarRail = () => {
 
       <MoreMenu gates={gates()} />
 
-      <div class="min-h-0 flex-1" />
+      <div class="min-h-0 min-w-0 flex-1" />
 
       <ReturnToCallButton />
       <FooterActions />
