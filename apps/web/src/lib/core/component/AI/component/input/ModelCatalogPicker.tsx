@@ -620,7 +620,8 @@ export function ModelCatalogMenu(
           </div>
         }
       >
-        <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
+        {/* A capped flex column: keep its label and custom rows from shrinking too. */}
+        <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain *:shrink-0">
           <Dropdown.GroupLabel>
             {filtered().length === 1
               ? '1 matching model'

@@ -27,11 +27,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
   },
-  projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    {
-      name: 'mobile',
-      use: { ...devices['iPhone 13'], browserName: 'chromium' },
-    },
-  ],
+  // The bug is in the desktop popover; phones get the touch sheet instead.
+  projects: [{ name: 'desktop', use: { ...devices['Desktop Chrome'] } }],
 });
