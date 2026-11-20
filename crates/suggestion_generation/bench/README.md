@@ -203,6 +203,42 @@ and earlier) can't be read by the `routines` section: write a new one. Don't ope
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one.
 
+### A month of mail
+
+`heldout make <name> <count> month` writes people with a month of mail
+instead: 30 days, up to 500 messages, enough recurring work that five good
+drafted routines are within reach, and a streams key (`streams-truth.json`)
+that spells out every stream in the mail: its senders, count, cadence, what
+each message asks and what the person does with it, as `work` (mail they act
+on), `noise` (mail they read or ignore) or `thread` (a one-off
+conversation). Writing one took $4.50 to $4.91 a person (three at once in
+about ten minutes). The stand-in serves the month to the 30-day read
+(`?days=`) and the newest 100 to the old one.
+
+On a month set a routines run also reports good suggestions: a drafted
+routine or a catalog pick that meets a need of the key with nothing wrong
+with it, counted apart, and how many generations reached five good drafts.
+They have no measured margin; `compare` reports their change without a
+verdict.
+
+`find` measures the finding step on its own: one model call reads a month
+person's mail as the service reads it (`mailText`, the lines
+`suggestions/work.rs` writes) with `find.md`, and the judge matches each
+listed stream to the streams key. A list scores the key's work streams it
+names (*found*) and the entries that name none (*unreal*: noise, a one-off
+thread, or nothing in the mail):
+
+```sh
+bun $B/bench.ts find --set m1 --label flash --model google/gemini-3.8-flash --thinking low --reps 2
+```
+
+A candidate behind a flag runs with it on: `--flags
+routine-suggestions-find-work` (comma-separated) adds flags to the
+section's. Where a generation's drafting session read a work list, the run
+scores that list the same way (`workListOf` reads it from the session's
+brief in the transcript), and reports time to the last suggestion beside
+the first.
+
 The seed CLI refuses an address whose local part isn't ASCII, so as a
 persona is loaded, each such address in its mail, workspace and answer keys
 alike is spelled in ASCII (accents dropped, any other non-ASCII character
@@ -293,6 +329,28 @@ once a run (`judgeLast`), 2026-11-19, on one stack:
 `noise` A against B: score −0.1 (95% −7.5 to 7.2), found +0.04 (−0.28 to
 0.35), bad +0.04 (−0.17 to 0.24), each inside its margin: judging once a
 run leaves `MARGINS` as they were.
+
+### Main on a month of mail
+
+Main `1d77cd00fd` on a readable month set (3 people, 10 needs each on
+average, of which 5 to 8 only a drafted routine meets), 27 attempts,
+2026-11-20:
+
+| Score | Found / needs | Bad | Suggested | Drafted | Good drafts | Five good | Good picks | First | End | $ / gen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 19.3 (12.2 to 26.8) | 2.67 / 10.0 | 0.67 | 5.3 | 2.26 | 0.56 | 0 of 27 | 1.67 | 76 s | 173 s | $0.072 |
+
+The finding step alone on the same people, 2026-11-20 (time includes the
+bench's retries):
+
+| Model | Lists | Found | Unreal a list | Median time | $ a list |
+| --- | --- | --- | --- | --- | --- |
+| `google/gemini-3.8-flash`, thinking low | 3 of 3 | 95% (39 of 41) | 0.3 | 33 s | $0.016 |
+| `anthropic/claude-sonnet-5-5` | 4 of 6 | 96% (52 of 54) | 0.25 | 175 s | $0.12 |
+| `anthropic/claude-haiku-4-5` | 3 of 3 | 80% (33 of 41) | 3.7 | 87 s | $0.086 |
+
+Sonnet's two missing lists, and every list of Gemini 3.8 Flash at its
+default thinking (6 of 6), ran past the stack's 90-second limit.
 
 ## Cost and time
 

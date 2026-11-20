@@ -8,6 +8,7 @@
 import { CATALOG } from './catalog';
 import type { CardMark, FeedMarks, RoutineMark } from './judge';
 import type { FeedTruth, RoutinesTruth, StreamsTruth } from './personas';
+import type { EntryMark, ListScore } from './finding';
 import type { Generation } from './run';
 
 export type Section = 'routines' | 'feed';
@@ -48,6 +49,9 @@ export type Attempt = {
   generation: Generation;
   routineMarks?: RoutineMark[];
   feedMarks?: FeedMarks;
+  /** The work list its drafting session read, matched to the persona's streams key. */
+  findingMarks?: EntryMark[];
+  finding?: ListScore;
   judgeUsd: number;
   /** The bench failed, not the build (seeding, the stack or the judge), or the attempt waits to be judged. Left out of scores. */
   benchError?: string;
@@ -219,6 +223,9 @@ export function summary(attempts: Attempt[]) {
   for (const a of done) for (const [k, v] of Object.entries(a.score.wrong)) wrong[k] = (wrong[k] ?? 0) + v;
   const first = done.map((a) => a.generation.firstMs).filter((v): v is number => v !== undefined);
   const wall = done.map((a) => a.generation.wallMs).filter((v): v is number => v !== undefined);
+  const last = done.map((a) => a.generation.lastMs).filter((v): v is number => v !== undefined);
+  const lists = done.flatMap((a) => (a.finding ? [a.finding] : []));
+  const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
   return {
     attempts: attempts.length,
     scored: done.length,
@@ -246,8 +253,13 @@ export function summary(attempts: Attempt[]) {
       ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
       : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
+    // Generations whose drafting session read a work list: what share of the key's work streams the lists named, and how many entries named none.
+    ...(lists.length
+      ? { finding: { lists: lists.length, found: total((list) => list.found) / Math.max(1, total((list) => list.work)), unreal: total((list) => list.unreal) / lists.length, listed: total((list) => list.listed) / lists.length } }
+      : {}),
     firstMedianMs: quantile(first, 0.5),
     firstP90Ms: quantile(first, 0.9),
+    lastMedianMs: quantile(last, 0.5),
     wallMedianMs: quantile(wall, 0.5),
     usd: avg(done.map((a) => a.generation.cost.usd)),
     judgeUsd: avg(attempts.map((a) => a.judgeUsd)),

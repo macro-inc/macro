@@ -12,6 +12,7 @@ import { SQL } from 'bun';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName, windowMessages } from './personas';
 import { clearInbox, writeInbox } from './stub';
+import type { WorkList } from './finding';
 
 const REPO = resolve(import.meta.dir, '../../..');
 export const CACHE = join(homedir(), '.cache/suggestions-bench');
@@ -73,9 +74,12 @@ export type Generation = {
   sessions: SessionRow[];
   routines: RoutineRow[];
   cards: CardRow[];
-  /** From the request to the first suggestion it wrote, and to the generation's end. */
+  /** From the request to the first suggestion it wrote, to the last, and to the generation's end. */
   firstMs?: number;
+  lastMs?: number;
   wallMs?: number;
+  /** The work streams a finding step listed, as its drafting session read them; none where no session read a list. */
+  workList?: WorkList;
   cost: Cost;
   /** The transcripts, one JSON line per log entry. */
   transcript?: string;
@@ -185,6 +189,33 @@ const SESSIONS = `SELECT s.session_id::text, s.kind, s.surfaces, s.ending, s.ope
   FROM suggestion_generation_session s WHERE s.generation_id = $1 ORDER BY s.opened_at`;
 
 /** Keeps every log line of the generation's sessions while they exist. */
+/** What a drafting session's brief says before the work streams it was given. */
+const WORK_LIST_MARK = 'The streams of work a step found';
+
+function* strings(value: unknown): Generator<string> {
+  if (typeof value === 'string') yield value;
+  else if (Array.isArray(value)) for (const item of value) yield* strings(item);
+  else if (value && typeof value === 'object') for (const item of Object.values(value)) yield* strings(item);
+}
+
+/** The work list a drafting session's brief carried, from its transcript rows; the first brief's where a session was retried. */
+export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
+  for (const row of rows) {
+    for (const text of strings((row as { content?: unknown }).content)) {
+      const at = text.indexOf(WORK_LIST_MARK);
+      if (at < 0) continue;
+      const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
+      if (!block) continue;
+      try {
+        return JSON.parse(block[1]) as WorkList;
+      } catch {
+        // Not the list: read on.
+      }
+    }
+  }
+  return undefined;
+}
+
 async function capture(db: SQL, generation: string, seen: Map<string, unknown>) {
   const rows = await db.unsafe(
     `SELECT l.id::text, l.agent_session_id::text AS session, l.direction, l.content, l.created_at::text
@@ -359,6 +390,14 @@ export async function generate(
     if (undelivered) result.error = `${undelivered} of ${result.sessions.length} sessions never got their prompt (delivery_unknown): the stack is overloaded; run fewer at once (--concurrency)`;
     result.routines = await routinesOf(db, user);
     result.cards = await cardsOf(db, user);
+    const [last] = await db.unsafe(
+      `SELECT greatest((SELECT max(created_at) FROM suggestion WHERE user_id = $1),
+                       (SELECT max(created_at) FROM routine_suggestion WHERE user_id = $1)) AS at`,
+      [user],
+    );
+    if (last?.at) result.lastMs = new Date(last.at).getTime() - start;
+    await capture(db, row.id, transcript);
+    result.workList = workListOf(transcript.values());
     // Usage rows land as each model call settles: give the last ones a moment.
     await Bun.sleep(5000);
     result.cost = await costOf(db, user, new Date(start - 1000), new Date());

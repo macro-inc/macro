@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { RoutineMark } from './judge';
 import { type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, windowMessages } from './personas';
-import type { Generation, RoutineRow } from './run';
+import { type Generation, type RoutineRow, workListOf } from './run';
+import { mailText } from './finding';
 import { type Attempt, scoreRoutines, summary } from './score';
 import { ANCHOR } from './clock';
 
@@ -164,5 +165,35 @@ describe('scoreRoutines', () => {
       score,
     });
     expect(summary([attempt(five), attempt(one)])).toMatchObject({ goodDrafts: 3, fiveGoodDrafts: 1 });
+  });
+});
+
+describe('mailText', () => {
+  test('reads each message as the finding call does', () => {
+    const ana = persona(120, 1);
+    ana.inbox.messages[0] = { ...ana.inbox.messages[0], subject: 'Order <1042>', labels: ['INBOX', 'Orders'], snippet: '  Please\nconfirm  ' };
+    const lines = mailText(ana, ANCHOR).split('\n');
+    expect(lines[0]).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d · Bo ‹bo@acme\.example› · Order ‹1042› · Orders$/);
+    expect(lines[1]).toBe('    Please confirm');
+    // The 101st message is read by its line alone.
+    expect(lines.filter((line) => !line.startsWith('    '))).toHaveLength(120);
+    expect(lines.filter((line) => line.startsWith('    '))).toHaveLength(100);
+  });
+});
+
+describe('workListOf', () => {
+  const list = { person: 'Runs a bakery', streams: [{ name: 'Supplier orders', senders: [], count: 9, cadence: '', what: '', action: '', handled_by: '', labels: [], keeps: '', examples: [] }] };
+  const brief = `Draft routines.\n<untrusted>\nmail\n</untrusted>\n\nThe streams of work a step found in the user's last 30 days of mail, those they would most regret missing first:\n<untrusted>\n${JSON.stringify(list)}\n</untrusted>`;
+
+  test('reads the list a drafting session was briefed with', () => {
+    const rows = [
+      { content: { type: 'event', event: 'acp_ready' } },
+      { content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: brief }] } } },
+    ];
+    expect(workListOf(rows)).toEqual(list);
+  });
+
+  test('finds none where no session read a list', () => {
+    expect(workListOf([{ content: { type: 'acp', params: { prompt: [{ type: 'text', text: 'Draft routines.\n<untrusted>\nmail\n</untrusted>' }] } } }])).toBeUndefined();
   });
 });

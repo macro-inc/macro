@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util';
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
 import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
-import { runFinding } from './finding';
+import { judgeList, runFinding, scoreList } from './finding';
 import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
@@ -104,6 +104,8 @@ const OPTIONS = {
   model: { type: 'string', default: 'anthropic/claude-sonnet-5-5' },
   prompt: { type: 'string' },
   thinking: { type: 'string' },
+  /** Flags to turn on besides the section's, comma-separated: a candidate behind a flag. */
+  flags: { type: 'string' },
 } as const;
 
 const commitOf = (dir: string) =>
@@ -165,6 +167,12 @@ const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: A
       if (section === 'routines') {
         attempt.routineMarks = await judgeRoutines(at, grader, persona, attempt.generation);
         attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
+        // The work list the drafting session read, scored as `find` scores one on its own.
+        const list = attempt.generation.workList;
+        if (list && persona.streamsTruth) {
+          attempt.findingMarks = await judgeList(at, persona, list, attempt.generation.now);
+          attempt.finding = scoreList(persona, list, attempt.findingMarks);
+        }
       } else {
         attempt.feedMarks = await judgeFeed(at, grader, persona, attempt.generation);
         attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
@@ -205,6 +213,7 @@ async function runSection(section: Section, values: Record<string, string | unde
     const gaps = people.flatMap((persona) => keyGaps(persona.routinesTruth!).map((gap) => `${persona.name}'s routines answer key ${gap}`));
     if (gaps.length) throw new Error(gaps.join('\n'));
   }
+  const flags = { ...spec.flags, ...Object.fromEntries((values.flags ?? '').split(',').filter(Boolean).map((flag) => [flag.trim(), true])) };
   const reps = Number(values.reps ?? spec.reps);
   const seats = Number(values.seats ?? spec.seats);
   // Every copy of every persona is a person of its own: they run side by side.
@@ -226,7 +235,7 @@ async function runSection(section: Section, values: Record<string, string | unde
     reps,
     judge: JUDGE,
     personas: Object.fromEntries(people.map((persona) => [persona.name, personaDigest(persona)])),
-    flags: spec.flags,
+    flags,
     attempts: [],
   };
   // Through a sibling file, so a run stopped mid-write keeps its last whole snapshot.
@@ -236,7 +245,7 @@ async function runSection(section: Section, values: Record<string, string | unde
   };
   await exclusive(at.instance, `suggestions bench ${section}`, async () => {
     startStub(at.instance);
-    await setFlags(at.instance, spec.flags);
+    await setFlags(at.instance, flags);
     await seedGraders(at.instance);
     const base = (slot: Persona, rep: number) => join(dir, `${slotName(slot).replace('/', '-')}-${rep}`);
     // Judging needs only what a generation wrote, so it runs on while the next
@@ -514,7 +523,7 @@ async function main() {
 options: --instance sugbench --set tune|<held-out set> --personas a,b --label local
          --seats <copies of each persona> --reps <rounds> (default: the section's size)
          --concurrency <generations at once> (default: the section's) --out <file> --margin <points>
-         --model, --thinking low, --prompt <file> (find)`);
+         --flags a,b (flags to turn on besides the section's) --model, --thinking low, --prompt <file> (find)`);
   }
 }
 
