@@ -208,7 +208,12 @@ function spansBlocks(list: Entry[], old: string): boolean {
  * `old` across a block boundary (blocks are joined by one blank line, as the
  * agent reads them): the spanned range and the match offsets inside it.
  */
-function crossBlockMatch(list: Entry[], old: string, edit: number) {
+function crossBlockMatch(
+  list: Entry[],
+  old: string,
+  replacement: string,
+  edit: number
+) {
   if (!old.includes('\n')) return null;
   const offsets: number[] = [];
   let joined = '';
@@ -227,11 +232,14 @@ function crossBlockMatch(list: Entry[], old: string, edit: number) {
     );
   const end = at + old.length;
   // A match that starts or ends inside a separator takes the blocks on both
-  // sides of it: skip only blocks wholly before its start or after its end.
+  // sides of it (consuming a separator joins them), except a block the match
+  // ends exactly before when the replacement puts the separator back.
   let first = 0;
   while (first < list.length - 1 && offsets[first + 1] <= at) first++;
   let last = list.length - 1;
-  while (last > 0 && offsets[last] - 2 >= end) last--;
+  while (last > 0 && offsets[last] > end) last--;
+  if (last > first && offsets[last] === end && replacement.endsWith('\n\n'))
+    last--;
   const merged = joined.slice(
     offsets[first],
     offsets[last] + list[last].markdown.length
@@ -281,7 +289,7 @@ function applyReplace(
       }))
     );
   if (total === 0 && !edit.block_id) {
-    const span = crossBlockMatch(list, edit.old, n);
+    const span = crossBlockMatch(list, edit.old, edit.new, n);
     if (span) {
       for (let i = span.first; i <= span.last; i++)
         if (list[i].opaque)

@@ -203,14 +203,19 @@ export function applyUpdate(
 }
 
 /**
- * Markdown for read-back comparisons: `"key":null` inside tags is dropped,
+ * Markdown for read-back comparisons: `"key":null` inside `<m-…>` tag JSON is
+ * dropped (text outside tags compares exactly),
  * because a Loro round trip materialises absent optional fields as null (a new
  * document card gains `"mentionUuid":null`) with no visible change.
  */
 export function verifyKey(markdown: string): string {
-  return markdown
-    .replace(/"[A-Za-z_][A-Za-z0-9_]*":null,?/g, '')
-    .replace(/,}/g, '}');
+  return markdown.replace(
+    /(<m-[a-z-]+>)(\{[\s\S]*?\})(<\/m-[a-z-]+>)/g,
+    (_, open: string, json: string, close: string) =>
+      open +
+      json.replace(/"[A-Za-z_][A-Za-z0-9_]*":null,?/g, '').replace(/,}/g, '}') +
+      close
+  );
 }
 
 /** The placeholder an opaque block is shown as; it must be left as it is. */
