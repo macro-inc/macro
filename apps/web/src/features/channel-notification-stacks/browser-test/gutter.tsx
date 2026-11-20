@@ -118,16 +118,24 @@ window.marked = [];
 function Fixture() {
   const [width, setWidth] = createSignal(Number(params.get('pane') ?? '1600'));
   window.resizeGutterPane = setWidth;
-  const [records, setRecords] = createSignal(NOTIFICATIONS);
+  // `?empty` starts with nothing left to mark done.
+  const [records, setRecords] = createSignal(
+    params.has('empty') ? [] : NOTIFICATIONS
+  );
   const [open, setOpen] = createSignal(true);
   const [view, setView] = createSignal<NotificationListView>('not_done');
   // `?notDone=failed` starts as if the not-done read failed; Retry loads it.
   const [notDoneStatus, setNotDoneStatus] = createSignal<StackListStatus>(
-    params.get('notDone') === 'failed' ? 'failed' : 'ready'
+    params.get('notDone') === 'failed'
+      ? 'failed'
+      : params.get('notDone') === 'loading'
+        ? 'loading'
+        : 'ready'
   );
 
   const stacks = createChannelNotificationStacks({
-    active: records,
+    // Like the not-done read: nothing until it has loaded.
+    active: () => (notDoneStatus() === 'ready' ? records() : undefined),
     unread: records,
   });
   const mark = (kind: 'done' | 'read', marked: readonly ChannelStack[]) => {

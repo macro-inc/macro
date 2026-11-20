@@ -1,14 +1,23 @@
 import { t } from '@app/lib/i18n';
+import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import BellIcon from '@icon/system/regular/bell.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button, Card } from '@ui';
-import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { NotificationListPanel } from '../components/notification-list-panel';
 import type { SenderName } from '../components/stack-label';
-import type {
-  ChannelStack,
-  NotificationListView,
-  StackListStatus,
+import {
+  type ChannelStack,
+  type NotificationListView,
+  type StackListStatus,
+  stackIsUnread,
 } from '../core/channel-stacks';
 
 /** The gutter the toggle needs: itself plus its inset from the pane's edge. */
@@ -45,6 +54,15 @@ export function NotificationList(props: {
   onMarkRead: (stacks: readonly ChannelStack[]) => void;
 }) {
   const [popoverOpen, setPopoverOpen] = createSignal(false);
+  // Only a channel with something left to mark done shows the toggle, so
+  // nothing shows while that is loading. A failed read keeps it, to retry.
+  const shown = () =>
+    props.status('not_done') === 'failed' || props.notDone().length > 0;
+  // The last stack marked done takes the popover with it; it stays closed
+  // when a new one arrives.
+  createEffect(() => {
+    if (!shown()) setPopoverOpen(false);
+  });
   const stacks = () =>
     props.view() === 'not_done' ? props.notDone() : props.unread();
   const docked = () => props.gutterWidth() >= DOCKED_MIN_GUTTER;
@@ -76,9 +94,23 @@ export function NotificationList(props: {
     />
   );
 
+  // Any not-done stack the viewer has not seen yet.
+  const hasUnread = () => props.notDone().some(stackIsUnread);
   const toggleContent = () => (
     <>
-      <BellIcon class="size-4" />
+      {/* The dock's unread dot, on the bell's corner. */}
+      <span class="relative flex">
+        <BellIcon class="size-4" />
+        <Show when={hasUnread()}>
+          <span
+            aria-hidden="true"
+            data-unread-dot
+            class="pointer-events-none absolute -top-1 -right-1 rounded-full ring-2 ring-button-secondary-bg"
+          >
+            <UnreadIndicator active class="size-1.5" />
+          </span>
+        </Show>
+      </span>
       <Show when={stacks().length > 0}>
         <span class="tabular-nums">{stacks().length}</span>
       </Show>
@@ -86,7 +118,7 @@ export function NotificationList(props: {
   );
 
   return (
-    <Show when={props.gutterWidth() >= TOGGLE_MIN_GUTTER}>
+    <Show when={shown() && props.gutterWidth() >= TOGGLE_MIN_GUTTER}>
       <div
         data-channel-notification-list
         class="absolute top-3 z-2 flex max-h-[calc(100%-1.5rem)] flex-col items-start gap-2"
@@ -101,6 +133,7 @@ export function NotificationList(props: {
               variant="secondary"
               size="sm"
               aria-label={t('channelNotificationStacks.toggle')}
+              aria-description={hasUnread() ? t('common.unread') : undefined}
               aria-expanded={props.open()}
               tooltip={{
                 content: t('channelNotificationStacks.toggle'),
@@ -136,6 +169,7 @@ export function NotificationList(props: {
                 variant="secondary"
                 size="sm"
                 aria-label={t('channelNotificationStacks.toggle')}
+                aria-description={hasUnread() ? t('common.unread') : undefined}
                 tooltip={{
                   content: t('channelNotificationStacks.toggle'),
                   // It would cover the popover it just opened.

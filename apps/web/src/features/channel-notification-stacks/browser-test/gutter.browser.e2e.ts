@@ -147,6 +147,96 @@ test('a failed read offers Retry instead of an empty list', async ({
   await expect(list(page).getByRole('listitem')).toHaveCount(3);
 });
 
+test('unread dots follow unseen stacks on the toggle and the rows', async ({
+  page,
+}) => {
+  await open(page, 1600);
+  const toggleDot = toggle(page).locator('[data-unread-dot]');
+  const rows = list(page).getByRole('listitem');
+  const unreadDots = list(page).getByRole('img', { name: 'Unread' });
+
+  // New messages and the thread hold unseen notifications; the mention was
+  // seen, so it is not done but shows no dot.
+  await expect(toggleDot).toBeVisible();
+  await expect(toggle(page)).toHaveAttribute('aria-description', 'Unread');
+  await expect(rows).toHaveCount(3);
+  await expect(unreadDots).toHaveCount(2);
+  await expect(
+    rows.filter({ hasText: 'mentioned you' }).getByRole('img', {
+      name: 'Unread',
+    })
+  ).toHaveCount(0);
+
+  // Every Unread row has its dot.
+  await list(page).getByText('Unread', { exact: true }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(unreadDots).toHaveCount(2);
+
+  // Reading one stack takes its dot away; the toggle keeps its dot.
+  const thread = rows.filter({ hasText: 'Thread reply' });
+  await thread.hover();
+  await thread.getByRole('button', { name: /^Mark read:/ }).click();
+  await expect(rows).toHaveCount(1);
+  await list(page).getByText('Not done', { exact: true }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(unreadDots).toHaveCount(1);
+  await expect(
+    rows.filter({ hasText: 'Thread reply' }).getByRole('img', {
+      name: 'Unread',
+    })
+  ).toHaveCount(0);
+  await expect(toggleDot).toBeVisible();
+
+  // With nothing unseen left, the toggle's dot goes too.
+  await list(page).getByText('Unread', { exact: true }).click();
+  await rows.first().hover();
+  await rows
+    .first()
+    .getByRole('button', { name: /^Mark read:/ })
+    .click();
+  await expect(toggleDot).toHaveCount(0);
+  await expect(toggle(page)).not.toHaveAttribute('aria-description', /./);
+});
+
+test('the toggle shows only while something is left to mark done', async ({
+  page,
+}) => {
+  // Nothing while the not-done read loads: no flash of the bell.
+  await page.goto('/gutter.html?pane=1600&notDone=loading');
+  await expect(page.locator('[data-message="m1"]')).toBeVisible();
+  await expect(toggle(page)).toHaveCount(0);
+  await expect(list(page)).toHaveCount(0);
+
+  await page.goto('/gutter.html?pane=1600&empty');
+  await expect(page.locator('[data-message="m1"]')).toBeVisible();
+  await expect(toggle(page)).toHaveCount(0);
+  await expect(list(page)).toHaveCount(0);
+
+  // A new notification brings the toggle and the docked card back.
+  await page.evaluate(() => window.notify('n9', 'm2'));
+  await expect(toggle(page)).toBeVisible();
+  await expect(list(page).getByRole('listitem')).toHaveCount(1);
+
+  // Marking the last stack done hides them again.
+  await checks(page).first().click();
+  await expect(toggle(page)).toHaveCount(0);
+  await expect(list(page)).toHaveCount(0);
+});
+
+test('marking the last stacks done closes the popover', async ({ page }) => {
+  await open(page, 1200);
+  await toggle(page).click();
+  const popover = page.getByRole('dialog');
+  await popover.getByRole('button', { name: 'Mark all done' }).click();
+  await expect(popover).toHaveCount(0);
+  await expect(toggle(page)).toHaveCount(0);
+
+  // It stays closed when a new notification brings the toggle back.
+  await page.evaluate(() => window.notify('n9', 'm2'));
+  await expect(toggle(page)).toBeVisible();
+  await expect(popover).toHaveCount(0);
+});
+
 // A narrow split (140px of gutter): the list opens in a popover, and opening
 // a stack from it closes the popover.
 test('a narrow pane opens the list as a popover', async ({ page }) => {

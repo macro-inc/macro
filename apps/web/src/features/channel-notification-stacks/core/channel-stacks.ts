@@ -146,6 +146,13 @@ export function channelStacks(
   return stacks.sort((a, b) => Date.parse(a.latestAt) - Date.parse(b.latestAt));
 }
 
+/** A stack holding a notification the viewer has not seen yet. */
+export function stackIsUnread(stack: ChannelStack) {
+  return stack.notifications.some(
+    (notification) => notification.state === 'unseen'
+  );
+}
+
 /**
  * `next`, with each stack that has not changed since `previous` kept as the
  * earlier object, so a list keyed by reference keeps its row (and focus).

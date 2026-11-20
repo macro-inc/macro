@@ -1096,10 +1096,16 @@ hidden states. Check that:
   marks that stack's notifications done in Home.
 - A toggle with the notifications bell and a count sits at the top left of
   the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
-  card docked in the gutter. Narrower panes open the list as a popover. Not done and Unread switch which stacks it
-  lists. Clicking a row scrolls to its message, and the row's check marks it
-  done (or read, in Unread). While a list's notifications load it says so,
-  and if the read fails it offers Retry instead of an empty list.
+  card docked in the gutter. Narrower panes open the list as a popover. Not
+  done and Unread switch which stacks it lists. Clicking a row scrolls to its
+  message, and the row's check marks it done (or read, in Unread). While a
+  list's notifications load it says so, and if the read fails it offers Retry
+  instead of an empty list.
+- Unseen stacks show an unread dot before their icon, and the bell shows a
+  dot while any not-done stack is unseen. Reading a stack (here, in Home, or
+  on another device) clears its dot.
+- With nothing left to mark done, the bell and the list hide (an open popover
+  closes); a new notification brings the bell back.
 - Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
 
 ## Requests to join
