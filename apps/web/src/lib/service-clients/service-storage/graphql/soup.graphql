@@ -251,6 +251,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		ownerId
 		organizationId
 		channelTeamId: teamId
+		autoJoinTeam
 		createdAt
 		updatedAt
 		viewedAt
@@ -262,6 +263,20 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			role
 			joinedAt
 			leftAt
+		}
+		# Every channel write carries the directory's fields (ChannelDirectoryFields),
+		# because a record missing one is omitted from directory reads.
+		botParticipants {
+			channelId
+			botId
+			role
+			joinedAt
+			leftAt
+		}
+		agentDm {
+			botId
+			name
+			avatarUrl
 		}
 		latestMessage {
 			...SoupChannelMessageFields

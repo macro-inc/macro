@@ -87,7 +87,9 @@ export type SoupBackfillParams = {
  * chats have paged through with it.
  */
 export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  checkpointId: 'channels',
+  // Renamed from 'channels' when the channel selection gained the directory's
+  // fields: a pass completed before then wrote records the directory omits.
+  checkpointId: 'channel-directory',
   // One request per 100 channels: 2 s spacing takes minutes on a large account.
   pageDelayMs: 250,
   input: {
