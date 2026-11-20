@@ -25,7 +25,7 @@ owner, and it needs nothing but `MACRO_API_KEY`: sending, reading, the relevance
    restart it resumes from that event (the events service replays a short window, in one
    process), and every time the stream opens after a gap it also reads, from a minute before the
    cursor and at most a day back, the channels with activity since, each root's replies
-   included. A cursor that can't be read reads the whole day. Bounds: 50 channels, DMs first,
+   included. A cursor that can't be read reads the whole day. A catch-up waits a random 0–5 s first, so agents restarted together don't all read at once, and skips a root deleted in the gap. Bounds: 50 channels, DMs first,
    then the most recently active; 200 roots per channel, the newest kept, since a channel that
    busy is read for context more than for replies. A cap hit is counted on the
    `agent.chat.catch_up` span. A message seen twice is delivered once, and one already in

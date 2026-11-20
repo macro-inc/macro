@@ -118,6 +118,8 @@ const catchUpMarginMs = 60_000;
 /** Bounds on one catch-up: channels read, and messages read per channel. */
 const catchUpChannels = 50;
 const catchUpMessages = 200;
+/** A catch-up waits up to this long first, so agents restarted together don't all read at once. */
+const catchUpSpreadMs = 5_000;
 /** Ids remembered to drop a message both replayed and caught up. */
 const rememberedIds = 1_000;
 
@@ -144,6 +146,7 @@ export const sdkChat = ({
   cursor = noCursor,
   trace = passthrough,
   now = () => new Date(),
+  sleep = (ms) => Bun.sleep(ms),
 }: {
   readonly macro: () => Promise<Macro>;
   /** What the agent's own messages are recorded as from. */
@@ -152,6 +155,8 @@ export const sdkChat = ({
   readonly cursor?: CursorStore;
   readonly trace?: Trace;
   readonly now?: () => Date;
+  /** Waits before a catch-up and between retries. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }): Chat => {
   const listening = Promise.withResolvers<void>();
   // Messages delivered but not handled yet, by id: the earlier of when each
@@ -448,6 +453,9 @@ export const sdkChat = ({
                 }
                 for (const message of [root, ...replies]) {
                   if (seen.has(message.id)) continue;
+                  // A root deleted in the gap is still listed for its live
+                  // replies; the stream would never have delivered it.
+                  if (message.toJSON().detail?.deleted_at) continue;
                   const at = await message.createdAt();
                   if (Date.parse(at) < since) continue;
                   missed.push(await fromHistory(channel, message, at));
@@ -501,13 +509,14 @@ export const sdkChat = ({
           while (open && pending !== undefined) {
             const after = pending;
             pending = undefined;
+            await sleep(Math.random() * catchUpSpreadMs);
             for (let attempt = 0; ; attempt += 1) {
               try {
                 await catchUpFrom(after);
                 break;
               } catch {
                 // The backend is still coming back: try again.
-                await Bun.sleep(Math.min(1_000 * 2 ** attempt, 30_000));
+                await sleep(Math.min(1_000 * 2 ** attempt, 30_000));
               }
             }
           }
@@ -530,7 +539,7 @@ export const sdkChat = ({
               answered = true;
               listening.resolve();
             } catch {
-              await Bun.sleep(Math.min(1_000 * 2 ** attempt, 30_000));
+              await sleep(Math.min(1_000 * 2 ** attempt, 30_000));
             }
           }
         } finally {

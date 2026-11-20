@@ -9,6 +9,8 @@ type Posted = {
   readonly text: string;
   /** The root it replies to; a root has none. */
   readonly thread?: string;
+  /** Deleted, but still listed for its replies. */
+  readonly deleted?: boolean;
 };
 
 type ListenOptions = {
@@ -44,7 +46,11 @@ const fakeMacro = () => {
     }),
     toJSON: () => ({
       id: message.id,
-      detail: { thread_id: message.thread ?? null, attachments: [] },
+      detail: {
+        thread_id: message.thread ?? null,
+        attachments: [],
+        deleted_at: message.deleted ? '2026-11-19T11:59:45Z' : null,
+      },
     }),
     thread: () => ({
       replies: async () =>
@@ -159,6 +165,8 @@ const listening = (
       },
     },
     now: () => now,
+    // Waits are tested by what happens, not by waiting.
+    sleep: async () => undefined,
   });
   const incoming = chat.incoming[Symbol.asyncIterator]();
   return {
@@ -366,4 +374,29 @@ test('a cursor that cannot be read catches up the whole window, and says so', as
   expect((await within(caught, 'nothing was caught up')).entry.id).toBe('old');
   expect(backend.activeSince).toEqual(['2026-11-18T12:00:00.000Z']);
   expect(spans.at(-1)).toMatchObject({ 'chat.cursor.unreadable': true });
+});
+
+test('a root deleted during the restart is not delivered, its new reply is', async () => {
+  const backend = fakeMacro();
+  backend.post({
+    id: 'gone',
+    at: '2026-11-19T11:59:30Z',
+    text: 'oops',
+    deleted: true,
+  });
+  backend.post({
+    id: 'gone-reply',
+    at: '2026-11-19T11:59:40Z',
+    text: 'what was that?',
+    thread: 'gone',
+  });
+  const { next } = listening(backend, { at: '2026-11-19T11:59:20Z' });
+
+  const caught = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  expect((await within(caught, 'nothing was caught up')).entry.id).toBe(
+    'gone-reply'
+  );
+  expect(await nothingWithin(next())).toBe('nothing');
 });
