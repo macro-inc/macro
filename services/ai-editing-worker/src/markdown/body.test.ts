@@ -524,4 +524,59 @@ describe('pipe tables', () => {
       ['New'],
     ]);
   });
+
+  it('keeps table-shaped text already in a paragraph as text, with its comment', async () => {
+    const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId: DOC });
+    (
+      await manager.initializeFromSnapshot(
+        (await markdownToLoroSnapshot(
+          '# Plan\n\n\\| Header |\n\\| --- |\n\\| Body |'
+        ))!
+      )
+    )._unsafeUnwrap();
+    await applyCommentMarkChange(manager, createNoopLiveSyncSource(DOC), {
+      action: 'add',
+      markId: MARK,
+      text: 'Body',
+    });
+    const synced = new SyncedDocument(manager.doc.export({ mode: 'snapshot' }));
+    manager.dispose();
+    const [, paragraph] = blocks(synced.doc);
+    expect(paragraph.type).toBe('paragraph');
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (read.action !== 'read') throw new Error('expected a read');
+
+    const unchanged = await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: read.markdown,
+      },
+      synced,
+      signal()
+    );
+    expect(unchanged).toMatchObject({ changed: false });
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: read.markdown.replace('# Plan', '# Updated'),
+      },
+      synced,
+      signal()
+    );
+    const after = blocks(synced.doc);
+    expect(after.map((block) => block.type)).toEqual(['heading', 'paragraph']);
+    expect(after[1]).toEqual(paragraph);
+    const marks = walk(after[1]).filter((n) => n.type === 'comment-mark');
+    expect(marks[0].ids).toEqual([MARK]);
+  });
 });

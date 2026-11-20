@@ -512,9 +512,14 @@ function $alignToHeader(table: TableNode, rows: TableRowNode[]) {
  * pipes as a row, and appends rows to a table on the line above. So every other
  * run of pipe lines outside fenced code gets its leading pipe escaped and stays
  * text, and a table gets a blank line above it, so it never joins the block
- * before it.
+ * before it. A run whose lines appear, in order, in one of `existingText` (the
+ * markdown of paragraphs already in the document) is that paragraph's text,
+ * not a new table, so it stays text too.
  */
-export function isolatePipeTables(markdown: string): string {
+export function isolatePipeTables(
+  markdown: string,
+  existingText: readonly string[] = []
+): string {
   const lines = markdown.split('\n');
   const inCode = codeFenceLines(lines);
   const isRow = (index: number) =>
@@ -535,10 +540,12 @@ export function isolatePipeTables(markdown: string): string {
     while (isRow(end)) end += 1;
     const run = lines.slice(index, end);
     const header = run[0].match(REG_EXP_TABLE_ROW)?.[1] ?? '';
+    const runText = `\n${run.join('\n')}\n`;
     const isTable =
       run.length >= 2 &&
       REG_EXP_TABLE_ROW_DIVIDER.test(run[1]) &&
-      splitTableRow(header).length === columnAlignments(run[1]).length;
+      splitTableRow(header).length === columnAlignments(run[1]).length &&
+      !existingText.some((text) => `\n${text}\n`.includes(runText));
 
     if (isTable) {
       if (output.length > 0 && output[output.length - 1].trim() !== '') {
