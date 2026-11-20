@@ -334,9 +334,9 @@ docs/design/teammate-runtime.md ("The container"). Contract:
   no `agent-stopped`: macrod passes the last container's exit to the next
   one as `TEAMMATE_PREVIOUS_EXIT` (`unknown`, or 0 for a stop it asked
   for), and teammate-boot counts failed boots from it. Each start is a new
-  container on the same volumes. A change of the restart marker
-  `/teammate/.restart` stops the agent and exits 75 (macrod starts it
-  again; no failed boot). `docker stop` sends SIGTERM to the agent, which
+  container on the same volumes. After a land the agent exits 75
+  by itself (it watches its restart marker `/teammate/.restart`), and so
+  does the container; macrod starts it again (no failed boot). `docker stop` sends SIGTERM to the agent, which
   syncs its repository once more when no wake is running. A stop is taken
   at any point of the start: before the agent starts, it never does; an
   agent that a stop ended by its signal (no handler yet) stopped cleanly,

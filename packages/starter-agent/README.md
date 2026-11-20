@@ -151,7 +151,7 @@ agent's service.
 | `MUPPET_CREDENTIALS_FILE` | yes (hosted) | The enrollment's `agent.env`, a systemd credential: `KEY="value"` lines. |
 | `MUPPET_CREDENTIALS` | no | `sops` for a self-hosted agent, which keeps `secrets.enc.json` instead. |
 | `MUPPET_LAST_GOOD_FILE` | yes (`run`) | Written with HEAD after a healthy boot. |
-| `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land; the image restarts the service (the teammate container exits 75). |
+| `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land, by whichever process landed; `run` sees it change, stops (a last sync when idle) and exits 75, which its launcher starts again. |
 | `MUPPET_MCP_SERVERS_JSON` | no | Stdio MCP servers for every wake (`{name: {command, args?, env?}}`). |
 | `CREDENTIALS_DIRECTORY` | set by systemd or the teammate image (`/run/teammate`) | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
 | `HARNESSD_STATE_DIRECTORY` | yes (with systemd credentials) | harnessd's Claude sign-in, read-only inside the sandbox; the `claude` wrapper on PATH reads it. |
