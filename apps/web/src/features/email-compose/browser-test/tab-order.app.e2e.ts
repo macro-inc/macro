@@ -81,6 +81,9 @@ for (const composer of ['new', 'forward']) {
     await expect(
       page.getByRole('option').filter({ hasText: 'Ann Rivera' })
     ).toBeVisible();
+    await expect(page.locator('[role="option"][data-highlighted]')).toHaveCount(
+      1
+    );
     await page.keyboard.press('Tab');
     await expect(chips).toHaveCount(1);
     await expect(to).toBeFocused();
@@ -94,8 +97,15 @@ for (const composer of ['new', 'reply', 'forward']) {
     page,
   }) => {
     const { to } = await open(page, composer);
+    const reads = page.getByTestId('directory-reads');
     await to.click();
+    await settle(page);
+    const readsBefore = Number(await reads.textContent());
     await page.keyboard.type('nobody by this name');
+    // Wait for the typed query's own read, not the empty list before it.
+    await expect
+      .poll(async () => Number(await reads.textContent()))
+      .toBeGreaterThan(readsBefore);
     await expect(page.getByTestId('directory-rows')).toHaveText('0');
     await page.keyboard.press('Tab');
     await expect(to).not.toBeFocused();
@@ -105,32 +115,35 @@ for (const composer of ['new', 'reply', 'forward']) {
 
 // Without this, Shift+Tab anywhere but the very start of the body is taken
 // by outdenting, even when there is nothing to outdent.
-test('Shift+Tab in the body outdents, then goes back to Subject', async ({
-  page,
-}) => {
-  const { body } = await open(page, 'new');
-  const subject = page.getByRole('textbox', { name: 'Subject' });
-  await body.click();
-  await page.keyboard.type('- one');
-  await page.keyboard.press('Enter');
-  await page.keyboard.type('two');
-  // Tab at the very end of the body moves on, so indent from inside the
-  // item. The editor ignores a caret move that lands with its own selection
-  // update, so let each settle first.
-  await settle(page);
-  await page.keyboard.press('ArrowLeft');
-  await settle(page);
-  await page.keyboard.press('Tab');
-  await expect(body.locator('ul ul')).toHaveCount(1);
+for (const composer of ['new', 'reply']) {
+  test(`Shift+Tab in the body outdents, then goes back in the ${composer} composer`, async ({
+    page,
+  }) => {
+    const { to, body } = await open(page, composer);
+    const previous =
+      composer === 'new' ? page.getByRole('textbox', { name: 'Subject' }) : to;
+    await body.click();
+    await page.keyboard.type('- one');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('two');
+    // Tab at the very end of a new email's body moves on, so indent from
+    // inside the item. The editor ignores a caret move that lands with its
+    // own selection update, so let each settle first.
+    await settle(page);
+    await page.keyboard.press('ArrowLeft');
+    await settle(page);
+    await page.keyboard.press('Tab');
+    await expect(body.locator('ul ul')).toHaveCount(1);
 
-  await page.keyboard.press('Shift+Tab');
-  await expect(body.locator('ul ul')).toHaveCount(0);
-  await expect(body).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(subject).toBeFocused();
-});
+    await page.keyboard.press('Shift+Tab');
+    await expect(body.locator('ul ul')).toHaveCount(0);
+    await expect(body).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(previous).toBeFocused();
+  });
+}
 
-for (const composer of ['reply', 'forward']) {
+for (const composer of ['forward']) {
   test(`Shift+Tab leaves the body in the ${composer} composer`, async ({
     page,
   }) => {

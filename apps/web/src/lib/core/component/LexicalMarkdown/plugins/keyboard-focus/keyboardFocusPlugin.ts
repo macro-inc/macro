@@ -80,10 +80,7 @@ function registerKeyboardFocusPlugin(
         if (e.shiftKey) {
           // Shift+Tab outdents while there is something to outdent, and
           // otherwise leaves, so it never stalls in the editor.
-          if (
-            $testSelectionPosition('start', 'horizontal') ||
-            !$canOutdentSelection()
-          ) {
+          if (!$canOutdentSelection()) {
             props.onFocusLeaveStart?.(e);
             return true;
           }

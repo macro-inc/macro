@@ -20,7 +20,7 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { $getRoot } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_CRITICAL, KEY_TAB_COMMAND } from 'lexical';
 import {
   type Accessor,
   children,
@@ -311,8 +311,15 @@ function LoadedReplyInputView(
     .use(registerToggleAppendedThread)
     .onChange(state.onContentChange)
     // Shift+Tab outdents while there is something to outdent, and otherwise
-    // keeps its default so focus moves back to the recipients.
-    .onTab((e) => e.shiftKey && !$canOutdentSelection())
+    // keeps its default so focus moves back to the recipients. A plugin, not
+    // onTab, which would drop the builder's tab indentation.
+    .use((editor) =>
+      editor.registerCommand(
+        KEY_TAB_COMMAND,
+        (e) => e.shiftKey && !$canOutdentSelection(),
+        COMMAND_PRIORITY_CRITICAL
+      )
+    )
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         if (editingDisabled()) return;
