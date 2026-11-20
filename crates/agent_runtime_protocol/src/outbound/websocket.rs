@@ -206,6 +206,10 @@ async fn run_pump<Rx, Socket, Frame, Error>(
             // A queue with no senders left is draining its last frames and
             // ends by itself; only a held sender keeps an unread socket open.
             () = unread_grace_over, if !outgoing.is_closed() => {
+                // The guard ran before the wait; a sender may have gone since.
+                if outgoing.is_closed() {
+                    continue;
+                }
                 // The peer sees the close and redials; without it, the pings
                 // would keep an unserved socket looking alive indefinitely.
                 let _ = bounded_write(sink.close()).await;
