@@ -3,11 +3,14 @@ use cursor_api_key::cipher::KmsCiphertextsError;
 use std::sync::Mutex;
 use zeroize::Zeroizing;
 
+/// Each encryption: the ciphertext, its context and the plaintext.
+type Stored = Mutex<Vec<(Vec<u8>, HashMap<String, String>, Vec<u8>)>>;
+
 /// A KMS that, like the real one, refuses a decrypt whose context differs
 /// from the one the ciphertext was encrypted under.
 #[derive(Default)]
 struct FakeKms {
-    stored: Mutex<Vec<(Vec<u8>, HashMap<String, String>, Vec<u8>)>>,
+    stored: Stored,
 }
 
 #[async_trait::async_trait]

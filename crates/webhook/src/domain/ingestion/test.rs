@@ -2171,9 +2171,12 @@ async fn a_resolved_password_request_reaches_only_the_requesting_agent() {
     );
 }
 
+/// Each fan-out call: the event id and the audience.
+type FanoutCalls = Arc<Mutex<Vec<(String, Vec<String>)>>>;
+
 #[derive(Clone, Default)]
 struct RecordingMcpFanout {
-    calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+    calls: FanoutCalls,
     fail: bool,
 }
 

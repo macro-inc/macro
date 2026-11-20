@@ -145,12 +145,15 @@ impl McpSubscriptionRepo for FakeRepo {
     }
 }
 
+/// Each delivery: the endpoint URL, the message id and the body.
+type Deliveries = Arc<Mutex<Vec<(String, String, Vec<u8>)>>>;
+
 #[derive(Clone)]
 struct FakeEndpoint {
     verify: Result<(), McpEndpointVerifyError>,
     deliver: McpDeliveryOutcome,
     verified: Arc<Mutex<Vec<String>>>,
-    delivered: Arc<Mutex<Vec<(String, String, Vec<u8>)>>>,
+    delivered: Deliveries,
 }
 
 impl FakeEndpoint {
