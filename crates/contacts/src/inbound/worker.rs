@@ -7,6 +7,9 @@ use rootcause::report;
 use sqs_worker::SQSWorker;
 use tracing::instrument;
 
+#[cfg(test)]
+mod test;
+
 /// SQS-based contacts worker that polls for messages and delegates processing
 /// to the domain service.
 pub struct ContactsWorker<R, N> {
@@ -45,7 +48,7 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
         }
     }
 
-    #[instrument(skip(self, message), err)]
+    #[instrument(skip(self, message), fields(message_id = message.message_id), err)]
     async fn process_message(
         &self,
         message: &aws_sdk_sqs::types::Message,
@@ -62,14 +65,11 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
     ) -> Result<(), rootcause::Report> {
         match message_from_sqs(sqs_message) {
             Some(message) => self.service.process_message(message).await,
-            None => {
-                tracing::warn!(
-                    message_id=?sqs_message.message_id,
-                    "SQS message body could not be parsed as ContactsMessage"
-                );
-
-                Ok(())
-            }
+            // Leave the message undeleted: SQS redelivers it until the queue's
+            // redrive policy moves it to the DLQ, where it stays inspectable.
+            None => Err(report!(
+                "SQS message body could not be parsed as ContactsMessage; leaving it for the DLQ"
+            )),
         }
     }
 
