@@ -33,7 +33,7 @@ type DateSelectorProps = {
   onClose?: () => void;
   /** Fill a sized container, such as a sheet, rather than a popover's height. */
   fillHeight?: boolean;
-  /** Shown above the suggestions instead of the current value. */
+  /** Shown above the search field, in place of the current value below it. */
   header?: JSX.Element;
   /** Shown after "Pick from calendar" instead of the single-day calendar. */
   calendar?: JSX.Element;
@@ -172,6 +172,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
     <div
       class={cn('relative flex min-h-0 flex-col', props.fillHeight && 'flex-1')}
     >
+      {header()}
       <div class="flex w-full shrink-0 items-center py-2 gap-2 px-2 border-b border-edge-muted">
         <SearchIcon class="size-4 text-ink-muted" />
         <input
@@ -193,17 +194,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
           disabled={mode() !== 'search'}
         />
       </div>
-      <Show
-        when={header()}
-        fallback={
-          <p class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
-            <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
-            <span class="text-ink-muted">Current:</span>
-            <span class="min-w-0 truncate">{selectedDateLabel()}</span>
-          </p>
-        }
-      >
-        {header()}
+      <Show when={!header()}>
+        <p class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
+          <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
+          <span class="text-ink-muted">Current:</span>
+          <span class="min-w-0 truncate">{selectedDateLabel()}</span>
+        </p>
       </Show>
       <Switch>
         <Match when={mode() === 'search'}>
