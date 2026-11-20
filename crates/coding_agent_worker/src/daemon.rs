@@ -90,7 +90,7 @@ impl Daemon {
         #[cfg(unix)]
         let workspaces = if crate::herdr::drives_herdr(&config.harness) {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
-            let herdr = crate::herdr::HerdrSession::detect()
+            let herdr = crate::herdr::HerdrSession::detect()?
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
@@ -306,7 +306,13 @@ fn adopt(inherited: Option<InheritedAgent>, _turns: &ActiveTurns) -> Option<Runn
 /// every session works in, and each session gets a herdr window.
 #[cfg(unix)]
 fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
-    let herdr = crate::herdr::HerdrSession::detect()?;
+    let herdr = match crate::herdr::HerdrSession::detect() {
+        Ok(herdr) => herdr?,
+        Err(error) => {
+            tracing::error!(error = %error, "herdr-core detected but it cannot be driven");
+            return None;
+        }
+    };
     if !crate::herdr::drives_herdr(&config.harness) {
         match std::env::current_dir() {
             Ok(cwd) => config.workspace.path = cwd,

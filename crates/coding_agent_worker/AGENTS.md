@@ -99,7 +99,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   sessions, config form, logs).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
-  (`hc`) by environment; both stay supported.
+  (`hc`, the binary the terminal's `HC_BIN` names; never `PATH`) by
+  environment; both stay supported.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`) and
   never npm's extensionless shell script beside them. The Claude Code adapter

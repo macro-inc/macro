@@ -36,9 +36,6 @@ pub(crate) use hub::Hub;
 
 use crate::config::Harness;
 
-/// herdr-core's CLI, which its installer puts on PATH.
-const CORE_COMMAND: &str = "hc";
-
 /// Whether the harness is `macrod herdr-acp`, which opens its own herdr
 /// windows for real agent TUIs, so no session needs a viewer window.
 pub(crate) fn drives_herdr(harness: &Harness) -> bool {
@@ -80,7 +77,22 @@ mod environment {
     macro_env_var::maybe_env_var! {
         pub struct HcTerminalId;
     }
+    macro_env_var::maybe_env_var! {
+        pub struct HcBin;
+    }
 }
+
+/// A herdr-core terminal whose environment does not say where herdr-core's
+/// `hc` is. A process `hc run` starts inherits the herdr-core server's `PATH`,
+/// not the shell's, so `hc` is not looked up there. A terminal started
+/// before herdr-core set `HC_BIN` keeps lacking it until it is restarted.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "macrod runs in a herdr-core terminal (HC_TERMINAL_ID is set) but HC_BIN, the path of \
+     herdr-core's `hc`, is not set; update herdr-core, then restart this terminal in herdr \
+     (a terminal that was already running keeps the environment it started with)"
+)]
+pub(crate) struct HcBinMissing;
 
 /// Private state for one paired daemon; shared by its dispatcher and ACP process.
 pub(crate) fn instance_directory(id: impl std::fmt::Display) -> rootcause::Result<PathBuf> {
@@ -102,6 +114,8 @@ pub(crate) enum HerdrSession {
     },
     /// A herdr-core terminal, usually shown by the herdr app.
     Core {
+        /// herdr-core's `hc`, as the terminal's `HC_BIN` names it.
+        bin: PathBuf,
         /// macrod's own terminal address, e.g. `t3`.
         terminal: String,
     },
@@ -111,16 +125,20 @@ impl HerdrSession {
     /// The herdr macrod is running inside, if any. herdr-core comes first:
     /// a core started from an old herdr pane passes `HERDR_ENV` on to its
     /// terminals.
-    pub(crate) fn detect() -> Option<Self> {
+    pub(crate) fn detect() -> Result<Option<Self>, HcBinMissing> {
         if let Some(terminal) = environment::HcTerminalId::new()
             .and_then(|id| id.value().map(str::to_owned))
             .filter(|id| !id.is_empty())
         {
-            return Some(Self::Core { terminal });
+            let bin = environment::HcBin::new()
+                .and_then(|path| path.value().map(PathBuf::from))
+                .filter(|path| !path.as_os_str().is_empty());
+            let bin = bin.ok_or(HcBinMissing)?;
+            return Ok(Some(Self::Core { bin, terminal }));
         }
         let inside = environment::HerdrEnv::new().is_some_and(|value| value.value() == Some("1"));
         if !inside {
-            return None;
+            return Ok(None);
         }
         let bin = environment::HerdrBinPath::new()
             .and_then(|path| path.value().map(PathBuf::from))
@@ -128,14 +146,15 @@ impl HerdrSession {
         let workspace_id = environment::HerdrWorkspaceId::new()
             .and_then(|id| id.value().map(str::to_owned))
             .filter(|id| !id.is_empty());
-        Some(Self::Legacy { bin, workspace_id })
+        Ok(Some(Self::Legacy { bin, workspace_id }))
     }
 
-    /// The command this herdr is driven through.
-    pub(crate) fn command(&self) -> &'static str {
+    /// The command looked up on `PATH` to drive this herdr, when its
+    /// environment does not name the binary.
+    pub(crate) fn path_command(&self) -> Option<&'static str> {
         match self {
-            Self::Legacy { .. } => "herdr",
-            Self::Core { .. } => CORE_COMMAND,
+            Self::Legacy { .. } => Some("herdr"),
+            Self::Core { .. } => None,
         }
     }
 
@@ -143,7 +162,7 @@ impl HerdrSession {
     pub(crate) fn cli(&self) -> cli::HerdrCli {
         match self {
             Self::Legacy { bin, workspace_id } => cli::HerdrCli::new(bin, workspace_id.clone()),
-            Self::Core { terminal } => cli::HerdrCli::core(CORE_COMMAND, terminal.clone()),
+            Self::Core { bin, terminal } => cli::HerdrCli::core(bin, terminal.clone()),
         }
     }
 
