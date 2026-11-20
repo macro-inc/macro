@@ -111,15 +111,24 @@ export class ChannelNamespace {
   /**
    * The channels the authenticated user is a member of whose latest message
    * or reply is at or after `after`: the ones worth reading after a gap,
-   * the most recently active first. Pages through every channel before
-   * yielding; reads no messages.
+   * the most recently active first; `maxItems` caps how many. Pages through
+   * every channel before yielding; reads no messages.
    *
    * @readonly
    */
-  async *activeSince(after: Date | string): AsyncGenerator<Channel> {
+  activeSince(
+    after: Date | string,
+    opts?: IterationOptions,
+  ): AsyncGenerator<Channel> {
     const since = (after instanceof Date ? after : new Date(after)).getTime();
     if (Number.isNaN(since))
-      throw new MacroError(`activeSince: not an instant: ${String(after)}`);
+      throw new MacroError(
+        `channels.activeSince: not an instant: ${String(after)}`,
+      );
+    return iterate('channels.activeSince', opts, {}, () => this.active(since));
+  }
+
+  private async *active(since: number): AsyncGenerator<Channel> {
     const active: {
       readonly latest: number;
       readonly record: ApiChannelWithLatest;

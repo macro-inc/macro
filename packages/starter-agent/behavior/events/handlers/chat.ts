@@ -2,6 +2,7 @@ import type { Woke } from '@macro-inc/muppet/core/agent';
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { isoText } from '@macro-inc/muppet/utilities/time';
 import type { ChatContext } from '../../capabilities/chat/context.ts';
+import type { Incoming } from '../../capabilities/chat/entry.ts';
 import { judge } from '../../capabilities/chat/listen.ts';
 import { replyPrompt, threadOf } from '../../capabilities/chat/prompt.ts';
 import type { chatSources } from '../sources/chat.ts';
@@ -12,60 +13,81 @@ const handledLog = 'handled';
 const screenHistory = 6;
 const promptHistory = 20;
 
+/** What the listener uses of the chat context. */
+export type Listening = {
+  readonly chat: Pick<ChatContext['chat'], 'me' | 'decide'>;
+  readonly history: Pick<
+    ChatContext['history'],
+    'recorded' | 'recent' | 'record' | 'wait'
+  >;
+  readonly waiting: Pick<ChatContext['waiting'], 'push'>;
+  readonly log: Pick<ChatContext['log'], 'event'>;
+  readonly relevanceScreen: ChatContext['relevanceScreen'];
+  readonly config: { readonly identity: { readonly name: string } };
+};
+
+/** The listener: records every message, and queues the ones that are for the agent. */
+export const listen = async (
+  incoming: Incoming,
+  { chat, history, waiting, log, relevanceScreen, config }: Listening
+): Promise<void> => {
+  const { channelId, channel, entry } = incoming;
+  // A replayed or caught-up message the agent already judged.
+  if (await history.recorded(channelId, entry.id)) return;
+  const recent = await history.recent(channelId, screenHistory);
+  const verdict = await judge(incoming, {
+    me: await chat.me(),
+    name: config.identity.name,
+    history: recent,
+    screen: await relevanceScreen(),
+    decide: chat.decide,
+    failed: (error) =>
+      log.event(listenLog, {
+        channel,
+        message_id: entry.id,
+        decide_error: String(error),
+      }),
+  });
+  // Recorded, so a restart from here needn't judge it again. A message
+  // for the agent is queued first: recorded but not queued, it would
+  // never be answered.
+  const done = () => history.record(channelId, entry);
+  if (verdict.kind === 'ignored') return done();
+  await log.event(listenLog, {
+    channel,
+    message_id: entry.id,
+    relevant: verdict.kind === 'relevant',
+    p: verdict.p,
+  });
+  if (verdict.kind !== 'relevant') return done();
+  const message = {
+    channel_id: channelId,
+    channel,
+    ...entry,
+    mentioned: verdict.mentioned,
+    p: { ...verdict.p },
+  };
+  // Already waiting when a restart restored it from the queue.
+  const queued = await history.wait(message);
+  await done();
+  if (queued) waiting.push(channelId, message);
+};
+
 export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
   behavior<ChatContext>()
     .use(sources)
     // The listener: records every message, and queues the ones that are for the agent.
     .on(
       (sources) => sources.messages,
-      async (
-        incoming,
-        { chat, history, waiting, log, relevanceScreen, config }
-      ) => {
-        const { channelId, channel, entry } = incoming;
-        // A replayed or caught-up message the agent already judged.
-        if (await history.recorded(channelId, entry.id))
-          return chat.handled(entry.id);
-        const recent = await history.recent(channelId, screenHistory);
-        const verdict = await judge(incoming, {
-          me: await chat.me(),
-          name: config.identity.name,
-          history: recent,
-          screen: await relevanceScreen(),
-          decide: chat.decide,
-          failed: (error) =>
-            log.event(listenLog, {
-              channel,
-              message_id: entry.id,
-              decide_error: String(error),
-            }),
-        });
-        // Recorded, so a restart from here needn't read it again. A message
-        // for the agent is queued first: recorded but not queued, it would
-        // never be answered.
-        const done = async () => {
-          await history.record(channelId, entry);
-          chat.handled(entry.id);
-        };
-        if (verdict.kind === 'ignored') return done();
-        await log.event(listenLog, {
-          channel,
-          message_id: entry.id,
-          relevant: verdict.kind === 'relevant',
-          p: verdict.p,
-        });
-        if (verdict.kind !== 'relevant') return done();
-        const message = {
-          channel_id: channelId,
-          channel,
-          ...entry,
-          mentioned: verdict.mentioned,
-          p: { ...verdict.p },
-        };
-        // Already waiting when a restart restored it from the queue.
-        const queued = await history.wait(message);
-        await done();
-        if (queued) waiting.push(channelId, message);
+      async (incoming, context) => {
+        // Handled however it ends: one that fails here would otherwise hold
+        // the stream's cursor back for the rest of the process. The runner
+        // logs the failure.
+        try {
+          await listen(incoming, context);
+        } finally {
+          context.chat.handled(incoming.entry.id);
+        }
       }
     )
     // The responder: wakes the agent to answer one conversation. It doesn't

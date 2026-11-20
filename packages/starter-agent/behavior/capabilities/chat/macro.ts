@@ -120,6 +120,17 @@ const catchUpChannels = 50;
 const catchUpMessages = 200;
 /** A catch-up waits up to this long first, so agents restarted together don't all read at once. */
 const catchUpSpreadMs = 5_000;
+/**
+ * Whether a catch-up skips what failed: only what the agent can't read (it
+ * lost access, or it is gone). Anything else, such as a backend still coming
+ * back, fails the pass, which is tried again from the same gap.
+ */
+const unreadable = (error: unknown): boolean =>
+  // The SDK's API errors carry the HTTP status (it doesn't export the class).
+  typeof error === 'object' &&
+  error !== null &&
+  'status' in error &&
+  (error.status === 403 || error.status === 404);
 /** Ids remembered to drop a message both replayed and caught up. */
 const rememberedIds = 1_000;
 
@@ -443,8 +454,8 @@ export const sdkChat = ({
             channels += 1;
             const missed: Incoming[] = [];
             let roots = 0;
-            // One channel or thread that can't be read is skipped and
-            // counted, so it can't stop every later catch-up.
+            // A channel, thread or message the agent can't read is skipped
+            // and counted, so it can't stop every later catch-up.
             try {
               // Newest first: a channel busier than the cap keeps its
               // latest messages, and is counted.
@@ -455,7 +466,8 @@ export const sdkChat = ({
                 let replies: readonly Posted[] = [];
                 try {
                   replies = await root.thread().replies();
-                } catch {
+                } catch (error) {
+                  if (!unreadable(error)) throw error;
                   skipped += 1;
                 }
                 for (const message of [root, ...replies]) {
@@ -463,12 +475,18 @@ export const sdkChat = ({
                   // A root deleted in the gap is still listed for its live
                   // replies; the stream would never have delivered it.
                   if (message.toJSON().detail?.deleted_at) continue;
-                  const at = await message.createdAt();
-                  if (Date.parse(at) < since) continue;
-                  missed.push(await fromHistory(channel, message, at));
+                  try {
+                    const at = await message.createdAt();
+                    if (Date.parse(at) < since) continue;
+                    missed.push(await fromHistory(channel, message, at));
+                  } catch (error) {
+                    if (!unreadable(error)) throw error;
+                    skipped += 1;
+                  }
                 }
               }
-            } catch {
+            } catch (error) {
+              if (!unreadable(error)) throw error;
               skipped += 1;
             }
             if (roots >= catchUpMessages) messagesCapped += 1;
@@ -500,12 +518,12 @@ export const sdkChat = ({
             now().getTime() - catchUpWindowMs
           )
         ).toISOString();
-      // The earliest gap not caught up yet. It is read once the stream is
-      // open, since a message posted between a read and the reopen would
-      // reach neither; a drop during a catch-up leaves it set for another
-      // pass.
-      let pending =
-        stored === undefined ? undefined : from(new Date(stored.at));
+      // The earliest gap not caught up yet, as the instant it starts (the
+      // margin is taken only when it is read, so the cursor never steps
+      // back by it). It is read once the stream is open, since a message
+      // posted between a read and the reopen would reach neither; a drop
+      // during a catch-up leaves it set for another pass.
+      let pending = stored?.at;
       let lastEvent: Date | undefined;
       // The gap the running pass reads.
       let reading: string | undefined;
@@ -525,7 +543,7 @@ export const sdkChat = ({
             await sleep(Math.random() * catchUpSpreadMs);
             for (let attempt = 0; ; attempt += 1) {
               try {
-                await catchUpFrom(after);
+                await catchUpFrom(from(new Date(after)));
                 // Read: what it found is in `unhandled` now.
                 reading = undefined;
                 saveCursor();
@@ -572,7 +590,7 @@ export const sdkChat = ({
         },
         onDrop: (droppedAt) => {
           open = false;
-          const gap = from(lastEvent ?? droppedAt);
+          const gap = (lastEvent ?? droppedAt).toISOString();
           if (pending === undefined || Date.parse(gap) < Date.parse(pending))
             pending = gap;
         },

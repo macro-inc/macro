@@ -33,6 +33,7 @@ const fakeMacro = () => {
   let meCalls = 0;
   let meFailures = 0;
   let unreadable = false;
+  let failures = 0;
   let held: Promise<void> | undefined;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let options: ListenOptions | undefined;
@@ -67,7 +68,14 @@ const fakeMacro = () => {
     // Roots posted or replied to after `after`, newest first, as the SDK
     // gives them.
     messagesAfter: async function* (after: string) {
-      if (unreadable) throw new Error('no access');
+      // As the SDK's API errors carry it: a 403 for access lost, a 500 for
+      // a backend still coming back.
+      if (unreadable)
+        throw Object.assign(new Error('no access'), { status: 403 });
+      if (failures > 0) {
+        failures -= 1;
+        throw Object.assign(new Error('try again'), { status: 500 });
+      }
       const active = (root: Posted) =>
         root.at > after ||
         posted.some((reply) => reply.thread === root.id && reply.at > after);
@@ -124,6 +132,10 @@ const fakeMacro = () => {
     options: () => options,
     post: (message: Posted) => posted.push(message),
     /** The DM's history can't be read, as one the agent lost access to. */
+    /** Reading history fails this many more times, as a backend coming back does. */
+    failReads: (times: number) => {
+      failures = times;
+    },
     unreadable: (yes: boolean) => {
       unreadable = yes;
     },
@@ -424,12 +436,29 @@ test('while a catch-up is still reading, the cursor stays before its gap', async
   // A live event during the pass must not move the cursor past the gap.
   backend.options()?.onEventId?.('e5');
   await Bun.sleep(10);
+  // The gap itself, not a margin before it, so repeated restarts don't walk
+  // the cursor back.
   expect(written.at(-1)).toEqual({
     eventId: 'e5',
-    at: '2026-11-19T10:59:00.000Z',
+    at: '2026-11-19T11:00:00.000Z',
   });
 
   release();
   await Bun.sleep(20);
   expect(written.at(-1)).toEqual({ eventId: 'e5', at: now.toISOString() });
+});
+
+test('a catch-up the backend fails is tried again, and what it missed still arrives', async () => {
+  const backend = fakeMacro();
+  backend.post({ id: 'gap', at: '2026-11-19T11:59:30Z', text: 'you there?' });
+  backend.failReads(1);
+  const { next } = listening(backend, { at: '2026-11-19T11:59:20Z' });
+
+  const caught = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  expect(
+    (await within(caught, 'the failed read was never retried')).entry.id
+  ).toBe('gap');
+  expect(backend.activeSince).toHaveLength(2);
 });
