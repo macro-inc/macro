@@ -99,6 +99,9 @@ pub struct RawWebhookEventQueueMessage {
     pub body: Option<String>,
     /// Handle used to acknowledge or delay this receipt.
     pub receipt_handle: Option<String>,
+    /// How many times the queue has handed this message out, this receipt
+    /// included, when it reported it.
+    pub receive_count: Option<u32>,
 }
 
 /// Identifier of a persisted webhook delivery.

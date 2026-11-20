@@ -243,3 +243,26 @@ impl McpSubscriptionError {
         Self::Internal(rootcause::Report::new(error).into_dynamic())
     }
 }
+
+/// A worker without MCP delivery. It leaves MCP messages on the queue for a
+/// worker that has it, so none is lost to a misconfigured one; the queue's
+/// redrive policy moves them aside if no such worker exists.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoMcpDelivery;
+
+/// How long [`NoMcpDelivery`] hides a message before another worker sees it.
+const NO_MCP_DELIVERY_DELAY: std::time::Duration = std::time::Duration::from_secs(30);
+
+impl McpEventDeliveryService for NoMcpDelivery {
+    async fn deliver(
+        &self,
+        message: McpEventQueueMessage,
+        _receive_count: u32,
+    ) -> WebhookWorkerDisposition {
+        tracing::warn!(
+            mcp_subscription_id = %message.mcp_subscription_id,
+            "mcp event message reached a worker without mcp delivery"
+        );
+        WebhookWorkerDisposition::RetryAfter(NO_MCP_DELIVERY_DELAY)
+    }
+}

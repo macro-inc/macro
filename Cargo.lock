@@ -23182,6 +23182,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "anyhow",
+ "async-trait",
  "axum",
  "axum-extra",
  "base64 0.22.1",
@@ -23218,6 +23219,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "strum 0.27.2",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -23229,7 +23231,9 @@ dependencies = [
  "utoipa",
  "uuid",
  "webhook_signature",
+ "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

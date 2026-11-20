@@ -1,6 +1,7 @@
 //! Generic SQS transport operations shared by queue-specific adapters.
 
 use crate::SQS;
+use aws_sdk_sqs::types::MessageSystemAttributeName;
 
 /// Raw message returned from an SQS receive operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,6 +12,9 @@ pub struct ReceivedMessage {
     pub body: Option<String>,
     /// Receipt handle used to delete or delay the message, when present.
     pub receipt_handle: Option<String>,
+    /// How many times the message has been received, this receipt included,
+    /// when SQS reported it.
+    pub receive_count: Option<u32>,
 }
 
 impl SQS {
@@ -47,6 +51,7 @@ impl SQS {
             .queue_url(queue_url)
             .max_number_of_messages(max_number_of_messages)
             .wait_time_seconds(wait_time_seconds)
+            .message_system_attribute_names(MessageSystemAttributeName::ApproximateReceiveCount)
             .send()
             .await?;
 
@@ -55,6 +60,13 @@ impl SQS {
             .unwrap_or_default()
             .into_iter()
             .map(|message| ReceivedMessage {
+                receive_count: message
+                    .attributes
+                    .as_ref()
+                    .and_then(|attributes| {
+                        attributes.get(&MessageSystemAttributeName::ApproximateReceiveCount)
+                    })
+                    .and_then(|count| count.parse().ok()),
                 message_id: message.message_id,
                 body: message.body,
                 receipt_handle: message.receipt_handle,
