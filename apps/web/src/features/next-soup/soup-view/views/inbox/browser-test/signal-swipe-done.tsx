@@ -10,7 +10,7 @@ import { macroLightTheme } from '@app/features/theme/themes/macro-light';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -21,6 +21,7 @@ import {
 } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { MutationUndoProvider } from '@queries/undo';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -167,7 +168,9 @@ render(
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <EmailLinksContextProvider>
                   <MobileSettingsProvider>
                     <MutationUndoProvider>
@@ -175,7 +178,7 @@ render(
                     </MutationUndoProvider>
                   </MobileSettingsProvider>
                 </EmailLinksContextProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>
