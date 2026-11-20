@@ -1,6 +1,7 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid/create-urql-infinite-query';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { UnifiedNotification } from '@notifications/types';
 import { createLiveAttentionFeed } from '@queries/attention-feed/live-attention-feed';
 import {
@@ -260,9 +261,10 @@ export function createNotificationInboxSource(
   /** Patches for a filter that has since changed would add rows it hides. */
   const applyIfCurrent = (
     scope: NotificationInboxScopeInput,
-    patches: Parameters<typeof live.applyPatches>[0]
+    patches: Parameters<typeof live.applyPatches>[0],
+    generation: string
   ) => {
-    if (scopeInput() === scope) live.applyPatches(patches);
+    if (scopeInput() === scope) live.applyPatches(patches, generation);
   };
 
   const markDone = async (targets: readonly NotificationInboxRow[]) => {
@@ -287,12 +289,13 @@ export function createNotificationInboxSource(
       undo: async () => {
         // The filter may have changed since the done; restore into this one.
         const scope = scopeInput();
+        const generation = cacheSessionGeneration.capture();
         const patches = await undoInboxRowsDone(client, undoToken, scope);
         restoreNotifications?.();
         setDone((current) => unmarkRows(current, ids));
         revalidate(client);
         // The restored places land now rather than with the stream.
-        applyIfCurrent(scope, patches);
+        applyIfCurrent(scope, patches, generation);
       },
     };
   };
@@ -303,6 +306,7 @@ export function createNotificationInboxSource(
   ) => {
     const client = options.client();
     const scope = scopeInput();
+    const generation = cacheSessionGeneration.capture();
     hideNotification(notification.id, true);
     const restoreNotifications = options.overrideNotificationsDone?.([
       notification.id,
@@ -321,11 +325,12 @@ export function createNotificationInboxSource(
       throw error;
     }
     revalidate(client);
-    applyIfCurrent(scope, done.patches);
+    applyIfCurrent(scope, done.patches, generation);
     return {
       undo: async () => {
         // The filter may have changed since the done; restore into this one.
         const undoScope = scopeInput();
+        const undoGeneration = cacheSessionGeneration.capture();
         const patches = await undoInboxRowsDone(
           client,
           done.undoToken,
@@ -334,7 +339,7 @@ export function createNotificationInboxSource(
         restoreNotifications?.();
         hideNotification(notification.id, false);
         revalidate(client);
-        applyIfCurrent(undoScope, patches);
+        applyIfCurrent(undoScope, patches, undoGeneration);
       },
     };
   };
@@ -430,8 +435,9 @@ export function createNotificationInboxSource(
     }
     try {
       const scope = scopeInput();
+      const generation = cacheSessionGeneration.capture();
       const patches = await markInboxRowsSeen(client, ids, scope);
-      applyIfCurrent(scope, patches);
+      applyIfCurrent(scope, patches, generation);
     } catch (error) {
       setSeen((current) => unmarkRows(current, ids));
       setKept((current) => current.filter((row) => !ids.includes(row.id)));

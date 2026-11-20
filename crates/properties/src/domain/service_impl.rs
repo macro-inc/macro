@@ -1286,6 +1286,10 @@ where
             return Err(PropertiesErr::Validation(err.to_string()));
         }
 
+        if let Some(built_in) = built_in_property_named(&request.display_name) {
+            return Err(PropertiesErr::ReservedName(built_in));
+        }
+
         let property_options = match &request.data_type {
             PropertyDataType::SelectString { options, .. } => options
                 .iter()
@@ -2030,6 +2034,21 @@ where
 
         Ok(())
     }
+}
+
+/// The built-in property that owns `name`, spelled as that property spells it.
+///
+/// Built-in names are reserved for user and team definitions, and the
+/// database's `check_property_name_not_system` trigger refuses them with a
+/// bare exception. This compares the way that trigger does (the whole name,
+/// ignoring case), so the caller hears why before the insert is tried.
+fn built_in_property_named(name: &str) -> Option<&'static str> {
+    let name = name.to_lowercase();
+    SystemPropertyKey::all_system_property_keys()
+        .iter()
+        .filter_map(|id| SystemPropertyKey::from_uuid(*id))
+        .map(|key| key.display_name())
+        .find(|built_in| built_in.to_lowercase() == name)
 }
 
 /// Validate the color rules for a property option: colors are only supported

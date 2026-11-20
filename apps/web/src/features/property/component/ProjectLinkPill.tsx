@@ -1,6 +1,7 @@
 import { openProject } from '@app/features/projects/open-project';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
@@ -12,8 +13,8 @@ import type { Property as PropertyValue } from '../types';
 import { getEntityValues } from '../utils';
 
 /**
- * A task's project as a split pill: the name opens the project and the caret
- * changes it. An empty or unavailable project stays the plain `fallback` pill.
+ * A single project value as a split pill: the name opens the project and the
+ * caret changes it. An empty or unavailable project stays the plain `fallback` pill.
  * A project still loading keeps the split, so a pick doesn't remount the caret
  * that takes focus back when the picker closes. The name counts as a row action
  * so that focus returns to the caret when the first project replaces the pill.
@@ -34,11 +35,18 @@ export function ProjectLinkPill(props: {
     () => 'INITIATIVE',
     { loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? '') }
   );
-  const open = (event: MouseEvent) => {
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
     event.stopPropagation();
     const id = nativeProjectId();
     if (id) openProject(layout, id, { newSplit: event.shiftKey });
-  };
+  });
+  const changeLabel = () =>
+    props.property.valueType === 'ENTITY' &&
+    props.property.specificEntityType === 'INITIATIVE'
+      ? t('entityActions.changeProject')
+      : t('entityActions.changeEntity', {
+          property: props.property.displayName,
+        });
 
   return (
     <Show
@@ -55,7 +63,7 @@ export function ProjectLinkPill(props: {
           data-property-row-action
           aria-label={t('entityActions.openProjectNamed', { name: name() })}
           class="group/project-link min-w-0 shrink justify-start"
-          onClick={open}
+          {...navHandlers}
         >
           <ProjectIcon
             class={cn(
@@ -70,7 +78,7 @@ export function ProjectLinkPill(props: {
           <ButtonGroup.Divider />
           <ButtonGroup.Button
             size="icon-xs"
-            aria-label={t('entityActions.changeProject')}
+            aria-label={changeLabel()}
             aria-expanded={ctx.editorOpen()}
             onClick={(event) => {
               event.stopPropagation();

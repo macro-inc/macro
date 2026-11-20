@@ -228,7 +228,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: `
       getAccountManagerGrant getDocumentAnchors getSelfBot getBot meetingLookup
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
-      getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
+      getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany getCompanyByDomain
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
       getCrmEmailPolicy getCrmEmailPrivacy getCrmEmailRulePreview getCrmEmailRuleRevision
       getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
