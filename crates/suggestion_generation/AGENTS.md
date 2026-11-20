@@ -128,10 +128,12 @@ scheduling runtime.
 - `bench/` is the suggestions bench: it runs real generations for synthetic
   personas on a local stack and scores them against answer keys, one section
   per kind (`routines` at onboarding, `feed` on request); `compare` says
-  win, loss or noise (see its README). Run the section a change touches
-  before and after changing a brief, a prompt or a session's tools.
+  win, loss or noise against margins `noise` measured (see its README).
+  Run the section a change touches before and after changing a brief, a
+  prompt or a session's tools; `find` scores the routines work list alone.
 - `bun test crates/suggestion_generation/bench` after changing the bench's
-  persona loading or the order and state it judges attempts in (`judging.ts`).
+  persona loading, month sets and window reads, scoring, held-out output, or
+  the order and state it judges attempts in (`judging.ts`).
 
 ## Gotchas
 
