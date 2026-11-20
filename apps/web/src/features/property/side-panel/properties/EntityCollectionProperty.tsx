@@ -15,9 +15,11 @@ import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { usePropertyEntityLink } from '@property/hooks/usePropertyEntityLink';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues } from '@property/utils';
+import { copyEntityReferences } from '@property/utils/copy-entity-references';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -25,7 +27,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   type JSX,
   Match,
   Show,
@@ -35,6 +36,11 @@ import {
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
 
 type PendingEntityReference = EntityReference & { displayName?: string };
+
+/** A chip keeps its element while its reference object is replaced by a copy. */
+function entityReferenceKey(reference: EntityReference) {
+  return `${reference.entity_type}:${reference.entity_id}:${reference.specific_message_id ?? ''}`;
+}
 
 function sameEntityReference(left: EntityReference, right: EntityReference) {
   return (
@@ -106,8 +112,10 @@ export function EntityCollectionProperty(props: {
   ): Promise<void> => {
     if (!ctx.canEdit || property.isMetadata || props.loading || isSaving())
       return Promise.resolve();
-    const currentRefs = getEntityValues(property);
-    const nextRefs = values.valueType === 'ENTITY' ? (values.refs ?? []) : [];
+    const currentRefs = copyEntityReferences(getEntityValues(property));
+    const nextRefs = copyEntityReferences(
+      values.valueType === 'ENTITY' ? (values.refs ?? []) : []
+    );
     latestSave += 1;
     const save = latestSave;
     batch(() => {
@@ -153,7 +161,13 @@ export function EntityCollectionProperty(props: {
 
       const commit = async () => {
         try {
-          await props.onSave(property, values, accept);
+          await props.onSave(
+            property,
+            values.valueType === 'ENTITY'
+              ? { ...values, refs: nextRefs.length > 0 ? nextRefs : null }
+              : values,
+            accept
+          );
         } catch (error) {
           // The save's own error handling has told the user. An accepted row
           // is already unlocked and may be mid-removal: only its values go
@@ -350,25 +364,25 @@ function EntityCollectionPropertyBody(props: {
           )}
           aria-busy={isSaving()}
         >
-          <For each={displayedEntities()}>
+          <Key each={displayedEntities()} by={entityReferenceKey}>
             {(entityRef) => (
               <NonUserEntityChip
                 property={props.property}
-                entityId={entityRef.entity_id}
-                entityType={entityRef.entity_type}
-                specificMessageId={entityRef.specific_message_id}
-                pending={isPending(entityRef)}
-                pendingLabel={pendingReference(entityRef)?.displayName}
+                entityId={entityRef().entity_id}
+                entityType={entityRef().entity_type}
+                specificMessageId={entityRef().specific_message_id}
+                pending={isPending(entityRef())}
+                pendingLabel={pendingReference(entityRef())?.displayName}
                 canEdit={!isReadOnly() && !props.loading && !isSaving()}
                 onRemove={() =>
                   fireAndForget(
-                    handleRemoveEntity(entityRef),
+                    handleRemoveEntity(entityRef()),
                     'property-collection-remove'
                   )
                 }
               />
             )}
-          </For>
+          </Key>
         </div>
         <span
           class="sr-only"
