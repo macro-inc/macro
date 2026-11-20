@@ -493,6 +493,9 @@ export default {
       other: '已删除 {{count}} 项',
     },
     toastDeleteFailed: '删除失败',
+    toastPropertySet: {
+      other: '已为 {{count}} 项设置 {{property}}',
+    },
     toastAddedToFavorites: '已添加到收藏',
     toastAddedCountToFavorites: {
       other: '已将 {{count}} 项添加到收藏',

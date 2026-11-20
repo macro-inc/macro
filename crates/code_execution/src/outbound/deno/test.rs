@@ -224,6 +224,76 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_sends_four_searches_at_once_and_queues_the_rest() {
+    const IN_FLIGHT: usize = 4;
+    const SEARCHES: usize = 6;
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let mut held = Vec::new();
+        for _ in 0..IN_FLIGHT {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            assert!(request.starts_with("POST /search?"), "{request}");
+            held.push(stream);
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err(),
+            "a fifth search started while four were unanswered"
+        );
+        for mut stream in held {
+            respond(&mut stream, r#"{"results":[]}"#).await;
+        }
+        for _ in IN_FLIGHT..SEARCHES {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            read_request(&mut stream).await;
+            respond(&mut stream, r#"{"results":[]}"#).await;
+        }
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("search".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = format!(
+        r#"
+export async function main({{macro}}) {{
+  const pages = await Promise.all(Array.from({{length: {SEARCHES}}}, (_, i) => macro.search.page(`query ${{i}}`)));
+  return {{ data: {{ pages: pages.length }}, reviews: [] }};
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 8000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if value["data"]["pages"] == SEARCHES),
+        "{outcome:?}"
+    );
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn a_program_presents_a_view_through_its_session() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

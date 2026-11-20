@@ -516,6 +516,35 @@ tools — hexagonal, heavily feature-gated.
   whether a mailbox still has mail with an address leave such rows out
   (`email_db_client`'s `link_has_any_message_with`, and CRM's
   `other_address_mail.sql` and `interactions.sql`).
+- Open every `mailbox_pg` transaction with `PgMailboxSync::begin`, which sets a
+  5 s `lock_timeout`, so a write queued behind a long lock holder (a CRM
+  population share-locks its link) fails instead of holding a pooled
+  connection; a locking read runs in one too. Pre-checks that a write repeats
+  under the lock (settings access) and credential health that has not changed
+  read without the lock, so reads and Graph calls never wait on it. The
+  timeout is SQLSTATE 55P03
+  (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
+  caller retries it: lease release or expiry, message backoff, redelivery, a
+  409 for user requests. A write that records a provider call's result (the
+  draft checkpoint, a command's draft write version) retries it in-process
+  through `record_after_provider`, and a delivery the queue would dead-letter
+  (link deletion) retries in the same delivery, each a bounded number of times
+  inside its lease or visibility timeout. The purge's batches run in
+  `email_db_client` without the timeout.
+- The user writes in `email_pg_repo` that lock an inbox's link row (draft
+  save and send admission, attachments, discard, resolution, transfer,
+  scheduling, Undo send, mailbox actions, sender policy) open with
+  `email_pg_repo::begin`, the same 5 s `lock_timeout`
+  (`email-link-lock-transactions-time-out`). Most take `FOR SHARE` on the
+  link: it fences the mailbox workers and a disconnect, which lock it
+  exclusively, while a CRM population, which share-locks it, runs alongside;
+  user writes on one draft serialize on its message row and advisory locks,
+  as Gmail's, which take no link lock, always have. Mailbox actions keep
+  `FOR UPDATE`, because a command's `accepted_order` is allocated under it,
+  and so does sender policy, like the settings worker. A timeout is
+  `EmailErr::Contended` (`AttachmentError::Contended`): 409 on REST, 503 with
+  `Retry-After` on attachment routes (whose 409 means the draft changed),
+  and GraphQL `INBOX_BUSY` with `retryable`.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,
@@ -528,7 +557,9 @@ tools — hexagonal, heavily feature-gated.
   database steps with `database_failed` and everything else with `failed`.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
-  a cause.
+  a cause. A failed attachment download or database step is not an effect, so
+  email-service's attachment step records `outlook.attachment_id` for it
+  before returning; the span carries the field once either way.
 - `MailboxSyncService` reads through two gateways: `import_provider` for a
   folder page claimed before the folder's first round completes and for
   import reconciliation rows, `provider` for everything else, live passes
@@ -586,10 +617,40 @@ tools — hexagonal, heavily feature-gated.
   once per change: the folder catalog rechecks a folder's stored mail only
   in the discovery that sees the folder leave, or move in or out of Deleted
   Items.
+  A message whose claims keep ending with no outcome (its worker stopped
+  holding the lease) is abandoned unread on the claim after five
+  (`UNFINISHED_CLAIM_LIMIT`, `defer_reason=unfinished`): `claim_message`
+  counts `unfinished_claims` from a lease still set when it claims, since
+  every recorded outcome deletes the row or clears the lease. The first claim
+  after a recorded release, or of a revision newer than the last claim read
+  (`claimed_revision`), starts the count over, so a change that arrives
+  during an unfinished claim is read.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
-  answered) once its backoff is at 30 minutes, so a provider outage never
-  abandons a message.
+  answered) or a lock timeout once its backoff is at 30 minutes, so a provider
+  outage or a busy mailbox never abandons a message.
+- A projection event that keeps failing is given up as a message read is:
+  `MailboxProjectionService::project_leased` decides with `message_retry`
+  (backoff included), and `finish_projection` gives an uncounted claim back to
+  `attempts`. One whose claims keep ending without an outcome is given up
+  unprojected after `UNFINISHED_CLAIM_LIMIT`: `claim_projection` counts
+  `email_projection_outbox.unfinished_claims` from a lease still set when it
+  claims, since every recorded outcome deletes the entry or clears its lease.
+  A given-up entry is deleted, not parked: an event is projected once, a later
+  event for the link carries newer state, and a parked entry's `dedupe_key`
+  would swallow a re-enqueue of the same message version. It logs one
+  `mailbox projection abandoned` WARN holding only ids and kinds.
+- A projection's attachment download or upload that keeps failing is counted
+  on the attachment (`email_attachments.upload_failures`), not the event, and
+  abandoned at the limit `attachment_failure_limit` in
+  `domain/mailbox/projection.rs` gives: 3 refusals or 50 other failures. A
+  transient download failure counts there, unlike a message read's, because
+  Graph can cut the same attachment's download every time. The abandoned
+  attachment keeps its upload claim and gets `upload_abandoned_at`, so no claim
+  takes it and the projection stops waiting on it; nothing revives it, and
+  opening it still downloads it on demand. email-service writes a failure only
+  while the claim is still the one its claiming statement returned, so a pass
+  that outlived the three-minute claim cannot undo the next pass's outcome.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can

@@ -1566,7 +1566,7 @@ export const deleteAgentSession = async (
 };
 
 /**
- * @summary Read activity using the same visibility capability as the session transcript.
+ * @summary Read session-visible activity after filtering CRM rows for the requester.
  */
 export type getAgentSessionActivityResponse200 = {
   data: AgentActivityPage;

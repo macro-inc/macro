@@ -1,6 +1,7 @@
 import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { Client, Operation } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -127,6 +128,27 @@ function setupCached() {
 }
 
 describe('channel unread edge revalidation', () => {
+  it('does not replay queued notification frames into a new session generation', async () => {
+    const { handler, host, writeResult } = setupCached();
+    const entered = Promise.withResolvers<void>();
+    const held = Promise.withResolvers<typeof writeResult>();
+    const generation = cacheSessionGeneration.capture();
+    host.writeQuery.mockImplementationOnce(() => {
+      entered.resolve();
+      return held.promise;
+    });
+    const first = handler.onPatch(newNotification);
+    const second = handler.onPatch(newNotification);
+    await entered.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    held.resolve(writeResult);
+    await Promise.all([first, second]);
+    expect(host.writeQuery).toHaveBeenCalledOnce();
+    expect(host.writeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ generation })
+    );
+  });
+
   it('writes delivered unread evidence locally before starting background reconciliation', async () => {
     const { handler, query, host } = setupCached();
     await handler.onPatch(newNotification);

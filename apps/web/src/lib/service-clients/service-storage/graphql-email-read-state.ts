@@ -18,6 +18,7 @@ function readStateDisposition<T, V extends AnyVariables>(
   if (disposition?.kind === 'queued') return 'queued';
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  if (disposition?.kind === 'committed') return 'committed';
   if (!hasReadState)
     throw new Error('Email read-state mutation returned no data');
   return 'committed';
