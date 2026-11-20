@@ -29575,6 +29575,8 @@ export const editDocumentMarkdownParams = zod.object({
   document_id: zod.string().describe('Document identity'),
 });
 
+export const editDocumentMarkdownBodyEditsMax = 200;
+
 export const editDocumentMarkdownBody = zod
   .object({
     allowDeletingContent: zod
@@ -29623,7 +29625,7 @@ export const editDocumentMarkdownBody = zod
                   .boolean()
                   .optional()
                   .describe(
-                    'Replace every occurrence instead of requiring exactly one.'
+                    'Replace every occurrence within blocks instead of requiring exactly\none. An `old` spanning blocks must still occur once: `replace_all`\ndoes not apply to matches across blocks.'
                   ),
               })
               .describe(
@@ -29703,7 +29705,9 @@ export const editDocumentMarkdownBody = zod
             'One edit of a batch. The shapes mirror `str_replace`-style editing tools,\ntold apart by their fields, so the input is untagged.'
           )
       )
-      .describe('The edits, applied in order.'),
+      .min(1)
+      .max(editDocumentMarkdownBodyEditsMax)
+      .describe('The edits, applied in order: 1 to 200.'),
   })
   .describe('A batch of direct edits, applied whole or not at all.');
 
@@ -29782,7 +29786,9 @@ export const editDocumentMarkdownResponse = zod
           ])
           .describe('What a batch did to one block.')
       )
-      .describe('What changed, block by block.'),
+      .describe(
+        'What changed, block by block; empty for `unchanged` and\n`already_applied` (read the blocks again for inserted ids then).'
+      ),
     merge: zod
       .union([
         zod.null(),

@@ -20,6 +20,10 @@ merge with the batch; absent means the current revision. */
   baseRevision?: MarkdownEditRequestBaseRevision;
   /** Compute and verify the batch, return its changes, write nothing. */
   dryRun?: boolean;
-  /** The edits, applied in order. */
+  /**
+   * The edits, applied in order: 1 to 200.
+   * @minItems 1
+   * @maxItems 200
+   */
   edits: MarkdownEdit[];
 }

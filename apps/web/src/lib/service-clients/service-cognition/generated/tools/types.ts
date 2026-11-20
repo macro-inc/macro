@@ -9408,7 +9408,9 @@ export interface ReplaceEdit {
    */
   new: string;
   /**
-   * Replace every occurrence instead of requiring exactly one.
+   * Replace every occurrence within blocks instead of requiring exactly
+   * one. An `old` spanning blocks must still occur once: `replace_all`
+   * does not apply to matches across blocks.
    */
   replace_all?: boolean;
 }

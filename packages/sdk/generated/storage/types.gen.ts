@@ -14753,7 +14753,7 @@ export type MarkdownEditRequest = {
      */
     dryRun?: boolean;
     /**
-     * The edits, applied in order.
+     * The edits, applied in order: 1 to 200.
      */
     edits: Array<MarkdownEdit>;
 };
@@ -14763,7 +14763,8 @@ export type MarkdownEditRequest = {
  */
 export type MarkdownEdited = {
     /**
-     * What changed, block by block.
+     * What changed, block by block; empty for `unchanged` and
+     * `already_applied` (read the blocks again for inserted ids then).
      */
     changes: Array<MarkdownBlockChange>;
     merge?: null | MarkdownEditMerge;
@@ -18812,7 +18813,9 @@ export type ReplaceEdit = {
      */
     old: string;
     /**
-     * Replace every occurrence instead of requiring exactly one.
+     * Replace every occurrence within blocks instead of requiring exactly
+     * one. An `old` spanning blocks must still occur once: `replace_all`
+     * does not apply to matches across blocks.
      */
     replace_all?: boolean;
 };
@@ -32624,7 +32627,7 @@ export type EditDocumentMarkdownErrors = {
      */
     404: unknown;
     /**
-     * An edit's matched text is gone since the base revision; nothing was written
+     * Nothing was written. `conflict: changed`: an edit no longer applies to the document as it is now; read the blocks again and redo it. `conflict: busy`: others kept editing while it committed; retry the same batch as is
      */
     409: MarkdownEditFailure;
     /**
@@ -32632,7 +32635,7 @@ export type EditDocumentMarkdownErrors = {
      */
     422: MarkdownEditFailure;
     /**
-     * The edit failed and may have applied
+     * The edit failed and may have applied. A batch with `baseRevision` is safe to resend (it answers `already_applied` if it committed); one without it is not: read the blocks first, or its inserts may land twice
      */
     502: MarkdownEditFailure;
 };

@@ -12,7 +12,8 @@ import type { MarkdownEditOutcomeKind } from './markdownEditOutcomeKind';
  * A batch that applied, or a dry run that would.
  */
 export interface MarkdownEdited {
-  /** What changed, block by block. */
+  /** What changed, block by block; empty for `unchanged` and
+`already_applied` (read the blocks again for inserted ids then). */
   changes: MarkdownBlockChange[];
   merge?: MarkdownEditedMerge;
   /** Written, unchanged, or a dry run. */
