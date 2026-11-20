@@ -1144,12 +1144,38 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    // MCP Events subscriptions: AHS compiles the filter and encrypts the
+    // signing secret; this service verifies endpoints, matches events and
+    // delivers, decrypting with the key id the ciphertext names.
+    let mcp_subscription_repository =
+        webhook::outbound::PgMcpSubscriptionRepository::new(db.clone());
+    let mcp_subscription_state = webhook::inbound::mcp_router::McpSubscriptionRouterState::new(
+        webhook::domain::mcp::service::McpEventSubscriptionServiceImpl::new(
+            mcp_subscription_repository.clone(),
+            webhook_http_client.clone(),
+        ),
+        authorization_state.clone(),
+    );
+    let mcp_event_delivery_service = webhook::domain::mcp::service::McpEventDeliveryServiceImpl::new(
+        mcp_subscription_repository.clone(),
+        webhook::outbound::KmsMcpSecretCipher::new(
+            cursor_api_key::cipher::AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
+                &aws_config,
+            )),
+        ),
+        webhook_http_client.clone(),
+    );
+
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
             webhook_repository,
             webhook_event_queue.clone(),
-        );
+        )
+        .with_mcp_fanout(webhook::domain::mcp::service::McpEventFanoutImpl::new(
+            mcp_subscription_repository,
+            webhook_event_queue.clone(),
+        ));
     let webhook_delivery_repository =
         webhook::outbound::PgWebhookDeliveryRepository::new(db.clone());
     let webhook_delivery_service = webhook::domain::delivery::WebhookEventDeliveryServiceImpl::new(
@@ -1159,7 +1185,8 @@ async fn run_server() -> anyhow::Result<()> {
     let webhook_worker = webhook::inbound::worker::WebhookEventWorker::new(
         webhook_event_queue,
         webhook_delivery_service,
-    );
+    )
+    .with_mcp_delivery(mcp_event_delivery_service);
     let webhook_worker_task = tokio::spawn(async move {
         tracing::info!("starting webhook event worker");
         webhook_worker.run().await;
@@ -2890,6 +2917,7 @@ async fn run_server() -> anyhow::Result<()> {
         call_public_rate_limiter,
         webhook_state,
         sse_stream_state,
+        mcp_subscription_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
