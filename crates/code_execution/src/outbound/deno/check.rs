@@ -33,7 +33,9 @@ const PROBES: &str = include_str!("check/probes.ts");
 const LINT_CONFIG: &str = r#"{"lint":{"plugins":["./probes.ts"],"rules":{"tags":[],"include":["ban-ts-comment","no-explicit-any","macro/no-sandbox-read","macro/no-sdk-source","macro/no-reflection"]}}}"#;
 /// The lint rule whose finding refuses a program. The others are warnings for
 /// now, counted on the check's span so their rate can be read before they
-/// refuse programs too.
+/// refuse programs too. The lint is a nudge toward the documentation, not a
+/// sandbox boundary: the runtime can read its scratch directory (it loads the
+/// SDK bundle from there), and a determined program can get past a lint.
 const REFUSED_RULE: &str = "macro/no-sandbox-read";
 /// Nothing a check reads comes from outside the files it is given.
 const OFFLINE: [&str; 4] = [
@@ -204,7 +206,7 @@ impl DenoChecker {
         let (refused, warned): (Vec<_>, Vec<_>) = findings
             .into_iter()
             .partition(|finding| finding.code == REFUSED_RULE);
-        record_probe_warnings(&warned);
+        record_probes(&refused, &warned);
         let refused = refused.iter().map(|finding| finding.diagnostic(&check_url));
         if output.status.success() {
             return Ok(refused.collect());
@@ -219,8 +221,8 @@ impl DenoChecker {
     }
 
     /// The probe lint's findings in `files`. A lint that can't run or answer
-    /// finds nothing: the type check still decides, and the runtime still
-    /// refuses file reads.
+    /// finds nothing, recorded on the span as `probe_lint = "failed"`: the type
+    /// check still decides, as it did before the lint.
     async fn lint(&self, check: &std::path::Path, files: &[SourceFile]) -> Vec<LintFinding> {
         let mut config = std::ffi::OsString::from("--config=");
         config.push(&self.lint_config);
@@ -239,13 +241,24 @@ impl DenoChecker {
             .kill_on_drop(true)
             .output()
             .await;
-        let report = output
-            .ok()
-            .and_then(|output| serde_json::from_slice::<LintReport>(&output.stdout).ok());
+        let report = match output {
+            Ok(output) => serde_json::from_slice::<LintReport>(&output.stdout).map_err(|_| {
+                (
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr).into_owned(),
+                )
+            }),
+            Err(error) => Err((None, error.to_string())),
+        };
+        let span = tracing::Span::current();
         match report {
-            Some(report) => report.diagnostics,
-            None => {
-                tracing::warn!("probe lint failed to report");
+            Ok(report) => {
+                span.record("probe_lint", "ran");
+                report.diagnostics
+            }
+            Err((status, cause)) => {
+                span.record("probe_lint", "failed");
+                tracing::warn!(?status, cause = %cause.chars().take(500).collect::<String>(), "probe lint failed to report");
                 Vec::new()
             }
         }
@@ -283,12 +296,13 @@ impl LintFinding {
     /// A refused finding as a check diagnostic, located like the type
     /// checker's.
     fn diagnostic(&self, check_url: &str) -> Diagnostic {
-        let file = self.filename.strip_prefix(check_url).unwrap_or("main.ts");
+        let file = self.filename.strip_prefix(check_url);
         Diagnostic {
-            file: Some(file.to_owned()),
+            file: file.map(str::to_owned),
             message: format!(
-                "A program can't read files: {} would only find the sandbox. Learn the SDK from DescribeCodeTools and ReadCodeDocs instead.\n    at {file}:{}:{}",
+                "A program can't read files: {} would only find the sandbox. Learn the SDK from DescribeCodeTools and ReadCodeDocs instead.\n    at {}:{}:{}",
                 self.message,
+                file.unwrap_or("<program>"),
                 self.range.start.line,
                 self.range.start.col + 1,
             ),
@@ -296,12 +310,17 @@ impl LintFinding {
     }
 }
 
-/// Count the probe warnings on the check's span, with the rules they broke.
-fn record_probe_warnings(warned: &[LintFinding]) {
-    if warned.is_empty() {
+/// Count the probe warnings on the check's span, with every rule the lint
+/// found broken, refused ones included.
+fn record_probes(refused: &[LintFinding], warned: &[LintFinding]) {
+    if refused.is_empty() && warned.is_empty() {
         return;
     }
-    let mut rules: Vec<&str> = warned.iter().map(|finding| finding.code.as_str()).collect();
+    let mut rules: Vec<&str> = refused
+        .iter()
+        .chain(warned)
+        .map(|finding| finding.code.as_str())
+        .collect();
     rules.sort_unstable();
     rules.dedup();
     let span = tracing::Span::current();
@@ -324,6 +343,7 @@ impl ProgramChecker for DenoChecker {
             imports = ?imports,
             waited_ms = tracing::field::Empty,
             diagnostics = tracing::field::Empty,
+            probe_lint = tracing::field::Empty,
             probe_warnings = tracing::field::Empty,
             probe_rules = tracing::field::Empty,
             outcome = tracing::field::Empty,

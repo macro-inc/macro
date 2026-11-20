@@ -21,7 +21,8 @@ function propertyName(node: Deno.lint.MemberExpression): string | undefined {
 }
 
 /** `Deno` APIs that read files, which would only find the sandbox's bundle. */
-const SANDBOX_READS = /^(read|open|stat|lstat|realPath)/;
+const SANDBOX_READS =
+	/^(readFile|readTextFile|readDir|readLink|open|stat|lstat|realPath)(Sync)?$/;
 
 /** Reflection that lists an object's members instead of its documentation. */
 const REFLECTION: Record<string, readonly string[]> = {
