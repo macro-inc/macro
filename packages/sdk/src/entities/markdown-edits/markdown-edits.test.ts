@@ -143,9 +143,7 @@ describe('document.applyMarkdownEdits', () => {
           code: 'ambiguous_match',
           message: 'edit 1: old occurs 2 times',
           edit: 1,
-          blocks: [
-            { blockId: 'p1', occurrences: 2, markdown: 'Q3 and Q3' },
-          ],
+          blocks: [{ blockId: 'p1', occurrences: 2, markdown: 'Q3 and Q3' }],
         },
       },
       response: { status: 422 },
@@ -169,7 +167,11 @@ describe('document.applyMarkdownEdits', () => {
 
   test('a gone match is DocumentChangedError, a busy document DocumentBusyError and a 502 an unknown outcome', async () => {
     const conflict = clientAnswering({
-      error: { error: 'revision_conflict', message: 'gone', conflict: 'changed' },
+      error: {
+        error: 'revision_conflict',
+        message: 'gone',
+        conflict: 'changed',
+      },
       response: { status: 409 },
     });
     const busy = clientAnswering({

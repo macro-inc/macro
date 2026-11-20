@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MarkdownEditCandidate } from './markdownEditCandidate';
+import type { MarkdownEditMatchingBlock } from './markdownEditMatchingBlock';
 import type { MarkdownEditRefusalCode } from './markdownEditRefusalCode';
 import type { MarkdownEditRefusalEdit } from './markdownEditRefusalEdit';
 
@@ -12,8 +12,9 @@ import type { MarkdownEditRefusalEdit } from './markdownEditRefusalEdit';
  * A refused batch: what was wrong and where.
  */
 export interface MarkdownEditRefusal {
-  /** Blocks it may have meant. */
-  candidates?: MarkdownEditCandidate[];
+  /** For `no_match` and `ambiguous_match`, the blocks `old` was found in or
+is nearest to. */
+  blocks?: MarkdownEditMatchingBlock[];
   /** What was wrong. */
   code: MarkdownEditRefusalCode;
   /**

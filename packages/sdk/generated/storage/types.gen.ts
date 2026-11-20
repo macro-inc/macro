@@ -14653,27 +14653,15 @@ export type MarkdownBlockChange = {
 export type MarkdownEdit = ReplaceEdit | InsertAfterEdit | InsertBeforeEdit | DeleteEdit | MoveAfterEdit | MoveBeforeEdit;
 
 /**
- * A block an ambiguous or missing `old` may have meant.
+ * Why a batch conflicts with the document as it is now.
  */
-export type MarkdownEditCandidate = {
-    /**
-     * The block.
-     */
-    blockId: string;
-    /**
-     * Its markdown as the batch saw it.
-     */
-    markdown: string;
-    /**
-     * How often `old` occurs in it (0 for a no-match suggestion).
-     */
-    occurrences: number;
-};
+export type MarkdownEditConflictReason = 'changed' | 'busy';
 
 /**
  * Why a direct-edit request did not complete.
  */
 export type MarkdownEditFailure = {
+    conflict?: null | MarkdownEditConflictReason;
     /**
      * What went wrong.
      */
@@ -14691,6 +14679,24 @@ export type MarkdownEditFailure = {
 export type MarkdownEditFailureCode = 'edit_refused' | 'revision_conflict' | 'read_failed' | 'edit_failed';
 
 /**
+ * A block a missing or ambiguous `old` was found in, or is nearest to.
+ */
+export type MarkdownEditMatchingBlock = {
+    /**
+     * The block.
+     */
+    blockId: string;
+    /**
+     * Its markdown as the batch saw it.
+     */
+    markdown: string;
+    /**
+     * How often `old` occurs in it (0 for a no-match suggestion).
+     */
+    occurrences: number;
+};
+
+/**
  * How the batch was placed on the document as it is now.
  */
 export type MarkdownEditMerge = 'current' | 'base' | 'rebased';
@@ -14705,9 +14711,10 @@ export type MarkdownEditOutcomeKind = 'committed' | 'unchanged' | 'dry_run' | 'a
  */
 export type MarkdownEditRefusal = {
     /**
-     * Blocks it may have meant.
+     * For `no_match` and `ambiguous_match`, the blocks `old` was found in or
+     * is nearest to.
      */
-    candidates?: Array<MarkdownEditCandidate>;
+    blocks?: Array<MarkdownEditMatchingBlock>;
     /**
      * What was wrong.
      */
@@ -14759,10 +14766,7 @@ export type MarkdownEdited = {
      * What changed, block by block.
      */
     changes: Array<MarkdownBlockChange>;
-    /**
-     * How the batch was placed.
-     */
-    merge: MarkdownEditMerge;
+    merge?: null | MarkdownEditMerge;
     /**
      * Written, unchanged, or a dry run.
      */

@@ -6,9 +6,9 @@
  */
 
 /**
- * A block an ambiguous or missing `old` may have meant.
+ * A block a missing or ambiguous `old` was found in, or is nearest to.
  */
-export interface MarkdownEditCandidate {
+export interface MarkdownEditMatchingBlock {
   /** The block. */
   blockId: string;
   /** Its markdown as the batch saw it. */

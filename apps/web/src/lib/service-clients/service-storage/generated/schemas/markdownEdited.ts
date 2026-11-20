@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MarkdownBlockChange } from './markdownBlockChange';
-import type { MarkdownEditMerge } from './markdownEditMerge';
+import type { MarkdownEditedMerge } from './markdownEditedMerge';
 import type { MarkdownEditOutcomeKind } from './markdownEditOutcomeKind';
 
 /**
@@ -14,8 +14,7 @@ import type { MarkdownEditOutcomeKind } from './markdownEditOutcomeKind';
 export interface MarkdownEdited {
   /** What changed, block by block. */
   changes: MarkdownBlockChange[];
-  /** How the batch was placed. */
-  merge: MarkdownEditMerge;
+  merge?: MarkdownEditedMerge;
   /** Written, unchanged, or a dry run. */
   outcome: MarkdownEditOutcomeKind;
   /** The document's revision after the write (the current one otherwise). */

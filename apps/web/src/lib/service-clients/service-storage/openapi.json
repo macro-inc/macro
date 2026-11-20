@@ -54340,32 +54340,27 @@
         ],
         "description": "One edit of a batch. The shapes mirror `str_replace`-style editing tools,\ntold apart by their fields, so the input is untagged."
       },
-      "MarkdownEditCandidate": {
-        "type": "object",
-        "description": "A block an ambiguous or missing `old` may have meant.",
-        "required": ["blockId", "occurrences", "markdown"],
-        "properties": {
-          "blockId": {
-            "type": "string",
-            "description": "The block."
-          },
-          "markdown": {
-            "type": "string",
-            "description": "Its markdown as the batch saw it."
-          },
-          "occurrences": {
-            "type": "integer",
-            "format": "int32",
-            "description": "How often `old` occurs in it (0 for a no-match suggestion).",
-            "minimum": 0
-          }
-        }
+      "MarkdownEditConflictReason": {
+        "type": "string",
+        "description": "Why a batch conflicts with the document as it is now.",
+        "enum": ["changed", "busy"]
       },
       "MarkdownEditFailure": {
         "type": "object",
         "description": "Why a direct-edit request did not complete.",
         "required": ["error", "message"],
         "properties": {
+          "conflict": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkdownEditConflictReason",
+                "description": "Why, for `revision_conflict`."
+              }
+            ]
+          },
           "error": {
             "$ref": "#/components/schemas/MarkdownEditFailureCode",
             "description": "What went wrong."
@@ -54397,6 +54392,27 @@
           "edit_failed"
         ]
       },
+      "MarkdownEditMatchingBlock": {
+        "type": "object",
+        "description": "A block a missing or ambiguous `old` was found in, or is nearest to.",
+        "required": ["blockId", "occurrences", "markdown"],
+        "properties": {
+          "blockId": {
+            "type": "string",
+            "description": "The block."
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Its markdown as the batch saw it."
+          },
+          "occurrences": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How often `old` occurs in it (0 for a no-match suggestion).",
+            "minimum": 0
+          }
+        }
+      },
       "MarkdownEditMerge": {
         "type": "string",
         "description": "How the batch was placed on the document as it is now.",
@@ -54412,12 +54428,12 @@
         "description": "A refused batch: what was wrong and where.",
         "required": ["code", "message"],
         "properties": {
-          "candidates": {
+          "blocks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MarkdownEditCandidate"
+              "$ref": "#/components/schemas/MarkdownEditMatchingBlock"
             },
-            "description": "Blocks it may have meant."
+            "description": "For `no_match` and `ambiguous_match`, the blocks `old` was found in or\nis nearest to."
           },
           "code": {
             "$ref": "#/components/schemas/MarkdownEditRefusalCode",
@@ -54483,7 +54499,7 @@
       "MarkdownEdited": {
         "type": "object",
         "description": "A batch that applied, or a dry run that would.",
-        "required": ["outcome", "revision", "changes", "merge"],
+        "required": ["outcome", "revision", "changes"],
         "properties": {
           "changes": {
             "type": "array",
@@ -54493,8 +54509,15 @@
             "description": "What changed, block by block."
           },
           "merge": {
-            "$ref": "#/components/schemas/MarkdownEditMerge",
-            "description": "How the batch was placed."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkdownEditMerge",
+                "description": "How the batch was placed; absent for `already_applied`."
+              }
+            ]
           },
           "outcome": {
             "$ref": "#/components/schemas/MarkdownEditOutcomeKind",

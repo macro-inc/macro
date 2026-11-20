@@ -29784,8 +29784,13 @@ export const editDocumentMarkdownResponse = zod
       )
       .describe('What changed, block by block.'),
     merge: zod
-      .enum(['current', 'base', 'rebased'])
-      .describe('How the batch was placed on the document as it is now.'),
+      .union([
+        zod.null(),
+        zod
+          .enum(['current', 'base', 'rebased'])
+          .describe('How the batch was placed on the document as it is now.'),
+      ])
+      .optional(),
     outcome: zod
       .enum(['committed', 'unchanged', 'dry_run', 'already_applied'])
       .describe('Whether the batch was written.'),

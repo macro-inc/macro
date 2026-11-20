@@ -4,13 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { MarkdownEditFailureCode } from './markdownEditFailureCode';
+import type { MarkdownEditFailureConflict } from './markdownEditFailureConflict';
 import type { MarkdownEditFailureRefusal } from './markdownEditFailureRefusal';
 
 /**
  * Why a direct-edit request did not complete.
  */
 export interface MarkdownEditFailure {
+  conflict?: MarkdownEditFailureConflict;
   /** What went wrong. */
   error: MarkdownEditFailureCode;
   /** What to do next. */
