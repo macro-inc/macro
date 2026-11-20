@@ -211,6 +211,11 @@ tools/HTTP/GraphQL surfaces over them.
   `crm_contacts_unfiled_email_idx`, and returns counts per outcome.
   It defaults to a dry run and is safe to repeat. Never call it from a worker
   or a migration: one import can hold thousands of domains.
+- `GET /crm/companies/by-domain` (SDK `crm.companyByDomain`) resolves the
+  team's company for one domain through `crm_domains_team_id_lower_domain_unique`
+  and reads it as `GET /crm/companies/{id}` does, without contacts; a member
+  gets nothing for a hidden company. It is exact and current, unlike the
+  indexed company search, so agents use it after a duplicate-domain 409.
 - Contact setters add or remove an address, choose the primary, link a first
   company for any contact without one, switch company for a personal-provider
   primary, or unlink a company; the rules live
