@@ -488,7 +488,11 @@ tools — hexagonal, heavily feature-gated.
   The mailbox loops log their own deferrals with `link_id` (gate refusals at
   DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
   Notification lag rides the same rows: a Graph change notification stamps
-  the folder streams' `notified_at` and `notified_traceparent`. Every claim
+  the folder streams' `notified_at` and `notified_traceparent` and makes them
+  due without moving one already due (`LEAST(next_run_at, now())`): stream
+  claims take the longest-due first across mailboxes, so a reset to now put a
+  due stream behind every stream that came due since, and a mailbox notified
+  more often than that line moved was never read. Every claim
   of the stream carries `notified_at` onto the reconciliation rows its pages
   queue (newest notification wins) until a checkpoint that started reading
   after the notification clears it; enumerate and reconcile spans record
