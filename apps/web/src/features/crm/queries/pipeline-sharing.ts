@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { SharePermissionV2 } from '@service-storage/generated/schemas/sharePermissionV2';
@@ -33,16 +34,19 @@ export function updatePipelineSharePermissions(
 }
 
 export async function updatePipelineTeamShare(id: string, shared: boolean) {
+  const canCache = captureQueryAuthorization();
   const sharing = shared ? 'team' : 'private';
   const result = await storageServiceClient.shareCrmPipeline(id, sharing);
   if (result.isOk()) {
-    queryClient.setQueriesData<Pipeline[]>(
-      { queryKey: crmKeys.pipelines._def },
-      (before) =>
-        before?.map((pipeline) =>
-          pipeline.id === id ? { ...pipeline, sharing } : pipeline
-        )
-    );
+    if (canCache()) {
+      queryClient.setQueriesData<Pipeline[]>(
+        { queryKey: crmKeys.pipelines._def },
+        (before) =>
+          before?.map((pipeline) =>
+            pipeline.id === id ? { ...pipeline, sharing } : pipeline
+          )
+      );
+    }
     await queryClient.invalidateQueries({ queryKey: crmKeys.pipelines._def });
   }
   return result;

@@ -58,6 +58,30 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
+  for its caller's turn in `domain::search_lanes` after the request's own
+  checks (query, paging, cursor, terms, sessions, email filters; ids a source
+  parses when it runs, such as channel and CRM company ids, are checked in the
+  turn) and before it reads anything: per process, three searches in
+  flight for the person's app session (the mention menu sends three one-type
+  searches per term) and two for every other caller, the rest waiting in
+  arrival order, and one still waiting after
+  20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
+  search threads per node, and one caller's burst of heavy searches filled
+  them for everyone. The caller (`api::search::caller::search_caller`) is the
+  user plus who acts: a signed agent (one lane across all its sessions for
+  that user) or routine, else the credential's kind: the app session, a
+  service searching for them (`Internal`: the AI tools, an agent's native
+  search tools, routine drafting), or an API credential. So a person's app
+  searches never wait behind a program's or a service's. The turn covers the
+  CRM membership read (so a receipt is never older than its search) and the
+  Postgres and OpenSearch search, not enrichment; the span records
+  `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
+  (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
+  bound grows with the replica count; DSS builds one `SearchLanes` for both
+  mounts. The internal mount runs under `connection_drop_prevention_handler`,
+  so a service search whose caller gave up keeps its place in the service's
+  lane and runs to the end.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
