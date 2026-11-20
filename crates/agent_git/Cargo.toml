@@ -43,6 +43,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 rand = { workspace = true }
+rustix = { workspace = true, features = ["event", "process"] }
 flate2 = { workspace = true }
 macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

@@ -335,3 +335,103 @@ async fn the_hold_outlives_a_dropped_response_until_git_exits() {
     let released = tokio::time::timeout(std::time::Duration::from_secs(10), released).await;
     assert!(matches!(released, Ok(Err(_))));
 }
+
+/// The git processes running in `repo`: upload-pack and pack-objects
+/// change into it, http-backend does not.
+fn git_processes_in(repo: &std::path::Path) -> Vec<rustix::process::Pid> {
+    let repo = repo.canonicalize().unwrap();
+    std::fs::read_dir("/proc")
+        .unwrap()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let pid: i32 = entry.file_name().to_str()?.parse().ok()?;
+            let cwd = std::fs::read_link(entry.path().join("cwd")).ok()?;
+            cwd.starts_with(&repo)
+                .then(|| rustix::process::Pid::from_raw(pid))
+                .flatten()
+        })
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_deadline_kills_every_git_process_of_a_fetch_whose_client_stopped_reading() {
+    use rand::RngCore;
+    let storage = tempfile::tempdir().unwrap();
+    let directories = RepoDirectories::new(storage.path().to_path_buf());
+    let agent = MacroUserIdStr::try_from("macro|agent@example.com".to_owned()).unwrap();
+    // Far more pack than the pipe and reader buffers hold, so git blocks
+    // writing it once the client stops reading.
+    let mut random = vec![0; 4 * 1024 * 1024];
+    rand::rng().fill_bytes(&mut random);
+    BareRepoStore::new(directories.clone())
+        .create_repo(
+            &agent,
+            &[RenderedFile {
+                path: "large.txt",
+                contents: hex::encode(random),
+                executable: false,
+            }],
+        )
+        .await
+        .unwrap();
+    let repo = directories.repo_path(&agent);
+    let head = git(&repo, &["rev-parse", "main"], b"").await;
+    let want = format!("want {}\n", String::from_utf8(head.stdout).unwrap().trim());
+    let body = format!("{:04x}{want}00000009done\n", want.len() + 4);
+
+    let backend = GitHttpBackend::new(
+        directories,
+        TaskTracker::new(),
+        std::time::Duration::from_secs(3),
+    );
+    let (held, released) = tokio::sync::oneshot::channel::<()>();
+    let response = backend
+        .serve(
+            &AuthorizedRepo::new(agent, GitAccess::Read, None),
+            GitRequest {
+                endpoint: GitEndpoint::Rpc(GitService::UploadPack),
+                content_type: Some("application/x-git-upload-pack-request".to_owned()),
+                content_encoding: None,
+                git_protocol: None,
+                body: Box::pin(futures::stream::iter([Ok(Bytes::from(body))])),
+            },
+            GitHold::new(held),
+        )
+        .await
+        .expect("git starts and sends its headers");
+    let mut body = response.body;
+    // The first pack bytes: git is running and writing. Then stop reading.
+    body.next().await.unwrap().unwrap();
+    let running = git_processes_in(&repo);
+    assert!(!running.is_empty(), "no git process found in the repo");
+    let exits: Vec<_> = running
+        .iter()
+        .filter_map(|pid| {
+            rustix::process::pidfd_open(*pid, rustix::process::PidfdFlags::empty()).ok()
+        })
+        .collect();
+
+    let released = tokio::time::timeout(std::time::Duration::from_secs(10), released).await;
+    assert!(
+        matches!(released, Ok(Err(_))),
+        "the hold outlived the deadline"
+    );
+    // A pidfd turns readable when its process exits.
+    let all_exited = tokio::task::spawn_blocking(move || {
+        let timeout = rustix::event::Timespec {
+            tv_sec: 10,
+            tv_nsec: 0,
+        };
+        exits.iter().all(|exit| {
+            let mut fds = [rustix::event::PollFd::new(
+                exit,
+                rustix::event::PollFlags::IN,
+            )];
+            rustix::event::poll(&mut fds, Some(&timeout)).unwrap() == 1
+        })
+    })
+    .await
+    .unwrap();
+    assert!(all_exited, "a git process outlived the deadline kill");
+    drop(body);
+}
