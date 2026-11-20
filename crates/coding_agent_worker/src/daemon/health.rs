@@ -40,4 +40,16 @@ impl TriggerStreamHealth {
         }
         idle
     }
+
+    /// A live stream closed to follow a changed binding: it is reopening, so
+    /// it is no longer live while the bindings are read and it reconnects.
+    /// Waiting with no agents bound stays as it is. Whether this changed the
+    /// state.
+    pub(super) fn reopening(&mut self) -> bool {
+        let live = matches!(self, Self::Live { .. });
+        if live {
+            *self = Self::Connecting;
+        }
+        live
+    }
 }

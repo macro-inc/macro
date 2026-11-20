@@ -181,6 +181,7 @@ impl Daemon {
                     ServeOutcome::Idle => {
                         delays.reset();
                         attempt = 0;
+                        health.send_if_modified(TriggerStreamHealth::reopening);
                     }
                     ServeOutcome::Ended { error, lasted } => {
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
