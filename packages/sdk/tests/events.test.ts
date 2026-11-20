@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { Macro } from '../src/macro';
+import { Macro, type StreamDrop } from '../src/macro';
 import { MacroError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
@@ -158,19 +158,20 @@ describe('MacroEvents', () => {
       token: 'user-token',
       hosts: { storage: 'https://storage.example.test' },
     });
-    const dropped = Promise.withResolvers<unknown>();
-    const drops: unknown[] = [];
+    const dropped = Promise.withResolvers<StreamDrop>();
+    const drops: StreamDrop[] = [];
     macro.events.on('document.created', () => {});
     const stop = await macro.events.listen({
-      onDisconnect: (error) => {
-        drops.push(error);
-        dropped.resolve(error);
+      onDisconnect: (drop) => {
+        drops.push(drop);
+        dropped.resolve(drop);
       },
     });
-    const error = await dropped.promise;
+    const { error, retried } = await dropped.promise;
     stop();
 
     expect(String(error)).toContain('503');
+    expect(retried).toBe(true);
     expect(drops).toHaveLength(1);
   });
 
@@ -193,10 +194,10 @@ describe('MacroEvents', () => {
         hosts: { storage: `http://localhost:${server.port}` },
       });
       const delivered = Promise.withResolvers<void>();
-      const drops: unknown[] = [];
+      const drops: StreamDrop[] = [];
       macro.events.on('document.created', () => delivered.resolve());
       const stop = await macro.events.listen({
-        onDisconnect: (error) => drops.push(error),
+        onDisconnect: (drop) => drops.push(drop),
       });
       await delivered.promise;
 
@@ -219,15 +220,16 @@ describe('MacroEvents', () => {
       token: 'user-token',
       hosts: { storage: 'https://storage.example.test' },
     });
-    const ended = Promise.withResolvers<unknown>();
+    const ended = Promise.withResolvers<StreamDrop>();
     macro.events.on('document.created', () => {});
     const stop = await macro.events.listen({
-      onDisconnect: (error) => ended.resolve(error),
+      onDisconnect: (drop) => ended.resolve(drop),
     });
-    const error = await ended.promise;
+    const { error, retried } = await ended.promise;
     stop();
 
     expect(String(error)).toContain('event stream ended');
+    expect(retried).toBe(false);
   });
 
   test('listen() throws when there are no filters or handlers', async () => {

@@ -16,21 +16,29 @@ test('each drop of the events stream is a reconnect span with the running count 
   };
   const dropped = streamDrops(trace);
 
-  dropped(new Error('SSE failed: 503 Service Unavailable'));
-  dropped(new TypeError('fetch failed'));
+  dropped({
+    error: new Error('SSE failed: 503 Service Unavailable'),
+    retried: true,
+  });
+  dropped({ error: new TypeError('fetch failed'), retried: false });
 
   expect(spans).toEqual([
     {
       name: 'chat.events.reconnect',
       attributes: {
         'chat.events.reconnects': 1,
+        'chat.events.retried': true,
         'error.type': 'Error',
         'http.response.status_code': 503,
       },
     },
     {
       name: 'chat.events.reconnect',
-      attributes: { 'chat.events.reconnects': 2, 'error.type': 'TypeError' },
+      attributes: {
+        'chat.events.reconnects': 2,
+        'chat.events.retried': false,
+        'error.type': 'TypeError',
+      },
     },
   ]);
 });

@@ -3,7 +3,7 @@
  * everything that talks can be run against a fake. `sdkChat` is the thin adapter over
  * Macro's SDK.
  */
-import type { Macro } from '@macro-inc/sdk';
+import type { Macro, StreamDrop } from '@macro-inc/sdk';
 import { pushed } from '../../context/stream.ts';
 import type { Attachment, Incoming } from './entry.ts';
 import type { Probabilities } from './listen.ts';
@@ -106,8 +106,8 @@ export const sdkChat = ({
   readonly macro: () => Promise<Macro>;
   /** What the agent's own messages are recorded as from. */
   readonly myName: string;
-  /** Told each time the events stream drops, before it reconnects. */
-  readonly disconnected?: (error: unknown) => void;
+  /** Told each time the events stream drops. */
+  readonly disconnected?: (drop: StreamDrop) => void;
 }): Chat => {
   let me: Promise<string> | undefined;
   const myId = () => {

@@ -147,7 +147,11 @@ export {
   type UiOpenResult,
   type UiTarget,
 } from './entities/ui/namespace';
-export type { ListenOptions, MacroEvents } from './events/receiver';
+export type {
+  ListenOptions,
+  MacroEvents,
+  StreamDrop,
+} from './events/receiver';
 export {
   here,
   type Interpolation,

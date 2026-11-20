@@ -171,3 +171,16 @@ test('the screen span records the verdict and each probability by question, neve
     'chat.screen.verdict': 'ignored',
   });
 });
+
+test('the screen span records at most eight well-formed question keys', () => {
+  const p = Object.fromEntries([
+    ['Bad Key', 0.5],
+    ...Array.from({ length: 12 }, (_, i) => [`q${i}`, i / 100]),
+  ]);
+  const attributes = screenAttributes({ kind: 'irrelevant', p });
+  const keys = Object.keys(attributes).filter((key) =>
+    key.startsWith('chat.screen.p.')
+  );
+  expect(keys).toHaveLength(8);
+  expect(keys).not.toContain('chat.screen.p.Bad Key');
+});

@@ -26,6 +26,14 @@ type AnyHandler = (event: unknown) => void | Promise<void>;
 const VALIDATION_EVENT = 'webhook.validation.test';
 
 /** Options for {@link MacroEvents.listen}. */
+/** One drop of an event stream, as `onDisconnect` is told of it. */
+export interface StreamDrop {
+  /** Why it dropped: the failed connection's error, or the server's end. */
+  readonly error: unknown;
+  /** Whether the stream reconnects; a stream the server ends does not. */
+  readonly retried: boolean;
+}
+
 export interface ListenOptions {
   /**
    * Event/entity-id filters, identical to persisted webhook `filters`.
@@ -42,10 +50,10 @@ export interface ListenOptions {
   signal?: AbortSignal;
   /**
    * Told each time the stream drops or fails to connect, before it is
-   * retried, and when the server ends it (which is not retried); never when
+   * retried, and when the server ends it, which is not retried; never when
    * the stream is stopped. Events published until it reconnects are missed.
    */
-  onDisconnect?: (error: unknown) => void;
+  onDisconnect?: (drop: StreamDrop) => void;
 }
 
 /** Attach the entity handles defined for each webhook event. */
@@ -176,7 +184,8 @@ export class MacroEvents {
       },
       signal: controller.signal,
       onSseError: (error) => {
-        if (!controller.signal.aborted) opts.onDisconnect?.(error);
+        if (!controller.signal.aborted)
+          opts.onDisconnect?.({ error, retried: true });
       },
     });
 
@@ -187,7 +196,10 @@ export class MacroEvents {
         }
         // The server ended the stream: a drop too, which is not retried.
         if (!controller.signal.aborted)
-          opts.onDisconnect?.(new MacroError('event stream ended'));
+          opts.onDisconnect?.({
+            error: new MacroError('event stream ended'),
+            retried: false,
+          });
       } catch {
         if (controller.signal.aborted) return;
         throw new MacroError('event stream failed');

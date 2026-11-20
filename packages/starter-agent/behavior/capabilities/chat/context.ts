@@ -1,4 +1,5 @@
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
+import type { StreamDrop } from '@macro-inc/sdk';
 import { channel } from '@macro-inc/muppet/core/event';
 import { z } from 'zod';
 import type { Trace } from '../../agent/claude.ts';
@@ -24,15 +25,18 @@ const reconnectSpan = 'chat.events.reconnect';
 /**
  * Counts the events stream's drops: each is a `chat.events.reconnect` span
  * carrying how many there have been in this process, so a flapping stream
- * shows as a rising count. Messages posted until it reconnects are missed.
+ * shows as a rising count, and whether the stream reconnects
+ * (`chat.events.retried`; not when the server ended it). Messages posted
+ * until it reconnects are missed.
  */
 export const streamDrops = (trace: Trace) => {
   let drops = 0;
-  return (error: unknown): void => {
+  return ({ error, retried }: StreamDrop): void => {
     drops += 1;
     const count = drops;
     void trace(reconnectSpan, async (span) => {
       span.set('chat.events.reconnects', count);
+      span.set('chat.events.retried', retried);
       span.set(
         'error.type',
         error instanceof Error ? error.name : typeof error
