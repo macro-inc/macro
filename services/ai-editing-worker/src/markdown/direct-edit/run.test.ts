@@ -5,7 +5,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { type DocumentView, readDocument } from './document';
 import type { DirectEdit } from './edits';
 import { EditRefusal } from './edits';
-import { RICH_COMMENTS, richSnapshot, SyncedDocument } from './fixtures/build';
+import {
+  buildSnapshot,
+  RICH_COMMENTS,
+  richSnapshot,
+  SyncedDocument,
+} from './fixtures/build';
 import {
   type DirectEditRequest,
   readMarkdownBlocks,
@@ -490,5 +495,49 @@ describe('dry run and commits', () => {
     );
     expect(peers.length).toBe(1);
     expect(isAiPeer(BigInt(peers[0]))).toBe(true);
+  });
+});
+
+describe('embedded images', () => {
+  const PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  it('read as a short placeholder; an alt edit keeps the bytes; a changed placeholder is refused', async () => {
+    const snapshot = await buildSnapshot(
+      `# Pics\n\n![a dot](${PNG})\n\nAfter.`
+    );
+    const read = await readMarkdownBlocks(
+      DOC,
+      new SyncedDocument(snapshot),
+      signal()
+    );
+    const image = read.blocks[1];
+    expect(image.markdown).toMatch(
+      /^!\[a dot\]\(data:redacted,[0-9a-f]{16}\)$/
+    );
+
+    const synced = new SyncedDocument(snapshot);
+    await runDirectEdit(
+      DOC,
+      { edits: [{ block_id: image.id, old: 'a dot', new: 'one dot' }] },
+      synced,
+      signal(),
+      NOOP_SPAN
+    );
+    const after = await readDocument(DOC, synced.snapshot());
+    expect(after.blocks[1].markdown).toBe(`![one dot](${PNG})`);
+
+    const error = await runDirectEdit(
+      DOC,
+      {
+        edits: [
+          { block_id: image.id, old: 'data:redacted,', new: 'data:redacted,0' },
+        ],
+      },
+      new SyncedDocument(snapshot),
+      signal(),
+      NOOP_SPAN
+    ).catch((e: unknown) => e);
+    expect((error as EditRefusal).code).toBe('frozen_media');
   });
 });
