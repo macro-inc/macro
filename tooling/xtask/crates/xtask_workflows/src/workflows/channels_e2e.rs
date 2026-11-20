@@ -63,14 +63,15 @@ const REPORT_ARTIFACT: &str = "channels-e2e-report";
 const REPORT: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("apps/web/tests/channels-e2e/.run/playwright-report.json");
 
-/// Minutes the job may take. A warm run takes about 18.
+/// Minutes the job may take. A warm run takes about 18, one of them before the
+/// suite's step.
 const JOB_MINUTES: u32 = 45;
 
 /// Minutes the suite's step may take. Less than the job's, so that running out
 /// of time fails the step and leaves the job time to collect the stack's logs,
 /// upload them and seal the cargo target; a job that runs out of time itself
 /// is cancelled, and skips every step that does not ask to run regardless.
-const SUITE_MINUTES: u32 = 35;
+const SUITE_MINUTES: u32 = 30;
 
 /// The step that dates the checkout, which the seal depends on.
 const REUSE_STEP: &str = "reuse";

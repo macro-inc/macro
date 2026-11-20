@@ -11,12 +11,23 @@ echo 'RUST_MIN_STACK=16777216' > "$stack_env"
 # stage of the bring-up nothing here caches: it clones the repository and
 # realizes its dev shell over the network, which has taken from one minute to
 # longer than the whole job. With local sandboxes off the stack skips it, and
-# the harness service starts without a sandbox provider.
+# the harness service starts with no credential for a hosted one, which it
+# allows.
 echo 'DEV_DANGEROUS_LOCAL_CONTAINERS=false' >> "$stack_env"
 
 started=$(date +%s)
+# The bring-up prints a stage's output only once the stage ends, so a stage
+# that never ends leaves nothing in the log. Once a minute, say what is running.
+(
+  while sleep 60; do
+    echo "starting the stack, $(( $(date +%s) - started )) s: $(pgrep -af 'docker build|docker compose|cargo build|vite build' | cut -c1-160 | head -n 3 | tr '\n' ';')"
+  done
+) &
+watch=$!
+trap 'kill "$watch" 2>/dev/null || true' EXIT
 just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
   --env-file "$stack_env"
+kill "$watch" 2>/dev/null || true
 echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
 just seed-scenario --instance "$CHANNELS_E2E_INSTANCE" apply --file seed/scenarios/channels-e2e.json
