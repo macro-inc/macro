@@ -148,6 +148,15 @@ pkgs.testers.runNixOSTest {
         machine.fail("test -e /run/macro-agent-inbox")
         machine.fail("systemctl is-active --quiet macro-agent.target")
         machine.fail("systemctl is-active --quiet macro-agent-display.service")
+        # Even with an inbox (made here by hand), the apply unit refuses an
+        # agent environment on a person's computer.
+        machine.succeed("install -d -m 0700 -o macro -g macro /run/macro-agent-inbox")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.env'")
+        machine.fail("systemctl start macro-agent-apply.service")
+        machine.succeed("journalctl -u macro-agent-apply.service | grep -F 'refusing an agent environment on a person computer'")
+        machine.fail("test -e /var/lib/macrod/agent.env")
+        machine.succeed("test ! -s /run/macro-agent-inbox/agent.env")
+        machine.succeed("rm -r /run/macro-agent-inbox")
 
     with subtest("a drive the host grows grows its mounted filesystem"):
         # drive1 is the root disk (vda); drive2, the first empty disk, is /dev/vdb.
@@ -183,6 +192,9 @@ pkgs.testers.runNixOSTest {
         machine.succeed("test ! -s /run/macro-agent-inbox/agent.env")
 
     with subtest("macro's own write to the inbox is installed the same way"):
+        # The fake Macro sends ApplyAgent again on every reconnect, which
+        # would replace what this test writes.
+        machine.succeed("systemctl stop fake-macro.service")
         # What macrod stages for ApplyAgent: the setup trace first, then the environment.
         trace = "00-11111111111111111111111111111111-2222222222222222-01"
         machine.succeed(f"runuser -u macro -- sh -c 'printf %s {trace} > /run/macro-agent-inbox/setup-traceparent'")

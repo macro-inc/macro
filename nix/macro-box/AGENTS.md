@@ -32,6 +32,9 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `claude-agent-acp/package-lock.json` (without the SDK's per-platform Claude
   binaries); tmpfiles link it where macrod installs adapters,
   `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs npm.
+- `_agent-inbox.nix` (imported by `_guest.nix`, option `macro.box.role`) is
+  how an agent's environment reaches every backend's guest: the inbox
+  `/run/macro-agent-inbox` and `macro-agent-apply.path`/`.service`, below.
 - `_agent.nix` (imported by `_guest.nix`, options `macro.box.agent.*`) runs
   the agent teammate: `packages/starter-agent` on `packages/muppet`.
   `_agent-runtime.nix` builds its `node_modules` from the starter agent's own
@@ -104,9 +107,10 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   attempt does not fail it) and whose marker it needs
   (`ConditionPathExists`). It restarts after 1 s, backing off to 30 s, and
   never hits a start limit.
-- One agent per computer. With an agent, `macrod enroll` writes
+- One agent per computer. With an agent, `macro-agent-apply` installs
   `/var/lib/macrod/agent.env` (KEY=VALUE, one line each, 0600, owned by
-  `macro`) and rewrites it on re-enrollment; without one the file is absent.
+  `macro`) from what macrod received over its socket, and rewrites it when a
+  new one arrives; without one the file is absent.
   `macro-agent.path` (`PathChanged` on it and on the runtime's restart
   marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
   writing, rewriting or removing the file starts, restarts or stops the
@@ -127,6 +131,20 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   macrod's setup spans export there.
 - The agent's units exist only with `macro.box.agentMode` (the
   `macro-box-agent` images), where macro has no sudo or docker.
+- `macro.box.role` says whom an image's computers are for: `agent` by
+  default with `agentMode` (the Docker agent image: DockerFleet starts it
+  only for an agent's computer), else `person`; null (Firecracker) leaves it
+  to `macro-restore`, which writes `/run/macro/role`. An `agent` image makes
+  `/run/macro-agent-inbox` (macro, 0700) with tmpfiles at boot and starts
+  `macro-agent.target` from `multi-user.target`; a restore does both for an
+  agent's identity. macrod stages an `ApplyAgent` environment at
+  `/run/macro-agent-inbox/agent.env` (it refuses without the directory, so a
+  person's computer refuses); `macro-agent-apply.path` (wanted by
+  `macro-agent.target`) starts a root unit that refuses unless the role is
+  `agent`, reads and empties the inbox only as macro (`setpriv`; a symlink
+  macro plants can't make root read or write through it), caps it at 64 KiB
+  and installs it as `/var/lib/macrod/agent.env` (0600, macro); the agent's
+  own path unit then starts it.
 - `macro-agent.service` is a system unit running as `macro`, the user
   harnessd keeps Claude's sign-in for. It binds that sign-in
   (`macro.box.harnessd.stateDirectory` + `/claude`) read-only and names it
@@ -300,14 +318,9 @@ and restores every computer from that snapshot. Contract with the host:
   `/run/sudoers.d/macro` (NOPASSWD, sudo's `@includedir /run/sudoers.d`) and
   an ACL `user:macro:rw` on `/run/docker.sock`; `agent` → no sudo or Docker,
   `/run/macro-agent-inbox` (macro, 0700) and `macro-agent.target`, which
-  alone wants the agent, its path unit and its desktop units. macrod stages
-  an `ApplyAgent` environment at `/run/macro-agent-inbox/agent.env` (it
-  refuses without the directory); `macro-agent-apply.path` starts a root unit
-  that refuses unless `/run/macro/role` is `agent`, reads and empties the
-  inbox only as macro (`setpriv`; a symlink macro plants can't make root
-  read or write through it), caps it at 64 KiB, installs it as
-  `/var/lib/macrod/agent.env` (0600, macro) and empties the inbox; the
-  agent's own path unit then starts it.
+  alone wants the agent, its path unit, its desktop units and
+  `macro-agent-apply.path` (`macro.box.role` is null; the inbox contract is
+  above).
 
 ## Running the Docker image
 
@@ -349,13 +362,16 @@ existing credentials: no new pairing and no Claude login.
   browser call made while Chromium is still starting succeeds. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
+  The first VM (a person's image) has no inbox or apply unit.
   A third VM boots the guest in agent mode: macro has no sudo or docker
-  group; the agent stays down without `agent.env`; its Chromium serves
+  group; the inbox exists from boot (macro, 0700); the agent stays down
+  without `agent.env`; its Chromium serves
   DevTools on loopback only with a profile under its home; the `agent` sink
   and its monitor exist; the clipboard round-trips on `:1`; AT-SPI reports
   `IsEnabled`; computer-use-linux lists Chromium's
   window, reads its AT-SPI tree and returns a screenshot PNG; the agent rejects a credentialed repo URL without
-  contacting the repo; a rewritten file restarts it, and it clones from an
+  contacting the repo; an environment macro stages in the inbox is installed
+  (0600 macro, inbox emptied) and restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
   neither the agent's unit nor Openbox can reach `systemd-run --user`,
@@ -369,6 +385,8 @@ existing credentials: no new pairing and no Claude login.
   A fourth VM enrolls from a file against `files/test-fake-macro.py` on
   loopback while `network-online.target` never comes: the claim and macrod's
   runtime connection still go through, and neither unit is ordered after it.
+  The fake Macro sends this person's computer an `ApplyAgent`, which macrod
+  refuses: no inbox, no `agent.env`.
 - The agent runtime (`packages/muppet` and the starter agent's packages)
   reaches agents only in a new image; a harness deploy changes only the
   seeded starter agent. Release the two together
@@ -389,7 +407,8 @@ existing credentials: no new pairing and no Claude login.
   `block_resize` of the volume grows the mounted `/home`; a
   repeat with the same id is a wake and keeps the machine id and files, another id changes
   it, and a cold boot mounts `/home` at boot. The first identity is a
-  person's (macro has sudo and the Docker socket, no agent units); the second
+  person's (macro has sudo and the Docker socket, no agent units, and
+  `macro-agent-apply` refuses even an inbox made by hand); the second
   an agent's (no sudo; the agent's desktop runs; an environment macro puts
   in the inbox is installed as `/var/lib/macrod/agent.env`, 0600 macro).
 - `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
@@ -409,6 +428,13 @@ existing credentials: no new pairing and no Claude login.
   upstream `https://downloads.claude.ai/claude-code-releases/<version>/manifest.json`
   (`platforms.linux-x64.checksum`) when upgrading.
 - `nix build .#macro-box-docker` and the Docker smoke test above.
+- `files/test-docker-agent-inbox.sh <agent image> <person image>` (its
+  header has the commands; needs Docker and skopeo) runs both locally built
+  Docker images as DockerFleet does against `files/test-fake-macro.py` on
+  each container's loopback: the agent's macrod stages the `ApplyAgent`
+  environment, it is installed as `agent.env` and `macro-agent` starts; the
+  person's macrod refuses it. Images load under a throwaway tag, never
+  `:latest`.
 
 - `nix/macro-box/kernel/update.sh` regenerates the Firecracker kernel config
   after a change to the fragment, the pinned Firecracker revision or nixpkgs'

@@ -12,8 +12,8 @@ mod test;
 
 /// Where macrod stages the environment. macrod runs as `macro` and cannot
 /// write `/var/lib/macrod`; the guest's root `macro-agent-apply` unit
-/// installs the staged file as `/var/lib/macrod/agent.env`, only on a
-/// computer restored as an agent's, and empties the inbox.
+/// installs the staged file as `/var/lib/macrod/agent.env`, only on an
+/// agent's computer (`nix/macro-box/_agent-inbox.nix`), and empties the inbox.
 pub const AGENT_ENV_INBOX: &str = "/run/macro-agent-inbox/agent.env";
 
 /// Where the guest installs the staged environment; the agent reads it.

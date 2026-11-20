@@ -248,11 +248,11 @@ in
     # person's computer gets sudo from /run/sudoers.d and Docker from an ACL
     # on its socket; an agent's computer starts macro-agent.target.
     macro.box.agentMode = true;
+    macro.box.role = null;
     security.sudo.extraConfig = ''
       @includedir /run/sudoers.d
     '';
     systemd.targets.macro-agent = {
-      description = "This computer runs an agent teammate";
       requires = [ "macro-home.target" ];
       after = [ "macro-home.target" ];
     };
@@ -289,73 +289,6 @@ in
       wantedBy = lib.mkForce [ "macro-agent.target" ];
       requires = [ "macro-home-setup.service" ];
       after = [ "macro-home-setup.service" ];
-    };
-
-    # The agent's environment arrives over macrod's socket (ApplyAgent): macrod,
-    # as macro, stages it in /run/macro-agent-inbox, which macro-restore makes
-    # only on an agent's computer (macrod refuses ApplyAgent without it); this
-    # root unit installs it where macro-agent reads it, checking the role
-    # again.
-    systemd.paths.macro-agent-apply = {
-      description = "Watch for an agent environment from macrod";
-      wantedBy = [ "macro-agent.target" ];
-      pathConfig.PathChanged = "/run/macro-agent-inbox/agent.env";
-    };
-    systemd.services.macro-agent-apply = {
-      description = "Install the agent environment macrod received";
-      path = [
-        pkgs.coreutils
-        pkgs.util-linux
-      ];
-      serviceConfig = {
-        Type = "oneshot";
-        UMask = "0077";
-      };
-      # The inbox is macro's, so root never opens anything in it: macro reads
-      # it (a symlink to a root-only file fails there) and empties it, and
-      # root only writes what macro handed over, capped at 64 KiB.
-      script = ''
-        inbox=/run/macro-agent-inbox/agent.env
-        as_macro() { setpriv --reuid=macro --regid=macro --clear-groups "$@"; }
-        if ! as_macro test -s "$inbox"; then
-          exit 0
-        fi
-        role=$(cat /run/macro/role 2> /dev/null || true)
-        if [ "$role" != agent ]; then
-          echo "macro-agent-apply: refusing an agent environment on a $role computer" >&2
-          as_macro truncate --size=0 "$inbox"
-          exit 1
-        fi
-        if ! as_macro head --bytes=65536 "$inbox" > /var/lib/macrod/agent.env.new; then
-          rm -f /var/lib/macrod/agent.env.new
-          echo "macro-agent-apply: macro cannot read its inbox's agent.env" >&2
-          exit 1
-        fi
-        # The setup trace macrod staged beside it (not a secret): installed
-        # root-owned and read-only for start-agent, capped like a traceparent,
-        # and only the first, so a redelivery's fresh one changes nothing.
-        # Nothing here fails the environment's install: the trace is only
-        # telemetry. One that can't be installed stays in the inbox for the
-        # next delivery.
-        trace_inbox=/run/macro-agent-inbox/setup-traceparent
-        trace=/run/macrod/agent-traceparent
-        if as_macro test -s "$trace_inbox"; then
-          if [ -e "$trace" ] || {
-            install -d -m 0755 /run/macrod &&
-              as_macro head --bytes=128 "$trace_inbox" > "$trace.new" &&
-              chmod 0644 "$trace.new" &&
-              mv "$trace.new" "$trace"
-          }; then
-            as_macro truncate --size=0 "$trace_inbox" || true
-          else
-            rm -f "$trace.new" || true
-            echo "macro-agent-apply: could not install the setup trace" >&2
-          fi
-        fi
-        chown macro:macro /var/lib/macrod/agent.env.new
-        mv /var/lib/macrod/agent.env.new /var/lib/macrod/agent.env
-        as_macro truncate --size=0 "$inbox"
-      '';
     };
 
     # Restored computers start what the golden boot left stopped; read their

@@ -174,7 +174,12 @@ the host). `macro-restore` applies it as root: a person's computer gives
 runs the agent in its sandbox. Root units on an agent's computer that act on
 files the `macro` user can write (such as the inbox macrod stages the agent's
 environment in) read and truncate them only as `macro`, never as root, and
-never follow a symlink there.
+never follow a symlink there. One module (`nix/macro-box/_agent-inbox.nix`)
+holds the inbox and the root unit that installs from it for every backend: a
+Firecracker computer takes the role from the restore (`/run/macro/role`), which
+the root unit checks; a local Docker computer's role is its image (the fleet
+starts the agent image only for an agent, and the person image has no inbox,
+so its macrod refuses).
 
 ## vsock
 
