@@ -179,7 +179,7 @@ rec {
   # switch (../cluster/README.md). `enable` lets the host's role list and
   # write `prefix` there, nothing else; turn it off once the copy is done.
   mimirBackfill = {
-    enable = true;
+    enable = false;
     # Mimir's `blocks_storage.storage_prefix`, then the tenant (`anonymous`
     # with multitenancy off). Change it with ../cluster's
     # modules/backends/mimir.nix.
