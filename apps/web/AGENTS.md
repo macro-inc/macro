@@ -69,7 +69,11 @@ initialization waits and queued settlement. An unchanged ready proof without
 failed cleanup never refetches. With the same account and policy,
 a stale generation hint changes only new write stamps: keep in-memory responses
 and recover rejected copied writes with fresh reads of their own queries. A
-changed account or policy retires visible content normally. Mirrors may lag
+changed account or policy retires visible content normally. An empty account or
+policy in a mirror at the owner's generation is not a change: within one
+generation the owner only fills them, by the first bind and the first proof that
+is not a denial, and issues a new generation for anything else. Compare a denied
+owner exactly, whatever the mirror leaves empty. Mirrors may lag
 across windows and never grant admission or replace the owner's fresh generation
 after reset. On web, a ready allowed hint for the signed-in account may open CRM
 UI before the owner arrives. A matching durable denial closes entry points

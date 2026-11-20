@@ -47,9 +47,21 @@ export function initialCacheRetirement(
   hint: CacheAuthority | undefined,
   owner: CacheAuthority
 ): 'session' | 'permission' | undefined {
+  // A mirror lags the owner by one observation when its page unloads first.
+  // Within one generation the owner only fills an empty account (the first
+  // bind) or an empty policy (the first proof, when it is not a denial); every
+  // other account or policy change issues a new generation. So an empty mirror
+  // field at the owner's generation is the same session and access, not a
+  // change. A denial never follows from a fill: a denied owner is compared
+  // exactly.
+  const filledSince = (mirrored: string | null | undefined) =>
+    mirrored === null &&
+    hint?.generation === owner.generation &&
+    !owner.policy?.endsWith(':denied');
   if (
     hint &&
-    (hint.identity !== owner.identity || hint.account !== owner.account)
+    (hint.identity !== owner.identity ||
+      (hint.account !== owner.account && !filledSince(hint.account)))
   )
     return 'session';
   if (owner.policy !== null && !owner.ready) return 'permission';
@@ -70,7 +82,8 @@ export function initialCacheRetirement(
     // A mismatching signed-in account is fenced separately by the policy owner.
     return undefined;
   }
-  if (hint.policy !== owner.policy) return 'permission';
+  if (hint.policy !== owner.policy && !filledSince(hint.policy))
+    return 'permission';
   // The same account/team/access status may have gone denied then allowed
   // while starting. Its in-memory responses remain visible under the access
   // held now; only possible staleness remains. Copied writes still retain their

@@ -111,3 +111,93 @@ it.each([
     expect(initialCacheRetirement(hint, denied)).toBe('permission');
   }
 );
+
+// A page can unload between the owner recording a first bind or a first grant
+// and the page mirroring it: the next start reads a mirror one step behind.
+const TEAM = '00000000-0000-4000-8000-000000000002';
+const OTHER_GENERATION = '00000000-0000-4000-8000-000000000005';
+const unbound: CacheAuthority = {
+  ...authority,
+  account: null,
+  policy: null,
+  ready: false,
+};
+const bound: CacheAuthority = { ...unbound, account: 'viewer' };
+const granted: CacheAuthority = {
+  ...bound,
+  policy: `${TEAM}:allowed`,
+  ready: true,
+};
+it.each([
+  ['the first bind', unbound, bound],
+  ['the first grant', bound, granted],
+  ['a first team-less proof', bound, { ...granted, policy: 'none' }],
+  ['the first bind and grant together', unbound, granted],
+] as const)(
+  'retires nothing when the mirror only lags %s of the same generation',
+  (_case, hint, owner) => {
+    expect(initialCacheRetirement(hint, owner)).toBeUndefined();
+  }
+);
+
+it.each([
+  [
+    'another account at the same generation',
+    { ...bound, account: 'someone-else' },
+    bound,
+    'session',
+  ],
+  [
+    'no account at an earlier generation',
+    { ...unbound, generation: OTHER_GENERATION },
+    bound,
+    'session',
+  ],
+  [
+    'another team at the same generation',
+    { ...granted, policy: '00000000-0000-4000-8000-000000000009:allowed' },
+    granted,
+    'permission',
+  ],
+  [
+    'a team when the owner now records none',
+    granted,
+    { ...granted, policy: 'none' },
+    'permission',
+  ],
+  [
+    'no policy at an earlier generation',
+    { ...bound, generation: OTHER_GENERATION },
+    granted,
+    'permission',
+  ],
+  [
+    'a grant the owner has since revoked',
+    granted,
+    { ...granted, policy: `${TEAM}:denied`, generation: OTHER_GENERATION },
+    'permission',
+  ],
+  [
+    'no policy where the owner records a denial, even at one generation',
+    bound,
+    { ...granted, policy: `${TEAM}:denied` },
+    'permission',
+  ],
+  [
+    'no account where the owner records a denial, even at one generation',
+    { ...granted, account: null, policy: `${TEAM}:denied` },
+    { ...granted, policy: `${TEAM}:denied` },
+    'session',
+  ],
+  [
+    'no policy where the owner has an unfinished transition',
+    bound,
+    { ...granted, ready: false },
+    'permission',
+  ],
+] as const)(
+  'still retires when the mirror names %s',
+  (_case, hint, owner, scope) => {
+    expect(initialCacheRetirement(hint, owner)).toBe(scope);
+  }
+);
