@@ -171,9 +171,31 @@ describe('connect card', () => {
 
     await waitFor(() =>
       expect(mocks.toastAlert).toHaveBeenCalledWith(
-        'Could not start the sign-in for Acme. Please try again.'
+        'Could not start the sign-in for Acme.'
       )
     );
     expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
+  });
+
+  it('disables a server card while the session cannot connect', () => {
+    render(() => (
+      <AppConnectionContext.Provider
+        value={{ connect: vi.fn(async () => {}), disabled: () => true }}
+      >
+        <ConnectCard
+          name="Acme"
+          target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+        />
+      </AppConnectionContext.Provider>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
+
+    expect(
+      screen
+        .getByRole('button', { name: 'Connect Acme' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    expect(mocks.connectMcpServer).not.toHaveBeenCalled();
   });
 });

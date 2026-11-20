@@ -129,6 +129,7 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
 }
 
 function ConnectServerCard(props: { name: string; url: string }) {
+  const session = useContext(AppConnectionContext);
   const server = useMcpServerConnected(() => props.url);
   const [busy, setBusy] = createSignal(false);
   const [adding, setAdding] = createSignal(false);
@@ -142,11 +143,9 @@ function ConnectServerCard(props: { name: string; url: string }) {
     setBusy(false);
     if (outcome.isErr()) {
       // A server the user has not added yet, whose sign-in cannot start, is
-      // added by hand, filled in; one they already have needs another try.
+      // added by hand, filled in; one they already have gets a message instead.
       if (server.listed()) {
-        toast.alert(
-          `Could not start the sign-in for ${props.name}. Please try again.`
-        );
+        toast.alert(`Could not start the sign-in for ${props.name}.`);
       } else {
         setAdding(true);
       }
@@ -163,6 +162,7 @@ function ConnectServerCard(props: { name: string; url: string }) {
         icon={<Plug class="size-[18px]" />}
         connected={server.ready() && server.connected()}
         busy={busy()}
+        disabled={session?.disabled() ?? false}
         onConnect={() => fireAndForget(connect(), 'connect-card')}
       />
       <AddCustomMcpDialog
