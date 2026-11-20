@@ -2,71 +2,59 @@ import type { Env } from '../../../../packages/sdk/src/config';
 import { Macro } from '../../../../packages/sdk/src/macro';
 import { unwrap } from '../../../../packages/sdk/src/utils';
 
-export type ChannelBindings = {
-  MACRO_ENV: Env;
-  MACRO_BOT_TOKEN: string;
-  MACRO_STORAGE_URL?: string;
+export type ChannelConfig = {
+  /** Bot API key (`mbot_...`) for the bot whose channels receive notifications. */
+  botToken: string;
+  /** Macro environment selected by the host. */
+  env: Env;
+  /** Optional storage API base URL for a custom Macro deployment. */
+  storageUrl?: string;
 };
 
-export type InvoiceDeliveries = {
-  getByName(name: string): { fetch(request: Request): Promise<Response> };
-};
+/** Delivers a formatted message to every channel containing the bot. */
+export type ChannelBroadcaster = (content: string) => Promise<void>;
 
-export function channelClient(env: ChannelBindings) {
-  return new Macro({
-    env: env.MACRO_ENV,
-    auth: { type: 'bot', token: env.MACRO_BOT_TOKEN, scope: 'team' },
-    hosts: env.MACRO_STORAGE_URL
-      ? { storage: env.MACRO_STORAGE_URL }
-      : undefined,
+/** Create a broadcaster backed by Macro's bot and channel webhook SDK methods. */
+export function createChannelBroadcaster(
+  config: ChannelConfig
+): ChannelBroadcaster {
+  const macro = new Macro({
+    env: config.env,
+    auth: { type: 'bot', token: config.botToken, scope: 'team' },
+    hosts: config.storageUrl ? { storage: config.storageUrl } : undefined,
   });
-}
 
-export async function broadcast(
-  env: ChannelBindings & { INVOICE_DELIVERIES: InvoiceDeliveries },
-  content: string,
-  invoiceId?: string
-) {
-  const macro = channelClient(env);
-  const channels = await macro.bots.channels();
-  const deliveries = await Promise.allSettled(
-    channels.map(async (channel) => {
-      if (invoiceId) {
-        const id = JSON.stringify([invoiceId, channel.channel_id]);
-        const result = await env.INVOICE_DELIVERIES.getByName(id).fetch(
-          new Request('https://delivery.internal/', {
-            method: 'POST',
-            body: JSON.stringify({ channelId: channel.channel_id, content }),
+  return async (content) => {
+    const channels = await macro.bots.channels();
+    const deliveries = await Promise.allSettled(
+      channels.map(async (channel) => {
+        const { message_id } = unwrap(
+          await macro._client.storage.postChannelBotWebhook({
+            path: { channel_id: channel.channel_id },
+            body: { content },
           })
         );
-        if (!result.ok)
-          throw new Error(`Delivery returned HTTP ${result.status}`);
-        return;
-      }
-      unwrap(
-        await macro._client.storage.postChannelBotWebhook({
-          path: { channel_id: channel.channel_id },
-          body: { content },
-        })
-      );
-    })
-  );
-
-  let failed = 0;
-  deliveries.forEach((delivery, index) => {
-    if (delivery.status === 'rejected') {
-      failed++;
-      console.error('Failed to post Stripe notification to a Macro channel', {
-        invoiceId,
-        channelId: channels[index].channel_id,
-        error: delivery.reason,
-      });
-    }
-  });
-  if (failed)
-    throw new Error(
-      `Failed to post to ${failed} of ${channels.length} Macro channels`
+        return { channelId: channel.channel_id, messageId: message_id };
+      })
     );
 
-  return channels.length;
+    const failures = deliveries.filter(
+      (delivery): delivery is PromiseRejectedResult =>
+        delivery.status === 'rejected'
+    );
+    if (failures.length > 0) {
+      failures.forEach((failure) => {
+        console.error('Failed to post Stripe notification to a Macro channel', {
+          error: failure.reason,
+        });
+      });
+      throw new Error(
+        `Failed to post to ${failures.length} of ${channels.length} Macro channels`
+      );
+    }
+
+    console.log('Posted Stripe notification', {
+      channelCount: channels.length,
+    });
+  };
 }

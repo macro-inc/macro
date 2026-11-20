@@ -17,7 +17,7 @@ Stripe webhook ──POST /webhook──> Cloudflare Worker
                                    │ map the event to a payment or cancellation
                                    ▼
                   Macro SDK → list the bot's channel memberships
-                            → deliver to each channel
+                            → POST each channel's bot webhook
 ```
 
 The destinations do not come from the Stripe event or Worker configuration.
@@ -98,10 +98,7 @@ stripe listen \
 Use the `whsec_...` printed by `stripe listen` as
 `STRIPE_WEBHOOK_SECRET`.
 
-Wrangler provisions the SQLite-backed `INVOICE_DELIVERIES` Durable Object
-binding with the Worker. Each invoice/channel pair stores its Macro message ID
-before posting through the team bot's channel message API. A retry skips a
-confirmed delivery and checks for the recorded message after an ambiguous failure.
+Stripe may redeliver an event. A retry can post the same payment again.
 
 ## Checks
 

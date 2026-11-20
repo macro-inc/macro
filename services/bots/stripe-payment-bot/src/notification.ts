@@ -8,7 +8,7 @@ export type PaymentNotification = {
   eventId: string;
   livemode: boolean;
   subscriptionId?: string;
-  invoice?: { id: string; reason: string };
+  reason?: string;
 };
 
 export type CancellationNotification = {
@@ -194,7 +194,7 @@ async function subscriptionPayment(
     eventId: event.id,
     livemode: event.livemode,
     subscriptionId: subscriptionId(subscriptionRef),
-    invoice: { id: invoice.id, reason },
+    reason,
   };
 }
 
@@ -290,7 +290,7 @@ function formatPayment(payment: PaymentNotification): string {
     `Customer: ${payment.customer}`,
     `Amount: ${formatAmount(payment.amount, payment.currency)}`,
   ];
-  if (payment.invoice) lines.push(`Reason: ${payment.invoice.reason}`);
+  if (payment.reason) lines.push(`Reason: ${payment.reason}`);
   if (payment.subscriptionId) {
     lines.push(`Subscription: ${payment.subscriptionId}`);
   }

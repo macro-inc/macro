@@ -182,7 +182,7 @@ describe('notificationFromEvent', () => {
       limit: 100,
     });
     expect(payment).toMatchObject({
-      invoice: { reason: 'Subscription change (prorated)' },
+      reason: 'Subscription change (prorated)',
     });
   });
 
@@ -204,7 +204,8 @@ describe('notificationFromEvent', () => {
     );
     expect(notifications.filter(Boolean)).toHaveLength(1);
     expect(notifications[2]).toMatchObject({
-      invoice: { id: 'in_subscription', reason: 'New subscription' },
+      kind: 'payment',
+      reason: 'New subscription',
     });
   });
 

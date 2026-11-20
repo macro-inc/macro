@@ -1,23 +1,17 @@
 import Stripe from 'stripe';
 import type { Env as MacroEnv } from '../../../../packages/sdk/src/config';
-import {
-  broadcast,
-  type ChannelBindings,
-  type InvoiceDeliveries,
-} from './channel';
-
-export { InvoiceDelivery } from './delivery';
-
+import { createChannelBroadcaster } from './channel';
 import { formatNotification, notificationFromEvent } from './notification';
 
-type WorkerEnv = ChannelBindings & {
-  INVOICE_DELIVERIES: InvoiceDeliveries;
+type WorkerEnv = {
+  MACRO_BOT_TOKEN: string;
+  MACRO_ENV: string;
+  MACRO_STORAGE_URL?: string;
   STRIPE_API_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
 };
 
 const REQUIRED_BINDINGS: readonly (keyof WorkerEnv)[] = [
-  'INVOICE_DELIVERIES',
   'MACRO_BOT_TOKEN',
   'MACRO_ENV',
   'STRIPE_API_KEY',
@@ -30,6 +24,10 @@ const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 function missingBindings(env: WorkerEnv): string[] {
   return REQUIRED_BINDINGS.filter((key) => !env[key]);
+}
+
+function parseMacroEnv(value: string): MacroEnv | undefined {
+  return MACRO_ENVIRONMENTS.find((environment) => environment === value);
 }
 
 export default {
@@ -50,7 +48,8 @@ export default {
       );
     }
 
-    if (!MACRO_ENVIRONMENTS.includes(env.MACRO_ENV)) {
+    const macroEnv = parseMacroEnv(env.MACRO_ENV);
+    if (!macroEnv) {
       return Response.json(
         {
           error: `MACRO_ENV must be one of: ${MACRO_ENVIRONMENTS.join(', ')}`,
@@ -92,21 +91,12 @@ export default {
     }
     if (!notification) return Response.json({ ok: true, ignored: true });
 
-    const invoiceId =
-      notification.kind === 'payment' ? notification.invoice?.id : undefined;
     try {
-      const channelCount = await broadcast(
-        env,
-        formatNotification(notification),
-        invoiceId
-      );
-      console.log('Posted Stripe notification', {
-        kind: notification.kind,
-        eventId: notification.eventId,
-        subscriptionId: notification.subscriptionId,
-        invoiceId,
-        channelCount,
-      });
+      await createChannelBroadcaster({
+        botToken: env.MACRO_BOT_TOKEN,
+        env: macroEnv,
+        storageUrl: env.MACRO_STORAGE_URL,
+      })(formatNotification(notification));
     } catch (error) {
       console.error('Failed to post Stripe notification to Macro', error);
       return new Response('Failed to post Stripe notification to Macro', {
@@ -114,6 +104,11 @@ export default {
       });
     }
 
+    console.log('Posted Stripe notification', {
+      kind: notification.kind,
+      eventId: notification.eventId,
+      subscriptionId: notification.subscriptionId,
+    });
     return Response.json({ ok: true });
   },
 };
