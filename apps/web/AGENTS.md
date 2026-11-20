@@ -2115,6 +2115,10 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   Chooser capabilities omit the optional admin-consent callback and use a
   separate account/session cache variant from signed approval links.
 
+- Use the shared SecretInput with current-password autocomplete for IMAP/SMTP;
+  reconnect secrets start empty and switching off a separate outgoing secret
+  clears its typed value.
+
 - Keep confirmed IMAP server settings after verification refusal, clear secret
   fields, and offer the catalog app-password help link. Render only whitelisted
   error guidance; a connection failure must never imply a rejected password.

@@ -18,10 +18,12 @@ import {
   type ManagedDialogProps,
   openDialog,
   Panel,
+  SecretInput,
 } from '@ui';
 import {
   createEffect,
   createSignal,
+  createUniqueId,
   type Owner,
   onCleanup,
   onMount,
@@ -163,14 +165,16 @@ function ConnectForm(props: ImapConnectProps) {
   const [separatePassword, setSeparatePassword] = createSignal(false);
   const [confirmed, setConfirmed] = createSignal(false);
   const [manual, setManual] = createSignal(false);
-  let passwordInput: HTMLInputElement | undefined;
-  let smtpPasswordInput: HTMLInputElement | undefined;
+  const passwordId = createUniqueId();
+  const smtpPasswordId = createUniqueId();
+  const [password, setPassword] = createSignal('');
+  const [smtpPassword, setSmtpPassword] = createSignal('');
   let controller: AbortController | undefined;
   let requestId = crypto.randomUUID();
 
   function clearPasswords() {
-    if (passwordInput) passwordInput.value = '';
-    if (smtpPasswordInput) smtpPasswordInput.value = '';
+    setPassword('');
+    setSmtpPassword('');
   }
 
   onCleanup(() => {
@@ -243,7 +247,8 @@ function ConnectForm(props: ImapConnectProps) {
       busy() ||
       !confirmed() ||
       !isCurrentQueryAccount(viewer) ||
-      !passwordInput
+      password() === '' ||
+      (separatePassword() && smtpPassword() === '')
     )
       return;
     setBusy(true);
@@ -256,12 +261,10 @@ function ConnectForm(props: ImapConnectProps) {
           requestId,
           linkId: props.linkId,
           email: email().trim(),
-          imap: { endpoint: imap(), password: passwordInput.value },
+          imap: { endpoint: imap(), password: password() },
           smtp: {
             endpoint: smtp(),
-            password: separatePassword()
-              ? (smtpPasswordInput?.value ?? '')
-              : passwordInput.value,
+            password: separatePassword() ? smtpPassword() : password(),
           },
           confirmedHosts: [...new Set([imap().host, smtp().host])],
         },
@@ -474,39 +477,40 @@ function ConnectForm(props: ImapConnectProps) {
                       </a>
                     )}
                   </Show>
-                  <label class="grid gap-1 text-sm">
-                    Password or app password
-                    <Input
-                      class="ph-no-capture"
-                      type="password"
+                  <div class="grid gap-1 text-sm">
+                    <label for={passwordId}>Password or app password</label>
+                    <SecretInput
+                      id={passwordId}
                       required
-                      disabled={!confirmed()}
-                      autocomplete="off"
-                      ref={passwordInput}
+                      disabled={!confirmed() || busy()}
+                      autocomplete="current-password"
+                      value={password()}
+                      onValueChange={setPassword}
                     />
-                  </label>
+                  </div>
                   <label class="flex gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={separatePassword()}
-                      onChange={(event) =>
-                        setSeparatePassword(event.currentTarget.checked)
-                      }
+                      onChange={(event) => {
+                        setSmtpPassword('');
+                        setSeparatePassword(event.currentTarget.checked);
+                      }}
                     />
                     Use a separate outgoing password
                   </label>
                   <Show when={separatePassword()}>
-                    <label class="grid gap-1 text-sm">
-                      Outgoing password
-                      <Input
-                        class="ph-no-capture"
-                        type="password"
+                    <div class="grid gap-1 text-sm">
+                      <label for={smtpPasswordId}>Outgoing password</label>
+                      <SecretInput
+                        id={smtpPasswordId}
                         required
-                        disabled={!confirmed()}
-                        autocomplete="off"
-                        ref={smtpPasswordInput}
+                        disabled={!confirmed() || busy()}
+                        autocomplete="current-password"
+                        value={smtpPassword()}
+                        onValueChange={setSmtpPassword}
                       />
-                    </label>
+                    </div>
                   </Show>
                 </Show>
               </Show>

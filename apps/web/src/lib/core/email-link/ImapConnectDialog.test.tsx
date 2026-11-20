@@ -286,3 +286,30 @@ it('keeps the same connection action and label while checking, failing and retry
   expect(screen.getByRole('button', { name: 'Connect inbox' })).toBe(button);
   retry.resolve(ok({ linkId: 'connected-inbox' }));
 });
+
+
+it('keeps reconnect secrets empty and forgets an unselected outgoing password', async () => {
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={() => {}}
+      emailAddress="owner@example.com"
+      linkId="existing-inbox"
+    />
+  ));
+  const incoming = await screen.findByLabelText('Password or app password');
+  expect(incoming).toHaveProperty('value', '');
+  expect(incoming.getAttribute('autocomplete')).toBe('current-password');
+  fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+  const separate = screen.getByLabelText('Use a separate outgoing password');
+  fireEvent.click(separate);
+  const outgoing = screen.getByLabelText('Outgoing password');
+  expect(outgoing).toHaveProperty('value', '');
+  expect(outgoing.getAttribute('autocomplete')).toBe('current-password');
+  fireEvent.input(outgoing, { target: { value: 'temporary-test-secret' } });
+  fireEvent.click(separate);
+  fireEvent.click(separate);
+  expect(screen.getByLabelText('Outgoing password')).toHaveProperty('value', '');
+  expect(mail.connect).not.toHaveBeenCalled();
+});

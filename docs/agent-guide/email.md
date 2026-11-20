@@ -97,6 +97,9 @@ never starts a provider automatically.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields full-screen.
+Incoming and outgoing passwords use the shared masked secret input. Reconnect
+starts with empty secret fields; revealing a field shows only newly typed text.
+Turning off a separate outgoing password forgets that typed value.
 During verification, **Connect inbox** stays in place with a loading indicator.
 Check idle, checking, refusal and retry on desktop and phone: the action keeps
 its label and width, and error copy wraps without being clipped.
