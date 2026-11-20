@@ -100,6 +100,8 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
 
 pub struct RunCredentials {
     pub egress: EgressRollout,
+    /// Which turns may start background jobs.
+    pub detach: Arc<dyn jobs::MayDetach>,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
@@ -159,6 +161,7 @@ fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
             "ExecuteCode"
                 | "DescribeCodeTools"
                 | "ReadCodeDocs"
+                | "CancelJob"
                 | "SearchTools"
                 | "LoadTools"
                 | "ReadToolResult"
@@ -244,13 +247,21 @@ impl ExecutionCredentials for RunCredentials {
                 tracing::error!(?error, "could not persist code-mode correlation");
                 CodeModeError::Unavailable
             })?;
-        // No refresh credential. Covers the 30-second queue/run deadline plus
-        // clock margin; a normal user token expires rather than revoking on exit.
+        // No refresh credential. Covers the 30-second queue/run deadline, or
+        // a background job's deadline, plus clock margin; a normal user token
+        // expires rather than revoking on exit. A job's token is held only
+        // by its process, which is killed when the job settles.
+        let lifetime = match identity.lifetime {
+            agent_code_mode::domain::RunLifetime::Foreground => 60,
+            agent_code_mode::domain::RunLifetime::Job { deadline } => {
+                usize::try_from((deadline - chrono::Utc::now()).num_seconds()).unwrap_or(0) + 60
+            }
+        };
         let token = self
             .signer
             .mint_for_agent(
                 &actor,
-                60,
+                lifetime,
                 Some(identity.agent_id.as_uuid()),
                 None,
                 None,
@@ -276,6 +287,13 @@ impl ExecutionCredentials for RunCredentials {
             },
             acting_user: actor,
         })
+    }
+
+    async fn may_detach(
+        &self,
+        identity: &ExecutionIdentity,
+    ) -> Result<agent_code_mode::domain::Detach, CodeModeError> {
+        self.detach.decide(identity).await
     }
 }
 
@@ -436,6 +454,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 
 pub mod connected_apps;
 pub mod images;
+pub mod jobs;
 pub mod reviews;
 pub mod ui_commands;
 

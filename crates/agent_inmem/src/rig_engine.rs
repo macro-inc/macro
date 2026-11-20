@@ -72,6 +72,7 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
     "mcp__macro_internal__ReadCodeDocs",
+    "mcp__macro_internal__CancelJob",
 ];
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and

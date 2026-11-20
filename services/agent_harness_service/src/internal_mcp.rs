@@ -188,7 +188,7 @@ impl ServerHandler for InternalTools {
         for tool in &mut definitions {
             if !matches!(
                 tool.name.as_ref(),
-                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode"
+                "DescribeCodeTools" | "ReadCodeDocs" | "ExecuteCode" | "CancelJob"
             ) {
                 ai_toolset::actor::add_actor_schema(Arc::make_mut(&mut tool.input_schema));
             }
@@ -238,7 +238,7 @@ impl InternalTools {
         let mut acting_user = owner.clone();
         if !matches!(
             request.name.as_ref(),
-            "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs"
+            "ExecuteCode" | "DescribeCodeTools" | "ReadCodeDocs" | "CancelJob"
         ) {
             let arguments = serde_json::Value::Object(request.arguments.take().unwrap_or_default());
             let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
