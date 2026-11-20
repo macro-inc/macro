@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod company_contacts;
+mod contact_filing;
 mod contact_listing;
 mod contact_update;
 mod email_policy;
@@ -24,6 +25,7 @@ use crate::domain::{
 };
 use chrono::{DateTime, Utc};
 use company_contacts::VisibleCompany;
+use contact_filing::ManualContactCompany;
 use sqlx::PgPool;
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -1098,6 +1100,107 @@ impl CompaniesRepositoryImpl {
 
         Ok((winner, false))
     }
+
+    /// Inserts a `manually_created` contact for the team. With
+    /// `file_by_domain`, the contact goes under the company for its email
+    /// domain when [`Self::company_for_manual_contact`] names one.
+    async fn insert_manual_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        email: Option<&str>,
+        name: &str,
+        now: DateTime<Utc>,
+        file_by_domain: bool,
+    ) -> Result<CrmContact, CrmError> {
+        let normalized_email = email.map(str::to_ascii_lowercase);
+        let domain = normalized_email
+            .as_deref()
+            .and_then(|email| email.split_once('@'))
+            .map(|(_, domain)| domain);
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        // Serialize manual identity creation with other writes for this domain.
+        // Contribution exclusions never change record visibility.
+        if let Some(domain) = domain {
+            Self::lock_team_domain(&mut tx, team_id, domain).await?;
+        }
+
+        if !Self::team_exists(&mut tx, team_id).await? {
+            return Err(CrmError::CrmDisabledForTeam);
+        }
+
+        let company_id = match domain.filter(|_| file_by_domain) {
+            Some(domain) => {
+                match Self::company_for_manual_contact(&mut tx, team_id, domain, now).await? {
+                    ManualContactCompany::Company { id, .. } => Some(id),
+                    ManualContactCompany::BlockedDomain | ManualContactCompany::Hidden => None,
+                }
+            }
+            None => None,
+        };
+
+        // Each unique index covers one side only: a contact filed under the
+        // company must not repeat the team's contact without a company.
+        let inserted = match company_id {
+            Some(company_id) => sqlx::query_scalar!(
+                r#"
+                INSERT INTO crm_contacts
+                    (team_id, company_id, email, name, first_interaction, last_interaction, manually_created)
+                SELECT $1, $2, $3, $4, $5, $5, TRUE
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM crm_contacts
+                    WHERE team_id = $1 AND LOWER(email) = $3 AND company_id IS NULL
+                )
+                ON CONFLICT (company_id, email) DO NOTHING
+                RETURNING id
+                "#,
+                team_id,
+                company_id,
+                normalized_email,
+                name,
+                now,
+            )
+            .fetch_optional(&mut *tx)
+            .await,
+            None => sqlx::query_scalar!(
+                r#"
+                INSERT INTO crm_contacts
+                    (team_id, company_id, email, name, first_interaction, last_interaction, manually_created)
+                VALUES ($1, NULL, $2, $3, $4, $4, TRUE)
+                ON CONFLICT (team_id, LOWER(email)) WHERE company_id IS NULL DO NOTHING
+                RETURNING id
+                "#,
+                team_id,
+                normalized_email,
+                name,
+                now,
+            )
+            .fetch_optional(&mut *tx)
+            .await,
+        }
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let Some(contact_id) = inserted else {
+            return Err(CrmError::ContactAlreadyExistsForCompany);
+        };
+
+        // Read back through the shared query: the address rows are written
+        // by a trigger, after the insert's own RETURNING is computed.
+        let contact = Self::read_contact(&mut *tx, team_id, &contact_id, true)
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(contact)
+    }
 }
 
 impl CompaniesRepository for CompaniesRepositoryImpl {
@@ -1233,55 +1336,22 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         name: &str,
         now: DateTime<Utc>,
     ) -> Result<CrmContact, CrmError> {
-        let normalized_email = email.map(str::to_ascii_lowercase);
-
-        let mut tx = self
-            .pool
-            .begin()
+        self.insert_manual_contact(team_id, email, name, now, false)
             .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+    }
 
-        // Serialize manual identity creation with other writes for this domain.
-        // Contribution exclusions never change record visibility.
-        if let Some((_, domain)) = normalized_email.as_deref().and_then(|e| e.split_once('@')) {
-            Self::lock_team_domain(&mut tx, team_id, domain).await?;
-        }
-
-        if !Self::team_exists(&mut tx, team_id).await? {
-            return Err(CrmError::CrmDisabledForTeam);
-        }
-
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO crm_contacts
-                (team_id, company_id, email, name, first_interaction, last_interaction, manually_created)
-            VALUES ($1, NULL, $2, $3, $4, $4, TRUE)
-            ON CONFLICT (team_id, LOWER(email)) WHERE company_id IS NULL DO NOTHING
-            RETURNING id
-            "#,
-            team_id,
-            normalized_email,
-            name,
-            now,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        let Some(row) = row else {
-            return Err(CrmError::ContactAlreadyExistsForCompany);
-        };
-
-        // Read back through the shared query: the address rows are written
-        // by a trigger, after the insert's own RETURNING is computed.
-        let contact = Self::read_contact(&mut *tx, team_id, &row.id, true)
-            .await?
-            .ok_or(CrmError::ContactNotFoundForTeam)?;
-
-        tx.commit()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
+    #[tracing::instrument(skip_all, fields(%team_id, filed = tracing::field::Empty), err)]
+    async fn create_contact_for_email_domain(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        name: &str,
+        now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        let contact = self
+            .insert_manual_contact(team_id, Some(email), name, now, true)
+            .await?;
+        tracing::Span::current().record("filed", contact.company_id.is_some());
         Ok(contact)
     }
 

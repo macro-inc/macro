@@ -53,6 +53,9 @@ pub mod create_contact;
 /// Manually create a contact without a company for the caller's team.
 pub mod create_team_contact;
 
+/// Operator route: file a team's manual contacts under their domain's company.
+pub mod file_unfiled_contacts;
+
 /// The domains a team keeps out of email sync.
 pub mod blocked_domains;
 
@@ -142,6 +145,26 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
             authorization_state: self.authorization_state.clone(),
         }
     }
+}
+
+/// Routes for internal callers, nested under the host's `/internal` router.
+/// Each handler authenticates with the internal-only extractor.
+pub fn crm_internal_router<C, St, Eas, Auth, S>(
+    state: CrmRouterState<C, St, Eas, Auth>,
+) -> Router<S>
+where
+    C: crate::domain::contact_filing::ContactFilingService,
+    St: Send + Sync + 'static,
+    Eas: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            file_unfiled_contacts::ROUTE,
+            post(file_unfiled_contacts::handler::<C, St, Eas, Auth>),
+        )
+        .with_state(state)
 }
 
 /// Build the CRM router with all endpoints.
