@@ -345,7 +345,9 @@ impl TreeSink for BoundedSink {
         attrs: Vec<Attribute>,
         flags: ElementFlags,
     ) -> NodeId {
-        self.count_node();
+        // Scraper gives a template a fragment node for its contents.
+        let template = &*name.ns == HTML_NAMESPACE && &*name.local == "template";
+        self.count_nodes(1 + usize::from(template));
         self.count_attributes(&attrs, attrs.len());
         let tag = is_formatting(&name).then(|| self.tag_hash(&name, &attrs));
         let element = self.html.create_element(name, attrs, flags);

@@ -9,3 +9,12 @@ fn attributes_spread_over_elements_count_toward_the_node_limit() {
     assert!(!parse_document(&within).clipped);
     assert!(parse_document(&past).clipped);
 }
+
+#[test]
+fn a_template_counts_its_contents_node() {
+    let within = "<template></template>".repeat(120_000);
+    let past = "<template></template>".repeat(130_000);
+
+    assert!(!parse_document(&within).clipped);
+    assert!(parse_document(&past).clipped);
+}
