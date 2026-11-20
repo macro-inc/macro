@@ -168,6 +168,9 @@ export type DirectoryDifference = {
   channelId: string;
 };
 
+// REST lists a bot among the participants under this prefix.
+const BOT_PRINCIPAL_PREFIX = 'bot|';
+
 function sameInstant(
   left: string | null | undefined,
   right: string | null | undefined
@@ -191,8 +194,8 @@ function sameMessage(
   );
 }
 
-/** Each member as `id|role|active`, so a bot in REST's list matches the
- * directory's `botParticipants`. */
+/** Each member as `id|role|active`, so a bot in REST's list (`bot|<id>`)
+ * matches the directory's `botParticipants` (the bare id). */
 function memberSet(
   members: ReadonlyArray<{ id: string; role: string; leftAt?: unknown }>
 ): string[] {
@@ -219,7 +222,7 @@ function sameMembers(rest: ApiChannelWithLatest, directory: DirectoryChannel) {
       leftAt: participant.leftAt,
     })),
     ...directory.botParticipants.map((participant) => ({
-      id: participant.botId,
+      id: `${BOT_PRINCIPAL_PREFIX}${participant.botId}`,
       role: participant.role,
       leftAt: participant.leftAt,
     })),

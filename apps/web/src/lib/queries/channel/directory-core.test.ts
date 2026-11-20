@@ -50,7 +50,7 @@ describe('channel directory comparison', () => {
         botParticipants: [
           {
             channelId: 'a',
-            botId: 'bot-1',
+            botId: '00000000-0000-0000-0000-00000000b071',
             role: 'MEMBER',
             joinedAt: '2026-11-02T00:00:00+00:00',
             leftAt: null,
@@ -61,7 +61,7 @@ describe('channel directory comparison', () => {
     const rest = restChannel('a');
     rest.participants.push({
       channel_id: 'a',
-      user_id: 'bot-1',
+      user_id: 'bot|00000000-0000-0000-0000-00000000b071',
       role: 'member',
       joined_at: '2026-11-02T00:00:00Z',
       left_at: null,
