@@ -27,7 +27,11 @@ composition root.
   the search cluster's few threads queue every user's search behind a
   program's burst, while one at a time pushes programs with dozens of searches
   past their deadline.
-- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
+- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK,
+  with a `deno lint` pass beside it (`check/probes.ts`): reading files
+  (`Deno.read*`) refuses a program; probing the SDK (`toString()` on it,
+  prototype reflection, `as any`, `@ts-ignore`) only counts on the check span
+  (`probe_warnings`, `probe_rules`) until its rate is known.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
 
