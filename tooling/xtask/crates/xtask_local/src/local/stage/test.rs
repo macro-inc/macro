@@ -27,7 +27,7 @@ fn stages_record_their_elapsed_time() {
 fn quiet_and_background_children_record_into_the_parent() {
     let stage = Stage::from_env();
     stage.quiet().run_step("folded", || Ok(())).unwrap();
-    let background = stage.background();
+    let background = stage.background("lane");
     std::thread::spawn(move || background.run_step("lane", || Ok(())))
         .join()
         .unwrap()

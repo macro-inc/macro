@@ -4,8 +4,10 @@ import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { buttonClasses, cn, HoverCard } from '@ui';
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
+import { useKnownFolders } from '../context/known-folders';
 import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
+import { knownFolderPath } from '../utils/folder-path';
 import { truncatedPath } from '../utils/path';
 
 const MAX_PATH_LENGTH = 30;
@@ -15,23 +17,42 @@ export function ProjectBreadCrumb(props: {
   onClick?: (entity: ProjectEntity, event: MouseEvent) => void;
   collapsed?: boolean;
 }) {
-  const projectQuery = useProjectPreviewQuery(() => props.entity.projectId);
-  const fullPath = () =>
-    queryReadyGate(projectQuery)
-      ? projectQuery.data.path.join('/') || projectQuery.data.name
-      : undefined;
+  // A folder the host already loaded (Drive's folder list) needs no request;
+  // only folders it doesn't hold ask the server, batched across rows.
+  const knownFolders = useKnownFolders();
+  const known = createMemo(() =>
+    knownFolders
+      ? knownFolderPath(knownFolders(), props.entity.projectId)
+      : undefined
+  );
+  const projectQuery = useProjectPreviewQuery(
+    () => props.entity.projectId,
+    () => !known()
+  );
+  const folder = () => {
+    const knownPath = known();
+    if (knownPath) return { ...knownPath, updatedAt: undefined };
+    if (!queryReadyGate(projectQuery)) return undefined;
+    const data = projectQuery.data;
+    return { ...data, ownerId: data.owner };
+  };
+  const loading = () => !known() && projectQuery.isPending;
+  const fullPath = () => {
+    const data = folder();
+    return data ? data.path.join('/') || data.name : undefined;
+  };
 
   const handleClick = (e: MouseEvent) => {
     e.preventDefault();
-    if (!projectQuery.isSuccess || !queryReadyGate(projectQuery)) return;
+    const data = folder();
+    if (!data) return;
     e.stopPropagation();
 
-    const data = projectQuery.data;
     const projectEntity: ProjectEntity = {
       type: 'project',
       id: data.id,
       name: data.name,
-      ownerId: data.owner,
+      ownerId: data.ownerId,
       updatedAt: data.updatedAt,
     };
 
@@ -52,7 +73,7 @@ export function ProjectBreadCrumb(props: {
         ),
       })}
       contentClass="menu-surface p-1.5 px-3"
-      disabled={!projectQuery.isSuccess}
+      disabled={!folder()}
       content={
         <div class="min-w-48 max-w-72">
           <div class="mb-1.5 flex items-center gap-2 border-b border-edge pb-1.5 text-ink-muted">
@@ -68,11 +89,9 @@ export function ProjectBreadCrumb(props: {
       <FolderIcon class="size-4 shrink-0 mobile:size-5" />
       <Show when={!props.collapsed}>
         <Show
-          when={queryReadyGate(projectQuery) ? projectQuery.data : undefined}
+          when={folder()}
           fallback={
-            projectQuery.isPending ? (
-              <ListSkeleton.Bar class="h-2 w-10" />
-            ) : undefined
+            loading() ? <ListSkeleton.Bar class="h-2 w-10" /> : undefined
           }
         >
           {(data) => (

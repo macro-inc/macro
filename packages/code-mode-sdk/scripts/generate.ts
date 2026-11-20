@@ -115,9 +115,12 @@ const postReads = new Set([
   'storage.postItemsSoup',
   'storage.postItemsSoupAst',
   'storage.postItemsSoupAstGrouped',
+  'storage.previewCrmEmailRules',
+  'storage.previewCrmRecords',
   'storage.previewSmartTag',
   'storage.queryCrmPipelineRows',
   'storage.taskSimilaritySearchHandler',
+  'storage.validateCrmEmailRules',
   'unfurl.getUnfurlBulk',
 ]);
 const labels: Record<string, string> = {
@@ -173,7 +176,13 @@ for (const key of postReads)
   if (!operations[key]) throw new Error(`unknown read operation ${key}`);
 await artifact('operations.json', `${JSON.stringify(operations, null, 2)}\n`);
 
-// Declarations that stored routine code is type-checked against, and the
+// Every service the SDK can reach, with its host in each environment. The SDK
+// falls back to these for any host code mode doesn't pass, so the harness
+// checks that each one holds a scoped session's credential to its scope.
+const { HOSTS } = await import(`${root}packages/sdk/src/config.ts`);
+await artifact('hosts.json', `${JSON.stringify(HOSTS, null, 2)}\n`);
+
+// Declarations that programs and stored routine code are type-checked against, and the
 // fingerprint a routine records: the SDK version plus a hash of these types,
 // so any change to the API's shape is a new fingerprint.
 const sdkRoot = join(root, 'packages/sdk');
@@ -198,7 +207,12 @@ const hash = new Bun.CryptoHasher('sha256')
   .update(JSON.stringify(files))
   .digest('hex')
   .slice(0, 12);
+// Handlebars' declarations stay out of the fingerprint: only attended
+// programs import it, and routines record the fingerprint.
+const handlebars = await Bun.file(
+  join(root, 'node_modules/handlebars/types/index.d.ts')
+).text();
 await artifact(
   'sdk-types.json',
-  `${JSON.stringify({ fingerprint: `${version}+${hash}`, files })}\n`
+  `${JSON.stringify({ fingerprint: `${version}+${hash}`, files, handlebars })}\n`
 );

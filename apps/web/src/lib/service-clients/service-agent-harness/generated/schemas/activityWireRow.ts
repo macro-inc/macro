@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActivityWireRowAgentCorrelationId } from './activityWireRowAgentCorrelationId';
+import type { ActivityWireRowAgentVerb } from './activityWireRowAgentVerb';
 import type { EntityType } from './entityType';
 
 /**
@@ -20,6 +21,8 @@ export interface ActivityWireRow {
   actor_id: string;
   /** Originating code-mode invocation, absent on older events. */
   agent_correlation_id?: ActivityWireRowAgentCorrelationId;
+  /** SDK display verb, absent on older events. */
+  agent_verb?: ActivityWireRowAgentVerb;
   /** The entity acted on. */
   entity_id: string;
   /** The kind of entity acted on. */

@@ -34,6 +34,15 @@ describe('channel label eligibility', () => {
     );
   });
 
+  it('rejects manual assignments to name-rule sections in either scope', () => {
+    const channel = { channelType: 'team' as const, teamId: 'team' };
+    const rule = { attribute: 'name' as const, contains: 'design' };
+
+    expect(canAssignChannel(channel, { rule })).toBe(false);
+    expect(canAssignChannel(channel, { teamId: 'team', rule })).toBe(false);
+    expect(canAssignChannel(channel, { teamId: 'team' })).toBe(true);
+  });
+
   it('retains unloaded server memberships for unread activity while removing known non-team channels', () => {
     const members = filterChannelLabelMembers(
       ['unloaded', 'public', 'team', 'private', 'dm'],

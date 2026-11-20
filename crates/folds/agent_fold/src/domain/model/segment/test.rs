@@ -143,7 +143,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
 }
 
 #[test]
-fn code_without_observed_requests_keeps_its_tool_step() {
+fn code_without_observed_requests_reads_as_workspace_work() {
     let part = MessagePart::ToolUse {
         id: ToolUseId("code-2".into()),
         name: ToolName::Mcp {
@@ -157,7 +157,167 @@ fn code_without_observed_requests_keeps_its_tool_step() {
             error: None,
         },
     };
-    assert_eq!(segments(&[part], true)[0].rows[0].label, "Execute code");
+    assert_eq!(
+        segments(&[part], true)[0].rows,
+        [ActivityRow {
+            id: "code-2".to_owned(),
+            label: "Finished a step".to_owned(),
+            detail: None,
+            status: ActivityStatus::Completed,
+            card: None,
+        }]
+    );
+}
+
+#[test]
+fn code_through_the_public_server_reads_as_workspace_work() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-4".into()),
+        name: ToolName::Mcp {
+            server: "macro".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Other {
+            kind: "other".into(),
+            input: Some(serde_json::json!({"source": "export async function main() {}"})),
+            result: Some(serde_json::json!({"status": "succeeded"})),
+            output: None,
+            error: None,
+        },
+    };
+    assert_eq!(segments(&[part], true)[0].rows[0].label, "Finished a step");
+}
+
+#[test]
+fn code_mode_lookups_are_not_steps() {
+    let lookup = |id: &str, name: ToolName| MessagePart::ToolUse {
+        id: ToolUseId(id.into()),
+        name,
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({"query": "documents"}),
+            output: None,
+            error: None,
+        },
+    };
+    let parts = [
+        lookup(
+            "describe",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "DescribeCodeTools".into(),
+            },
+        ),
+        lookup(
+            "docs",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "ReadCodeDocs".into(),
+            },
+        ),
+        lookup(
+            "search",
+            ToolName::Native {
+                name: "SearchTools".into(),
+            },
+        ),
+        lookup(
+            "load",
+            ToolName::Mcp {
+                server: "macro".into(),
+                tool: "LoadTools".into(),
+            },
+        ),
+    ];
+    assert_eq!(kinds(&segments(&parts, true)), []);
+
+    // Between two steps, a lookup neither splits the run nor adds a row.
+    let between = [
+        run("a", "ls", ToolStatus::Completed),
+        parts[0].clone(),
+        run("b", "pwd", ToolStatus::Completed),
+    ];
+    let segments = segments(&between, true);
+    assert_eq!(kinds(&segments), [(SegmentKind::Activity, true)]);
+    assert_eq!(segments[0].rows.len(), 2);
+}
+
+#[test]
+fn a_code_run_with_no_steps_says_only_how_far_it_got() {
+    let code = |status: ToolStatus| MessagePart::ToolUse {
+        id: ToolUseId("code-3".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: None,
+            error: None,
+        },
+    };
+    let row = |status: ToolStatus, closed: bool| {
+        let row = segments(&[code(status)], closed)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    assert_eq!(
+        row(ToolStatus::Running, false),
+        ("Working on it".to_owned(), ActivityStatus::Running)
+    );
+    assert_eq!(
+        row(ToolStatus::Running, true),
+        ("Step interrupted".to_owned(), ActivityStatus::Interrupted)
+    );
+    assert_eq!(
+        row(ToolStatus::Failed, true),
+        ("A step failed".to_owned(), ActivityStatus::Failed)
+    );
+}
+
+#[test]
+fn a_program_that_failed_or_was_cancelled_says_so_though_its_call_completed() {
+    let code = |detail: ToolDetail| MessagePart::ToolUse {
+        id: ToolUseId("code-5".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail,
+    };
+    let row = |detail: ToolDetail| {
+        let row = segments(&[code(detail)], true)[0].rows[0].clone();
+        (row.label, row.status)
+    };
+    let failed = ("A step failed".to_owned(), ActivityStatus::Failed);
+    assert_eq!(
+        row(ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"status": "failed", "activity": []})),
+            error: None,
+        }),
+        failed
+    );
+    assert_eq!(
+        row(ToolDetail::Other {
+            kind: "other".into(),
+            input: None,
+            result: Some(serde_json::json!({"status": "timed_out"})),
+            output: None,
+            error: None,
+        }),
+        failed
+    );
+    assert_eq!(
+        row(ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"status": "cancelled", "activity": []})),
+            error: None,
+        }),
+        ("Step interrupted".to_owned(), ActivityStatus::Interrupted)
+    );
 }
 
 #[test]

@@ -293,6 +293,7 @@ where
                     &respondent,
                     stamped,
                 )],
+                ids: None,
             },
         }];
         // The row first, under the form's receipt, then the ledger, in its
@@ -472,6 +473,7 @@ where
                     &Respondent::Member(user.clone()),
                     entry.submitted_at,
                 )],
+                ids: None,
             },
         }];
         let viewer = row_author(form, &Respondent::Member(user.clone()))?;

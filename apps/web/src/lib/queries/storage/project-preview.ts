@@ -1,66 +1,75 @@
+import type { DateValue } from '@core/util/date';
 import { catchToResult, type ResultError } from '@core/util/result';
-import { storageServiceClient } from '@service-storage/client';
-import type { ProjectPreviewData } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
+import { previewDataLoader } from '../preview/dataloader';
 import { projectsKeys } from './keys';
+
+/** A folder with its path from the root, as a row's folder breadcrumb shows it. */
+export type FolderPreview = {
+  id: string;
+  name: string;
+  owner: string;
+  /** Folder names from the root down to this folder. */
+  path: string[];
+  updatedAt?: DateValue | null;
+};
 
 const PROJECT_PREVIEW_STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const PROJECT_PREVIEW_GC_TIME = 10 * 60 * 1000; // 10 minutes
 
 /**
- * Fetch project preview data from the storage service
+ * Fetch a folder's preview. A list renders one breadcrumb per row, so this
+ * goes through the shared preview loader, which sends the folders asked for
+ * together in one request instead of one request per row.
  */
-async function fetchProjectPreview(
-  projectId: string
-): Promise<ProjectPreviewData> {
-  const result = await storageServiceClient.projects.getPreview({
-    projectIds: [projectId],
+async function fetchProjectPreview(projectId: string): Promise<FolderPreview> {
+  const preview = await previewDataLoader.load({
+    id: projectId,
+    type: 'project',
   });
 
-  if (result.isErr()) {
-    throw new Error(`Failed to fetch project preview`);
+  if (preview.loading || preview.access !== 'access') {
+    throw new Error(`No preview for folder ${projectId}`);
   }
 
-  const projectPreview = result.value.previews.find(
-    (preview) => preview.id === projectId
-  );
-
-  if (!projectPreview) {
-    throw new Error(`Project ${projectId} not found in preview response`);
+  if (preview.type !== 'project') {
+    throw new Error(`Item ${projectId} is not a folder`);
   }
 
-  if (projectPreview.access === 'no_access') {
-    throw new Error(`No access to folder ${projectId}`);
-  }
-
-  if (projectPreview.access === 'does_not_exist') {
-    throw new Error(`Project ${projectId} does not exist`);
-  }
-
-  return projectPreview;
+  return {
+    id: preview.id,
+    name: preview.name,
+    owner: preview.owner ?? '',
+    path: preview.path ?? [preview.name],
+    updatedAt: preview.updatedAt,
+  };
 }
 
 /**
  * Create query options for a project preview
  */
-function projectPreviewQueryOptions(projectId: string) {
+function projectPreviewQueryOptions(projectId: string, enabled: boolean) {
   return {
     queryKey: projectsKeys.preview(projectId).queryKey,
     queryFn: () => fetchProjectPreview(projectId),
     staleTime: PROJECT_PREVIEW_STALE_TIME,
     gcTime: PROJECT_PREVIEW_GC_TIME,
-    enabled: !!projectId,
+    enabled: enabled && !!projectId,
   };
 }
 
 /**
- * Hook to fetch project preview data
+ * Hook to fetch project preview data. `enabled` lets a caller that already
+ * knows the folder skip the request.
  */
-export function useProjectPreviewQuery(projectId: Accessor<string>) {
-  return useQuery(() => projectPreviewQueryOptions(projectId()));
+export function useProjectPreviewQuery(
+  projectId: Accessor<string>,
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQuery(() => projectPreviewQueryOptions(projectId(), enabled()));
 }
 
 /**
@@ -69,9 +78,9 @@ export function useProjectPreviewQuery(projectId: Accessor<string>) {
  */
 async function _fetchAndCacheProjectPreview(
   projectId: string
-): Promise<Result<{ project: ProjectPreviewData }, ResultError<string>[]>> {
+): Promise<Result<{ project: FolderPreview }, ResultError<string>[]>> {
   const result = await catchToResult(async () =>
-    queryClient.ensureQueryData(projectPreviewQueryOptions(projectId))
+    queryClient.ensureQueryData(projectPreviewQueryOptions(projectId, true))
   );
 
   if (result.isErr()) {
@@ -93,8 +102,8 @@ function _invalidateProjectPreview(projectId: string) {
 /**
  * Set project preview data directly in cache
  */
-function _setProjectPreviewData(projectId: string, data: ProjectPreviewData) {
-  return queryClient.setQueryData<ProjectPreviewData>(
+function _setProjectPreviewData(projectId: string, data: FolderPreview) {
+  return queryClient.setQueryData<FolderPreview>(
     projectsKeys.preview(projectId).queryKey,
     data
   );

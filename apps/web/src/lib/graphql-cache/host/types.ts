@@ -156,8 +156,12 @@ export interface CacheHost {
   ): Promise<ReadRecordsByKeysResult>;
   /** Context-aware contact policy; absent on disabled/older host adapters. */
   readonly people?: PeopleCache;
-  /** Searches the compact write-through materialized projection. */
-  search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Searches the compact write-through materialized projection. Aborting
+   * `signal` releases a search the caller has superseded. */
+  search(
+    args: SearchCacheArgs,
+    options?: { signal?: AbortSignal }
+  ): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   /** Answers a calendar viewport from the local range index. */
@@ -185,7 +189,7 @@ export interface CacheHost {
   ): Promise<CachedQueryVariantWire[]>;
   /** Enumerates and materializes cached query field variants. */
   inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
-  /** Read-only queue snapshots; their lease values do not authorize settlement. */
+  /** Read-only queue snapshots, each with its current lease when claimed. */
   inspectMutations?(): Promise<MutationInspection[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(

@@ -8,6 +8,7 @@
     "main"
   ],
   "permissions": [
+    "call-kit:allow-audio-output",
     "haptics:allow-impact-feedback",
     "haptics:allow-notification-feedback",
     "haptics:allow-selection-feedback",

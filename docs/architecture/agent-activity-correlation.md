@@ -20,16 +20,30 @@ Uncorrelated traffic does not query the mapping table. Unsigned correlation head
 are not accepted. Public read-only and asset services retain their existing auth;
 they do not produce activity-history events.
 
+Email builds its correlation state from the database pool and JWT validation
+arguments in [API startup composition](../../services/email_service/src/composition/api.rs).
+Its API context carries that state to the optional extractor; handlers do not
+compose a database/JWT verifier for each request.
+
 The accepted ID lives in request-local async context, independent of trace
-sampling. Event constructors copy it into the Kafka envelope. Spawned mutation
-work explicitly captures context. Consumers restore it before producing activity.
+sampling. A validated code-mode request may also supply `x-macro-sdk-verb`, a
+display-only value from the closed SDK verb vocabulary. Unknown values are
+absent; the verb never changes authorization or whether activity is recorded.
+Event constructors copy the ID and verb into the Kafka envelope. Spawned mutation
+work explicitly captures both. The activity consumer restores both before
+producing activity. Older envelopes remain valid without a verb, and newer
+envelope verb strings remain decodable by older consumers.
 Email scheduling and mailbox projection payloads persist attribution for delayed
 work. Signed document grants carry it through Sync, whose editor batches retain
 separate attribution per invocation. Editing-session debounce keys include it.
+Those paths retain correlation without an SDK verb; document edits use their
+stored action as the display fallback.
 
-Activity materialization stores the nullable ID on the existing `activity_events`
-row. This is attribution for the existing activity vocabulary, not a log of every
-SDK read, failed request or network attempt. Existing rows are not backfilled.
+Activity materialization stores the nullable ID and verb on the existing
+`activity_events` row. Both are selected by session, entity, subject, and team
+activity reads and included in realtime rows. This is attribution for the
+existing activity vocabulary, not a log of every SDK read, failed request or
+network attempt. Existing rows are not backfilled.
 Activity remains in entity histories; session deletion removes correlation
 mappings but does not change those histories' retention.
 

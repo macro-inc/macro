@@ -42,6 +42,11 @@ fn test_build_bool_query_join_shape() -> anyhow::Result<()> {
     let has_child = &must[0]["has_child"];
     assert_eq!(has_child["type"], "message");
     assert_eq!(has_child["inner_hits"]["name"], "term_0");
+    assert_eq!(
+        has_child["inner_hits"]["_source"],
+        serde_json::json!(["chat_message_id", "role"]),
+        "inner hits must not ship message content"
+    );
 
     // role is a child-side field: it must sit inside the has_child query
     // alongside the term match, so the same message that matches the term
@@ -121,6 +126,69 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
     assert!(
         !filter.iter().any(|f| f.get("nested").is_some()),
         "empty tag_option_ids should emit no nested clause: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn term_clauses_share_one_message_budget_per_chat() -> anyhow::Result<()> {
+    for (terms, expected_size) in [
+        (vec!["one"], 10),
+        (vec!["one", "two"], 5),
+        (vec!["one", "two", "three"], 3),
+        (
+            vec!["one", "two", "three", "four", "five", "six", "seven"],
+            1,
+        ),
+    ] {
+        let json = ChatQueryBuilder::new(terms.iter().map(|term| term.to_string()).collect())
+            .match_type("partial")
+            .user_id("alice")
+            .build_bool_query()?
+            .build()
+            .to_json();
+        let must = json["bool"]["must"].as_array().expect("must array");
+
+        assert_eq!(must.len(), terms.len());
+        for clause in must {
+            assert_eq!(
+                clause["has_child"]["inner_hits"]["size"],
+                expected_size,
+                "{} terms",
+                terms.len()
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn only_the_first_ten_term_clauses_carry_inner_hits() -> anyhow::Result<()> {
+    let terms = [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+        "twelve",
+    ];
+    let json = ChatQueryBuilder::new(terms.map(String::from).to_vec())
+        .match_type("partial")
+        .user_id("alice")
+        .role(vec!["user".to_string()])
+        .build_bool_query()?
+        .build()
+        .to_json();
+    let must = json["bool"]["must"].as_array().expect("must array");
+
+    assert_eq!(must.len(), 12, "every term still has to match");
+    let inner_hit_sizes: Vec<Option<u64>> = must
+        .iter()
+        .map(|clause| clause["has_child"]["inner_hits"]["size"].as_u64())
+        .collect();
+    let mut expected = vec![Some(1); 10];
+    expected.extend([None, None]);
+    assert_eq!(inner_hit_sizes, expected);
+    assert!(
+        must[11]["has_child"]["query"]["bool"]["must"].is_array(),
+        "a clause past the budget keeps its term and role query: {:?}",
+        must[11]
     );
     Ok(())
 }

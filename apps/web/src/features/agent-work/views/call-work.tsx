@@ -6,9 +6,12 @@ import { UserIcon } from '@core/component/UserIcon';
 import { enableAgentWork } from '@core/constant/featureFlags';
 import { getDisplayName, isAgentAccount, tryMacroId } from '@core/user';
 import XIcon from '@icon/system/regular/x.svg';
-import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  subscribeGraphqlSoupReconnected,
+} from '@service-storage/graphql-soup';
 import { Button } from '@ui';
-import { type Accessor, createSignal, For, Show } from 'solid-js';
+import { type Accessor, createSignal, For } from 'solid-js';
 import { WorkIdentity } from '../components/WorkIdentity';
 import { WorkList } from '../components/WorkList';
 import type { WorkItem } from '../core/work-item';
@@ -16,7 +19,6 @@ import { callWorkAccounts } from '../core/work-visibility';
 import { createRegisteredWork } from '../primitives/create-registered-work';
 import { createWorkArrivals } from '../primitives/create-work-arrivals';
 import { useOpenWorkItem } from './open-work-item';
-import { useWorkClient } from './use-work-client';
 
 /** How long the active work prompt stays over the call. */
 const WORK_PROMPT_DURATION_MS = 8_000;
@@ -32,7 +34,7 @@ export function createCallWork(options: {
 }) {
   const flag = useFeatureFlag(enableAgentWork);
   const work = createRegisteredWork({
-    client: useWorkClient(),
+    client: getGraphqlSoupClient,
     accountIds: () => callWorkAccounts(options.accountIds()),
     enabled: () => flag().enabled,
     onReconnected: subscribeGraphqlSoupReconnected,
@@ -80,19 +82,20 @@ function CallWorkSection(props: {
             name={getDisplayName(tryMacroId(props.accountId))}
             isAgent={isAgentAccount(tryMacroId(props.accountId))}
             avatar={
-              <UserIcon
-                id={props.accountId}
-                size="md"
-                suppressClick
-                showTooltip={false}
-              />
-            }
-            note={
-              <Show when={props.isSpeaking}>
-                <span class="shrink-0 text-xs font-medium text-accent">
-                  {t('calls.speaking')}
-                </span>
-              </Show>
+              <span
+                class="rounded-full"
+                classList={{
+                  'outline-2 -outline-offset-2 outline-success':
+                    props.isSpeaking,
+                }}
+              >
+                <UserIcon
+                  id={props.accountId}
+                  size="md"
+                  suppressClick
+                  showTooltip={false}
+                />
+              </span>
             }
           />
           <CollapsibleSection.Indicator />

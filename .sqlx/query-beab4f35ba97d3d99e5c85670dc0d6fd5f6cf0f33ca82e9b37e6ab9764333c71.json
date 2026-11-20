@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH requested AS (\n                SELECT DISTINCT ON (notification_id) notification_id, group_key\n                FROM unnest($3::uuid[], $4::text[]) AS item (notification_id, group_key)\n            ),\n            target AS (\n                SELECT un.notification_id, un.state, requested.group_key\n                FROM user_notification un\n                JOIN requested USING (notification_id)\n                WHERE un.user_id = $2\n                    AND un.deleted_at IS NULL\n                    AND un.state <> 'done'\n                    AND un.created_at::timestamptz <= $5\n                FOR UPDATE OF un\n            ),\n            ledger AS (\n                INSERT INTO notification_bulk_action_item\n                    (action_id, notification_id, was_unseen, group_key)\n                SELECT $1, notification_id, state = 'unseen', group_key\n                FROM target\n                ON CONFLICT (action_id, notification_id) DO NOTHING\n            )\n            UPDATE user_notification un\n            SET state = 'done', done_by = $1\n            FROM target\n            WHERE un.user_id = $2 AND un.notification_id = target.notification_id\n            RETURNING un.notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "UuidArray",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "beab4f35ba97d3d99e5c85670dc0d6fd5f6cf0f33ca82e9b37e6ab9764333c71"
+}

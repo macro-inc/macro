@@ -1,13 +1,13 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
-use serde::Serialize;
-use utoipa::ToSchema;
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -47,9 +47,9 @@ impl From<CrmDomain> for CrmDomainResponse {
 
 /// A CRM company as returned by `GET /crm/companies/{company_id}`.
 /// Mirrors the soup-listed `crmCompany` shape (`name` / `description`
-/// resolved from the primary domain's `crm_domain_directory` entry) and
-/// embeds the company's contacts so the panel can render in a single
-/// request.
+/// resolved from the primary domain's `crm_domain_directory` entry). It
+/// embeds the company's contacts unless the caller asks it not to
+/// (`includeContacts=false`).
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CrmCompanyResponse {
@@ -77,7 +77,8 @@ pub struct CrmCompanyResponse {
     /// time ascending (primary first).
     pub domains: Vec<CrmDomainResponse>,
     /// Contacts attached to this company. Hidden contacts are filtered
-    /// out for non-admin viewers.
+    /// out for non-admin viewers. Empty when the request set
+    /// `includeContacts=false`.
     pub contacts: Vec<CrmContactResponse>,
 }
 
@@ -104,6 +105,17 @@ impl From<CrmCompanyWithContacts> for CrmCompanyResponse {
     }
 }
 
+/// Query parameters of `GET /crm/companies/{company_id}`.
+#[derive(Debug, Deserialize, IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct GetCompanyParams {
+    /// Whether to embed every contact of the company (default `true`).
+    /// A caller that pages contacts through
+    /// `GET /crm/companies/{company_id}/contacts/page` sets it to `false`.
+    pub include_contacts: Option<bool>,
+}
+
 /// Fetch a single CRM company by id, hydrated with its domains, the
 /// primary domain's directory display metadata (name + description),
 /// and the company's contacts. Access is enforced by
@@ -117,6 +129,7 @@ impl From<CrmCompanyWithContacts> for CrmCompanyResponse {
     operation_id = "get_company",
     params(
         ("company_id" = Uuid, Path, description = "The CRM company to fetch"),
+        GetCompanyParams,
     ),
     responses(
         (status = 200, body = CrmCompanyResponse),
@@ -135,10 +148,11 @@ pub async fn handler<
     access: CrmCompanyAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
+    Query(params): Query<GetCompanyParams>,
 ) -> Result<Json<CrmCompanyResponse>, CrmError> {
     let record = state
         .service
-        .get_company_for_team(&access.receipt)
+        .get_company_for_team(&access.receipt, params.include_contacts.unwrap_or(true))
         .await?
         .ok_or(CrmError::CompanyNotFoundForTeam)?;
 

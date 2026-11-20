@@ -16,6 +16,6 @@ export default mergeConfig(base, {
   },
   optimizeDeps: {
     entries: ['attachments.html'],
-    esbuildOptions: { target: 'esnext' },
+    rolldownOptions: { transform: { target: 'esnext' } },
   },
 });

@@ -1,9 +1,11 @@
+import { t } from '@app/lib/i18n';
 import { cn } from '@ui';
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { SYSTEM_PROPERTY_IDS } from '../identifiers';
 import { Property } from '../property';
 import { getEntityValues, hasValue } from '../utils';
+import { EntityLinkPill } from './EntityLinkPill';
 import { ProjectLinkPill } from './ProjectLinkPill';
 import { SourceLinkPill } from './SourceLinkPill';
 
@@ -43,6 +45,11 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
           property().specificEntityType === 'USER';
         const isMultiUserEntity = () =>
           isUserEntity() && getEntityValues(property()).length > 1;
+        /** One referenced item other than a person: its name opens the item. */
+        const isLinkableEntity = () =>
+          property().valueType === 'ENTITY' &&
+          !isUserEntity() &&
+          getEntityValues(property()).length === 1;
 
         const pill = () => (
           <Property.Pill
@@ -128,6 +135,21 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                     class={props.class}
                     iconClass={props.iconClass}
                     fallback={pill()}
+                  />
+                </Match>
+                <Match when={isLinkableEntity()}>
+                  <EntityLinkPill
+                    property={property()}
+                    class={props.class}
+                    iconClass={props.iconClass}
+                    fallback={pill()}
+                    label={props.showLabel ? property().displayName : undefined}
+                    openLabel={(name) =>
+                      t('entityActions.openEntityNamed', { name })
+                    }
+                    changeLabel={t('entityActions.changeEntity', {
+                      property: property().displayName,
+                    })}
                   />
                 </Match>
               </Switch>

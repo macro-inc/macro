@@ -1,6 +1,7 @@
 //! Notification contributions derived from GraphQL state, never viewing timestamps.
 
 use super::*;
+use crate::parsed_document::parsed_document;
 use cache_core::{
     normalize::normalize,
     predicate::ProjectionState,
@@ -312,7 +313,7 @@ pub async fn notification_projection_updates<S: Storage>(
     data: &serde_json::Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
     let document =
-        Document::parse(query).map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
+        parsed_document(query).map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
     let operation = document
         .operation(operation_name)
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;

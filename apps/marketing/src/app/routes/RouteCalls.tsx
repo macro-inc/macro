@@ -316,7 +316,7 @@ const summaryBlock: LoopsFeatureBlock = {
   ),
   description:
     'The moment a call ends you get a speaker-attributed transcript and an AI summary with every decision and owner.',
-  href: 'https://docs.macro.com/product/calls',
+  href: '/calls#guide',
   heroShot: SummarySpotlightShot,
   heroBare: true,
 };
@@ -332,7 +332,7 @@ const stageBlock: LoopsFeatureBlock = {
   ),
   description:
     'Host or join right inside Macro. It records, transcribes, and writes meeting notes live while you talk.',
-  href: 'https://docs.macro.com/product/calls',
+  href: '/calls#guide',
   heroShot: CallStageShot,
   heroBare: true,
 };
@@ -348,7 +348,7 @@ const agentBlock: LoopsFeatureBlock = {
   ),
   description:
     'Agents read the calls you share, so they can act on what was said — assign a bug to whoever owned it in the standup.',
-  href: 'https://docs.macro.com/product/calls',
+  href: '/calls#guide',
   heroShot: AgentSpotlightShot,
   heroBare: true,
 };

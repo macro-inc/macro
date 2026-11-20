@@ -11,6 +11,10 @@ pub enum EmailErr {
     /// A send snapshot is invalid or its attachments have changed.
     #[error("Invalid send snapshot: {0}")]
     InvalidSendSnapshot(String),
+    /// Live selected-rule expansion could not be completed within its budget.
+    #[cfg(feature = "ports")]
+    #[error(transparent)]
+    EmailRuleLimitExceeded(#[from] crm::domain::email_rule_discovery::EmailRuleLimitExceeded),
     /// A repository/infrastructure error.
     #[error(transparent)]
     RepoErr(#[from] anyhow::Error),
@@ -40,7 +44,7 @@ pub enum EmailErr {
     /// they have connected or been delegated. The accessible addresses are
     /// carried along so the caller can be told what it could have been.
     #[error(
-        "No connected inbox matches \"{requested}\". Connected inboxes: {}.",
+        "No connected inbox or verified send-as alias matches \"{requested}\". Connected inboxes: {}.",
         available.join(", ")
     )]
     UnknownSendingInbox {
@@ -48,6 +52,17 @@ pub enum EmailErr {
         requested: String,
         /// The addresses of every inbox the caller can send from.
         available: Vec<String>,
+    },
+    /// The caller asked to send from a send-as alias the provider has not
+    /// verified yet.
+    #[error(
+        "\"{requested}\" is a send-as alias of {inbox}, but Gmail has not verified it. Finish verifying it in Gmail settings before sending from it."
+    )]
+    UnverifiedSendingAlias {
+        /// The alias the caller asked to send from.
+        requested: String,
+        /// The address of the inbox the alias belongs to.
+        inbox: String,
     },
     /// The referenced message has already been sent and cannot be modified.
     #[error("Message with id {0} has already been sent")]

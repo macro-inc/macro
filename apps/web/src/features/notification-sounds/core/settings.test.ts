@@ -2,8 +2,10 @@ import { expect, it } from 'vitest';
 import {
   DEFAULT_NOTIFICATION_SOUND_SETTINGS,
   parseNotificationSoundSettings,
+  soundForCallEvent,
   soundForNotification,
 } from './settings';
+import { notificationSound } from './sounds';
 
 it('keeps sounds off until they are turned on', () => {
   expect(parseNotificationSoundSettings(null).enabled).toBe(false);
@@ -44,6 +46,68 @@ it('keeps valid saved choices and defaults unknown sounds and categories', () =>
   expect(settings.categories.messages).toEqual(
     DEFAULT_NOTIFICATION_SOUND_SETTINGS.categories.messages
   );
+});
+
+it('defaults call sounds on for legacy storage without changing notification sounds', () => {
+  const settings = parseNotificationSoundSettings('{"enabled":false}');
+
+  expect(settings.callSoundsEnabled).toBe(true);
+  expect(soundForCallEvent('join', settings)).toBe('call-join');
+  expect(soundForCallEvent('leave', settings)).toBe('call-leave');
+  expect(soundForNotification('channel_mention', settings)).toBeNull();
+});
+
+it('synthesizes short rising and falling two-note chimes', () => {
+  const join = notificationSound('call-join').tones;
+  const leave = notificationSound('call-leave').tones;
+  const joinNotes = join.filter((tone) => tone.gain >= 0.8);
+  const leaveNotes = leave.filter((tone) => tone.gain >= 0.8);
+
+  expect(joinNotes).toHaveLength(2);
+  expect(leaveNotes).toHaveLength(2);
+  expect(joinNotes[1].start).toBeGreaterThan(joinNotes[0].start);
+  expect(joinNotes[1].frequency).toBeGreaterThan(joinNotes[0].frequency);
+  expect(leaveNotes[1].start).toBeGreaterThan(leaveNotes[0].start);
+  expect(leaveNotes[1].frequency).toBeLessThan(leaveNotes[0].frequency);
+  for (const tone of [...join, ...leave]) {
+    expect(tone.wave).toBe('sine');
+    expect(tone.glideTo).toBeUndefined();
+    expect(tone.start + tone.duration).toBeLessThan(0.5);
+  }
+});
+
+it('silences call sounds when disabled, muted, or within quiet hours', () => {
+  const settings = parseNotificationSoundSettings(
+    JSON.stringify({
+      enabled: true,
+      callSoundsEnabled: false,
+      quietHours: {
+        enabled: true,
+        startMinutes: 22 * 60,
+        endMinutes: 8 * 60,
+        days: ['tue'],
+        timeZone: 'UTC',
+      },
+    })
+  );
+  const noon = new Date('2026-11-03T12:00:00Z');
+  const night = new Date('2026-11-03T23:30:00Z');
+
+  expect(soundForCallEvent('join', settings, noon)).toBeNull();
+  expect(
+    soundForCallEvent('leave', { ...settings, callSoundsEnabled: true }, night)
+  ).toBeNull();
+  expect(
+    soundForCallEvent(
+      'join',
+      { ...settings, callSoundsEnabled: true, volume: 0 },
+      noon
+    )
+  ).toBeNull();
+  expect(
+    soundForCallEvent('leave', { ...settings, callSoundsEnabled: true }, noon)
+  ).toBe('call-leave');
+  expect(soundForNotification('channel_mention', settings, noon)).toBe('ding');
 });
 
 it('plays the sound chosen for the notification category', () => {

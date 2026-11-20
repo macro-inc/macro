@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PillTabs } from './PillTabs';
 
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
 }));
@@ -52,6 +53,7 @@ afterEach(() => {
   drawerStyles.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 async function setup() {
@@ -127,3 +129,60 @@ describe('pill overflow drawer', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe.each([true, false])(
+  'pill context actions (scrollable: %s)',
+  (scrollable) => {
+    function setupContextActions() {
+      const onChange = vi.fn();
+      const onContextMenu = vi.fn();
+      render(() => (
+        <PillTabs
+          scrollable={scrollable}
+          items={[{ value: 'team', label: 'Team', onContextMenu }]}
+          value="all"
+          onChange={onChange}
+        />
+      ));
+      return {
+        button: screen.getByRole('button', { name: 'Team' }),
+        onChange,
+        onContextMenu,
+      };
+    }
+
+    it('opens actions on hold without selecting, and retains normal tap selection', () => {
+      vi.useFakeTimers();
+      const { button, onChange, onContextMenu } = setupContextActions();
+      fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
+      vi.advanceTimersByTime(500);
+      expect(onContextMenu).toHaveBeenCalledOnce();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(fireEvent.touchEnd(button, { touches: [] })).toBe(false);
+      fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
+      fireEvent.touchEnd(button, { touches: [] });
+      fireEvent.click(button);
+      expect(onChange).toHaveBeenCalledExactlyOnceWith('team');
+      expect(onContextMenu).toHaveBeenCalledOnce();
+    });
+
+    it('cancels a hold when the finger moves into a scroll gesture', () => {
+      vi.useFakeTimers();
+      const { button, onChange, onContextMenu } = setupContextActions();
+      fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
+      fireEvent.touchMove(button, { touches: [{ clientX: 29, clientY: 20 }] });
+      vi.advanceTimersByTime(500);
+      fireEvent.touchEnd(button, { touches: [] });
+      expect(onContextMenu).not.toHaveBeenCalled();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(hapticImpact).not.toHaveBeenCalled();
+    });
+
+    it('opens context actions without changing the selected tab', () => {
+      const { button, onChange, onContextMenu } = setupContextActions();
+      expect(fireEvent.contextMenu(button)).toBe(false);
+      expect(onContextMenu).toHaveBeenCalledOnce();
+      expect(onChange).not.toHaveBeenCalled();
+    });
+  }
+);

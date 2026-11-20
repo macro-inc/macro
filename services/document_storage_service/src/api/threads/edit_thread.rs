@@ -68,6 +68,19 @@ pub async fn edit_thread_handler(
 ) -> Result<Response, Response> {
     let req = project.into_inner();
 
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    if let Err(refused) = agent_correlation::context::refuse_sharing(req.share_permission.is_some())
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                message: refused.to_string().into(),
+            }),
+        )
+            .into_response());
+    }
+
     let access_level = match thread_access.entity_access_receipt.entity_permission() {
         EntityPermission::AccessLevel { access_level } => *access_level,
         _ => AccessLevel::Owner,

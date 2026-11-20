@@ -22,7 +22,7 @@ use databases::domain::{
         TableId, ViewId, Viewer,
     },
     provisioning::StorageBlueprint,
-    storage::{DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery},
+    storage::{DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery, StorageRowsRead},
 };
 use entity_access::domain::{
     models::{
@@ -30,6 +30,7 @@ use entity_access::domain::{
         MemberTeamRole, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
     },
     ports::{AccessiblePipelines, EntityAccessService},
+    telemetry::span_count,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::{
@@ -130,6 +131,8 @@ pub struct Pipeline {
     /// Name, which names no column once someone deletes it.
     #[schema(value_type = Uuid)]
     pub primary_column_id: ColumnId,
+    /// Stable identities for Outcome and amount/currency fields.
+    pub commercial_fields: super::pipeline_commercial::CommercialFields,
     /// Whether the pipeline has a team grant.
     pub sharing: PipelineSharing,
     /// Creation time.
@@ -184,6 +187,8 @@ pub struct PipelineBlueprint {
     pub team_id: Uuid,
     /// Primary reference kind, if it tracks a record.
     pub record_type: Option<PipelineRecordType>,
+    /// Outcome and amount/currency fields provisioned with a tracked pipeline's table.
+    pub commercial_fields: super::pipeline_commercial::CommercialFields,
     /// Initial grants.
     pub sharing: PipelineSharing,
     /// Schema owned by the database domain.
@@ -220,7 +225,7 @@ pub enum PipelineError {
 }
 
 /// Persistence contract. Transactions and grant writes belong to the adapter.
-pub trait PipelineRepo: Send + Sync + 'static {
+pub trait PipelineRepo: Send + Sync + 'static + super::auth::CrmMemberAccess {
     /// Adapter error.
     type Error: std::error::Error + Send + Sync + 'static;
     /// Holds a live pipeline against concurrent trash/deletion.
@@ -230,6 +235,13 @@ pub trait PipelineRepo: Send + Sync + 'static {
         &self,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Self::Guard>, Self::Error>> + Send;
+    /// Acquire one lifecycle guard for reads over several pipelines: those of
+    /// `ids` still live, read under it. While held, none of them is trashed,
+    /// deleted, renamed or written through its write guard.
+    fn lock_live_many(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<(Self::Guard, Vec<Pipeline>), Self::Error>> + Send;
     /// Serialize policy changes and row writes for one live pipeline.
     fn lock_write(
         &self,
@@ -261,12 +273,15 @@ pub trait PipelineRepo: Send + Sync + 'static {
         &self,
         ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Pipeline>, Self::Error>> + Send;
-    /// Rows of these live tracked pipelines whose primary column references one
-    /// of `records`, grouped by pipeline in each one's row order.
+    /// Rows of live pipelines tracking `record_type`, in any team, whose
+    /// primary column references one of `records`, grouped by pipeline in
+    /// each one's row order; `pipeline` narrows them to one pipeline. Reads
+    /// only the cells that reference `records`.
     fn referencing_rows(
         &self,
-        pipelines: &[Uuid],
+        record_type: PipelineRecordType,
         records: &[Uuid],
+        pipeline: Option<Uuid>,
     ) -> impl Future<Output = Result<Vec<PipelineReference>, Self::Error>> + Send;
     /// Insert metadata, backing database and grants atomically.
     fn create(
@@ -482,11 +497,17 @@ pub(crate) fn pipeline_blueprint(
 ) -> PipelineBlueprint {
     let id = macro_uuid::generate_uuid_v7();
     let primary_column_id = ColumnId::new();
-    let columns = match input.record_type {
-        Some(record_type) => tracked_columns(primary_column_id, record_type, labels),
-        None => generic_columns(primary_column_id),
+    // Only a pipeline that tracks a record holds deals; a generic one is a free-form table.
+    let (columns, commercial_fields) = match input.record_type {
+        Some(record_type) => {
+            let mut columns = tracked_columns(primary_column_id, record_type, labels);
+            let commercial_fields = super::pipeline_commercial::provision(&mut columns);
+            (columns, commercial_fields)
+        }
+        None => (generic_columns(primary_column_id), Default::default()),
     };
     PipelineBlueprint {
+        commercial_fields,
         id,
         team_id,
         record_type: input.record_type,
@@ -515,6 +536,7 @@ where
         input: CreatePipeline,
     ) -> Result<AccessiblePipeline, PipelineError> {
         let name = name(&input.name)?;
+        team.check_access(&self.repo).await?;
         let creator = actor(team.receipt())?;
         if !self
             .repo
@@ -592,6 +614,7 @@ where
             .collect())
     }
 
+    #[tracing::instrument(name = "crm.pipeline.entries", skip_all, fields(record_type = record_type.as_str(), records = span_count(records.len()), pipelines = tracing::field::Empty, entries = tracing::field::Empty), err)]
     async fn entries(
         &self,
         viewer: &MacroUserIdStr<'static>,
@@ -601,63 +624,71 @@ where
         if records.is_empty() {
             return Ok(Vec::new());
         }
-        let grants: HashMap<_, _> = self
-            .access
-            .accessible_pipelines(viewer)
-            .await?
-            .into_iter()
-            .collect();
-        if grants.is_empty() {
-            return Ok(Vec::new());
-        }
-        let ids = grants.keys().copied().collect::<Vec<_>>();
-        let pipelines: HashMap<_, _> = self
-            .repo
-            .get_many(&ids)
-            .await
-            .map_err(storage)?
-            .into_iter()
-            .filter(|p| p.trashed_at.is_none() && p.record_type == Some(record_type))
-            .map(|p| (p.id, p))
-            .collect();
-        let live = pipelines.keys().copied().collect::<Vec<_>>();
+        // Starts from the records, so a record in no pipeline costs one read
+        // and the viewer's other pipelines are never read.
         let references = self
             .repo
-            .referencing_rows(&live, records)
+            .referencing_rows(record_type, records, None)
             .await
             .map_err(storage)?;
+        let mut holders: Vec<_> = references.iter().map(|r| r.pipeline_id).collect();
+        holders.dedup();
+        let grants = if holders.is_empty() {
+            HashMap::new()
+        } else {
+            self.access.pipelines_access(viewer, &holders).await?
+        };
+        holders.retain(|id| grants.contains_key(id));
+        tracing::Span::current().record("pipelines", span_count(holders.len()));
+        if holders.is_empty() {
+            return Ok(Vec::new());
+        }
+        // One guard over every pipeline read, held until their cells are
+        // read: a pipeline trashed since the lookup has no entries, and none
+        // is written while its schema and cells are read.
+        // `referencing_rows` already kept pipelines of `record_type`, which is
+        // set when a pipeline is created and never changes.
+        let (_guard, pipelines) = self.repo.lock_live_many(&holders).await.map_err(storage)?;
+        let pipelines: HashMap<_, _> = pipelines.into_iter().map(|p| (p.id, p)).collect();
+        let groups: Vec<_> = references
+            .chunk_by(|a, b| a.pipeline_id == b.pipeline_id)
+            .filter_map(|group| {
+                let pipeline = pipelines.get(&group.first()?.pipeline_id)?;
+                let grant = *grants.get(&pipeline.id)?;
+                Some((pipeline, grant, group))
+            })
+            .collect();
+        let reads: Vec<_> = groups
+            .iter()
+            .map(|(pipeline, _, group)| StorageRowsRead {
+                database: pipeline.database_id,
+                table: pipeline.table_id,
+                rows: group.iter().map(|r| r.row_id).collect(),
+            })
+            .collect();
+        let mut tables: HashMap<_, _> = self
+            .databases
+            .storage_tables_rows(&reads)
+            .await?
+            .into_iter()
+            .map(|table| (table.table, table))
+            .collect();
         let mut entries = Vec::with_capacity(references.len());
-        for references in references.chunk_by(|a, b| a.pipeline_id == b.pipeline_id) {
-            let Some(pipeline) = pipelines.get(&references[0].pipeline_id) else {
+        for (pipeline, grant, group) in groups {
+            let Some(table) = tables.remove(&pipeline.table_id) else {
                 continue;
             };
-            // A pipeline trashed since the lookup has no entries.
-            let Some(_guard) = self.repo.lock_live(pipeline.id).await.map_err(storage)? else {
-                continue;
-            };
-            let Some(table) = self
-                .databases
-                .storage_tables(pipeline.database_id)
-                .await?
-                .into_iter()
-                .find(|table| table.table.id == pipeline.table_id)
-            else {
-                continue;
-            };
-            let rows = references.iter().map(|r| r.row_id).collect::<Vec<_>>();
-            let cells: HashMap<_, _> = self
-                .databases
-                .storage_row_cells(pipeline.database_id, pipeline.table_id, &rows)
-                .await?
+            let cells: HashMap<_, _> = table
+                .rows
                 .into_iter()
                 .map(|row| (row.row_id, row.cells))
                 .collect();
             let shared = Arc::new(AccessiblePipeline {
                 pipeline: pipeline.clone(),
-                grant: grants[&pipeline.id],
+                grant,
             });
             let columns: Arc<[ColumnDetail]> = table.columns.into();
-            entries.extend(references.iter().filter_map(|reference| {
+            entries.extend(group.iter().filter_map(|reference| {
                 Some(PipelineEntry {
                     row_id: reference.row_id,
                     record_id: reference.record_id,
@@ -667,6 +698,7 @@ where
                 })
             }));
         }
+        tracing::Span::current().record("entries", span_count(entries.len()));
         Ok(entries)
     }
 
@@ -914,11 +946,14 @@ where
             return Err(PipelineError::NotFound);
         }
         // A generic pipeline's primary cells are text, not references.
-        if records.is_empty() || pipeline.record_type.is_none() {
+        let Some(record_type) = pipeline.record_type else {
+            return Ok(Vec::new());
+        };
+        if records.is_empty() {
             return Ok(Vec::new());
         }
         self.repo
-            .referencing_rows(&[pipeline.id], records)
+            .referencing_rows(record_type, records, Some(pipeline.id))
             .await
             .map_err(storage)
     }
@@ -976,7 +1011,15 @@ where
             .await
             .map_err(storage)?
             .ok_or(PipelineError::NotFound)?;
-        self.validate_stage_requirements(&pipeline, &mut batch)
+        // Insert defaults come first so they can satisfy a stage's required fields.
+        // The table read for them also serves the stage rules.
+        let mut table = None;
+        if pipeline.commercial_fields.has_system_fields() {
+            let loaded = self.pipeline_table(&pipeline).await?;
+            pipeline.commercial_fields.prepare(&loaded, &mut batch)?;
+            table = Some(loaded);
+        }
+        self.validate_stage_requirements(&pipeline, table, &mut batch)
             .await?;
         Ok(self
             .databases

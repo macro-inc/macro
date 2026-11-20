@@ -25,7 +25,7 @@ const SHELL_PALETTE = {
   '--color-accent': 'var(--color-ink)',
 };
 
-/** Section heading in the "Replace 27+ apps" format from `HomepageUnification`. */
+/** Section heading in the shared centered slab format. */
 function TourHeading(props: {
   id: string;
   title: string;
@@ -96,8 +96,7 @@ export function RouteTour() {
             </div>
           </div>
 
-          {/* The homepage's `HomepageUnification` section, without its
-              hero-to-section scroll animation. */}
+          {/* Reuse the homepage feature constellation with tour-specific copy. */}
           <section
             class="homepage-unification tour-constellation"
             aria-labelledby="unification-heading"

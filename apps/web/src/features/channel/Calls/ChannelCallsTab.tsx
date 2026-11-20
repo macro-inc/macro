@@ -35,7 +35,6 @@ import {
 } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import { validateSearchServiceText } from '@queries/soup/search';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, EmptyStatePanel } from '@ui';
 import {
@@ -312,18 +311,14 @@ function ChannelCallsList(props: { channelId: string }) {
                         : EmptyStateCallsGraphic
                     }
                     title={
-                      !searchQuery()
-                        ? 'No calls in this channel'
-                        : validateSearchServiceText(searchQuery())
-                          ? `No results for "${searchQuery()}"`
-                          : 'Keep typing to search'
+                      searchQuery()
+                        ? `No results for "${searchQuery()}"`
+                        : 'No calls in this channel'
                     }
                     description={
-                      !searchQuery()
-                        ? 'Recordings, transcriptions, and summaries of calls in this channel will appear here.'
-                        : validateSearchServiceText(searchQuery())
-                          ? 'Search matches call names and transcripts in this channel.'
-                          : 'Call search starts at 3 characters and matches names and transcripts.'
+                      searchQuery()
+                        ? 'Search matches call names and transcripts in this channel.'
+                        : 'Recordings, transcriptions, and summaries of calls in this channel will appear here.'
                     }
                     documentationUrl={LIST_VIEW_DOCS_URL.calls}
                   />

@@ -1,6 +1,8 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, untrack } from 'solid-js';
+import type { CallJoinIntent } from './call-lifecycle';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
@@ -14,7 +16,7 @@ import { useCall } from './use-call';
  */
 export function ChannelCallAutoJoin(props: {
   channelId: string;
-  pendingJoinCall: Accessor<boolean>;
+  pendingJoinCall: Accessor<CallJoinIntent | undefined>;
   onHandled: () => void;
   /** Wait for metadata; agent DMs cannot host calls. */
   canCall?: Accessor<boolean | undefined>;
@@ -27,9 +29,22 @@ export function ChannelCallAutoJoin(props: {
     onJoin: () => setActiveTab(getCallJoinTab()),
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
+  let attemptedIntent: CallJoinIntent | undefined;
+
+  async function join(intent: CallJoinIntent) {
+    try {
+      await call.joinCall('deep_link', intent);
+    } catch (error) {
+      console.error('Auto-join call failed', error);
+    } finally {
+      // A newer navigation request owns its own completion.
+      if (props.pendingJoinCall() === intent) props.onHandled();
+    }
+  }
 
   createEffect(() => {
-    if (!props.pendingJoinCall()) return;
+    const intent = props.pendingJoinCall();
+    if (!intent || intent === attemptedIntent) return;
     const canCall = props.canCall ? props.canCall() : true;
     if (canCall === undefined) return;
     if (!canCall) {
@@ -38,29 +53,17 @@ export function ChannelCallAutoJoin(props: {
       return;
     }
 
+    // Leave a newer target pending until the current transition settles.
+    // Read the lifecycle outside untrack so completion retries this effect.
+    if (call.isJoining() || call.isLeaving()) return;
+
     untrack(() => {
       if (!ENABLE_CALLS) {
         props.onHandled();
         return;
       }
-
-      // If the user is mid-transition on this channel's call (e.g. they
-      // clicked the call button at the same moment), let that flow win.
-      if (call.isJoining() || call.isLeaving()) {
-        props.onHandled();
-        return;
-      }
-
-      if (call.isInThisChannel()) {
-        setActiveTab(getCallJoinTab());
-        props.onHandled();
-        return;
-      }
-
-      call
-        .joinCall('deep_link')
-        .catch((e) => console.error('Auto-join call failed', e))
-        .finally(() => props.onHandled());
+      attemptedIntent = intent;
+      fireAndForget(join(intent), 'channel-call');
     });
   });
 

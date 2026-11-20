@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT checked, passed, checks, created, state IS NOT DISTINCT FROM 'cancelled' AS \"cancelled!\"\n            FROM scheduled_action_draft WHERE session_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "checked",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "passed",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "checks",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "created",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "cancelled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "003e14f925bbec02d1633e8f2a7c68b8cbb4c1c29c29dcdfbe44459a3799f12c"
+}

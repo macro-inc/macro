@@ -57,3 +57,21 @@ fn callers_cannot_choose_identity_or_tools() {
         assert!(serde_json::from_value::<GenerateObjectRequest>(input).is_err());
     }
 }
+
+#[test]
+fn routing_input_carries_the_latest_and_a_clipped_previous_message() {
+    let previous = "summarise Q2 revenue ".repeat(500);
+    let request = RoutingRequest {
+        latest: "now do it for Q3",
+        previous: Some(&previous),
+    };
+
+    let input = request.decision_input("request");
+
+    assert_eq!(input["request"], json!("now do it for Q3"));
+    assert_eq!(
+        input["previousRequest"].as_str().unwrap().chars().count(),
+        8000
+    );
+    assert!(previous.starts_with(input["previousRequest"].as_str().unwrap()));
+}

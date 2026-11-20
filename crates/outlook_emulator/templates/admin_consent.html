@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permissions requested - Microsoft emulator</title>
+<style>
+{% include "page_style.css" %}
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">Outlook emulator. This is not Microsoft.</div>
+  <h1>Permissions requested</h1>
+  <p>Review for your organization: <code>{{ client_id }}</code> at <code>{{ redirect_host }}</code></p>
+  <form method="post">
+    {% for (name, value) in request %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+    <div class="permissions">
+      <h2>Accepting grants these for every user of the directory:</h2>
+      <ul>
+        {% for permission in permissions %}
+        <li><code>{{ permission }}</code></li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="actions">
+      <button class="action" type="submit" name="cancel" value="1">Cancel</button>
+      <button class="action primary" type="submit" name="accept" value="1">Accept</button>
+    </div>
+  </form>
+</main>
+</body>
+</html>

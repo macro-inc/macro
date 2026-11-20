@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ActionDialogShell, Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type Ref, Show } from 'solid-js';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 import { createBulkDeleteDssItemsMutation } from '../queries/dss';
 import type { EntityData } from '../types/entity';
@@ -18,6 +18,10 @@ export const BulkDeleteView = (props: {
   onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
+  /** The confirm button, which the dialog focuses on open so Enter deletes. */
+  deleteButtonRef?: Ref<HTMLButtonElement>;
 }) => {
   const mutation = createBulkDeleteDssItemsMutation();
   const [remainingEntities, setRemainingEntities] =
@@ -25,7 +29,19 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
+  // A large folder can take a while; the button shows it is working and
+  // ignores presses until the attempt settles, so nothing is deleted twice.
+  const [deleting, setDeleting] = createSignal(false);
   const handleDelete = async () => {
+    if (deleting()) return;
+    setDeleting(true);
+    try {
+      await deleteEntities();
+    } finally {
+      setDeleting(false);
+    }
+  };
+  const deleteEntities = async () => {
     // Keep the completion attached to the caller that submitted this attempt,
     // even if another modal replaces this one while the request is in flight.
     const onPartialDelete = props.onPartialDelete;
@@ -71,6 +87,9 @@ export const BulkDeleteView = (props: {
           </ActionDialogShell.Description>
         </ActionDialogShell.Header>
         <EntityActionSelection entities={entities()} />
+        <Show when={props.note}>
+          {(note) => <p class="text-sm text-ink-muted">{note()}</p>}
+        </Show>
         <Show when={partialMessage()}>
           {(message) => (
             <p role="status" class="text-sm text-ink-muted">
@@ -84,7 +103,14 @@ export const BulkDeleteView = (props: {
           Cancel
         </Button>
         <Button
+          ref={props.deleteButtonRef}
           variant="secondary"
+          loading={deleting()}
+          // Delete takes focus when the dialog opens, so an Enter held down to
+          // open it would repeat onto Delete. Confirm only on a fresh press.
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key === 'Enter' && event.repeat) event.preventDefault();
+          }}
           onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
         >
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}

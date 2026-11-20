@@ -1,9 +1,9 @@
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import { A, useParams } from '@solidjs/router';
 import { createMemo, createRenderEffect, Show } from 'solid-js';
 import { Dynamic, isServer } from 'solid-js/web';
 import { APP_BASE_URL } from '../../app/utils/utilBaseUrl';
 import { setPageSeo } from '../../app/utils/utilSeo';
+import { FeatureUiStyles } from '../../features/marketing/components/FeaturePage';
 import { PostCover } from './PostCover';
 import { PostsPageTail } from './PostsPageTail';
 import { avoidTitleOrphan, getPostBySlug } from './registry';
@@ -79,14 +79,12 @@ export default function PostPage() {
           !!e().meta.updated && e().meta.updated !== e().meta.date;
         return (
           <>
-            <article class="posts-shell posts-article posts-article--with-footer">
+            <article
+              class="posts-shell posts-article posts-article--with-footer"
+              classList={{ 'posts-article--video': !!e().meta.heroVideo }}
+            >
+              <FeatureUiStyles />
               <header class="posts-article-header">
-                <nav class="posts-eyebrow" aria-label="Breadcrumb">
-                  <A href="/posts">
-                    <ArrowLeftIcon aria-hidden="true" /> All posts
-                  </A>
-                </nav>
-
                 <h1 class="posts-title">
                   {avoidTitleOrphan(e().meta.title)}
                   <Show when={e().meta.titleLine2}>
@@ -105,9 +103,29 @@ export default function PostPage() {
                   {(subtitle) => <p class="posts-lede">{subtitle()}</p>}
                 </Show>
 
-                <div class="posts-hero-art">
-                  <PostCover brand={e().meta.coverBrand} />
-                </div>
+                <Show
+                  when={e().meta.heroVideo}
+                  fallback={
+                    <div class="posts-hero-art">
+                      <PostCover brand={e().meta.coverBrand} />
+                    </div>
+                  }
+                >
+                  {(video) => (
+                    <figure class="posts-hero-video">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${video().id}?rel=0`}
+                        title={video().title}
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen
+                      />
+                      <Show when={video().caption}>
+                        {(caption) => <figcaption>{caption()}</figcaption>}
+                      </Show>
+                    </figure>
+                  )}
+                </Show>
 
                 <div class="posts-byline">
                   <Show when={e().meta.author}>
@@ -152,11 +170,7 @@ export default function PostPage() {
                 <Dynamic component={e().component} />
               </div>
             </article>
-            <PostsPageTail
-              ctaButtonName={
-                e().meta.ctaButtonName ?? `blog_${e().meta.slug}_cta`
-              }
-            />
+            <PostsPageTail />
           </>
         );
       }}

@@ -139,6 +139,64 @@ pub async fn delete_entity(
     )
 }
 
+/// Set `deleted_at = at` on every row in `ids` in one statement. Returns the
+/// number of rows changed; ids with no row are skipped.
+#[tracing::instrument(skip_all, fields(entity.count = ids.len()), err)]
+pub async fn mark_deleted_many(
+    tx: &mut Transaction<'_, Postgres>,
+    ids: &[Uuid],
+    at: DateTime<Utc>,
+) -> EntityRegistryResult<u64> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE entity SET deleted_at = $2 WHERE id = ANY($1)
+        "#,
+        ids,
+        at,
+    )
+    .execute(tx.as_mut())
+    .await
+    .context(EntityRegistryError::Infrastructure)?;
+    Ok(result.rows_affected())
+}
+
+/// Set `deleted_at = NULL` on every row in `ids` in one statement. The
+/// restore mirror of [`mark_deleted_many`].
+#[tracing::instrument(skip_all, fields(entity.count = ids.len()), err)]
+pub async fn clear_deleted_many(
+    tx: &mut Transaction<'_, Postgres>,
+    ids: &[Uuid],
+) -> EntityRegistryResult<u64> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE entity SET deleted_at = NULL WHERE id = ANY($1)
+        "#,
+        ids,
+    )
+    .execute(tx.as_mut())
+    .await
+    .context(EntityRegistryError::Infrastructure)?;
+    Ok(result.rows_affected())
+}
+
+/// Remove the rows for every id in `ids` in one statement.
+#[tracing::instrument(skip_all, fields(entity.count = ids.len()), err)]
+pub async fn delete_entities(
+    tx: &mut Transaction<'_, Postgres>,
+    ids: &[Uuid],
+) -> EntityRegistryResult<u64> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM entity WHERE id = ANY($1)
+        "#,
+        ids,
+    )
+    .execute(tx.as_mut())
+    .await
+    .context(EntityRegistryError::Infrastructure)?;
+    Ok(result.rows_affected())
+}
+
 fn write_by_id(
     result: Result<sqlx::postgres::PgQueryResult, sqlx::Error>,
 ) -> EntityRegistryResult<WriteOutcome> {

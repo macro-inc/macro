@@ -57,6 +57,26 @@ describe('ToolApprovalCard', () => {
     expect(onApproveAlways).toHaveBeenCalledOnce();
   });
 
+  it('says the agent wants it when the owner prompted the turn themselves', () => {
+    const { getByText } = card({
+      canApprove: true,
+      ownTurn: true,
+      requester: 'wolf@macro.com',
+      action: 'use your Google Drive account (trash file)',
+      standing: 'use your Google Drive account',
+    });
+    expect(
+      getByText(
+        'The agent wants to use your Google Drive account (trash file).'
+      )
+    ).toBeTruthy();
+    expect(
+      getByText(
+        'Always allow lets the agent use your Google Drive account in this session without asking you.'
+      )
+    ).toBeTruthy();
+  });
+
   it('offers no standing approval when there is nobody to remember', () => {
     const { queryByText } = card({ canApprove: true });
     expect(queryByText('Always allow')).toBeNull();

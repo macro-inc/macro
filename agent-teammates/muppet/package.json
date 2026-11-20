@@ -1,0 +1,19 @@
+{
+	"name": "muppet",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"typecheck": "tsc -b",
+		"test": "bun test",
+		"format": "biome format --write",
+		"format:check": "biome format"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.6",
+		"@types/bun": "latest",
+		"typescript": "^5"
+	}
+}

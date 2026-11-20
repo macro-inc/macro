@@ -402,13 +402,13 @@ mod code_mode {
     }
 
     #[derive(Deserialize, schemars::JsonSchema)]
-    #[schemars(title = "Subagent", description = "Delegate a task.")]
-    struct Subagent {}
-    impl ToolAnnotated for Subagent {
-        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delegate a task");
+    #[schemars(title = "ManageAgentSession", description = "Manage a session.")]
+    struct ManageAgentSession {}
+    impl ToolAnnotated for ManageAgentSession {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Manage a session");
     }
     #[async_trait::async_trait]
-    impl ai_toolset::AsyncTool<()> for Subagent {
+    impl ai_toolset::AsyncTool<()> for ManageAgentSession {
         type Output = serde_json::Value;
         async fn call(
             &self,
@@ -422,9 +422,9 @@ mod code_mode {
     const DIRECT_TOOLS: [&str; 5] = [
         "EditDocument",
         "ListCalendarEvents",
+        "ManageAgentSession",
         "NameSearch",
         "ReadContent",
-        "Subagent",
     ];
     const CHATGPT_TOOLS: [&str; 4] = [
         "EditDocument",
@@ -440,7 +440,7 @@ mod code_mode {
                 .add_tool::<ReadContent, ()>()
                 .add_tool::<EditDocument, ()>()
                 .add_tool::<ListCalendarEvents, ()>()
-                .add_tool::<Subagent, ()>(),
+                .add_tool::<ManageAgentSession, ()>(),
         )
     }
 
@@ -577,7 +577,7 @@ mod code_mode {
             USER,
             mcp_client("ChatGPT"),
             "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
+            serde_json::json!({"name": "ManageAgentSession", "arguments": {}}),
         )
         .await;
         assert!(
@@ -586,16 +586,28 @@ mod code_mode {
                 .is_some_and(|message| message.contains("not found")),
             "{response}"
         );
+    }
 
-        let other = rpc_as(
-            app(Arc::new(Runs::default())),
-            USER,
-            mcp_client("Claude"),
-            "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
-        )
-        .await;
-        assert!(other.get("error").is_none(), "{other}");
+    #[tokio::test]
+    async fn chatgpt_calls_native_tools_directly() {
+        for caller in [
+            mcp_client("ChatGPT"),
+            Some(ToolCaller::McpClient { name: None }),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": "NameSearch", "arguments": {}}),
+            )
+            .await;
+            assert_eq!(
+                response["result"]["structuredContent"],
+                serde_json::json!({"ok": true}),
+                "{response}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -655,6 +667,7 @@ mod code_mode {
         assert!(code_mode_instructions.contains("Code mode is on"));
         assert!(code_mode_instructions.contains("ExecuteCode"));
         assert!(code_mode_instructions.contains("DescribeCodeTools"));
+        assert!(code_mode_instructions.contains("Never guess an SDK method"));
         for leaked in [
             "NameSearch",
             "ReadContent",
@@ -756,18 +769,67 @@ mod code_mode {
     }
 
     #[tokio::test]
-    async fn hidden_native_tools_remain_callable_in_code_mode() {
-        let app = app(Arc::new(Runs::default()));
-        let result = rpc(
+    async fn unlisted_native_tools_are_refused_in_code_mode() {
+        for (caller, name) in [
+            (Some(ToolCaller::ApiKey), "NameSearch"),
+            (mcp_client("Claude"), "NameSearch"),
+            (mcp_client("Claude"), "ManageAgentSession"),
+            (mcp_client("Claude"), "NoSuchTool"),
+            (Some(ToolCaller::Agent(BotId::TEST_A)), "NameSearch"),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": name, "arguments": {}}),
+            )
+            .await;
+            assert!(
+                response["error"]["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("not available in code mode")),
+                "{name}: {response}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn native_tools_are_callable_without_a_code_runner() {
+        let service = StreamableHttpService::new(
+            || Ok(catalog_service()),
+            Arc::new(LocalSessionManager::default()),
+            {
+                let mut config = StreamableHttpServerConfig::default()
+                    .with_allowed_hosts(["localhost".to_owned()]);
+                config.legacy_session_mode = false;
+                config.json_response = true;
+                config
+            },
+        );
+        let app =
+            axum::Router::new()
+                .nest_service("/mcp", service)
+                .layer(axum::middleware::from_fn(
+                    |mut request: axum::extract::Request, next: axum::middleware::Next| async move {
+                        request
+                            .extensions_mut()
+                            .insert(MacroUserIdStr::try_from_email(USER).unwrap());
+                        next.run(request).await
+                    },
+                ));
+        let response = rpc_as(
             app,
             USER,
+            mcp_client("Claude"),
             "tools/call",
             serde_json::json!({"name": "NameSearch", "arguments": {}}),
         )
         .await;
         assert_eq!(
-            result["result"]["structuredContent"],
-            serde_json::json!({"ok": true})
+            response["result"]["structuredContent"],
+            serde_json::json!({"ok": true}),
+            "{response}"
         );
     }
 
@@ -799,7 +861,7 @@ mod code_mode {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn a_user_runs_real_javascript_over_mcp() {
+    async fn a_user_runs_a_checked_program_over_mcp() {
         let scratch = tempfile::tempdir().unwrap();
         let path = tokio::process::Command::new("which")
             .arg("deno")
@@ -807,15 +869,26 @@ mod code_mode {
             .await
             .unwrap();
         assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
+        let binary: std::path::PathBuf = String::from_utf8(path.stdout).unwrap().trim().into();
         let deno = code_execution::outbound::deno::DenoRunner::new(
-            String::from_utf8(path.stdout).unwrap().trim().into(),
-            scratch.path().to_owned(),
+            binary.clone(),
+            scratch.path().join("runs"),
             128,
+        )
+        .await
+        .unwrap();
+        let checker = code_execution::outbound::deno::check::DenoChecker::new(
+            binary,
+            scratch.path().join("checks"),
+            1,
+            4,
+            64 * 1024,
         )
         .await
         .unwrap();
         let runner = code_execution::domain::ExecutionService::new(
             Arc::new(deno),
+            Arc::new(checker),
             code_execution::domain::Limits::default(),
         )
         .unwrap();
@@ -830,7 +903,7 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro, session}) { return {data: {sdk: typeof macro.documents, session: session ?? null, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: {sdk: typeof macro.documents, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
             }),
         )
         .await;
@@ -838,7 +911,7 @@ mod code_mode {
         assert_eq!(receipt["status"], "succeeded", "{succeeded}");
         assert_eq!(
             receipt["result"],
-            serde_json::json!({"data": {"sdk": "object", "session": null, "sum": 6}})
+            serde_json::json!({"data": {"sdk": "object", "sum": 6}})
         );
 
         let failed = rpc(
@@ -847,15 +920,19 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro}) { return {data: await macro.noSuchEntity.list()}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: await macro.noSuchEntity.list()}; }"},
             }),
         )
         .await;
         let receipt = &failed["result"]["structuredContent"];
         assert_eq!(receipt["status"], "failed", "{failed}");
+        // A public run has no session, and the SDK has no such entity.
+        let error = receipt["error"].as_str().unwrap();
+        assert!(error.contains("doesn't type-check"), "{failed}");
         assert!(
-            receipt["error"].as_str().unwrap().contains("TypeError"),
+            error.contains("Property 'noSuchEntity' does not exist on type 'Macro"),
             "{failed}"
         );
+        assert!(error.contains("at main.ts:1:"), "{failed}");
     }
 }

@@ -7,9 +7,10 @@
 use model_entity::EntityType;
 use models_entity_access_management::EntityAccessSourceType;
 use models_permissions::share_permission::access_level::AccessLevel;
-use sqlx::{Postgres, QueryBuilder, Transaction};
+use sqlx::{PgConnection, Postgres, QueryBuilder, Transaction};
 
-use crate::walk_up_project_tree;
+use crate::scoped_grants::{EntityGrant, Grant, refuse_added_access_across, refuse_grant};
+use crate::{get_nested_project_entities, walk_up_project_tree};
 
 /// A grant made directly on a folder, which the folder's contents inherit.
 #[derive(Clone, Debug)]
@@ -52,8 +53,191 @@ pub async fn project_grant_sources(
     .await
 }
 
+/// Refuses, under a scope that may not share, giving each of `entities`
+/// (id and `entity_access.entity_type`) `sources`' grants when one would add
+/// access (see [`crate::scoped_grants`]).
+pub async fn refuse_inherited_access(
+    connection: &mut PgConnection,
+    entities: &[(macro_uuid::Uuid, &str)],
+    sources: &[ProjectGrantSource],
+) -> Result<(), sqlx::Error> {
+    if agent_correlation::context::may_share() {
+        return Ok(());
+    }
+    let grants: Vec<EntityGrant<'_>> = entities
+        .iter()
+        .flat_map(|&(entity_id, entity_type)| {
+            sources.iter().map(move |source| EntityGrant {
+                entity_id,
+                entity_type,
+                grant: Grant {
+                    source_id: &source.source_id,
+                    source_type: source.source_type,
+                    access_level: source.access_level,
+                },
+            })
+        })
+        .collect();
+    refuse_added_access_across(connection, &grants).await
+}
+
+/// Refuses, under a scope that may not share, filing the entity in
+/// `project_id` when the grants it would inherit from that folder and the
+/// folders above it would add access; a folder brings its contents along. A
+/// write that files an entity in a folder and inherits its grants in another
+/// transaction calls this in the first, so a refused move or creation writes
+/// nothing.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn refuse_filing(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    project_id: &macro_uuid::Uuid,
+) -> Result<(), sqlx::Error> {
+    if agent_correlation::context::may_share() {
+        return Ok(());
+    }
+    let project_ids = walk_up_project_tree(transaction, project_id).await?;
+    let sources = project_grant_sources(transaction, &project_ids).await?;
+    if sources.is_empty() {
+        return Ok(());
+    }
+    let nested = if entity_type == EntityType::Project {
+        get_nested_project_entities(transaction, entity_id).await?
+    } else {
+        Vec::new()
+    };
+    // Legacy contents without a UUID inherit through their folder at read time.
+    let mut filed: Vec<(macro_uuid::Uuid, &str)> = nested
+        .iter()
+        .filter_map(|entity| {
+            let id = macro_uuid::string_to_uuid(&entity.entity_id).ok()?;
+            Some((id, entity.entity_type.as_str()))
+        })
+        .collect();
+    if filed.is_empty() {
+        filed.push((*entity_id, entity_type.as_ref()));
+    }
+    refuse_inherited_access(transaction.as_mut(), &filed, &sources).await
+}
+
+/// [`refuse_filing`] for a folder id as an entity row stores it: no folder, an
+/// empty id (filed nowhere) or one that isn't a UUID has nothing to refuse.
+pub async fn refuse_filing_in(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    project_id: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    match project_id.and_then(|id| macro_uuid::string_to_uuid(id).ok()) {
+        Some(project_id) => refuse_filing(transaction, entity_id, entity_type, &project_id).await,
+        None => Ok(()),
+    }
+}
+
+/// [`refuse_filing`] for a document whose id isn't a UUID, moved by its
+/// owner `owner` from folder `from` to folder `to` (folder ids as the document
+/// row stores them). Such a document has no `entity_access` rows: at read time
+/// it gives the grantees of its folder chain their grant and each folder's
+/// owner edit. Under a scope that may not share, the move is refused when the
+/// new chain reaches anyone but `owner` further than the old chain did.
+///
+/// A folder moved with such documents in it needs no call: the documents read
+/// the folder's own grants, which [`refuse_filing`] checks.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn refuse_unregistered_filing(
+    transaction: &mut Transaction<'_, Postgres>,
+    owner: &str,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    let from = from.filter(|id| !id.is_empty());
+    let Some(to) = to.filter(|id| !id.is_empty() && Some(*id) != from) else {
+        return Ok(());
+    };
+    if agent_correlation::context::may_share() {
+        return Ok(());
+    }
+    let reached = unregistered_reach(transaction, to).await?;
+    let held = match from {
+        Some(from) => unregistered_reach(transaction, from).await?,
+        None => Vec::new(),
+    };
+    let adds_access = reached.iter().any(|(source_id, source_type, level)| {
+        let is_owner = *source_type == EntityAccessSourceType::User && source_id == owner;
+        !is_owner
+            && !held.iter().any(|(held_id, held_type, held_level)| {
+                held_id == source_id && held_type == source_type && held_level >= level
+            })
+    });
+    refuse_grant(adds_access)
+}
+
+/// Who a document without `entity_access` rows filed in `project_id` reaches,
+/// and how far, as its access is read: each grant on a live folder of the
+/// chain, and each such folder's owner at edit.
+async fn unregistered_reach(
+    transaction: &mut Transaction<'_, Postgres>,
+    project_id: &str,
+) -> Result<Vec<(String, EntityAccessSourceType, AccessLevel)>, sqlx::Error> {
+    let chain = sqlx::query!(
+        r#"
+        WITH RECURSIVE chain AS (
+            SELECT id, "parentId", "userId" FROM "Project"
+            WHERE id = $1 AND "deletedAt" IS NULL
+            UNION
+            SELECT p.id, p."parentId", p."userId"
+            FROM "Project" p
+            JOIN chain c ON p.id = c."parentId"
+            WHERE p."deletedAt" IS NULL
+        )
+        SELECT id AS "id!", "userId" AS "user_id!" FROM chain
+        "#,
+        project_id,
+    )
+    .fetch_all(transaction.as_mut())
+    .await?;
+    let project_ids: Vec<macro_uuid::Uuid> = chain
+        .iter()
+        .filter_map(|folder| macro_uuid::string_to_uuid(&folder.id).ok())
+        .collect();
+    let grants = sqlx::query!(
+        r#"
+        SELECT
+        source_id,
+        source_type as "source_type:EntityAccessSourceType",
+        access_level as "access_level:AccessLevel"
+        FROM entity_access
+        WHERE entity_id = ANY($1) AND entity_type = 'project'
+        "#,
+        &project_ids,
+    )
+    .fetch_all(transaction.as_mut())
+    .await?;
+    Ok(chain
+        .into_iter()
+        .map(|folder| {
+            (
+                folder.user_id,
+                EntityAccessSourceType::User,
+                AccessLevel::Edit,
+            )
+        })
+        .chain(
+            grants
+                .into_iter()
+                .map(|grant| (grant.source_id, grant.source_type, grant.access_level)),
+        )
+        .collect())
+}
+
 /// Give an entity just filed in `project_id` the grants of that folder and
 /// every folder above it.
+///
+/// This writes no scope check of its own: a move drops the grants of the old
+/// folder before it inherits the new one's, so checking here would count the
+/// grants the entity held a moment ago as new. The write that files the
+/// entity calls [`refuse_filing`] first, against the grants it holds then.
 #[tracing::instrument(skip(transaction), err)]
 pub async fn inherit_project_grants(
     transaction: &mut Transaction<'_, Postgres>,

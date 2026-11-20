@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT effect->>'effect' AS \"effect!\" FROM hosted_runtime_effect WHERE computer_id = $1 ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "effect!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "786423c126573e9226aa72ab9f7e4d99d4aeabefa5cac6e73a714dfb2a4f0e38"
+}

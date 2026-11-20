@@ -121,6 +121,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
   const { entities: userSkills } = useEntityMention({
     buckets: ['skill'],
     searchTerm: activeSearchTerm,
+    enabled: props.menu.isOpen,
   });
 
   const systemSkills = useSystemSkillsQuery();

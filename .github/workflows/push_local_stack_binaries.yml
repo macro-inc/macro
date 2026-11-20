@@ -2,9 +2,8 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/push_local_stack_binaries.rs
 name: Push local stack binaries
 'on':
-  push:
-    branches:
-    - main
+  schedule:
+  - cron: '17 * * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -12,11 +11,15 @@ jobs:
   push:
     name: Build and push local-stack-binaries
     runs-on: namespace-profile-linux-mid
+    timeout-minutes: 110
     steps:
     - name: Checkout Repo
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -61,4 +64,4 @@ jobs:
       uses: './.github/actions/teardown-nix'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false

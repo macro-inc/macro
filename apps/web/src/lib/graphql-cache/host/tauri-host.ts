@@ -113,7 +113,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
 const ENTITY_FILTER_RESUME_COMMAND = 'graphql_cache_entity_filter_resume';
 // Match the engine view bound. Retention is only a request-size optimization.
-const LIVE_QUERY_CAPACITY = 32;
+export const LIVE_QUERY_CAPACITY = 256;
 const WATCH_COMMAND = 'graphql_cache_watch';
 const CALENDAR_RANGE_COMMAND = 'graphql_cache_calendar_range';
 const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';

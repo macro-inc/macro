@@ -272,7 +272,8 @@ impl MacroApiTokenSigner {
     }
 
     /// Mint an owner credential with signed agent attribution for SDK messages,
-    /// and the client label (`agent_via`) the agent's posts are shown under.
+    /// the client label (`agent_via`) the agent's posts are shown under, and
+    /// the code-mode correlation it acts for with that session's scope.
     #[tracing::instrument(skip_all, err, fields(?agent_id, ?agent_via))]
     pub async fn mint_for_agent(
         &self,
@@ -281,13 +282,14 @@ impl MacroApiTokenSigner {
         agent_id: Option<macro_uuid::Uuid>,
         agent_via: Option<String>,
         agent_session_id: Option<uuid::Uuid>,
-        agent_correlation_id: Option<uuid::Uuid>,
+        correlation: Option<SignedCorrelation>,
     ) -> Result<String, EgressError> {
         let claims = SignedClaims {
             agent_id,
             agent_via,
             agent_session_id,
-            agent_correlation_id,
+            agent_correlation_id: correlation.map(|correlation| correlation.id),
+            agent_scope: correlation.and_then(|correlation| correlation.scope),
             routine_id: None,
         };
         self.sign(owner, lifetime_seconds, claims).await
@@ -296,21 +298,18 @@ impl MacroApiTokenSigner {
     /// Mint an owner credential for one run of `routine_id`, signed with that
     /// routine so the events its writes produce never trigger routines.
     /// `agent_id` attributes writes to an agent; `None` writes as the owner.
-    #[tracing::instrument(skip_all, err, fields(?agent_id, %routine_id))]
+    /// `scope` narrows it, as for a dry run (`SessionScope::DryRun`), which
+    /// every service that accepts it then enforces.
+    #[tracing::instrument(skip_all, err, fields(?agent_id, %routine_id, ?scope))]
     pub async fn mint_for_routine(
         &self,
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
         routine_id: macro_uuid::Uuid,
+        scope: Option<agent_correlation::scope::SessionScope>,
     ) -> Result<String, EgressError> {
-        let claims = SignedClaims {
-            agent_id,
-            agent_via: None,
-            agent_session_id: None,
-            agent_correlation_id: None,
-            routine_id: Some(routine_id),
-        };
+        let claims = SignedClaims::routine(agent_id, routine_id, scope);
         self.sign(owner, lifetime_seconds, claims).await
     }
 
@@ -325,6 +324,7 @@ impl MacroApiTokenSigner {
             agent_via,
             agent_session_id,
             agent_correlation_id,
+            agent_scope,
             routine_id,
         } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
@@ -371,6 +371,7 @@ impl MacroApiTokenSigner {
             agent_id,
             agent_via,
             routine_id,
+            agent_scope: agent_scope.map(|scope| scope.as_str().to_owned()),
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(
@@ -380,13 +381,44 @@ impl MacroApiTokenSigner {
     }
 }
 
+/// The code-mode correlation a credential acts for, and the narrower scope
+/// of its session, which every service accepting the credential enforces.
+#[derive(Clone, Copy, Debug)]
+pub struct SignedCorrelation {
+    /// The correlation's id (`agent_correlation_id`).
+    pub id: uuid::Uuid,
+    /// The session's scope (`agent_scope`), if narrower than its person's access.
+    pub scope: Option<agent_correlation::scope::SessionScope>,
+}
+
 /// The optional claims a minted token signs besides the owner.
+#[derive(Debug, PartialEq)]
 struct SignedClaims {
     agent_id: Option<macro_uuid::Uuid>,
     agent_via: Option<String>,
     agent_session_id: Option<uuid::Uuid>,
     agent_correlation_id: Option<uuid::Uuid>,
+    agent_scope: Option<agent_correlation::scope::SessionScope>,
     routine_id: Option<macro_uuid::Uuid>,
+}
+
+impl SignedClaims {
+    /// What a routine run's token signs: its routine, its agent if any, and
+    /// its scope if narrower.
+    fn routine(
+        agent_id: Option<macro_uuid::Uuid>,
+        routine_id: macro_uuid::Uuid,
+        scope: Option<agent_correlation::scope::SessionScope>,
+    ) -> Self {
+        Self {
+            agent_id,
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            agent_scope: scope,
+            routine_id: Some(routine_id),
+        }
+    }
 }
 
 impl MacroApiTokens for MacroApiTokenSigner {

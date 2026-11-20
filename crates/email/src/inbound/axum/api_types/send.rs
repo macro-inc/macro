@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::domain::models::{ContactInfo, CreateDraftInput};
+use crate::domain::models::{ContactInfo, CreateDraftInput, EmailErr};
 
 use super::{ApiDraftInput, ApiDraftOutput};
 
@@ -23,13 +23,14 @@ impl SendMessageRequest {
     /// Convert the API request into a domain `CreateDraftInput`.
     ///
     /// `send_time` is not set here — the service layer computes it from config.
-    pub fn into_domain(self) -> CreateDraftInput {
+    pub fn into_domain(self) -> Result<CreateDraftInput, EmailErr> {
         let msg = self.message;
+        let sender_email = msg.sender_email()?;
 
-        CreateDraftInput {
+        Ok(CreateDraftInput {
             frozen_signature_html: None,
             draft_generation: msg.draft_generation,
-            sender_email: None,
+            sender_email,
             db_id: msg.db_id,
             provider_id: msg.provider_id,
             replying_to_id: msg.replying_to_id,
@@ -65,6 +66,6 @@ impl SendMessageRequest {
             actor: None,
             draft_client_binding: None,
             thread_client_binding: None,
-        }
+        })
     }
 }

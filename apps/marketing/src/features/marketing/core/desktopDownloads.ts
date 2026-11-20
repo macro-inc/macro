@@ -19,7 +19,7 @@ export function desktopReleaseVersion(downloadUrl: string): string | undefined {
 
 export const FALLBACK_DOWNLOAD_URLS: DesktopDownloadUrls = {
   macos:
-    'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Macro-2.5.0-aarch64-darwin.dmg',
+    'https://github.com/macro-inc/macro/releases/download/v2026.11.6.1/Macro-2026.1106.1-aarch64-darwin.dmg',
   linux:
     'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Macro-2.5.0-x86_64-linux.AppImage',
 };

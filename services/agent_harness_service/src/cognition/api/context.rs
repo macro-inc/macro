@@ -43,7 +43,6 @@ pub type DcsAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtVal
 pub type DcsUserPermissionsService =
     roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
         roles_and_permissions::outbound::pgpool::MacroDB,
-        roles_and_permissions::outbound::pgpool::MacroDB,
     >;
 
 /// The AI billing gate: reads plan allowances, credits, and overage state.
@@ -95,16 +94,6 @@ pub type DcsMemoryService =
 /// The AI cost service wired to the Postgres usage repo.
 pub type DcsUsageService =
     ai_usage::domain::service::UsageServiceImpl<ai_usage::outbound::PgUsageRepo>;
-
-/// The AI projections service wired to the Postgres projection repo, the SQS
-/// materialization queue, and the connection-gateway update notifier.
-pub type DcsAiProjectionService =
-    ai_projections::domain::ai_projection_service::AiProjectionServiceImpl<
-        ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl,
-        sqs_client::SQS,
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator,
-        ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier,
-    >;
 
 /// Concrete MCP router state for DCS.
 pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
@@ -171,7 +160,6 @@ pub struct ApiContext {
     pub document_tool_context: ToolDocumentToolContext,
     pub memory_service: Arc<DcsMemoryService>,
     pub usage_service: Arc<DcsUsageService>,
-    pub ai_projections_service: Arc<DcsAiProjectionService>,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,

@@ -99,7 +99,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, input))]
+    #[tracing::instrument(err, skip(self, macro_id, input))]
     pub(crate) async fn save_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -240,7 +240,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, macro_id))]
     pub(crate) async fn delete_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -500,6 +500,7 @@ where
         }
 
         // Build parsed addresses
+        let from_name = sender.name.clone();
         let addresses = ParsedAddresses {
             from_email: sender.email,
             from_name: sender.name,
@@ -537,6 +538,7 @@ where
             provider_thread_id: input.provider_thread_id,
             thread_db_id,
             subject: input.subject,
+            from_name,
             to: input.to,
             cc: input.cc,
             bcc: input.bcc,
@@ -726,23 +728,33 @@ where
             return Ok(());
         };
 
-        // An explicit, validated identity must never be retargeted to a newer
-        // reply draft by a delayed save from an obsolete composer.
+        // A resolved identity already identifies the reply being saved.
         if input.db_id.is_some() {
             return Ok(());
         }
-        // The draft replying to this message lives in the inbox being sent from.
         if let Some(existing_draft) = self
             .email_repo
             .get_draft_replying_to(link_id, reply_target.db_id)
             .await
             .map_err(anyhow::Error::from)?
         {
-            self.apply_existing_draft(input, existing_draft);
-        } else {
-            apply_reply_target(link_id, input, reply_target);
+            // A first save can adopt an unbound draft. Undo can also restore
+            // a bound draft for this target while another composer is writing.
+            let bound_to_another = match input.draft_client_binding {
+                Some(handle) => self
+                    .email_repo
+                    .draft_bound_to_another_handle(existing_draft.db_id, link_id, handle)
+                    .await
+                    .map_err(anyhow::Error::from)?,
+                None => false,
+            };
+            if !bound_to_another {
+                self.apply_existing_draft(input, existing_draft);
+                return Ok(());
+            }
         }
 
+        apply_reply_target(link_id, input, reply_target);
         Ok(())
     }
 

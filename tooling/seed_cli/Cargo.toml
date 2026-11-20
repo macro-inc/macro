@@ -12,6 +12,7 @@ channels = { path = "../../crates/channels", default-features = false, features 
 chrono = { workspace = true }
 clap = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
+email = { path = "../../crates/email", default-features = false, features = ["mailbox", "outbound"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }

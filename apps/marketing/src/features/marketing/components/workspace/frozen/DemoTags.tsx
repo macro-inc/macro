@@ -1,4 +1,4 @@
-import Plus from '@phosphor/plus.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Dropdown } from '@ui';
 import { badgeTriggerClasses } from '@ui/components/Badge';
 import { For, type JSX } from 'solid-js';

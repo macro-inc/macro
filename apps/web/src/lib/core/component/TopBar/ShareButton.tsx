@@ -97,11 +97,7 @@ import {
 } from '@queries/storage/entity-mutations';
 import { updateFormSharePermissions } from '@queries/storage/forms';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import {
-  blockNameToItemType,
-  storageServiceClient,
-} from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { LinkShare } from '@service-storage/generated/schemas/linkShare';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
@@ -161,6 +157,7 @@ import {
   teamShareScopeOptionsForItem,
 } from './linkShare';
 import { ShareDialogFrame, ShareDialogTitle } from './ShareDialogFrame';
+import { getShareDrawerRecipientInput } from './ShareDrawer';
 
 false && clickOutside;
 
@@ -275,6 +272,7 @@ const permissionsBlockResource = createBlockResource(
     const id = useBlockId();
     const blockName = useBlockName();
     const itemType = blockNameToItemType(blockName);
+    if (itemType === 'email') return;
     return fetchSharePermissions(id, itemType);
   },
   { initialValue: undefined }
@@ -310,19 +308,10 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
 const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
 export const refetchDocumentShareButtonResource = () => {
   invalidateSharePermissions();
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
+  refetchArray().forEach((refetch) => refetch());
 };
 
-export function getShareDrawerRecipientInput(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[data-share-drawer-recipient] input'
-  );
-}
+export { getShareDrawerRecipientInput };
 
 interface ShareModalProps extends ManagedDialogProps {
   userPermissions: Permissions;
@@ -865,8 +854,11 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       <div class="font-medium truncate">
                         <Show
                           when={
-                            props.channelNameMap.get(recipient.channel_id)
-                              ?.type !== 'direct_message'
+                            props.itemType === 'email'
+                              ? !props.channelNameMap.get(recipient.channel_id)
+                                  ?.name
+                              : props.channelNameMap.get(recipient.channel_id)
+                                  ?.type !== 'direct_message'
                           }
                           fallback={
                             props.channelNameMap.get(recipient.channel_id)
@@ -992,6 +984,7 @@ export function ShareModal(props: ShareModalProps) {
   const isBlockContext = () =>
     !!enclosingBlockId &&
     enclosingBlockId === props.id &&
+    props.itemType !== 'email' &&
     props.itemType !== 'agent_session' &&
     props.itemType !== 'initiative' &&
     props.itemType !== 'crm_pipeline' &&
@@ -1001,9 +994,18 @@ export function ShareModal(props: ShareModalProps) {
   const queryClient = useQueryClient();
   const fallbackPermissionsQuery = useQuery(() => ({
     ...sharePermissionsQueryOptions(props.id, props.itemType),
-    enabled: !isBlockContext() && !!props.id,
+    enabled:
+      !isBlockContext() &&
+      !!props.id &&
+      (props.itemType !== 'email' ||
+        (props.open && props.userPermissions === Permissions.OWNER)),
   }));
   const sharePermission = () => {
+    if (
+      props.itemType === 'email' &&
+      props.userPermissions !== Permissions.OWNER
+    )
+      return undefined;
     if (isBlockContext()) {
       const result = permissionsBlockResource[0].latest;
       return result && !result.isErr() ? result.value : undefined;
@@ -1087,7 +1089,8 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const sharedChannels = createMemo(
-    () => sharedChannelIds(sharePermission()),
+    () =>
+      props.itemType === 'email' ? [] : sharedChannelIds(sharePermission()),
     undefined,
     {
       equals: (a, b) =>
@@ -1100,6 +1103,15 @@ export function ShareModal(props: ShareModalProps) {
 
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
+    const permission = sharePermission();
+    if (permission && 'threadChannelShares' in permission) {
+      return new Map(
+        permission.threadChannelShares.map((share) => [
+          share.channel_id,
+          { name: share.channel_name ?? '', type: share.channel_type },
+        ])
+      );
+    }
     const data = channelNamesQuery.isPending
       ? undefined
       : channelNamesQuery.data;
@@ -1234,73 +1246,6 @@ export function ShareModal(props: ShareModalProps) {
           subtext: 'Please try again',
         });
       }
-    } else if (props.itemType === 'chat') {
-      const result = await cognitionApiServiceClient.updateChatPermissions({
-        chat_id: props.id,
-        sharePermission: {
-          channelSharePermissions: [
-            {
-              operation: 'remove',
-              channelId,
-            },
-          ],
-        },
-      });
-      if (!result.isErr()) {
-        fireAndForget(refetch(), 'share-modal');
-        toast.success('Removed channel access', {
-          subtext: 'Channel no longer has access to this chat',
-        });
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
-    } else if (props.itemType === 'document') {
-      const result = await storageServiceClient.editDocument({
-        documentId: props.id,
-        sharePermission: {
-          channelSharePermissions: [
-            {
-              operation: 'remove',
-              channelId,
-            },
-          ],
-        },
-      });
-      if (!result.isErr()) {
-        fireAndForget(refetch(), 'share-modal');
-        toast.success('Removed channel access', {
-          subtext: 'Channel no longer has access to this document',
-        });
-      } else {
-        toast.alert('Failed to remove channel access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
-    } else if (props.itemType === 'project') {
-      const result = await storageServiceClient.projects.edit({
-        id: props.id,
-        sharePermission: {
-          channelSharePermissions: [
-            {
-              operation: 'remove',
-              channelId,
-            },
-          ],
-        },
-      });
-      if (!result.isErr()) {
-        fireAndForget(refetch(), 'share-modal');
-        toast.success('Removed folder access');
-      } else {
-        toast.alert('Failed to remove folder access', {
-          subtext: 'Please try again',
-        });
-        console.error(result);
-      }
     }
   });
 
@@ -1357,58 +1302,6 @@ export function ShareModal(props: ShareModalProps) {
           channelSharePermissions: [
             { operation: 'replace', accessLevel, channelId },
           ],
-        });
-      } else if (props.itemType === 'chat') {
-        result = await cognitionApiServiceClient.updateChatPermissions({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          chat_id: props.id,
-        });
-      } else if (props.itemType === 'document') {
-        result = await storageServiceClient.editDocument({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          documentId: props.id,
-        });
-      } else if (props.itemType === 'project') {
-        result = await storageServiceClient.projects.edit({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          id: props.id,
-        });
-      } else if (props.itemType === 'email') {
-        result = await storageServiceClient.editThread({
-          sharePermission: {
-            channelSharePermissions: [
-              {
-                operation: 'replace',
-                accessLevel,
-                channelId,
-              },
-            ],
-          },
-          threadId: props.id,
         });
       }
 
@@ -1486,28 +1379,15 @@ export function ShareModal(props: ShareModalProps) {
           props.id,
           sharePermission
         );
-      } else if (props.itemType === 'chat') {
-        result = await cognitionApiServiceClient.updateChatPermissions({
-          sharePermission,
-          chat_id: props.id,
-        });
       } else if (props.itemType === 'call') {
         result = await updateCallTeamShare(props.id, shared);
-      } else if (props.itemType === 'project') {
-        result = await storageServiceClient.projects.edit({
-          id: props.id,
-          sharePermission,
-        });
       } else if (props.itemType === 'database') {
         result = await updateDatabaseSharePermissions({
           id: props.id,
           ...sharePermission,
         });
       } else {
-        result = await storageServiceClient.editDocument({
-          sharePermission,
-          documentId: props.id,
-        });
+        return;
       }
       if (result.isErr()) {
         toast.alert('Failed to change team access', {
@@ -1591,21 +1471,6 @@ export function ShareModal(props: ShareModalProps) {
           props.id,
           sharePermission
         );
-      } else if (props.itemType === 'chat') {
-        result = await cognitionApiServiceClient.updateChatPermissions({
-          sharePermission,
-          chat_id: props.id,
-        });
-      } else if (props.itemType === 'document') {
-        result = await storageServiceClient.editDocument({
-          sharePermission,
-          documentId: props.id,
-        });
-      } else if (props.itemType === 'project') {
-        result = await storageServiceClient.projects.edit({
-          sharePermission,
-          id: props.id,
-        });
       }
 
       const entityLabel = getShareItemNoun(props.itemType);
@@ -1892,8 +1757,12 @@ export function ShareModal(props: ShareModalProps) {
                             <div class="font-medium truncate">
                               <Show
                                 when={
-                                  channelNameMap().get(recipient.channel_id)
-                                    ?.type !== 'direct_message'
+                                  props.itemType === 'email'
+                                    ? !channelNameMap().get(
+                                        recipient.channel_id
+                                      )?.name
+                                    : channelNameMap().get(recipient.channel_id)
+                                        ?.type !== 'direct_message'
                                 }
                                 fallback={
                                   channelNameMap().get(recipient.channel_id)
@@ -2028,6 +1897,8 @@ export function ShareTrigger(props: {
   hotkeyScope?: string;
   copyLink?: () => void;
   size?: 'sm' | 'md';
+  /** Compact mobile headers keep Copy link in the title drawer. */
+  showCopyLink?: boolean;
 }) {
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
@@ -2066,7 +1937,7 @@ export function ShareTrigger(props: {
   // Hovering or focusing Share loads what the dialog shows first, so a click
   // opens it with its roster instead of waiting on the network.
   const warmShareDialog = () => {
-    if (!isAuthenticated()) return;
+    if (!isAuthenticated() || itemType() === 'email') return;
     if (inBlock) {
       const result = permissionsBlockResource[0].latest;
       fireAndForget(
@@ -2188,15 +2059,19 @@ export function ShareTrigger(props: {
           }}
         />
 
-        <CopyButton
-          as={ButtonGroup.Button}
-          variant="ghost"
-          tooltip="Copy Share Link"
-          size={iconSize()}
-          onClick={ShareLinkAction().action}
-        >
-          <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
-        </CopyButton>
+        <Show when={props.showCopyLink !== false}>
+          <CopyButton
+            as={ButtonGroup.Button}
+            variant="ghost"
+            aria-label="Copy Share Link"
+            tooltip="Copy Share Link"
+            size={iconSize()}
+            onClick={ShareLinkAction().action}
+            icon={
+              <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
+            }
+          />
+        </Show>
       </div>
     </HeaderActionGroup>
   );

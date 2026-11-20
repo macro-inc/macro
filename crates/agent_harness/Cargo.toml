@@ -79,6 +79,7 @@ rustls = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 serde_json = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
   "macros",
@@ -99,6 +100,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 entity_registry = { path = "../entity_registry/entity_registry" }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env = { path = "../macro_env" }
 bots = { path = "../bots", default-features = false, features = ["test-utils"] }
 channels = { path = "../channels", default-features = false, features = ["outbound"] }
 messages = { path = "../messages", features = ["test-utils"] }
@@ -108,6 +110,7 @@ dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
+harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 model_user = { path = "../model_user" }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tower = { workspace = true }

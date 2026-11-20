@@ -3,11 +3,19 @@ import { NATIVE_SESSION_SERVICE_URLS } from '../constant/servers';
 import { isTauri } from './platform';
 
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
+// tauri-plugin-http's message when a URL is outside the capability's scope.
+const SCOPE_DENIAL = 'url not allowed on the configured scope';
 let originalFetch: typeof fetch | undefined;
 
-// Third-party APIs that allow any origin and require requests from the user's
+// Third-party hosts that allow any origin and require requests from the user's
 // browser. The native HTTP client's scope doesn't list them and rejects them.
-const WEBVIEW_FETCH_HOSTS = new Set(['api.klipy.com']);
+// Call background effects fetch MediaPipe's WASM from jsDelivr and its
+// segmentation model from Google Cloud Storage (`@livekit/track-processors`).
+const WEBVIEW_FETCH_HOSTS = new Set([
+  'api.klipy.com',
+  'cdn.jsdelivr.net',
+  'storage.googleapis.com',
+]);
 
 /**
  * Called once by the entry point: routes Tauri's global fetch through
@@ -81,7 +89,21 @@ export function createPlatformFetch(
     // The plugin cancels only on `init.signal`, never on a `Request`'s own.
     const signal =
       init?.signal ?? (input instanceof Request ? input.signal : undefined);
-    return fetch(input, { ...init, signal });
+    try {
+      return await fetch(input, { ...init, signal });
+    } catch (error) {
+      // The plugin rejects with its Rust error text when no response arrives
+      // (DNS, connect, TLS). Browser fetch rejects those with a TypeError, so
+      // callers can treat both transports alike; the text stays as the message.
+      // Cancellations and scope denials keep their text: they aren't outages.
+      if (
+        typeof error === 'string' &&
+        !signal?.aborted &&
+        !error.startsWith(SCOPE_DENIAL)
+      )
+        throw new TypeError(error);
+      throw error;
+    }
   };
 }
 

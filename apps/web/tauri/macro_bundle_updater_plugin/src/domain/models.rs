@@ -138,6 +138,10 @@ impl BundleRoot {
     }
 }
 
+/// The newest bundle manifest schema this updater reads, sent with each check
+/// so the server never offers desktop a schema it would reject.
+pub const SUPPORTED_MANIFEST_SCHEMA: u64 = 3;
+
 /// Metadata generated with each JavaScript bundle build.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -174,6 +178,9 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), Target::Android) => Some(builds.android),
             (3, Some(builds), Target::Ios) => Some(builds.ios),
+            (3, Some(_), Target::Darwin | Target::Linux | Target::Windows) => {
+                Some(self.min_native_build)
+            }
             _ => None,
         }
     }
@@ -205,6 +212,8 @@ const MPSC_CHAN_SIZE: usize = 10;
 pub struct NativeAppInfo {
     /// The native app build number.
     pub native_build: u64,
+    /// The commit the embedded bundle was built from, if known.
+    pub embedded_git_sha: Option<String>,
     /// CPU architecture.
     pub arch: Arch,
     /// Operating system target.
@@ -216,6 +225,9 @@ pub struct NativeAppInfo {
 pub struct AppInfo {
     /// The current effective JS bundle build.
     pub current_bundle_build: u64,
+    /// The commit the current bundle was built from, sent only while the
+    /// embedded bundle is active.
+    pub current_git_sha: Option<String>,
     /// The native app build number.
     pub native_build: u64,
     /// CPU architecture.

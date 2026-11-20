@@ -19,6 +19,8 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Agent } from '../agents/agent';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import { EntityAccess } from '../sharing/access';
 import {
@@ -211,6 +213,18 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   readonly access = new EntityAccess(this.client, 'agent_session', this);
 
   /**
+   * Share this agent session with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * agent session; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'agent_session', this.id);
+  }
+
+  /**
    * Construct an approval handle scoped to this session.
    *
    * @readonly
@@ -294,8 +308,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * The GitHub repositories the caller can hand a managed session: every
-   * repository under an installation of Macro's GitHub App they or their
+   * List repositories available for managed sessions.
+   *
+   * Includes every repository under an installation of Macro's GitHub App they or their
    * teams made, sorted by `owner/name`. Empty when the App is installed
    * nowhere they reach.
    */
@@ -873,8 +888,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * Read this session's whole history as the conversation the app renders:
-   * each user prompt and agent reply, oldest first, with tool calls and their
+   * Read this session's full conversation as the app renders it.
+   *
+   * Includes each user prompt and agent reply, oldest first, with tool calls and their
    * results, plans, permission requests and how each turn ended. Works on any
    * session the caller can view, live or finished, so it is the way to read
    * what another agent session did. Prefer it to {@link log}, which returns
@@ -925,7 +941,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   };
 
   /**
-   * Recorded activity caused by this session, lazily paginated newest first.
+   * Recorded activity caused by this session, lazily paginated newest first; `maxItems` caps the total.
    *
    * @readonly
    */

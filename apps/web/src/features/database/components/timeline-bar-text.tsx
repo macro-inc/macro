@@ -1,3 +1,4 @@
+import { Gantt } from '@app/components/gantt/gantt';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import { TagDot } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
@@ -15,7 +16,7 @@ export function TimelineBarText(props: {
 }) {
   return (
     <span class="flex h-7 min-w-0 flex-wrap items-center overflow-hidden">
-      <span class="block h-7 min-w-0 truncate leading-7">{props.title}</span>
+      <Gantt.BarTitle class="block h-7 leading-7">{props.title}</Gantt.BarTitle>
       <Show when={props.time}>{(time) => <Segment>{time()}</Segment>}</Show>
       <For each={props.fields}>
         {(field) => (

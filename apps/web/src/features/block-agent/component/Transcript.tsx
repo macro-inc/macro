@@ -156,6 +156,8 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
       <ThreadList
         keys={keys}
         shortListAlign="start"
+        // A reply streams below the tool rows and thoughts the reader opens.
+        holdOnDisclosure
         initialPosition={
           initialTarget && initialSessionId
             ? {

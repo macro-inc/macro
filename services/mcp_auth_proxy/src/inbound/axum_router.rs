@@ -83,6 +83,11 @@ async fn register<I: InflightAuthStore + 'static>(
             );
             (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
+        Err(RegisterClientError::ReservedClientName) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "client_name may not be Macro's own name",
+        )
+            .into_response(),
         Err(RegisterClientError::ClientRegistrationStore(error)) => {
             tracing::error!(error=?error, "failed to persist client registration");
             (
@@ -899,7 +904,35 @@ fn oauth_routes<I: InflightAuthStore + 'static>(auth_proxy: McpAuthProxyServiceI
         .route("/oauth/callback", routing::get(oauth_callback))
         .route("/token", routing::post(token))
         .route("/revoke", routing::post(revoke))
+        .layer(axum::middleware::from_fn(refuse_programs))
         .with_state(auth_proxy)
+}
+
+/// Refuse the broker to a program: one that drives the email sign-in and
+/// reads the code from the user's inbox would hold an MCP grant for the
+/// account. These routes take no Macro credential; a program shows by
+/// `x-macro-code-execution`, which the code-mode runtime sets on requests to
+/// SDK origins. The broker shares the gateway origin in dev and prod, and is
+/// not a host a program may reach locally.
+async fn refuse_programs(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    if request
+        .headers()
+        .contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    {
+        tracing::warn!(
+            path = request.uri().path(),
+            "refused the sign-in broker to a program"
+        );
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            macro_authorization::PROGRAM_SIGN_IN_REFUSAL,
+        )
+            .into_response();
+    }
+    next.run(request).await
 }
 
 /// Builds the complete MCP router: unauthenticated OAuth broker routes plus
@@ -923,7 +956,11 @@ where
         let clients = auth_proxy.access_token_clients();
         mcp_router_with_oauth(
             oauth_router(auth_proxy),
-            super::middleware::BearerAuth { jwt_args, clients },
+            super::middleware::BearerAuth {
+                jwt_args,
+                clients,
+                user_api_keys: None,
+            },
             mcp_service,
         )
     }
@@ -931,6 +968,7 @@ where
 
 /// MCP routes for a shared HTTP listener whose process owns health checks.
 pub fn mounted_mcp_router<I, S>(
+    user_api_keys: Option<std::sync::Arc<dyn crate::domain::user_api_keys::McpUserApiKeys>>,
     auth_proxy: McpAuthProxyServiceImpl<I>,
     jwt_args: JwtValidationArgs,
     mcp_service: S,
@@ -949,7 +987,11 @@ where
         let clients = auth_proxy.access_token_clients();
         mcp_router_with_oauth(
             oauth_routes(auth_proxy),
-            super::middleware::BearerAuth { jwt_args, clients },
+            super::middleware::BearerAuth {
+                jwt_args,
+                clients,
+                user_api_keys,
+            },
             mcp_service,
         )
     }
@@ -1000,6 +1042,7 @@ fn mcp_cors_layer() -> CorsLayer {
         .allow_headers([
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
+            HeaderName::from_static("x-macro-user-api-key"),
             HeaderName::from_static("mcp-protocol-version"),
             HeaderName::from_static("mcp-session-id"),
         ])

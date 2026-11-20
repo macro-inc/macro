@@ -7,17 +7,6 @@ export function registerEmailHotkeys(
   scopeId: string,
   handlers: EmailThreadKeyboardHandlers
 ) {
-  if (handlers.replyAllToFocusedMessage) {
-    registerHotkey({
-      hotkey: 'opt+r',
-      scopeId: scopeId,
-      description: 'Reply all to message',
-      keyDownHandler: handlers.replyAllToFocusedMessage,
-      hotkeyToken: TOKENS.email.replyAll,
-      displayPriority: 8,
-    });
-  }
-
   registerHotkey({
     hotkey: 'r',
     scopeId: scopeId,

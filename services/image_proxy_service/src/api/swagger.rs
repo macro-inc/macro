@@ -12,6 +12,7 @@ use super::proxy::{self, ProxyParams};
     paths(
         health::health_handler,
         proxy::proxy_request_handler,
+        super::logos::logo_handler,
     ),
     components(
         schemas(

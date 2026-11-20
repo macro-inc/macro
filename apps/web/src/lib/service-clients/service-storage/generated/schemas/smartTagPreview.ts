@@ -12,6 +12,6 @@ import type { SmartTagChannelMatch } from './smartTagChannelMatch';
 export interface SmartTagPreview {
   /** First matches, in alphabetical order. */
   channels: SmartTagChannelMatch[];
-  /** Number of matching channels the caller participates in, including overflow. */
+  /** Number of visible matches, including overflow; legacy previews count participants. */
   totalCount: number;
 }

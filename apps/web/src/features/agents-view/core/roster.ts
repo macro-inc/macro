@@ -45,6 +45,8 @@ export type RuntimeLike = {
   name: string;
   connected: boolean;
   access?: 'owner' | 'user' | 'read' | 'none';
+  /** Set for a team's Macro computer, which is powered off when away. */
+  computer_id?: string | null;
 };
 
 type RosterShare = 'system' | 'team' | 'private';
@@ -75,6 +77,8 @@ export type RosterAgent = {
    * so surfaces mark it "Offline" rather than offering a connect flow.
    */
   offline?: boolean;
+  /** Its Macro computer is turned off; it starts again from the ⋯ menu. */
+  poweredOff?: boolean;
   /** An unavailable agent with a setup action stays clickable. */
   connectLabel?: string;
   /** The viewer must be given access to its runtime before prompting it. */
@@ -138,17 +142,57 @@ function runtimeConnected(
   }
 }
 
+/** Why a saved agent can't start from the composer, and what fixes it. */
+function availability(
+  agent: PersistedAgentLike,
+  input: RosterInput,
+  state: {
+    connected: boolean;
+    poweredOff: boolean;
+    disconnected: boolean;
+    needsRuntimeAccess: boolean;
+  }
+): Pick<RosterAgent, 'connectLabel' | 'unavailableReason'> {
+  if (agent.harness === 'cursor' && input.cursorNeedsConnection)
+    return {
+      connectLabel: 'Connect Cursor',
+      unavailableReason: state.connected
+        ? undefined
+        : 'Connect Cursor to start it',
+    };
+  if (state.needsRuntimeAccess)
+    return {
+      connectLabel: 'Request access',
+      unavailableReason: 'You need access to its machine',
+    };
+  if (state.poweredOff)
+    return {
+      unavailableReason: 'Turn its computer on in Settings → Machines',
+    };
+  if (state.disconnected)
+    return {
+      connectLabel: 'Reconnect machine',
+      unavailableReason: 'Its machine is disconnected',
+    };
+  if (agent.harness === 'cursor' && !state.connected)
+    return { unavailableReason: 'Connect Cursor to start it' };
+  return {};
+}
+
 function persistedAgent(
   agent: PersistedAgentLike,
   input: RosterInput
 ): RosterAgent {
   const harnessId = agent.harness_id ?? undefined;
   const connected = runtimeConnected(agent.harness, harnessId, input);
+  const runtime = input.runtimes.find((item) => item.id === harnessId);
+  // A computer that is away is turned off; there is nothing to reconnect.
+  const poweredOff =
+    agent.harness === 'macrod' && !connected && !!runtime?.computer_id;
+  const disconnected = agent.harness === 'macrod' && !connected && !poweredOff;
   // A resident answers anyone who can reach it; a coding agent needs the person
   // prompting it to have access to its machine.
-  const runtimeAccess = input.runtimes.find(
-    (runtime) => runtime.id === harnessId
-  )?.access;
+  const runtimeAccess = runtime?.access;
   const needsRuntimeAccess =
     agent.is_coding !== false &&
     (runtimeAccess === 'none' || runtimeAccess === 'read');
@@ -172,23 +216,15 @@ function persistedAgent(
       agent.bot.owner?.type === 'user'
         ? agent.bot.owner.user_id
         : (agent.bot.created_by ?? undefined),
-    offline: agent.harness === 'macrod' && !connected,
+    offline: disconnected,
+    poweredOff,
     needsRuntimeAccess,
-    connectLabel:
-      agent.harness === 'cursor' && input.cursorNeedsConnection
-        ? 'Connect Cursor'
-        : needsRuntimeAccess
-          ? 'Request access'
-          : agent.harness === 'macrod' && !connected
-            ? 'Reconnect machine'
-            : undefined,
-    unavailableReason: needsRuntimeAccess
-      ? 'You need access to its machine'
-      : agent.harness === 'macrod' && !connected
-        ? 'Its machine is disconnected'
-        : agent.harness === 'cursor' && !connected
-          ? 'Connect Cursor to start it'
-          : undefined,
+    ...availability(agent, input, {
+      connected,
+      poweredOff,
+      disconnected,
+      needsRuntimeAccess,
+    }),
     persisted: agent,
   };
 }

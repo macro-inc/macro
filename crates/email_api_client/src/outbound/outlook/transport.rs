@@ -6,7 +6,7 @@ use serde_json::Value;
 use tracing::Instrument;
 use url::Url;
 
-use super::{IMMUTABLE_ID_PREFERENCE, OutlookApiClientRepository, route};
+use super::{DELTA_PAGE_PREFERENCE, IMMUTABLE_ID_PREFERENCE, OutlookApiClientRepository, route};
 use crate::domain::models::{AccessToken, EmailApiError, RateLimitOrigin, StreamToken};
 
 #[cfg(test)]
@@ -109,7 +109,7 @@ impl OutlookApiClientRepository {
         url: Url,
     ) -> Result<Option<Response>, EmailApiError> {
         match self
-            .send_graph_request(token, Method::GET, url, None, None, NotFound::Answer)
+            .send_graph_request(token, Method::GET, url, None, &[], NotFound::Answer)
             .await
         {
             Ok(response) => Ok(Some(response)),
@@ -135,10 +135,33 @@ impl OutlookApiClientRepository {
             method,
             url,
             body,
-            expected_version,
+            expected_version
+                .map(|version| ("If-Match", version))
+                .as_slice(),
             NotFound::Failure,
         )
         .await
+    }
+
+    /// Reads one page of a delta round. The page-size preference is not
+    /// carried in the nextLink, so every page of the round sends it.
+    pub(super) async fn get_delta_page<T: DeserializeOwned>(
+        &self,
+        token: &AccessToken,
+        url: Url,
+    ) -> Result<T, EmailApiError> {
+        let response = self
+            .send_graph_request(
+                token,
+                Method::GET,
+                url,
+                None,
+                &[("Prefer", DELTA_PAGE_PREFERENCE)],
+                NotFound::Failure,
+            )
+            .await
+            .map_err(|failure| failure.error)?;
+        read_json(response).await
     }
 
     async fn send_graph_request(
@@ -147,7 +170,7 @@ impl OutlookApiClientRepository {
         method: Method,
         url: Url,
         body: Option<&Value>,
-        expected_version: Option<&str>,
+        extra_headers: &[(&'static str, &str)],
         not_found: NotFound,
     ) -> Result<Response, GraphFailure> {
         let path = url.path().to_owned();
@@ -162,8 +185,8 @@ impl OutlookApiClientRepository {
             .request(method.clone(), url)
             .bearer_auth(token.expose_secret())
             .header("Prefer", IMMUTABLE_ID_PREFERENCE);
-        if let Some(version) = expected_version {
-            request = request.header("If-Match", version);
+        for (name, value) in extra_headers {
+            request = request.header(*name, *value);
         }
         match body {
             Some(body) => request = request.json(body),
@@ -238,6 +261,7 @@ impl OutlookApiClientRepository {
             reauthorized,
             http.response.status_code = tracing::field::Empty,
             graph.request_id = tracing::field::Empty,
+            graph.error_code = tracing::field::Empty,
             outlook.gate_wait_ms = tracing::field::Empty,
             outlook.throttle_origin = tracing::field::Empty,
             outlook.retry_after_seconds = tracing::field::Empty,
@@ -335,6 +359,7 @@ impl OutlookApiClientRepository {
         let body = response.text().await.unwrap_or_default();
         let error: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
         let code = error.pointer("/error/code").and_then(Value::as_str);
+        span.record("graph.error_code", code);
         if method != Method::GET {
             // Graph error messages can quote recipient addresses. The code and
             // request-id identify the failure; only bodies without a Graph error

@@ -7,12 +7,10 @@ use opensearch_query_builder::{BoolQueryBuilder, HasChildQuery, InnerHits, Query
 
 use super::{
     builder::{SearchQueryBuilder, SearchQueryConfig},
-    chats::{
-        build_all_terms_highlight_query, build_child_content_query, inner_hits_content_highlight,
-    },
+    chats::{build_all_terms_highlight_query, inner_hits_content_highlight},
     model::{Hit, SearchGotoAgentSession, SearchGotoContent, SearchHit, parse_highlight_hit},
-    query::Keys,
-    utils::millis_to_datetime,
+    query::{Keys, child_content_query},
+    utils::{millis_to_datetime, split_inner_hits_budget},
 };
 use crate::Result;
 
@@ -41,6 +39,9 @@ pub struct AgentSessionSearchArgs {
     /// Name/content selection.
     pub mode: AgentSessionSearchMode,
 }
+
+/// The fields `SearchGotoAgentSession` decodes from a matching message.
+const MESSAGE_SOURCE_FIELDS: [&str; 2] = ["message_turn", "author"];
 
 struct AgentSessionSearchConfig;
 
@@ -78,17 +79,21 @@ pub(super) fn build_query(
     ) {
         let mut content = BoolQueryBuilder::new();
         let highlight = build_all_terms_highlight_query(&args.terms, match_type);
+        let budget = split_inner_hits_budget(args.terms.len());
+
         for (index, term) in args.terms.iter().enumerate() {
-            content.must(
-                HasChildQuery::new("message", build_child_content_query(term, match_type))
-                    .inner_hits(
-                        InnerHits::new()
-                            .name(format!("agent_term_{index}"))
-                            .size(100)
-                            .highlight(inner_hits_content_highlight(&highlight)),
-                    )
-                    .into(),
-            );
+            let has_child = HasChildQuery::new("message", child_content_query(term, match_type));
+            let Some(size) = budget.size_for_clause(index) else {
+                content.must(has_child.into());
+                continue;
+            };
+
+            let inner_hits = InnerHits::new()
+                .name(format!("agent_term_{index}"))
+                .size(size)
+                .source_fields(MESSAGE_SOURCE_FIELDS)
+                .highlight(inner_hits_content_highlight(&highlight));
+            content.must(has_child.inner_hits(inner_hits).into());
         }
         query.should(content.build().into());
     }

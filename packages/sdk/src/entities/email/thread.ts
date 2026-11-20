@@ -1,6 +1,7 @@
 import type {
   ApiContactInfo,
   ApiDraftContactInfo,
+  ApiThreadPreviewCursorInner,
   CalendarInvitation,
   GetThreadResponses,
   MailboxOperation,
@@ -11,6 +12,8 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
@@ -20,6 +23,7 @@ import {
   sharePermissionBody,
 } from '../sharing/permissions';
 import { EmailAttachment } from './attachment';
+import { EmailDraft } from './draft';
 import type { Label } from './label';
 import { Link } from './link';
 import { EmailMessage } from './message';
@@ -190,6 +194,18 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** Favorites identify email threads as `email_thread`. */
   readonly entityType = 'email_thread';
 
+  /**
+   * Share this email thread with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * email thread; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'thread', this.id);
+  }
+
   /** The properties service identifies email threads as `THREAD`. */
   protected readonly propertyEntityType = 'THREAD';
 
@@ -220,6 +236,23 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** A handle to a thread by id. Details load on first access. */
   static byId(client: MacroClient, id: string): EmailThread {
     return new EmailThread(client, id);
+  }
+
+  /**
+   * A handle seeded from an inbox preview with the thread columns it carries.
+   * Its subject is the latest message's and its times are inbox sort times,
+   * so `subject()` and the timestamps still read the thread.
+   */
+  static fromPreview(
+    client: MacroClient,
+    preview: ApiThreadPreviewCursorInner,
+  ): EmailThread {
+    return new EmailThread(client, preview.id).withListed({
+      is_read: preview.isRead,
+      inbox_visible: preview.inboxVisible,
+      link_id: preview.linkId,
+      provider_id: preview.providerId,
+    });
   }
 
   /** When the thread was created. */
@@ -309,6 +342,18 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   }
 
   /**
+   * The unsent drafts among this thread's first 100 messages, from the thread detail.
+   *
+   * @readonly
+   */
+  async drafts(): Promise<EmailDraft[]> {
+    const { messages } = await this.detail.get();
+    return messages
+      .filter((m) => m.is_draft && !m.is_sent)
+      .map((m) => EmailDraft.byId(this.client, m.db_id));
+  }
+
+  /**
    * The attachments across this thread's first 100 messages, pre-seeded from the thread detail.
    *
    * @readonly
@@ -326,7 +371,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * `replyingTo` instead. Returns a handle when the API reports the created
    * message's id.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async reply(opts: ReplyEmailOptions): Promise<EmailMessage | undefined> {
@@ -477,7 +522,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Search email threads by subject and content, most relevant first, auto-paginated. */
+  /** Search email threads by subject and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { email_filters: {} },
     type: 'email',

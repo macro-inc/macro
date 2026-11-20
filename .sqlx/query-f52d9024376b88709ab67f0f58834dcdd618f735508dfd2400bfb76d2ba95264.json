@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion SET state = $5, updated_at = $3,\n                   state_changed_at = CASE WHEN state = $5 THEN state_changed_at ELSE $3 END\n               WHERE id = $1 AND user_id = $2 AND updated_at = $4 AND state = ANY($6)\n                 AND EXISTS (SELECT 1 FROM suggestion_prompt p WHERE p.suggestion_id = suggestion.id AND p.run_mode = 'background')\n                 AND NOT EXISTS (\n                     SELECT 1 FROM suggestion_run r WHERE r.suggestion_id = suggestion.id AND r.settled_at IS NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f52d9024376b88709ab67f0f58834dcdd618f735508dfd2400bfb76d2ba95264"
+}

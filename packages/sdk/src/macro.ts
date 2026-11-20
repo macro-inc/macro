@@ -23,11 +23,13 @@ import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
+import { ImportNamespace } from './entities/imports/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { MemoryNamespace } from './entities/memory/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
+import { PasswordNamespace } from './entities/passwords/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
@@ -35,8 +37,10 @@ import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
+import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
@@ -47,6 +51,11 @@ import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
+export type {
+  AppearanceColor,
+  AppearanceIcon,
+  EntityAppearance,
+} from '../generated/storage/types.gen';
 export type { MacroOpts } from './config';
 export type {
   ActivityAction,
@@ -76,12 +85,35 @@ export {
 } from './entities/connected-apps/connected-app';
 export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
+export type {
+  CrmEmailPolicy,
+  CrmEmailPolicyHistoryEvent,
+  CrmEmailPolicyResult,
+  CrmEmailPolicyToken,
+  CrmEmailPolicyWriteOptions,
+  CrmEmailPrivacySettings,
+  CrmEmailRuleValidation,
+  CrmExcludedEmailThread,
+} from './entities/crm-email-privacy/email-privacy';
+export {
+  type CrmEmailPreviewState,
+  CrmEmailRulePreview,
+} from './entities/crm-email-privacy/email-rule-preview';
+export {
+  type CrmEmailRuleDefinition,
+  CrmEmailRuleRevision,
+} from './entities/crm-email-privacy/email-rule-revision';
+export type {
+  CrmEmailRule,
+  CrmEmailRuleSet,
+} from './entities/crm-email-privacy/email-rules';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
   type ChangeColumnTypeOptions,
   type ColumnType,
   type ConvertIntoNewColumnOptions,
+  type CreateDatabaseOptions,
   MacroOpRefusedError,
   type OpResultOf,
 } from './entities/databases/database';
@@ -108,6 +140,13 @@ export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
 export type { CreatedEntity } from './entities/routines/namespace';
+export {
+  AppLink,
+  UiNamespace,
+  type UiOpenOptions,
+  type UiOpenResult,
+  type UiTarget,
+} from './entities/ui/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -129,6 +168,9 @@ export type { RequestActivity } from './utils/activity';
 export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
+
+  /** suggestions resources and operations. */
+  readonly suggestions: SuggestionNamespace;
 
   /** unfurls resources and operations. */
   readonly unfurls: UnfurlNamespace;
@@ -188,6 +230,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Call the user's connected apps and MCP servers from a code execution. */
   readonly connectedApps: ConnectedAppNamespace;
 
+  /** Open items in the Macro app tab the user prompted from. */
+  readonly ui: UiNamespace;
+
   readonly favorites: FavoritesNamespace;
 
   readonly foreignEntities: ForeignEntityNamespace;
@@ -197,6 +242,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** The import ledger: external items proposed for, or copied into, Macro. */
+  readonly imports: ImportNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
 
@@ -221,6 +268,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Saved views: named filter definitions shown in a surface's sidebar, such as Email. */
   readonly savedViews: SavedViewsNamespace;
+
+  /** The authenticated agent's view of its team vaults; agent API keys only. */
+  readonly passwords: PasswordNamespace;
 
   readonly tasks: TaskNamespace;
 
@@ -251,6 +301,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     const client = new MacroClient(opts);
     this._client = client;
     this.routines = new RoutineNamespace(client);
+    this.suggestions = new SuggestionNamespace(client);
     this.unfurls = new UnfurlNamespace(client);
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
@@ -275,10 +326,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
     this.connectedApps = new ConnectedAppNamespace(client);
+    this.ui = new UiNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.imports = new ImportNamespace(client);
     this.web = new WebNamespace(client);
     this.memory = new MemoryNamespace(client);
     this.activity = new ActivityNamespace(client);
@@ -289,6 +342,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.referrals = new ReferralNamespace(client);
     this.savedViews = new SavedViewsNamespace(client);
     this.search = new SearchNamespace(client);
+    this.passwords = new PasswordNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -391,6 +445,11 @@ export {
 } from './entities/canvases/canvas';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
+export type {
+  MessageContext,
+  MessageContextOptions,
+  ReplyContext,
+} from './entities/channels/message';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {
@@ -515,9 +574,19 @@ export type {
 } from './entities/memory/namespace';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
+export type {
+  AgentAccessRequest,
+  AgentWake,
+  DisclosedSecret,
+  SecretSelector,
+  VerificationCode,
+} from './entities/passwords/item';
+export { PasswordItem } from './entities/passwords/item';
+export { AgentVault, PasswordNamespace } from './entities/passwords/namespace';
 export type { EntityReference } from './entities/reference';
 export type { ReferralLink } from './entities/referrals/namespace';
 export type {
+  RoutineApp,
   RoutineEventFilter,
   RoutineTriggerOptions,
   SingleRoutineTrigger,
@@ -527,6 +596,7 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export { RoutineSuggestion } from './entities/routines/suggestion';
 export {
   SavedView,
   type SavedViewConfig,
@@ -552,6 +622,16 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/spreadsheets/spreadsheet';
+export type {
+  SuggestionInput,
+  SuggestionsReview,
+} from './entities/suggestions/namespace';
+export {
+  Suggestion,
+  type SuggestionChanges,
+  type SuggestionItem,
+  type SuggestionWriteOutcome,
+} from './entities/suggestions/suggestion';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export {

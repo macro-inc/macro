@@ -3,12 +3,12 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
-import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isChannelEntity } from '@entity';
+import { type ChannelEntity, isChannelEntity } from '@entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryReadyGate } from '../gate';
 import {
   type SoupAstItemsQuery,
@@ -35,9 +35,14 @@ export function channelsByIdsQueryArgs(
   };
 }
 
-/** Keep each channel list's bounded unread projection current, including cached rows. */
+/**
+ * Keep each channel list's bounded unread and mention projections current,
+ * including cached rows. A list given `channelTypes` also waits for a new
+ * channel of those types to reach its first page.
+ */
 export function registerChannelListNotificationRefresh(
-  query: SoupAstItemsQuery
+  query: SoupAstItemsQuery,
+  channelTypes?: readonly string[]
 ) {
   return registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
@@ -45,13 +50,17 @@ export function registerChannelListNotificationRefresh(
     reader: {
       enabled: query.transport === 'graphql' && query.isEnabled,
       fetching: query.isFetching,
+      channelTypes,
       filtered: true,
       notificationIds: query.isPending
         ? []
         : (query.data?.entities ?? [])
             .filter(isChannelEntity)
             .flatMap((channel) =>
-              (channel.unreadNotifications ?? []).map(({ id }) => id)
+              [
+                ...(channel.unreadNotifications ?? []),
+                ...(channel.unreadMentions ?? []),
+              ].map(({ id }) => id)
             ),
     },
   }));
@@ -62,17 +71,17 @@ export function useChannelsByIdsQuery(
   channelIds: Accessor<readonly string[]>,
   options: Accessor<{ cacheFirst?: boolean }> = () => ({})
 ) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    () => ({
-      enabled: channelIds().length > 0,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-      graphqlCacheFirstEntities: options().cacheFirst
-        ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
-        : undefined,
-    })
-  );
+  // Soup reads its arguments from multiple reactive computations. Compile the
+  // ID filter once per membership change, not again for every status update.
+  const args = createMemo(() => channelsByIdsQueryArgs(channelIds()));
+  const query = useSoupAstItemsQuery(args, () => ({
+    enabled: channelIds().length > 0,
+    staleTime: 30_000,
+    graphqlProjection: 'channel-list',
+    graphqlCacheFirstEntities: options().cacheFirst
+      ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
+      : undefined,
+  }));
   registerChannelListNotificationRefresh(query);
   createEffect(() => {
     if (
@@ -94,13 +103,13 @@ export function useCachedChannelsByIds(
   ids: Accessor<readonly string[]>,
   enabled: Accessor<boolean>
 ) {
-  const userId = useUserId();
+  const account = useQueryAccount();
   const memberIds = createMemo(() => [...new Set(ids())].sort(), [], {
     equals: arrayEquals,
   });
   const source = createMemo(() => {
     const members = memberIds();
-    if (!enabled() || !userId()) return [];
+    if (!enabled() || !account()) return [];
     return untrack(() => {
       const batches = [];
       for (let offset = 0; offset < members.length; offset += BATCH_SIZE) {
@@ -109,10 +118,12 @@ export function useCachedChannelsByIds(
           () => batchIds,
           () => ({ cacheFirst: true })
         );
-        const channels = () =>
-          queryReadyGate(query)
-            ? query.data.entities.filter(isChannelEntity)
-            : [];
+        // A refresh must not empty sections that already resolved their members.
+        // Each batch owns its snapshot, so changed IDs or accounts start fresh.
+        const channels = createMemo<ChannelEntity[]>((previous) => {
+          if (!queryReadyGate(query)) return previous;
+          return query.data.entities.filter(isChannelEntity);
+        }, []);
         const unresolved = () => {
           const loaded = new Set(channels().map((channel) => channel.id));
           return batchIds.filter((id) => !loaded.has(id));
@@ -136,7 +147,19 @@ export function useCachedChannelsByIds(
       new Set(
         source().flatMap((batch) => (batch.error() ? batch.unresolved() : []))
       ),
-    isLoading: () => source().some((batch) => batch.loading()),
+    // Successful omissions are unavailable, not placeholders for another page.
+    unavailableIds: () =>
+      new Set(
+        source().flatMap((batch) =>
+          batch.query.hasPageData && !batch.loading() && !batch.error()
+            ? batch.unresolved()
+            : []
+        )
+      ),
+    isLoading: () =>
+      source().some(
+        (batch) => batch.loading() && batch.unresolved().length > 0
+      ),
     error: () =>
       source()
         .find((batch) => batch.error() && batch.unresolved().length)

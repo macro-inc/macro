@@ -1,8 +1,17 @@
 #[cfg(test)]
 mod test;
 
+use std::sync::{Arc, LazyLock};
+
 use chrono::{DateTime, Utc};
+use single_flight::{DatabaseKey, SingleFlight};
 use uuid::Uuid;
+
+type AccessibleCallsKey = (DatabaseKey, String, Vec<String>);
+type AccessibleCalls = Result<Vec<Uuid>, Arc<sqlx::Error>>;
+
+static RUNNING_CALL_LOOKUPS: LazyLock<SingleFlight<AccessibleCallsKey, AccessibleCalls>> =
+    LazyLock::new(SingleFlight::new);
 
 #[derive(Debug, Clone)]
 pub struct CallRecordSearchBackfill {
@@ -51,81 +60,61 @@ pub struct CallRecordSearchPayload {
 /// `status_filter` optionally narrows visible calls by viewer-relative status.
 /// Standalone calls are discoverable only through the caller's individual grant;
 /// team/channel grants and shared links do not add them to team memory.
-#[tracing::instrument(skip(db, status_filter))]
+///
+/// Nothing is cached, but callers asking at the same time for the same
+/// database, user and status filter share one run of the query. A failure
+/// reaches all of them as an `Arc<sqlx::Error>`.
+#[tracing::instrument(
+    skip_all,
+    err,
+    fields(
+        statuses = status_filter.len(),
+        calls = tracing::field::Empty,
+        coalesced = tracing::field::Empty
+    )
+)]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     status_filter: &[String],
 ) -> anyhow::Result<Vec<Uuid>> {
-    sqlx::query_scalar!(
-        r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text AS source_id
-            FROM comms_channel_participants cp
-            WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text
-            FROM team_user t
-            WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        ),
-        visible_calls AS (
-            SELECT
-                cr.id,
-                CASE
-                    WHEN EXISTS (
-                        SELECT 1 FROM call_record_participants crp
-                        WHERE crp.call_record_id = cr.id AND crp.user_id = $1
-                    ) THEN 'ATTENDED'
-                    WHEN EXISTS (
-                        SELECT 1 FROM comms_channel_participants ccp
-                        WHERE ccp.channel_id = cr.channel_id
-                          AND ccp.user_id = $1
-                          AND ccp.left_at IS NULL
-                    ) THEN 'MISSED'
-                    ELSE 'UNATTENDED'
-                END AS status
-            FROM call_records cr
-            WHERE (
-                EXISTS (
-                    SELECT 1 FROM entity_access ea
-                    WHERE ea.entity_id = cr.id
-                      AND ea.entity_type = 'call'
-                      AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                      AND (cr.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
-                ) OR EXISTS (
-                    SELECT 1 FROM "SharePermission" sp
-                    WHERE sp.id = cr.share_permission_id
-                      AND cr.channel_id IS NOT NULL
-                      AND sp."linkShareAccessLevel" IS NOT NULL
-                      AND (
-                          sp."linkShare" = 'PUBLIC'
-                          OR (
-                              sp."linkShare" = 'TEAM'
-                              AND EXISTS (
-                                  SELECT 1
-                                  FROM team_user owner_team
-                                  WHERE owner_team.user_id = cr.created_by
-                                    AND owner_team.team_id::text IN (
-                                        SELECT source_id FROM user_source_ids
-                                    )
-                              )
-                          )
-                      )
-                )
-            )
-        )
-        SELECT id AS "id!"
-        FROM visible_calls
-        WHERE cardinality($2::text[]) = 0 OR status = ANY($2)
-        "#,
+    let key = (
+        DatabaseKey::of(db),
+        user_id.to_string(),
+        status_filter.to_vec(),
+    );
+    let lookup = || {
+        let db = db.clone();
+        let user_id = user_id.to_string();
+        let status_filter = status_filter.to_vec();
+
+        async move {
+            query_accessible_call_ids(&db, &user_id, &status_filter)
+                .await
+                .map_err(Arc::new)
+        }
+    };
+
+    // Boxed so the lookup adds one pointer, not its whole state machine, to
+    // the future of every caller up the stack: services near rustc's layout
+    // depth limit stop compiling otherwise.
+    let call_ids = Box::pin(RUNNING_CALL_LOOKUPS.run(key, lookup)).await?;
+    tracing::Span::current().record("calls", call_ids.len());
+    Ok(call_ids)
+}
+
+async fn query_accessible_call_ids(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &str,
+    status_filter: &[String],
+) -> sqlx::Result<Vec<Uuid>> {
+    sqlx::query_file_scalar!(
+        "src/call_record/get/accessible_call_ids.sql",
         user_id,
         status_filter,
     )
     .fetch_all(db)
     .await
-    .map_err(Into::into)
 }
 
 /// Gets call records for search backfill.

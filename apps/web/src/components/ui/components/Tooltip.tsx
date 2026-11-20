@@ -12,6 +12,7 @@ import {
   createSignal,
   For,
   onCleanup,
+  onMount,
   type ParentProps,
   Show,
   splitProps,
@@ -119,6 +120,31 @@ function TooltipContent(props: ComponentProps<typeof KobalteTooltip.Content>) {
   );
 }
 
+/** Keep tooltips above a fullscreen surface instead of behind the browser's top layer. */
+function TooltipPortal(props: ComponentProps<typeof KobalteTooltip.Portal>) {
+  let marker!: HTMLSpanElement;
+  const [mount, setMount] = createSignal<HTMLElement>();
+  onMount(() => {
+    const sync = () => {
+      const element = document.fullscreenElement;
+      setMount(
+        element instanceof HTMLElement && element.contains(marker)
+          ? element
+          : undefined
+      );
+    };
+    sync();
+    document.addEventListener('fullscreenchange', sync);
+    onCleanup(() => document.removeEventListener('fullscreenchange', sync));
+  });
+  return (
+    <>
+      <span hidden ref={marker} />
+      <KobalteTooltip.Portal {...props} mount={props.mount ?? mount()} />
+    </>
+  );
+}
+
 type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
   /** Raw shortcuts for actions without a registered HotkeyToken. */
@@ -159,7 +185,7 @@ function TooltipComponent(props: TooltipProps) {
       >
         {props.children}
       </TooltipTrigger>
-      <KobalteTooltip.Portal>
+      <TooltipPortal>
         <TooltipContent>
           <div class="flex items-center gap-2">
             <div class="text-xs">{props.label}</div>
@@ -189,7 +215,7 @@ function TooltipComponent(props: TooltipProps) {
             </Show>
           </div>
         </TooltipContent>
-      </KobalteTooltip.Portal>
+      </TooltipPortal>
     </TooltipRoot>
   );
 }
@@ -197,6 +223,6 @@ function TooltipComponent(props: TooltipProps) {
 export const Tooltip = Object.assign(TooltipComponent, {
   Root: TooltipRoot,
   Trigger: TooltipTrigger,
-  Portal: KobalteTooltip.Portal,
+  Portal: TooltipPortal,
   Content: TooltipContent,
 });

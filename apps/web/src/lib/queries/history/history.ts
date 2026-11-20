@@ -1,6 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useIsAuthenticated } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
@@ -8,7 +7,10 @@ import {
   type ItemType,
   storageServiceClient,
 } from '@service-storage/client';
-import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import {
   keepPreviousData,
   type QueryClient,
@@ -21,9 +23,12 @@ import {
 import { type Accessor, createEffect, onCleanup, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import { intervalWhileRead } from '../visible-refresh';
 import {
   HISTORY_SEARCH_BUCKETS,
+  loadHistoryViewItem,
   readCachedGraphqlHistoryItems,
+  stampCachedHistoryView,
 } from './graphql';
 import { historyKeys } from './keys';
 import { transformHistoryItem, transformHistoryResponse } from './transforms';
@@ -127,14 +132,24 @@ const restHistoryQueryOptions = {
 };
 
 export function useHistoryQuery() {
+  return createHistoryQuery();
+}
+
+/**
+ * History for Quick Access, which lists it only while one of its lists reads
+ * the cache: cache changes reread it promptly while `reading` is true and at
+ * most once a minute otherwise, so a list opening never has to read it.
+ */
+export function useHistoryQueryWhileRead(reading: Accessor<boolean>) {
+  return createHistoryQuery(reading);
+}
+
+function createHistoryQuery(reading?: Accessor<boolean>) {
   const authenticated = useIsAuthenticated();
-  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
-    if (authenticated() !== true || !graphqlSoupFlag().enabled)
-      return undefined;
-    const cacheHost = getGraphqlSoupCacheHost();
-    return cacheHost?.disabled ? undefined : cacheHost;
+    if (authenticated() !== true) return undefined;
+    return getGraphqlSoupCacheHost();
   };
 
   createEffect(() => {
@@ -148,7 +163,10 @@ export function useHistoryQuery() {
             { queryKey: historyKeys.graphqlList.queryKey },
             { cancelRefetch: false }
           ),
-        { searchBuckets: () => HISTORY_SEARCH_BUCKETS }
+        {
+          searchBuckets: () => HISTORY_SEARCH_BUCKETS,
+          intervalMs: reading ? intervalWhileRead(reading) : undefined,
+        }
       )
     );
   });
@@ -195,6 +213,49 @@ type UpsertToHistoryContext = {
   previousData: HistoryQueryFnResult | undefined;
 };
 
+/**
+ * Lists a viewed item first in cached history at once, as the recently-viewed
+ * stamp does for items already listed. An item the cache does not hold yet is
+ * loaded once the server has recorded the view. History is reread only when
+ * the item was not listed, so an open of a listed item costs no read.
+ */
+async function listViewInCachedHistory(
+  params: UpsertToHistoryParams,
+  upserted: Promise<unknown>
+): Promise<void> {
+  const cacheHost = getGraphqlSoupCacheHost();
+  if (!cacheHost || cacheHost.disabled) return;
+  const viewed = await stampCachedHistoryView(
+    cacheHost,
+    { ...params, viewedAt: new Date().toISOString() },
+    async (typename) => {
+      const recorded = await upserted.then(
+        () => true,
+        () => false
+      );
+      if (!recorded) return;
+      await loadHistoryViewItem(
+        getGraphqlSoupClient(),
+        typename,
+        params.itemId
+      );
+    }
+  );
+  if (!viewed) return;
+  const listed = queryClient
+    .getQueryData<HistoryQueryFnResult>(historyKeys.graphqlList.queryKey)
+    ?.some((item) => item.id === params.itemId);
+  if (listed) return;
+  // A read in flight may predate the stamp, and with no history data yet an
+  // invalidation would join it instead of reading again.
+  await queryClient.cancelQueries({
+    queryKey: historyKeys.graphqlList.queryKey,
+  });
+  await queryClient.invalidateQueries({
+    queryKey: historyKeys.graphqlList.queryKey,
+  });
+}
+
 export function useUpsertToHistoryMutation(
   callbacks?: MutationCallbacks<
     void,
@@ -207,13 +268,18 @@ export function useUpsertToHistoryMutation(
   return useMutation(
     () => ({
       mutationFn: async (params: UpsertToHistoryParams) => {
-        await throwOnErr(
+        const upserted = throwOnErr(
           async () =>
             await storageServiceClient.upsertItemToUserHistory({
               itemId: params.itemId,
               itemType: params.itemType,
             })
         );
+        fireAndForget(
+          listViewInCachedHistory(params, upserted),
+          'history-cached-view'
+        );
+        await upserted;
       },
       ...withCallbacks<
         void,

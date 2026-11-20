@@ -1,5 +1,5 @@
 import type { Track } from 'livekit-client';
-import { createEffect, on, onCleanup } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 
 /**
  * Generic track view that attaches/detaches a LiveKit track's media element.
@@ -12,40 +12,55 @@ export function TrackView(props: {
 }) {
   let ref!: HTMLDivElement;
   let attachedTrack: Track | undefined;
-  let attachedElement: Element | undefined;
+  const [attachedElement, setAttachedElement] =
+    createSignal<HTMLMediaElement>();
 
+  // Crossfades can mount two views of one track. Detach only this view's
+  // element, then attach its replacement; never interrupt the sibling view.
   createEffect(
     on(
       () => props.track,
       (track, prev) => {
         if (prev === track) return;
 
-        prev?.detach().forEach((el) => el.remove());
+        const previousElement = attachedElement();
+        if (prev && previousElement) {
+          prev.detach(previousElement);
+          previousElement.remove();
+        }
         attachedTrack = undefined;
-        attachedElement = undefined;
+        setAttachedElement(undefined);
 
         if (!track) return;
 
         const el = track.attach();
         attachedTrack = track;
-        attachedElement = el;
-        Object.assign(el.style, {
-          width: '100%',
-          height: '100%',
-          objectFit: props.fit ?? 'cover',
-          transform: props.mirror ? 'scaleX(-1)' : '',
-        });
+        setAttachedElement(el);
         ref.appendChild(el);
       }
     )
   );
 
+  // Layout changes update the mounted element without detaching its stream.
+  createEffect(
+    on(
+      () => [attachedElement(), props.fit, props.mirror] as const,
+      ([element, fit, mirror]) => {
+        if (!element) return;
+        Object.assign(element.style, {
+          width: '100%',
+          height: '100%',
+          objectFit: fit ?? 'cover',
+          transform: mirror ? 'scaleX(-1)' : '',
+        });
+      }
+    )
+  );
+
   onCleanup(() => {
-    if (attachedTrack) {
-      attachedTrack.detach().forEach((el) => el.remove());
-    } else {
-      attachedElement?.remove();
-    }
+    const element = attachedElement();
+    if (attachedTrack && element) attachedTrack.detach(element);
+    element?.remove();
   });
 
   return <div ref={ref} class="size-full" />;

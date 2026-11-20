@@ -1,4 +1,4 @@
-use crate::tool_search::{SearchableTool, ToolLoader};
+use crate::tool_search::{SearchableTool, ToolLoader, ToolMatch};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -34,6 +34,10 @@ pub struct RequestContext {
     /// `SearchTools` tool to match the model's query. Empty when the request has
     /// no searchable tools.
     pub searchable_tools: Arc<Vec<SearchableTool>>,
+    /// The tools sent with every request, so `SearchTools` can say a match is
+    /// already callable instead of reporting nothing. Empty when the request
+    /// has no tool search.
+    pub advertised_tools: Arc<Vec<ToolMatch>>,
     /// Loader used by `SearchTools` to load matched tools into the active
     /// request. `None` when tool search is not wired up (e.g. non-agent callers).
     pub tool_loader: Option<ToolLoader>,
@@ -55,6 +59,7 @@ impl RequestContext {
         Self {
             user_id,
             searchable_tools: Arc::new(Vec::new()),
+            advertised_tools: Arc::new(Vec::new()),
             tool_loader: None,
             cancel: CancellationToken::new(),
             genai_telemetry: true,
@@ -76,6 +81,12 @@ impl RequestContext {
     ) -> Self {
         self.searchable_tools = searchable_tools;
         self.tool_loader = Some(tool_loader);
+        self
+    }
+
+    /// Attach the tools sent with every request (see [`Self::advertised_tools`]).
+    pub fn with_advertised_tools(mut self, advertised_tools: Arc<Vec<ToolMatch>>) -> Self {
+        self.advertised_tools = advertised_tools;
         self
     }
 }

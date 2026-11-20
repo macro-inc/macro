@@ -9,7 +9,7 @@ jobs:
   release:
     if: github.event.label.name == 'ios-update' && github.event.pull_request.head.repo.full_name == github.repository
     name: iOS App Store Release
-    runs-on: nscloud-macos-sequoia-arm64-6x14
+    runs-on: nscloud-macos-tahoe-slim-arm64-6x14
     permissions:
       actions: read
       contents: read
@@ -29,6 +29,79 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: '0'
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
+    - name: Select Xcode 27.1
+      run: |
+        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
+        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
+        set -euo pipefail
+        # Namespace macOS images install several Xcodes side by side under
+        # /Applications and select one by default, which moves when the image adds a
+        # newer Xcode. Find $XCODE_VERSION (any patch release, never a beta) by the
+        # version each bundle reports, and select it for every later step: the iOS
+        # toolchain split (ios-native-env.sh, build_ios_simulator_app.sh) reads
+        # `xcode-select -p` because nix develop overrides DEVELOPER_DIR.
+        #
+        # An image-level DEVELOPER_DIR would outrank that selection for xcodebuild,
+        # xcrun and `xcode-select -p` alike, so drop it here and pin it for later steps.
+        unset DEVELOPER_DIR
+        plist_value() {
+          /usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/version.plist" 2>/dev/null
+        }
+
+        installed=""
+        best=""
+        best_version=""
+        best_patch=-1
+        for app in /Applications/Xcode*.app; do
+          [[ -f "$app/Contents/version.plist" ]] || continue
+          version=$(plist_value "$app" CFBundleShortVersionString) || continue
+          build=$(plist_value "$app" ProductBuildVersion) || build="?"
+          installed+="  $app: Xcode $version ($build)"$'\n'
+          [[ "$app" == *[Bb]eta* ]] && continue
+          [[ "$version" == "$XCODE_VERSION" || "$version" == "$XCODE_VERSION".* ]] || continue
+          # Prefer the newest patch release: 27.1.1 over 27.1.
+          patch=${version#"$XCODE_VERSION"}
+          patch=${patch#.}
+          if (( ${patch:-0} > best_patch )); then
+            best="$app"
+            best_version="$version"
+            best_patch=${patch:-0}
+          fi
+        done
+
+        if [[ -z "$best" ]]; then
+          echo "::error::This runner has no Xcode ${XCODE_VERSION}; iOS builds need it for the iOS ${XCODE_VERSION} SDK. Move the job to a runner image that ships it (see runners.rs) or change the pinned version in steps.rs."
+          echo "Installed Xcodes:"
+          printf '%s' "${installed:-  none}"
+          exit 1
+        fi
+
+        echo "Installed Xcodes:"
+        printf '%s' "$installed"
+        echo "Selecting $best (Xcode $best_version)."
+        sudo xcode-select --switch "$best/Contents/Developer"
+        echo "DEVELOPER_DIR=$best/Contents/Developer" >> "$GITHUB_ENV"
+        # Installs the system components a non-default Xcode may still lack; a no-op
+        # once they match.
+        sudo xcodebuild -runFirstLaunch
+
+        xcodebuild -version
+        for sdk in iphoneos iphonesimulator; do
+          sdk_version=$(xcrun --sdk "$sdk" --show-sdk-version 2>/dev/null || true)
+          if [[ "$sdk_version" != "$XCODE_VERSION" && "$sdk_version" != "$XCODE_VERSION".* ]]; then
+            echo "::error::Xcode ${best_version} at $best has the ${sdk} SDK '${sdk_version:-missing}', not ${XCODE_VERSION}."
+            xcodebuild -showsdks || true
+            exit 1
+          fi
+          echo "${sdk} SDK ${sdk_version}"
+        done
+      shell: bash
+      env:
+        LOGGED_STEP: Select Xcode 27.1
+        XCODE_VERSION: '27.1'
     - name: Ensure gh and jq are installed
       run: |
         printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
@@ -222,8 +295,8 @@ jobs:
         # so refuse to start unless the PR is in a mergeable state: not a draft, and
         # every other check on the head commit passing. Pending checks are waited on
         # (the label often lands right after a push); anything failing stops the
-        # release before the long build. Our own checks are excluded: the native
-        # check is expected to be red until Apple approves the release.
+        # release before the long build. The native checks and both platforms'
+        # release checks are excluded; that last step is release_wait_for_checks.sh.
         pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid)
         if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
           echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding ios-update." >&2
@@ -250,42 +323,56 @@ jobs:
             "bump (doppler run --project ios-release --config prd -- just ios-bump), commit, and re-add ios-update." >&2
           exit 1
         fi
-
-        # Web App Status Check aggregates the gate, so it is red whenever the gate is;
-        # its other inputs (Typecheck, Test, Build, ...) are separate checks and stay.
-        # The CI gate status aggregates all of them, and stays pending on a head no one
-        # has run PR CI on. (`gh pr checks` names are job names, not workflow names;
-        # PR CI prefixes the ones it calls with `Web App / `.)
-        ours='^((Web App / )?(iOS Native Check|Web App Status Check|Android Native Check)|Re-run the native check|iOS App Store Release|iOS Release Drift|CI gate$)'
+        # The last precondition of a store release: every other check on the head
+        # commit passes. Pending ones are waited on, since the label often lands
+        # right after a push; a failing one stops the release before the long build.
+        # Both platforms run this one copy. RELEASE_LABEL names the label in messages.
+        #
+        # Checks a release does not wait on, as `gh pr checks` names them: job names,
+        # not workflow names, plus the contexts of commit statuses such as the
+        # android-play/* ones. PR CI prefixes the jobs it calls with `Web App / `.
+        #
+        # - The native checks are red until the release is live. The CI gate reads
+        #   them, so it is red with them. The other web checks (Typecheck, Test,
+        #   Build, ...) are separate checks and still count.
+        # - Both platforms' release and drift checks. The other store's release is
+        #   not this one's gate: an upload that failed there, or is still in flight,
+        #   must not hold this release back. Whoever adds the label decides whether a
+        #   failure there matters here.
+        release_gate_checks='^((Web App / )?(Android Native Check|iOS Native Check)|Re-run the native check|Android Play Release|Android Release Drift|android-play/|iOS App Store Release|iOS Release Drift|CI gate$)'
         deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
         while true; do
           all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)
-          # The checks only exist once someone has run PR CI on this head; its CI gate
+          # The checks only exist once someone has run PR CI on this head. Its CI gate
           # fails with the native check, so only the gate's description is read here.
+          # Two entries carry that name, the PR CI job and the commit status; only the
+          # status has a description, and it stays pending on a head no one has run
+          # PR CI on.
           gate=$(jq -r '
             [.[] | select(.name == "CI gate") | .description] as $gates |
             ([$gates[] | select(startswith("Running on") or startswith("Passed on"))][0] //
-             [$gates[] | select(startswith("Failed:"))][0] // "")
+             [$gates[] | select(startswith("Failed:"))][0] //
+             [$gates[] | select(. != "")][0] // "")
           ' <<<"$all_checks")
           case "$gate" in
             "" | "Not run on this commit."*)
-              echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add ios-update once it passes." >&2
+              echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add ${RELEASE_LABEL} once it passes." >&2
               exit 1
               ;;
             "Running on"* | "Passed on"* | "Failed:"*) ;;
             *)
-              echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add ios-update once it passes." >&2
+              echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add ${RELEASE_LABEL} once it passes." >&2
               exit 1
               ;;
           esac
-          checks=$(jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]' <<<"$all_checks")
+          checks=$(jq -c --arg ignored "$release_gate_checks" '[.[] | select(.name | test($ignored) | not)]' <<<"$all_checks")
           if [[ "$gate" == "Running on"* ]]; then
             checks=$(jq -c '. + [{name: "CI gate", bucket: "pending"}]' <<<"$checks")
           fi
           failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
           pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
           if [[ -n "$failing" ]]; then
-            echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add ios-update." >&2
+            echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add ${RELEASE_LABEL}." >&2
             exit 1
           fi
           if [[ -z "$pending" ]]; then
@@ -293,7 +380,7 @@ jobs:
             exit 0
           fi
           if (( $(date +%s) > deadline )); then
-            echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add ios-update once they pass." >&2
+            echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add ${RELEASE_LABEL} once they pass." >&2
             exit 1
           fi
           echo "Waiting for: ${pending}"
@@ -304,6 +391,7 @@ jobs:
         LOGGED_STEP: Require the PR to be ready to merge
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         WAIT_MINUTES: '30'
+        RELEASE_LABEL: ios-update
     - name: Install Nix
       run: |
         set -euo pipefail

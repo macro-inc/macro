@@ -1,8 +1,13 @@
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { routineContent } from '../../routines/routine-navigation';
 import type { AgentsPage } from '../core/pages';
 
-/** Open a workspace page, also when an Agents split is already mounted. */
+/**
+ * Open a workspace page, also when an Agents split is already mounted. The
+ * new-conversation page takes `composerAgentId` to start in Code with that
+ * coding agent selected.
+ */
 export function openAgentsPage(
   layout: Pick<SplitManager, 'openWithSplit'>,
   page: AgentsPage,
@@ -27,6 +32,12 @@ export function openAgentsPage(
       agentPageRequest: crypto.randomUUID(),
     },
   };
+  // The phone stack owns Back. Open a new entry instead of merging an
+  // already-mounted Agents page into the current history entry.
+  if (isTouchDevice()) {
+    layout.openWithSplit(content, { activate: true, search: {} });
+    return;
+  }
   const split = layout.openWithSplit(content, { activate: true }).split;
   if (!split) return;
   const current = split.content();

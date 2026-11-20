@@ -30,7 +30,7 @@ export function InboxClearMenu(props: InboxClearMenuProps) {
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
         variant="ghost"
-        size="icon-md"
+        size="icon-xs"
         aria-label={t('notificationsInbox.clear')}
         tooltip={t('notificationsInbox.clear')}
       >

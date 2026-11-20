@@ -1,6 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
-import type { ErrorResponseHandler } from '@core/util/safeFetch';
+import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import {
   type AI_USAGE_LIMIT_ERROR,
   readAiUsageLimitError,
@@ -11,7 +11,6 @@ import type {
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
-  AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
@@ -39,6 +38,7 @@ import type {
   SharePermissionV2,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
+  Voice,
   WarmAgentSessionResponse,
 } from './generated/schemas';
 import {
@@ -79,8 +79,49 @@ const sessionAiError: ErrorResponseHandler<
   (await readNoRuntimeAccessError(response)) ??
   (await sessionError(response));
 
+export const PROVIDER_CREDENTIAL_REJECTED =
+  'PROVIDER_CREDENTIAL_REJECTED' as const;
+
+/**
+ * Model and capability probes answer a provider refusing the caller's
+ * connected credential (a Cursor team-owned service token, a revoked key) as
+ * a JSON 409 whose message says what to reconnect with.
+ */
+const providerProbeError: ErrorResponseHandler<
+  typeof PROVIDER_CREDENTIAL_REJECTED
+> = async (response) => {
+  if (response.status === 409) {
+    try {
+      const body: unknown = await response.clone().json();
+      if (
+        typeof body === 'object' &&
+        body !== null &&
+        'code' in body &&
+        body.code === 'provider_credential_rejected' &&
+        'message' in body &&
+        typeof body.message === 'string'
+      ) {
+        return { code: PROVIDER_CREDENTIAL_REJECTED, message: body.message };
+      }
+    } catch {
+      // A plain-text 409 is a disconnected runtime, not a refused credential.
+    }
+  }
+  return statusError(response.status);
+};
+
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
+  /** Voices an agent teammate can speak with on calls. Team admins only. */
+  voices() {
+    return fetchWithToken<Voice[]>(`${agentHarnessHost}/voices`);
+  },
+  /** A WAV of the voice saying a fixed line; the first play bills the team. */
+  voiceSample(model: string) {
+    return fetchWithToken<Uint8Array>(
+      `${agentHarnessHost}/voices/${encodeURIComponent(model)}/sample`
+    );
+  },
   preview(sessionIds: string[]) {
     return fetchWithToken<PreviewAgentSessionsResponse>(
       `${agentHarnessHost}/agent-sessions/preview`,
@@ -93,30 +134,32 @@ export const agentHarnessServiceClient = {
   },
   /** Probes one agent target for its current, uncached model catalog. */
   loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
-    return fetchWithToken<LoadAgentModelsResponse>(
-      `${agentHarnessHost}/agent-models/load`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        signal,
-      }
-    );
+    return fetchWithToken<
+      LoadAgentModelsResponse,
+      typeof PROVIDER_CREDENTIAL_REJECTED
+    >(`${agentHarnessHost}/agent-models/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+      errorResponseHandler: providerProbeError,
+    });
   },
 
   discoverAgentCapabilities(
     request: DiscoverAgentCapabilitiesRequest,
     signal?: AbortSignal
   ) {
-    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
-      `${agentHarnessHost}/agent-capabilities/discover`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        signal,
-      }
-    );
+    return fetchWithToken<
+      DiscoverAgentCapabilitiesResponse,
+      typeof PROVIDER_CREDENTIAL_REJECTED
+    >(`${agentHarnessHost}/agent-capabilities/discover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+      errorResponseHandler: providerProbeError,
+    });
   },
 
   /** Prepare a hidden, unprompted in-memory session for this browser. */
@@ -206,13 +249,6 @@ export const agentHarnessServiceClient = {
         body: JSON.stringify(request),
         errorResponseHandler: sessionError,
       }
-    );
-  },
-
-  getLog(sessionId: string) {
-    return fetchWithToken<AgentSessionLogResponse>(
-      `${agentHarnessHost}/agent-sessions/${sessionId}/log`,
-      { method: 'GET' }
     );
   },
 

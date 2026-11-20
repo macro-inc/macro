@@ -1,6 +1,6 @@
-import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { TextShimmer } from '@app/features/block-agent/ui';
+import { useSessionActivity } from '@core/agent-session/session-activity';
+import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
@@ -16,15 +16,15 @@ import { conversationState } from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import { conversationTimestamp } from '../core/recent-conversations';
-import {
-  repositoryLabel,
-  type SessionCodeDetails,
-} from '../core/session-code-details';
+import { conversationCodeDetails } from '../queries/conversation-code-details';
 
 type Props = {
   entity: AgentSessionEntity;
   surface: 'home' | 'agents';
+  /** The row button's id, for a list that points at its focused row. */
+  domId?: string;
   active?: boolean;
+  focused?: boolean;
   unread?: boolean;
   mode?: AgentsMode;
   onOpen?: (event: MouseEvent) => void;
@@ -32,7 +32,6 @@ type Props = {
 
 /** Persisted list metadata stays fresh through the session update events. */
 export function AgentSessionListItem(props: Props) {
-  const { openWithSplit } = useSplitLayout();
   const mode = () =>
     props.entity.harness
       ? modeForKind(kindForHarness(props.entity.harness))
@@ -41,26 +40,10 @@ export function AgentSessionListItem(props: Props) {
   const state = () =>
     conversationState(props.entity.status, props.entity.turnState);
   const failed = () => props.entity.turnState === 'failed';
-  const details = (): SessionCodeDetails | undefined => {
-    if (mode() !== 'code') return undefined;
-    const pr = parseGithubPrUrl(props.entity.pullRequestUrl ?? '');
-    const repository =
-      repositoryLabel(props.entity.repoUrl) ??
-      (pr ? `${pr.owner}/${pr.repo}` : undefined);
-    const branch = props.entity.workingBranch ?? undefined;
-    if (!repository && !branch && !pr) return undefined;
-    return {
-      repository,
-      branch,
-      pullRequest: pr
-        ? {
-            number: pr.number,
-            url: prHtmlUrl(pr),
-            status: props.entity.pullRequestState ?? undefined,
-          }
-        : undefined,
-    };
-  };
+  const activity = useSessionActivity(() => props.entity.id);
+  const summary = () => (state() === 'working' ? activity() : undefined);
+  const details = () =>
+    mode() === 'code' ? conversationCodeDetails(props.entity) : undefined;
 
   const hideLeading = () => props.surface === 'agents';
   const codeStatusIndicator = () =>
@@ -83,11 +66,13 @@ export function AgentSessionListItem(props: Props) {
   return (
     <AgentSessionRow
       id={props.entity.id}
+      domId={props.domId}
       title={props.entity.name || 'Untitled conversation'}
       kind={mode()}
       state={state()}
       failed={failed()}
       active={props.active}
+      focused={props.focused}
       unread={props.unread}
       hideLeading={hideLeading()}
       onOpen={props.onOpen}
@@ -128,28 +113,23 @@ export function AgentSessionListItem(props: Props) {
         </>
       }
     >
+      <Show when={summary()}>
+        {(summary) => (
+          <span class="block min-w-0 truncate text-xs text-ink-extra-muted">
+            <TextShimmer text={summary()} active />
+          </span>
+        )}
+      </Show>
       <Show when={details()}>
         {(details) => (
           <AgentSessionCodeDetails
             details={details()}
             statusIndicator={codeStatusIndicator()}
-            onOpenPullRequest={
-              props.entity.pullRequestId
-                ? (event) => {
-                    const id = props.entity.pullRequestId;
-                    if (!id) return;
-                    openWithSplit(
-                      { type: 'pr', id },
-                      {
-                        preferNewSplit: openInNewSplitForMention(
-                          event.shiftKey,
-                          true
-                        ),
-                      }
-                    );
-                  }
-                : undefined
-            }
+            onOpenPullRequest={() => {
+              // PRs open on GitHub for now, not in the PR split.
+              const url = details().pullRequest?.url;
+              if (url) openExternalUrl(url);
+            }}
           />
         )}
       </Show>

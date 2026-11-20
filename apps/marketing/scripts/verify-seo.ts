@@ -4,6 +4,7 @@ import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { Window } from 'happy-dom';
 import baseline from '../seo/migration-baseline.json';
+import redirects from '../seo/page-redirects.json';
 
 const directory = path.resolve(import.meta.dirname, '../dist');
 const origin = (process.env.VITE_APP_BASE_URL || 'https://macro.com').replace(
@@ -24,19 +25,22 @@ const typesIn = (html: string) =>
 
 // Intentional copy updates; retain the captured migration baseline unchanged.
 const updatedTitles: Record<string, string> = {
+  '/email': 'Macro Mail — Brilliantly fast email',
+  '/crm': 'Macro CRM — Hands-free CRM',
   '/github': 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
-  '/agents': 'Macro Agents | Agents That Know What Your Team Is Doing',
-  '/calls': 'Macro Calls — Turn Conversations into Tasks and Updates',
-  '/channels': 'Macro Chat: Bring the Work into the Conversation',
+  '/agents': 'Macro Agents — Bring your favorite agents',
+  '/calls': 'Macro Calls — Team-level memory',
+  '/channels': 'Macro Chat — Focused team chat',
   '/documents': 'Macro Docs | Write With Your Team and Your Agents',
-  '/migrate': 'Switch your company to Macro | Migration guide',
-  '/tasks': 'Macro Tasks — Task management that keeps up with your team',
+  '/download': 'Download Macro',
+  '/tasks': 'Macro Tasks — Task management for people and agents',
 };
 
 const linksByRoute = new Map<string, string[]>();
 const documentsByRoute = new Map<string, ReturnType<typeof parse>>();
 const indexedRoutes = baseline.routes.filter(
-  ({ path }) => !baseline.retiredPaths.includes(path)
+  ({ path }) =>
+    !baseline.retiredPaths.includes(path) && !Object.hasOwn(redirects, path)
 );
 for (const previous of indexedRoutes) {
   assert(
@@ -49,18 +53,6 @@ for (const previous of indexedRoutes) {
   assert(
     /<meta charset="[^"]+"\s*\/?>/i.test(html.slice(0, 1024)),
     `${previous.path}: charset must precede large inline styles`
-  );
-  linksByRoute.set(
-    previous.path,
-    [...doc.querySelectorAll('a[href]')].flatMap((link) => {
-      const url = new URL(
-        link.getAttribute('href')!,
-        `${origin}${previous.path}`
-      );
-      return url.origin === origin
-        ? [url.pathname.replace(/\/$/, '') || '/']
-        : [];
-    })
   );
   assert.equal(
     doc.querySelectorAll('link[rel="canonical"]').length,
@@ -140,6 +132,50 @@ for (const previous of indexedRoutes) {
       fs.existsSync(path.join(directory, new URL(og).pathname)),
       `${previous.path}: missing social image file`
     );
+}
+
+// Integrated guides must ship complete HTML and valid links too.
+for (const route of routes.filter(
+  (route) => route === '/docs' || route.startsWith('/docs/')
+)) {
+  const html = htmlFor(route);
+  const doc = parse(html);
+  assert.equal(
+    doc.querySelectorAll('h1').length,
+    1,
+    `${route}: expected one H1`
+  );
+  assert(
+    (doc.querySelector('.documentation-body')?.textContent.length ?? 0) > 40,
+    `${route}: missing guide content`
+  );
+  assert(
+    !doc
+      .querySelector('.documentation-body')
+      ?.textContent.includes('Loading guide…'),
+    `${route}: unresolved guide`
+  );
+  assert.equal(
+    doc.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+    `${origin}${route}`,
+    `${route}: canonical mismatch`
+  );
+  documentsByRoute.set(route, doc);
+}
+
+// Include new pages such as /legal in the crawl graph, not only the migration baseline.
+for (const route of routes) {
+  const doc = documentsByRoute.get(route) ?? parse(htmlFor(route));
+  documentsByRoute.set(route, doc);
+  linksByRoute.set(
+    route,
+    [...doc.querySelectorAll('a[href]')].flatMap((link) => {
+      const url = new URL(link.getAttribute('href')!, `${origin}${route}`);
+      return url.origin === origin
+        ? [url.pathname.replace(/\/$/, '') || '/']
+        : [];
+    })
+  );
 }
 
 // Check destinations as well as reachability: a link to an unknown page or a
@@ -241,7 +277,7 @@ for (const route of [
   '/pricing',
   '/partners',
   '/posts',
-  '/migrate',
+  '/docs/switch-to-macro',
 ]) {
   assert(
     home.querySelector(`a[href="${route}"]`),
@@ -285,7 +321,14 @@ function visit(key: string) {
   assets.add(chunk.file);
   for (const dependency of chunk.imports ?? []) visit(dependency);
 }
-visit('start.html');
+for (const script of home.querySelectorAll('script[type="module"][src]')) {
+  const source = script.getAttribute('src')!.replace(/^\//, '');
+  const entry = Object.keys(manifest).find(
+    (key) => manifest[key].file === source
+  );
+  assert(entry, `Homepage module missing from manifest: ${source}`);
+  visit(entry);
+}
 const bytes = [...assets].reduce(
   (total, file) =>
     total + gzipSync(fs.readFileSync(path.join(directory, file))).byteLength,

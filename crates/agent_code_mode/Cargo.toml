@@ -22,10 +22,12 @@ email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
 futures = { workspace = true }
 import = { path = "../import" }
+lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
 macro_uuid = { path = "../macro_uuid" }
+nom = { workspace = true }
 nutype = { workspace = true }
 pipedream_mcp = { path = "../pipedream_mcp" }
 rootcause = { workspace = true }
@@ -37,15 +39,18 @@ specta = { workspace = true }
 specta-serde = { workspace = true }
 specta-typescript = { workspace = true }
 sqlx = { workspace = true, features = ["json"] }
+system_skills = { path = "../system_skills" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
+urlencoding = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 jev = { path = "../jev", features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

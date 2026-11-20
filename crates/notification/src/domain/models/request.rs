@@ -1,5 +1,6 @@
 //! Request and response models for the notification service.
 
+use crate::domain::channel_settings::ChannelNotificationKind;
 use crate::domain::models::{
     ExclusionReason, FilteredRecipient, MobilePushRecipients, Notification, NotificationExtEmail,
     NotificationExtIos, RecipientExclusion, TaggedContent,
@@ -87,6 +88,8 @@ where
             build_email: None,
             send_conn_gateway: false,
             mobile_push_exclusions: MobilePushRecipients::default(),
+            mention_fallback_recipient_ids: HashSet::new(),
+            channel_settings_kind: None,
         }
     }
 }
@@ -115,6 +118,15 @@ pub struct SendNotificationRequest<'a, T, U> {
     /// Platforms already handled by another delivery path for these recipients.
     #[serde(default)]
     pub(crate) mobile_push_exclusions: MobilePushRecipients,
+    /// Users this message @mentions, who received a mention notification
+    /// instead of this one. Ingress adds back each one who turned mentions off
+    /// for the channel, so they still hear about the message.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub(crate) mention_fallback_recipient_ids: HashSet<MacroUserIdStr<'a>>,
+    /// The channel notification setting that decides who receives this
+    /// notification, when it is not the one named by its event type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) channel_settings_kind: Option<ChannelNotificationKind>,
 }
 
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
@@ -127,6 +139,8 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             uuid_to_write,
             send_conn_gateway,
             mobile_push_exclusions,
+            mention_fallback_recipient_ids,
+            channel_settings_kind,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
@@ -158,6 +172,8 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_email,
             send_conn_gateway,
             mobile_push_exclusions,
+            mention_fallback_recipient_ids,
+            channel_settings_kind,
         }
     }
 }
@@ -206,11 +222,28 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
         self
     }
 
+    /// Name the users this message @mentions who were left out of this
+    /// notification because they get a mention notification. See
+    /// [`SendNotificationRequest::mention_fallback_recipient_ids`].
+    pub fn with_mention_fallback(mut self, recipients: HashSet<MacroUserIdStr<'a>>) -> Self {
+        self.mention_fallback_recipient_ids = recipients;
+        self
+    }
+
+    /// Let this channel setting, not the one its event type names, decide
+    /// who receives the notification.
+    pub fn with_channel_settings_kind(mut self, kind: ChannelNotificationKind) -> Self {
+        self.channel_settings_kind = Some(kind);
+        self
+    }
+
     pub(crate) fn update_recipients(
         mut self,
         muted_users: HashSet<MacroUserIdStr<'a>>,
         unsubscribed_users: HashSet<MacroUserIdStr<'a>>,
         type_disabled_users: HashSet<MacroUserIdStr<'a>>,
+        channel_kind_disabled_users: HashSet<MacroUserIdStr<'a>>,
+        section_muted_users: HashSet<MacroUserIdStr<'a>>,
     ) -> (Self, Vec<RecipientExclusion<'a>>) {
         let recipient_is_sender = |id: FilteredRecipient<'a>| match (id, &self.req.sender_id) {
             (FilteredRecipient::Allowed(macro_user_id_str), Some(sender))
@@ -260,6 +293,30 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
             x => x,
         };
 
+        let user_disabled_channel_kind = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if channel_kind_disabled_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::DisabledForChannel,
+                })
+            }
+            x => x,
+        };
+
+        let muted_by_sections = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if section_muted_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::MutedBySections,
+                })
+            }
+            x => x,
+        };
+
         let recipients = std::mem::take(&mut self.req.recipient_ids);
 
         let (allowed, excluded): (HashSet<_>, Vec<_>) = recipients
@@ -269,6 +326,8 @@ impl<'a, T, U> SendNotificationRequest<'a, T, U> {
             .map(user_muted_notifs)
             .map(notif_type_is_ignored)
             .map(user_disabled_type)
+            .map(user_disabled_channel_kind)
+            .map(muted_by_sections)
             .partition_map(|r| match r {
                 FilteredRecipient::Allowed(a) => itertools::Either::Left(a),
                 FilteredRecipient::Excluded(b) => itertools::Either::Right(b),
@@ -303,6 +362,12 @@ pub enum NotificationStatus {
     Seen,
     /// the notification is either done or _not_ done
     Done(bool),
+    /// Reopen done notifications as they were before their done: those in
+    /// `unseen` return to unseen, the rest to seen.
+    Reopen {
+        /// The notifications that were unseen when they were marked done.
+        unseen: Vec<uuid::Uuid>,
+    },
 }
 
 impl NotificationStatus {
@@ -313,7 +378,7 @@ impl NotificationStatus {
         match self {
             Self::Seen => (&[NotificationState::Unseen], true),
             Self::Done(true) => (&NotificationState::ACTIVE, false),
-            Self::Done(false) => (&[NotificationState::Done], false),
+            Self::Done(false) | Self::Reopen { .. } => (&[NotificationState::Done], false),
         }
     }
 
@@ -325,7 +390,9 @@ impl NotificationStatus {
             let action = match self {
                 NotificationStatus::Seen => NotificationAction::MarkSeen,
                 NotificationStatus::Done(true) => NotificationAction::MarkDone,
-                NotificationStatus::Done(false) => NotificationAction::Reopen,
+                NotificationStatus::Done(false) | NotificationStatus::Reopen { .. } => {
+                    NotificationAction::Reopen
+                }
             };
             action.should_clear_push_notifications()
         } else {

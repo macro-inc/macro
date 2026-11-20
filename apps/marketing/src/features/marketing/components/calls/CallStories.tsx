@@ -1,10 +1,10 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import ListIcon from '@phosphor/list.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Newspaper from '@phosphor/newspaper.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import X from '@phosphor/x.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Newspaper from '@icon/system/regular/newspaper.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import X from '@icon/system/regular/x.svg';
 import { UserMessageBubble } from '@ui/components/UserMessageBubble';
 import {
   type Accessor,
@@ -108,7 +108,7 @@ const channelPeople: CallPerson[] = [
   'julia',
   'teo',
   'gabriel',
-  'valentina',
+  'austin',
 ];
 
 /**

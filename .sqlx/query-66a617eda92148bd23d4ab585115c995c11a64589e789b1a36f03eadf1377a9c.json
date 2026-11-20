@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture p SET state = 'ready', static_file_id = $4, staged = NULL, mime = NULL,\n                attempts = 0, retry_at = now() + make_interval(days => $5) + random() * make_interval(days => $6)\n            FROM whatsapp_linked_account a\n            WHERE a.id = p.account_id AND p.account_id = $1 AND p.jid = $2 AND p.picture_id = $3\n                AND (p.state = 'staged' OR (p.state = 'ready' AND p.static_file_id = $4))\n            RETURNING a.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "66a617eda92148bd23d4ab585115c995c11a64589e789b1a36f03eadf1377a9c"
+}

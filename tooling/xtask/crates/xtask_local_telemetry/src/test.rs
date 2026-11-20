@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::{Event, Paths, Recorder};
+use super::config::Provision;
+use super::{Event, Paths, Recorder, Switch, take_hint};
 
 const TOKEN: &str = "test-token-0123456789abcdef0123456789";
 const CHILD_DIR: &str = "LOCAL_TELEMETRY_TEST_CHILD_DIR";
@@ -74,10 +75,7 @@ fn opt_in(dir: &Path, endpoint: &str) -> Paths {
     )
     .expect("write config");
     std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
-    Paths {
-        config,
-        buffer_dir: dir.join("buffer"),
-    }
+    Paths::at(config, dir.join("buffer"))
 }
 
 fn common() -> BTreeMap<String, Value> {
@@ -118,15 +116,12 @@ fn buffered_files(paths: &Paths) -> Vec<std::path::PathBuf> {
 }
 
 #[test]
-fn opted_out_writes_and_sends_nothing() {
+fn no_settings_and_no_provisioning_writes_and_sends_nothing() {
     let endpoint = Endpoint::start(ResponseTemplate::new(204));
     let dir = tempfile::tempdir().expect("tempdir");
-    // A fully working opt-in file, just not at the path that is read.
+    // A fully working settings file, just not at the path that is read.
     let opted_in = opt_in(dir.path(), &endpoint.server.uri());
-    let paths = Paths {
-        config: dir.path().join("absent.toml"),
-        buffer_dir: opted_in.buffer_dir.clone(),
-    };
+    let paths = Paths::at(dir.path().join("absent.toml"), opted_in.buffer_dir.clone());
 
     let built_fields = std::cell::Cell::new(false);
     let recorder = Recorder::start(&paths, SystemTime::now(), || {
@@ -152,9 +147,9 @@ fn a_run_sends_its_steps_and_run_event_as_otlp() {
 
     let recorder = Recorder::start(&paths, started, common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     let run_id = recorder.run_id().to_owned();
-    recorder.step_started("Running migrations");
+    recorder.step_started("Running migrations", None, None);
     recorder.record(
         Event::new("step")
             .with("step", "Running migrations")
@@ -236,21 +231,34 @@ fn killed_child() {
         return;
     };
     let config = Path::new(&dir).join("local-telemetry.toml");
-    let paths = Paths {
-        config,
-        buffer_dir: Path::new(&dir).join("buffer"),
-    };
+    let paths = Paths::at(config, Path::new(&dir).join("buffer"));
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
-    recorder.step_started("Starting infra (docker compose up -d --wait)");
+        .expect("on");
+    recorder.step_started(
+        "Starting infra (docker compose up -d --wait)",
+        Some("step/1"),
+        None,
+    );
     recorder.record(
         Event::new("step")
             .with("step", "Starting infra (docker compose up -d --wait)")
             .with("seconds", 41.0)
-            .with("outcome", "success"),
+            .with("outcome", "success")
+            .lasting("Starting infra", Duration::from_secs(41))
+            .span("step/1"),
     );
-    recorder.step_started("Building service binaries");
+    recorder.step_started("Rebuilding & reloading services", Some("step/2"), None);
+    recorder.step_started("Building service binaries", Some("step/3"), Some("step/2"));
+    recorder.record(
+        Event::new("step")
+            .with("step", "Building service binaries")
+            .with("seconds", 30.0)
+            .with("outcome", "success")
+            .lasting("Building service binaries", Duration::from_secs(30))
+            .span("step/3")
+            .under("step/2"),
+    );
     println!("RECORDED");
     // Block until killed: the parent reads the line above, then SIGKILLs us.
     let mut line = String::new();
@@ -284,7 +292,7 @@ fn a_killed_run_is_sent_by_the_next_one() {
 
     let next = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     next.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
 
     let records = endpoint.log_records();
@@ -296,20 +304,66 @@ fn a_killed_run_is_sent_by_the_next_one() {
                 || record.get("outcome") == Some(&json!("interrupted"))
         })
         .collect();
-    assert_eq!(killed.len(), 2);
+    let steps: Vec<(Value, Value)> = killed
+        .iter()
+        .map(|record| {
+            let field = |key: &str| record.get(key).cloned().unwrap_or(Value::Null);
+            (field("event"), field("step"))
+        })
+        .collect();
     assert_eq!(
-        killed[0]["step"],
-        json!("Starting infra (docker compose up -d --wait)")
+        steps,
+        vec![
+            (
+                json!("step"),
+                json!("Starting infra (docker compose up -d --wait)")
+            ),
+            (json!("step"), json!("Building service binaries")),
+            (json!("step"), json!("Rebuilding & reloading services")),
+            (json!("run"), Value::Null),
+        ]
     );
-    assert_eq!(killed[1]["event"], json!("run"));
-    assert_eq!(killed[1]["outcome"], json!("interrupted"));
-    assert_eq!(killed[1]["failed_step"], json!("Building service binaries"));
+    // The step it was in when killed closes as interrupted, and is the run's
+    // failed step.
+    assert_eq!(killed[2]["outcome"], json!("interrupted"));
+    assert_eq!(killed[3]["outcome"], json!("interrupted"));
+    assert_eq!(
+        killed[3]["failed_step"],
+        json!("Rebuilding & reloading services")
+    );
     assert!(
-        killed[1]["seconds"]
+        killed[3]["seconds"]
             .as_f64()
             .is_some_and(|seconds| seconds >= 0.0)
     );
-    assert_eq!(killed[0]["run_id"], killed[1]["run_id"]);
+    assert!(
+        killed
+            .iter()
+            .all(|record| record["run_id"] == killed[0]["run_id"])
+    );
+
+    // The step that finished inside it still has its parent span.
+    let spans: Vec<Value> = endpoint
+        .requests("/v1/traces")
+        .iter()
+        .flat_map(|request| {
+            gunzip(&request.body)["resourceSpans"][0]["scopeSpans"][0]["spans"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect();
+    let span = |name: &str| {
+        spans
+            .iter()
+            .find(|span| span["name"] == json!(name))
+            .cloned()
+            .unwrap_or_else(|| panic!("no span {name}"))
+    };
+    assert_eq!(
+        span("Building service binaries")["parentSpanId"],
+        span("Rebuilding & reloading services")["spanId"]
+    );
     assert!(buffered_files(&paths).is_empty());
 }
 
@@ -322,7 +376,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     let began = Instant::now();
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     for index in 0..50 {
         recorder.record(Event::new("step").with("step", format!("step {index}")));
     }
@@ -336,7 +390,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     let bounded = Instant::now();
     let second = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     second.finish(
         BTreeMap::new(),
         SystemTime::now(),
@@ -359,9 +413,276 @@ fn an_unreachable_endpoint_keeps_the_events_for_later() {
 
     let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
-        .expect("opted in");
+        .expect("on");
     recorder.record(Event::new("step").with("step", "Running migrations"));
     recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
 
     assert_eq!(buffered_files(&paths).len(), 1);
+}
+
+/// Settings in `dir` that don't exist yet, provisioned by `script`'s stdout.
+fn unprovisioned(dir: &Path, endpoint: &str, script: &str) -> Paths {
+    let mut paths = Paths::at(dir.join("local-telemetry.toml"), dir.join("buffer"));
+    paths.provision = Some(Provision {
+        command: vec!["sh".into(), "-c".into(), script.into()],
+        endpoint: endpoint.to_owned(),
+    });
+    paths
+}
+
+#[test]
+fn forwarding_runs_carry_the_readable_machine_name() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut paths = opt_in(dir.path(), &endpoint.server.uri());
+    let run = |paths: &Paths| {
+        let recorder = Recorder::start(paths, SystemTime::now(), common)
+            .expect("start")
+            .expect("on");
+        recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    };
+
+    run(&paths);
+    let plain = endpoint.log_records();
+    assert!(!plain.is_empty());
+    assert!(
+        plain
+            .iter()
+            .all(|record| !fields(record).contains_key("host_name"))
+    );
+
+    let settings = std::fs::read_to_string(&paths.config).expect("read");
+    std::fs::write(
+        &paths.config,
+        format!("{settings}services = true\nmachine = \"build-box\"\n"),
+    )
+    .expect("write");
+    paths.buffer_dir = dir.path().join("buffer-forwarding");
+    run(&paths);
+    let records = endpoint.log_records();
+    let forwarding = &records[plain.len()..];
+    assert!(!forwarding.is_empty());
+    for record in forwarding {
+        assert_eq!(fields(record).get("host_name"), Some(&json!("build-box")));
+    }
+}
+
+/// A chosen `machine` names runs without forwarding; with neither, runs are
+/// grouped by the hashed host.
+#[test]
+fn every_run_names_its_machine() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut paths = opt_in(dir.path(), &endpoint.server.uri());
+    let run = |paths: &Paths, common: BTreeMap<String, Value>| {
+        let recorder = Recorder::start(paths, SystemTime::now(), || common)
+            .expect("start")
+            .expect("on");
+        recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    };
+    let hashed = BTreeMap::from([("host".to_owned(), json!("9643b8d9287c"))]);
+
+    run(&paths, hashed.clone());
+    let plain = endpoint.log_records();
+    assert!(!plain.is_empty());
+    for record in &plain {
+        assert_eq!(fields(record).get("machine"), Some(&json!("9643b8d9287c")));
+    }
+
+    let settings = std::fs::read_to_string(&paths.config).expect("read");
+    std::fs::write(
+        &paths.config,
+        format!("{settings}machine = \"build-box\"\n"),
+    )
+    .expect("write");
+    paths.buffer_dir = dir.path().join("buffer-named");
+    run(&paths, hashed);
+    let records = endpoint.log_records();
+    let named = &records[plain.len()..];
+    assert!(!named.is_empty());
+    for record in named {
+        assert_eq!(fields(record).get("host_name"), Some(&json!("build-box")));
+        assert_eq!(fields(record).get("machine"), Some(&json!("build-box")));
+    }
+}
+
+#[test]
+fn opting_out_wins_over_working_settings() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut by_env = opt_in(dir.path(), &endpoint.server.uri());
+    by_env.switch = Switch::Off;
+    let recorder = Recorder::start(&by_env, SystemTime::now(), common).expect("start");
+    assert!(recorder.is_none());
+
+    let by_file = unprovisioned(dir.path(), &endpoint.server.uri(), &format!("echo {TOKEN}"));
+    std::fs::write(&by_file.config, "enabled = false\n").expect("write");
+    let recorder = Recorder::start(&by_file, SystemTime::now(), common).expect("start");
+    assert!(recorder.is_none());
+    assert!(!by_file.buffer_dir.exists());
+    assert!(endpoint.requests("/v1/logs").is_empty());
+}
+
+#[test]
+fn a_first_run_provisions_its_token_and_sends() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = unprovisioned(dir.path(), &endpoint.server.uri(), &format!("echo {TOKEN}"));
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on by default");
+    recorder.record(Event::new("step").with("step", "Running migrations"));
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    let requests = endpoint.requests("/v1/logs");
+    assert!(!requests.is_empty());
+    let authorization = requests[0]
+        .headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    assert_eq!(authorization, Some(format!("Bearer {TOKEN}")));
+    let mode = std::fs::metadata(&paths.config)
+        .expect("settings written")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+    let written = std::fs::read_to_string(&paths.config).expect("read");
+    assert!(written.contains("provisioned = true"));
+    assert!(buffered_files(&paths).is_empty());
+}
+
+#[test]
+fn without_a_token_runs_carry_on_and_back_off() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Doppler logged out, offline or without access: no token on stdout.
+    let paths = unprovisioned(dir.path(), "https://otlp.example.com", "exit 1");
+
+    let began = Instant::now();
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on by default");
+    recorder.record(Event::new("step").with("step", "Running migrations"));
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+    assert!(began.elapsed() < Duration::from_secs(5));
+    assert!(!paths.config.exists());
+    // Kept, in case a later run gets a token within the week.
+    assert_eq!(buffered_files(&paths).len(), 1);
+
+    let built_fields = std::cell::Cell::new(false);
+    let next = Recorder::start(&paths, SystemTime::now(), || {
+        built_fields.set(true);
+        common()
+    })
+    .expect("start");
+    assert!(next.is_none(), "a recent failure skips recording");
+    assert!(!built_fields.get());
+
+    assert!(take_hint(&paths).is_some());
+    assert!(take_hint(&paths).is_none(), "the hint shows once");
+}
+
+#[test]
+fn a_rejected_provisioned_token_is_fetched_again() {
+    const FRESH: &str = "fresh-token-0123456789abcdef0123456789";
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let server = runtime.block_on(async {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                format!("Bearer {FRESH}").as_str(),
+            ))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        server
+    });
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = unprovisioned(dir.path(), &server.uri(), &format!("echo {FRESH}"));
+    std::fs::write(
+        &paths.config,
+        format!(
+            "endpoint = \"{}\"\ntoken = \"{TOKEN}\"\nprovisioned = true\nservices = true\nmachine = \"build-box\"\n",
+            server.uri()
+        ),
+    )
+    .expect("write");
+    std::fs::set_permissions(&paths.config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on");
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    let written = std::fs::read_to_string(&paths.config).expect("read");
+    assert!(written.contains(FRESH));
+    // The user's forwarding choices survive the new token.
+    assert!(written.contains("services = true\n"));
+    assert!(written.contains("machine = \"build-box\"\n"));
+    assert!(
+        buffered_files(&paths).is_empty(),
+        "sent with the fresh token"
+    );
+}
+
+#[test]
+fn a_rejected_token_never_replaces_a_file_the_user_changed() {
+    const FRESH: &str = "fresh-token-0123456789abcdef0123456789";
+    let endpoint = Endpoint::start(ResponseTemplate::new(401));
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Provisioning would write a different endpoint than the one the user chose.
+    let paths = unprovisioned(
+        dir.path(),
+        "https://otlp.example.com",
+        &format!("echo {FRESH}"),
+    );
+    let users = format!(
+        "endpoint = \"{}\"\ntoken = \"{TOKEN}\"\nprovisioned = true\n",
+        endpoint.server.uri()
+    );
+    std::fs::write(&paths.config, &users).expect("write");
+    std::fs::set_permissions(&paths.config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on");
+    // The user swaps in their own file while the run holds the old one.
+    let own = format!(
+        "endpoint = \"{}\"\ntoken = \"{TOKEN}-mine\"\n",
+        endpoint.server.uri()
+    );
+    std::fs::write(&paths.config, &own).expect("write");
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    assert_eq!(std::fs::read_to_string(&paths.config).expect("read"), own);
+    // Rejected events are kept, not dropped.
+    assert_eq!(buffered_files(&paths).len(), 1);
+}
+
+/// A short command exits before its token command does; the command's output
+/// file is read by the next run instead of fetching again.
+#[test]
+fn a_fetch_left_by_an_exited_process_is_used_by_the_next_run() {
+    let endpoint = Endpoint::start(ResponseTemplate::new(204));
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Fetching now would fail: only the leftover can provide the token.
+    let paths = unprovisioned(dir.path(), &endpoint.server.uri(), "exit 1");
+    let leftover = dir.path().join(".local-telemetry.toml.earlier.token");
+    std::fs::write(&leftover, format!("{TOKEN}\n")).expect("write");
+
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
+        .expect("start")
+        .expect("on");
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
+
+    assert!(!leftover.exists());
+    let written = std::fs::read_to_string(&paths.config).expect("settings written");
+    assert!(written.contains(TOKEN));
+    assert!(!endpoint.requests("/v1/logs").is_empty());
 }

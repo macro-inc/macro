@@ -1,4 +1,5 @@
 use super::*;
+use agent_session::domain::model::AgentSessionId;
 use harnesses::domain::ports::HarnessRepo as _;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -92,7 +93,13 @@ async fn live_sessions_resolve_only_on_the_harness_their_bot_is_bound_to(pool: P
         .await
         .unwrap();
 
-    assert_eq!(found, [mine]);
+    assert_eq!(
+        found,
+        ListedSessions {
+            live: vec![mine],
+            dormant: 0,
+        }
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -113,7 +120,379 @@ async fn a_deleted_harness_reattaches_nothing(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(found.is_empty());
+    assert_eq!(found, ListedSessions::default());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_archived_session_is_not_reattached(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let bot = insert_bot(&pool, laptop).await;
+    let archived = insert_session(&pool, bot, "acp-archived").await;
+    let live = insert_session(&pool, bot, "acp-live").await;
+    sqlx::query!(
+        "UPDATE agent_session SET archived_by = 'user', archived_at = now() WHERE id = $1",
+        archived.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let found = PgHarnessBindings::new(pool.clone())
+        .sessions_on_harness(
+            laptop,
+            &[SessionId::new("acp-archived"), SessionId::new("acp-live")],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        found,
+        ListedSessions {
+            live: vec![live],
+            dormant: 0,
+        }
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_session_untouched_for_a_week_with_nothing_waiting_is_dormant(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let bot = insert_bot(&pool, laptop).await;
+    let dormant = insert_session(&pool, bot, "acp-dormant").await;
+    let fresh = insert_session(&pool, bot, "acp-fresh").await;
+    let recent_log = insert_session(&pool, bot, "acp-recent-log").await;
+    let starting = insert_session(&pool, bot, "acp-starting").await;
+    let running = insert_session(&pool, bot, "acp-running").await;
+    let blocked = insert_session(&pool, bot, "acp-blocked").await;
+    let stopping = insert_session(&pool, bot, "acp-stopping").await;
+    let interrupted = insert_session(&pool, bot, "acp-interrupted").await;
+    let queued = insert_session(&pool, bot, "acp-queued").await;
+    let approval = insert_session(&pool, bot, "acp-approval").await;
+    let notified = insert_session(&pool, bot, "acp-notified").await;
+    let answering = insert_session(&pool, bot, "acp-answering").await;
+    let old = [
+        dormant,
+        recent_log,
+        starting,
+        running,
+        blocked,
+        stopping,
+        interrupted,
+        queued,
+        approval,
+        notified,
+        answering,
+    ];
+    for session in old {
+        sqlx::query!(
+            "UPDATE agent_session SET modified_at = now() - interval '8 days', turn_state = 'idle' WHERE id = $1",
+            session.as_uuid()
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_log (id, agent_session_id, direction, content, created_at)
+        VALUES ($1, $2, 'to_server', '{}', now() - interval '9 days'),
+               ($3, $2, 'to_server', '{}', now() - interval '1 day'),
+               ($4, $5, 'to_server', '{}', now() - interval '9 days')
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        recent_log.as_uuid(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        dormant.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (session, state) in [
+        (starting, "starting"),
+        (running, "running"),
+        (blocked, "blocked"),
+        (stopping, "stopping"),
+    ] {
+        sqlx::query!(
+            "UPDATE agent_session SET turn_state = $2 WHERE id = $1",
+            session.as_uuid(),
+            state
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE agent_session SET turn_state = 'disconnected', turn_interrupted = true WHERE id = $1",
+        interrupted.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO agent_session_queue (agent_session_id, entries) VALUES ($1, '[{"id": "queued"}]')"#,
+        queued.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_tool_approval
+            (id, agent_session_id, turn_action_id, request_id, owner_id, server_slug,
+             server_name, tool_name, arguments)
+        VALUES ($1, $2, $3, '1', $4, 'macro', 'Macro', 'ReadDocument', '{}')
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        approval.as_uuid(),
+        macro_uuid::generate_uuid_v7(),
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_notification
+            (id, session_id, kind, subject_id, payload, dedupe_key, wake)
+        VALUES ($1, $2, 'test', 'subject', '{}', 'dedupe', true)
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        notified.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let channel = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        channel,
+        OWNER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_conversation_sessions (session_id, channel_id, bot_id) VALUES ($1, $2, $3)",
+        answering.as_uuid(),
+        channel,
+        bot
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut found = PgHarnessBindings::new(pool.clone())
+        .sessions_on_harness(
+            laptop,
+            &[
+                SessionId::new("acp-dormant"),
+                SessionId::new("acp-fresh"),
+                SessionId::new("acp-recent-log"),
+                SessionId::new("acp-starting"),
+                SessionId::new("acp-running"),
+                SessionId::new("acp-blocked"),
+                SessionId::new("acp-stopping"),
+                SessionId::new("acp-interrupted"),
+                SessionId::new("acp-queued"),
+                SessionId::new("acp-approval"),
+                SessionId::new("acp-notified"),
+                SessionId::new("acp-answering"),
+            ],
+        )
+        .await
+        .unwrap();
+    found.live.sort_by_key(|session| session.as_uuid());
+
+    let mut live = vec![
+        fresh,
+        recent_log,
+        starting,
+        running,
+        blocked,
+        stopping,
+        interrupted,
+        queued,
+        approval,
+        notified,
+        answering,
+    ];
+    live.sort_by_key(|session| session.as_uuid());
+    assert_eq!(found, ListedSessions { live, dormant: 1 });
+}
+
+fn presence_on_a_replica(pool: &PgPool) -> Arc<PgHarnessPresence> {
+    Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()))
+}
+
+async fn reads_connected(pool: &PgPool, harness: HarnessId) -> bool {
+    PgHarnessRepo::new(pool.clone())
+        .get_harness(harness)
+        .await
+        .unwrap()
+        .unwrap()
+        .connected
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stale_close_on_another_replica_leaves_a_redialed_harness_connected(pool: PgPool) {
+    let harness = insert_harness(&pool).await;
+    let replica_a = presence_on_a_replica(&pool);
+    let replica_b = presence_on_a_replica(&pool);
+    let old_socket = RuntimeConnectionId::generate();
+    let new_socket = RuntimeConnectionId::generate();
+
+    Arc::clone(&replica_a)
+        .connected(
+            harness,
+            old_socket,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    // The old socket goes silent. The daemon redials, reaching the other replica
+    // before the first one notices.
+    Arc::clone(&replica_b)
+        .connected(
+            harness,
+            new_socket,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    assert!(reads_connected(&pool, harness).await);
+
+    replica_a.disconnected(harness, old_socket).await;
+
+    assert!(reads_connected(&pool, harness).await);
+
+    // The stamp stays put too, for readers that still go by the timestamps.
+    let stamped = sqlx::query_scalar!(
+        r#"SELECT last_disconnected_at FROM harnesses WHERE id = $1"#,
+        harness.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stamped, None);
+
+    replica_b.disconnected(harness, new_socket).await;
+
+    assert!(!reads_connected(&pool, harness).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replica_crash_ends_its_connections_when_their_lease_lapses(pool: PgPool) {
+    let harness = insert_harness(&pool).await;
+    let crashed = presence_on_a_replica(&pool);
+    let connection = RuntimeConnectionId::generate();
+    crashed
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    assert!(reads_connected(&pool, harness).await);
+
+    // A crash writes no disconnect; all that happens is renewals stop.
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(!reads_connected(&pool, harness).await);
+
+    // The daemon's next dial brings it back and clears the dead row.
+    let successor = presence_on_a_replica(&pool);
+    successor
+        .connected(
+            harness,
+            RuntimeConnectionId::generate(),
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    assert!(reads_connected(&pool, harness).await);
+    let rows = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM harness_runtime_connection WHERE harness_id = $1"#,
+        harness.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
+    let harness = insert_harness(&pool).await;
+    let replica = presence_on_a_replica(&pool);
+    let connection = RuntimeConnectionId::generate();
+    Arc::clone(&replica)
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    Arc::clone(&replica)
+        .renew(vec![(harness, connection)])
+        .await;
+    assert!(reads_connected(&pool, harness).await);
+
+    sqlx::query!(r#"DELETE FROM harness_runtime_connection"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(r#"UPDATE harnesses SET last_disconnected_at = now() + interval '1 hour'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!reads_connected(&pool, harness).await);
+
+    replica.renew(vec![(harness, connection)]).await;
+
+    assert!(reads_connected(&pool, harness).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn simultaneous_final_closes_leave_a_harness_offline(pool: PgPool) {
+    // Racing writes interleave differently each time, so give them many chances.
+    for _ in 0..25 {
+        let harness = insert_harness(&pool).await;
+        let replica_a = presence_on_a_replica(&pool);
+        let replica_b = presence_on_a_replica(&pool);
+        let first = RuntimeConnectionId::generate();
+        let second = RuntimeConnectionId::generate();
+        Arc::clone(&replica_a)
+            .connected(
+                harness,
+                first,
+                agent_harness::domain::ports::RuntimeAccepts::default(),
+            )
+            .await;
+        Arc::clone(&replica_b)
+            .connected(
+                harness,
+                second,
+                agent_harness::domain::ports::RuntimeAccepts::default(),
+            )
+            .await;
+
+        tokio::join!(
+            replica_a.disconnected(harness, first),
+            replica_b.disconnected(harness, second),
+        );
+
+        assert!(!reads_connected(&pool, harness).await);
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -226,137 +605,4 @@ async fn a_reader_cannot_prompt_a_coding_agent(pool: PgPool) {
         .unwrap();
     assert_eq!(facts.actor_may_use, Some(false));
     assert!(!facts.may_run());
-}
-
-fn presence_on_a_replica(pool: &PgPool) -> Arc<PgHarnessPresence> {
-    Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()))
-}
-
-async fn reads_connected(pool: &PgPool, harness: HarnessId) -> bool {
-    PgHarnessRepo::new(pool.clone())
-        .get_harness(harness)
-        .await
-        .unwrap()
-        .unwrap()
-        .connected
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_stale_close_on_another_replica_leaves_a_redialed_harness_connected(pool: PgPool) {
-    let harness = insert_harness(&pool).await;
-    let replica_a = presence_on_a_replica(&pool);
-    let replica_b = presence_on_a_replica(&pool);
-    let old_socket = RuntimeConnectionId::generate();
-    let new_socket = RuntimeConnectionId::generate();
-
-    Arc::clone(&replica_a).connected(harness, old_socket).await;
-    // The old socket goes silent. The daemon redials, reaching the other replica
-    // before the first one notices.
-    Arc::clone(&replica_b).connected(harness, new_socket).await;
-    assert!(reads_connected(&pool, harness).await);
-
-    replica_a.disconnected(harness, old_socket).await;
-
-    assert!(reads_connected(&pool, harness).await);
-
-    // The stamp stays put too, for readers that still go by the timestamps.
-    let stamped = sqlx::query_scalar!(
-        r#"SELECT last_disconnected_at FROM harnesses WHERE id = $1"#,
-        harness.as_uuid(),
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(stamped, None);
-
-    replica_b.disconnected(harness, new_socket).await;
-
-    assert!(!reads_connected(&pool, harness).await);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_replica_crash_ends_its_connections_when_their_lease_lapses(pool: PgPool) {
-    let harness = insert_harness(&pool).await;
-    let crashed = presence_on_a_replica(&pool);
-    let connection = RuntimeConnectionId::generate();
-    crashed.connected(harness, connection).await;
-    assert!(reads_connected(&pool, harness).await);
-
-    // A crash writes no disconnect; all that happens is renewals stop.
-    sqlx::query!(
-        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert!(!reads_connected(&pool, harness).await);
-
-    // The daemon's next dial brings it back and clears the dead row.
-    let successor = presence_on_a_replica(&pool);
-    successor
-        .connected(harness, RuntimeConnectionId::generate())
-        .await;
-    assert!(reads_connected(&pool, harness).await);
-    let rows = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM harness_runtime_connection WHERE harness_id = $1"#,
-        harness.as_uuid(),
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(rows, 1);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
-    let harness = insert_harness(&pool).await;
-    let replica = presence_on_a_replica(&pool);
-    let connection = RuntimeConnectionId::generate();
-    Arc::clone(&replica).connected(harness, connection).await;
-
-    sqlx::query!(
-        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    Arc::clone(&replica)
-        .renew(vec![(harness, connection)])
-        .await;
-    assert!(reads_connected(&pool, harness).await);
-
-    sqlx::query!(r#"DELETE FROM harness_runtime_connection"#)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query!(r#"UPDATE harnesses SET last_disconnected_at = now() + interval '1 hour'"#)
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert!(!reads_connected(&pool, harness).await);
-
-    replica.renew(vec![(harness, connection)]).await;
-
-    assert!(reads_connected(&pool, harness).await);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn simultaneous_final_closes_leave_a_harness_offline(pool: PgPool) {
-    // Racing writes interleave differently each time, so give them many chances.
-    for _ in 0..25 {
-        let harness = insert_harness(&pool).await;
-        let replica_a = presence_on_a_replica(&pool);
-        let replica_b = presence_on_a_replica(&pool);
-        let first = RuntimeConnectionId::generate();
-        let second = RuntimeConnectionId::generate();
-        Arc::clone(&replica_a).connected(harness, first).await;
-        Arc::clone(&replica_b).connected(harness, second).await;
-
-        tokio::join!(
-            replica_a.disconnected(harness, first),
-            replica_b.disconnected(harness, second),
-        );
-
-        assert!(!reads_connected(&pool, harness).await);
-    }
 }

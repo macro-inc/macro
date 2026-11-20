@@ -1,8 +1,15 @@
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import { parseCacheRevision, type ReadResult } from '@graphql-cache/protocol';
 import type { CrmPipelineEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { createClient, type Operation } from '@urql/core';
 import { okAsync } from 'neverthrow';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
+import { filter, map, pipe } from 'wonka';
 import { UNAVAILABLE_OPTION } from '../../database/core/grid-cells';
 import {
+  createPipelineEntriesQuery,
   type PipelineEntriesDependencies,
   pipelineEntriesInput,
   savePipelineEntryCell,
@@ -22,6 +29,8 @@ type Column = Cell['column'];
 function column(overrides: Partial<Column>): Column {
   return {
     __typename: 'GraphqlCrmPipelineColumn',
+    currencyColumnId: null,
+    systemDefault: null,
     id: 'column',
     name: 'Column',
     dataType: 'STRING',
@@ -228,4 +237,150 @@ it('reports a record page pipeline write with the record type', async () => {
     updatedRows: 1,
     deletedRows: 0,
   });
+});
+
+/** A client over the normalized cache exchange, with an in-memory store and a counted network. */
+function cachedClient(added: () => boolean = () => false) {
+  const stored = new Map<string, unknown>();
+  const storeKey = (args: { query: string; variables?: unknown }) =>
+    JSON.stringify([args.query, args.variables]);
+  const network = vi.fn((operation: Operation) => ({
+    operation,
+    data: {
+      user: {
+        soup: {
+          items: [
+            {
+              __typename: 'GraphqlSoupCrmCompany',
+              pipelineEntries: added()
+                ? [entry([]), { ...entry([]), id: 'row-2' }]
+                : [entry([])],
+            },
+          ],
+        },
+      },
+    },
+    stale: false,
+    hasNext: false,
+  }));
+  const client = createClient({
+    url: '/graphql',
+    exchanges: [
+      normalizedCacheExchange({
+        ...createNoopCacheHost(),
+        disabled: false,
+        async readQuery(args): Promise<ReadResult> {
+          const data = stored.get(storeKey(args));
+          return data === undefined ? { kind: 'miss' } : { kind: 'hit', data };
+        },
+        async writeQuery(args) {
+          stored.set(storeKey(args), args.data);
+          return {
+            revision: parseCacheRevision('1'),
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          };
+        },
+        onOpsAffected: () => () => {},
+      }),
+      () => (operations) =>
+        pipe(
+          operations,
+          filter((operation: Operation) => operation.kind === 'query'),
+          map(network)
+        ),
+    ],
+  });
+  return { client, network };
+}
+
+it('lets a cache-first reader take the Pipelines card answer without a second request', async () => {
+  let added = false;
+  const { client, network } = cachedClient(() => added);
+  const record = { type: 'company', id: 'acme' } as const;
+  const state = createRoot((dispose) => {
+    const card = createPipelineEntriesQuery(
+      () => client,
+      () => record
+    );
+    const [menuOpen, setMenuOpen] = createSignal(false);
+    const menu = createMemo(() =>
+      menuOpen()
+        ? createPipelineEntriesQuery(
+            () => client,
+            () => record,
+            'cache-first'
+          )
+        : undefined
+    );
+    return { card, menu, setMenuOpen, dispose };
+  });
+  try {
+    await vi.waitFor(() => expect(state.card.entries()).toHaveLength(1));
+    expect(network).toHaveBeenCalledOnce();
+
+    state.setMenuOpen(true);
+    await vi.waitFor(() => expect(state.menu()?.entries()).toHaveLength(1));
+    expect(network).toHaveBeenCalledOnce();
+
+    // An add reads again from the network, once, and both readers get it.
+    added = true;
+    await state.menu()?.refetch();
+    await vi.waitFor(() => expect(state.card.entries()).toHaveLength(2));
+    expect(state.menu()?.entries()).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(network).toHaveBeenCalledTimes(2);
+  } finally {
+    state.dispose();
+  }
+});
+
+it('lets a cache-first reader read once when nothing is cached', async () => {
+  const { client, network } = cachedClient();
+  const state = createRoot((dispose) => ({
+    dispose,
+    menu: createPipelineEntriesQuery(
+      () => client,
+      () => ({ type: 'contact', id: 'maya' }),
+      'cache-first'
+    ),
+  }));
+  try {
+    await vi.waitFor(() => expect(state.menu.entries()).toHaveLength(1));
+    expect(network).toHaveBeenCalledOnce();
+  } finally {
+    state.dispose();
+  }
+});
+
+it('sends the request again for a second cache-and-network reader', async () => {
+  // Why the menu reads cache-first: urql merges only requests in flight
+  // together, and this policy refetches once the card's request has finished.
+  const { client, network } = cachedClient();
+  const record = { type: 'company', id: 'acme' } as const;
+  const state = createRoot((dispose) => {
+    const card = createPipelineEntriesQuery(
+      () => client,
+      () => record
+    );
+    const [open, setOpen] = createSignal(false);
+    const second = createMemo(() =>
+      open()
+        ? createPipelineEntriesQuery(
+            () => client,
+            () => record
+          )
+        : undefined
+    );
+    return { card, second, setOpen, dispose };
+  });
+  try {
+    await vi.waitFor(() => expect(state.card.entries()).toHaveLength(1));
+    state.setOpen(true);
+    await vi.waitFor(() => expect(network).toHaveBeenCalledTimes(2));
+  } finally {
+    state.dispose();
+  }
 });

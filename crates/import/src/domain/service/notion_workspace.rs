@@ -15,8 +15,9 @@ use std::time::{Duration, Instant};
 use agent_session::domain::model::AgentSessionId;
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_users, inventory};
+use import_notion::domain::macro_cells::{PeopleMap, Person};
 use import_notion::domain::model::{
-    ImportScope, NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged,
+    ImportScope, NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, RowsPage,
     SearchHit, SearchObject,
 };
 use import_notion::domain::ports::{NotionApi, NotionConnections, NotionError};
@@ -111,7 +112,7 @@ impl NotionApi for NoNotionApi {
         &self,
         _id: &NotionId,
         _cursor: Option<String>,
-    ) -> std::result::Result<Paged<NotionPage>, NotionError> {
+    ) -> std::result::Result<RowsPage, NotionError> {
         match *self {}
     }
 
@@ -482,13 +483,14 @@ where
         tracing::Span::current().record("already_in_macro", already_imported.len());
         // The whole tree is staged before the decision model answers, so the
         // review shows it while each batch is decided.
-        self.repo
-            .replace_plan(
-                user,
-                self.workspace_source,
-                &tree.staged_rows(sharing, team, &already_imported),
-            )
-            .await?;
+        super::lifecycle::replace_plan(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            self.workspace_source,
+            &tree.staged_rows(sharing, team, &already_imported),
+        )
+        .await?;
         self.notify(user).await;
         // Objects already in Macro need no decision, so they cost no model call.
         let items = tree.triage_items(&already_imported);
@@ -597,8 +599,7 @@ where
             Ok(failed) => (
                 RunStatus::Completed,
                 Some(format!(
-                    "{failed} of {} objects could not be imported",
-                    set.pending.len()
+                    "{failed} objects could not be imported. Plan again to retry them."
                 )),
             ),
             Err(error) => {
@@ -654,7 +655,8 @@ where
         let people = self.people(&api, user).await;
         let ids: Vec<Uuid> = set.all.iter().map(|item| item.import_id).collect();
         let written = self.repo.written(user, &ids).await?;
-        let links = self.links(user, &set.all, &people).await?;
+        let (links, unavailable) = self.links(user, &set.all, &people).await?;
+        let links = tokio::sync::RwLock::new(links);
         let root = self.root_folder(user).await?;
 
         // Folders first, parents before children. A folder is shared only
@@ -739,7 +741,7 @@ where
 
         // Objects a teammate was writing: link to what they finished, take
         // over what they gave up, and wait on the rest.
-        let mut failed = 0;
+        let mut failed = unavailable;
         let mut waiting = Vec::new();
         for (item, outcome) in set.pending.iter().zip(outcomes) {
             match outcome {
@@ -794,7 +796,10 @@ where
 
     /// The user's "Notion" folder: the one earlier imports made while it
     /// still exists, otherwise a new one.
-    async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Uuid> {
+    pub(in crate::domain::service) async fn root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<Uuid> {
         if let Some(folder) = self.repo.root_folder(user).await?
             && self.creator.folder_exists(user, folder).await?
         {
@@ -810,12 +815,12 @@ where
 
     /// Notion users matched to the user's team by email. Empty when Notion
     /// will not share emails; people columns then stay empty.
-    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> values::PeopleMap {
+    async fn people(&self, api: &N::Api, user: &MacroUserIdStr<'static>) -> PeopleMap {
         let notion_users = match all_users(api).await {
             Ok(users) => users,
             Err(error) => {
                 tracing::warn!(error = ?error, "notion users were not read; people stay empty");
-                return values::PeopleMap::new();
+                return PeopleMap::new();
             }
         };
         let members = self
@@ -836,7 +841,7 @@ where
                         .find(|member| &member.email == email)
                         .map(|member| member.user_id.clone())
                 });
-                (notion_user.id, values::Person { email, macro_user })
+                (notion_user.id, Person { email, macro_user })
             })
             .collect()
     }

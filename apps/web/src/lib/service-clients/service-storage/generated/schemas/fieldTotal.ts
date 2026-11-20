@@ -4,11 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { FieldTotalCurrency } from './fieldTotalCurrency';
 
 /**
  * The sum of a number field over the matched entries.
  */
 export interface FieldTotal {
+  /** The currency code of a monetary field's amounts; such a field has one
+total per currency, never converted or combined. Absent for other numbers. */
+  currency?: FieldTotalCurrency;
   /** The field. */
   field: string;
   /** The sum. */

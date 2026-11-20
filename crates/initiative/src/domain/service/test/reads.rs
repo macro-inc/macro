@@ -93,6 +93,7 @@ fn service_with_resources(repo: MockInitiativeRepo, resources: FakeResources) ->
 
 fn summary(id: u128, name: &str) -> InitiativeSummary {
     InitiativeSummary {
+        appearance: None,
         id: InitiativeId::from_uuid(uuid::Uuid::from_u128(id)),
         name: name.into(),
         updated_at: now(),

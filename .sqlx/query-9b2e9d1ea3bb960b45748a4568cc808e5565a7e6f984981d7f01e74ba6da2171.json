@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT options AS \"options: Json<Vec<SessionConfigOption>>\", observed_at\n            FROM harness_known_models\n            WHERE harness_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "options: Json<Vec<SessionConfigOption>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "observed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9b2e9d1ea3bb960b45748a4568cc808e5565a7e6f984981d7f01e74ba6da2171"
+}

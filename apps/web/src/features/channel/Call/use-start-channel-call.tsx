@@ -68,7 +68,12 @@ export function useStartChannelCall(channelId: () => string) {
       isExistingCall: wasExistingCall,
     });
     try {
-      await call.joinCall();
+      const callId = activeCallQuery.data?.callId;
+      if (wasExistingCall && callId) {
+        await call.joinCall('user', { kind: 'join', callId });
+      } else {
+        await call.startCall();
+      }
       // A successful join with no call previously in progress means this user
       // started the call. Fires once, from the starter's client.
       if (!wasExistingCall) {
@@ -112,6 +117,7 @@ export function useStartChannelCall(channelId: () => string) {
   return {
     start,
     isCallInProgress,
+    isJoining: call.isJoining,
     isInThisChannel: call.isInThisChannel,
   };
 }

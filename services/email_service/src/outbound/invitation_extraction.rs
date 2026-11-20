@@ -21,3 +21,33 @@ impl InvitationAttachmentProvider for InvitationProvider {
             .map_err(Report::new)?)
     }
 }
+
+/// Save invitation snapshots after the email commit. Failures leave plain mail.
+pub async fn save_discovered<R, P>(
+    extractor: &email::domain::invitation_extraction::InvitationExtractionService<R, P>,
+    link_id: Uuid,
+    provider_id: &str,
+    message_id: Uuid,
+    parts: &[email_api_client::domain::models::CalendarPart],
+) where
+    R: email::domain::invitation_extraction::InvitationExtractionRepository,
+    P: InvitationAttachmentProvider,
+{
+    use email::domain::invitation_extraction::InvitationPart;
+    let parts = parts
+        .iter()
+        .filter_map(
+            |part| match (&part.inline_data, &part.provider_attachment_id) {
+                (Some(bytes), _) => Some(InvitationPart::Inline(bytes)),
+                (None, Some(attachment_id)) => Some(InvitationPart::Attachment(attachment_id)),
+                (None, None) => None,
+            },
+        )
+        .collect::<Vec<_>>();
+    if let Err(error) = extractor
+        .ingest(message_id, link_id, provider_id, &parts)
+        .await
+    {
+        tracing::warn!(target: "email_service::pubsub::invitation_extraction", error=?error, "invitation extraction failed");
+    }
+}

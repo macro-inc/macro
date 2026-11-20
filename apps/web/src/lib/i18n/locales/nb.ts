@@ -103,7 +103,6 @@ export default {
     close: 'Lukk',
     delete: 'Slett',
     rename: 'Gi nytt navn',
-    more: 'Mer',
     search: 'Søk',
     settings: 'Innstillinger',
   },
@@ -588,10 +587,6 @@ export default {
       other: 'Merket {{accepted}} av {{count}} elementer som ikke ferdige',
     },
     toastMarkNotDoneFailed: 'Kunne ikke merke som ikke ferdig',
-    toastThreadStaysDone:
-      'Denne tråden har ingen mottatte meldinger, så den forblir ferdig',
-    toastThreadsStayDone:
-      'Disse trådene har ingen mottatte meldinger, så de forblir ferdige',
     toastCountNotRestored: {
       one: '{{count}} kunne ikke gjenopprettes.',
       other: '{{count}} kunne ikke gjenopprettes.',
@@ -691,8 +686,6 @@ export default {
     create: 'Opprett',
     getMobileApp: 'Last ned mobilappen',
     signedInAs: 'Logget på som {{name}}',
-    commandMenu: 'Kommandomeny',
-    searchEverything: 'Søk i alt',
     customizeSidebar: 'Tilpass sidefeltet',
     customizeSidebarDescription:
       'Velg hvilke apper som vises i sidefeltet, og dra for å endre rekkefølgen. Hjem er alltid først.',

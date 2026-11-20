@@ -8,6 +8,8 @@ type MediaPreviewProps = {
   class?: string;
   /** An item whose file failed to load. */
   onError?: (id: string) => void;
+  /** An image whose file loaded. */
+  onLoad?: (id: string) => void;
 };
 
 export function MediaPreview(props: MediaPreviewProps) {
@@ -21,6 +23,7 @@ export function MediaPreview(props: MediaPreviewProps) {
         variant="message"
         class={props.class}
         onError={props.onError}
+        onLoad={props.onLoad}
         onOpen={(index) => {
           setSelectedIndex(index);
           setViewerOpen(true);

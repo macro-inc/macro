@@ -13,7 +13,7 @@ import { SettingsCard } from '../primitives';
 import { RuntimeName } from './connected-runtimes-section';
 
 const ROW_CLASS =
-  'flex items-start justify-between gap-4 px-4 py-3 @max-[480px]:flex-col @max-[480px]:gap-2';
+  'flex items-start justify-between gap-4 px-6 py-4 @max-[480px]:flex-col @max-[480px]:gap-2';
 const ACTIONS_CLASS =
   'flex shrink-0 flex-wrap items-center justify-end gap-1 @max-[480px]:justify-start @max-[480px]:pl-2';
 
@@ -41,7 +41,7 @@ export function PendingRequestsSection() {
         <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
           {t('runtimeSharing.pendingRequestsTitle')}
         </h2>
-        <SettingsCard>
+        <SettingsCard inset="wide">
           <For each={incomingIds()}>
             {(id) => (
               <Show when={incoming(id)}>

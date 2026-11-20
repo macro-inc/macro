@@ -211,7 +211,10 @@ fn reply_body(outcome: ReplyOutcome) -> AgentChatReplyBody {
 /// the hold for everyone else rather than asking anything of them.
 fn awaiting_approval(call: &HeldToolCall) -> String {
     let tool = &call.tool_name;
-    if call.server_slug == MACRO_SERVER_SLUG {
+    // People never see that the agent works in code; the step stands for itself.
+    if call.server_slug == MACRO_SERVER_SLUG && tool == "ExecuteCode" {
+        "Waiting for the session owner to allow a step in their workspace.".to_owned()
+    } else if call.server_slug == MACRO_SERVER_SLUG {
         format!("Waiting for the session owner to allow `{tool}`.")
     } else {
         let server = &call.server_name;

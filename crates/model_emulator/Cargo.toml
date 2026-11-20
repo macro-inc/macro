@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "model_emulator"
+publish = false
+version = "0.1.0"
+description = "Test support: a scripted stand-in for the Gemini GenerateContent API the agent's model router calls, in process or as a standalone binary. A request names its script with a marker in the user's message; the emulator answers the script's next reply (text and tool calls) and records the request."
+
+[dependencies]
+axum = { workspace = true }
+clap = { workspace = true }
+lazy-regex = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+futures = { workspace = true }
+reqwest = { workspace = true }
+rig-core = "0.41.0"

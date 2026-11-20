@@ -108,6 +108,7 @@ fn held(
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(asker()),
+            client: None,
         },
         server_slug: "macro".to_owned(),
         server_name: "Macro".to_owned(),
@@ -423,6 +424,7 @@ fn in_process(session: AgentSessionId) -> InProcessCall {
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(asker()),
+            client: None,
         },
         server_slug: "macro".to_owned(),
         server_name: "Macro".to_owned(),
@@ -494,6 +496,37 @@ fn only_public_lookups_on_macro_skip_the_owner() {
         spends_owner_access("linear", "WebSearch"),
         "a connected app is always the owner's own account"
     );
+}
+
+#[test]
+fn only_drives_writes_wait_for_the_owner_in_their_own_turn() {
+    for write in [
+        "copy_file",
+        "create_file",
+        "edit_google_doc",
+        "restore_file",
+        "trash_file",
+        "update_file",
+    ] {
+        assert!(owner_confirms("google_drive", write), "{write}");
+    }
+    for read in [
+        "download_file_content",
+        "get_file_metadata",
+        "get_file_permissions",
+        "list_files",
+        "list_recent_files",
+        "list_shared_drives",
+        "read_file_content",
+        "search_files",
+    ] {
+        assert!(!owner_confirms("google_drive", read), "{read}");
+    }
+    assert!(
+        !owner_confirms("linear", "create_file"),
+        "another app's tool of the same name is not Drive's"
+    );
+    assert!(!owner_confirms(MACRO_SERVER_SLUG, "trash_file"));
 }
 
 /// Hold `call` in-process on a task, and the approval it is waiting on once
@@ -581,6 +614,7 @@ async fn approving_one_macro_tool_for_good_still_asks_about_anything_else() {
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(MacroUserIdStr::try_from_email("someone@macro.com").unwrap()),
+            client: None,
         },
         ..in_process(session)
     };
@@ -702,6 +736,7 @@ async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: None,
+            client: None,
         },
         ..in_process(session)
     };

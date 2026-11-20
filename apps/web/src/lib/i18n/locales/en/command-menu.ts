@@ -23,6 +23,7 @@ export default {
   hintCategory: 'Category',
   hintClose: 'Close',
   openInNewSplit: 'Open in new split',
+  openInNewTab: 'Open in new tab',
   moveSelectionDown: 'Move selection down',
   moveSelectionUp: 'Move selection up',
   selectItem: 'Select item',

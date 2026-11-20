@@ -244,7 +244,7 @@ impl FavoritesRepo for PgFavoritesRepo {
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self, entities))]
+    #[tracing::instrument(err, skip(self, user_id, entities))]
     async fn favorited_entities(
         &self,
         user_id: &MacroUserIdStr<'_>,

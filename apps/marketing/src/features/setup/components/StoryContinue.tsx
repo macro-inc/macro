@@ -1,4 +1,4 @@
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 
 /** An understated, explicit next step that leaves scrolling native. */
 export function StoryContinue(props: { label: string; onClick: () => void }) {

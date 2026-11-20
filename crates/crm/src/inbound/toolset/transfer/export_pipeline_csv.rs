@@ -16,7 +16,7 @@ use crate::domain::{crm_transfer::CrmTransferService, pipeline_workflows::MAX_SC
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ExportPipelineCsv",
-    description = "Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds."
+    description = "Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Monetary amounts and their currency codes occupy separate columns, and Outcome exports as Open, Won or Lost. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds."
 )]
 pub struct ExportPipelineCsv {
     /// The pipeline.

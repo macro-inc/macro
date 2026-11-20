@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notification_bulk_action\n            SET lease_expires_at = now()\n            WHERE id = $1 AND lease_token = $2 AND status IN ('applying', 'undoing')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5f9b172f498e7992e8df497725361817d5b666ddd24bffe392c41513d6fc93f"
+}

@@ -83,8 +83,8 @@ export const onboardingPr: DemoPullRequest = {
   comments: [
     {
       id: 'approve',
-      person: 'valentina',
-      login: 'valentina',
+      person: 'austin',
+      login: 'austin',
       time: '9:12 AM',
       badge: 'review',
       body: 'Checked it on mobile too. Ship it.',

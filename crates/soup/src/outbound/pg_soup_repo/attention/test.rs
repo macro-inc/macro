@@ -275,6 +275,82 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
     Ok(())
 }
 
+/// Copy each notification's entity onto its recipient rows, as notification
+/// ingress does; the fixtures insert recipient rows without it.
+async fn copy_entities_onto_recipient_rows(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE user_notification un \
+         SET event_item_type = n.event_item_type, \
+             event_item_id = n.event_item_id, \
+             notification_event_type = n.notification_event_type \
+         FROM notification n WHERE n.id = un.notification_id",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_only_matches_the_whole_feed_for_every_item(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    for own_work in [ATTENTION, WORK] {
+        let mut whole = req(own_work, &link_ids, &sources);
+        whole.keying = AttentionKeying::FiledEntity;
+        let feed = attention_soup_page(&pool, whole).await?;
+        assert!(
+            feed.iter()
+                .any(|candidate| candidate.attention_at.is_some())
+        );
+
+        // Every item of the feed, and two the feed does not hold: one only
+        // ever opened and one that does not exist.
+        let mut only: Vec<Entity<'static>> = feed
+            .iter()
+            .map(|candidate| candidate.entity.clone())
+            .collect();
+        only.push(EntityType::Document.with_entity_string(DOC_F.to_string()));
+        only.push(EntityType::Channel.with_entity_string(Uuid::nil().to_string()));
+        let mut known = req(own_work, &link_ids, &sources);
+        known.keying = AttentionKeying::FiledEntity;
+        known.only = Some(&only);
+
+        assert_eq!(attention_soup_page(&pool, known).await?, feed);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_only_reads_one_item_of_the_feed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut whole = req(ATTENTION, &link_ids, &sources);
+    whole.keying = AttentionKeying::FiledEntity;
+    let feed = attention_soup_page(&pool, whole).await?;
+
+    for candidate in &feed {
+        let only = vec![candidate.entity.clone()];
+        let mut known = req(ATTENTION, &link_ids, &sources);
+        known.keying = AttentionKeying::FiledEntity;
+        known.only = Some(&only);
+        assert_eq!(
+            attention_soup_page(&pool, known).await?,
+            vec![candidate.clone()]
+        );
+    }
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("work_feed")),
     migrator = "MACRO_DB_MIGRATIONS"
@@ -472,6 +548,7 @@ async fn thread_scoped_keying_places_channel_notifications_on_their_threads(
 async fn filed_entity_keying_places_a_channel_and_its_threads_together(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
     let mut request = req(ATTENTION, &link_ids, &sources);
@@ -539,5 +616,123 @@ async fn runtime_access_notifications_are_candidates(pool: Pool<Postgres>) -> an
             ),
         ]
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed", "attention_teams")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn team_notifications_are_candidates_only_for_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = &[EntityType::Team];
+    request.keying = AttentionKeying::FiledEntity;
+    let page = attention_soup_page(&pool, request).await?;
+
+    // team-2's request stays out: user-1 is not a member. The invite is filed
+    // under an invite id, which names no team.
+    assert_eq!(
+        keys(&page),
+        vec![(
+            EntityType::Team,
+            "bbbbbbbb-0000-0000-0000-000000000001".to_string()
+        )]
+    );
+
+    // Membership alone never lists a team: user-2 is in team-2, whose request
+    // notification is user-1's, not theirs.
+    let mut teammate = req(ATTENTION, &link_ids, &sources);
+    teammate.types = &[EntityType::Team];
+    teammate.keying = AttentionKeying::FiledEntity;
+    teammate.user_id = MacroUserIdStr::parse_from_str("macro|user-2@example.com")?;
+    assert!(attention_soup_page(&pool, teammate).await?.is_empty());
+    Ok(())
+}
+
+// A bulk clear marks a team request done and owns it through `done_by`; its
+// undo reopens it, but a state change made in between takes ownership back, so
+// the undo leaves that notification alone. The UPDATEs mirror the clear and
+// undo statements in `notification::outbound::bulk_action`.
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed", "attention_teams")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_cleared_team_request_leaves_attention_until_undone(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TEAM_1: &str = "bbbbbbbb-0000-0000-0000-000000000001";
+    const REQUEST: &str = "0190b000-0000-7000-8000-000000000060";
+    let action_id = Uuid::parse_str("0190b000-0000-7000-8000-0000000000aa")?;
+    let request_id = Uuid::parse_str(REQUEST)?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let team_page = || {
+        let mut request = req(ATTENTION, &link_ids, &sources);
+        request.types = &[EntityType::Team];
+        request.keying = AttentionKeying::FiledEntity;
+        attention_soup_page(&pool, request)
+    };
+    let clear = || {
+        sqlx::query!(
+            "UPDATE user_notification SET state = 'done', done_by = $1 \
+             WHERE user_id = $2 AND notification_id = $3",
+            action_id,
+            USER_1,
+            request_id,
+        )
+        .execute(&pool)
+    };
+    let undo = || {
+        sqlx::query!(
+            "UPDATE user_notification SET state = 'unseen', done_by = NULL \
+             WHERE user_id = $2 AND notification_id = $3 AND done_by = $1 \
+             AND state = 'done' AND deleted_at IS NULL",
+            action_id,
+            USER_1,
+            request_id,
+        )
+        .execute(&pool)
+    };
+    let listed = vec![(EntityType::Team, TEAM_1.to_string())];
+
+    clear().await?;
+    assert!(team_page().await?.is_empty());
+    assert_eq!(undo().await?.rows_affected(), 1);
+    assert_eq!(keys(&team_page().await?), listed);
+
+    // A writer that knows nothing of bulk actions reopens it after a clear.
+    clear().await?;
+    sqlx::query!(
+        "UPDATE user_notification SET state = 'seen' \
+         WHERE user_id = $1 AND notification_id = $2",
+        USER_1,
+        request_id,
+    )
+    .execute(&pool)
+    .await?;
+    let done_by = sqlx::query_scalar!(
+        "SELECT done_by FROM user_notification WHERE user_id = $1 AND notification_id = $2",
+        USER_1,
+        request_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(done_by, None);
+    assert_eq!(keys(&team_page().await?), listed);
+    assert_eq!(undo().await?.rows_affected(), 0);
+
+    // Leaving the team drops its request from attention.
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1 AND team_id = $2",
+        USER_1,
+        Uuid::parse_str(TEAM_1)?,
+    )
+    .execute(&pool)
+    .await?;
+    assert!(team_page().await?.is_empty());
     Ok(())
 }

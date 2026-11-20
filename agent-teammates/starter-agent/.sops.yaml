@@ -1,0 +1,6 @@
+# The agent's credentials are encrypted to an age key. bin/setup fills in its
+# public half here; the private half is in ~/.config/sops/age/keys.txt on the
+# machine the agent runs on, and nowhere else.
+creation_rules:
+  - path_regex: secrets\.enc\.json$
+    age: REPLACED_BY_BIN_SETUP

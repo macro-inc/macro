@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE stripe_events SET payload = NULL WHERE created_at < $1 AND payload IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "375d3583e19379411a3a03f8eebda7c4f1c9d19742899c4ffbb76013a4781e25"
+}

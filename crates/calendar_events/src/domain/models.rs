@@ -1098,6 +1098,43 @@ pub enum CalendarSyncStatus {
     Ready,
 }
 
+/// Why a calendar's latest sync attempt failed, while none has succeeded since.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CalendarSyncFailure {
+    /// The provider or Macro may recover by itself; until it does, the
+    /// calendar's stored events stop taking changes.
+    Transient,
+    /// The provider refused for a reason a retry will not fix.
+    Permanent,
+    /// The grant is gone: nothing syncs or writes until the user reconnects.
+    ReauthRequired,
+}
+
+/// How current one visible calendar's stored events are.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarFreshness {
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// When the calendar's next routine sync was due: its last successful
+    /// sync, which Macro repeats every few minutes, or a day after it for a
+    /// system calendar synced daily (see [`SYSTEM_CALENDAR_SYNC_INTERVAL`]).
+    /// `None` before its first sync finished.
+    pub refresh_due_at: Option<DateTime<Utc>>,
+    /// The latest attempt's failure, from the calendar or its whole account.
+    pub failure: Option<CalendarSyncFailure>,
+}
+
+/// How current a requester's calendar data is, for a reader that must not
+/// read stale or missing data as free time.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CalendarSyncHealth {
+    /// Every calendar `list_visible_calendars` returns.
+    pub calendars: Vec<CalendarFreshness>,
+    /// Connected inboxes whose first sync has not listed a calendar yet, so
+    /// whose calendars, which count toward busy time by default, are unknown.
+    pub unlisted_inboxes: Vec<Uuid>,
+}
+
 impl OccurrenceRange {
     /// Construct the bounded history/future window maintained by sync jobs.
     pub fn historical_sync(now: DateTime<Utc>) -> Self {
@@ -1120,6 +1157,22 @@ impl OccurrenceRange {
     pub fn maintenance_horizon(now: DateTime<Utc>) -> Self {
         let starts_at = now - chrono::Duration::days(365);
         let ends_at = month_ceil(now + chrono::Duration::days(730));
+        Self {
+            starts_at,
+            ends_at,
+            start_date: starts_at.date_naive(),
+            end_date: ends_at.date_naive(),
+        }
+    }
+
+    /// Construct this month and next, the part of the window a user looks at
+    /// first, which an Outlook calendar's first import lists before the rest.
+    ///
+    /// Months are UTC, as every sync window is, padded by a day on each side
+    /// so the user's own month is inside it in any time zone.
+    pub fn near_window(now: DateTime<Utc>) -> Self {
+        let starts_at = month_floor(now) - chrono::Duration::days(1);
+        let ends_at = month_ceil(month_ceil(now)) + chrono::Duration::days(1);
         Self {
             starts_at,
             ends_at,
@@ -1166,6 +1219,18 @@ fn month_ceil(instant: DateTime<Utc>) -> DateTime<Utc> {
         (date.year(), date.month() + 1)
     };
     NaiveDate::from_ymd_opt(year, month, 1)
+        .expect("first day of a month is valid")
+        .and_hms_opt(0, 0, 0)
+        .expect("midnight is a valid time")
+        .and_utc()
+}
+
+fn month_floor(instant: DateTime<Utc>) -> DateTime<Utc> {
+    use chrono::Datelike;
+
+    instant
+        .date_naive()
+        .with_day(1)
         .expect("first day of a month is valid")
         .and_hms_opt(0, 0, 0)
         .expect("midnight is a valid time")
@@ -1573,10 +1638,10 @@ pub struct VisibleCalendar {
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
     /// Whether this calendar counts toward the requester's busy time: their
-    /// setting, by default only the primary calendars of inboxes they own.
+    /// setting in Settings → Calendar, on by default for every calendar.
     /// The nearest thing to "this is the requester's own": a provider's
     /// access role only says what they may do, on a colleague's calendar too.
-    #[serde(default)]
+    #[serde(default = "counts_toward_availability_by_default")]
     pub contributes_to_availability: bool,
     /// A persistent sync failure isolated to this calendar, surfaced so the
     /// settings row can badge it. `None` while the calendar is syncing
@@ -1584,6 +1649,11 @@ pub struct VisibleCalendar {
     pub sync_error: Option<String>,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
+}
+
+/// A reply that omits the setting must not free the user's time.
+fn counts_toward_availability_by_default() -> bool {
+    true
 }
 
 impl VisibleCalendar {
@@ -1725,7 +1795,9 @@ pub const WATCH_UNSUPPORTED_RETRY_INTERVAL: chrono::Duration = chrono::Duration:
 /// How often Google's own read-only system calendars (holidays, birthdays)
 /// are synced. Their content changes on the order of once a year, and Google
 /// chronically resets their sync tokens, turning every poll into a full
-/// snapshot; a daily cadence keeps them fresh without that churn.
+/// snapshot; a daily cadence keeps them fresh without that churn. An Outlook
+/// mailbox's own read-only calendars (`OutlookCalendar::is_system`) follow
+/// it too, since without a delta every round re-reads all their events.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
 
 /// Consecutive isolated sync failures a calendar must accumulate before its
@@ -1880,11 +1952,14 @@ pub struct GoogleBackfillRunReport {
     pub team_ooo_changed: bool,
     /// Events written through the ingestion upsert this run.
     pub events_upserted: usize,
+    /// Those upserts that created or rewrote a row. A provider echo of what
+    /// Macro already stored, such as the sync after a Macro write, is not one.
+    pub events_changed: usize,
     /// Cancellation tombstones the change feed reported this run.
     pub cancellations_observed: usize,
     /// Events removed or rewritten because a source they relied on was
-    /// retired: unobserved by a full snapshot, or on a calendar the account
-    /// no longer lists.
+    /// retired: cancelled by a tombstone, unobserved by a full snapshot, or on
+    /// a calendar the account no longer lists.
     pub events_retired: usize,
     /// Guest copies in other inboxes whose guest policy changed to follow an
     /// organizer's copy this run wrote; their viewers need a refresh too.
@@ -1893,12 +1968,11 @@ pub struct GoogleBackfillRunReport {
 
 impl GoogleBackfillRunReport {
     /// Whether the run plausibly changed the local projection. Quiet
-    /// token-only polls report nothing and skip client notifications.
+    /// token-only polls report nothing and skip client notifications, and so
+    /// does a run that only read back what Macro had already stored: an
+    /// unchanged upsert, or a tombstone for a source already gone.
     pub fn changed(&self) -> bool {
-        self.team_ooo_changed
-            || self.events_upserted > 0
-            || self.cancellations_observed > 0
-            || self.events_retired > 0
+        self.team_ooo_changed || self.events_changed > 0 || self.events_retired > 0
     }
 }
 
@@ -2085,6 +2159,10 @@ pub enum CalendarBackfillClaim {
         lease_token: Uuid,
         /// Calendar account provisioned by the grant transaction.
         account_id: Uuid,
+        /// When the first delivery of this round claimed the job. A round
+        /// deferred at Macro's per-inbox request limit keeps it, so a later
+        /// delivery skips the calendars the round already synced.
+        round_started_at: DateTime<Utc>,
     },
     /// The durable job already completed.
     Complete,

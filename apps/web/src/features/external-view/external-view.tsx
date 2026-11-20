@@ -115,8 +115,8 @@ export function ExternalView() {
       >
         {/* Above the chats, so people who haven't linked WhatsApp see it too.
             Its rows are sidebar-style items, so the entry is one, inset to
-            line up with the rows below it (In Macro on touch, chats on desktop). */}
-        <div class="px-2 pt-2 empty:hidden not-touch:px-4">
+            line up with the chats below it. Touch devices show no tutorial. */}
+        <div class="px-4 pt-2 empty:hidden">
           <TutorialSidebarItem tutorial="whatsapp" />
         </div>
         {/* Touch has no sidebar: the chats in Macro lead the page. */}
@@ -141,11 +141,14 @@ export function ExternalView() {
       <SplitPanel.Body>
         <ViewShell.Root
           asidePreferenceKey="external"
-          aside={isTouchDevice() ? false : undefined}
-          resizable={!isTouchDevice()}
+          aside={{ preserveDuringResize: false }}
+          resizable
         >
           <ViewShell.Aside>
-            <ViewSidebar.Root aria-label="External navigation">
+            <ViewSidebar.Root
+              reorderId="external"
+              aria-label="External navigation"
+            >
               <ViewSidebar.Header>
                 <div class="flex min-w-0 items-center gap-1">
                   <ViewSidebar.CloseButton class="shrink-0" />
@@ -153,12 +156,18 @@ export function ExternalView() {
                 </div>
               </ViewSidebar.Header>
               <ViewSidebar.Content>
-                <ViewSidebar.Nav aria-label="External apps">
-                  <For each={PROVIDERS}>
-                    {(provider) => {
-                      const open = () => !folded().includes(provider);
-                      return (
-                        <>
+                <For each={PROVIDERS}>
+                  {(provider) => {
+                    const open = () => !folded().includes(provider);
+                    return (
+                      <ViewSidebar.Section
+                        id={`provider:${provider}`}
+                        label={providerIdentity(provider).label}
+                        headerless
+                      >
+                        <ViewSidebar.Nav
+                          aria-label={providerIdentity(provider).label}
+                        >
                           <ViewSidebar.TreeItem
                             active={!params.chatId}
                             label={providerIdentity(provider).label}
@@ -181,15 +190,20 @@ export function ExternalView() {
                           <ViewSidebar.Branch open={open()}>
                             {inMacroChats(provider)}
                           </ViewSidebar.Branch>
-                        </>
-                      );
-                    }}
-                  </For>
-                </ViewSidebar.Nav>
+                        </ViewSidebar.Nav>
+                      </ViewSidebar.Section>
+                    );
+                  }}
+                </For>
               </ViewSidebar.Content>
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
+            <Show when={isTouchDevice()}>
+              <ViewShell.Header class="empty:hidden">
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+              </ViewShell.Header>
+            </Show>
             <SplitRouter.Outlet fallback={whatsappPage} />
           </ViewShell.Main>
         </ViewShell.Root>

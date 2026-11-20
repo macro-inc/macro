@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_item_entities SET deleted_at=COALESCE(deleted_at,now()),cleanup_due_at=now()+interval '1 hour' WHERE team_id=$1 AND id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c4bbc1b70ec24c60f70b2f383dccb5eb05f0b59ba21e7a0056adcb98ad37b605"
+}

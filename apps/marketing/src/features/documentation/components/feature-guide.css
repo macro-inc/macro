@@ -1,0 +1,19 @@
+.feature-guide {
+	margin-block: 48px;
+}
+.feature-guide > details {
+	border-block: 1px solid color-mix(in srgb, var(--c1) 12%, transparent);
+}
+.feature-guide > details > summary {
+	cursor: default;
+	padding-block: 20px;
+	font-family: "body", sans-serif;
+	font-size: 17.5px;
+	color: var(--c1);
+}
+.feature-guide .documentation-body {
+	padding-block: 12px 28px;
+}
+.feature-guide [id] {
+	scroll-margin-top: 100px;
+}

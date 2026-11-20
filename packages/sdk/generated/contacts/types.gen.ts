@@ -24,6 +24,38 @@ export type GetContactsResponse = {
     contacts: Array<string>;
 };
 
+/**
+ * Response body for GET /contacts/search.
+ */
+export type SearchPeopleResponse = {
+    /**
+     * Matches ranked teammates first, then prefix matches, then by name or email.
+     */
+    people: Array<SearchedPerson>;
+};
+
+/**
+ * One ranked person in a GET /contacts/search response.
+ */
+export type SearchedPerson = {
+    /**
+     * Whether the person is an agent rather than a human; false for non-Macro contacts.
+     */
+    isAgent: boolean;
+    /**
+     * Whether the person is on the viewer's current team.
+     */
+    isTeammate: boolean;
+    /**
+     * Resolved name, as the contact directory shows it; null when unknown.
+     */
+    name?: string | null;
+    /**
+     * The person's user ID (`macro|<email>`).
+     */
+    userId: string;
+};
+
 export type GetContactsData = {
     body?: never;
     path?: never;
@@ -64,3 +96,34 @@ export type AddContactResponses = {
 };
 
 export type AddContactResponse = AddContactResponses[keyof AddContactResponses];
+
+export type SearchPeopleData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Text matched against email and name. Under two characters after
+         * trimming returns no people; over 512 bytes is rejected.
+         */
+        query: string;
+        /**
+         * Maximum results: default 20, values over 50 are capped at 50, zero is rejected.
+         */
+        limit?: number;
+    };
+    url: '/contacts/search';
+};
+
+export type SearchPeopleErrors = {
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type SearchPeopleError = SearchPeopleErrors[keyof SearchPeopleErrors];
+
+export type SearchPeopleResponses = {
+    200: SearchPeopleResponse;
+};
+
+export type SearchPeopleResponse2 = SearchPeopleResponses[keyof SearchPeopleResponses];

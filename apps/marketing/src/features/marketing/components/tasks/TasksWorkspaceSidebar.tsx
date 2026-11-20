@@ -1,10 +1,10 @@
-import Caret from '@phosphor/caret-down.svg';
-import CheckSquare from '@phosphor/check-square.svg';
-import List from '@phosphor/list-checks.svg';
-import Note from '@phosphor/note-pencil.svg';
-import Plus from '@phosphor/plus.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
-import Stack from '@phosphor/stack.svg';
+import Caret from '@icon/system/regular/caret-down.svg';
+import CheckSquare from '@icon/system/regular/check-square.svg';
+import List from '@icon/system/regular/list-checks.svg';
+import Note from '@icon/system/regular/note-pencil.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
+import Stack from '@icon/system/regular/stack.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { ViewSidebar } from '../DemoViewSidebar';
 import type { TasksWorkspace } from './createTasksWorkspace';

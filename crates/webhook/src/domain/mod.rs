@@ -1,6 +1,9 @@
 //! Domain layer for webhooks.
 
 #[cfg(feature = "ports")]
+/// Addresses and hosts webhook endpoints must never reach.
+pub(crate) mod blocked_address;
+#[cfg(feature = "ports")]
 /// Webhook event delivery state machine and retry policy.
 pub mod delivery;
 /// Webhook lifecycle event contracts and deliverable event payloads.

@@ -92,7 +92,7 @@ impl ExtractionStage {
     input.primary_configured = primary.is_some(),
     input.intent = intent.telemetry_name(),
     input.phase = stage.name(),
-    input.fallback_used = false,
+    input.fallback_used = tracing::field::Empty,
     input.fallback_reason = tracing::field::Empty,
     input.provider_path = tracing::field::Empty,
     input.fallback_succeeded = tracing::field::Empty,
@@ -109,6 +109,7 @@ async fn attempt<T>(
     if let Some(primary) = primary {
         match primary.await {
             Ok(value) => {
+                span.record("input.fallback_used", false);
                 span.record("input.provider_path", "primary");
                 return Ok(value);
             }
@@ -121,9 +122,13 @@ async fn attempt<T>(
                     "Universal Input using fallback"
                 );
             }
-            Err(error) => return Err(error),
+            Err(error) => {
+                span.record("input.fallback_used", false);
+                return Err(error);
+            }
         }
     } else {
+        span.record("input.fallback_used", false);
         span.record("input.provider_path", "fallback_only");
     }
     let result = fallback.await;

@@ -30,8 +30,6 @@ import type {
   AddDraftAttachmentResponse,
   ApiMessageOperation,
   ApiPaginatedThreadCursor,
-  ArchiveThreadsRequest,
-  ArchiveThreadsResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
@@ -170,11 +168,19 @@ export const ALREADY_INITIALIZED_CODE = 'ALREADY_INITIALIZED' as const;
  */
 export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
 
+/**
+ * Error code `init` returns (HTTP 400) when the inbox is still being removed
+ * from Macro, after its account was deleted or it was disconnected. Adding it
+ * again works once that removal finishes.
+ */
+export const INBOX_BEING_REMOVED_CODE = 'INBOX_BEING_REMOVED' as const;
+
 type InitErrorCode =
   | 'PAYMENT_REQUIRED'
   | typeof SHARED_INBOX_CONFLICT_CODE
   | typeof ALREADY_INITIALIZED_CODE
-  | typeof NO_GMAIL_GRANT_CODE;
+  | typeof NO_GMAIL_GRANT_CODE
+  | typeof INBOX_BEING_REMOVED_CODE;
 
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
@@ -272,7 +278,8 @@ export const emailClient = {
           } | null;
           if (
             body?.code === ALREADY_INITIALIZED_CODE ||
-            body?.code === NO_GMAIL_GRANT_CODE
+            body?.code === NO_GMAIL_GRANT_CODE ||
+            body?.code === INBOX_BEING_REMOVED_CODE
           ) {
             return { code: body.code, message: body.message ?? '' };
           }
@@ -393,36 +400,6 @@ export const emailClient = {
         }
       )
     ).map((result) => result);
-  },
-  async updateThreadProject(args: {
-    thread_id: string;
-    projectId: string | null;
-  }) {
-    const { thread_id, projectId } = args;
-    return emailFetch<{ oldProjectId: string | null }>(
-      `/email/threads/${thread_id}/project`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ projectId }),
-      }
-    );
-  },
-  async flagArchived(args: { value: boolean; id: string }, linkId?: string) {
-    const { value, id } = args;
-    return (
-      await emailFetch<EmptyResponse>(`/email/threads/${id}/archived`, {
-        method: 'PATCH',
-        body: JSON.stringify({ value }),
-        headers: emailLinkHeaders(linkId),
-      })
-    ).map((result) => result);
-  },
-  /** One request for up to 100 threads; the server reports threads it could not change. */
-  async flagArchivedBatch(args: ArchiveThreadsRequest) {
-    return await emailFetch<ArchiveThreadsResponse>('/email/threads/archived', {
-      method: 'PATCH',
-      body: JSON.stringify(args),
-    });
   },
   async startSync() {
     return (
@@ -749,15 +726,6 @@ export const emailClient = {
           headers: emailLinkHeaders(linkId),
         }
       )
-    ).map((result) => result);
-  },
-  async markThreadAsSeen(args: { thread_id: string }, linkId?: string) {
-    const { thread_id } = args;
-    return (
-      await emailFetch<EmptyResponse>(`/email/threads/${thread_id}/seen`, {
-        method: 'POST',
-        headers: emailLinkHeaders(linkId),
-      })
     ).map((result) => result);
   },
   async blockSender(args: { email_address: string }, linkId?: string) {

@@ -21,8 +21,8 @@ check:
     bun install
     bun run check
 
-# Check endpoint coverage: every generated endpoint must either have a call
-# site under src/ or be hand-listed in src/coverage/skipped.ts.
+# Check endpoint coverage: every generated endpoint is wrapped or skipped,
+# and every wrapped method has one hand-assigned verb.
 coverage:
     bun install
     bun run coverage

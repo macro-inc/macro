@@ -1,8 +1,4 @@
-import {
-  SearchBar,
-  useViewTabHotkeys,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
@@ -24,21 +20,19 @@ import TrayIcon from '@icon/system/regular/tray.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
-import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
-import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import {
-  canSearchEmailTab,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_IDS,
   EMAIL_TAB_LABELS,
   EMAIL_TABS,
   isEmailInboxTab,
 } from '../constants';
+import { switchesEmailTabs } from '../email-search-focus';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
@@ -46,8 +40,6 @@ import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailSavedViewsSection } from '../views/email-saved-views';
 import { EmailInboxList } from './EmailInboxSelector';
 
-// Email is personal, so the sidebar lists only the user's own tags.
-const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
 const PRIMARY_TAB_IDS = [
   'favorites',
   'drafts',
@@ -111,55 +103,73 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
     <Show
       when={!isTouchDevice()}
       fallback={
-        <ViewSidebar.Nav aria-label="Email tabs">
-          <Show when={isVisible('focus')}>
-            <Tab id="focus" onNavigate={props.onNavigate} />
-          </Show>
-          <div
-            ref={tourTarget(EMAIL_TOUR.signalNoise)}
-            class="flex flex-col gap-(--sidebar-row-gap)"
-          >
-            <For each={EMAIL_TABS.slice(0, 2)}>
+        <ViewSidebar.Section
+          id="mail-folders"
+          label={t('viewMenus.mailFolders')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label="Email tabs">
+            <Show when={isVisible('focus')}>
+              <Tab id="focus" onNavigate={props.onNavigate} />
+            </Show>
+            <div
+              ref={tourTarget(EMAIL_TOUR.signalNoise)}
+              class="flex flex-col gap-(--sidebar-row-gap)"
+            >
+              <For each={EMAIL_TABS.slice(0, 2)}>
+                {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
+              </For>
+            </div>
+            <For
+              each={EMAIL_TABS.slice(2).filter(
+                (tab) => tab.id !== 'focus' && isVisible(tab.id)
+              )}
+            >
               {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
             </For>
-          </div>
-          <For
-            each={EMAIL_TABS.slice(2).filter(
-              (tab) => tab.id !== 'focus' && isVisible(tab.id)
-            )}
-          >
-            {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
-          </For>
-        </ViewSidebar.Nav>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
       }
     >
-      <ViewSidebar.Nav aria-label="Email tabs">
-        <ViewSidebar.Item
-          ref={tourTarget(EMAIL_TOUR.inbox)}
-          active={!savedViewActive() && isEmailInboxTab(state.tab)}
-          {...pressHandlers(() => {
-            // Reopen the Inbox view that was last open: Focus, Signal or Noise.
-            setTab(
-              !savedViewActive() && isEmailInboxTab(state.tab)
-                ? state.tab
-                : 'important'
-            );
-            props.onNavigate?.();
-          })}
-        >
-          <ViewSidebar.Icon>
-            <TrayIcon class="size-4" />
-          </ViewSidebar.Icon>
-          <span class="truncate">{t('viewMenus.inbox')}</span>
-        </ViewSidebar.Item>
-        <For each={PRIMARY_TAB_IDS.filter(isVisible)}>
-          {(id) => <Tab id={id} onNavigate={props.onNavigate} />}
-        </For>
-      </ViewSidebar.Nav>
-      <section aria-label={t('viewMenus.library')} class="shrink-0">
-        <h2 class="flex h-(--sidebar-row-height) items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted">
-          {t('viewMenus.library')}
-        </h2>
+      <ViewSidebar.Section
+        id="mail-folders"
+        label={t('viewMenus.mailFolders')}
+        headerless
+      >
+        <ViewSidebar.Nav aria-label="Email tabs">
+          <ViewSidebar.Item
+            ref={tourTarget(EMAIL_TOUR.inbox)}
+            active={!savedViewActive() && isEmailInboxTab(state.tab)}
+            {...pressHandlers(() => {
+              // Reopen the Inbox view that was last open: Focus, Signal or Noise.
+              setTab(
+                !savedViewActive() && isEmailInboxTab(state.tab)
+                  ? state.tab
+                  : 'important'
+              );
+              props.onNavigate?.();
+            })}
+          >
+            <ViewSidebar.Icon>
+              <TrayIcon class="size-4" />
+            </ViewSidebar.Icon>
+            <span class="truncate">{t('viewMenus.inbox')}</span>
+          </ViewSidebar.Item>
+          <For each={PRIMARY_TAB_IDS.filter(isVisible)}>
+            {(id) => <Tab id={id} onNavigate={props.onNavigate} />}
+          </For>
+        </ViewSidebar.Nav>
+      </ViewSidebar.Section>
+      <ViewSidebar.Section
+        id="library"
+        label={t('viewMenus.library')}
+        aria-label={t('viewMenus.library')}
+      >
+        <ViewSidebar.SectionHeader>
+          <h2 class="flex h-(--sidebar-row-height) items-center px-(--sidebar-item-inset) text-xs font-medium text-ink-muted">
+            {t('viewMenus.library')}
+          </h2>
+        </ViewSidebar.SectionHeader>
         <ViewSidebar.Nav
           aria-label="Email library"
           class="pt-(--sidebar-section-content-gap)"
@@ -174,7 +184,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
             )}
           </For>
         </ViewSidebar.Nav>
-      </section>
+      </ViewSidebar.Section>
     </Show>
   );
 }
@@ -183,14 +193,7 @@ export function EmailSidebar() {
   const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const {
-    state,
-    setState,
-    setTab,
-    showTags,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useEmailView();
+  const { state, setTab } = useEmailView();
 
   const tabIds = () =>
     (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
@@ -205,37 +208,17 @@ export function EmailSidebar() {
       isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
     activeId: () => state.tab,
     setActiveId: setTab,
-    shouldHandleSequentialKeyEvent: (event) =>
-      !(
-        event?.target instanceof Element &&
-        event.target.closest('[role="grid"][aria-label="Email"]')
-      ),
+    shouldHandleSequentialKeyEvent: switchesEmailTabs,
   });
 
   return (
-    <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header
-          searchLabel="Search email"
-          search={
-            canSearchEmailTab(state.tab)
-              ? () => (
-                  <SearchBar
-                    label="Search email"
-                    placeholder="Search email"
-                    value={state.search}
-                    onValueChange={(search) => setState('search', search)}
-                  />
-                )
-              : undefined
-          }
-        >
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+    <ViewSidebar.Root reorderId="email" aria-label="Email navigation">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
 
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Primary>
@@ -260,16 +243,6 @@ export function EmailSidebar() {
         <EmailNavigation />
 
         <EmailSavedViewsSection />
-
-        <div ref={tourTarget(EMAIL_TOUR.tags)}>
-          <SidebarTagsSection
-            activeIds={state.facets.tags ?? []}
-            onActiveIdsChange={showTags}
-            open={isSidebarSectionOpen('tags')}
-            onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-            scopes={SIDEBAR_TAG_SCOPES}
-          />
-        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

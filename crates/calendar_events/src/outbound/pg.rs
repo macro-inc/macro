@@ -6,10 +6,12 @@ mod export;
 mod guest_policy;
 mod invitations;
 mod join_requests;
+mod nul_characters;
 #[cfg(feature = "outlook")]
 mod outlook;
 mod replacement;
 mod source_access;
+mod sync_health;
 
 use change_log::ChangeLogBatch;
 
@@ -35,14 +37,14 @@ use crate::domain::{
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantBinding, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarMentionViewerCopy, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncStatus,
-        CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar, DueCalendarReminder,
-        EventDetails, EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel, GuestPolicy, MeetingCopy,
-        OccurrenceException, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
-        StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities, VisibleCalendar,
-        is_system_calendar,
+        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncFailure,
+        CalendarSyncStatus, CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar,
+        DueCalendarReminder, EventDetails, EventReminderOverride, EventReminders, EventStart,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        GuestPolicy, MeetingCopy, OccurrenceException, OccurrenceListing, OccurrenceRange,
+        OwnedInbox, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities,
+        VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -867,6 +869,7 @@ impl CalendarRepository for PgCalendarRepository {
             #[cfg(test)]
             CalendarEventWrite::Fixture(upsert) => upsert,
         };
+        nul_characters::remove_from_upsert(&mut upsert);
         let source = upsert.source.details();
         let source_kind = upsert.source.kind();
         let source_link_id = source.email_link_id;
@@ -1193,6 +1196,9 @@ impl CalendarRepository for PgCalendarRepository {
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
+
+        // Materialize the owner set so Postgres can use owner_id in each
+        // occurrence index condition alongside the time window.
         let rows = sqlx::query_as!(
             OccurrenceJoinRow,
             r#"
@@ -1247,13 +1253,13 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN calendar_event_overrides override
                 ON override.event_id = occurrence.event_id
                AND override.recurrence_id = occurrence.recurrence_id
-            WHERE occurrence.owner_id IN (
+            WHERE occurrence.owner_id = ANY(ARRAY(
                     SELECT $1::text
                     UNION
                     SELECT link.child_macro_id
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
-              )
+              ))
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (
@@ -1910,6 +1916,7 @@ impl CalendarRepository for PgCalendarRepository {
                 synced_at = now(),
                 last_sync_error = NULL,
                 last_sync_error_at = NULL,
+                last_sync_error_kind = NULL,
                 consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
@@ -1976,6 +1983,7 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
@@ -1985,6 +1993,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             UPDATE calendars
             SET last_sync_error = $3,
+                last_sync_error_kind = $4,
                 last_sync_error_at = now(),
                 consecutive_sync_failures = consecutive_sync_failures + 1,
                 updated_at = now()
@@ -1996,6 +2005,7 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id,
             account_id,
             message,
+            sync_health::stored_sync_failure(kind),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -2687,8 +2697,7 @@ impl CalendarRepository for PgCalendarRepository {
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
                 calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
-                COALESCE(preference.contributes_to_availability,
-                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
+                COALESCE(preference.contributes_to_availability, true) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -2853,6 +2862,46 @@ impl CalendarRepository for PgCalendarRepository {
     }
 }
 
+impl PgCalendarRepository {
+    /// Turn one link's Google calendar off if its grant still lacks the
+    /// capability. The link row is the lock a grant or disconnect takes, so a
+    /// link one of them holds is left to the next round; the scopes row is
+    /// locked too, so a grant that committed since this statement's snapshot
+    /// is re-checked rather than read stale.
+    async fn disable_google_account_without_capability(
+        &self,
+        email_link_id: Uuid,
+        required_scopes: &[String],
+    ) -> Result<bool, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let locked = sqlx::query_scalar!(
+            r#"
+            SELECT link.id
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN email_link_google_scopes scopes ON scopes.link_id = link.id
+            WHERE link.id = $1
+              AND account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $2::text[]
+            FOR UPDATE OF link, scopes SKIP LOCKED
+            "#,
+            email_link_id,
+            required_scopes,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        if locked.is_none() {
+            return Ok(false);
+        }
+        let mut log = ChangeLogBatch::default();
+        disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
+        log.commit(tx).await?;
+        Ok(true)
+    }
+}
+
 impl GoogleCalendarSyncRepository for PgCalendarRepository {
     #[tracing::instrument(skip(self), err)]
     async fn schedule_due_google_syncs(&self, due_before: DateTime<Utc>) -> Result<usize, Report> {
@@ -2964,6 +3013,50 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
         .map_err(report)?;
         Ok(reaped as usize)
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn disable_google_accounts_without_calendar_capability(&self) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        // A grant from before Macro narrowed its calendar scopes still
+        // reports the broad scope, which never counts as the capability, so
+        // nothing syncs the account; Outlook's claim maintenance treats the
+        // same gap this way. Each account gets its own transaction, since
+        // removing a large calendar holds a lock per event until commit, and
+        // a round takes a few so the scheduler's other work is not held up.
+        let candidates = sqlx::query_scalar!(
+            r#"
+            SELECT account.email_link_id
+            FROM calendar_accounts account
+            JOIN email_link_google_scopes scopes ON scopes.link_id = account.email_link_id
+            WHERE account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $1::text[]
+            ORDER BY account.email_link_id
+            LIMIT 10
+            "#,
+            &required_scopes,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        let mut disabled = 0;
+        for email_link_id in candidates {
+            match self
+                .disable_google_account_without_capability(email_link_id, &required_scopes)
+                .await
+            {
+                Ok(true) => {
+                    disabled += 1;
+                    tracing::info!(%email_link_id, "turned off a Google calendar without the calendar capability");
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(%email_link_id, error = ?error, "could not turn off a Google calendar without the calendar capability");
+                }
+            }
+        }
+        Ok(disabled)
+    }
 }
 
 async fn fence_google_mutation_tx(
@@ -3028,6 +3121,10 @@ async fn upsert_calendar_tx(
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
     // the firing schedule of every event that follows this calendar.
+    // A source under another role counts only if written since the last
+    // committed sync. A full snapshot keeps a stored copy newer than Google's
+    // and its old role, and reading the calendar again keeps it again, so
+    // counting older sources would rebuild such a calendar on every poll.
     let previous = sqlx::query!(
         r#"
         SELECT
@@ -3036,6 +3133,7 @@ async fn upsert_calendar_tx(
                 SELECT 1 FROM calendar_event_sources source
                 WHERE source.calendar_id = calendars.id
                   AND source.provider_access_role IS DISTINCT FROM calendars.access_role
+                  AND source.last_seen_at >= calendars.synced_at
             )) AS "needs_verification!"
         FROM calendars
         WHERE account_id = $1 AND provider_calendar_id = $2
@@ -3106,6 +3204,10 @@ async fn upsert_calendar_tx(
             last_sync_error_at = CASE
                 WHEN calendars.is_deleted THEN NULL
                 ELSE calendars.last_sync_error_at
+            END,
+            last_sync_error_kind = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_kind
             END,
             consecutive_sync_failures = CASE
                 WHEN calendars.is_deleted THEN 0
@@ -3242,7 +3344,7 @@ impl CalendarBackfillRepository for PgCalendarRepository {
         let lease_token = Uuid::now_v7();
         let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
         let mut tx = self.pool.begin().await.map_err(report)?;
-        let claimed_account_id = sqlx::query_scalar!(
+        let claimed = sqlx::query!(
             r#"
             UPDATE calendar_backfill_jobs
             SET status = 'running',
@@ -3275,7 +3377,7 @@ impl CalendarBackfillRepository for PgCalendarRepository {
                       AND lease_expires_at < now()
                   )
               )
-            RETURNING account_id
+            RETURNING account_id, started_at AS "started_at!"
             "#,
             key.job_id,
             key.email_link_id,
@@ -3285,8 +3387,8 @@ impl CalendarBackfillRepository for PgCalendarRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(report)?;
-        if let Some(account_id) = claimed_account_id {
-            let Some(account_id) = account_id else {
+        if let Some(claimed) = claimed {
+            let Some(account_id) = claimed.account_id else {
                 tx.rollback().await.map_err(report)?;
                 return Err(rootcause::report!(
                     "Google Calendar backfill job has no calendar account"
@@ -3296,6 +3398,7 @@ impl CalendarBackfillRepository for PgCalendarRepository {
             return Ok(CalendarBackfillClaim::Claimed {
                 lease_token,
                 account_id,
+                round_started_at: claimed.started_at,
             });
         }
 
@@ -3477,6 +3580,52 @@ impl CalendarBackfillRepository for PgCalendarRepository {
     ) -> Result<CalendarBackfillFailureOutcome, Report> {
         self.persist_google_backfill_failure(key, Some(lease_token), disposition, message)
             .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn defer_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> Result<(), Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        // started_at stays, so the round's next delivery skips what this one
+        // synced; the account keeps its status and error, as nothing failed.
+        let deferred = sqlx::query!(
+            r#"
+            UPDATE calendar_backfill_jobs
+            SET status = 'pending',
+                lease_token = NULL,
+                lease_expires_at = NULL,
+                updated_at = now()
+            WHERE id = $1
+              AND email_link_id = $2
+              AND kind = 'google_calendar'
+              AND status = 'running'
+              AND lease_token = $3
+              AND lease_expires_at > now()
+              AND EXISTS (
+                    SELECT 1
+                    FROM email_link_google_scopes scopes
+                    WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                      AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                      AND scopes.granted_scopes @> $4::text[]
+              )
+            "#,
+            key.job_id,
+            key.email_link_id,
+            lease_token,
+            &required_scopes,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+        if deferred.rows_affected() != 1 {
+            return Err(rootcause::report!(
+                "Google Calendar backfill lease was lost"
+            ));
+        }
+        Ok(())
     }
 }
 

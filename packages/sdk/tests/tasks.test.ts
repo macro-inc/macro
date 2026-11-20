@@ -58,6 +58,91 @@ describe('Task.forPullRequest', () => {
   });
 });
 
+describe('Task.slug', () => {
+  function serveTaskAndTeams(
+    requests: Request[],
+    documentMetadata: Record<string, unknown>,
+  ) {
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      const path = new URL(request.url).pathname;
+      if (path === '/documents/0198a4cc-e138-7670-a308-a6b766602730') {
+        return Response.json({
+          data: {
+            documentMetadata: {
+              documentId: '0198a4cc-e138-7670-a308-a6b766602730',
+              documentName: 'Fix imported timestamps',
+              subType: 'task',
+              ...documentMetadata,
+            },
+            userAccessLevel: 'owner',
+          },
+        });
+      }
+      if (path === '/team/user') {
+        return Response.json([
+          { id: '0198a4cc-e138-7670-a308-a6b7666027a1', slug: 'ENG' },
+          { id: '0198a4cc-e138-7670-a308-a6b7666027a2', slug: 'DB' },
+        ]);
+      }
+      return new Response(`unexpected ${path}`, { status: 404 });
+    }) as typeof fetch;
+    return new Macro({
+      token: 'user-token',
+      hosts: {
+        storage: 'https://storage.example.test',
+        auth: 'https://auth.example.test',
+      },
+    });
+  }
+
+  test("names the task by its team's slug and its number in that team", async () => {
+    const requests: Request[] = [];
+    const macro = serveTaskAndTeams(requests, {
+      teamId: '0198a4cc-e138-7670-a308-a6b7666027a2',
+      teamTaskId: 245,
+    });
+
+    const slug = await macro.tasks
+      .byId('0198a4cc-e138-7670-a308-a6b766602730')
+      .slug();
+
+    expect(slug).toBe('DB-245');
+    expect(requests.map((request) => new URL(request.url).host)).toEqual([
+      'storage.example.test',
+      'auth.example.test',
+    ]);
+  });
+
+  test('is undefined for a task without a team number', async () => {
+    const requests: Request[] = [];
+    const macro = serveTaskAndTeams(requests, {});
+
+    const slug = await macro.tasks
+      .byId('0198a4cc-e138-7670-a308-a6b766602730')
+      .slug();
+
+    expect(slug).toBeUndefined();
+    expect(requests).toHaveLength(1);
+  });
+
+  test("is undefined when the task's team is not one of the caller's", async () => {
+    const requests: Request[] = [];
+    const macro = serveTaskAndTeams(requests, {
+      teamId: '0198a4cc-e138-7670-a308-a6b7666027a9',
+      teamTaskId: 12,
+    });
+
+    const slug = await macro.tasks
+      .byId('0198a4cc-e138-7670-a308-a6b766602730')
+      .slug();
+
+    expect(slug).toBeUndefined();
+  });
+});
+
 describe('Task.create', () => {
   test('sends initiative, assignees and due date with the create', async () => {
     const requests: Request[] = [];
@@ -327,5 +412,100 @@ describe('InitiativeNamespace.summaries', () => {
     ]);
     expect(requests).toHaveLength(1);
     expect(new URL(requests[0].url).pathname).toBe('/initiatives');
+  });
+});
+
+describe('Task.findSimilar', () => {
+  test('sends the title and body as the similarity search input', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      return Response.json({
+        results: [
+          {
+            taskId: '0198a4cc-e138-7670-a308-a6b766602710',
+            taskName: 'Fix the login redirect',
+            vectorScore: 0.92,
+          },
+        ],
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    const similar = await macro.tasks.findSimilar({
+      title: 'Login redirect loops',
+      body: 'Signing in sends you back to the login page.',
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(await requests[0].json()).toEqual({
+      taskName: 'Login redirect loops',
+      markdown: 'Signing in sends you back to the login page.',
+    });
+    expect(similar.map((match) => [match.task.id, match.name])).toEqual([
+      ['0198a4cc-e138-7670-a308-a6b766602710', 'Fix the login redirect'],
+    ]);
+  });
+
+  test('refuses the create-style keys and names the ones it takes', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      requests.push(
+        input instanceof Request ? input : new Request(input, init),
+      );
+      return Response.json({ results: [] });
+    }) as typeof fetch;
+    const macro = new Macro({ token: 'user-token' });
+
+    await expect(
+      macro.tasks.findSimilar({
+        name: 'Login redirect loops',
+        markdown: 'Signing in sends you back to the login page.',
+      } as unknown as { title: string }),
+    ).rejects.toThrow(
+      'tasks.findSimilar does not take `name`, `markdown`; its options are `title`, `body`.',
+    );
+    expect(requests).toHaveLength(0);
+  });
+
+  test('refuses a missing title and a missing options object', async () => {
+    const macro = new Macro({ token: 'user-token' });
+
+    await expect(
+      macro.tasks.findSimilar({} as unknown as { title: string }),
+    ).rejects.toThrow('tasks.findSimilar needs `title`');
+    await expect(
+      macro.tasks.findSimilar(undefined as unknown as { title: string }),
+    ).rejects.toThrow(
+      'tasks.findSimilar takes an options object, { title, body }.',
+    );
+  });
+});
+
+describe('Task.create options', () => {
+  test('refuses the similarity-search keys and names the ones it takes', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      requests.push(
+        input instanceof Request ? input : new Request(input, init),
+      );
+      return Response.json({ documentId: 'task-1' });
+    }) as typeof fetch;
+    const macro = new Macro({ token: 'user-token' });
+
+    await expect(
+      macro.tasks.create({
+        title: 'Login redirect loops',
+        body: 'Signing in sends you back to the login page.',
+      } as unknown as { name: string }),
+    ).rejects.toThrow(
+      'tasks.create does not take `title`, `body`; its options are `name`, `markdown`, `project`, `initiative`, `assignees`, `dueDate`, `team`, `shareWithTeam`.',
+    );
+    expect(requests).toHaveLength(0);
   });
 });

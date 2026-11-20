@@ -15,7 +15,7 @@ inbound = [
   "entity_access/inbound",
 ]
 # Postgres persistence, and receipts minted through entity access.
-postgres = ["dep:sqlx"]
+postgres = ["dep:sqlx", "databases/outbound"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
@@ -41,6 +41,9 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
+model_user = { path = "../model_user" }
+tower = { workspace = true }
 # The real databases service and entity access, for the end-to-end test.
 databases = { path = "../databases", features = ["postgres"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }

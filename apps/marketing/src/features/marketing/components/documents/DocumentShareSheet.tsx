@@ -1,13 +1,13 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Eye from '@phosphor/eye.svg';
-import FileText from '@phosphor/file-text.svg';
-import Hash from '@phosphor/hash-straight.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import Pencil from '@phosphor/pencil.svg';
-import UserCircle from '@phosphor/user-circle.svg';
-import Users from '@phosphor/users.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Hash from '@icon/system/regular/hash-straight.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import Pencil from '@icon/system/regular/pencil.svg';
+import UserCircle from '@icon/system/regular/user-circle.svg';
+import Users from '@icon/system/regular/users.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   createSignal,
@@ -22,8 +22,9 @@ import {
   homepagePeople,
 } from '../../core/homepage-demo-people';
 
-/** GroupChannelLabel for #launch: its other members, up to 20 characters. */
-export const LAUNCH_MEMBERS = 'Julia, Teo, Gabriel +1 other';
+/** Other participants in the local #launch demo. */
+export const LAUNCH_MEMBERS =
+  'Eric Hayes, Rahul Batra, Wolf Mermelstein +1 other';
 
 export type ShareLevel = 'view' | 'comment' | 'edit';
 type Level = ShareLevel;
@@ -96,10 +97,14 @@ const LINK_SCOPES = {
 type Scope = keyof typeof LINK_SCOPES;
 
 const MATCHES: [RegExp, HomepagePersonId][] = [
+  [/peter/i, 'peter'],
+  [/wolf/i, 'wolf'],
+  [/eric/i, 'eric'],
+  [/rahul/i, 'rahul'],
   [/teo/i, 'teo'],
   [/julia/i, 'julia'],
   [/gabriel/i, 'gabriel'],
-  [/valentina/i, 'valentina'],
+  [/austin/i, 'austin'],
 ];
 
 /**

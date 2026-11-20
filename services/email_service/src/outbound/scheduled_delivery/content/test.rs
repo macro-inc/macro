@@ -1,4 +1,5 @@
 use super::*;
+use email::domain::scheduled_delivery::state::claim_delivery;
 use email::domain::{
     models::{
         ContactInfo as DomainContact, CreateDraftInput, RecipientType, ResolvedDraftInput,
@@ -7,7 +8,6 @@ use email::domain::{
     send_attempt::{EmailSendRepo, PreparedSend, SendAttemptId, SendSnapshot},
 };
 use email::outbound::EmailPgRepo;
-use email_db_client::messages::scheduled::delivery::claim_delivery;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -33,6 +33,7 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
         provider_thread_id: Some("approved-provider-thread".into()),
         thread_db_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
         subject: "Approved subject".into(),
+        from_name: None,
         to: vec![to.clone()],
         cc: vec![],
         bcc: vec![],

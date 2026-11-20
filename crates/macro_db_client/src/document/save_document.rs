@@ -54,7 +54,7 @@ pub async fn save_document(
 ) -> anyhow::Result<DocumentMetadata> {
     let mut transaction = db.begin().await?;
 
-    let document = sqlx::query!(
+    let (document, appearance) = sqlx::query!(
         r#"
         UPDATE "Document" SET "updatedAt" = NOW()
         WHERE id = $1
@@ -62,24 +62,28 @@ pub async fn save_document(
         "branchedFromId" as branched_from_id, "branchedFromVersionId" as branched_from_version_id,
         "documentFamilyId" as document_family_id,
         "projectId" as project_id,
-        "deletedAt"::timestamptz as "deleted_at"
+        "deletedAt"::timestamptz as "deleted_at",
+        appearance as "appearance: sqlx::types::Json<model_entity::EntityAppearance>"
         "#,
         document_id
     )
     .try_map(|row| {
-        Ok(DocumentBasic {
-            document_id: row.document_id,
-            document_name: row.document_name,
-            owner: Owner::from_principal_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-            file_type: row.file_type,
-            sub_type: None,
-            branched_from_id: row.branched_from_id,
-            branched_from_version_id: row.branched_from_version_id,
-            document_family_id: row.document_family_id,
-            project_id: row.project_id,
-            deleted_at: row.deleted_at,
-        })
+        Ok((
+            DocumentBasic {
+                document_id: row.document_id,
+                document_name: row.document_name,
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                file_type: row.file_type,
+                sub_type: None,
+                branched_from_id: row.branched_from_id,
+                branched_from_version_id: row.branched_from_version_id,
+                document_family_id: row.document_family_id,
+                project_id: row.project_id,
+                deleted_at: row.deleted_at,
+            },
+            row.appearance.map(|appearance| appearance.0),
+        ))
     })
     .fetch_one(&mut *transaction)
     .await?;
@@ -197,6 +201,7 @@ pub async fn save_document(
     }
 
     Ok(DocumentMetadata {
+        appearance,
         document_name: document.document_name,
         document_id: document_id.to_string(),
         document_version_id: document_version.id,
@@ -217,6 +222,8 @@ pub async fn save_document(
     })
 }
 
+#[cfg(test)]
+mod test;
 #[cfg(test)]
 mod tests {
     use super::*;

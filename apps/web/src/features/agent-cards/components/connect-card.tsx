@@ -11,7 +11,7 @@ import {
   useMcpServerConnected,
   usePipedreamConnectedSlugs,
 } from '@queries/pipedream-connectors';
-import { Button } from '@ui';
+import { Badge, Button, Item } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import {
   createSignal,
@@ -22,8 +22,7 @@ import {
   useContext,
 } from 'solid-js';
 import type { ConnectTarget } from '../../dynamic-ui/generated/types';
-import { Card, CardHeader } from './kit/card';
-import { CardPill, Tile } from './kit/parts';
+import { Card, CardSingle } from './kit/card';
 
 /**
  * Something to connect, as a card: its icon and name, then either a Connect
@@ -39,16 +38,22 @@ export function ConnectCardView(props: {
 }) {
   return (
     <Card width="compact" data-agent-card="connect">
-      <CardHeader
-        center
-        padded
-        tile={<Tile tone="frame">{props.icon}</Tile>}
+      <CardSingle
+        media={
+          <Item.Media class="self-center">
+            {props.icon}
+          </Item.Media>
+        }
         title={props.name}
-        subtitle={props.kind}
+        description={props.kind}
         trailing={
           <Show
             when={!props.connected}
-            fallback={<CardPill tone="ok">Connected</CardPill>}
+            fallback={
+              <Badge variant="success" size="xs">
+                Connected
+              </Badge>
+            }
           >
             <Button
               size="sm"

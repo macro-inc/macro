@@ -2666,6 +2666,7 @@ export function PptxEditor() {
                         ref={stage}
                         tabIndex={0}
                         data-testid="pptx-stage"
+                        data-owns-arrow-keys
                         class="absolute inset-0 outline-none"
                         classList={{
                           'cursor-text':

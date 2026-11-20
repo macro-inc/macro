@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 93bbdba6daeede4663cfb55b6e73238d1563c618a4bd62ea16b200ba96cf8954 # shrinks to sizes = [1, 1, 4], steps = [(3, PaymentConfirmed, 0), (3, PaymentConfirmed, 0), (3, HostLost, 0), (2, PaymentConfirmed, 0), (3, PowerOff, 0)]
+cc b241b9802245e2e707918eaba43d83df16edb8dfd6a568694366604bec344cbe
+cc 20664f749cdf23018b343adf4c4cfd1edfdf8854ec53ac4379c487bfa177b7cc # shrinks to sizes = [1, 1, 1], steps = [(0, InstanceStarted, 3104), (0, InstanceStarted, 2215), (0, InstanceStarted, 4210), (0, InstanceStarted, 2971), (0, InstanceStarted, 2563), (0, InstanceStarted, 4207), (0, InstanceStarted, 1298), (0, InstanceStarted, 3610), (0, InstanceStarted, 3961), (0, InstanceStarted, 2490), (4, CancelAtPeriodEnd { at: 2026-11-05T12:00:00Z }, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (2, InstanceStarted, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (0, InstanceStarted, 0), (4, Restore { billing: Active { subscription_item: SubscriptionItemId("si_restored") } }, 0), (1, CancelAtPeriodEnd { at: 2026-11-05T12:00:00Z }, 0), (4, Restore { billing: Active { subscription_item: SubscriptionItemId("si_restored") } }, 0), (1, ReleaseNow, 0)]

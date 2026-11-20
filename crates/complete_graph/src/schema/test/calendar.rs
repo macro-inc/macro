@@ -351,8 +351,18 @@ impl calendar_events::domain::ports::CalendarMacroCallService for RecordingCalen
         _email_link_id: Option<Uuid>,
         _calendar_id: Option<Uuid>,
         _draft: calendar_events::domain::models::CalendarEventDraft,
-    ) -> Result<CalendarEvent, calendar_events::domain::meeting_links::CreateEventWithMacroCallError>
-    {
+    ) -> Result<CalendarEvent, calendar_events::domain::meeting_links::MacroCallEventError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn update_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _event_id: uuid::Uuid,
+        _calendar_id: Option<uuid::Uuid>,
+        _patch: calendar_events::domain::models::CalendarEventPatch,
+        _scope: calendar_events::domain::ports::CalendarUpdateScope,
+    ) -> Result<CalendarEvent, calendar_events::domain::meeting_links::MacroCallEventError> {
         unreachable!("only deletion is exercised")
     }
 }

@@ -2,9 +2,9 @@ set -euo pipefail
 # The android-update label means "release this and merge it when it is live",
 # so refuse to start unless the PR is in a mergeable state: not a draft, the
 # Android native code actually changed with a version code bump, and every
-# other check on the head commit passing (pending ones are waited on). Our own
-# checks are excluded: the native check is expected to be red until the
-# release is live.
+# other check on the head commit passing (pending ones are waited on). The
+# native checks and both platforms' release checks are excluded; that last
+# step is release_wait_for_checks.sh.
 pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid,baseRefOid)
 if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
   echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding android-update." >&2
@@ -46,48 +46,3 @@ if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun script
 fi
 echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
 echo "Releasing Android version code ${version_code}."
-
-# (`gh pr checks` names are job names, not workflow names, plus the contexts
-# of commit statuses, such as the android-play/* ones Android Play Publish
-# and Android Release Watch set. PR CI prefixes the jobs it calls with
-# `Web App / `. The CI gate status aggregates every check, and stays pending
-# on a head no one has run PR CI on.)
-ours='^((Web App / )?(Android Native Check|Web App Status Check|iOS Native Check)|Android Play Release|Re-run the native check|Android Release Drift|android-play/|CI gate$)'
-deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
-while true; do
-  all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)
-  # The checks only exist once someone has run PR CI on this head; its CI gate
-  # fails with the native check, so only the gate's description is read here.
-  gate=$(jq -r '[.[] | select(.name == "CI gate") | .description][0] // ""' <<<"$all_checks")
-  case "$gate" in
-    "" | "Not run on this commit."*)
-      echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add android-update once it passes." >&2
-      exit 1
-      ;;
-    "Running on"* | "Passed on"* | "Failed:"*) ;;
-    *)
-      echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add android-update once it passes." >&2
-      exit 1
-      ;;
-  esac
-  checks=$(jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]' <<<"$all_checks")
-  if [[ "$gate" == "Running on"* ]]; then
-    checks=$(jq -c '. + [{name: "CI gate", bucket: "pending"}]' <<<"$checks")
-  fi
-  failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
-  pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
-  if [[ -n "$failing" ]]; then
-    echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add android-update." >&2
-    exit 1
-  fi
-  if [[ -z "$pending" ]]; then
-    echo "All other checks on ${head_sha:0:10} pass ($(jq 'length' <<<"$checks") checks)."
-    exit 0
-  fi
-  if (( $(date +%s) > deadline )); then
-    echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add android-update once they pass." >&2
-    exit 1
-  fi
-  echo "Waiting for: ${pending}"
-  sleep 60
-done

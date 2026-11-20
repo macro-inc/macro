@@ -9,7 +9,7 @@ const INDETERMINATE_ARC = 0.25;
 export type ProgressRingProps = {
   /** A completed fraction, or null when progress is indeterminate. */
   fraction: number | null;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 };
 
 /** Decorative ring; place it inside an element that names the progress. */
@@ -26,7 +26,9 @@ export function ProgressRing(props: ProgressRingProps) {
       aria-hidden="true"
       class={cn(
         'shrink-0',
-        props.size === 'sm' ? 'size-3' : 'size-4',
+        props.size === 'sm' && 'size-3',
+        (props.size === 'md' || props.size === undefined) && 'size-4',
+        props.size === 'lg' && 'size-11',
         props.fraction === null && 'motion-safe:animate-spin'
       )}
     >
@@ -35,7 +37,7 @@ export function ProgressRing(props: ProgressRingProps) {
         cy="8"
         r={RING_RADIUS}
         fill="none"
-        stroke-width="2"
+        stroke-width={props.size === 'lg' ? 1 : 2}
         class="stroke-ink/15"
       />
       <circle
@@ -43,7 +45,7 @@ export function ProgressRing(props: ProgressRingProps) {
         cy="8"
         r={RING_RADIUS}
         fill="none"
-        stroke-width="2"
+        stroke-width={props.size === 'lg' ? 1 : 2}
         stroke-linecap="round"
         stroke-dasharray={String(RING_CIRCUMFERENCE)}
         stroke-dashoffset={RING_CIRCUMFERENCE * (1 - fraction())}

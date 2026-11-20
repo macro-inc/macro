@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ct.id,\n                ct.company_id,\n                ct.email,\n                ct.name,\n                ct.hidden,\n                ct.first_interaction,\n                ct.last_interaction,\n                ct.created_at,\n                ct.updated_at,\n                ARRAY(\n                    SELECT ce.email FROM crm_contact_emails ce\n                    WHERE ce.contact_id = ct.id\n                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email\n                ) AS \"emails!\",\n                ARRAY(\n                    SELECT ce.email FROM crm_contact_emails ce\n                    WHERE ce.contact_id = ct.id\n                      AND EXISTS (\n                          SELECT 1 FROM crm_domains d\n                          WHERE d.team_id = ct.team_id\n                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)\n                            AND d.company_id = ct.company_id\n                      )\n                    ORDER BY ce.created_at, ce.email\n                ) AS \"company_domain_emails!\",\n                CASE WHEN co.team_id = ct.team_id THEN co.id END AS \"summary_id?\",\n                COALESCE(co.custom_name, primary_domain.name) AS \"summary_name?\",\n                primary_domain.domain AS \"summary_domain?\",\n                co.hidden AS \"summary_hidden?\"\n            FROM crm_contacts ct\n            LEFT JOIN crm_companies co ON co.id = ct.company_id\n            LEFT JOIN LATERAL (\n                SELECT d.domain, dd.name\n                FROM (\n                    SELECT d.domain\n                    FROM crm_domains d\n                    WHERE d.company_id = co.id\n                    ORDER BY d.created_at ASC NULLS LAST, d.id\n                    LIMIT 1\n                ) d\n                LEFT JOIN crm_domain_directory dd\n                    ON LOWER(dd.domain) = LOWER(d.domain)\n            ) primary_domain ON TRUE\n            WHERE ct.id = $1\n              AND ct.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "emails!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "company_domain_emails!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "summary_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "summary_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "summary_domain?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "summary_hidden?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "09ea41897fe9ca97ec6a786a4d352a99cae1f2d11bcf702109fac975ae3ad8b0"
+}

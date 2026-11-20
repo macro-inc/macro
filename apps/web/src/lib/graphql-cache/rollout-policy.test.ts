@@ -7,12 +7,12 @@ import {
 const values: BooleanFlag[] = [undefined, false, true];
 
 describe('browser Turso cache rollout policy', () => {
-  it('follows the GraphQL soup gate unless an emergency kill is active', () => {
+  it('enables the browser cache unless an emergency kill is active', () => {
     for (const disableEnvOverride of values) {
       for (const posthogDisable of values) {
         const decision = resolveBrowserTursoCacheRollout({
           isTauri: false,
-          graphqlTransportEnabled: true,
+          browserSupported: true,
           disableEnvOverride,
           posthogDisable,
         });
@@ -28,11 +28,11 @@ describe('browser Turso cache rollout policy', () => {
     }
   });
 
-  it('enables browser cache when GraphQL soup is enabled', () => {
+  it('enables browser cache without an emergency kill', () => {
     expect(
       resolveBrowserTursoCacheRollout({
         isTauri: false,
-        graphqlTransportEnabled: true,
+        browserSupported: true,
         disableEnvOverride: undefined,
         posthogDisable: undefined,
       })
@@ -44,37 +44,36 @@ describe('browser Turso cache rollout policy', () => {
     });
   });
 
-  it('does not enable a cache when the existing GraphQL transport is disabled', () => {
+  it('leaves Tauri native cache behavior unchanged', () => {
     expect(
       resolveBrowserTursoCacheRollout({
-        isTauri: false,
-        graphqlTransportEnabled: false,
-        disableEnvOverride: false,
-        posthogDisable: false,
+        isTauri: true,
+        browserSupported: false,
+        // Browser emergency values are irrelevant on native.
+        disableEnvOverride: true,
+        posthogDisable: true,
       })
-    ).toMatchObject({
-      enabled: false,
-      reason: 'graphql-transport-disabled',
+    ).toEqual({
+      enabled: true,
+      cohort: 'unknown',
+      reason: 'tauri-native-unchanged',
+      nativeCacheUnchanged: true,
     });
   });
 
-  it.each([false, true])(
-    'leaves Tauri native cache behavior equal to GraphQL transport=%s',
-    (graphqlTransportEnabled) => {
-      expect(
-        resolveBrowserTursoCacheRollout({
-          isTauri: true,
-          graphqlTransportEnabled,
-          // Browser emergency values are irrelevant on native.
-          disableEnvOverride: true,
-          posthogDisable: true,
-        })
-      ).toEqual({
-        enabled: graphqlTransportEnabled,
-        cohort: 'unknown',
-        reason: 'tauri-native-unchanged',
-        nativeCacheUnchanged: true,
-      });
-    }
-  );
+  it('keeps browsers without the cache APIs uncached', () => {
+    expect(
+      resolveBrowserTursoCacheRollout({
+        isTauri: false,
+        browserSupported: false,
+        disableEnvOverride: undefined,
+        posthogDisable: undefined,
+      })
+    ).toEqual({
+      enabled: false,
+      cohort: 'unknown',
+      reason: 'browser-unsupported',
+      nativeCacheUnchanged: false,
+    });
+  });
 });

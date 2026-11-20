@@ -5,11 +5,15 @@ pub mod search;
 pub mod unified;
 pub mod upsert;
 
+#[cfg(test)]
+mod test_support;
+
 pub mod agent_session;
 pub mod calendar_event;
 pub mod call_record;
 pub mod channel_message;
 pub mod chat;
+pub mod chat_message_repair;
 pub mod document;
 pub mod email;
 pub mod project;

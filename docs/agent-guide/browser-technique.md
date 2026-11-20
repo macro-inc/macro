@@ -53,8 +53,12 @@
   proxy logs for Docker-to-host dial timeouts. The generated Vite proxy limits
   upstream connections to 16 to avoid exhausting the host listener during module
   loading; reload after updating and restarting only the affected proxy.
-- `net::ERR_NETWORK_CHANGED` spam means the environment's network flapped: verify the stack
-  with curl from the shell, then `navigate_page` reload.
+- On `net::ERR_NETWORK_CHANGED`, verify the loopback server with curl before treating blank pages as UI failures.
+  For a manual session, reload after the network settles.
+  For isolated Playwright fixtures, forward loopback HTTP with `route.fetch()` and `route.fulfill({ response })`.
+  Block service workers and external traffic.
+  This keeps fixture requests on Node's transport instead of Chromium's network-change-sensitive socket pool.
+  Do not add a fallback to app networking.
 - Full-screen "Something went terribly wrong" dialogs: `Home` recovers navigation-level
   crashes; the LoroDoc crash needs a reload with `ignoreCache: true` (see documents.md).
 - Browser restarts invalidate page ids AND (with a fresh profile) the login session; on

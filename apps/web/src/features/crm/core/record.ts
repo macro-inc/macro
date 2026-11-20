@@ -10,7 +10,8 @@ export type CrmRecordScope =
   | {
       type: 'contact';
       id: string;
-      email?: string | null;
+      /** Every address of the contact, primary first. */
+      emails: string[];
       companyId?: string | null;
     };
 
@@ -27,7 +28,11 @@ export function sameRecordScope(
     return a.id === b.id && a.domains.join('\n') === b.domains.join('\n');
   }
   if (a.type === 'contact' && b.type === 'contact') {
-    return a.id === b.id && a.email === b.email && a.companyId === b.companyId;
+    return (
+      a.id === b.id &&
+      a.emails.join('\n') === b.emails.join('\n') &&
+      a.companyId === b.companyId
+    );
   }
   return false;
 }

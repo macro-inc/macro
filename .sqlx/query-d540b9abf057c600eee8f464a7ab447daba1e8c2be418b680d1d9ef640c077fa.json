@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_audience\n               SET next_run_at = $2, last_outcome = $3, last_outcome_at = $4\n               WHERE user_id = $1\n                 AND (last_outcome_at IS NULL OR last_outcome_at <= $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d540b9abf057c600eee8f464a7ab447daba1e8c2be418b680d1d9ef640c077fa"
+}

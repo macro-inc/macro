@@ -88,6 +88,8 @@ export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
 
 export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
+  /** Whether text search reruns the list's sorted query; service search keeps its own order. */
+  sortsSearchResults: boolean;
   /** Uncollapsed rows for alternative layouts; the query owner is shared. */
   boardRows?: Accessor<TasksDataSourceItem[]>;
   boardSearching?: Accessor<boolean>;
@@ -264,7 +266,9 @@ export function useTasksDataSource(
     );
   }, []);
 
-  const { entityPool } = useSearchContext();
+  const entityPool = useSearchContext().entityPool(
+    () => !options.crm && Boolean(state.search.trim())
+  );
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();
@@ -516,5 +520,6 @@ export function useTasksDataSource(
     loadMoreGroup: continuations.loadMore,
     loadMore,
     refresh,
+    sortsSearchResults: Boolean(options.crm),
   } satisfies TasksDataSource;
 }

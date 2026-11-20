@@ -5,6 +5,8 @@ use chrono::{SecondsFormat, Utc};
 use routine_program::{CATALOG, CODE_STEPS, CatalogRoutine, STEP_CONTEXT, Surface};
 use serde_json::{Value, json};
 
+use suggestions::domain::model::GenerationTrigger;
+
 use super::decode::line;
 use super::ports::InboxMessage;
 
@@ -28,6 +30,8 @@ const MAX_LIST: usize = 5;
 pub struct BriefData<'a> {
     /// The surfaces this session suggests for.
     pub surfaces: &'a [Surface],
+    /// What started the generation.
+    pub trigger: GenerationTrigger,
     pub inbox: &'a [InboxMessage],
     /// Apps the person connected, by slug.
     pub apps: &'a [String],
@@ -40,9 +44,41 @@ pub struct BriefData<'a> {
     pub agent_model: &'a str,
     /// Whether code steps can be written.
     pub code: bool,
+    /// Whether a routine may start when mail arrives: the person is in the
+    /// event routines rollout and the deployment evaluates conditions.
+    pub events: bool,
     /// The SDK's routines guide.
     pub guide: &'a str,
 }
+
+/// How a drafted routine starts when the person may have event triggers.
+const START_ON_MAIL: &str = "start it when that kind of mail arrives \
+    (`email.message_received`, with a condition that names it) and make the user a task \
+    for what it asks of them, or run it on a schedule that gathers that week's mail of \
+    that kind into one task or document for them";
+
+/// How a drafted routine starts when they may not: a check would refuse an
+/// event trigger.
+const START_ON_SCHEDULE: &str = "this user's routines can't start when mail \
+    arrives, so run it on a schedule: each morning, to make the user a task for what each \
+    of that kind of message since the last run asks of them, or each week, to gather that \
+    week's mail of that kind into one task or document for them";
+
+/// What a weekly routines session does before suggesting: review and retire.
+const WEEKLY_REVIEW: &str = "Where this differs from the rest of the brief, \
+    this wins. First, in one \
+    program, read what you suggested before with \
+    `await macro.routines.review()` and the user's own routines with \
+    `await macro.routines.list()`, and retire with `suggestion.retire(reason)` open \
+    suggestions that no longer fit their work or duplicate one of their routines. Then \
+    suggest at most 2 new routines in all, and none unless the \
+    evidence is strong. Draft at most one routine the catalog lacks, and only one built \
+    around something specific in their workspace that you name (a deal, vendor, \
+    project, channel, label or report they keep), that discovers, evaluates or advances \
+    it; a general habit is a catalog routine or nothing. Never a weekly recap, digest or \
+    audit, and never what their own routines already do. When you draft nothing, don't \
+    read the routine-writing docs. Suggestions are never rewritten; retire one and \
+    suggest a better one instead.";
 
 /// The session's one prompt.
 pub fn brief(data: &BriefData<'_>) -> String {
@@ -53,7 +89,32 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .filter_map(|value| value.as_str().map(str::to_owned))
         .collect::<Vec<_>>()
         .join(", ");
-    let task = TASK.replace("{surfaces}", &surfaces);
+    let occasion = match data.trigger {
+        GenerationTrigger::Onboarding => {
+            "The user just signed up. Be quick: they are waiting. At signup their mail \
+             is what shows their work, so work from the mail below: don't search or \
+             list anything in their workspace."
+                .to_owned()
+        }
+        GenerationTrigger::Nightly => format!(
+            "This is the week's run (routine suggestions come once a week). {WEEKLY_REVIEW}"
+        ),
+        GenerationTrigger::Manual => format!(
+            "The user asked for fresh suggestions; this is the week's run (routine \
+             suggestions come once a week). {WEEKLY_REVIEW}"
+        ),
+    };
+    let task = TASK
+        .replace("{surfaces}", &surfaces)
+        .replace("{occasion}", &occasion)
+        .replace(
+            "{start}",
+            if data.events {
+                START_ON_MAIL
+            } else {
+                START_ON_SCHEDULE
+            },
+        );
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let model = data.agent_model;
     let timezone = data.timezone;

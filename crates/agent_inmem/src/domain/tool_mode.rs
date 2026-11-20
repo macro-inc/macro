@@ -1,10 +1,9 @@
-//! Which tools a turn presents.
+//! Which tools the public MCP presents a request.
 
-/// Tool presentation for one turn.
+/// Tool presentation for one request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolMode {
-    /// The direct Macro tools: turns that cannot run code (summaries,
-    /// sessions without a user owner, or no code runner reachable).
+    /// The direct Macro tools.
     Standard,
     /// Code mode: the SDK replaces every direct tool it covers.
     Code,

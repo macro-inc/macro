@@ -24,6 +24,23 @@ fn email_senders_are_embedded_and_legacy_participants_remain_available() {
 }
 
 #[test]
+fn channel_agent_dm_persona_is_embedded() {
+    let sdl = crate::build_schema().sdl();
+    let agent_dm = sdl
+        .split_once("type GraphqlSoupChannelAgentDm {")
+        .expect("channel agent DM type")
+        .1
+        .split_once('}')
+        .expect("end of channel agent DM type")
+        .0;
+    assert!(agent_dm.lines().any(|line| line.trim() == "botId: ID!"));
+    assert!(
+        !agent_dm.lines().any(|line| line.trim().starts_with("id:")),
+        "the persona is embedded in its channel, not normalized by bot ID"
+    );
+}
+
+#[test]
 fn soup_response_schema_exposes_frontend_fields() {
     let sdl = crate::build_schema().sdl();
 
@@ -36,6 +53,9 @@ fn soup_response_schema_exposes_frontend_fields() {
         "participants: [GraphqlSoupChannelParticipant!]!",
         "latestMessage: GraphqlSoupChannelMessagePreview",
         "latestNonThreadMessage: GraphqlSoupChannelMessagePreview",
+        "autoJoinTeam: Boolean!",
+        "agentDm: GraphqlSoupChannelAgentDm",
+        "type GraphqlSoupChannelAgentDm {",
         "input EmailThreadInput {",
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
@@ -474,7 +494,11 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
     };
     assert_sdl_line(
         object("GraphqlUser"),
-        "initiative(initiativeId: ID!): GraphqlSoupInitiative!",
+        "initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: \"Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31.\")",
+    );
+    assert_sdl_line(
+        object("GraphqlUser"),
+        "visibleInitiative(initiativeId: ID!): GraphqlSoupInitiative",
     );
     assert!(!object("SoupQueryRoot").contains("initiative"));
     for field in [
@@ -637,6 +661,15 @@ fn crm_associations_scope_soup_and_compose_in_document_trees() {
     let association = block("input GraphqlCrmAssociation @oneOf {");
     assert_sdl_line(&association, "company: ID");
     assert_sdl_line(&association, "contact: ID");
+}
+
+#[test]
+fn active_notification_ids_hang_off_the_authenticated_user() {
+    let sdl = crate::build_schema().sdl();
+    assert_sdl_line(
+        &sdl,
+        "activeNotificationIds(eventTypes: [String!]!, limit: Int): [ID!]!",
+    );
 }
 
 #[test]

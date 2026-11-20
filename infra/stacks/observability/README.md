@@ -18,20 +18,54 @@ hierarchy is workflow → jobs → steps, stored in Tempo with
 triggering PR checkout, artifact download, raw build-log collection, or Datadog
 export. Individual test cases are outside this integration.
 
+### GitHub API budget
+
+Every workflow's `GITHUB_TOKEN` draws on one budget of 5,000 REST calls an hour
+for the repository, and PR CI fails to start without its own calls. Exporting
+every completion of about 50 workflows, most of them PR bookkeeping, once used
+nearly all of it. So:
+
+- PR bookkeeping that runs on most PR events (labels, statuses, comments, text
+  checks, preview cleanup; the `UNOBSERVED_PR_WORKFLOWS` list) is not observed.
+  It has no `job` or `step` lines or traces, so CI hours and the queue tables
+  leave out its runs, most of the tiny runner's work among them. It seldom
+  finishes last on a push that ran PR CI (2 of about 640 in a week). A test makes
+  every new PR workflow pick a list.
+- A run whose jobs were all skipped doesn't start the exporter.
+- The preflight reads the budget first, which GitHub doesn't count. Below 40% of
+  the limit it skips the export and makes no calls; the collector stops at the
+  same line. Otherwise it lists the run's jobs once, for both the collector and
+  its own checks of the upstream action's limits.
+- The trace step runs only on an attempt the pinned trace action can represent.
+  That action retries a failed assertion, and an API error, up to 240 times at
+  two calls a try, and sends a job that ends before it starts as a broken span,
+  so the preflight checks first. When it refuses, the exporter still ends green,
+  without an annotation, and the `export` line's `untraced` says why. The
+  common reason is `job_never_ran`: GitHub dates a skipped job, or one
+  cancelled before it started, as completed a second before it started, and most
+  PR CI runs skip some jobs. An API error during the trace can still start the
+  retry loop.
+
+An exporter run costs one call to list jobs, two for the trace, and, on a PR
+event, one to list the head's runs. The run that completes a push adds one call
+per other workflow that ran, one for the PR, one to three for its files and one
+for the push time.
+
 ### CI events in Loki
 
 Tempo refuses metrics queries over three hours and keeps traces for seven days, so
 it cannot answer daily percentiles. The exporter therefore also writes one log line
 per finished push, job and step to Loki, with `service_name="ci-telemetry"`. They
 keep for 30 days and give exact percentiles. Fields are structured metadata, read
-without a parser; each line's `trace_id` links to the run's trace.
+without a parser; each line's `trace_id` links to the run's trace, which exists
+only when the run's `export` line has no `untraced`.
 
 | `event` | Fields |
 | --- | --- |
 | `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
 | `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
 | `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
-| `export` | The exporter's own cost: `collect_seconds`, `api_calls`, `rate_remaining`, `rate_limit` |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, `skipped` (`budget`, `no_listing`) when it made no calls, and `untraced` when it sent no trace (`no_job_ran`, `job_never_ran`, `job_unfinished`, `no_conclusion`, `step_timing`, `duplicate_name`, `over_100_jobs`, `over_511_spans`) |
 
 `pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
 `other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
@@ -39,7 +73,9 @@ or any root manifest change. `wall_seconds` runs from the push, or from opening 
 PR when that came later, to the last job. If neither fits, such as a reopen or
 leaving draft, it runs from the first workflow run and `wall_start` says
 `first_run`. A push counts as finished when every workflow it started has finished,
-so a workflow a PR runs must be on the exporter's list; a test enforces this. A run
+and only an observed workflow's completion can notice that, so a push whose last
+workflow is unobserved PR bookkeeping has no `push` line. Neither does a push
+where only bookkeeping ran, or only one workflow. A run
 that starts after everything on its head has finished came from something else, such
 as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
 which also leaves a commit's first full run after draft out of the real PR numbers.
@@ -89,22 +125,28 @@ of an upstream limitation; do not treat it as attempt execution time.
 
 ### run_local events in Loki
 
-`just run_local` sends the same kind of events when a developer opts in
+`just run_local`, `just stack up`/`update` and `cargo x build-services` send the
+same kind of events by default, unless a developer opts out
 (`docs/development/running-locally.md`, `tooling/xtask/crates/xtask_local_telemetry`):
 one line per run, step, build and container health wait, with
 `service_name="local-telemetry"` and `deployment_environment="local"`, through
-the same OTLP route and token as CI. Fields are structured metadata; each line's
-`trace_id` opens the run's step waterfall in Tempo. Runs that ended before their
+the same OTLP route as CI. Each machine reads the ingest token from Doppler
+`observability/lcl` (`LOCAL_TELEMETRY_TOKEN`) into a 0600 per-user file; keep
+that config holding only this ingest-only token, since every engineer can read it. Fields are structured metadata; a run's
+`trace_id` is its `run_id` and opens its waterfall in Tempo: steps nest under the
+step they ran in, crates under the build, and every span carries `run_id`. Runs that ended before their
 events were sent are sent by the developer's next run, clamped to 30 minutes old
-like CI's, and a killed run arrives with `outcome="interrupted"`.
+like CI's, and a killed run arrives with `outcome="interrupted"`, as do the steps
+it had open, which carry only `step` and `outcome`.
 
 | `event` | Fields |
 | --- | --- |
-| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`), `detached`, `instance`, `instance_kind`, `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` |
-| `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
-| `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `host_name` (the readable machine name, only from machines with `services = true` or a `machine` setting), `machine` (`host_name`, else `host`: group machines by this), `platform`, `cpus`, `memory_gb`, `cpu_model`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
+| `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps`, `bring_up` (`<start>/<run_id>/<machine>`, on bring-ups that got ready: the dashboard's run pickers list it) |
+| `step` | `step`, `seconds`, `outcome`, `offset_in_run` (seconds from the run's start to the step's), `lane` (`main` for the bring-up's own thread, whose top-level steps add up to its time to ready, or a background lane: `frontend`, `fusionauth`, `localstack`), `parent_step` (the step it ran inside, if any), plus the run's `mode` and `start` |
 | `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |
-| `service` | `service`, `phase` (`infra`, `app`), `health`, `seconds_to_healthy` (start to first passing probe), `restarts` |
+| `service` | `service`, `phase` (`infra`, `app`), `health`, `seconds_to_healthy` (start to first passing probe), `restarts`, `lane` (`containers`), `offset_in_run` (when the container started during the run) |
+| `crate` | `crate`, `target` (`lib`, `bin`, `build-script`, `build-script-run`, ...), `workspace` (one of ours), `seconds`, `offset_in_build`, `step`, `lane` (`cargo`): a build's compilation units of at least 1 s, at most 150, from `cargo build --timings` |
 
 ```logql
 quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="up"
@@ -113,7 +155,44 @@ quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="
 
 `nixos/local-report.json` holds the queries for the `Macro run_local` dashboard
 (`/d/macro-run-local`) and for `scripts/ci-report.ts --spec local`. Both
-dashboards build their Loki panels with `nixos/loki-report-panels.nix`.
+dashboards build their Loki panels with `nixos/loki-report-panels.nix`. Every
+filter names the machine (`machine`, else `host_name`, else `host`, for events
+recorded before `machine` existed), and the dashboard narrows each filter to
+its `Machine` variable, which lists Tempo's `span.machine` values. Its rows:
+
+- **Time to ready**: runs, percentiles, and the step with the biggest share of
+  fresh and resumed bring-ups' critical path.
+- **One bring-up as a trace**: the latest fresh start and resume that got
+  ready, picked from Tempo's `span.bring_up` values (the Tempo data source
+  reads tag values over 7 days, `timeRangeForTags`), and recent bring-ups whose
+  trace ids open their trace.
+- **Bottleneck**: a Gantt chart of each top-level step's median start
+  (`offset_in_run`) and length, and the critical path: the `main` lane's
+  top-level steps, which the bring-up waits on in order, by share.
+- **Machines**: per machine percentiles, ready share, build time, sccache hits,
+  CPUs and memory, and each step's median by machine.
+- **Inside the steps**: every step, nested steps, the slowest crates, services,
+  builds and actions.
+
+Older events have no lanes or offsets, so the Gantt chart and critical path
+cover only runs recorded since; the other panels cover every event.
+
+### Local stacks' own telemetry
+
+A developer who sets `services = true` in their local telemetry settings also
+sends their local stacks' service traces, logs and metrics through the same
+route and token (`docs/development/running-locally.md`). A Grafana Alloy
+forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
+trace with an error in its first 30 seconds and a tenth of the rest, drops the
+local collector's own telemetry and debug and trace logs,
+and tags resources and metric datapoints with `host.name` (the machine's name)
+and `deployment.environment="local"`; services add `macro.local.instance`,
+which the forwarder copies onto metric datapoints. Dev
+dashboards and alerts select `dev`/`development`, so this data stays out of
+them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
+under `deployment_environment="local"`. The `Macro run_local` dashboard's last row
+(`nixos/local-dashboard.nix`, not the shared report spec) shows bring-ups,
+stacks, sampled traces, error logs and logs by machine.
 
 ### Pinned exporter limits
 
@@ -136,7 +215,8 @@ Grafana's OAuth credentials. The provider is account-wide and protected; import 
 into Pulumi if another stack creates it before this rollout.
 
 Deploy the host (see [Deploying](#deploying)) to provision the dashboard. The workflow starts observing after
-merge to `main`; add new workflow names to its list when they are introduced.
+merge to `main`; a test fails until a new PR workflow is in `OBSERVED_WORKFLOWS`
+or `UNOBSERVED_PR_WORKFLOWS`. Add other new workflows to `OBSERVED_WORKFLOWS`.
 GitHub's three-level `workflow_run` chaining limit still applies. Keep
 `trace-artifacts-glob` unset so the exporter never downloads PR-produced artifacts.
 
@@ -166,6 +246,8 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/alerting.nix`: Grafana alert rules, contact points and routing.
 - `nixos/prod-alerts.nix`: prod alert queries and thresholds, shared by the
   rules and `nixos/prod-alerts-dashboard.nix`.
+- `nixos/email-focus.nix`: the Email Focus rollout's go/stop checks, shared by
+  the `Email Focus` rules in `alerting.nix` and `nixos/email-focus-dashboard.nix`.
 - `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
@@ -628,6 +710,12 @@ list annotations but not Grafana's panel link. Each
 has a Datadog copy in `infra/stacks/monitoring/monitors/`; keep thresholds and
 windows in sync by hand. Forecasts, anomalies, Database Monitoring, APM and log
 rules are Datadog-only.
+
+`nixos/email-focus.nix` holds the Email Focus rollout's go/stop checks over the
+worker's `Macro/EmailFocus` metrics. Each becomes a warning and a critical rule
+in the `Email Focus` group and a panel on the `Email Focus rollout` dashboard
+(`/d/email-focus-rollout`), linked the same way as the prod alerts. They never
+page and have no Datadog copies. See `docs/runbooks/email-focus.md`.
 
 Every prod alert goes to GoAlert over loopback, and GoAlert alone posts to the
 Macro Alerts channel. Critical alerts of rules with `pages = true` go to the

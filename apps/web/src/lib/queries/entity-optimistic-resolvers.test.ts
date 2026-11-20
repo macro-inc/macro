@@ -1,6 +1,7 @@
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   DeleteEntityPropertyDocument,
+  MoveEntitiesDocument,
   RenameEntitiesDocument,
   UpdateInitiativeDocument,
 } from '@service-storage/graphql/generated/graphql';
@@ -58,6 +59,77 @@ describe('entity local resolvers', () => {
         ],
       })
     ).toBeUndefined();
+  });
+
+  it.each([
+    ['DOCUMENT', 'GraphqlSoupDocument', 'projectId'],
+    ['CHAT', 'GraphqlSoupChat', 'projectId'],
+    ['EMAIL_THREAD', 'GraphqlSoupEmailThread', 'projectId'],
+    ['PROJECT', 'GraphqlSoupProject', 'parentId'],
+  ])('moves a %s by predicting its folder field', (type, typename, field) => {
+    for (const projectId of ['folder', null]) {
+      expect(
+        predict(MoveEntitiesDocument, {
+          inputs: [{ entity: { type, id: 'entity' }, projectId }],
+        })?.response
+      ).toEqual({
+        moveEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [
+                {
+                  __typename: 'SoupUpdated',
+                  item: {
+                    __typename: typename,
+                    id: 'entity',
+                    [field]: projectId,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
+    }
+  });
+
+  it('moves to the root when the destination is omitted', () => {
+    expect(
+      predict(MoveEntitiesDocument, {
+        inputs: { entity: { type: 'DOCUMENT', id: 'entity' } },
+      })?.response
+    ).toEqual({
+      moveEntities: {
+        results: [
+          {
+            __typename: 'GraphqlMutationSuccess',
+            effects: [
+              {
+                __typename: 'SoupUpdated',
+                item: {
+                  __typename: 'GraphqlSoupDocument',
+                  id: 'entity',
+                  projectId: null,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('waits for the server when a batch moves an entity it cannot predict', () => {
+    for (const type of ['DATABASE', 'FORM'])
+      expect(
+        predict(MoveEntitiesDocument, {
+          inputs: [
+            { entity: { type: 'DOCUMENT', id: 'one' }, projectId: 'folder' },
+            { entity: { type, id: 'two' }, projectId: 'folder' },
+          ],
+        })
+      ).toBeUndefined();
   });
 
   it('changes only supplied project fields, including an empty member list', () => {

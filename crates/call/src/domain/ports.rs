@@ -1399,12 +1399,9 @@ pub trait ProgrammaticCallGate: Send + Sync + 'static {
     async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool;
 }
 
-/// Whether new channel calls discuss in a channel thread, and creating that thread.
+/// Creates the channel thread a new channel call discusses in.
 #[async_trait::async_trait]
 pub trait ChannelThreads: Send + Sync + 'static {
-    /// Whether a call this person starts gets a thread in its channel. A failed
-    /// read answers no: the call then behaves as calls always have.
-    async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool;
     /// Create the call's thread root, once.
     async fn ensure_root(&self, call_id: Uuid) -> Result<(), rootcause::Report>;
 }

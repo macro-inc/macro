@@ -21,15 +21,18 @@ export type { ConnectMcpServerResponse };
  *
  * Calls run in the user's real account through Macro's server, as the account this execution acts as, and take effect at once; the program never sees a credential. In a turn someone other than the session's owner prompted, each call that uses the owner's account waits for the owner to approve it, so make few such calls and expect a long wait or a refusal. Read before writing, and never repeat a write whose outcome is unknown: check the app's state first. A result with `isError` explains itself: when it says an app is not connected, tell the user and include the connect markup it gives you in your reply verbatim, then stop.
  *
+ * Each account's calls to one app share a budget across its running programs on the same Macro server: a few run at once, paced, and the rest queue. Narrow first with the app's search or list tools and their own limits and filters (e.g. open PRs updated this week), then call per item only for the few items you need, in small batches; never `Promise.all` a call per item over a whole list. A call the app keeps refusing with HTTP 429 is retried after its `Retry-After`; one still refused throws a rate-limit error and did not run, so stop and report partial results rather than retrying in a loop.
+ *
  * When an app the work needs is missing, find it with `macro.connectedApps.discover(execution, appName)` and `connector.inspect()` its advertised actions and connection status. Recommend connecting only when an advertised action supports the task; an app's name is not evidence. For a suitable unconnected app, put the inspection's `connectMarkup` in your reply verbatim and say what connecting enables. To add a remote MCP server the user gives you the URL of, use `macro.connectedApps.addServer(execution, {url, serverName})`; never guess a URL, and tell the user to sign in under Settings → Connections when its summary says so.
  *
- * ```javascript
- * export async function main({macro, execution}) {
+ * ```typescript
+ * export async function main({macro, execution}: CodeContext) {
  *   const apps = await macro.connectedApps.list(execution);
  *   const linear = apps.find((app) => app.key === 'linear');
  *   if (!linear) return {data: {error: 'Linear is not connected', available: apps.map((app) => app.name)}};
  *   const tools = await linear.tools();
  *   const search = tools.find((tool) => tool.name === 'list_issues');
+ *   if (!search) return {data: {error: 'Linear has no list_issues tool'}};
  *   const result = await search.call({query: 'login bug', limit: 5});
  *   return {data: result.isError ? {error: result.content} : result.structuredContent ?? result.content};
  * }

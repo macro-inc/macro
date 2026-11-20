@@ -17,7 +17,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 
-use super::events::ActivityTopicEvent;
+use super::events::{ActivityTopicEvent, ActivityWireRow};
 use super::models::ActivityRecord;
 
 /// Number of messages retained by each user-keyed broadcast channel.
@@ -138,16 +138,25 @@ pub struct ActivityRealtimeConsumerService<C> {
     invalidations: tokio::sync::watch::Sender<()>,
     broadcasts:
         BroadcastManager<GlobalSpawner, MacroUserIdStr<'static>, ActivitySubscriptionUpdate>,
+    session_updates: tokio::sync::broadcast::Sender<Arc<ActivityRecord>>,
 }
 
 impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
     /// Creates an activity realtime consumer service backed by `consumer`.
     pub fn new(consumer: C) -> Self {
+        let (session_updates, _) = tokio::sync::broadcast::channel(64);
         Self {
             consumer,
             invalidations: tokio::sync::watch::channel(()).0,
             broadcasts: BroadcastManager::new(GlobalSpawner, BROADCAST_BUFFER_CAPACITY),
+            session_updates,
         }
+    }
+
+    /// Subscribe to correlated rows before the caller resolves session ownership.
+    #[must_use]
+    pub fn subscribe_session_rows(&self) -> tokio::sync::broadcast::Receiver<Arc<ActivityRecord>> {
+        self.session_updates.subscribe()
     }
 
     /// Subscribes to activity updates addressed to `user_id`.
@@ -193,6 +202,15 @@ impl<C: ActivityTopicEventConsumer> ActivityRealtimeConsumerService<C> {
                     "failed to receive activity topic event after {MAX_RECEIVE_ATTEMPTS} attempts"
                 ))?;
 
+            if let ActivityTopicEvent::SessionRecorded { activities } = event {
+                for record in activities
+                    .into_iter()
+                    .filter_map(ActivityWireRow::into_record)
+                {
+                    let _ = self.session_updates.send(Arc::new(record));
+                }
+                continue;
+            }
             let ActivityTopicEvent::Recorded {
                 recipient_id,
                 activities,

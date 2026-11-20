@@ -1,37 +1,129 @@
-/* Shared page chrome for the legal routes — /terms, /privacy, and /dpa.
-
-   Each document keeps its own typography (inline in UtilPlainText for /terms
-   and /privacy, in RouteDpa.css for /dpa); what lives here is the framing all
-   three need: clearance under the fixed header, and the spacing around the
-   site footer. Metrics match `.posts-article` / `.posts-page-footer` in
-   src/routes/posts/posts-shell.css so the legal pages sit at the same height
-   as /partners/terms and the blog. */
-
+/* Legal pages share the feature pages' slab headings and reading typography.
+   DPA counters and tables remain in RouteDpa.css. */
 .legal-doc {
   box-sizing: border-box;
-  margin: 0 auto;
-  max-width: 56rem;
-  /* BaseHeader is `position: fixed`, so the document has to start below it —
-     the old 2.5rem put the wordmark eyebrow and the top of the title behind
-     the bar. */
-  padding: 116px 2rem 72px;
   width: 100%;
+  max-width: 688px;
+  margin: 0 auto;
+  padding: 132px 24px 80px;
+  color: var(--color-ink-muted);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 17.5px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
 }
 
-/* The footer sits outside the document's measure and brings its own rule and
-   top padding (SectionMoreFeatures), so this only owns the page edges. */
-.legal-doc-footer {
-  padding-bottom: 48px;
-  padding-inline: 24px;
+.legal-doc .legal-eyebrow,
+.legal-doc .dpa-eyebrow {
+  margin: 0 0 22px;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
-@media (max-width: 700px) {
+.legal-doc h1 {
+  margin: 0 0 24px;
+  color: var(--color-ink);
+  font-family: 'Roboto Slab Variable', display, serif;
+  font-size: 40px;
+  font-weight: 320;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.legal-doc p {
+  margin: 0 0 20px;
+}
+
+.legal-doc .legal-date,
+.legal-doc .dpa-version {
+  margin: 0 0 64px;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.legal-doc h2 {
+  margin: 56px 0 20px;
+  padding-top: 32px;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent);
+  color: var(--color-ink);
+  font-family: 'Roboto Slab Variable', display, serif;
+  font-size: 28px;
+  font-weight: 320;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.legal-doc h3,
+.legal-doc h4 {
+  margin: 32px 0 12px;
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.legal-doc a {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-ink) 35%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.legal-doc a:hover {
+  text-decoration-color: currentColor;
+}
+
+.legal-list {
+  margin: 0 0 20px;
+  padding-left: 1.4em;
+}
+
+.legal-list > li {
+  margin-bottom: 8px;
+  padding-left: 0.2em;
+}
+
+/* Preserve the DPA's compact nesting and table layout within the shared prose. */
+.legal-doc .dpa-clause p {
+  margin: 0;
+}
+
+.legal-doc .dpa-clause p + p {
+  margin-top: 20px;
+}
+
+.legal-doc .dpa-clause-title + p {
+  margin-top: 0;
+}
+
+@media (max-width: 699px) {
   .legal-doc {
-    padding: 72px 1.25rem 56px;
+    padding: 114px 20px 56px;
+    font-size: 16px;
   }
 
-  .legal-doc-footer {
-    padding-bottom: 40px;
-    padding-inline: 18px;
+  .legal-doc h1 {
+    font-size: 32px;
+  }
+
+  .legal-doc h2 {
+    margin-top: 40px;
+    padding-top: 28px;
+    font-size: 24px;
+  }
+
+  .legal-doc .legal-date,
+  .legal-doc .dpa-version {
+    margin-bottom: 44px;
   }
 }

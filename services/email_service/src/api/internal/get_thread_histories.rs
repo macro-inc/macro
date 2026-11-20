@@ -5,8 +5,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::message_reads::SummaryReadError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::service::message::{ThreadHistoryRequest, ThreadHistoryResponse};
+use models_email::service::message::ThreadHistoryRequest;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
@@ -45,16 +46,15 @@ pub async fn handler(
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(req_body): Json<ThreadHistoryRequest>,
 ) -> Result<Response, GetThreadHistoriesError> {
-    let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, &req_body.user_id)
-        .await?
-        .ok_or(GetThreadHistoriesError::LinkNotFound(req_body.user_id))?;
-
-    let history_map = email_db_client::user_history::get_thread_summary_info(
-        &ctx.db,
-        &[link.id],
-        &req_body.thread_ids,
-    )
-    .await?;
-
-    Ok((StatusCode::OK, Json(ThreadHistoryResponse { history_map })).into_response())
+    let response = ctx
+        .message_reads
+        .histories(req_body)
+        .await
+        .map_err(|error| match error {
+            SummaryReadError::LinkNotFound(user) => GetThreadHistoriesError::LinkNotFound(user),
+            SummaryReadError::Query(error) => {
+                GetThreadHistoriesError::QueryError(error.into_inner())
+            }
+        })?;
+    Ok((StatusCode::OK, Json(response)).into_response())
 }

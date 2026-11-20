@@ -1,0 +1,33 @@
+[package]
+edition = "2024"
+name = "stripe_inbox"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-stripe = { workspace = true, default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper",
+] }
+chrono = { workspace = true }
+futures = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+rand = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["chrono", "json", "postgres", "uuid"] }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["test-util"] }

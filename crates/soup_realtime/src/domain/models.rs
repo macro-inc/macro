@@ -1,5 +1,7 @@
 //! Realtime Soup patch and broker event models.
 
+use std::collections::HashSet;
+
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -42,6 +44,10 @@ pub struct SoupRealtimePatch {
     pub patch: Patch<Entity<'static>>,
     /// Entity whose current accessors should receive the patch.
     pub access_source: Entity<'static>,
+    /// Users who also receive the patch: those the source event names because
+    /// their access ended with the change, as when an entity is hard-deleted
+    /// before its event is consumed.
+    pub named_recipients: Vec<MacroUserIdStr<'static>>,
 }
 
 impl SoupRealtimePatch {
@@ -50,6 +56,7 @@ impl SoupRealtimePatch {
         Self {
             patch,
             access_source,
+            named_recipients: Vec::new(),
         }
     }
 
@@ -58,6 +65,32 @@ impl SoupRealtimePatch {
         let access_source = patch.value().clone();
         Self::new(patch, access_source)
     }
+
+    /// Also delivers the patch to `users`, whatever their current access.
+    #[must_use]
+    pub fn with_named_recipients(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.named_recipients = users;
+        self
+    }
+}
+
+/// Entities whose current accessors are the same users.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedAccess {
+    /// Entities each of these users can currently access.
+    pub entities: Vec<Entity<'static>>,
+    /// Current accessors of every one of the entities.
+    pub users: Vec<MacroUserIdStr<'static>>,
+}
+
+/// What publishing one batch of patches reached.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Delivery {
+    /// Each distinct, non-empty set of recipients among the batch's patches,
+    /// with its users sorted.
+    pub recipient_sets: HashSet<Vec<MacroUserIdStr<'static>>>,
+    /// Number of recipient-targeted patches published.
+    pub publish_count: usize,
 }
 
 /// One recipient-targeted patch after decoding the Soup topic event.

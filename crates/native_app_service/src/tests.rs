@@ -32,6 +32,9 @@ fn all_urls_work() {
     assert_eq!(url.as_str(), "https://macro.com/app/app-archive.zip");
 }
 
+/// Commit the mock deployed bundle was built from, abbreviated as CI does.
+const DEPLOYED_GIT_SHA: &str = "cd959802";
+
 struct MockBundleFetcher {
     manifest: BundleManifest,
 }
@@ -44,7 +47,7 @@ impl MockBundleFetcher {
                 min_native_builds: None,
                 bundle_build,
                 min_native_build,
-                git_sha: Some("abc123".to_string()),
+                git_sha: Some(DEPLOYED_GIT_SHA.to_string()),
                 app_version: "2.5.0".to_string(),
             },
         }
@@ -128,6 +131,8 @@ fn request(
         arch,
         current_bundle_build,
         native_build,
+        manifest_schema: Some(3),
+        current_git_sha: None,
     }
 }
 
@@ -438,6 +443,74 @@ async fn shared_bundle_uses_independent_mobile_build_minima() {
 }
 
 #[tokio::test]
+async fn schema_3_reaches_only_desktop_updaters_that_read_it() {
+    let mut service = service(20, 0, BundleUpdatePolicy::default());
+    service.bundle_fetcher.manifest.schema_version = 3;
+    service.bundle_fetcher.manifest.min_native_build = 5;
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+        android: 2_050_001,
+        ios: 184,
+    });
+    for target in DesktopTarget::iter() {
+        let target = AllTargets::Desktop(target);
+        // Older desktop updaters reject schema 3 after downloading it, on
+        // every check, so they are never offered one.
+        let legacy = domain::models::BundleUpdateRequest {
+            manifest_schema: None,
+            ..request(target, Arch::Aarch64, 10, 202_611_100_001)
+        };
+        assert_matches!(service.get_bundle_update(legacy).await, Ok(None));
+        assert_matches!(
+            service.get_bundle_update(request(target, Arch::Aarch64, 10, 4)).await,
+            Ok(Some(BundleAction::NativeUpdateRequired(required))) => {
+                assert_eq!(required.min_native_build, 5);
+            }
+        );
+        assert_matches!(
+            service.get_bundle_update(request(target, Arch::Aarch64, 10, 5)).await,
+            Ok(Some(BundleAction::Update(update))) => {
+                assert_eq!(update.min_native_build, 5);
+            }
+        );
+    }
+}
+
+#[tokio::test]
+async fn route_reads_the_updater_manifest_schema() {
+    let mut service = service(20, 0, BundleUpdatePolicy::default());
+    service.bundle_fetcher.manifest.schema_version = 3;
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+        android: 2_050_001,
+        ios: 184,
+    });
+    let app = native_app_router::<_, ()>(RouterState {
+        inner: Arc::new(service),
+    });
+    for (query, status) in [
+        (
+            "current_bundle_build=10&native_build=1",
+            StatusCode::NO_CONTENT,
+        ),
+        (
+            "current_bundle_build=10&native_build=1&manifest_schema=3",
+            StatusCode::OK,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/update/bundle/darwin/aarch64?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status, "{query}");
+    }
+}
+
+#[tokio::test]
 async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
     for schema in [3, 4] {
@@ -467,5 +540,58 @@ async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
             ))
             .await,
         Ok(None)
+    );
+}
+
+#[tokio::test]
+async fn bundle_from_the_running_commit_is_not_an_update() {
+    let service = service(20, 0, BundleUpdatePolicy::default());
+    let desktop = AllTargets::Desktop(DesktopTarget::Darwin);
+    let from_commit = |sha: &str| domain::models::BundleUpdateRequest {
+        current_git_sha: Some(sha.to_string()),
+        ..request(desktop, Arch::Aarch64, 10, 202_611_160_001)
+    };
+
+    // Nix abbreviates to seven digits, CI to eight; either names the commit.
+    for same in ["cd95980", "cd959802", "CD959802", "cd95980272"] {
+        assert_matches!(service.get_bundle_update(from_commit(same)).await, Ok(None));
+    }
+    for other in ["f2cc9fe", "cd9598", "unknown", ""] {
+        assert_matches!(
+            service.get_bundle_update(from_commit(other)).await,
+            Ok(Some(BundleAction::Update(update))) => assert_eq!(update.bundle_build, 20)
+        );
+    }
+}
+
+#[tokio::test]
+async fn route_reads_the_running_git_sha() {
+    let app = native_app_router::<_, ()>(RouterState {
+        inner: Arc::new(service(20, 0, BundleUpdatePolicy::default())),
+    });
+    let status = |query: &'static str| {
+        let app = app.clone();
+        async move {
+            app.oneshot(
+                Request::builder()
+                    .uri(format!("/update/bundle/darwin/aarch64?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .status()
+        }
+    };
+
+    assert_eq!(
+        status("current_bundle_build=10&native_build=1&manifest_schema=3&current_git_sha=cd95980")
+            .await,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        status("current_bundle_build=10&native_build=1&manifest_schema=3&current_git_sha=f2cc9fe")
+            .await,
+        StatusCode::OK
     );
 }

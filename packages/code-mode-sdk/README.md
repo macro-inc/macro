@@ -4,11 +4,13 @@ This build package bundles the actual public `@macro-inc/sdk` and Handlebars for
 Deno. It adds no tool-name proxy or alternate API. Nested namespaces, entity
 handles, promises and async iterators retain the public SDK implementation.
 
-The agent supplies a JavaScript ES module exporting `async main(context)`. The
-trusted bootstrap provides authenticated `macro`, `session`, and `execution`
-handles plus `token`, `hosts`, `sessionId` and `executionId`. Explicit imports from
+The agent supplies a TypeScript ES module exporting
+`async main(context: CodeContext)`, type-checked against `sdk-types.json` (the
+SDK's declarations plus Handlebars') before it runs. The trusted bootstrap
+provides authenticated `macro`, `session`, and `execution` handles plus
+`token`, `hosts`, `sessionId` and `executionId`. Explicit imports from
 `@macro-inc/sdk` and `handlebars` resolve to local build artifacts; no downloads
-or TypeScript compilation happen during a run. SDK local portmap discovery is
+happen during a run, and Deno strips the types. SDK local portmap discovery is
 removed from the bundle because service hosts are supplied by the harness.
 
 The harness mints a Macro API JWT for the owner, lasting 60 seconds, after the
@@ -55,7 +57,8 @@ bun run --cwd packages/code-mode-sdk test
 
 The generated `sdk.mjs`, `handlebars.mjs`, `documentation.json`,
 `operations.json` (each SDK operation's label, method, path and whether it
-writes) and `sdk-types.json` (the SDK's declarations routine code is
+writes), `hosts.json` (every service the SDK can reach, with its host in each
+environment) and `sdk-types.json` (the SDK's declarations routine code is
 type-checked against, with their fingerprint) are build outputs, never
 committed. `crates/code_mode_assets`
 builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,

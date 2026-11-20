@@ -1,6 +1,6 @@
 # Call chat in the channel
 
-Status: implemented behind the server flag `enable-call-channel-thread`, off by default.
+Status: implemented and on for every new channel call.
 
 Mockup: [Call chat in the channel](https://claude.ai/artifact/V1h77fWX2oMtqLihZbuaeA)
 (every artboard is clickable; start at the first one).
@@ -108,10 +108,10 @@ optional reply. Closing a target returns to the call thread rather than to no ta
 
 Normal thread rules apply, with two differences for call threads:
 
-- **Connected people get nothing.** Followers are computed as usual, including through
-  mentions, and notifications are dropped at send time for anyone connected to the call.
-  When they leave, the next reply reaches them. The only thing they are never notified
-  about is a message sent while the thread was in their call.
+- **Connected people are notified like followers.** Followers are computed as usual,
+  including through mentions, and channel members connected to the call are added at send
+  time, so a message in the call chat pops up for the others on the call. People connected
+  without channel membership (guests) are never notified.
 - **The caller is not a follower for starting the call.** People follow by sending a
   message or being mentioned.
 
@@ -220,14 +220,11 @@ and the Soup thread filters (`channelThreadParticipantId`, `channelThreadRootSen
 `MessageService::post` rejects `MessageParent::Call` posts on a `channel_thread` call, so a
 stale client cannot write to a chat nobody will see.
 
-### Flag
+### Rollout
 
-`enable-call-channel-thread`, through `crates/feature_flags`, evaluated for the caller when
-the call is created and targeted by team in PostHog. The stored type then applies to everyone
-on that call, so people on one call cannot end up in different discussions. There is no client
-flag. `document_storage_service` requires `POSTHOG_API_KEY` at startup and always wires
-`PostHogFeatureFlags`. Evaluation has a 300 ms timeout; a failed load keeps that call
-`call_chat` for its lifetime. Joining an existing call does not evaluate the flag again.
+The `enable-call-channel-thread` server flag rolled this out and has been removed. A new
+channel call stores `channel_thread` when it is created, and the stored type applies to
+everyone on that call, so people on one call cannot end up in different discussions.
 
 ## Frontend
 
@@ -240,11 +237,12 @@ with user-visible text through `t()`.
   active call, so nothing else on the wire needs it.
 - `ChannelCallTab` and the meeting route hand `CallOverlay` a `discussion` slot, which supplies the
   panel content, the tab label and the default open state. `CallDiscussionContent` is the one place
-  a signed-in call chooses between `ChannelCallPanel` and `CallChat`.
-- Guests have no discussion slot and keep `GuestCallChat`. A new meeting has no channel and keeps
-  `CallChat`.
-- The meeting page renders without the app's providers, so it mounts `MeetingDiscussionHost` around
-  either discussion, only when the panel opens: the call's own chat renders app messages too.
+  every host chooses between `ChannelCallPanel` and `CallChat`.
+- Signed-out guests supply a `call_chat` discussion from the active call ID and guest access from
+  their call credentials. They do not read the call record. New meetings use `callDiscussionOf` on
+  the record and supply member access.
+- The meeting page renders without the app's providers. It mounts `MeetingDiscussionHost` only
+  around `ChannelCallPanel`; `CallChat` renders without those providers.
 - `CallDiscussionHistory` is the one place a call record chooses between `CallChatHistory` and the
   read-only channel thread section.
 
@@ -312,8 +310,8 @@ that reads `discussion` has reached people.
 2. Merge and deploy. All calls are still `call_chat` while the flag is at 0%.
 3. Wait for the web bundle to reach clients.
 4. Enable `enable-call-channel-thread` in dev, then by team.
-5. Clean up: remove the flag and `CallEnded` handling once no past-call row needs it. `CallChat`,
-   `GuestCallChat` and `CallChatHistory` remain for calls with no channel and past calls.
+5. Clean up: remove the flag and `CallEnded` handling once no past-call row needs it. `CallChat`
+   and `CallChatHistory` remain for calls with no channel and past calls.
 
 ## Tests
 
@@ -322,8 +320,8 @@ that reads `discussion` has reached people.
 - `crates/messages`: root rejects edit, delete, thread delete and reactions for users, bots and agent
   tools; a client cannot set `kind`; first-reply retry creates the root once under races; call-parent
   posts are rejected on `channel_thread`; timeline entries for each status, with one query per page.
-- `crates/channels`: connected people get nothing on all three effects, and normal thread rules for
-  everyone else; the caller is not a follower for starting the call; a call root does not suppress
+- `crates/channels`: channel members connected to the call get all three effects like followers,
+  connected guests outside the channel get none, and normal thread rules apply to everyone else; the caller is not a follower for starting the call; a call root does not suppress
   first-message invites; normal channel mentions during a call still notify.
 - `crates/agent_trigger`, `crates/scheduled_action`: a root triggers nothing, and a reply triggers
   normally.

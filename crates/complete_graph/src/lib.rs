@@ -60,9 +60,10 @@ pub use graphql_favorite::{
     entity_favorite_loader, resolve_favorites,
 };
 pub use graphql_notification::{
-    EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,
-    NotificationMutationRoot, NotificationMutationService, SoupNotificationEdgeReader,
-    UpdateNotificationsForEntityInput, UpdateNotificationsInput, entity_notifications_loader,
+    ActiveNotificationIdsGraphqlContext, EntityNotificationsLoader,
+    GraphqlNotificationUpdateOperation, NoOpNotificationMutationService, NotificationMutationRoot,
+    NotificationMutationService, SoupNotificationEdgeReader, UpdateNotificationsForEntityInput,
+    UpdateNotificationsInput, entity_notifications_loader,
 };
 pub use graphql_notification_inbox::{
     NotificationInboxGraphqlContext, NotificationInboxGraphqlService,
@@ -81,7 +82,10 @@ pub use graphql_properties::{
 pub use graphql_registered_work::{RegisteredWorkGraphqlContext, RegisteredWorkGraphqlService};
 pub use graphql_work_feed::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
 pub use mail_cache_profile::{MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
-pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
+pub use realtime::{
+    AgentSessionActivitySubscriptions, AgentSessionLogSubscriptions,
+    agent_session_activity_subscriptions, agent_session_log_subscriptions,
+};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,
     SoupSchema, SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,

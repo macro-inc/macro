@@ -141,7 +141,7 @@ export function PipelineView(props: {
             <Dropdown placement="bottom-start">
               <Dropdown.Trigger
                 variant="ghost"
-                size="icon-md"
+                size="icon-sm"
                 aria-label="Pipeline actions"
                 class="shrink-0"
                 disabled={pending()}

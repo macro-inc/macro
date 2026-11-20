@@ -8,7 +8,7 @@
 .task-sidebar-section > span { padding-inline: 8px; color: var(--color-ink-muted); font-size: 12px; }
 .task-tag-dot { width: 8px; height: 8px; border-radius: 50%; background: #a99b5b; margin: 0 8px 0 4px; }
 .task-list-toolbar { height: 60px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.task-list-toolbar h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.03em; }
+.task-list-toolbar h3 { margin: 0; font-size: 14px; font-weight: 500; letter-spacing: -.03em; }
 .task-list-toolbar > span { font-size: 11px; color: var(--color-ink-extra-muted); }
 .task-search { padding: 4px 16px 20px; }
 .task-grid { display: grid; grid-template-columns: minmax(0, 1fr) 88px 60px 56px 50px; gap: 8px; align-items: center; padding-inline: 14px; }
@@ -33,7 +33,7 @@
 .task-document-toolbar > span { white-space: nowrap; }
 .task-breadcrumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .task-document { width: min(640px, 100%); margin: 32px auto 0; padding: 0 28px; }
-.task-document h3 { font: 600 23px/1.35 var(--font-sans); letter-spacing: -.025em; margin: 0 0 18px; }
+.task-document h3 { font: 500 23px/1.35 var(--font-sans); letter-spacing: -.025em; margin: 0 0 18px; }
 .task-property-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .task-property-pill { display: inline-flex; align-items: center; gap: 5px; min-height: 25px; border-radius: 999px; padding: 3px 8px; background: var(--color-control); color: var(--color-ink-muted); font-size: 11px; }
 .task-property-pill > :is(svg, img) { width: 14px; height: 14px; flex: none; }
@@ -75,5 +75,5 @@
   .task-tag { display: none; }
   .task-main { padding-bottom: 64px; }
 }
-.task-new-title { width: 100%; margin-bottom: 18px; background: transparent; border: 0; font: 600 23px/1.35 var(--font-sans) !important; }
+.task-new-title { width: 100%; margin-bottom: 18px; background: transparent; border: 0; font: 500 23px/1.35 var(--font-sans) !important; }
 .task-new-description { display: block; width: 100%; min-height: 88px; margin-block: 24px 12px; resize: vertical; background: transparent; border: 0; font-size: 14px !important; }

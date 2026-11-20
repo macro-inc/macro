@@ -9,6 +9,7 @@ mod independent_outbox;
 mod preparation_cancel;
 mod provider_deletion;
 mod provider_draft_trash;
+mod reply_draft_identity;
 mod retention;
 mod trash;
 
@@ -67,6 +68,7 @@ fn prepared() -> PreparedSend {
             provider_thread_id: None,
             replying_to_id: None,
             subject: input.subject.clone(),
+            from_name: None,
             to: vec![],
             cc: vec![],
             bcc: vec![],

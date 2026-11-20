@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime\n            SET state = $2, awake = $3, version = version + 1, updated_at = $4,\n                enrollment_generation = $5\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Bool",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e7e3b0b7b6a7e8e065144cd9380705038b0c64ece11e018b8478b32d1071786"
+}

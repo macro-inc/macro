@@ -231,3 +231,29 @@ where
 {
     Ok(Json(state.service.collaborate_form(access.receipt).await?))
 }
+
+/// Replace a form's icon and color without changing its content timestamp.
+#[utoipa::path(put, tag = "forms", operation_id = "set_form_appearance", path = "/forms/{id}/appearance",
+    params(("id" = Uuid, Path, description = "Form id")),
+    request_body = model_entity::EntityAppearance,
+    responses((status = 200, body = model_entity::EntityAppearance), (status = 400, body = FormErrorResponse),
+        (status = 401, body = FormErrorResponse), (status = 403, body = FormErrorResponse),
+        (status = 404, body = FormErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_form_appearance<Service, EntityAccess, Authorization>(
+    access: FormReceipt<EditAccessLevel, EntityAccess, Authorization>,
+    State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,
+    Json(appearance): Json<model_entity::EntityAppearance>,
+) -> Result<Json<model_entity::EntityAppearance>, FormsApiError>
+where
+    Service: FormsService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .set_appearance(access.receipt, appearance)
+            .await?,
+    ))
+}

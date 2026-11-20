@@ -280,6 +280,7 @@ pub async fn get_document(
         r#"
         SELECT
             d.id as "document_id",
+                d.appearance,
             d.owner as "owner",
             COALESCE(db.id, di.id) as "document_version_id!",
             d.name as "document_name",
@@ -360,6 +361,11 @@ pub async fn get_document(
     )
     .try_map(|row| {
         Ok(DocumentMetadata {
+            appearance: row
+                .appearance
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_id: row.document_id,
             document_version_id: row.document_version_id,
             owner: Owner::from_principal_str(&row.owner)
@@ -396,6 +402,7 @@ pub async fn get_document_version(
         r#"
         SELECT
             d.id as "document_id",
+                d.appearance,
             d.owner as "owner",
             d.name as "document_name",
             COALESCE(di.id, db.id) as "document_version_id!",
@@ -475,6 +482,11 @@ pub async fn get_document_version(
     )
     .try_map(|row| {
         Ok(DocumentMetadata {
+            appearance: row
+                .appearance
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_id: row.document_id,
             document_version_id: row.document_version_id,
             owner: Owner::from_principal_str(&row.owner)

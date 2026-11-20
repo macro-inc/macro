@@ -3,7 +3,7 @@ use upstream_error::{UpstreamError, UpstreamFailure};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::{GOOGLE, refresh_google_token_at};
+use super::{GOOGLE, refresh_google_token};
 use crate::{
     UnauthedClient,
     error::{FusionAuthClientError, GrantBlockReason},
@@ -16,7 +16,7 @@ async fn refresh_answering(response: ResponseTemplate) -> FusionAuthClientError 
         .mount(&server)
         .await;
 
-    refresh_google_token_at(
+    refresh_google_token(
         &UnauthedClient::new(),
         &format!("{}/token", server.uri()),
         "client-id",

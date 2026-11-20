@@ -15,8 +15,9 @@ use agent::{Message, PredefinedModel};
 use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
-    CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    SdkEndpoints, SourceFile, Unattended, operations, sdk_declarations,
+    CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, ProgramImports,
+    RunEnvironment, SdkEndpoints, SourceFile, Unattended, operations, sdk_declaration_files,
+    sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -56,18 +57,28 @@ const REWRITE_DECLARATION_BYTES: usize = 48 * 1024;
 /// SDK reference a draft reads, in bytes: the symbols its model names,
 /// then the types their references name.
 const DRAFT_REFERENCE_BYTES: usize = 48 * 1024;
+/// SDK reference a routine draft's session reads for the areas its request
+/// uses, in bytes; of that, one area's; and the generated types their
+/// declarations import.
+const AREA_REFERENCE_BYTES: usize = 64 * 1024;
+const ONE_AREA_BYTES: usize = 32 * 1024;
+const IMPORTED_TYPE_BYTES: usize = 8 * 1024;
+/// Where the SDK declares its entities.
+const ENTITY_DECLARATIONS: &str = "src/entities/";
 
 const REWRITE_INSTRUCTIONS: &str = "You maintain TypeScript that a Macro routine runs against Macro's SDK. Macro's SDK has changed and the code no longer type-checks. Rewrite it so it type-checks against the declarations you are given, changing only what the type checker's errors require. Keep exactly what it does: the same reads, the same changes, the same decisions and the same return value. Keep the module's shape, `export async function main(...: StepContext)` with no imports, and keep reading the step's settings from `knobs` as it did. If a call it made no longer exists, use the declarations' replacement for it.";
 
 /// Mints the short-lived token a routine's code acts as its owner with.
 pub trait RoutineCredentials: Send + Sync + 'static {
     /// A token for `owner` that outlives one step's deadline, its writes
-    /// attributed as `acts_as` says, for a run of `routine_id`.
+    /// attributed as `acts_as` says, for a run of `routine_id`. A dry run's
+    /// token can only read: every service that accepts it refuses a write.
     fn mint(
         &self,
         owner: &MacroUserIdStr<'static>,
         acts_as: CodeIdentity,
         routine_id: Uuid,
+        dry_run: bool,
     ) -> impl std::future::Future<Output = anyhow::Result<String>> + Send;
 }
 
@@ -77,20 +88,33 @@ impl RoutineCredentials for MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         acts_as: CodeIdentity,
         routine_id: Uuid,
+        dry_run: bool,
     ) -> anyhow::Result<String> {
-        // The owner's access either way. As the agent, writes are attributed
-        // to Macro acting for them, as an agent step's are; as the owner,
-        // they look like the owner's own. The routine id signed into every
-        // token marks the events its writes produce, so they never start a
-        // routine, this one included.
-        let agent_id = match acts_as {
-            CodeIdentity::Agent => Some(bot_id::MACRO_NEW_BOT_ID.as_uuid()),
-            CodeIdentity::Owner => None,
-        };
+        let (agent_id, scope) = routine_claims(acts_as, dry_run);
         Ok(self
-            .mint_for_routine(owner, TOKEN_LIFETIME_SECONDS, agent_id, routine_id)
+            .mint_for_routine(owner, TOKEN_LIFETIME_SECONDS, agent_id, routine_id, scope)
             .await?)
     }
+}
+
+/// The agent and scope a routine step's token signs. The owner's access
+/// either way: as the agent, writes are attributed to Macro acting for them,
+/// as an agent step's are; as the owner, they look like the owner's own. A
+/// dry run is held back in its process too, but code written to get past
+/// that must still not write, so its token signs `dry_run`, which every
+/// service that accepts it enforces.
+pub(crate) fn routine_claims(
+    acts_as: CodeIdentity,
+    dry_run: bool,
+) -> (Option<Uuid>, Option<agent_correlation::scope::SessionScope>) {
+    let agent_id = match acts_as {
+        CodeIdentity::Agent => Some(bot_id::MACRO_NEW_BOT_ID.as_uuid()),
+        CodeIdentity::Owner => None,
+    };
+    (
+        agent_id,
+        dry_run.then_some(agent_correlation::scope::SessionScope::DryRun),
+    )
 }
 
 /// Looks up the time zone a routine's owner works in. `async_trait` keeps it
@@ -133,6 +157,8 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     /// before its credential is minted, rather than queueing in the executor,
     /// so its credential and time limit start when it runs.
     slots: Arc<Semaphore>,
+    /// How each step's requests reach the SDK hosts, by its owner's flag.
+    egress: crate::code_mode::EgressRollout,
 }
 
 impl<Credentials> SdkRoutineCode<Credentials> {
@@ -157,7 +183,15 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             cognition,
             time_zones,
             slots: Arc::new(Semaphore::new(Semaphore::MAX_PERMITS)),
+            egress: crate::code_mode::EgressRollout::new(None),
         }
+    }
+
+    /// Send each step's requests as its owner's egress flag says; without
+    /// this, every step goes directly.
+    pub fn with_egress(mut self, egress: crate::code_mode::EgressRollout) -> Self {
+        self.egress = egress;
+        self
     }
 
     /// Run at most `slots` programs at once, the executor's running limit;
@@ -188,7 +222,11 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 source: file.source.clone(),
             })
             .collect();
-        let diagnostics = match self.checker.check_files(&sources, STEP_CONTEXT).await {
+        let diagnostics = match self
+            .checker
+            .check_files(&sources, STEP_CONTEXT, ProgramImports::Sdk)
+            .await
+        {
             Ok(diagnostics) => diagnostics,
             Err(CheckError::InvalidSource) => {
                 return Ok(vec![StepProblems {
@@ -263,7 +301,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         };
         let token = match self
             .credentials
-            .mint(owner, run.acts_as, run.routine_id)
+            .mint(owner, run.acts_as, run.routine_id, run.dry_run)
             .await
         {
             Ok(token) => token,
@@ -296,6 +334,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 arguments,
                 dry_run: run.dry_run,
             }),
+            egress: self.egress.egress(owner).await,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();
@@ -379,7 +418,15 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
     }
 
     fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
-        symbol_references(symbols, shown)
+        symbol_references(symbols, shown, DRAFT_REFERENCE_BYTES)
+    }
+
+    fn sdk_areas(&self) -> String {
+        sdk_areas()
+    }
+
+    fn area_reference(&self, areas: &[String]) -> String {
+        area_reference(areas)
     }
 
     async fn rewrite(
@@ -458,7 +505,7 @@ fn declarations_for(problems: &[String]) -> String {
 /// those references name and the types those name, nearest first and once
 /// each, until the budget is spent; and the names the SDK doesn't have, so
 /// the writer doesn't use them.
-fn symbol_references(symbols: &[String], shown: &str) -> String {
+fn symbol_references(symbols: &[String], shown: &str, budget: usize) -> String {
     let symbols: Vec<&str> = symbols.iter().map(|symbol| symbol.trim()).collect();
     let (known, unknown): (Vec<&str>, Vec<&str>) = symbols
         .iter()
@@ -477,7 +524,7 @@ fn symbol_references(symbols: &[String], shown: &str) -> String {
         }
     }
     for index in indexes {
-        if output.len() + index.len() <= DRAFT_REFERENCE_BYTES {
+        if output.len() + index.len() <= budget {
             output.push_str(index);
             output.push_str("\n\n");
         }
@@ -490,7 +537,7 @@ fn symbol_references(symbols: &[String], shown: &str) -> String {
         let Some(reference) = symbol_reference(symbol) else {
             continue;
         };
-        if read.contains(&symbol) || output.len() + reference.len() > DRAFT_REFERENCE_BYTES {
+        if read.contains(&symbol) || output.len() + reference.len() > budget {
             continue;
         }
         read.push(symbol);
@@ -549,6 +596,215 @@ fn drafter_index(index: &str) -> String {
         .filter(|line| !line.starts_with("Read any symbol below"))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Every SDK area, one line each: its name and when to use it.
+fn sdk_areas() -> String {
+    agent_code_mode::domain::sdk_documentation()
+        .iter()
+        .filter(|entity| entity.index.is_some())
+        .map(|entity| format!("- `{}`: {}", entity.name, entity.description))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// What a routine draft's session reads of the SDK areas `areas` names, in
+/// order, each whole or not at all, within [`AREA_REFERENCE_BYTES`]: each
+/// area's index, guidance and declarations, then the generated types those
+/// declarations import.
+fn area_reference(areas: &[String]) -> String {
+    let mut output = String::new();
+    let mut imported: Vec<String> = Vec::new();
+    let mut shown: Vec<&str> = Vec::new();
+    for area in areas {
+        let Some(reference) = AREAS.get(area.trim()) else {
+            continue;
+        };
+        if shown.contains(&area.trim())
+            || output.len() + reference.text.len() > AREA_REFERENCE_BYTES
+        {
+            continue;
+        }
+        shown.push(area.trim());
+        output.push_str(&reference.text);
+        output.push_str("\n\n");
+        for name in &reference.imports {
+            if !imported.contains(name) {
+                imported.push(name.clone());
+            }
+        }
+    }
+    if !imported.is_empty() {
+        let types = symbol_references(&imported, &output, IMPORTED_TYPE_BYTES);
+        if !types.is_empty() {
+            output.push_str("The generated types those declarations import:\n\n");
+            output.push_str(&types);
+        }
+    }
+    output
+}
+
+/// One SDK area as a routine draft's session reads it.
+struct AreaReference {
+    text: String,
+    /// The generated types its declarations import, which the SDK's
+    /// reference has.
+    imports: Vec<String>,
+}
+
+/// Each SDK area's reference by its name, built once.
+static AREAS: LazyLock<HashMap<&'static str, AreaReference>> = LazyLock::new(|| {
+    agent_code_mode::domain::sdk_documentation()
+        .iter()
+        .filter_map(|entity| {
+            let index = entity.index.as_deref()?;
+            Some((
+                entity.name.as_str(),
+                area(&entity.name, index, entity.guide.as_deref()),
+            ))
+        })
+        .collect()
+});
+
+/// An area's index, its guidance, and as many of its declaration files as
+/// fit in [`ONE_AREA_BYTES`], its namespace's first, without their imports.
+fn area(name: &str, index: &str, guide: Option<&str>) -> AreaReference {
+    let mut text = drafter_index(index);
+    if let Some(guide) = guide.filter(|guide| !guide.trim().is_empty()) {
+        text.push_str("\n\nHow it works:\n");
+        text.push_str(guide.trim());
+    }
+    let mut imports = Vec::new();
+    let mut files = area_declarations(name, index);
+    // Its namespace first: what `macro.<area>` has.
+    files.sort_by_key(|(path, _)| !path.ends_with("/namespace.d.ts"));
+    let mut declarations = String::new();
+    for (path, file) in files {
+        let mut kept = format!("// @macro-inc/sdk/{path}\n");
+        let mut names = Vec::new();
+        for line in file.lines() {
+            if line.starts_with("import ") {
+                names.extend(generated_imports(line));
+            } else {
+                kept.push_str(line);
+                kept.push('\n');
+            }
+        }
+        if text.len() + declarations.len() + kept.len() > ONE_AREA_BYTES {
+            continue;
+        }
+        declarations.push_str(&kept);
+        imports.extend(
+            names
+                .into_iter()
+                .filter(|name| symbol_reference(name).is_some()),
+        );
+    }
+    if !declarations.is_empty() {
+        text.push_str("\n\nIts declarations:\n```ts\n");
+        text.push_str(&declarations);
+        text.push_str("```");
+    }
+    AreaReference { text, imports }
+}
+
+/// The declaration files of the area `name`, whose index this is: those in
+/// its namespace class's directory, such as `src/entities/tasks/` for
+/// `TaskNamespace`.
+fn area_declarations(name: &str, index: &str) -> Vec<(&'static str, &'static str)> {
+    let Some(namespace) = index.lines().find_map(|line| {
+        line.strip_prefix("### ")?
+            .split_whitespace()
+            .next()
+            .filter(|class| class.ends_with("Namespace"))
+    }) else {
+        return Vec::new();
+    };
+    // Most areas live in their name's directory, `agentSessions` in
+    // `agent-sessions`; searching every file is the fallback.
+    let kebab: String = name
+        .chars()
+        .flat_map(|c| {
+            let dash = c.is_ascii_uppercase().then_some('-');
+            dash.into_iter()
+                .chain(std::iter::once(c.to_ascii_lowercase()))
+        })
+        .collect();
+    let guessed = sdk_declaration_files(&format!("{ENTITY_DECLARATIONS}{kebab}/"));
+    let declared = format!("class {namespace} ");
+    if guessed.iter().any(|(_, text)| text.contains(&declared)) {
+        return guessed;
+    }
+    sdk_declarations(&[namespace], usize::MAX)
+        .into_iter()
+        .filter(|(path, _)| path.starts_with(ENTITY_DECLARATIONS))
+        .find_map(|(path, _)| path.rsplit_once('/'))
+        .map(|(directory, _)| sdk_declaration_files(&format!("{directory}/")))
+        .unwrap_or_default()
+}
+
+/// The names an `import` line takes from the SDK's generated clients, such
+/// as `DecisionRequest` from `import type { DecisionRequest } from
+/// '../../../generated/cognition/types.gen';`. A name imported under an alias
+/// is left out: the SDK renames it because one of its own classes has that
+/// name, so looking the name up would find the class.
+fn generated_imports(line: &str) -> Vec<String> {
+    match import_line(line) {
+        Ok((_, (names, from))) if from.contains("/generated/") => names
+            .into_iter()
+            .filter(|(_, alias)| alias.is_none())
+            .map(|(name, _)| name.to_owned())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// A name an `import` line takes, as its module declares it, with its alias.
+type ImportedName<'a> = (&'a str, Option<&'a str>);
+
+/// `import [type] { A, type B as C } from '<path>'`: the names as their
+/// module declares them, each with its alias (`A`, `B` as `C`), and the path.
+fn import_line(line: &str) -> nom::IResult<&str, (Vec<ImportedName<'_>>, &str)> {
+    use nom::Parser;
+    use nom::branch::alt;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    use nom::character::complete::{char, multispace0, multispace1};
+    use nom::combinator::opt;
+    use nom::multi::separated_list1;
+    use nom::sequence::{delimited, preceded, terminated};
+
+    let identifier = || take_while1(|c: char| c.is_alphanumeric() || c == '_' || c == '$');
+    let type_keyword = || opt(terminated(tag("type"), multispace1));
+    let name = (
+        type_keyword(),
+        identifier(),
+        opt(preceded(
+            (multispace1, tag("as"), multispace1),
+            identifier(),
+        )),
+    )
+        .map(|(_, name, alias)| (name, alias));
+    let names = delimited(
+        (char('{'), multispace0),
+        separated_list1((multispace0, char(','), multispace0), name),
+        (multispace0, opt(char(',')), multispace0, char('}')),
+    );
+    let path = alt((
+        delimited(char('\''), take_until("'"), char('\'')),
+        delimited(char('"'), take_until("\""), char('"')),
+    ));
+    (
+        tag("import"),
+        multispace1,
+        type_keyword(),
+        names,
+        multispace1,
+        tag("from"),
+        multispace1,
+        path,
+    )
+        .map(|(_, _, _, names, _, _, _, path)| (names, path))
+        .parse(line)
 }
 
 /// The names a reference writes in backticks, such as `SearchOpts`.

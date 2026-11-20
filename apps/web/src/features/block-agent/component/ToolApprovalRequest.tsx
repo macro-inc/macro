@@ -39,6 +39,10 @@ export function ToolApprovalRequest(props: { request: HeldToolApproval }) {
       action={action()}
       standing={standing()}
       requester={name(props.request.requestedBy)}
+      ownTurn={
+        !!props.request.requestedBy &&
+        props.request.requestedBy === session?.session()?.ownerId
+      }
       owner={owner()}
       canApprove={approvals()?.canApprove() === true}
       canCancel={approvals()?.canCancel() === true}

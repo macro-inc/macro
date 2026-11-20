@@ -113,6 +113,10 @@ where
                 .patch(forms::update_form_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
+            "/{id}/appearance",
+            put(forms::set_form_appearance::<Service, EntityAccess, Authorization>),
+        )
+        .route(
             "/{id}/collaboration",
             post(forms::collaborate_form_handler::<Service, EntityAccess, Authorization>),
         )
@@ -162,6 +166,7 @@ pub(crate) fn viewer_of<Authorization>(signed_in: &SignedIn<Authorization>) -> V
         forms::list_accessible_forms_handler,
         forms::get_form_handler,
         forms::update_form_handler,
+        forms::set_form_appearance,
         forms::put_form_layout_handler,
         forms::collaborate_form_handler,
         responses::submit_form_response_handler,

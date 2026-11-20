@@ -157,6 +157,7 @@ vi.mock('../queries/entity-search', () => ({
     items: () => mocks.items(),
     rankItems: (items: QuickAccessItem[]) => items,
     isLoadingEntities: () => mocks.loadingEntities(),
+    isSearchingEntities: () => false,
     isSettling: () => mocks.loadingEntities(),
     hasError: () => mocks.refreshError(),
     hasAuthoritativeError: () => false,

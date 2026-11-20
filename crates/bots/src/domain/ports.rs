@@ -101,6 +101,14 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
+    /// Users who see the bot's name and picture: its owner, its team's
+    /// members, and the people in the channels it takes part in. For a
+    /// deleted bot, those channels are the ones its deletion removed it from.
+    fn bot_audience(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id. Its channels are the ones it
     /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(
@@ -187,6 +195,13 @@ pub trait BotRepo: Send + Sync + 'static {
 
     /// Soft-delete an active bot.
     fn delete_bot(&self, bot_id: BotId) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Soft-delete every active agent bound to `harness` in one transaction,
+    /// returning the deleted bots and their owners.
+    fn delete_harness_agents(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<Vec<(BotId, BotOwner)>, Self::Err>> + Send;
 
     /// Add bot reach to a channel.
     fn add_bot_to_channel(
@@ -469,6 +484,23 @@ pub trait TeamBotRoster: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
 }
 
+/// Pushes a bot's current profile to the people who see it, so their open
+/// views show its new name and picture without a reload.
+pub trait BotProfilePublisher: Send + Sync + 'static {
+    /// Send `profile` to every user in `recipients`.
+    fn publish_profile(
+        &self,
+        profile: BotOwnerProfile,
+        recipients: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// The harness an agent was being bound to was deleted first, e.g. by its
+/// Macro computer's release. Repositories return it inside their error.
+#[derive(Debug, thiserror::Error)]
+#[error("that runtime was removed; choose another one")]
+pub struct HarnessRemoved;
+
 /// Bot service error.
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {
@@ -481,10 +513,45 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The harness is an agent teammate's computer. People message the agent;
+    /// no other agent runs there.
+    #[error("This computer belongs to an agent teammate. Message them instead.")]
+    AgentTeammateComputer,
     /// The MCP app directory could not answer, so a slug was not stored.
     #[error("{0}")]
     Unavailable(String),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),
+}
+
+/// Trusted deletion of the agents bound to a harness that is going away, so
+/// none is left pointing at a machine that no longer exists.
+///
+/// Trusted in-process callers only (the hosted runtime control plane): it
+/// checks no caller and must never back a route.
+pub trait HarnessAgentDeletion: Send + Sync {
+    /// Delete every agent bound to `harness`, recording `actor` as the user
+    /// on whose behalf they went. Returns how many were deleted; none is fine.
+    fn delete_harness_agents(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<usize, BotError>> + Send;
+}
+
+/// Trusted runtime-routing lookups for agent harness assignments.
+pub trait HarnessAssignments: Send + Sync {
+    /// Lookup the registered harness selected by an agent.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
+    /// List every agent assigned to a harness, including retired bots.
+    fn bots_on_harness(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<Vec<BotId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
 }

@@ -23,17 +23,30 @@ pub(crate) const MAX_EVENT_AGE_NS: u64 = 1_800 * 1_000_000_000;
 const SPAN_KIND_INTERNAL: u8 = 1;
 const STATUS_ERROR: u8 = 2;
 
-/// The trace every event of a run belongs to.
+/// The trace every event of a run belongs to: the run id itself, which is 32
+/// hex digits, so a run's `run_id` opens its trace and run ids sort by start
+/// time. Any other id (none today) gets a digest of the same width.
 fn trace_id(run_id: &str) -> String {
+    if run_id.len() == 32 && run_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return run_id.to_ascii_lowercase();
+    }
     hex_digest(format!("{SERVICE_NAME}{run_id}t").as_bytes())[..32].to_owned()
 }
 
-/// A record's span, or the run's root span for its `run` event.
+/// A record's span, or the run's root span for its `run` event. A record with a
+/// span key gets the id every record naming that key as its parent uses.
 fn span_id(run_id: &str, record: &Record) -> String {
     if record.event == RUN_EVENT {
         return root_span_id(run_id);
     }
-    hex_digest(format!("{run_id}/{}", record.seq).as_bytes())[..16].to_owned()
+    match &record.span {
+        Some(key) => keyed_span_id(run_id, key),
+        None => hex_digest(format!("{run_id}/{}", record.seq).as_bytes())[..16].to_owned(),
+    }
+}
+
+fn keyed_span_id(run_id: &str, key: &str) -> String {
+    hex_digest(format!("{run_id}/span/{key}").as_bytes())[..16].to_owned()
 }
 
 fn root_span_id(run_id: &str) -> String {
@@ -107,11 +120,14 @@ pub(crate) fn logs(begin: &Begin, records: &[Record], now_ns: u64) -> Value {
     })
 }
 
-/// The traces request: a span per record that has a duration, under the run's
-/// root span. `None` when no record has one.
+/// The traces request: a span per record that has a duration, under the span
+/// its record names as parent or else the run's root span. Every span carries
+/// `run_id`. `None` when no record has one.
 pub(crate) fn traces(begin: &Begin, records: &[Record]) -> Option<Value> {
     let trace = trace_id(&begin.run_id);
     let root = root_span_id(&begin.run_id);
+    let run_key = "run_id".to_owned();
+    let run_id = Value::String(begin.run_id.clone());
     let spans: Vec<Value> = records
         .iter()
         .filter_map(|record| {
@@ -123,10 +139,16 @@ pub(crate) fn traces(begin: &Begin, records: &[Record]) -> Option<Value> {
                 "kind": SPAN_KIND_INTERNAL,
                 "startTimeUnixNano": record.at_ns.saturating_sub(duration).to_string(),
                 "endTimeUnixNano": record.at_ns.to_string(),
-                "attributes": attributes(merged(begin, record).into_iter()),
+                "attributes": attributes(
+                    merged(begin, record).into_iter().chain([(&run_key, &run_id)])
+                ),
             });
             if record.event != RUN_EVENT {
-                span["parentSpanId"] = Value::String(root.clone());
+                let parent = record
+                    .parent
+                    .as_deref()
+                    .map_or_else(|| root.clone(), |key| keyed_span_id(&begin.run_id, key));
+                span["parentSpanId"] = Value::String(parent);
             }
             if record.fields.get("outcome").and_then(Value::as_str) == Some("failure") {
                 span["status"] = json!({ "code": STATUS_ERROR });

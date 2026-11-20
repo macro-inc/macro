@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CountedReactionNames } from './countedReactionNames';
 
 /**
  * Reaction emoji and the users who added it.
@@ -11,6 +12,8 @@
 export interface CountedReaction {
   /** Emoji being reacted with. */
   emoji: string;
+  /** Display names for reactors whose account identity is not visible to this viewer. */
+  names?: CountedReactionNames;
   /** User identifiers. */
   users: string[];
 }

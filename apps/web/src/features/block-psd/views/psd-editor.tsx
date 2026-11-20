@@ -303,6 +303,8 @@ export function PsdEditor() {
     };
     const onWindowKeyDown = (e: KeyboardEvent) => {
       if (!(e.target instanceof Node)) return;
+      // A parked tab layer is inert; its editor must not claim keys.
+      if (root.closest('[inert]')) return;
       const ours =
         root.contains(e.target) ||
         (pressedInside && e.target === document.body && root.isConnected);

@@ -24,6 +24,7 @@ async fn a_running_quiet_batch_leaves_the_next_conversation_message_queued(pool:
         Some(journal.clone()),
         None,
         Some(outbox.clone()),
+        None,
     );
     let mut command = direct_command();
     let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())

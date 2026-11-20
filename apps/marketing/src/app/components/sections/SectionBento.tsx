@@ -1,9 +1,9 @@
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconDocuments from '@icon/system/regular/file.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
 import { A } from '@solidjs/router';
 import { createSignal, For, Show } from 'solid-js';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconDocuments from '../../../assets/icons/icon-documents.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
 import { breakpoint, viewportWidth } from '../../utils/utilBreakpoint';
 
 const bento = [

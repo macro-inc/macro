@@ -122,10 +122,15 @@ pub struct Installed {
 
 #[cfg(unix)]
 impl Installed {
-    /// Re-execute as the new binary with the same arguments and environment,
-    /// handing it the running agent. Returns only on failure.
-    pub fn relaunch(self, agent: Option<crate::handoff::HandedOffAgent>) -> std::io::Error {
-        install::relaunch(&self.executable, &self.tag, agent)
+    /// Re-execute as the new binary with `arguments` (`argv`, starting with
+    /// `argv[0]`) and the same environment, handing it the running agent.
+    /// Returns only on failure.
+    pub fn relaunch(
+        self,
+        arguments: &[std::ffi::OsString],
+        agent: Option<crate::handoff::HandedOffAgent>,
+    ) -> std::io::Error {
+        install::relaunch(&self.executable, &self.tag, arguments, agent)
     }
 }
 

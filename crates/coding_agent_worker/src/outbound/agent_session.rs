@@ -72,7 +72,8 @@ impl HarnessApi {
         request: &CreateAgentSessionRequest,
         acting_user: &MacroUserIdStr<'static>,
     ) -> Result<CreateAgentSessionResponse, ApiError> {
-        // A trigger stream is not replayed. Creation can commit before reply
+        // The trigger stream resumes after the last event it delivered, so a
+        // failed create is never redelivered. Creation can commit before reply
         // reservation fails, so retry the same identity before any prompt.
         let attempts = if request.id.is_some() && request.thread.is_some() {
             2
@@ -151,6 +152,7 @@ impl HarnessApi {
             .json(&ControlRequest {
                 action_id,
                 context,
+                client_id: None,
                 action,
             })
             .send()

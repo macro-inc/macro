@@ -39,9 +39,9 @@ const comparisons: readonly FeatureComparison[] = [
       },
     ],
     sources: [
-      'https://docs.macro.com/product/calls',
+      '/calls#guide',
       'https://pipedream.com/apps/granola/integrations/slack-v2',
-      'https://docs.macro.com/product/agents',
+      '/agents#guide',
       'https://support.google.com/meet/answer/9308681',
       'https://support.google.com/meet/answer/18481437',
       'https://support.google.com/meet/answer/14754931',

@@ -8,7 +8,10 @@
 
 pub mod context;
 pub mod domain;
+pub mod verb;
+pub use verb::AgentVerb;
 #[cfg(feature = "http")]
 pub mod inbound;
 #[cfg(feature = "postgres")]
 pub mod outbound;
+pub mod scope;

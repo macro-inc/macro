@@ -1,6 +1,9 @@
+mod composition;
 mod config;
 mod context;
+mod domain;
 mod handler;
+mod outbound;
 
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
@@ -31,10 +34,7 @@ async fn main() -> Result<(), Error> {
     ))
     .sfs_delete_queue(&sfs_delete_queue);
 
-    let ctx = context::Context {
-        db,
-        sqs_client: Arc::new(sqs_client),
-    };
+    let ctx = composition::context(db, Arc::new(sqs_client));
 
     let func = service_fn(move |event: LambdaEvent<EventBridgeEvent>| {
         let ctx = ctx.clone();

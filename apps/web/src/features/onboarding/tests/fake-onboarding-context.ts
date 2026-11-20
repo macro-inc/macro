@@ -63,6 +63,8 @@ export type FakeOnboardingWorld = {
   accent: string | undefined;
   /** Suggestions are on, so the flow ends with the routines step. */
   routineSuggestionsEnabled: boolean;
+  /** The person's suggestions are on, apart from routine suggestions. */
+  suggestionsEnabled: boolean;
   /** The scheduler's answer; undefined until it is first read. */
   routineSuggestions: RoutineSuggestions | undefined;
   routineCatalog: RoutineTemplate[];
@@ -154,6 +156,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     webhookDelayPolls: 1,
     accent: undefined,
     routineSuggestionsEnabled: false,
+    suggestionsEnabled: false,
     routineSuggestions: { status: 'none', suggestions: [] },
     routineCatalog: TEST_CATALOG,
     routineCreateFailures: [],
@@ -407,7 +410,9 @@ export function createFakeOnboarding(
       return { t: 'completed' };
     },
     routineSuggestionsEnabled: () => world.routineSuggestionsEnabled,
-    generateRoutineSuggestions: () => call('generateRoutineSuggestions'),
+    suggestionGenerationEnabled: () =>
+      world.routineSuggestionsEnabled || world.suggestionsEnabled,
+    startSuggestionGeneration: () => call('startSuggestionGeneration'),
     createRoutinesStep: () => ({
       answer: () => world.routineSuggestions,
       failed: () => false,

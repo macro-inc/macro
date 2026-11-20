@@ -4,7 +4,7 @@ import type {
   TransferRecoveryResponse,
 } from '../../../generated/email/types.gen';
 import type { ListEmailRemindersData } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search/options';
 import { EmailAttachment } from './attachment';
@@ -21,8 +21,8 @@ import {
 import { EmailThread } from './thread';
 
 /** Options for listing inbox threads. */
-export interface InboxOptions {
-  /** Page size (default 20, max 500). */
+export interface InboxOptions extends IterationOptions {
+  /** Threads fetched per request (default 50, max 500). */
   pageSize?: number;
   /** Sort order. Defaults to `viewed_updated`. */
   sort?: ApiSortMethod;
@@ -41,7 +41,7 @@ export interface InboxOptions {
  * ## Sending email
  *
  * - Nothing leaves without the user seeing it. A program cannot call `send` or `EmailThread.reply`; they are refused, and so is a draft's `send` or `schedule` without `userConfirmation`.
- * - In an agent session, present the email as a review: `execution.reviews.create({kind: 'email', title, drafts})`, each draft with the same fields as `sendConfirmed` (Markdown `body`, `to`/`cc`/`bcc`, `from` as the inbox's address, `replyingToId`, `attachments: [{documentId}]`), then return `reviews: [await review.reference()]`. The user sends it from the card. For a forward, `await message.forwardDraft({to, body})` is the draft.
+ * - In an agent session, present the email as a review: `execution.reviews.create({kind: 'email', title, drafts})`, each draft with the same fields as `sendConfirmed` (Markdown `body`, `to`/`cc`/`bcc`, `from` as the inbox's address or a verified send-as alias of it, `replyingToId`, `attachments: [{documentId}]`), then return `reviews: [await review.reference()]`. The user sends it from the card. For a forward, `await message.forwardDraft({to, body})` is the draft.
  * - For a prompt from a channel or document thread, where no card is seen: write the whole email into your reply, ask whether to send it, and stop. Only once the user replies approving that email, send it with their reply quoted in `userConfirmation`: `sendConfirmed` for a new email or a reply, `EmailMessage.forwardConfirmed` for a forward, `EmailDraft.send` or `EmailDraft.schedule` for a saved draft. Being asked to send an email is a request to draft one, never the approval.
  */
 export class EmailNamespace {
@@ -77,7 +77,20 @@ export class EmailNamespace {
    *
    * @readonly
    */
-  async *scheduled(options?: {
+  scheduled(options?: {
+    pageSize?: number;
+    inbox?: Link;
+    maxItems?: number;
+  }): AsyncGenerator<EmailDraft> {
+    return iterate(
+      'email.scheduled',
+      options,
+      { pageSize: true, inbox: true },
+      () => this.scheduledPages(options),
+    );
+  }
+
+  private async *scheduledPages(options?: {
     pageSize?: number;
     inbox?: Link;
   }): AsyncGenerator<EmailDraft> {
@@ -149,7 +162,7 @@ export class EmailNamespace {
   }
 
   /**
-   * Follow-up reminders with thread handles, automatically paginated.
+   * Follow-up reminders with thread handles, automatically paginated; `maxItems` caps the total.
    *
    * @readonly
    */
@@ -157,23 +170,38 @@ export class EmailNamespace {
     options?: Omit<
       NonNullable<ListEmailRemindersData['query']>,
       'inboxIds' | 'cursor'
-    > & { inboxes?: Link[] },
+    > & { inboxes?: Link[]; maxItems?: number },
   ) {
-    const { inboxes, ...query } = options ?? {};
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.storage.listEmailReminders({
-          query: { ...query, inboxIds: inboxes?.map((i) => i.id), cursor },
+    const { inboxes, maxItems: _maxItems, ...query } = options ?? {};
+    return iterate(
+      'email.reminders',
+      options,
+      {
+        noInboxes: true,
+        done: true,
+        read: true,
+        calendar: true,
+        tags: true,
+        attachments: true,
+        limit: true,
+        inboxes: true,
+      },
+      () =>
+        paginate(async (cursor) => {
+          const page = unwrap(
+            await this.client.storage.listEmailReminders({
+              query: { ...query, inboxIds: inboxes?.map((i) => i.id), cursor },
+            }),
+          );
+          return {
+            items: page.items.map(({ threadId, ...item }) => ({
+              ...item,
+              thread: EmailThread.byId(this.client, threadId),
+            })),
+            nextCursor: page.nextCursor,
+          };
         }),
-      );
-      return {
-        items: page.items.map(({ threadId, ...item }) => ({
-          ...item,
-          thread: EmailThread.byId(this.client, threadId),
-        })),
-        nextCursor: page.nextCursor,
-      };
-    });
+    );
   }
 
   constructor(private readonly client: MacroClient) {}
@@ -249,7 +277,7 @@ export class EmailNamespace {
    * Send a new plain-text email; an agent's program is refused (403) and
    * sends through a review or {@link sendConfirmed} instead.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   send(opts: SendEmailOptions): Promise<EmailMessage | undefined> {
@@ -269,7 +297,7 @@ export class EmailNamespace {
    * is never retried; on an error, look for the message in the thread before
    * sending again.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   sendConfirmed(opts: ConfirmedEmailOptions): Promise<SentEmail> {
@@ -289,27 +317,34 @@ export class EmailNamespace {
   }
 
   /**
-   * The threads in the inbox, most recent first, auto-paginated.
+   * The threads in the inbox, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
   inbox(opts?: InboxOptions): AsyncGenerator<EmailThread> {
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.email.previewsInboxCursor({
-          path: { view: 'inbox' },
-          query: {
-            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
-            ...(opts?.sort ? { sort_method: opts.sort } : {}),
-            ...(cursor ? { cursor } : {}),
-          },
-        }),
-      );
-      return {
-        items: page.items.map((t) => EmailThread.byId(this.client, t.id)),
-        nextCursor: page.next_cursor,
-      };
-    });
+    const requestedLimit = opts?.pageSize ?? 50;
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
+      throw new Error('pageSize must be positive');
+    const limit = Math.min(requestedLimit, 500);
+
+    return iterate('email.inbox', opts, { pageSize: true, sort: true }, () =>
+      paginate(async (cursor) => {
+        const page = unwrap(
+          await this.client.email.previewsInboxCursor({
+            path: { view: 'inbox' },
+            query: {
+              limit,
+              ...(opts?.sort ? { sort_method: opts.sort } : {}),
+              ...(cursor ? { cursor } : {}),
+            },
+          }),
+        );
+        return {
+          items: page.items.map((t) => EmailThread.fromPreview(this.client, t)),
+          nextCursor: page.next_cursor,
+        };
+      }),
+    );
   }
 
   /**

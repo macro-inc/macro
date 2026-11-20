@@ -116,6 +116,7 @@ keep persisted client caches; a change that makes stored records unsafe needs a
 bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-core/src/codec.rs`.
 
 Email send admission, cancellation and status are exposed by `graphql_email`;
+`agentSessionActivityAppended` checks session view access as the log subscription does and filters correlated activity rows by the session bound in `agent_correlations`. Its first empty frame confirms listening, so clients refetch REST history to close the handoff gap. A lagging stream errors so clients refetch again.
 `GraphqlUser.pendingEmailSends` lists authorized inbox attempts with cursor pagination.
 Keep this viewer-scoped listing independent of normalized-cache initialization.
 
@@ -133,6 +134,8 @@ work budget, and omitted `matching` retains the deployed subsequence behavior.
 can differ by viewer. Keep the bounded read context in DSS HTTP and websocket
 request data and run the `contacts` schema tests after changes.
 
-Saved-view definitions live under authenticated `GraphqlUser`; mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
+Saved-view definitions live under authenticated `GraphqlUser`; reads include shared appearance and creation accepts optional validated appearance. Mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
 
 - Mail capsule negotiation lives in `mail_cache_profile`: absent/unknown capabilities receive v2; explicit `soup-mail-v5` receives current capsules. Never infer client support from the server version.
+
+- Agent-session activity subscriptions recheck current entity access before emitting CRM activity. Session access alone does not disclose CRM record content after revocation.

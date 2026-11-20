@@ -11,7 +11,11 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/generate.ts`: builds the Deno bundles and backend documentation into
   the directory it is given; `crates/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
-  per-symbol references (classes, methods, types). A discriminated union over
+  per-symbol references (classes, methods, types). Index fields retain lazy
+  accessor call signatures and return types (`content(): Promise<string>`).
+  Keep each index under 16 KiB using concise source TSDoc first sentences;
+  preserve the [SDK's operating constraints](../sdk/AGENTS.md#gotchas) there and
+  retain other details in following paragraphs. A discriminated union over
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
   `EditOp.<discriminator>`.
 - `scripts/catalog.ts`: the entity directories agents discover, one entity
@@ -24,6 +28,18 @@ HTML worker belong to `packages/sdk-docs`.
   entity. Agents route on the sentence; the guide is how that area works,
   inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
+- `sdk-types.json` holds the SDK's declarations, which every program is
+  type-checked against, and Handlebars' (`handlebars`), kept out of the
+  fingerprint routines record. `@agent` examples of whole programs are fenced
+  `typescript` and typed with `CodeContext`; `crates/agent_code_mode` checks
+  each one.
+- `crmEmailPrivacy` documents `macro.crm.emailPrivacy` separately from CRM records so both entity indexes stay within the 16 KiB bound; this changes neither the public namespace nor endpoint authorization.
+- The bundled SDK adds its hand-assigned display verb to each generated call
+  when code mode enables the verb header in the bootstrap.
+- Keep `generate.ts`'s `postReads` in step with
+  `agent_correlation::scope::POST_READS`; the harness tests compare both catalogs,
+  including rule validation and count previews. Policy activation remains a
+  sharing write.
 
 ## Tool contracts
 

@@ -2,6 +2,7 @@ import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { toast } from '@core/component/Toast/Toast';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   DeleteEmailDraftMutation,
   SaveEmailDraftMutation,
@@ -16,9 +17,9 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
 import { queryClient } from '../client';
 import { refetchSoupEntity } from '../soup/cache';
-import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 import {
+  beginDraftAttempt,
   emailSendOwnsDraft,
   localDraftMessage,
   readLocalDraft,
@@ -38,12 +39,8 @@ const mocks = vi.hoisted(() => ({
   assertQueueAvailable: vi.fn(),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: 'graphql-soup',
-  isFeatureEnabled: () => true,
-}));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
+  Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   assertEmailDraftQueueAvailable: mocks.assertQueueAvailable,
@@ -62,7 +59,6 @@ vi.mock('../soup/cache', () => ({
   invalidateSoupEntity: vi.fn(),
   refetchSoupEntity: vi.fn(),
 }));
-vi.mock('./draft-cache', () => ({ markThreadDraftSaved: vi.fn() }));
 vi.mock('./thread', () => ({ fetchAndCacheThread: vi.fn() }));
 
 import {
@@ -96,6 +92,15 @@ beforeEach(() => {
   mocks.cacheEnabled = true;
   vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
   vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
+  vi.mocked(beginDraftAttempt).mockResolvedValue({
+    kind: 'email-draft',
+    id: 'attempt',
+    draftKey: 'draft',
+    accountId: 'owner',
+    generation: 'generation',
+    revision: 1,
+    operation: 'save',
+  });
 });
 
 async function setup(committed = false) {
@@ -178,7 +183,6 @@ it('keeps active thread messages intact after a committed draft save', async () 
     draftId: serverId,
     threadId: 'server-thread',
   });
-  expect(markThreadDraftSaved).toHaveBeenCalledWith('server-thread');
   expect(queryClient.invalidateQueries).toHaveBeenCalledExactlyOnceWith({
     queryKey: emailKeys.previews._def,
   });
@@ -205,13 +209,12 @@ it.each(['save', 'delete'] as const)(
   }
 );
 
-it('keeps local persistence enabled for GraphQL drafts while the queue is unavailable', () => {
+it('keeps local persistence enabled for drafts while the queue is unavailable', () => {
   mocks.cacheEnabled = false;
   mocks.queueBlocked = true;
-  expect(draftQueueActive('graphql')).toBe(true);
-  expect(draftQueueActive('rest')).toBe(false);
+  expect(draftQueueActive()).toBe(true);
   mocks.queueBlocked = false;
-  expect(draftQueueActive('graphql')).toBe(false);
+  expect(draftQueueActive()).toBe(false);
 });
 
 it('uses resolved IDs for an old-handle save without duplicating the cached draft', async () => {
@@ -392,6 +395,30 @@ const workingCopy = (status: LocalDraft['status']): LocalDraft => ({
   attachments: [],
   status,
   updatedAt: 1,
+});
+
+it('drops a synced working copy from its cached thread when the discard is enqueued', async () => {
+  const { operations } = await setup();
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('synced'));
+  expect(
+    await deleteEmailDraftQueued({
+      draftId: serverId,
+      threadId: 'local-thread',
+    })
+  ).toEqual({ kind: 'queued' });
+  const operation = operations[0];
+  const response = optimisticContextOf(operation)!
+    .optimisticResponse as DeleteEmailDraftMutation;
+  expect(operation.variables?.input.draftId).toBe(handle);
+  expect(response.deleteEmailDraft).toMatchObject({
+    threadDeleted: true,
+    thread: {
+      isDraft: false,
+      mailDraftPreview: null,
+      messages: [],
+      mailDraftState: { drafts: [] },
+    },
+  });
 });
 
 it('reads authoritative content once the local working copy is synced', async () => {
@@ -590,4 +617,18 @@ it('does not report a save that lost to its own send', async () => {
     code: 'INVALID',
   });
   expect(toast.failure).toHaveBeenCalledOnce();
+});
+
+it('queues nothing for a draft that is being discarded', async () => {
+  const { operations } = await setup();
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('deleting'));
+  // A closed composer's last flush arrives after the discard.
+  vi.mocked(beginDraftAttempt).mockResolvedValue(undefined);
+
+  expect(await saveEmailDraftQueued({ args })).toEqual({ kind: 'queued' });
+  expect(operations).toEqual([]);
+  expect(Telemetry.info).toHaveBeenCalledExactlyOnceWith(
+    'email_draft.save_yielded_to_discard',
+    { 'email_draft.draft_id': handle }
+  );
 });

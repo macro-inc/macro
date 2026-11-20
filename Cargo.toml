@@ -1,13 +1,28 @@
 [workspace]
 resolver = "2"
-# Patched third-party crates ([patch.crates-io]), not workspace members.
-exclude = ["vendor"]
+# Patched third-party crates ([patch.crates-io]) and nightly-only cargo-fuzz
+# crates, not workspace members.
+exclude = ["vendor", "crates/password_import/fuzz"]
 
 members = [
+  "crates/passwords",
+  "crates/password_events",
+  "crates/password_import",
+  "crates/password_import_wasm",
+  "crates/stripe_inbox",
+  "crates/openbao_client",
   "crates/access_requests",
+  "crates/source_items",
   "crates/agent_api_keys",
+  "crates/agent_credentials",
+  "crates/agent_git",
+  "crates/team_agents",
   "crates/routines",
   "crates/routine_program",
+  "crates/shown_text",
+  "crates/suggestions",
+  "crates/suggestions_db_utils",
+  "crates/suggestion_generation",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
@@ -21,7 +36,6 @@ members = [
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
   "crates/ai_billing",
-  "crates/ai_projections",
   "crates/ai_usage",
   "crates/attention_feed",
   "crates/bot_id",
@@ -62,6 +76,7 @@ members = [
   "crates/web_search",
   "crates/dictation",
   "crates/email_api_client",
+  "crates/email_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -73,6 +88,7 @@ members = [
   "crates/generic_email_domains",
   "crates/git_patch",
   "crates/gmail_client",
+  "crates/gmail_emulator",
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
@@ -99,8 +115,15 @@ members = [
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd",
+  "crates/harnessd_protocol",
   "crates/harnesses",
-  "crates/incus_client",
+  "crates/hosted_runtimes",
+  "crates/firecracker_host_api",
+  "crates/pinned_tls",
+  "crates/computer_types",
+  "services/firecracker_guest_agent",
+  "services/firecracker_host",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -129,6 +152,8 @@ members = [
   "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
+  "crates/outlook_emulator",
+  "crates/model_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -149,6 +174,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/single_flight",
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
@@ -196,6 +222,7 @@ members = [
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
   "crates/scheduled_action",
+  "services/search_freshness_probe",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",
@@ -219,7 +246,12 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+harnessd_protocol = { path = "crates/harnessd_protocol" }
+pairing_id = { path = "crates/pairing_id" }
+openbao_client = { path = "crates/openbao_client" }
 macro_user_id = { path = "crates/macro_user_id" }
+model-entity = { path = "crates/model-entity" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -239,6 +271,7 @@ arboard = { version = "3.6.1", default-features = false, features = ["wayland-da
 # Templates use built-in defaults; omit the unused config parser and basic-toml.
 askama = { version = "0.14", default-features = false, features = ["derive", "std", "urlencode"] }
 async-graphql = "7.2.1"
+async-graphql-parser = "7.2.1"
 async-lock = "3"
 async-openai = { version = "0.36.1", features = [
   "byot",
@@ -254,6 +287,7 @@ aws-msk-iam-sasl-signer = "1.0.1"
 # SDK defaults also enable the deprecated `rustls` feature, which pulls in
 # rustls 0.21 / hyper 0.14. Keep the modern HTTPS client and the other defaults;
 # macro_aws_config uses BehaviorVersion::latest() with this transport.
+aws-sdk-cloudwatch = { version = "1.113.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-dynamodb = { version = "1.111.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-ecs = { version = "1.124.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-kms = { version = "1.104.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
@@ -284,12 +318,14 @@ crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
 csv = "1"
+csv-core = "0.1.13"
 dashmap = "6.1.0"
 dateparser = "0.2.1"
 determinator = "0.12.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+emojis = "0.9.1"
 eventsource-stream = "0.2.3"
 flate2 = "1"
 fractional_index = { version = "2.0.2", default-features = false }
@@ -303,6 +339,7 @@ glob = "0.3.3"
 # hakari release is built against.
 guppy = "0.17.24"
 h2 = "0.4"
+heck = "0.5"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -310,6 +347,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -327,6 +365,7 @@ indexmap = "2"
 infer = "0.19.0"
 indoc = "2"
 inquire = "0.7"
+insta = { version = "1.48.0", features = ["json"] }
 itertools = "0.14"
 jsonschema = { version = "0.58.6", default-features = false }
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
@@ -336,6 +375,7 @@ lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
 libc = "0.2"
+memchr = "2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -344,11 +384,13 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
   "services-tokio",
   "webhooks",
 ] }
+mail-builder = "0.4.3"
+mailparse = "0.16.1"
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
+loro = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 mimalloc = { version = "0.1", default-features = false }
@@ -381,8 +423,10 @@ postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
+proc-macro2 = "1"
 prost = "0.14"
 prost-build = "0.14"
+psl = "2.1"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"
@@ -407,6 +451,8 @@ reqwest = { version = "0.13", default-features = false, features = [
 rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
+rrule = "0.14.0"
+rsa = "0.9.10"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs"] }
 # Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
@@ -428,6 +474,7 @@ shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
+sha1 = "0.10.6"
 sha2 = "0.10.8"
 sqlx = { version = "0.8.6", features = [
   "chrono",
@@ -439,6 +486,7 @@ sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strsim = "0.11"
 strum = { version = "0.27.1", features = ["derive"] }
+syn = { version = "2", features = ["full"] }
 symphonia = { version = "0.6.1", default-features = false, features = [
   "isomp4",
   "mkv",
@@ -463,6 +511,7 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
+tokio-vsock = "0.7.2"
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [
@@ -493,6 +542,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -535,7 +587,12 @@ zip = { version = "9.0.5", default-features = false, features = [
   "xz",
   "zstd",
 ] }
-ammonia = "4.1.8"
+# Inflate-only zip for code that also builds for wasm32 (password_import): the
+# full `zip` entry above pulls C codecs (bzip2, zstd, lzma) that don't build there.
+zip-inflate = { package = "zip", version = "9.0.5", default-features = false, features = [
+  "deflate-flate2-zlib-rs",
+] }
+ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
 
@@ -544,6 +601,8 @@ subtle = "2.6.1"
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
+# Bundles a newer IANA tzdata release than crates.io; see vendor/chrono-tz/README-MACRO.md.
+chrono-tz = { path = "vendor/chrono-tz" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests

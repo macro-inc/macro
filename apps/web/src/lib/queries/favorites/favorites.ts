@@ -1,23 +1,10 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { useIsAuthenticated } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
-import { storageServiceClient } from '@service-storage/client';
 import type { AddFavoriteRequest } from '@service-storage/generated/schemas/addFavoriteRequest';
-import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import type { ListFavoritesParams } from '@service-storage/generated/schemas/listFavoritesParams';
 import type { FavoriteWriteResult } from '@service-storage/graphql-favorites';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-
-import { queryClient } from '../client';
-import { getSoupEntityById, optimisticUpdateSoupEntity } from '../soup/cache';
-import { soupKeys } from '../soup/keys';
-import { withCallbacks } from '../utils';
 
 import {
   createGraphqlAddFavoriteMutation,
@@ -26,7 +13,6 @@ import {
   createGraphqlReorderFavoritesMutation,
   refreshActiveGraphqlFavoritesQueries,
 } from './graphql';
-import { favoriteKeys } from './keys';
 import type { FavoriteMutationCallbacks } from './mutation';
 
 export type FavoriteEntityType = AddFavoriteRequest['entityType'];
@@ -74,348 +60,73 @@ export function favoriteEntityType(
   }
 }
 
-function favoriteEntityKey(
-  entityType: FavoriteEntityType,
-  entityId: string
-): string {
-  return `${entityType}:${entityId}`;
-}
-
-/** The user's favorites from the transport selected at hook creation. */
+/** The user's favorites. */
 export function useFavoritesQuery(filter?: FavoritesFilter) {
   const authenticated = useIsAuthenticated();
-  const enabled = () => authenticated() === true;
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return createGraphqlFavoritesQuery(filter, enabled);
-  }
-
-  return createRestFavoritesQuery(filter, enabled);
-}
-
-// Cached callbacks outlive the hook; only the plain filter enters this closure.
-function restFavoritesQueryOptions(filter?: FavoritesFilter) {
-  return queryOptions({
-    queryKey: favoriteKeys.list(filter).queryKey,
-    queryFn: async () =>
-      await throwOnErr(() =>
-        storageServiceClient.favorites.getFavorites(filter)
-      ),
-    staleTime: 60_000,
-  });
-}
-
-function createRestFavoritesQuery(
-  filter: FavoritesFilter | undefined,
-  enabled: Accessor<boolean>
-) {
-  return useQuery(() => ({
-    ...restFavoritesQueryOptions(filter),
-    enabled: enabled(),
-  }));
+  return createGraphqlFavoritesQuery(filter, () => authenticated() === true);
 }
 
 /**
  * Non-suspending, non-throwing view of the favorites list.
  *
- * The REST query's `data` property suspends while pending and throws on error,
- * while the urql-solid result does neither. Favorites are read from broad
- * surfaces (command menu conditions and descriptions, the sidebar, context
- * menus) where a slow or failing request must never take the surface down.
- * Keep cached GraphQL data visible even if a background network request fails.
- * Only REST needs the status guard to avoid suspending or throwing.
+ * Favorites are read from broad surfaces (command menu conditions and
+ * descriptions, the sidebar, context menus) where a slow or failing request
+ * must never take the surface down. Keep cached GraphQL data visible even if a
+ * background network request fails.
  */
 export function useFavoritesData(
-  filter?: FavoritesFilter
+  filter?: FavoritesFilter,
+  /** Read only while this holds, so a gated surface makes no request. */
+  wanted: Accessor<boolean> = () => true
 ): Accessor<FavoritesList | undefined> {
   const authenticated = useIsAuthenticated();
-  const enabled = () => authenticated() === true;
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    const query = createGraphqlFavoritesQuery(filter, enabled);
-    return () => (enabled() ? query.data : undefined);
-  }
-  const query = createRestFavoritesQuery(filter, enabled);
-  return () => (enabled() && query.isSuccess ? query.data : undefined);
-}
-
-function readLists() {
-  return queryClient.getQueriesData<FavoritesList>({
-    queryKey: favoriteKeys.list._def,
-  });
-}
-
-type FavoriteListsSnapshot = ReturnType<typeof readLists>;
-type FavoriteListQueryKey = ReturnType<typeof favoriteKeys.list>['queryKey'];
-
-function favoriteMatchesFilter(
-  favorite: Favorite,
-  filter: FavoritesFilter | undefined
-): boolean {
-  return (
-    (!filter?.entityType || filter.entityType.includes(favorite.entityType)) &&
-    (!filter?.entityId || filter.entityId.includes(favorite.entityId))
-  );
-}
-
-function writeLists(
-  update: (
-    prev: FavoritesList,
-    filter: FavoritesFilter | undefined
-  ) => FavoritesList
-) {
-  for (const [queryKey, prev] of readLists()) {
-    if (!prev) continue;
-    const [, , filter] = queryKey as FavoriteListQueryKey;
-    queryClient.setQueryData<FavoritesList>(queryKey, update(prev, filter));
-  }
-}
-
-function restoreLists(snapshot: FavoriteListsSnapshot) {
-  for (const [queryKey, previous] of snapshot) {
-    queryClient.setQueryData(queryKey, previous);
-  }
+  const enabled = () => authenticated() === true && wanted();
+  const query = createGraphqlFavoritesQuery(filter, enabled);
+  return () => (enabled() ? query.data : undefined);
 }
 
 export function invalidateFavorites() {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return refreshActiveGraphqlFavoritesQueries();
-  }
-
-  return Promise.all([
-    queryClient.invalidateQueries({ queryKey: favoriteKeys.list._def }),
-    queryClient.invalidateQueries({
-      queryKey: soupKeys._def,
-      predicate: (query) =>
-        query.queryKey.some(
-          (part) =>
-            part !== null &&
-            typeof part === 'object' &&
-            'favorites_only' in part &&
-            part.favorites_only === true
-        ),
-    }),
-  ]).then(() => undefined);
+  return refreshActiveGraphqlFavoritesQueries();
 }
-
-function updateSoupFavorite(entityId: string, favorite: boolean) {
-  const item = getSoupEntityById(entityId);
-  return item
-    ? optimisticUpdateSoupEntity({ ...item, is_favorited: favorite })
-    : undefined;
-}
-
-type FavoriteMutationContext = { rollback: () => void } | undefined;
-
-// A paused REST toggle lives only in memory and replays in parallel on
-// reconnect, so an offline toggle must fail and roll back instead of waiting.
-const TOGGLE_NETWORK_MODE = 'always';
 
 type AddFavoriteArgs = AddFavoriteRequest;
-type AddFavoriteCallbacks = FavoriteMutationCallbacks<
-  FavoriteWriteResult,
-  AddFavoriteArgs,
-  FavoriteMutationContext
->;
 
-function pendingFavorite(args: AddFavoriteArgs): Favorite {
-  return {
-    entityType: args.entityType,
-    entityId: args.entityId,
-    sortOrder: Number.MAX_SAFE_INTEGER,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return createGraphqlAddFavoriteMutation(callbacks);
-  }
-
-  return useMutation(() => ({
-    networkMode: TOGGLE_NETWORK_MODE,
-    mutationFn: async (args: AddFavoriteArgs): Promise<FavoriteWriteResult> => {
-      await throwOnErr(() => storageServiceClient.favorites.addFavorite(args));
-      return { kind: 'committed' };
-    },
-    ...withCallbacks<
-      FavoriteWriteResult,
-      Error,
-      AddFavoriteArgs,
-      FavoriteMutationContext
-    >(
-      {
-        onMutate: async (args: AddFavoriteArgs) => {
-          await queryClient.cancelQueries({
-            queryKey: favoriteKeys.list._def,
-          });
-          const previous = readLists();
-          const soupUpdate = updateSoupFavorite(args.entityId, true);
-          const optimistic = pendingFavorite(args);
-          writeLists((prev, filter) =>
-            favoriteMatchesFilter(optimistic, filter)
-              ? {
-                  ...prev,
-                  favorites: [...prev.favorites, optimistic],
-                }
-              : prev
-          );
-          return {
-            rollback: () => {
-              restoreLists(previous);
-              soupUpdate?.rollback();
-            },
-          };
-        },
-        onError: (_error, _args, context) => {
-          context?.rollback();
-        },
-        onSettled: () => invalidateFavorites(),
-      },
-      callbacks
-    ),
-  }));
+export function useAddFavoriteMutation<Context = void>(
+  callbacks?: FavoriteMutationCallbacks<
+    FavoriteWriteResult,
+    AddFavoriteArgs,
+    Context
+  >
+) {
+  return createGraphqlAddFavoriteMutation(callbacks);
 }
 
 type RemoveFavoriteArgs = {
   entityType: FavoriteEntityType;
   entityId: string;
 };
-type RemoveFavoriteCallbacks = FavoriteMutationCallbacks<
-  FavoriteWriteResult,
-  RemoveFavoriteArgs,
-  FavoriteMutationContext
->;
 
-export function useRemoveFavoriteMutation(callbacks?: RemoveFavoriteCallbacks) {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return createGraphqlRemoveFavoriteMutation(callbacks);
-  }
-
-  return useMutation(() => ({
-    networkMode: TOGGLE_NETWORK_MODE,
-    mutationFn: async (
-      args: RemoveFavoriteArgs
-    ): Promise<FavoriteWriteResult> => {
-      await throwOnErr(() =>
-        storageServiceClient.favorites.removeFavoriteByEntity(args)
-      );
-      return { kind: 'committed' };
-    },
-    ...withCallbacks<
-      FavoriteWriteResult,
-      Error,
-      RemoveFavoriteArgs,
-      FavoriteMutationContext
-    >(
-      {
-        onMutate: async (args: RemoveFavoriteArgs) => {
-          await queryClient.cancelQueries({
-            queryKey: favoriteKeys.list._def,
-          });
-          const previous = readLists();
-          const soupUpdate = updateSoupFavorite(args.entityId, false);
-          const keep = (favorite: Favorite) =>
-            !(
-              favorite.entityType === args.entityType &&
-              favorite.entityId === args.entityId
-            );
-          writeLists((prev) => ({
-            ...prev,
-            favorites: prev.favorites.filter(keep),
-          }));
-          return {
-            rollback: () => {
-              restoreLists(previous);
-              soupUpdate?.rollback();
-            },
-          };
-        },
-        onError: (_error, _args, context) => {
-          context?.rollback();
-        },
-        onSettled: () => invalidateFavorites(),
-      },
-      callbacks
-    ),
-  }));
+export function useRemoveFavoriteMutation<Context = void>(
+  callbacks?: FavoriteMutationCallbacks<
+    FavoriteWriteResult,
+    RemoveFavoriteArgs,
+    Context
+  >
+) {
+  return createGraphqlRemoveFavoriteMutation(callbacks);
 }
 
 type ReorderFavoritesArgs = {
   /** The user's favorited entities in the desired order. */
   favorites: { entityType: FavoriteEntityType; entityId: string }[];
 };
-type ReorderFavoritesCallbacks = FavoriteMutationCallbacks<
-  FavoriteWriteResult,
-  ReorderFavoritesArgs,
-  FavoriteMutationContext
->;
 
-export function useReorderFavoritesMutation(
-  callbacks?: ReorderFavoritesCallbacks
+export function useReorderFavoritesMutation<Context = void>(
+  callbacks?: FavoriteMutationCallbacks<
+    FavoriteWriteResult,
+    ReorderFavoritesArgs,
+    Context
+  >
 ) {
-  if (isFeatureEnabled(enableGraphqlSoup)) {
-    return createGraphqlReorderFavoritesMutation(callbacks);
-  }
-
-  return useMutation(() => ({
-    mutationFn: async (
-      args: ReorderFavoritesArgs
-    ): Promise<FavoriteWriteResult> => {
-      // Entities the user has not favorited (e.g. an optimistic row whose add
-      // is still in flight) are ignored by the backend.
-      if (args.favorites.length === 0) return { kind: 'committed' };
-      await throwOnErr(() =>
-        storageServiceClient.favorites.reorderFavorites({
-          favorites: args.favorites,
-        })
-      );
-      return { kind: 'committed' };
-    },
-    ...withCallbacks<
-      FavoriteWriteResult,
-      Error,
-      ReorderFavoritesArgs,
-      FavoriteMutationContext
-    >(
-      {
-        onMutate: async (args: ReorderFavoritesArgs) => {
-          await queryClient.cancelQueries({
-            queryKey: favoriteKeys.list._def,
-          });
-          const previous = readLists();
-          const reorder = (favorites: Favorite[]) => {
-            const byKey = new Map(
-              favorites.map((f) => [
-                favoriteEntityKey(f.entityType, f.entityId),
-                f,
-              ])
-            );
-            const orderedKeys = args.favorites.map((f) =>
-              favoriteEntityKey(f.entityType, f.entityId)
-            );
-            const ordered = orderedKeys
-              .map((key) => byKey.get(key))
-              .filter((f): f is Favorite => !!f);
-            const orderedSet = new Set(orderedKeys);
-            const leftover = favorites.filter(
-              (f) =>
-                !orderedSet.has(favoriteEntityKey(f.entityType, f.entityId))
-            );
-            return [...ordered, ...leftover];
-          };
-          writeLists((prev) => ({
-            ...prev,
-            favorites: reorder(prev.favorites),
-          }));
-          return {
-            rollback: () => restoreLists(previous),
-          };
-        },
-        onError: (_error, _args, context) => {
-          context?.rollback();
-        },
-        onSettled: () => invalidateFavorites(),
-      },
-      callbacks
-    ),
-  }));
+  return createGraphqlReorderFavoritesMutation(callbacks);
 }

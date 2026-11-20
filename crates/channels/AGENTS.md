@@ -20,7 +20,8 @@ DMs, and the shared message store other domains discuss things on.
 - `src/outbound/pg_channels_repo.rs`, `src/outbound/connection_gateway_realtime.rs`:
   storage and realtime delivery adapters.
 - `src/outbound/channel_name.rs`: the viewer-dependent channel naming rule —
-  batch name resolution and the SQL name search behind `name_search`.
+  batch name resolution and the SQL name search behind `name_search`
+  (`src/outbound/channel_name/match_channel_names.sql`).
 
 ## Scope
 
@@ -49,8 +50,11 @@ DMs, and the shared message store other domains discuss things on.
 ## Tool contracts
 
 - `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
-  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `CalendarEvent.shareWithChannel`); both take `ChannelShareEntityType` from `domain/models.rs`.
+  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `shareWithChannel(channel)` on every shareable handle, through `packages/sdk/src/entities/channels/share.ts`); both take `ChannelShareEntityType` from `domain/models.rs`.
 - The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
+- `EditChannelMessage` and `DeleteChannelMessage` act as the tool's bot only on
+  a message that bot posted for the caller (`Message::posted_by_bot_for`), and
+  as the caller otherwise; see the receipt rule in `crates/messages/AGENTS.md`.
 
 ## Checks
 
@@ -64,13 +68,27 @@ DMs, and the shared message store other domains discuss things on.
   channel whose `team_id` matches their membership. Membership in a channel or
   the channel creator's team never grants deletion authority on its own. Both
   REST deletion and permanent entity deletion call this policy.
+  It reads the active members before the delete removes them, and
+  `channel.deleted` carries them so `soup_realtime` can drop the channel from
+  their open lists.
+
+- `match_channel_names.sql` starts from the viewer's memberships and looks
+  every channel, participant, person and bot up by key behind `OFFSET 0`
+  fences. Keep that shape: a generic plan estimates every viewer at a few
+  memberships, and the earlier CTE version then joined its matches back to the
+  viewer's channels in a nested loop, seconds for a viewer in thousands of
+  channels. Its plan test runs custom and generic plans.
 
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
+- A person's first top-level message with the default notification policy invites the channel's recipients who are not mentioned in it. In a DM or unnamed group chat (`ChannelMetadata::is_dm_or_group_chat`) that message creates the conversation, so those recipients with an account get the ordinary channel message notification instead, which counts as unread; only people without an account get the invite. Bot first messages and mentions-only posts never invite.
 - Channel access requests are separate from `crates/access_requests`: access is
   membership, and every participant reviews. Each attempt is its own row so a
   timeline entry keeps its outcome. Approval adds the member in the request's
   transaction, then dispatches `ParticipantsAdded`; the announcement reaches the
   timeline through `macro.channels` and the activity consumer.
+  The announcement stores the requester's profile name as it was when they asked
+  (`requester_name`, optional), so the timeline entry mounts at its final height;
+  the web app swaps in the current name once it loads.
   Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
   the request has been pending longer than a minute.
   Completing a resolved request's notification attempts every recipient before
@@ -111,3 +129,5 @@ DMs, and the shared message store other domains discuss things on.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - Capture agent correlation when spawning mutation side effects and restore it when team events create direct-message channels.
+
+- CRM attachment-reference lookups authorize the referenced company/contact/pipeline through the comment-parent access port before reading references; a missing adapter or denied target returns no references.

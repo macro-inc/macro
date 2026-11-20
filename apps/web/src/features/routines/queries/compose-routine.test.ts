@@ -3,7 +3,7 @@ import type {
   RoutineStep,
 } from '@service-scheduled-action/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateSteps } from '../core/routine-steps';
 import { composeRoutine, draftFromRoutine } from './compose-routine';
 import { draftToCreateBody } from './routine-draft';
@@ -54,6 +54,25 @@ const routine = (
 beforeEach(() => {
   draftRoutine.mockReset();
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+const DROPPED = { code: 'NETWORK_ERROR', message: 'Network error occurred' };
+/** How the desktop app's native transport reports a dropped connection. */
+const DROPPED_NATIVE = {
+  code: 'UNKNOWN_ERROR',
+  message: 'An unknown error occurred: error sending request for url',
+};
+
+/** Compose with the pause before a second attempt skipped. */
+async function composeWithoutWaiting(description: string) {
+  vi.useFakeTimers();
+  const composed = composeRoutine(description, context);
+  await vi.runAllTimersAsync();
+  return await composed;
+}
 
 describe('composeRoutine', () => {
   it('sends only the description and settings, never the workspace', async () => {
@@ -128,6 +147,54 @@ describe('composeRoutine', () => {
     expect(new Set([tooLarge, timedOut, generic]).size).toBe(3);
     expect(limited).toBe('You’ve used this month’s free AI.');
   });
+
+  it('sends the draft again when its connection drops, and opens that draft', async () => {
+    // The connection drops mid-draft, before the server answers.
+    draftRoutine
+      .mockResolvedValueOnce(err([DROPPED]))
+      .mockResolvedValueOnce(ok(routine()));
+
+    const draft = await composeWithoutWaiting(BUG_REPORTS);
+
+    expect(draftRoutine).toHaveBeenCalledTimes(2);
+    expect(draftRoutine.mock.calls[1]).toEqual(draftRoutine.mock.calls[0]);
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.name).toBe('Inbox triage');
+  });
+
+  it('says the connection was lost when the second attempt gets no answer either', async () => {
+    draftRoutine
+      .mockResolvedValueOnce(err([DROPPED_NATIVE]))
+      .mockResolvedValueOnce(err([DROPPED]));
+
+    expect(await composeWithoutWaiting(BUG_REPORTS)).toBe(
+      'Lost the connection while drafting. Check your connection and try again.'
+    );
+    expect(draftRoutine).toHaveBeenCalledTimes(2);
+  });
+
+  it('doesn’t send a draft again once nobody waits for it', async () => {
+    draftRoutine.mockResolvedValueOnce(err([DROPPED]));
+    vi.useFakeTimers();
+    const left = new AbortController();
+
+    const composed = composeRoutine(BUG_REPORTS, context, left.signal);
+    // The user leaves the dialog, then the connection drops.
+    left.abort();
+    await vi.runAllTimersAsync();
+    await composed;
+
+    expect(draftRoutine).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a draft the server answered only once', async () => {
+    draftRoutine.mockResolvedValueOnce(
+      err([{ code: 'TIMEOUT', message: 'Request timed out' }])
+    );
+
+    expect(await composeWithoutWaiting(BUG_REPORTS)).toMatch(/took too long/);
+    expect(draftRoutine).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('a drafted routine in the editor', () => {
@@ -143,6 +210,22 @@ describe('a drafted routine in the editor', () => {
     const draft = draftFromRoutine(routine({ created }), 'claude');
     if (typeof draft === 'string') throw new Error(draft);
     expect(draft.created).toEqual(created);
+  });
+
+  it('keeps the look AI picked, which creating the routine saves', () => {
+    const appearance = {
+      icon: { kind: 'macro', name: 'tag-simple' },
+      color: 'green',
+    } as const;
+    const draft = draftFromRoutine(routine({ appearance }), 'claude');
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.appearance).toEqual(appearance);
+    expect(draftToCreateBody(draft).appearance).toEqual(appearance);
+
+    const plain = draftFromRoutine(routine(), 'claude');
+    if (typeof plain === 'string') throw new Error(plain);
+    expect(plain.appearance).toBeUndefined();
+    expect(draftToCreateBody(plain)).not.toHaveProperty('appearance');
   });
 
   it('keeps a trigger limited to the items it names', () => {
@@ -177,6 +260,28 @@ describe('a drafted routine in the editor', () => {
     expect(draft.triggers?.[0]).toMatchObject({
       kind: 'schedule',
       frequency: 'day',
+    });
+  });
+
+  it('requires the apps a drafted Ask AI step uses, connected or not, and saves them', () => {
+    const linear = { app_slug: 'linear', server_name: 'Linear' };
+    const notion = { app_slug: 'notion', server_name: 'Notion' };
+    const draft = draftFromRoutine(
+      routine({
+        trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
+        steps: [
+          { type: 'agent', model: 'claude', instructions: 'File the bugs' },
+        ],
+        apps: [linear],
+        missingApps: [notion, linear],
+      }),
+      'claude'
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    // The review shows Notion unconnected; saving waits until it is.
+    expect(draft.apps).toEqual([linear, notion]);
+    expect(draftToCreateBody(draft).task).toMatchObject({
+      mcp_servers: [linear, notion],
     });
   });
 

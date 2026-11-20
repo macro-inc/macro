@@ -93,7 +93,7 @@ export interface HotkeyRegistrationOptions {
    * Keyboard shortcut keys, in the form of, e.g. 'j', 'cmd+j', or 'opt+shift+j'.
    * We use Mac modifier abbreviations (i.e. 'ctrl', 'opt', 'shift' and 'cmd').
    * Modifiers must be listed in this order: 'ctrl', 'opt', 'shift', 'cmd'.
-   * 'cmd' will be translated to 'ctrl' for non-Mac users. For this reason, you should not use both 'cmd' and 'ctrl' in your hotkeys.
+   * Avoid combining 'cmd' and 'ctrl' unless the binding is Mac-only with a separate non-Mac shortcut.
    * Can be a single hotkey or an array of hotkeys.
    */
   hotkey?: ValidHotkey | ValidHotkey[];
@@ -417,6 +417,7 @@ export type ValidHotkey =
   | 'cmd'
   | 'ctrl+opt'
   | 'ctrl+shift'
+  | 'ctrl+cmd'
   | 'opt+shift'
   | 'opt+cmd'
   | 'shift+cmd'
@@ -425,6 +426,7 @@ export type ValidHotkey =
   | `ctrl+${BaseKeyboardValue}`
   | `ctrl+opt+${BaseKeyboardValue}`
   | `ctrl+shift+${BaseKeyboardValue}`
+  | `ctrl+cmd+${BaseKeyboardValue}`
   | `opt+${BaseKeyboardValue}`
   | `opt+shift+${BaseKeyboardValue}`
   | `opt+cmd+${BaseKeyboardValue}`

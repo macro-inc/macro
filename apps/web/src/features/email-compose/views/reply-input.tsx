@@ -22,9 +22,11 @@ import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
+  children,
   createResource,
   createSignal,
   For,
+  type JSX,
   onMount,
   Show,
 } from 'solid-js';
@@ -77,11 +79,14 @@ type ReplyInputViewProps = Omit<
   | 'hasPaidAccess'
   | 'recordMention'
   | 'focusAfterReplyRequest'
+  | 'initialSavedDraftId'
 > & {
   context: EmailComposeContext;
   onReloadDraft?: () => void;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   unframed?: boolean;
+  /** The host's own footer for the desktop reply's card, under the composer. */
+  footer?: JSX.Element;
   mobileCompose?: {
     portalMount: Accessor<HTMLDivElement | undefined>;
     onClose: () => void;
@@ -95,6 +100,12 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     () => read && initialId,
     async (id) => await read!(id)
   );
+  const initialSavedDraftId = () => {
+    const initial = saved();
+    return initial?.persistence === 'committed'
+      ? initial.draft?.db_id
+      : undefined;
+  };
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
@@ -122,6 +133,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         <LoadedReplyInputView
           {...props}
           draft={saved()?.draft ?? props.draft}
+          initialSavedDraftId={initialSavedDraftId()}
           localDraft={saved()?.local}
           localAttachments={saved()?.attachments}
           preloadedHtml={restoredHtml()}
@@ -131,8 +143,11 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   );
 }
 
-function LoadedReplyInputView(props: ReplyInputViewProps) {
+function LoadedReplyInputView(
+  props: ReplyInputViewProps & Pick<ReplyComposerOptions, 'initialSavedDraftId'>
+) {
   const composeContext = props.context;
+  const footer = children(() => props.footer);
   const ctx = props.session;
   const [isDragging, setIsDragging] = createSignal<boolean>();
   let composeContainerRef: HTMLDivElement | undefined;
@@ -158,6 +173,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       replyingTo: props.replyingTo,
       isEditingExisting: props.isEditingExisting,
       draft: props.draft,
+      initialSavedDraftId: props.initialSavedDraftId,
       localDraft: props.localDraft,
       localAttachments: props.localAttachments,
       preloadedHtml: props.preloadedHtml,
@@ -222,10 +238,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
   const quoteToggleLabel = () =>
     `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
-  const signatureHtml = () =>
-    composeContext.presentation.signaturesEnabled()
-      ? state.signatureHtml()
-      : undefined;
+  const signatureHtml = () => state.signatureHtml();
   const writtenText = createWrittenText(editor);
   const createEvent = () => {
     const recipients = form.recipients();
@@ -539,6 +552,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           props.unframed ? { 'background-color': 'transparent' } : undefined
         }
         hideBorder={props.unframed}
+        // Full-screen mobile compose scrolls the whole surface, not the body.
+        data-composer-scroll={isMobileCompose() ? '' : undefined}
         ref={(el) => {
           composeContainerRef = el;
           if (isMobileCompose()) setScrollContainer(el);
@@ -650,6 +665,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           )}
         >
           <div
+            data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
               if (!isMobileCompose()) setScrollContainer(el);
             }}
@@ -819,7 +835,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
-                <Show when={composeContext.calendarEvents?.enabled()}>
+                <Show when={composeContext.calendarEvents}>
                   <CreateEventButton
                     suggested={proposesMeeting(writtenText())}
                     shortcut="b"
@@ -890,6 +906,12 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           onCheckStatus={checkScheduleStatus}
           class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
         />
+        {/* A send time takes the card's footer: the host's is hidden beside it. */}
+        <Show when={footer()}>
+          <div class="-mx-4 -mb-4 mt-3 border-t border-edge-muted [[data-testid=schedule-summary]+&]:hidden">
+            {footer()}
+          </div>
+        </Show>
       </Show>
     </>
   );

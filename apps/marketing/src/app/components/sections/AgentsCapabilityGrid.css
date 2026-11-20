@@ -14,7 +14,7 @@
 .agents-cap-schedule-control { padding: 24px; background: linear-gradient(125deg, #151619, #0c0d0f); border: 1px solid #ffffff16; border-radius: 18px; box-shadow: 0 12px 36px #0008; transform: rotate(-2deg); }
 .agents-cap-schedule-time { display: flex; align-items: center; gap: 12px; font-size: 19px; color: #d4d4d4; }
 .agents-cap-schedule-time > svg { width: 24px; height: 24px; color: var(--a0); }
-.agents-cap-schedule-time strong { font-size: 18px; font-weight: 400; margin-left: auto; }
+.agents-cap-schedule-time strong { font-size: 18px; font-weight: 370; margin-left: auto; }
 .agents-cap-days { display: flex; gap: 8px; margin-top: 21px; justify-content: space-between; }
 .agents-cap-days > span { flex: 1; max-width: 36px; height: 34px; display: grid; place-items: center; border-radius: 6px; color: #555; font-size: 13px; border: 1px solid #ffffff0c; }
 .agents-cap-days > .is-active { color: var(--a0); border-color: color-mix(in srgb, var(--a0) 26%, transparent); background: color-mix(in srgb, var(--a0) 8%, transparent); }

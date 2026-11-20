@@ -1,0 +1,56 @@
+.homepage-feature-links {
+  position: relative;
+  isolation: isolate;
+  width: min(448px, 100%);
+  margin: 0 auto 44px;
+  color: var(--color-ink);
+}
+.homepage-feature-links .ob-orbit-tile {
+  transform: translate(-50%, -50%);
+}
+@media (max-width: 699px) {
+  .homepage-feature-links { margin-bottom: 32px; }
+}
+
+/* A quieter version of the opening onboarding slide's accent and texture. */
+.homepage-constellation-wash {
+  --workspace-dots-opacity: .09;
+  --workspace-grain-opacity: .035;
+  position: absolute;
+  z-index: -1;
+  inset: -45px -120px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 45% 65% at 20% 42%, #cf977c26, transparent 80%), radial-gradient(ellipse 45% 65% at 80% 38%, #aa718d22, transparent 80%), radial-gradient(ellipse 55% 50% at 55% 85%, #baab701c, transparent 85%);
+  mask-image: radial-gradient(ellipse, #000 35%, transparent 76%);
+}
+
+.homepage-feature-links :is(.ob-orbit-tile, .ob-welcome-logo) {
+  --glass-rim-background: linear-gradient(135deg, #ffffff13, #ffffff04 55%, #ffffff09);
+  background: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  backdrop-filter: blur(16px) saturate(115%);
+  box-shadow: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .homepage-feature-links :is(.ob-orbit-tile, .ob-welcome-logo) {
+    background: color-mix(in srgb, var(--color-surface) 92%, var(--color-ink));
+    backdrop-filter: none;
+  }
+}
+
+.homepage-feature-links [data-context-scene] > svg { opacity: .75; }
+.homepage-feature-links [data-context-scene] > div:nth-child(1) { border-color: color-mix(in srgb, var(--color-ink) 2%, transparent); }
+.homepage-feature-links [data-context-scene] > div:nth-child(2) { border-color: color-mix(in srgb, var(--color-ink) 3%, transparent); }
+
+@media (min-width: 700px) {
+  .homepage-feature-links {
+    transform: scale(1.1);
+    transform-origin: top center;
+    margin-top: 20px;
+    /* Reserve the extra 28.8px of scaled height plus 10px more below. */
+    margin-bottom: 82.8px;
+  }
+}
+
+@media (min-width: 390px) and (max-width: 699px) {
+  .homepage-feature-links { margin-top: 40px; }
+}

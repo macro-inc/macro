@@ -524,6 +524,7 @@ fn the_openapi_document_names_every_operation_the_sdk_wraps() {
             "list_accessible_forms",
             "list_forms",
             "put_form_layout",
+            "set_form_appearance",
             "submit_form_response",
             "update_form",
             "update_form_permissions",
@@ -621,4 +622,36 @@ async fn collaboration_requires_edit_and_passes_the_receipt_to_the_service() {
         assert_eq!(response.status(), status);
     }
     assert_eq!(service.handed.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn appearance_requires_edit_and_forwards_the_saved_value() {
+    for (level, expected) in [
+        (AccessLevel::View, StatusCode::FORBIDDEN),
+        (AccessLevel::Edit, StatusCode::OK),
+        (AccessLevel::Owner, StatusCode::OK),
+    ] {
+        let (router, service) = router(Grants {
+            users: [(OWNER.to_string(), level)].into(),
+            public: None,
+        });
+        let response = router
+            .oneshot(request(
+                Method::PUT,
+                "/00000000-0000-0000-0000-0000000000f0/appearance",
+                Some("owner"),
+                Some(json!({"color": "blue"})),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        let handed = service.handed.lock().unwrap();
+        if expected == StatusCode::OK {
+            assert_eq!(handed.len(), 1);
+            assert_eq!(handed[0].call, "set_appearance");
+            assert_eq!(handed[0].entity_id, FORM.to_string());
+        } else {
+            assert!(handed.is_empty());
+        }
+    }
 }

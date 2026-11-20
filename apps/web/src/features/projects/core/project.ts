@@ -1,7 +1,9 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 /** User-facing project identity. It is an initiative, never a folder. */
 export type Project = {
   id: string;
   name: string;
+  appearance?: EntityAppearance | null;
   updatedAt: string;
   createdAt?: string;
   access?: ProjectAccess;
@@ -14,7 +16,8 @@ export type ProjectScope = 'all' | 'assigned-to-me' | 'created-by-me';
 export type ProjectAccess = 'view' | 'comment' | 'edit' | 'owner';
 
 /** What chips and previews may read; counts and membership stay on the project view. */
-export type ProjectIdentity = Pick<Project, 'id' | 'name'> & {
+export type ProjectIdentity = Pick<Project, 'id' | 'name' | 'appearance'> & {
+  ownerId: string;
   access: ProjectAccess;
 };
 
@@ -38,10 +41,40 @@ export type ProjectFilters = {
   descending?: boolean;
 };
 
+export type ProjectListGroupBy = 'none' | 'status' | 'priority' | 'assignee';
+
+/** Persisted presentation and editable filters, separate from search and scroll. */
+export type ProjectCollectionSettings = {
+  layout: 'list' | 'gantt';
+  status: string;
+  priority: string;
+  dueBefore: string;
+  dueAfter: string;
+  mine: boolean;
+  sort: NonNullable<ProjectFilters['sort']>;
+  groupBy: ProjectListGroupBy;
+};
+
+export const DEFAULT_PROJECT_SETTINGS: ProjectCollectionSettings = {
+  layout: 'list',
+  status: '',
+  priority: '',
+  dueBefore: '',
+  dueAfter: '',
+  mine: false,
+  sort: 'updated',
+  groupBy: 'status',
+};
+
 export type TaskProjectReference =
   | { state: 'none' }
   | { state: 'unavailable' }
-  | { state: 'visible'; id: string; name: string };
+  | {
+      state: 'visible';
+      id: string;
+      name: string;
+      appearance?: EntityAppearance | null;
+    };
 
 export const canEditProject = (project: Pick<Project, 'access'>) =>
   project.access === 'edit' || project.access === 'owner';

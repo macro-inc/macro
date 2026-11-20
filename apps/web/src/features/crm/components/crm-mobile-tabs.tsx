@@ -1,7 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
-import { enableCrmActivity } from '@core/constant/featureFlags';
 import type { JSX } from 'solid-js';
 import {
   CRM_ACTIVITY_TABS,
@@ -16,12 +14,8 @@ export function CrmMobileTabs(props: {
   leading?: JSX.Element;
   onNavigate(id: string): void;
 }) {
-  const activityFlag = useFeatureFlag(enableCrmActivity);
   const items = (): PillTabItem[] => [
-    ...[
-      ...CRM_RECORDS,
-      ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
-    ].map((record) => ({
+    ...[...CRM_RECORDS, ...CRM_ACTIVITY_TABS].map((record) => ({
       value: record.id,
       label: record.label,
     })),
@@ -39,7 +33,7 @@ export function CrmMobileTabs(props: {
     <nav aria-label={t('crm.viewsNavigation')} class="flex h-10 min-w-0 flex-1">
       <PillTabs
         scrollable
-        class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+        class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
         contentClass="px-(--mobile-chrome-gutter)"
         leading={props.leading}
         items={items()}

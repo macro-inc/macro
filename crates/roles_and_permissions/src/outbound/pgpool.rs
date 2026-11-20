@@ -5,17 +5,12 @@ mod test;
 
 use std::collections::HashSet;
 
-use macro_user_id::{
-    cowlike::CowLike,
-    email::{Email, ReadEmailParts},
-    lowercased::Lowercase,
-    user_id::MacroUserIdStr,
-};
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 use crate::domain::{
     model::{Permission, PermissionId, RoleId, UserRolesAndPermissionsError},
-    port::{UserRepository, UserRolesAndPermissionsRepository},
+    port::UserRolesAndPermissionsRepository,
 };
 
 /// The MacroDB struct is a wrapper around sqlx::PgPool connected to macrodb.
@@ -29,25 +24,6 @@ impl MacroDB {
     /// Create a new instance of MacroDB
     pub fn new(pool: PgPool) -> MacroDB {
         MacroDB { pool }
-    }
-
-    /// Get the user id from the email
-    async fn get_user_id_from_email<'a>(
-        &self,
-        email: &Email<Lowercase<'a>>,
-    ) -> Result<MacroUserIdStr<'a>, anyhow::Error> {
-        let email: &str = email.email_str();
-        let user_id = sqlx::query!(
-            r#"
-                SELECT id FROM "User" WHERE email = $1
-            "#,
-            email
-        )
-        .map(|row| row.id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(MacroUserIdStr::parse_from_str(user_id.as_str()).map(|id| id.into_owned())?)
     }
 
     /// Add roles to the user
@@ -196,18 +172,5 @@ impl UserRolesAndPermissionsRepository for MacroDB {
         role_ids: &[RoleId],
     ) -> Result<(), UserRolesAndPermissionsError> {
         self.remove_roles_from_user(user_id, role_ids).await
-    }
-}
-
-impl UserRepository for MacroDB {
-    /// Get the user id by email
-    async fn get_user_id_by_email(
-        &self,
-        email: &Email<Lowercase<'_>>,
-    ) -> Result<MacroUserIdStr<'_>, UserRolesAndPermissionsError> {
-        self.get_user_id_from_email(email)
-            .await
-            .map(|id| id.into_owned())
-            .map_err(UserRolesAndPermissionsError::from)
     }
 }

@@ -28,6 +28,13 @@ composer imports the URL matcher from this package; do not duplicate it.
 
 ## Gotchas
 
+GitHub comment and PR bodies go through `normalizeGithubMarkdown`
+(`utils/github-markdown.ts`) before import: it rewrites GitHub's raw HTML into
+Markdown and keeps `<details>` for `transformers/details.ts`. `DetailsNode` is
+registered only in `StaticRenderNodeTypes` (read-only renderers); the details
+transformer is in every set but does nothing in an editor without the node, so
+editors and services keep `<details>` as text.
+
 Human user mention Markdown requires only a nonempty string `userId`; the importer
 derives a missing email from `macro|` IDs so web name lookup and clipboard round
 trips can resolve the user. Other identities still need an email or display name.
@@ -39,9 +46,21 @@ as models sometimes write it, a bare ISO date or timestamp;
 
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
-literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
+literal URLs; escapes of `*`, `_`, `` ` `` and `~` alone don't make a URL
+literal, because Lexical's export adds them to unlinked URL text (see
+`README.md`). Keep unlink state through both Markdown and Lexical JSON saves.
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
+
+A link's URL comes from saved content: check it with `isAllowedLinkUrl`
+(`utils/link-url.ts`) before it becomes a link node, an anchor, or a call to
+open it. Build transformer sets from `STANDARD_TRANSFORMERS`, never Lexical's
+`TRANSFORMERS` (its `LINK` keeps any URL; see `README.md`).
+
+Table cells import and export through their own transformer sets in
+`transformers/tables.ts`. Keep their chip entries matching the paragraph sets
+(`EXTERNAL_TRANSFORMERS` order for export), or a table drops chips a paragraph
+keeps.
 
 An image under a list item is a child of that `ListItemNode`. Lexical runs
 element transformers only on top-level nodes, so `listItemImage` exports it as

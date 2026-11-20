@@ -4,13 +4,16 @@ use crate::domain::catalog::CatalogEntry;
 use crate::domain::code_check::CodeCheckError;
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
+use crate::domain::drafts::jobs::DraftJobError;
 use crate::domain::event_trigger::ActionTrigger;
+use crate::domain::knob_entities::UnusableKnob;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, CreatedItem, InProgressExecution, ListedAction, OwnerNotUserError,
-    RoutineCheck, Schedule, ScheduledAction,
+    AlreadyRunningError, CreatedItem, CreatedRoutine, InProgressExecution, ListScope, ListedAction,
+    ListedRun, OwnerNotUserError, Requester, RoutineCheck, RunCaller, Schedule, ScheduledAction,
+    SubRoutineKey,
 };
-use crate::domain::ports::ScheduledActionService;
+use crate::domain::ports::{SavedAction, ScheduledActionService};
 use crate::domain::target_validation::TargetValidationError;
 use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
@@ -20,6 +23,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
+use bots::domain::models::AgentMcpServer;
 use chrono_tz::Tz;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -27,11 +31,12 @@ use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOnly, UserOrInternal,
+    UserOnly, UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, is_program_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
+use model_entity::EntityAppearance;
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -95,6 +100,11 @@ pub struct CheckRoutineRequest {
     /// the database it writes to; kept with its draft for the person to see.
     #[serde(default)]
     pub created: Vec<CreatedItem>,
+    /// Apps a routine draft's session found the routine needs that its owner
+    /// hasn't connected, for the person to connect before saving. The routine
+    /// itself requires only connected ones.
+    #[serde(default)]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -108,6 +118,34 @@ pub struct ListActionsQuery {
     /// Backend clients must opt in to event actions; defaults to false (cron-only).
     #[param(default = false)]
     pub include_events: Option<bool>,
+    /// Also list active sub-routines, the routines other routines' runs
+    /// created, without finished one-time ones; defaults to false (top-level
+    /// routines only).
+    #[param(default = false)]
+    pub include_children: Option<bool>,
+    /// List only this routine's sub-routines: the active ones and its newest
+    /// 200 finished one-time ones.
+    #[param(value_type = Option<String>, format = Uuid)]
+    pub parent: Option<Uuid>,
+}
+
+/// A finished run, with the routines it created.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ExecutionRecordResponse {
+    #[serde(flatten)]
+    pub record: ActionExecutionRecord,
+    /// The sub-routines this run created that still follow the routine.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub created: Vec<CreatedRoutine>,
+}
+
+impl From<ListedRun> for ExecutionRecordResponse {
+    fn from(run: ListedRun) -> Self {
+        Self {
+            record: run.record,
+            created: run.created,
+        }
+    }
 }
 
 pub struct ScheduledActionRouterState<S, Svc, Auth> {
@@ -179,8 +217,16 @@ where
                 .delete(delete_action::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/{id}/appearance",
+            put(set_appearance::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/{id}/enabled",
             put(set_action_enabled::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/detach",
+            post(detach_action::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/execute",
@@ -193,6 +239,10 @@ where
         .route(
             "/scheduled-actions/{id}/code-upgrades",
             get(list_code_upgrades::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/unusable-items",
+            get(list_unusable_items::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/check",
@@ -265,6 +315,10 @@ pub struct CreateActionQuery {
     /// The routine suggestion it is saved from, recorded on the routine.
     #[param(value_type = Option<String>, format = Uuid)]
     pub suggestion_id: Option<Uuid>,
+    /// A name for a routine a routine's run creates: the same key under the
+    /// same parent updates that sub-routine instead of adding another.
+    /// Rejected outside a routine's run.
+    pub key: Option<String>,
 }
 
 #[utoipa::path(
@@ -295,15 +349,18 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let Json(CheckRoutineRequest { routine, created }) =
-        body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let Json(CheckRoutineRequest {
+        routine,
+        created,
+        missing_apps,
+    }) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     // The code-mode invocation the credential names, already validated
     // against its session at the router's boundary.
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
             .service
-            .check_action(&principal, routine, created, correlation)
+            .check_action(&principal, routine, created, missing_apps, correlation)
             .await?,
     ))
 }
@@ -317,15 +374,25 @@ where
     request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
+        (status = 200, body = ScheduledActionResponse, description = "The sub-routine its key already named, updated"),
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 409, body = String, description = "The routine already has the most active sub-routines it can"),
         (status = 500, body = String),
     )
 )]
+/// Create a routine. A create made by a routine's run, from its code step
+/// or its Ask AI step's session, makes that routine's sub-routine: the
+/// caller's credential says so, never the body.
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     Query(query): Query<CreateActionQuery>,
     body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
@@ -339,10 +406,42 @@ where
         Some(suggestion_id) => {
             state
                 .service
-                .create_action_from_suggestion(&principal, req, suggestion_id)
+                .create_action_from_suggestion(
+                    &principal,
+                    req,
+                    suggestion_id,
+                    requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+                )
                 .await?
         }
-        None => state.service.create_action(&principal, req).await?,
+        None => {
+            // Both come from the request's verified credential: the routine
+            // a code step's token is signed for, and the code-mode
+            // invocation of an agent session.
+            let caller = RunCaller {
+                routine: agent_correlation::context::current_routine(),
+                correlation: agent_correlation::context::current(),
+                requester: requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+            };
+            let key = query
+                .key
+                .as_deref()
+                .map(SubRoutineKey::new)
+                .transpose()
+                .map_err(anyhow::Error::from)?;
+            let saved = state
+                .service
+                .create_action_from(&principal, req, caller, key)
+                .await?;
+            let status = match saved {
+                SavedAction::Created(_) => StatusCode::CREATED,
+                SavedAction::Updated(_) => StatusCode::OK,
+            };
+            return Ok((
+                status,
+                Json(ScheduledActionResponse::from(saved.into_action())),
+            ));
+        }
     };
     Ok((
         StatusCode::CREATED,
@@ -377,6 +476,11 @@ where
         .get_actions(
             user.authorization.user.macro_user_id.clone(),
             query.include_events.unwrap_or(false),
+            match (query.parent, query.include_children.unwrap_or(false)) {
+                (Some(parent), _) => ListScope::ChildrenOf(parent),
+                (None, true) => ListScope::WithChildren,
+                (None, false) => ListScope::TopLevel,
+            },
         )
         .await?;
     Ok(Json(
@@ -402,15 +506,17 @@ where
 )]
 pub async fn get_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(id): Path<Uuid>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
 ) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
 where
     S: ScheduledActionService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let action = state.service.get_action(id).await?;
+    let action = state.service.get_action(&entity_access_receipt).await?;
     Ok(Json(action.into()))
 }
 
@@ -436,6 +542,11 @@ pub async fn update_action<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     body: Result<Json<ActionConfigurationUpdate>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -446,9 +557,62 @@ where
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let updated = state
         .service
-        .update_action(entity_access_receipt, req)
+        .update_action(
+            entity_access_receipt,
+            req,
+            requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+        )
         .await?;
     Ok(Json(ScheduledActionResponse::from(updated)))
+}
+
+/// A person in the app, or a program acting for them: an agent's or a
+/// routine's run (signed claims or the code-execution mark), a bot, or an
+/// internal service.
+pub(crate) fn requester(
+    user: Option<&UserOrInternalAuthorization>,
+    headers: &axum::http::HeaderMap,
+) -> Requester {
+    match user {
+        Some(user)
+            if matches!(user.caller, UserOrInternalCaller::User)
+                && !is_program_run(user.user.attribution(), headers) =>
+        {
+            Requester::Person
+        }
+        Some(_) | None => Requester::Program,
+    }
+}
+
+#[utoipa::path(
+    put,
+    path = "/scheduled-actions/{id}/appearance",
+    tag = "scheduled actions",
+    operation_id = "set_scheduled_action_appearance",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    request_body = EntityAppearance,
+    responses((status = 200, body = EntityAppearance), (status = 400), (status = 401), (status = 404)),
+)]
+pub async fn set_appearance<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+    body: Result<Json<EntityAppearance>, JsonRejection>,
+) -> Result<Json<EntityAppearance>, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(appearance) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    Ok(Json(
+        state
+            .service
+            .set_appearance(entity_access_receipt, appearance)
+            .await?,
+    ))
 }
 
 #[utoipa::path(
@@ -473,6 +637,11 @@ pub async fn set_action_enabled<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
     body: Result<Json<SetScheduledActionEnabled>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -483,7 +652,11 @@ where
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let action = state
         .service
-        .set_enabled(entity_access_receipt, req.enabled)
+        .set_enabled(
+            entity_access_receipt,
+            req.enabled,
+            requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+        )
         .await?;
     Ok(Json(ScheduledActionResponse::from(action)))
 }
@@ -515,6 +688,38 @@ where
 {
     state.service.delete_action(entity_access_receipt).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/{id}/detach",
+    tag = "scheduled actions",
+    operation_id = "detach_scheduled_action",
+    params(("id" = String, Path, description = "ID of the sub-routine")),
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 400, body = String, description = "Not a sub-routine"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Keep a sub-routine as the owner's own routine: it moves to the main list
+/// and no longer follows the routine whose run created it.
+pub async fn detach_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let action = state.service.detach_action(entity_access_receipt).await?;
+    Ok(Json(ScheduledActionResponse::from(action)))
 }
 
 #[utoipa::path(
@@ -560,7 +765,7 @@ where
     operation_id = "list_scheduled_action_history",
     params(("id" = String, Path, description = "ID of the scheduled action")),
     responses(
-        (status = 200, body = Vec<ActionExecutionRecord>),
+        (status = 200, body = Vec<ExecutionRecordResponse>),
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 500, body = String),
@@ -582,7 +787,12 @@ where
         .service
         .get_execution_records(entity_access_receipt)
         .await?;
-    Ok(Json(records))
+    Ok(Json(
+        records
+            .into_iter()
+            .map(ExecutionRecordResponse::from)
+            .collect::<Vec<_>>(),
+    ))
 }
 
 #[utoipa::path(
@@ -615,6 +825,38 @@ where
         .get_code_upgrades(entity_access_receipt)
         .await?;
     Ok(Json(upgrades))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}/unusable-items",
+    tag = "scheduled actions",
+    operation_id = "list_scheduled_action_unusable_items",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = Vec<UnusableKnob>, description = "The routine's entity knobs whose item its owner can't use now: deleted, trashed, out of their reach, or not picked"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn list_unusable_items<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let knobs = state
+        .service
+        .get_unusable_knobs(entity_access_receipt)
+        .await?;
+    Ok(Json(knobs))
 }
 
 /// Which zone the catalog's schedules are written in.
@@ -682,18 +924,33 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
-                ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
-                ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,
+                ActionPolicyError::UpdateConflict
+                | ActionPolicyError::TooManySubRoutines
+                | ActionPolicyError::UnreviewedRewrite => StatusCode::CONFLICT,
+                ActionPolicyError::NotSuggesting | ActionPolicyError::OwnerIdentityNeedsPerson => {
+                    StatusCode::FORBIDDEN
+                }
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
+                | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked
-                | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::DescriptionTooLong
+                | ActionPolicyError::KeyOutsideRun
+                | ActionPolicyError::InvalidKey
+                | ActionPolicyError::NotSubRoutine => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }
         if let Some(draft) = error.downcast_ref::<InvalidDraft>() {
             return (StatusCode::BAD_REQUEST, draft.to_string()).into_response();
+        }
+        if let Some(job) = error.downcast_ref::<DraftJobError>() {
+            let status = match job {
+                DraftJobError::NotFound => StatusCode::NOT_FOUND,
+                DraftJobError::TooMany => StatusCode::CONFLICT,
+            };
+            return (status, job.to_string()).into_response();
         }
         if let Some(code) = error.downcast_ref::<CodeCheckError>() {
             let status = match code {
@@ -709,7 +966,9 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match validation {
                 TargetValidationError::InvalidTask
                 | TargetValidationError::InvalidProgram(_)
-                | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
+                | TargetValidationError::SessionsUnavailable
+                | TargetValidationError::UnusableItems(_)
+                | TargetValidationError::ItemsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired
                 | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,
@@ -729,7 +988,9 @@ impl IntoResponse for ScheduledActionApiError {
                 RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
                     (StatusCode::UNPROCESSABLE_ENTITY, session.to_string())
                 }
-                RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
+                RoutineSessionError::Conflict | RoutineSessionError::TeamAgentComputer => {
+                    (StatusCode::CONFLICT, session.to_string())
+                }
                 RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "agent service is unavailable".to_owned(),

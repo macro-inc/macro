@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AccessToken, EmailApiError, MailFolder, MailboxAccess, MailboxChangePage, MailboxMessage,
-    MailboxSubscription, MessageAction, MessageWriteReceipt, ProviderId, StreamToken,
+    MailboxSubscription, MessageAction, MessageWriteReceipt, ProviderId, RoundStart, StreamToken,
     SubmissionOutcome,
 };
 
@@ -103,12 +103,20 @@ pub trait MailboxContentReader: Send + Sync + 'static {
 
 /// Per-folder providers enumerate bounded pages for initial and incremental sync.
 pub trait FolderChangeReader: Send + Sync + 'static {
+    /// Revision of the folder delta request. Raise it with a change that lets
+    /// a fresh delta round list mail an older revision's round missed: each
+    /// folder stream records the revision its round started at, and a stream
+    /// whose round started at an older one is due a re-import.
+    const READER_REVISION: i16;
     /// Return one page. The caller must commit work atomically with its position.
+    /// Without a position the page is a new round's first, and `start` says
+    /// what the round lists; with one, the position carries it.
     fn folder_changes(
         &self,
         token: &AccessToken,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> impl Future<Output = Result<MailboxChangePage, EmailApiError>> + Send;
 }
 

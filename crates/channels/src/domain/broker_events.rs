@@ -83,6 +83,11 @@ pub struct ChannelDeletedMetadata {
     pub channel_id: Uuid,
     /// Actor that deleted the channel.
     pub actor: ChannelSender<'static>,
+    /// Active participants just before the delete. The channel and its
+    /// memberships are gone by the time this is consumed, so consumers that
+    /// tell members about the delete cannot look them up.
+    #[serde(default)]
+    pub participant_user_ids: Vec<MacroUserIdStr<'static>>,
 }
 
 /// The channel-only shape of a posted message.
@@ -156,6 +161,10 @@ pub struct ChannelAccessRequestedMetadata {
     pub request_id: Uuid,
     /// Person asking to join.
     pub requester_id: MacroUserIdStr<'static>,
+    /// The requester's profile name when they asked, if they had one. Absent
+    /// on events from before it was added.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester_name: Option<String>,
 }
 
 /// Events that can be published to [`MacroChannelsTopic`].

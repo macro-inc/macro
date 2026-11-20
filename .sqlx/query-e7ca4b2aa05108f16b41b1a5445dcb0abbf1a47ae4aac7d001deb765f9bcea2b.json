@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_entity SET draft_preview = $2 WHERE suggestion_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7ca4b2aa05108f16b41b1a5445dcb0abbf1a47ae4aac7d001deb765f9bcea2b"
+}

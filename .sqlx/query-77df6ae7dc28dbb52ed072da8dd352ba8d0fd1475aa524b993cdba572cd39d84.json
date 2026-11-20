@@ -1,0 +1,157 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the calls a viewer can see: live calls, archived calls, and\n-- imported calls, newest first.\n--\n-- $1 viewer, $2 page size, $3/$4 channel filter, $5/$6 call id filter,\n-- $7/$8 status filter, $9-$13 property clauses (see property_clauses.rs),\n-- $14 sort by start (else by last activity), $15/$16 keyset cursor.\n--\n-- The page starts from the viewer's grants on calls, so its cost follows the\n-- calls the viewer can see, not every call on the platform. Each flag\n-- parameter stands alone in its own condition, so a generic plan resolves it\n-- once per execution instead of filtering every row.\nWITH user_source_ids AS (\n    SELECT cp.channel_id::text AS source_id\n    FROM comms_channel_participants cp\n    WHERE cp.user_id = $1 AND cp.left_at IS NULL\n    UNION ALL\n    SELECT t.team_id::text AS source_id\n    FROM team_user t\n    WHERE t.user_id = $1\n    UNION ALL\n    SELECT $1 AS source_id\n),\n-- The calls a filter names: the call id filter's (CRM associations), or else\n-- the channel filter's channels' calls. Empty without either filter.\nnamed AS (\n    SELECT unnest($6::uuid[]) AS call_id\n    WHERE $5::bool\n    UNION ALL\n    SELECT cr.id FROM call_records cr\n    WHERE NOT $5::bool AND $3::bool AND cr.channel_id = ANY($4)\n    UNION ALL\n    SELECT c.id FROM calls c\n    WHERE NOT $5::bool AND $3::bool AND c.channel_id = ANY($4)\n    UNION ALL\n    SELECT ce.id FROM call_entities ce\n    WHERE NOT $5::bool AND $3::bool AND ce.channel_id = ANY($4) AND ce.created_via <> 'native'\n),\n-- Calls the viewer holds a grant on, and whether one of those grants is the\n-- viewer's own: standalone calls need it, so a team or channel grant can't\n-- add them. One arm runs. With a filter, read the named calls' grants and\n-- keep those from the viewer's sources; the sources are a jsonb object so\n-- each check is a key lookup that no join order can turn into a scan of\n-- every source per grant. Without one, read the grants the viewer's sources\n-- hold from the index alone, and the viewer's own user grants separately.\ngranted AS (\n    SELECT ea.entity_id AS call_id,\n           bool_or(ea.source_type = 'user' AND ea.source_id = $1) AS own_grant\n    FROM entity_access ea\n    WHERE ($5::bool OR $3::bool)\n      AND ea.entity_id = ANY(ARRAY(SELECT call_id FROM named))\n      AND ea.entity_type = 'call'\n      AND (SELECT jsonb_object_agg(source_id, true) FROM user_source_ids) ? ea.source_id\n    GROUP BY ea.entity_id\n    UNION ALL\n    SELECT g.entity_id, bool_or(g.own_grant)\n    FROM (\n        SELECT ea.entity_id, false AS own_grant\n        FROM entity_access ea\n        WHERE NOT ($5::bool OR $3::bool)\n          AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))\n          AND ea.entity_type = 'call'\n        UNION ALL\n        SELECT ea.entity_id, true\n        FROM entity_access ea\n        WHERE NOT ($5::bool OR $3::bool)\n          AND ea.source_id = $1\n          AND ea.entity_type = 'call'\n          AND ea.source_type = 'user'\n    ) g\n    GROUP BY g.entity_id\n),\n-- Each granted call's row: archived, live, or imported. The lateral join\n-- reads the tables by primary key once per granted call, so its cost follows\n-- the viewer's calls whatever the planner estimates for them. A call is in\n-- exactly one table (archiving moves the live row in one transaction, and\n-- imports get their own ids), so the first row found ends the lookup.\ncandidates AS (\n    SELECT x.*, g.own_grant\n    FROM granted g\n    CROSS JOIN LATERAL (\n        SELECT cr.id AS call_id, cr.channel_id, cr.room_name, cr.created_by,\n               cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id,\n               cr.recording_key, cr.preview_url, cr.recording_started_at,\n               NULL::uuid AS meeting_id, cr.custom_name, cr.summary,\n               NULL::bool AS share_with_team, cr.share_permission_id,\n               false AS is_active, false AS is_imported\n        FROM call_records cr\n        WHERE cr.id = g.call_id\n        UNION ALL\n        SELECT c.id, c.channel_id, c.room_name, c.created_by,\n               c.created_at, NULL::timestamptz, NULL::bigint, c.egress_id,\n               c.recording_key, c.preview_url, c.recording_started_at,\n               c.meeting_id, NULL::text, NULL::text,\n               c.share_with_team, c.share_permission_id,\n               true, false\n        FROM calls c\n        WHERE c.id = g.call_id\n        UNION ALL\n        -- Imported calls (e.g. Granola) exist only as call entities; native\n        -- calls are mirrored there too, so exclude them.\n        SELECT ce.id, ce.channel_id, NULL::text, ce.user_id,\n               COALESCE(ce.started_at, ce.created_at), ce.ended_at, ce.duration_ms,\n               NULL::text, NULL::text, NULL::text, NULL::timestamptz,\n               NULL::uuid, ce.title, NULL::text,\n               NULL::bool, ce.share_permission_id,\n               false, true\n        FROM call_entities ce\n        WHERE ce.id = g.call_id AND ce.created_via <> 'native'\n        LIMIT 1\n    ) x\n),\n-- Every visible call in page order. The fence keeps the status probes below\n-- out of this scan, so they run only for the rows the page reads.\nsorted AS (\n    SELECT candidates.*,\n           CASE WHEN $14 THEN started_at ELSE COALESCE(ended_at, started_at) END AS sort_at\n    FROM candidates\n    WHERE (channel_id IS NOT NULL OR own_grant)\n      AND ($3::bool IS FALSE OR channel_id = ANY($4))\n      -- Soup's keyset: calls sort by start, or by last activity.\n      AND (\n          $15::timestamptz IS NULL\n          OR (\n              CASE WHEN $14 THEN started_at ELSE COALESCE(ended_at, started_at) END,\n              call_id::text\n          ) < ($15, $16::text)\n      )\n      -- Property conditions in conjunctive normal form: every clause needs a\n      -- term the call satisfies. Tags (no definition) match any property\n      -- value; entity references match their definition's value.\n      AND NOT EXISTS (\n          SELECT 1\n          FROM generate_series(0, $9::int - 1) AS clause(idx)\n          WHERE NOT EXISTS (\n              SELECT 1\n              FROM UNNEST($10::int[], $11::bool[], $12::uuid[], $13::text[])\n                  AS term(clause_idx, negated, definition_id, value)\n              WHERE term.clause_idx = clause.idx\n                AND term.negated <> EXISTS (\n                    SELECT 1 FROM entity_properties ep\n                    WHERE ep.entity_id = candidates.call_id::text\n                      AND ep.entity_type = 'CALL_RECORD'\n                      AND jsonb_typeof(ep.values -> 'value') = 'array'\n                      AND CASE\n                          WHEN term.definition_id IS NULL\n                              THEN jsonb_exists(ep.values -> 'value', term.value)\n                          ELSE ep.property_definition_id = term.definition_id\n                              AND ep.values -> 'value' @> jsonb_build_array(\n                                  jsonb_build_object('entity_id', term.value)\n                              )\n                      END\n                )\n          )\n      )\n    ORDER BY sort_at DESC, call_id::text DESC\n    OFFSET 0\n),\n-- The viewer attended a call they joined (an import's importer attended\n-- it), missed a call in a channel they're in, and otherwise didn't attend.\nwith_status AS (\n    SELECT sorted.*,\n        CASE\n            WHEN is_imported THEN\n                CASE WHEN created_by = $1 THEN 'ATTENDED'::text ELSE 'UNATTENDED'::text END\n            WHEN is_active AND EXISTS (\n                SELECT 1 FROM call_participants cp\n                WHERE cp.call_id = sorted.call_id AND cp.user_id = $1\n            ) THEN 'ATTENDED'::text\n            WHEN NOT is_active AND EXISTS (\n                SELECT 1 FROM call_record_participants crp\n                WHERE crp.call_record_id = sorted.call_id AND crp.user_id = $1\n            ) THEN 'ATTENDED'::text\n            WHEN EXISTS (\n                SELECT 1 FROM comms_channel_participants ccp\n                WHERE ccp.channel_id = sorted.channel_id\n                  AND ccp.user_id = $1\n                  AND ccp.left_at IS NULL\n            ) THEN 'MISSED'::text\n            ELSE 'UNATTENDED'::text\n        END AS status\n    FROM sorted\n    OFFSET 0\n),\npage AS (\n    SELECT *\n    FROM with_status\n    WHERE ($7::bool IS FALSE OR status = ANY($8::text[]))\n    LIMIT $2\n)\nSELECT\n    p.call_id AS \"call_id!\",\n    p.channel_id AS \"channel_id?\",\n    p.room_name,\n    p.created_by AS \"created_by!\",\n    p.started_at AS \"started_at!\",\n    p.ended_at,\n    p.duration_ms,\n    p.egress_id,\n    p.recording_key,\n    p.preview_url,\n    p.recording_started_at,\n    CASE\n        WHEN p.is_active THEN (SELECT m.title FROM call_meetings m WHERE m.id = p.meeting_id)\n        ELSE p.custom_name\n    END AS custom_name,\n    CASE\n        WHEN p.is_imported THEN (\n            SELECT s.metadata ->> 'summary' FROM call_entity_sources s\n            WHERE s.call_id = p.call_id\n            ORDER BY s.synced_at DESC NULLS LAST\n            LIMIT 1\n        )\n        ELSE p.summary\n    END AS summary,\n    -- A live call carries its pending intent; afterwards the shared\n    -- permission's team level is the source of truth.\n    CASE\n        WHEN p.is_active THEN p.share_with_team\n        ELSE sp.team_share_access_level IS NOT NULL\n    END AS \"share_with_team!\",\n    sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\",\n    p.is_active AS \"is_active!\",\n    p.is_imported AS \"is_imported!\",\n    p.status AS \"status!\",\n    (SELECT d.discussion FROM call_entities d WHERE d.id = p.call_id) AS discussion\n-- The share permission is a required foreign key, so joining it after the\n-- limit drops no row the page counted.\nFROM page p\nJOIN \"SharePermission\" sp ON sp.id = p.share_permission_id\nORDER BY p.sort_at DESC, p.call_id::text DESC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "egress_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "preview_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "recording_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "custom_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "summary",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "share_with_team!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "team_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "is_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "is_imported!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 17,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "discussion",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Bool",
+        "UuidArray",
+        "Bool",
+        "UuidArray",
+        "Bool",
+        "TextArray",
+        "Int4",
+        "Int4Array",
+        "BoolArray",
+        "UuidArray",
+        "TextArray",
+        "Bool",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      true,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "77df6ae7dc28dbb52ed072da8dd352ba8d0fd1475aa524b993cdba572cd39d84"
+}

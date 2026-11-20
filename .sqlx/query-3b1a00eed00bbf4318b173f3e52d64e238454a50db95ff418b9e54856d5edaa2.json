@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_profile_picture p\n        WHERE p.account_id IN (SELECT a.id FROM whatsapp_linked_account a WHERE a.user_id = $1)\n          AND p.jid = ANY($2)\n          AND NOT EXISTS (\n            SELECT 1 FROM external_chat c\n            WHERE c.user_id = $1 AND c.provider = 'whatsapp' AND c.state <> 'detached'\n              AND (c.remote_id = p.jid\n                OR EXISTS (SELECT 1 FROM whatsapp_identity_alias y WHERE y.chat_id = c.id AND y.jid = p.jid)))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3b1a00eed00bbf4318b173f3e52d64e238454a50db95ff418b9e54856d5edaa2"
+}

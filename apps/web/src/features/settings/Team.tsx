@@ -1,4 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -6,6 +9,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -39,10 +43,30 @@ import {
   TeamInviteLinkSection,
 } from './TeamInviteLinkSection';
 import { isTeamAdminOrOwner } from './teamMemberPermissions';
+import { InviteAgentPanel } from './views/invite-agent-panel';
 
 const emailSchema = z.string().email();
 
 type InviteEntry = { email: string };
+
+/** Which flow the invite dialog opens: people by email, or an agent teammate. */
+export type InviteKind = 'people' | 'agent';
+
+/**
+ * Whether the viewer may invite an agent teammate: team admins and owners,
+ * with agent teammates on and, because adding one buys its computer, Macro
+ * computers too. A flag still loading counts as off.
+ */
+export function useCanInviteAgents(isAdminOrOwner: () => boolean) {
+  const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const computersFlag = useMacroComputersRollout();
+  return () =>
+    isAdminOrOwner() &&
+    !agentFlag().loading &&
+    agentFlag().enabled &&
+    !computersFlag().loading &&
+    computersFlag().enabled;
+}
 
 const EMPTY_INVITE: InviteEntry = { email: '' };
 
@@ -455,18 +479,26 @@ export function CreateTeamDialog(props: {
 }
 
 /**
- * Invite people to an existing team by email. After sending, a second step
- * asks the inviter to give the invitees a heads-up with the team's invite
- * link: an email from someone they expect is far more likely to be opened.
+ * Invite people to an existing team by email, or (`kind="agent"`) add an
+ * agent teammate. After sending people invites, a second step asks the
+ * inviter to give the invitees a heads-up with the team's invite link: an
+ * email from someone they expect is far more likely to be opened.
  */
 export function InviteToTeamDialog(props: {
   teamId: string;
   /** Team admins and owners may reset or turn off the invite link. */
   canManageLink: boolean;
+  /** The flow to open; people unless the caller asks for an agent. */
+  kind?: InviteKind;
+  /** Whether the viewer may add agents (`useCanInviteAgents`). */
+  canInviteAgents?: boolean;
   open: boolean;
   onClose: () => void;
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
+  // A rollout or role change that revokes agents falls back to people.
+  const kind = (): InviteKind =>
+    props.kind === 'agent' && props.canInviteAgents ? 'agent' : 'people';
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
@@ -530,7 +562,14 @@ export function InviteToTeamDialog(props: {
             <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-base font-medium p-0 m-0">
-            <Show when={sent()} fallback="Invite to Team">
+            <Show
+              when={sent()}
+              fallback={
+                kind() === 'agent'
+                  ? t('teamAgents.inviteTitle')
+                  : 'Invite to Team'
+              }
+            >
               Let them know it's coming
             </Show>
           </Dialog.Title>
@@ -545,7 +584,14 @@ export function InviteToTeamDialog(props: {
             />
           )}
         </Show>
-        <Show when={!sent()}>
+        <Show when={!sent() && kind() === 'agent'}>
+          <InviteAgentPanel
+            teamId={props.teamId}
+            onCancel={close}
+            onInvited={close}
+          />
+        </Show>
+        <Show when={!sent() && kind() === 'people'}>
           <Panel.Body>
             <div class="flex flex-col gap-5 px-5 py-5">
               <TeamInviteLinkSection

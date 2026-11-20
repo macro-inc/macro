@@ -169,26 +169,30 @@ export function createChannelMessageActions(
               });
             }
           : undefined,
-      onCopyLink: async () => {
+      onCopyLink: async ({ silent }) => {
         try {
           const parent = message.parent ?? options.parent();
           const url =
             options.buildLink?.(message) ??
             buildMessageLink(parent.id, message.id, message.thread_id);
           await effects.copyToClipboard(url);
-          effects.notifyCopyLinkSuccess();
+          if (!silent) effects.notifyCopyLinkSuccess();
+          return true;
         } catch (error) {
           effects.notifyCopyLinkFailure(error);
+          return false;
         }
       },
       onCopyMessageText:
         !isDeleted && message.content
-          ? async () => {
+          ? async ({ silent }) => {
               try {
                 await effects.copyToClipboard(message.content);
-                effects.notifyCopyMessageTextSuccess();
+                if (!silent) effects.notifyCopyMessageTextSuccess();
+                return true;
               } catch (error) {
                 effects.notifyCopyMessageTextFailure(error);
+                return false;
               }
             }
           : undefined,

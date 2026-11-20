@@ -9,13 +9,16 @@ jobs:
   build-image:
     name: Build observability image
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:

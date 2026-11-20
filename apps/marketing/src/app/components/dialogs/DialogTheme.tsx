@@ -1,6 +1,6 @@
+import IconX from '@icon/system/regular/x.svg';
 import { createSignal } from 'solid-js';
 import { isServer } from 'solid-js/web';
-import IconX from '../../../assets/icons/icon-x.svg';
 import { ThemeEditorBasic } from '../../../lib/theme/components/ThemeEditorBasic';
 import { ThemeList } from '../../../lib/theme/components/ThemeList';
 import { ThemeTools } from '../../../lib/theme/components/ThemeTools';

@@ -51,38 +51,29 @@ export class UserNamespace {
   }
 
   /**
-   * Find people in your existing Macro contacts by name or email, as in the
-   * mention picker. This is not a global directory. Returns every matching
-   * contact so callers can disambiguate; it never chooses a person for you.
+   * Find people by name or email among your Macro contacts and your team, as
+   * in the mention picker. Returns at most 20 people in one request, ranked
+   * teammates first, then names or addresses that start with the query. This
+   * is not a global directory, and it never chooses a person for you.
+   *
+   * @param query - A name or email, at least two characters; a shorter one
+   *   finds nobody.
    *
    * @readonly
    */
   async search(query: string): Promise<User[]> {
-    const term = query.trim().toLocaleLowerCase();
+    const term = query.trim();
     if (!term) throw new Error('A person search needs a name or email.');
-    const response = await this.client.contacts.getContacts();
-    // The contacts API represents an empty contact set with 404.
-    if (response.response?.status === 404) return [];
-    const { contacts } = unwrap(response);
-    const ids = [...new Set(contacts)];
-    const matches: User[] = [];
-    for (let offset = 0; offset < ids.length; offset += 100) {
-      const batch = ids.slice(offset, offset + 100);
-      const { names } = unwrap(
-        await this.client.auth.getUserNamesWithEmail({
-          body: { user_ids: batch },
-        }),
-      );
-      const byId = new Map(names.map((name) => [name.id, name]));
-      for (const id of batch) {
-        const entry = byId.get(id) ?? { id };
-        const name = [entry.first_name, entry.last_name]
-          .filter(Boolean)
-          .join(' ');
-        if (`${name} ${id}`.toLocaleLowerCase().includes(term))
-          matches.push(User.fromName(this.client, entry));
-      }
-    }
-    return matches;
+    const { people } = unwrap(
+      await this.client.contacts.searchPeople({ query: { query: term } }),
+    );
+    return people.map((person) =>
+      User.fromName(this.client, {
+        id: person.userId,
+        first_name: person.name ?? null,
+        last_name: null,
+        is_agent: person.isAgent,
+      }),
+    );
   }
 }

@@ -2,14 +2,8 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use email::domain::{
-    models::{GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
-    ports::EmailService,
-};
-use filter_ast::Expr;
-use item_filters::ast::email::EmailLiteral;
+use email::domain::ports::EmailThreadPreviewService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Query, SimpleSortMethod};
 use models_soup::email_thread::SoupEnrichedEmailThreadPreview;
 use uuid::Uuid;
 
@@ -61,7 +55,7 @@ impl EmailMutationThreadLoader {
 /// Adapter over the email writer's primary-backed domain service.
 struct PrimaryEmailReader<E>(Arc<E>);
 
-impl<E: EmailService> EmailMutationThreadReader for PrimaryEmailReader<E> {
+impl<E: EmailThreadPreviewService> EmailMutationThreadReader for PrimaryEmailReader<E> {
     async fn read(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -69,34 +63,17 @@ impl<E: EmailService> EmailMutationThreadReader for PrimaryEmailReader<E> {
     ) -> async_graphql::Result<Option<SoupEnrichedEmailThreadPreview<()>>> {
         // Ownership/delegation remains the email service's policy. Never load
         // an arbitrary thread by ID through a repository at this boundary.
-        let Some(link) = self
+        Ok(self
             .0
-            .get_owned_link_for_thread(user_id.clone(), thread_id)
+            .get_owned_email_thread_preview(user_id, thread_id)
             .await?
-        else {
-            return Ok(None);
-        };
-        let page = self
-            .0
-            .get_email_thread_previews(GetEmailsRequest {
-                view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
-                link_ids: vec![link.id],
-                macro_id: user_id,
-                limit: Some(1),
-                query: Query::Sort(
-                    SimpleSortMethod::UpdatedAt,
-                    Some(Arc::new(Expr::val(EmailLiteral::ThreadId(thread_id)))),
-                ),
-                include_frecency: false,
-                team_receipt: None,
-                crm_scope: None,
-            })
-            .await?;
-        Ok(page.items.into_iter().next().map(Into::into))
+            .map(Into::into))
     }
 }
 
 /// Build mutation replies from the primary email service, not the Soup reader.
-pub fn email_mutation_thread_loader<E: EmailService>(service: Arc<E>) -> EmailMutationThreadLoader {
+pub fn email_mutation_thread_loader<E: EmailThreadPreviewService>(
+    service: Arc<E>,
+) -> EmailMutationThreadLoader {
     EmailMutationThreadLoader::new(PrimaryEmailReader(service))
 }

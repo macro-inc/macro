@@ -86,6 +86,10 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                   - prod
                   - both
                 description: The environment to deploy to (both deploys dev, then prod)
+              preview_only:
+                type: boolean
+                default: false
+                description: Preview resource changes without publishing
         "#})?,
     );
     Ok(())
@@ -126,13 +130,12 @@ fn build_deploy() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("lfs", true))
+    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("lfs", true))
 }
 
 /// Without LFS content the site would publish pointer files as its videos.
@@ -190,7 +193,7 @@ fn pulumi_up() -> Step<Use> {
             "actions",
             "8e5e406f4007fca908480587cb9893c07090f58d",
         ) // v6
-        .add_with(("command", "up"))
+        .add_with(("command", "${{ inputs.preview_only && 'preview' || 'up' }}"))
         .add_with(("stack-name", format!("macro-inc/{ENVIRONMENT}")))
         .add_with(("work-dir", "./infra/stacks/website"))
         .add_env(Env::new("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))

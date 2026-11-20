@@ -1239,7 +1239,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(skip(self, team), err)]
+    #[tracing::instrument(skip(self, team, user_id), err)]
     async fn list_property_definitions_with_options(
         &self,
         team: Option<&TeamReceipt>,

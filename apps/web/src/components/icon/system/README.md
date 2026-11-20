@@ -2,9 +2,11 @@
 
 Original SVG drawings for Macro's interface. The source of truth is the SVG
 files in this directory. These drawings were authored on a blank coordinate
-grid; no Apple, OpenAI, Linear, or Phosphor vector paths were imported or traced.
-SF Symbols and ChatGPT were visual references for optical balance and clarity,
-not asset sources. The icons have no platform font or native symbol dependency.
+grid, except `regular/speaker-slash.svg`, which retains Phosphor's regular
+geometry and MIT notice for the recording mute state. No Apple, OpenAI, or
+Linear vector paths were imported or traced. SF Symbols and ChatGPT were visual
+references for optical balance and clarity, not asset sources. The icons have
+no platform font or native symbol dependency.
 
 Apple's design guidance informs optical balance, not asset reuse. Do not import,
 trace, or modify SF Symbols exports or templates for this cross-platform set.
@@ -61,6 +63,12 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
+Question glyphs share one letterform, following Phosphor's proportions: a wide,
+flat bowl with a short left terminal and stem, set slightly low. As in Phosphor,
+`question` is circled: the mark at 57% inside the `info` ring, leaving about 2
+units above the mark. `question-fill` cuts the same mark out of
+a 9.4-unit disc like the other circle fills, and `question-mark` draws it alone
+at full size.
 Urgent priority uses `priority-urgent-fill`, a filled rounded square with rounded
 exclamation-stem and dot cutouts. Its dedicated `priority-urgent` token maps to
 the theme's orange rather than warning or accent.
@@ -115,6 +123,53 @@ small counters open; the surrounding page retains the normal family weight.
 Settings navigation and its page controls use this same set, including the
 appearance, keyboard, usage, billing, runtime, integration, and developer icons.
 Inactive settings rows use muted ink; selection and hover supply emphasis.
+
+## Menu action icons
+
+Reuse these existing SVGs across header More menus, context menus, preview
+menus, and mobile action sheets. Import individual files rather than building
+a separate icon registry. Icons describe the action, not its containing view.
+
+| Action | Icon |
+| --- | --- |
+| Move to folder / Remove from folder | `regular/folder.svg` |
+| Rename | `regular/pencil-line.svg` |
+| Edit | `regular/pencil-simple.svg` |
+| Duplicate / Copy ID / Copy text or prompt | `regular/copy.svg` |
+| Copy link, including external links | `regular/link.svg` |
+| Copy branch name | `regular/git-branch.svg` |
+| Share | `../share.svg` |
+| Download | `regular/download-simple.svg` |
+| Delete / Trash | `regular/trash-simple.svg` |
+| Favorite / Unfavorite | `regular/star.svg` |
+| Change icon | `regular/paint-brush.svg` |
+| Add tag | `regular/tag.svg` |
+| Add to project | `regular/cube.svg` |
+| Open in new split | `regular/columns.svg` |
+| Open in new tab / Open externally | `regular/arrow-square-out.svg` |
+| Open in current split | `regular/arrow-right.svg` |
+| Open fullscreen | `regular/arrows-out.svg` |
+| Set status | `regular/task-in-progress.svg` (monochrome) |
+| Set priority | `../wide-priority-high.svg` (monochrome) |
+| Mark done | `regular/check-circle.svg` |
+| Mark not done | `regular/arrow-counter-clockwise.svg` |
+| Mark read | `regular/envelope-open.svg` |
+| Mark unread | `regular/envelope.svg` |
+| Mute notifications | `regular/bell-slash.svg` |
+| Unmute notifications / Remind me | `regular/bell-simple.svg` |
+| Sender to Signal | `regular/wave-sine.svg` |
+| Sender to Noise | `regular/waveform.svg` |
+| Block sender | `regular/prohibit.svg` |
+| Ask Macro / Chat with Agent | `regular/sparkle.svg` |
+
+Notification mute icons describe the offered action: use the slashed bell for
+Mute and the unslashed bell for Unmute. Keep mute-duration choices text-only.
+Copy actions replace their action icon with the shared plain green check after
+success; this feedback does not change the resting icon.
+
+Use the fixed In Progress and High glyphs for Set status and Set priority menu
+triggers in the inherited menu text color; keep selected values inside the
+pickers on their existing status and priority treatments.
 
 ## Optical review principles
 

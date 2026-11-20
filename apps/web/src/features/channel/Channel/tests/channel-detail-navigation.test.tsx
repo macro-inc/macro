@@ -38,7 +38,7 @@ vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
-  ChatWithAgentButton: () => null,
+  openChatWithAgent: vi.fn(),
 }));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({
   ChannelAttachmentsTab: () => null,
@@ -85,6 +85,9 @@ vi.mock('@components/app/GlobalAppState', () => ({
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
+}));
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 0, height: 0 }),
 }));
 vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
 vi.mock('@core/context/channels', () => ({

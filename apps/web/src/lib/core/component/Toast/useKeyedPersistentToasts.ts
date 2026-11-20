@@ -1,6 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
-import { type CustomToastConfig, toast } from './Toast';
+import { type CustomToastConfig, type ToastDismissStyle, toast } from './Toast';
 
 function readDismissed(storageKey: string): string[] {
   if (typeof localStorage === 'undefined') return [];
@@ -65,6 +65,16 @@ export function useKeyedPersistentToasts<T>(options: {
    * for a set that is synchronously derived.
    */
   itemsLoaded?: Accessor<boolean>;
+  /**
+   * How an item's toast offers to close: by default a Dismiss button beside
+   * its actions, or `'icon'` for a corner close button.
+   */
+  dismissStyle?: (item: T) => ToastDismissStyle | undefined;
+  /**
+   * Runs when the person closes an item's toast themselves, not when it is
+   * torn down for them; e.g. to discard what a failure toast reported.
+   */
+  onUserDismiss?: (item: T) => void;
 }): void {
   /**
    * A shown toast. Tracked by object identity rather than by key alone: a
@@ -135,6 +145,7 @@ export function useKeyedPersistentToasts<T>(options: {
         // The prompt region caps how many of these are visible and queues
         // the rest, so every eligible item gets its toast created eagerly.
         region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+        dismissStyle: options.dismissStyle?.(item),
         onDismiss: () => {
           // Only retract ourselves; the key may already hold a replacement.
           if (live.get(key) === entry) live.delete(key);
@@ -148,6 +159,7 @@ export function useKeyedPersistentToasts<T>(options: {
             persisted.add(key);
             writeDismissed(persistKey, persisted);
           }
+          options.onUserDismiss?.(item);
         },
       });
       live.set(key, entry);

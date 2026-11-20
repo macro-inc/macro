@@ -27,8 +27,11 @@ caller, so no tool is handwritten.
 ## Tags
 
 Every public SDK method carries exactly one of `@readonly`, `@write`
-(undoable change) or `@destructive` (deletes, overwrites, sends outside
-Macro, cancels), plus `@openworld` and `@idempotent` when true.
+(undoable change), `@send` (only sends something new outside Macro, such as
+an email; a call that can also edit or delete is `@destructive`; its
+own `<entity>_send` tool, not destructive, always open-world) or
+`@destructive` (deletes, overwrites, cancels), plus `@openworld` and
+`@idempotent` when true.
 `@mcp-exclude <reason>` on a method or class leaves it out. Generation fails
 on an untagged method, a parameter JSON can't carry (callbacks, bytes,
 streams; optional ones are dropped), or a class with methods no operation
@@ -54,4 +57,11 @@ method signature or hint tag changes the snapshots: review the diff, then
   reduced to its class name so no authenticated client leaks.
 - Groups are code mode's entity directories
   (`packages/code-mode-sdk/scripts/catalog.ts`); a tool's description starts
-  with its entity's `@routing` sentence.
+  with its entity's `@routing` sentence. `GROUP_NAMES` in the generator
+  renames directories whose name says nothing as a tool name (`foreign` is
+  `linked_items`) and gives a few non-code-mode directories a group of their
+  own; anything left over lands in `core`, which should stay empty.
+- Descriptions are written for code mode: the generator rewrites
+  `` `macro.web` `` to `` the `web_*` tools ``, `` `macro.web.search` `` to the
+  operation and its tool, and drops `{@link}` markup. Write TSDoc for both
+  readers: no steering (`preferred`), no comparing Macro with other apps.

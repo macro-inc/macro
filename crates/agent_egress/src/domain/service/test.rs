@@ -1301,6 +1301,7 @@ fn prompted_by(prompter: Option<MacroUserIdStr<'static>>) -> StubSessions {
         kind: agent_session::domain::model::PrompterKind::User,
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: prompter,
+        client: None,
     });
     StubSessions(Ok(grant))
 }
@@ -1396,6 +1397,30 @@ async fn a_tool_call_in_a_turn_the_owner_prompted_goes_straight_through() {
     assert!(service.approvals.held.lock().unwrap().is_empty());
 }
 
+/// A program prompting for the owner acts with their access: its turn's
+/// calls run as the owner's own do, with nothing held.
+#[tokio::test]
+async fn a_tool_call_in_a_turn_a_program_prompted_for_the_owner_goes_straight_through() {
+    let StubSessions(Ok(mut grant)) = prompted_by(Some(owner())) else {
+        unreachable!("granting grants");
+    };
+    if let Some(prompter) = grant.prompter.as_mut() {
+        prompter.kind = agent_session::domain::model::PrompterKind::Program;
+    }
+    let service = gated(StubSessions(Ok(grant)), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}
+
 /// Somebody else's turn holds the call, already addressed and stamped with
 /// the owner's credential, and nothing reaches the upstream yet.
 #[tokio::test]
@@ -1455,6 +1480,57 @@ async fn a_tool_call_to_macros_own_server_is_held_under_its_name() {
         .expect("held");
     let held = service.approvals.held.lock().unwrap();
     assert_eq!((held[0].0.as_str(), held[0].1.as_str()), ("macro", "Macro"));
+}
+
+fn google_drive() -> EgressTarget {
+    EgressTarget::McpServer(McpDestination::Connected(
+        McpServerSlug::parse("google_drive").expect("slug"),
+    ))
+}
+
+/// A change to the owner's Drive waits for them even in their own turn.
+#[tokio::test]
+async fn a_drive_write_in_the_owners_own_turn_is_held_for_them() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            google_drive(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"trash_file","arguments":{"fileId":"f"}}}"#,
+            ),
+        )
+        .await
+        .expect("held");
+    assert_eq!(response.status(), StatusCode::IM_USED, "the hold answered");
+    assert!(!service.forward.was_called());
+    let held = service.approvals.held.lock().unwrap();
+    let [(slug, name, call, _)] = held.as_slice() else {
+        panic!("one call was held");
+    };
+    assert_eq!(
+        (slug.as_str(), name.as_str(), call.name.as_str()),
+        ("google_drive", "Google Drive", "trash_file")
+    );
+}
+
+/// Reading the owner's Drive in their own turn asks nobody.
+#[tokio::test]
+async fn a_drive_read_in_the_owners_own_turn_goes_straight_through() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            google_drive(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_files","arguments":{"query":"x"}}}"#,
+            ),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
 }
 
 /// Only `tools/call` runs anything; the handshake and listing still flow so
@@ -1558,3 +1634,4 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
 }
 
 mod actor;
+mod telemetry;

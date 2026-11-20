@@ -79,7 +79,7 @@ it('opens recent replies and coding sessions inside Home with their actual conte
     screen.getByRole('complementary', { name: 'Home navigation' })
   );
   fireEvent.click(
-    home.getByRole('button', { name: 'Teo replied in #engineers' })
+    home.getByRole('button', { name: 'Rahul Batra replied in #engineers' })
   );
   const log = within(screen.getByRole('log', { name: 'Channel engineers' }));
   expect(
@@ -110,7 +110,7 @@ it('clears a thread reply when switching to another conversation', () => {
     })[0]
   );
   expect(screen.getByRole('textbox', { name: 'Thread reply' })).toBeTruthy();
-  fireEvent.click(home.getByRole('button', { name: 'Julia' }));
+  fireEvent.click(home.getByRole('button', { name: 'Eric Hayes' }));
   expect(screen.queryByRole('textbox', { name: 'Thread reply' })).toBeNull();
   expect(screen.getByRole('log', { name: 'Channel dm-julia' })).toBeTruthy();
   expect(
@@ -136,8 +136,8 @@ it('keeps the populated Chat sidebar while opening documents and email in indepe
     view.getByRole('complementary', { name: 'Chat navigation' })
   );
   expect(nav.getByRole('button', { name: 'engineering' })).toBeTruthy();
-  expect(nav.getByRole('button', { name: 'Gabriel' })).toBeTruthy();
-  expect(nav.getByRole('button', { name: 'Valentina' })).toBeTruthy();
+  expect(nav.getByRole('button', { name: 'Wolf Mermelstein' })).toBeTruthy();
+  expect(nav.getByRole('button', { name: 'Austin Barron' })).toBeTruthy();
   fireEvent.click(view.getByRole('button', { name: CHANNEL_DOC }));
   expect(
     view.getByRole('textbox', { name: 'Document title' }).textContent
@@ -155,8 +155,8 @@ it('keeps the populated Chat sidebar while opening documents and email in indepe
     within(email).getByRole('button', { name: 'Close shared work' })
   );
   expect(view.container.querySelectorAll('.channel-work-item')).toHaveLength(1);
-  fireEvent.click(nav.getByRole('button', { name: 'Valentina' }));
-  expect(view.getByRole('log', { name: 'Channel dm-valentina' })).toBeTruthy();
+  fireEvent.click(nav.getByRole('button', { name: 'Austin Barron' }));
+  expect(view.getByRole('log', { name: 'Channel dm-austin' })).toBeTruthy();
   expect(view.getByText('looks much sharper, thanks')).toBeTruthy();
 });
 
@@ -180,9 +180,9 @@ it('supports Chat search, collapsible groups, and opening a thread from the side
   fireEvent.click(nav.getByRole('button', { name: 'Search conversations' }));
   fireEvent.input(
     nav.getByRole('searchbox', { name: 'Search channels and direct messages' }),
-    { target: { value: 'Gabriel' } }
+    { target: { value: 'Wolf' } }
   );
-  expect(nav.getByRole('button', { name: 'Gabriel' })).toBeTruthy();
+  expect(nav.getByRole('button', { name: 'Wolf Mermelstein' })).toBeTruthy();
   expect(nav.queryByRole('button', { name: 'engineering' })).toBeNull();
   fireEvent.click(nav.getByRole('button', { name: 'Close search' }));
   fireEvent.click(nav.getByRole('radio', { name: 'Threads' }));

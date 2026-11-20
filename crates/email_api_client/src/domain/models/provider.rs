@@ -100,6 +100,10 @@ pub struct MailFolder {
     pub role: FolderRole,
     /// Whether the folder has children that must also be enumerated.
     pub has_children: bool,
+    /// How many items the provider counted in the folder when it was last
+    /// listed, whether or not they have been imported yet.
+    #[serde(default)]
+    pub total_items: Option<u32>,
 }
 
 impl MailFolder {
@@ -227,6 +231,21 @@ pub struct MailboxChangePage {
     pub removed: Vec<ProviderId>,
     /// The continuation or committed checkpoint returned by the provider.
     pub position: StreamPosition,
+    /// The `FolderChangeReader::READER_REVISION` that read the page.
+    pub reader_revision: i16,
+}
+
+/// Which messages a folder's delta round lists, and in what order. Only a
+/// round's first request takes it: the provider carries it in the round's
+/// continuation and checkpoint links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundStart {
+    /// Every message in the folder, in the provider's order.
+    Unordered,
+    /// Every message in the folder, most recently received first.
+    NewestFirst,
+    /// Only messages received at or after this time.
+    ReceivedSince(DateTime<Utc>),
 }
 
 /// An opaque continuation/checkpoint which must be validated by its adapter.

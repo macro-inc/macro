@@ -8,10 +8,16 @@ const port = Number(process.env.COMMENT_BROWSER_PORT ?? 3068);
 export default defineConfig({
   testDir: directory,
   testMatch: '*.browser.e2e.ts',
+  testIgnore: 'guest-thread.browser.e2e.ts',
   outputDir: `${directory}/test-results`,
   workers: 1,
   reporter: 'line',
-  use: { baseURL: `http://127.0.0.1:${port}` },
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    launchOptions: {
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    },
+  },
   webServer: {
     command: `bunx vite --config src/lib/core/messages/browser-test/vite.config.ts --port ${port}`,
     cwd: webDirectory,

@@ -58,7 +58,7 @@
   .call-list-row { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: 'icon title time' '. meta meta' '. summary summary'; row-gap: 2px; padding: 8px 10px; }
   .call-list-channel, .call-list-people { display: none; }
   .call-list-meta { margin-left: 0; }
-  .call-list-summary { font-size: 12px; font-weight: 400; }
+  .call-list-summary { font-size: 12px; font-weight: 370; }
 }
 
 /* CallRecordingBody */
@@ -90,7 +90,7 @@
 .call-player-button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; }
 .call-player-button:hover { background: rgb(255 255 255 / .12); }
 .call-player-button > svg { width: 18px; height: 18px; }
-.call-player-time { font: 400 13px/1 Inter, sans-serif; font-variant-numeric: tabular-nums; }
+.call-player-time { font: 370 13px/1 Inter, sans-serif; font-variant-numeric: tabular-nums; }
 .call-player-icons { display: flex; align-items: center; gap: 16px; margin-left: auto; padding-right: 6px; }
 .call-player-icons > svg { width: 18px; height: 18px; }
 

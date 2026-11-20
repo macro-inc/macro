@@ -14,7 +14,7 @@ use macro_uuid::Uuid;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
@@ -50,6 +50,11 @@ macro_env_var::env_vars!(
     /// The authentication service's internal key for billing settlement and
     /// linked GitHub token lookups.
     pub struct AuthenticationServiceSecretKey;
+    /// LiveKit project key the speech gateway signs inference-only tokens
+    /// with.
+    pub struct LivekitApiKey;
+    /// LiveKit project secret; never leaves the speech gateway.
+    pub struct LivekitApiSecret;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -157,6 +162,20 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Optional physical fleet selection; absence attaches no computer fleet.
+    pub computers_fleet: Option<ComputerFleetKind>,
+    /// Dev only: comma-separated Macro user ids that get computers without the
+    /// PostHog flag. Refused in production.
+    pub computers_rollout_allowlist: Option<String>,
+    /// Days a Macro computer whose billing ended keeps its disk before it is
+    /// destroyed; the timers the fleet operator fires use it. The same value
+    /// authentication_service reads.
+    #[macro_config_default(14)]
+    pub computer_retention_days: u32,
+    /// Days a Macro computer keeps running on a past-due subscription before
+    /// it is turned off.
+    #[macro_config_default(7)]
+    pub computer_past_due_grace_days: u32,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -187,6 +206,10 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
+    /// LiveKit project key for agent call speech.
+    pub livekit_api_key: LivekitApiKey,
+    /// LiveKit project secret for agent call speech.
+    pub livekit_api_secret: LivekitApiSecret,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -243,6 +266,13 @@ pub struct Config {
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
+    /// Directory holding agent teammates' bare repos: the EFS volume every
+    /// replica mounts in AWS, a compose volume locally. Must exist.
+    pub repo_storage_root: std::path::PathBuf,
+    /// Pushes to an agent repo are refused once it reaches this size.
+    pub max_repo_size_bytes: u64,
+    /// Push budget per agent repo, shared by every replica.
+    pub pushes_per_minute: u32,
     /// Port the sandbox-facing egress proxy is served on.
     ///
     /// The shared gateway forwards `/agent-harness-egress/*` to this listener.
@@ -405,4 +435,161 @@ macro_env_var::maybe_env_vars! {
     pub struct FusionauthPublicUrl;
     /// Optional public MCP OAuth configuration.
     pub struct McpAllowedRedirectHosts;
+}
+
+/// Explicit selection shared by startup and Doppler validation.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerFleetKind {
+    /// Firecracker hosts, one per `hosted_runtime_host` row with a connection.
+    Firecracker,
+    /// The local Docker daemon; local stacks only.
+    Docker,
+    /// Retired: Incus hosts are gone. A control plane still configured for
+    /// them attaches no fleet, as with `COMPUTERS_FLEET` unset.
+    // TODO: remove once COMPUTERS_FLEET=incus and the COMPUTERS_INCUS_* keys
+    // are deleted from Doppler dev/prd.
+    Incus,
+}
+
+/// Required settings for the selected fleet; unselected groups are not loaded.
+pub enum ComputerFleetConfig {
+    Firecracker(FirecrackerFleetSettings),
+    Docker(DockerFleetSettings),
+}
+
+/// Required Firecracker fleet configuration; each host's address and pinned
+/// certificate are on its `hosted_runtime_host` row.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct FirecrackerFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_image: String,
+    pub computers_agent_image: String,
+    pub computers_firecracker_client_cert: String,
+    pub computers_firecracker_client_key: String,
+}
+
+impl FirecrackerFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
+            (
+                "COMPUTERS_FIRECRACKER_CLIENT_CERT",
+                self.computers_firecracker_client_cert.as_str(),
+            ),
+            (
+                "COMPUTERS_FIRECRACKER_CLIENT_KEY",
+                self.computers_firecracker_client_key.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Config {
+    /// Docker fleets are local infrastructure, never a deployed fallback.
+    pub fn validate_fleet_selection(&self) -> macro_config::MacroConfigResult<()> {
+        if matches!(self.computers_fleet, Some(ComputerFleetKind::Docker))
+            && !matches!(self.environment, Environment::Local)
+        {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_FLEET=docker is only available in local environments".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The computers rollout allowlist; refused in production.
+    pub fn computer_rollout_allowlist(
+        &self,
+    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::rollout::RolloutAllowlist> {
+        hosted_runtimes::outbound::rollout_allowlist::configured(
+            self.computers_rollout_allowlist.as_deref(),
+            self.environment,
+        )
+        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
+    }
+
+    /// Macro computers' retention and past-due grace.
+    pub fn computer_billing_policy(
+        &self,
+    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::lifecycle::BillingPolicy> {
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(
+            self.computer_retention_days,
+            self.computer_past_due_grace_days,
+        )
+        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
+    }
+
+    /// Load only the required settings for the explicitly selected fleet.
+    pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<Option<ComputerFleetConfig>> {
+        self.validate_fleet_selection()?;
+        match self.computers_fleet {
+            Some(ComputerFleetKind::Firecracker) => {
+                let settings: FirecrackerFleetSettings = macro_config::load()?;
+                settings.validate()?;
+                Ok(Some(ComputerFleetConfig::Firecracker(settings)))
+            }
+            Some(ComputerFleetKind::Incus) => {
+                tracing::error!("COMPUTERS_FLEET=incus is retired; no computer fleet is attached");
+                Ok(None)
+            }
+            Some(ComputerFleetKind::Docker) => {
+                let settings: DockerFleetSettings = macro_config::load()?;
+                settings.validate()?;
+                Ok(Some(ComputerFleetConfig::Docker(settings)))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+/// Required Docker fleet configuration.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct DockerFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_host_name: String,
+    pub computers_image: String,
+    pub computers_agent_image: String,
+    pub computers_docker_network: String,
+    pub computers_docker_enrollment_dir: String,
+    pub computers_docker_memory_gb: u32,
+}
+
+impl DockerFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
+            (
+                "COMPUTERS_DOCKER_NETWORK",
+                self.computers_docker_network.as_str(),
+            ),
+            (
+                "COMPUTERS_DOCKER_ENROLLMENT_DIR",
+                self.computers_docker_enrollment_dir.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        Ok(())
+    }
 }

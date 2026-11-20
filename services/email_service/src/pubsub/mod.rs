@@ -1,9 +1,4 @@
 pub mod backfill;
-pub mod context;
-pub mod invitation_extraction;
-/// The homepage-backed CRM metadata resolver, re-exported for the
-/// pubsub_workers binary to construct.
-pub use context::CrmMetadataResolver;
 pub mod crm_cleanup;
 pub mod gmail_ops;
 pub mod inbox_sync;

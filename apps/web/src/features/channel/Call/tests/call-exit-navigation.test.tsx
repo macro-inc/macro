@@ -6,6 +6,7 @@ import { ChannelCallTab } from '../ChannelCallTab';
 
 const state = vi.hoisted(() => ({
   navigate: vi.fn(),
+  discussionAccess: vi.fn(),
   leave: async (): Promise<{ callEnded: boolean }> => ({ callEnded: false }),
 }));
 vi.mock('@solidjs/router', () => ({
@@ -25,10 +26,26 @@ vi.mock('../use-call', () => ({
 }));
 vi.mock('../ActiveCallLink', () => ({ ActiveCallLink: () => null }));
 vi.mock('../CallOverlay', () => ({
-  CallOverlay: (props: { onLeave: () => Promise<void> }) => (
-    <button type="button" onClick={props.onLeave}>
-      Leave call
-    </button>
+  CallOverlay: (props: {
+    onLeave: () => Promise<void>;
+    discussion: {
+      render: (panel: {
+        open: boolean;
+        focusOnOpen: boolean;
+        onClose: () => void;
+      }) => Element;
+    };
+  }) => (
+    <>
+      {props.discussion.render({
+        open: true,
+        focusOnOpen: false,
+        onClose: () => undefined,
+      })}
+      <button type="button" onClick={props.onLeave}>
+        Leave call
+      </button>
+    </>
   ),
 }));
 vi.mock('@queries/call/call', () => ({
@@ -37,7 +54,12 @@ vi.mock('@queries/call/call', () => ({
 vi.mock('@core/context/channels', () => ({
   useChannel: () => () => undefined,
 }));
-vi.mock('@channel/Call/discussion/CallDiscussionContent', () => ({}));
+vi.mock('../discussion/CallDiscussionContent', () => ({
+  CallDiscussionContent: (props: { access: { kind: string } }) => {
+    state.discussionAccess(props.access);
+    return null;
+  },
+}));
 vi.mock('@core/component/UserGroup', () => ({}));
 vi.mock('@core/user', () => ({}));
 
@@ -61,6 +83,7 @@ it.each([{ callEnded: true }, { callEnded: false }])(
         <ChannelCallTab channelId="channel-1" />
       </Show>
     ));
+    expect(state.discussionAccess).toHaveBeenCalledWith({ kind: 'member' });
     fireEvent.click(screen.getByRole('button', { name: 'Leave call' }));
     await leaving;
     await Promise.resolve();

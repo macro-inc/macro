@@ -7,7 +7,7 @@ use crate::local::instance::Instance;
 #[test]
 fn key_is_deterministic_and_port_free() {
     let instance = Instance::derive(None, None).unwrap();
-    crate::local::fusionauth::write_kickstart(&instance, None, None).unwrap();
+    crate::local::fusionauth::write_kickstart(&instance, None, None, None).unwrap();
 
     let a = Plan::compute(&instance).unwrap();
     let b = Plan::compute(&instance).unwrap();
@@ -15,7 +15,7 @@ fn key_is_deterministic_and_port_free() {
     assert_eq!(a.key.len(), 64, "sha256 hex");
 
     let other = Instance::derive(Some("snapshot-key-test"), None).unwrap();
-    crate::local::fusionauth::write_kickstart(&other, None, None).unwrap();
+    crate::local::fusionauth::write_kickstart(&other, None, None, None).unwrap();
     let c = Plan::compute(&other).unwrap();
     let _ = std::fs::remove_dir_all(other.artifact_dir());
     assert_eq!(
@@ -27,7 +27,7 @@ fn key_is_deterministic_and_port_free() {
 /// Any kickstart change other than the redirect URLs is a different init, so
 /// it must miss.
 #[test]
-fn kickstart_without_redirect_urls_keeps_everything_else() {
+fn kickstart_without_instance_urls_keeps_everything_else() {
     let doc = |urls: &[&str], lambda: &str| {
         crate::local::kickstart::build(
             urls.iter().map(|url| url.to_string()).collect(),
@@ -37,7 +37,7 @@ fn kickstart_without_redirect_urls_keeps_everything_else() {
             None,
         )
     };
-    let strip = crate::local::kickstart::without_redirect_urls;
+    let strip = crate::local::kickstart::without_instance_urls;
 
     assert_eq!(
         strip(doc(

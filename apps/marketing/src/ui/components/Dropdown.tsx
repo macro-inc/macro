@@ -1,5 +1,5 @@
+import CheckIcon from '@icon/system/regular/check.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM hosted_runtime_effect WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "feb67f957235f7cfd1e64271e7d600422bd9850d1a841a3239c9aa3bfc1e9fec"
+}

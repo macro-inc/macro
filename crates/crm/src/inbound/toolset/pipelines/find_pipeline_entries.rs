@@ -23,7 +23,7 @@ const MAX_LIMIT: u16 = 200;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "FindPipelineEntries",
-    description = "Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search` (in a generic pipeline, by any text field), or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like \"how many deals are in Negotiation\" or \"what is the pipeline worth\". To find where a company or contact is across all pipelines (\"what stage is Acme in?\"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines."
+    description = "Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search` (in a generic pipeline, by any text field), or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields. Each entry also has a separate `currencies` map from monetary field name (including renamed fields) to currency code: present every amount with its denomination. Also returns, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue, grouped by currency for monetary fields (never converted or combined across currencies): use these for questions like \"how many deals are in Negotiation\" or \"what is the pipeline worth\". To find where a company or contact is across all pipelines (\"what stage is Acme in?\"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines."
 )]
 pub struct FindPipelineEntries {
     /// The pipeline to read.
@@ -108,7 +108,10 @@ pub struct ToolOptionCounts {
 pub struct ToolTotal {
     /// The field.
     pub field: String,
-    /// The sum.
+    /// Currency code for a monetary field; different currencies have separate totals.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+    /// The sum in that currency.
     pub sum: f64,
 }
 
@@ -294,7 +297,11 @@ fn response(found: FoundEntries) -> FindPipelineEntriesResponse {
         totals: found
             .totals
             .into_iter()
-            .map(|(field, sum)| ToolTotal { field, sum })
+            .map(|total| ToolTotal {
+                field: total.field,
+                currency: total.currency,
+                sum: total.sum,
+            })
             .collect(),
         summary,
     }

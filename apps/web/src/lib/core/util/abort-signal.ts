@@ -1,3 +1,5 @@
+import { make, type Source } from 'wonka';
+
 // `AbortSignal.any` needs Safari 17.4, newer than the webview floor in
 // apps/web/package.json `browserslist`.
 
@@ -21,4 +23,25 @@ export function anyAbortSignal(signals: readonly AbortSignal[]): AbortSignal {
     });
   }
   return controller.signal;
+}
+
+/**
+ * Emits once the signal aborts. Racing an urql query against it unsubscribes
+ * the query's operation, which a later read with the same key would otherwise
+ * join and take its older answer from.
+ */
+export function abortedBy(signal: AbortSignal | undefined): Source<'aborted'> {
+  return make((observer) => {
+    if (!signal) return () => {};
+    const abort = () => {
+      observer.next('aborted');
+      observer.complete();
+    };
+    if (signal.aborted) {
+      abort();
+      return () => {};
+    }
+    signal.addEventListener('abort', abort, { once: true });
+    return () => signal.removeEventListener('abort', abort);
+  });
 }

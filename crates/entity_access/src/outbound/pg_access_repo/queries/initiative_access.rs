@@ -19,6 +19,10 @@ pub async fn get_initiative_access(
     initiative_id: &uuid::Uuid,
     source_ids: &SourceIds,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let levels: Vec<AccessLevel> = sqlx::query_scalar!(
         r#"
         WITH entity_access_grants AS (
@@ -57,8 +61,9 @@ pub async fn get_initiative_access(
         initiative_id,
         &source_ids.0,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(levels.into_iter().max())
 }

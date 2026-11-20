@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ExternalChatSenderPictureFileId } from './externalChatSenderPictureFileId';
 import type { ExternalChatSenderUserId } from './externalChatSenderUserId';
 
 /**
@@ -14,6 +15,9 @@ export interface ExternalChatSender {
   name: string;
   /** External person identity. */
   personId: string;
+  /** Their profile picture as the chat owner's account sees it: a static
+file id; `null` when hidden, unset or not fetched yet. */
+  pictureFileId?: ExternalChatSenderPictureFileId;
   /** Verified Macro user association, if present. */
   userId?: ExternalChatSenderUserId;
 }

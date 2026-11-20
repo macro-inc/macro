@@ -9,7 +9,7 @@ import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import type { EmailFormContextInputs } from '../context/email-form-inputs';
 import { decodeBase64Utf8 } from '../core/decode-base64';
-import { replySenderAddress } from '../core/email-sender';
+import { inboxAddresses, replySenderAddress } from '../core/email-sender';
 import { forwardedAttachments } from '../core/forwarded-attachments';
 import {
   convertContactInfoToEmailRecipient,
@@ -164,11 +164,9 @@ export function createEmailFormState(
   };
   const inboxEmail = () => senderEmail() ?? userEmail() ?? '';
   const ownAddresses = () =>
-    [
-      inboxEmail(),
-      sendingInbox()?.email_address,
-      ...(sendingInbox()?.sendAs ?? []).map((sender) => sender.email_address),
-    ].filter((address): address is string => !!address);
+    [inboxEmail(), ...inboxAddresses(sendingInbox())].filter(
+      (address) => !!address
+    );
   const [recipientsEdited, setRecipientsEdited] = createSignal(false);
 
   const decodedBody = (message?: EmailMessage) => {

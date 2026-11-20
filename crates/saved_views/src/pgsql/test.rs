@@ -21,6 +21,14 @@ struct FixtureTeam;
 impl MembershipPort for FixtureTeam {
     type Err = std::convert::Infallible;
 
+    async fn denied_view_kinds(
+        &self,
+        _: &str,
+        _: &HashSet<String>,
+    ) -> Result<HashSet<String>, Self::Err> {
+        Ok(HashSet::new())
+    }
+
     async fn viewer_teams(&self, _viewer: &str) -> Result<Vec<Uuid>, Self::Err> {
         Ok(vec![TEAM])
     }
@@ -90,7 +98,14 @@ async fn reorder_sets_list_order_and_leaves_others_after(pool: PgPool) {
     let third = uuid!("00000000-0000-7000-8000-000000000003");
     for (id, name) in [(first, "First"), (second, "Second"), (third, "Third")] {
         service
-            .create(OWNER, id, name.to_owned(), json!({ "kind": "email" }), None)
+            .create(
+                OWNER,
+                id,
+                name.to_owned(),
+                json!({ "kind": "email" }),
+                None,
+                None,
+            )
             .await
             .unwrap();
     }
@@ -128,7 +143,14 @@ async fn pagination_keeps_order_across_placed_and_unplaced_views(pool: PgPool) {
     let third = uuid!("00000000-0000-7000-8000-000000000003");
     for (id, name) in [(first, "First"), (second, "Second"), (third, "Third")] {
         service
-            .create(OWNER, id, name.to_owned(), json!({ "kind": "email" }), None)
+            .create(
+                OWNER,
+                id,
+                name.to_owned(),
+                json!({ "kind": "email" }),
+                None,
+                None,
+            )
             .await
             .unwrap();
     }
@@ -166,6 +188,7 @@ async fn viewer_order_of_shared_views_is_personal(pool: PgPool) {
             "Shared".to_owned(),
             json!({ "kind": "email" }),
             Some(TEAM),
+            None,
         )
         .await
         .unwrap();
@@ -175,6 +198,7 @@ async fn viewer_order_of_shared_views_is_personal(pool: PgPool) {
             own,
             "Own".to_owned(),
             json!({ "kind": "email" }),
+            None,
             None,
         )
         .await
@@ -207,6 +231,7 @@ async fn reorder_rejects_views_the_viewer_cannot_place(pool: PgPool) {
             "Private".to_owned(),
             json!({ "kind": "email" }),
             None,
+            None,
         )
         .await
         .unwrap();
@@ -217,6 +242,7 @@ async fn reorder_rejects_views_the_viewer_cannot_place(pool: PgPool) {
             "Tasks".to_owned(),
             json!({ "kind": "tasks" }),
             None,
+            None,
         )
         .await
         .unwrap();
@@ -226,6 +252,7 @@ async fn reorder_rejects_views_the_viewer_cannot_place(pool: PgPool) {
             own,
             "Own".to_owned(),
             json!({ "kind": "email" }),
+            None,
             None,
         )
         .await
@@ -255,6 +282,7 @@ async fn deleting_a_placed_view_removes_its_position(pool: PgPool) {
             placed,
             "Placed".to_owned(),
             json!({ "kind": "email" }),
+            None,
             None,
         )
         .await
@@ -287,6 +315,7 @@ async fn committed_writes_signal_their_kind_and_audience(pool: PgPool) {
             id,
             "Mine".to_owned(),
             json!({ "kind": "email" }),
+            None,
             None,
         )
         .await
@@ -329,6 +358,7 @@ async fn writes_that_change_nothing_send_no_signal(pool: PgPool) {
             "Mine".to_owned(),
             json!({ "kind": "email" }),
             None,
+            None,
         )
         .await
         .unwrap();
@@ -341,6 +371,7 @@ async fn writes_that_change_nothing_send_no_signal(pool: PgPool) {
             id,
             "Mine".to_owned(),
             json!({ "kind": "email" }),
+            None,
             None,
         )
         .await
@@ -368,4 +399,275 @@ async fn writes_that_change_nothing_send_no_signal(pool: PgPool) {
     service.delete(OWNER, id, created.revision).await.unwrap();
 
     assert_eq!(changes.take(), vec![]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn crm_configuration_access_is_rechecked_for_legacy_and_definition_routes(pool: PgPool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct FeatureAccess(Arc<AtomicBool>);
+    impl MembershipPort for FeatureAccess {
+        type Err = std::convert::Infallible;
+        async fn viewer_teams(&self, viewer: &str) -> Result<Vec<Uuid>, Self::Err> {
+            FixtureTeam.viewer_teams(viewer).await
+        }
+        async fn team_members(&self, team: Uuid) -> Result<HashSet<String>, Self::Err> {
+            FixtureTeam.team_members(team).await
+        }
+        async fn denied_view_kinds(
+            &self,
+            _: &str,
+            kinds: &HashSet<String>,
+        ) -> Result<HashSet<String>, Self::Err> {
+            Ok(kinds
+                .iter()
+                .filter(|kind| {
+                    !self.0.load(Ordering::Relaxed) && matches!(kind.as_str(), "crm" | "crm-list")
+                })
+                .cloned()
+                .collect())
+        }
+    }
+    let allowed = Arc::new(AtomicBool::new(true));
+    let service = SavedViewService::new(
+        PgViewStorage::new(pool),
+        FeatureAccess(allowed.clone()),
+        Recorder::default(),
+    );
+    let list = service
+        .legacy_create(
+            OWNER,
+            "Private collection".into(),
+            json!({"kind":"crm-list","teamId":TEAM,"companyIds":[]}),
+        )
+        .await
+        .unwrap();
+    let view = service
+        .create(
+            OWNER,
+            Uuid::now_v7(),
+            "Records view".into(),
+            json!({"kind":"crm"}),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    service
+        .legacy_create(OWNER, "Mail view".into(), json!({"kind":"email"}))
+        .await
+        .unwrap();
+    for enabled in [true, false, true] {
+        allowed.store(enabled, Ordering::Relaxed);
+        assert_eq!(service.get(OWNER, list.id).await.is_ok(), enabled);
+        assert_eq!(service.get(OWNER, view.id).await.is_ok(), enabled);
+        assert_eq!(
+            service
+                .list(OWNER, Some("crm"), None, 50)
+                .await
+                .unwrap()
+                .views
+                .len(),
+            usize::from(enabled)
+        );
+        assert_eq!(
+            service.legacy_list(OWNER).await.unwrap().len(),
+            if enabled { 3 } else { 1 }
+        );
+        assert_eq!(
+            service
+                .legacy_patch(OWNER, list.id, Some("Renamed collection"), None)
+                .await
+                .is_ok(),
+            enabled
+        );
+        if !enabled {
+            assert!(matches!(
+                service.delete(OWNER, view.id, view.revision).await,
+                Err(Error::NotFound)
+            ));
+            assert!(matches!(
+                service
+                    .legacy_create(OWNER, "Blocked".into(), json!({"kind":"crm-list"}))
+                    .await,
+                Err(Error::NotFound)
+            ));
+            assert!(matches!(
+                service
+                    .update(
+                        OWNER,
+                        view.id,
+                        view.revision,
+                        Update {
+                            name: Some("Blocked".into()),
+                            config: None,
+                            share: ShareChange::Unchanged
+                        }
+                    )
+                    .await,
+                Err(Error::NotFound)
+            ));
+        }
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn appearance_is_owner_only_and_does_not_change_filter_revision(pool: PgPool) {
+    let service = service(pool);
+    let id = Uuid::now_v7();
+    let created = service
+        .create(
+            OWNER,
+            id,
+            "Shared".into(),
+            json!({"kind":"email"}),
+            Some(TEAM),
+            None,
+        )
+        .await
+        .unwrap();
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "📚".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Blue),
+    };
+    assert!(matches!(
+        service.set_appearance(VIEWER, id, appearance.clone()).await,
+        Err(Error::NotFound)
+    ));
+    let saved = service
+        .set_appearance(OWNER, id, appearance.clone())
+        .await
+        .unwrap();
+    assert_eq!(saved.appearance.as_ref(), Some(&appearance));
+    assert_eq!(saved.revision, created.revision);
+    assert_eq!(saved.updated_at, created.updated_at);
+    assert_eq!(
+        service.get(VIEWER, id).await.unwrap().appearance.as_ref(),
+        Some(&appearance)
+    );
+    let updated = service
+        .update(
+            OWNER,
+            id,
+            created.revision,
+            Update {
+                name: Some("Renamed".into()),
+                config: None,
+                share: ShareChange::Unchanged,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.appearance.as_ref(), Some(&appearance));
+    assert_eq!(
+        service
+            .list(VIEWER, Some("email"), None, 50)
+            .await
+            .unwrap()
+            .views[0]
+            .appearance
+            .as_ref(),
+        Some(&appearance)
+    );
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "not-a-macro-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        service.set_appearance(OWNER, id, invalid).await,
+        Err(Error::Invalid)
+    ));
+    assert_eq!(
+        service.get(OWNER, id).await.unwrap().appearance.as_ref(),
+        Some(&appearance)
+    );
+    let reset = service
+        .set_appearance(OWNER, id, model_entity::EntityAppearance::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        reset.appearance.as_ref(),
+        Some(&model_entity::EntityAppearance::default())
+    );
+    assert_eq!(reset.revision, updated.revision);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("users"))
+)]
+async fn create_retry_preserves_first_appearance(pool: PgPool) {
+    let service = service(pool);
+    let id = Uuid::now_v7();
+    let first = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "📚".into()
+        }),
+        color: None,
+    };
+    let created = service
+        .create(
+            OWNER,
+            id,
+            "Original".into(),
+            json!({"kind":"email"}),
+            None,
+            Some(first.clone()),
+        )
+        .await
+        .unwrap();
+    let replay = service
+        .create(
+            OWNER,
+            id,
+            "Changed".into(),
+            json!({"kind":"tasks"}),
+            None,
+            Some(model_entity::EntityAppearance::default()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(replay.name, created.name);
+    assert_eq!(replay.appearance.as_ref(), Some(&first));
+    assert!(matches!(
+        service
+            .create(
+                VIEWER,
+                id,
+                "Other".into(),
+                json!({"kind":"email"}),
+                None,
+                None
+            )
+            .await,
+        Err(Error::NotFound)
+    ));
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "invalid".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        service
+            .create(
+                OWNER,
+                Uuid::now_v7(),
+                "Invalid".into(),
+                json!({"kind":"email"}),
+                None,
+                Some(invalid)
+            )
+            .await,
+        Err(Error::Invalid)
+    ));
 }

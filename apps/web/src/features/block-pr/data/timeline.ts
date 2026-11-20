@@ -1,7 +1,8 @@
 import type { DiscussionThread } from '@core/comments/discussion';
+import { normalizeGithubMarkdown } from '@macro-inc/lexical-core';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
 
-import { cleanGithubMarkdown, isGithubBotLogin } from '../util/githubMarkdown';
+import { isGithubBotLogin } from '../util/githubMarkdown';
 
 export type TimelineEntry =
   | {
@@ -76,7 +77,7 @@ export function buildTimeline(
       continue;
     }
     const [root, ...replies] = group
-      .map((item) => ({ ...item, body: cleanGithubMarkdown(item.body) }))
+      .map((item) => ({ ...item, body: normalizeGithubMarkdown(item.body) }))
       .filter((item) => item.body)
       .sort((a, b) => timestamp(a.createdAt) - timestamp(b.createdAt));
     if (!root) continue;

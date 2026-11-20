@@ -28,7 +28,7 @@ pub struct SearchToolContext {
 impl FromRef<ToolServiceContext> for SearchToolContext {
     fn from_ref(ctx: &ToolServiceContext) -> Self {
         // `usage_context.entity` is set to the chat id for the Chat feature
-        // (including subagents spawned from a chat, which inherit the feature).
+        // (including tools called from a chat, which inherit the feature).
         // Only treat it as a chat to exclude when the feature is actually Chat;
         // for other features the entity is some unrelated item.
         let self_chat_id = matches!(ctx.usage_context.feature, AiFeature::Chat)

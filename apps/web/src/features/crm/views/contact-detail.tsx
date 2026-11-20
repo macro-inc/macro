@@ -1,9 +1,11 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
+import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
@@ -51,10 +53,10 @@ export function Contact(props: ContactProps) {
 
 function ContactContent(props: ContactProps) {
   const context = useCrmContext();
-  const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
   usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
+  createOpenTracker('contact', () => contact()?.id);
   onCleanup(
     context.registerTaskComposerRecord(() => ({
       type: 'contact',
@@ -70,7 +72,7 @@ function ContactContent(props: ContactProps) {
       return {
         type: 'contact',
         id: current.id,
-        email: current.email,
+        emails: contactEmails(current),
         companyId: current.companyId,
       };
     },
@@ -93,12 +95,10 @@ function ContactContent(props: ContactProps) {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
-                <Show when={pipelinesEnabled()}>
-                  <context.PipelineEntries
-                    record={{ type: 'contact', id: props.contactId }}
-                    onOpenPipeline={props.onOpenPipeline}
-                  />
-                </Show>
+                <context.PipelineEntries
+                  record={{ type: 'contact', id: props.contactId }}
+                  onOpenPipeline={props.onOpenPipeline}
+                />
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>
             </Match>

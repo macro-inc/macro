@@ -1,11 +1,22 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import StarIcon from '@icon/system/regular/sparkle.svg';
+import { Tooltip } from '@ui/components/Tooltip';
 import type { JSX } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer, useToolError } from './ToolRenderer';
+
+/** What to call the delegated work: the first line of its instructions. */
+function subagentTitle(task: string): string {
+  return (
+    task
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) || 'Subagent'
+  );
+}
 
 const handler = createToolRenderer({
   name: 'Subagent',
@@ -14,11 +25,11 @@ const handler = createToolRenderer({
     const error = useToolError();
     const isLoading = () => !ctx.response && !error;
     const result = () => ctx.response?.data.result;
-    const hasResult = () => !!result();
     const statusText = () => {
-      if (isLoading()) return 'Working…';
-      if (error) return undefined;
-      return hasResult() ? 'Done' : 'No result';
+      if (isLoading()) return 'Running';
+      // The row already says Failed; this toggle still opens the brief.
+      if (error) return 'Instructions';
+      return result() ? 'Done' : 'No result';
     };
     const Icon = (props: JSX.SvgSVGAttributes<SVGSVGElement>) => (
       <Show
@@ -41,21 +52,45 @@ const handler = createToolRenderer({
         renderContext={ctx.renderContext}
         type="call"
         response={
-          hasResult() && isExpanded() ? (
-            <div class="max-h-120 overflow-y-auto text-xs">
-              <ChatMessageMarkdown text={result()!} generating={() => false} />
+          isExpanded() ? (
+            <div class="flex flex-col gap-2 text-xs">
+              <section class="flex flex-col gap-1">
+                <h4 class="text-ink-disabled">Instructions</h4>
+                <p class="max-h-40 overflow-y-auto overscroll-contain whitespace-pre-wrap wrap-break-word">
+                  {ctx.tool.data.task}
+                </p>
+              </section>
+              <Show when={result()}>
+                {(text) => (
+                  <section class="flex flex-col gap-1">
+                    <h4 class="text-ink-disabled">Result</h4>
+                    <div class="max-h-120 overflow-y-auto">
+                      <ChatMessageMarkdown
+                        text={text()}
+                        generating={() => false}
+                      />
+                    </div>
+                  </section>
+                )}
+              </Show>
             </div>
           ) : undefined
         }
       >
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
-          <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <span class="min-w-0 truncate">{ctx.tool.data.task}</span>
-          </div>
+          <Tooltip
+            label={subagentTitle(ctx.tool.data.task)}
+            as="span"
+            class="min-w-0 flex-1"
+          >
+            {/* The trigger is a flex box, whose own text never ellipsizes. */}
+            <span class="min-w-0 truncate">
+              {subagentTitle(ctx.tool.data.task)}
+            </span>
+          </Tooltip>
           <Tool.ResultToggle
             expanded={isExpanded()}
             onToggle={() => setIsExpanded((expanded) => !expanded)}
-            showToggle={hasResult()}
             status={statusText()}
           />
         </div>

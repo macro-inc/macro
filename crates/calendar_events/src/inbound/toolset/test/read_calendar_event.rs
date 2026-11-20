@@ -59,7 +59,7 @@ impl CalendarOccurrenceService for PreviewOccurrences {
         &self,
         _requester_id: &str,
     ) -> Result<Option<String>, rootcause::Report> {
-        unreachable!("reading an event resolves no time zone")
+        Ok(Some("America/New_York".to_string()))
     }
 
     async fn meeting_copies(
@@ -178,6 +178,32 @@ async fn a_channel_shared_event_reads_as_shared_with_its_join_state() {
             event_id: shared,
             occurrence_key: Some("2026-10-26T14:00:00+00:00".to_string()),
         }]
+    );
+}
+
+#[tokio::test]
+async fn an_event_states_its_weekdays_in_the_users_time_zone() {
+    let mut event = mention(Some(Uuid::from_u128(42)));
+    event.time = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 5, 5, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: Some("America/Phoenix".to_string()),
+    };
+
+    let (result, _) = read(
+        CalendarMentionPreview::Accessible(Box::new(event)),
+        serde_json::json!({ "eventId": Uuid::from_u128(43), "occurrenceKey": null }),
+    )
+    .await;
+
+    let read = result.unwrap();
+    assert_eq!(
+        read["startLocal"],
+        "Thursday, November 5, 2026, 12:00 AM America/New_York"
+    );
+    assert_eq!(
+        read["endLocal"],
+        "Tuesday, November 10, 2026, 12:00 AM America/New_York"
     );
 }
 

@@ -23,7 +23,6 @@ export {
 export { getDocumentCommentNotification } from './document-comment-notification';
 export {
   createEffectOnEntityTypeNotification,
-  entityHasUnreadNotifications,
   executeMarkNotificationsDone,
   executeMarkNotificationsUndone,
   isDocumentCommentNotification,
@@ -94,7 +93,6 @@ export {
   getThreadId,
   stackNotifications,
 } from './notification-stacking';
-export { fetchNotificationsForEntities } from './queries/entities-notifications-query';
 export { createMutedEntitiesQuery } from './queries/muted-entities-query';
 export type {
   CompositeEntity,
@@ -105,3 +103,4 @@ export {
   handleNotificationUpdate,
   useNotificationUpdates,
 } from './use-notification-updates';
+export { useOpenEntityNotifications } from './use-open-entity-notifications';

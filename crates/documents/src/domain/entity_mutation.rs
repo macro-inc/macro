@@ -35,7 +35,9 @@ impl From<DocumentError> for EntityMutationErrorCode {
             error @ (DocumentError::NotFound(_) | DocumentError::Gone) => {
                 Self::not_found(rootcause::report!(error))
             }
-            error @ DocumentError::Unauthorized => Self::forbidden(rootcause::report!(error)),
+            error @ (DocumentError::Unauthorized | DocumentError::Forbidden(_)) => {
+                Self::forbidden(rootcause::report!(error))
+            }
             error @ DocumentError::Conflict(_) => Self::conflict(rootcause::report!(error)),
             error @ (DocumentError::BadRequest(_) | DocumentError::NameTooLong { .. }) => {
                 Self::invalid(rootcause::report!(error))

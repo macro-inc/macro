@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' AND sync_generation = $2\n                AND grant_generation = $3 AND is_sync_active AND NOT needs_reauth FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7650646e21d11aca4d5d243b43872e03032e34ece8bd107663a131fa2ef8ace3"
+}

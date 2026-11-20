@@ -311,9 +311,19 @@ fn egress_error(error: EgressError) -> CodeModeError {
         EgressError::UnknownServer(_)
         | EgressError::UnknownCustomServer(_)
         | EgressError::Unroutable(_) => CodeModeError::NotFound,
+        EgressError::Upstream(_) => {
+            tracing::warn!(%error, "a connected app could not be reached");
+            CodeModeError::ConnectedAppUnreachable
+        }
+        EgressError::RateLimited { retry_after } => {
+            CodeModeError::ConnectedAppRateLimited { retry_after }
+        }
         error => {
             tracing::error!(%error, "a connected app could not be reached");
             CodeModeError::Unavailable
         }
     }
 }
+
+#[cfg(test)]
+mod test;

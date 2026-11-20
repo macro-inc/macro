@@ -60,7 +60,7 @@ function useAutoFocus(
 }
 
 export function useSearchInputFocus(
-  inputRef: () => HTMLInputElement | undefined,
+  inputRef: () => HTMLElement | undefined,
   shouldFocus: () => boolean = () => true
 ) {
   return useAutoFocus(inputRef, shouldFocus);

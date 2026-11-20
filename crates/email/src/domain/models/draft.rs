@@ -89,6 +89,11 @@ pub struct ResolvedDraftInput {
     pub thread_db_id: Uuid,
     /// Subject line of the draft.
     pub subject: String,
+    /// Display name of a send-as alias the draft is sent from. It overrides
+    /// the sender contact's name, which is shared and skipped for role
+    /// addresses such as `support@`. `None` uses the contact's name.
+    #[serde(default)]
+    pub from_name: Option<String>,
     /// To recipients.
     pub to: Vec<ContactInfo>,
     /// Cc recipients.

@@ -5,6 +5,17 @@ fn rendered() -> serde_yaml::Value {
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
 }
 
+/// The committed YAML of a workflow PR CI calls.
+fn called(call: &Call) -> serde_yaml::Value {
+    let path = format!(
+        "{}/../../../../.github/workflows/{}",
+        env!("CARGO_MANIFEST_DIR"),
+        call.file
+    );
+    serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
+        .expect("called workflow parses")
+}
+
 /// A called workflow the gate doesn't wait for could fail after the gate passed.
 #[test]
 fn the_gate_waits_for_start_and_every_call() {
@@ -26,12 +37,8 @@ fn the_gate_waits_for_start_and_every_call() {
 /// GitHub refuses to call a workflow without a `workflow_call` trigger.
 #[test]
 fn every_called_workflow_can_be_called() {
-    let workflows = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
     for call in CALLS {
-        let path = format!("{workflows}/{}", call.file);
-        let workflow: serde_yaml::Value =
-            serde_yaml::from_str(&std::fs::read_to_string(&path).expect("called workflow exists"))
-                .expect("called workflow parses");
+        let workflow = called(call);
         let triggers = &workflow["on"];
 
         assert!(
@@ -39,6 +46,65 @@ fn every_called_workflow_can_be_called() {
             "{} has no workflow_call trigger",
             call.file
         );
+    }
+}
+
+/// Without a limit GitHub lets a stalled job run for six hours, holding the gate.
+/// A job limit at or just above a step limit inside it would cut that step short.
+#[test]
+fn every_job_the_gate_waits_for_has_a_timeout() {
+    let workflows = std::iter::once(("pr-ci.yml", rendered()))
+        .chain(CALLS.iter().map(|call| (call.file, called(call))));
+
+    for (file, workflow) in workflows {
+        let jobs = workflow["jobs"].as_mapping().expect("jobs");
+        for (id, job) in jobs {
+            if job.get("uses").is_some() {
+                continue;
+            }
+            let id = id.as_str().unwrap_or_default();
+            let limit = job
+                .get("timeout-minutes")
+                .and_then(serde_yaml::Value::as_u64)
+                .unwrap_or_else(|| panic!("{file} job {id} has no numeric timeout-minutes"));
+            let longest_step = job["steps"]
+                .as_sequence()
+                .into_iter()
+                .flatten()
+                .filter_map(|step| step.get("timeout-minutes")?.as_u64())
+                .max()
+                .unwrap_or_default();
+            assert!(
+                limit >= longest_step + 5,
+                "{file} job {id} allows {limit} minutes, too little for its {longest_step}-minute step"
+            );
+        }
+    }
+}
+
+/// The gate reads each call's result, which fails or cancels when any of its
+/// jobs does, so the called workflows need no roll-up job of their own. A job
+/// that continues on error, or an always-run job, could hide a failed job from
+/// that result, and a roll-up costs every run a runner and a queue wait.
+#[test]
+fn every_called_job_reaches_the_gate() {
+    for call in CALLS {
+        let workflow = called(call);
+        let jobs = workflow["jobs"].as_mapping().expect("jobs");
+        for (id, job) in jobs {
+            let id = id.as_str().unwrap_or_default();
+            assert!(
+                job.get("continue-on-error").is_none(),
+                "{} job {id} continues on error, so the gate can't see it fail",
+                call.file
+            );
+            let condition = job.get("if").and_then(serde_yaml::Value::as_str);
+            assert!(
+                !condition.is_some_and(|condition| condition.contains("always()")),
+                "{} job {id} is a roll-up; the gate reads the call's result instead",
+                call.file
+            );
+        }
     }
 }
 
@@ -87,4 +153,59 @@ fn gate_script_scenarios() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+/// What a PR check reads from history is commits, trees and a few blobs, which
+/// git fetches on demand; fetching every blob of the full history took about
+/// 40 s per job.
+#[test]
+fn full_history_checkouts_fetch_no_blobs_up_front() {
+    for call in CALLS {
+        let workflow = called(call);
+        for (id, job) in workflow["jobs"].as_mapping().expect("jobs") {
+            let id = id.as_str().unwrap_or_default();
+            for step in job["steps"].as_sequence().into_iter().flatten() {
+                let with = &step["with"];
+                let full = with["fetch-depth"].as_str() == Some("0")
+                    || with["fetch-depth"].as_u64() == Some(0);
+                assert!(
+                    !full || with["filter"].as_str() == Some("blob:none"),
+                    "{} job {id} fetches every blob of the full history",
+                    call.file
+                );
+            }
+        }
+    }
+}
+
+/// A blobless full-history checkout is prepared right after it: Nix can't open
+/// a repository marked as a partial clone, and `biome --changed` must not need
+/// old blobs.
+#[test]
+fn blobless_history_is_prepared() {
+    for call in CALLS {
+        let workflow = called(call);
+        for (id, job) in workflow["jobs"].as_mapping().expect("jobs") {
+            let id = id.as_str().unwrap_or_default();
+            let steps: Vec<_> = job["steps"].as_sequence().into_iter().flatten().collect();
+            for (index, step) in steps.iter().enumerate() {
+                let with = &step["with"];
+                let full = with["fetch-depth"].as_str() == Some("0")
+                    || with["fetch-depth"].as_u64() == Some(0);
+                if !full || with["filter"].as_str().is_none() {
+                    continue;
+                }
+                let run = steps
+                    .get(index + 1)
+                    .and_then(|next| next["run"].as_str())
+                    .unwrap_or_default();
+                assert!(
+                    run.contains("git config --unset extensions.partialclone")
+                        && run.contains("git config diff.renames false"),
+                    "{} job {id} doesn't prepare its blobless checkout",
+                    call.file
+                );
+            }
+        }
+    }
 }

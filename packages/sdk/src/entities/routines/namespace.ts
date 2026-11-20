@@ -1,12 +1,20 @@
 import type {
   RoutineCheck,
+  RoutineSuggestionCard,
   SuggestOutcome,
   Surface,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
-import { Routine, type RoutineOptions, routineBody } from './routine';
+import {
+  appsBody,
+  Routine,
+  type RoutineApp,
+  type RoutineOptions,
+  routineBody,
+} from './routine';
+import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
 export interface CreatedEntity {
@@ -25,15 +33,18 @@ export interface CreatedEntity {
  * - "Remind me", "every Monday", "tomorrow at 9" and "whenever something happens" ask for a routine: work that runs later, as the user, after this conversation ends. A meeting with other people is a calendar event, not a routine.
  * - A routine's run never sees this conversation. Write its instructions to stand alone: what to do, the items involved by id or link, absolute dates, and where to report the result.
  * - Before creating one, look for a routine of the user's that already does this, and update it instead of adding a second.
+ * - A routine created by a routine's run, from its code or its Ask AI step, is that routine's sub-routine: it is listed under it, pauses and is deleted with it, and `list()` leaves it out unless asked. A routine has at most 50 active sub-routines (one-time ones that have run don't count); creating another is refused. When a run may create the same routine again, pass a `key` so the second create updates the first instead of adding a duplicate.
  *
  * ### Writing one
  *
  * - Find each item the request names (a channel, person, folder, project, label, tag, agent, database or document) with SDK search, as the user would, paging and refining the search until you find the item itself. The item is the one whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no item has that name, or several do, ask which one rather than guess.
- * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key. A code step uses an item by its id, in a knob.
- * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and use its id. Create nothing else.
+ * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key.
+ * - A code step uses each item it names (the channel it posts in, a person, a task, an email thread, a folder, a database) through an `entity` knob holding the same kind of reference, `{ type: 'entity', name: 'bugsChannel', label: 'Channel to post in', entity_types: ['channel'], value: { type: 'channel', entity: channel } }`, and its code reads it as that handle (`await knobs.bugsChannel.send(text)`), so the user can pick another item later: never a text knob with its name, and never an id in the code. Its `entity_types` lists the fewest kinds the request allows, usually one; a task is `{ type: 'task', entity: task }`.
+ * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and put its handle in the step's entity knob. Create nothing else.
  * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
  * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
  * - In code, check the whole routine with `macro.routines.check` before creating it, naming in `created` what you created for it, and fix what it reports until `ok` is true.
+ * - Only an Ask AI step reaches apps outside Macro (Linear, GitHub, Notion…); a code step never does. List in `apps` each one the step uses: a connected app from `macro.connectedApps.list(execution)` (`kind` `app`) as `{ slug: app.key, name: app.name }`. Saving refuses an app the user hasn't connected: tell them to connect it.
  *
  * Events an `events` trigger starts on (`EventName` lists every one):
  *
@@ -46,7 +57,8 @@ export interface CreatedEntity {
  * - `task.status_changed`: a task's status changes.
  * - `task.priority_changed`: a task's priority changes.
  * - `task.property_changed`: any property on a task changes, such as its assignees, due date, project or effort, including status and priority.
- * - `email.message_received`: new mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.
+ * - `email.message_received`: new mail arrives in any of your inboxes, yours or one
+ *   delegated to you. Excludes spam, trash, drafts and historical imports.
  * - `call.started`: a call you start begins. The routine gets the call and who has joined so far.
  * - `call.ended`: a call you joined ends. The routine gets the call's participants and transcript.
  */
@@ -59,11 +71,13 @@ export class RoutineNamespace {
   }
 
   /**
-   * Create a routine: one agent task (`prompt`, with `model`, `agent`, or
-   * both), or code and Ask AI `steps`. Set `dangerouslyOperateAsUser` only
-   * when the user explicitly asked for it to act, send or post as them. To
-   * check on something later, such as a spawned session or a long job, create
-   * a routine instead of waiting in a program. A cron `schedule` has 6 fields
+   * Create a routine from `steps`: code steps and at most one Ask AI
+   * (`agent`) step. The older single agent task (`prompt`, with `model`,
+   * `agent`, or both) still saves and runs as one Ask AI step; write new
+   * routines as steps. Set `dangerouslyOperateAsUser` only when the user
+   * explicitly asked for it to act, send or post as them. To check on
+   * something later, such as a spawned session or a long job, create a
+   * routine instead of waiting in a program. A cron `schedule` has 6 fields
    * (second minute hour day-of-month month day-of-week) or 7 with a year; a
    * 7-field schedule that names one date runs once. A code step's `source`
    * exports `async function main({ macro, run, trigger, steps, knobs })` and
@@ -71,29 +85,45 @@ export class RoutineNamespace {
    * `MacroApiError` whose message says what the server refused, including
    * type-check errors.
    *
+   * Inside a routine's run, the new routine is that routine's sub-routine
+   * ({@link Routine.parent}). Pass `key` there to name it: creating with the
+   * same key again updates that sub-routine instead of adding another, so a
+   * run that repeats is safe. Without a key every create adds a routine, and
+   * the 51st active sub-routine is refused. Outside a routine's run a key is
+   * rejected.
+   *
    * @example
    * // Every ten minutes, in New York time.
    * const routine = await macro.routines.create({
    *   name: 'Check the import',
-   *   prompt: 'Read the import task and post its status in the channel.',
-   *   userPrompt: 'Check on the import every ten minutes.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: {
    *     type: 'cron',
    *     schedule: '0 0/10 * * * *',
    *     timezone: 'America/New_York',
    *   },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the import task and post its status in the channel.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // Once, at 14:30 on 3 November 2027.
    * await macro.routines.create({
    *   name: 'Follow up on the review',
-   *   prompt: 'Read the review session and summarize its outcome.',
-   *   userPrompt: 'Follow up on the review on 3 November 2027.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the review session and summarize its outcome.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
-   * // A code step that posts in a channel, disabled until turned on. The
-   * // user asked for the post to come from them.
+   * // A code step that posts in a channel the user can swap later, disabled
+   * // until turned on. The user asked for the post to come from them.
+   * // `channel` is the channel the user named, found with `macro.channels.search`.
    * await macro.routines.create({
    *   name: 'Say hello',
    *   trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
@@ -102,22 +132,57 @@ export class RoutineNamespace {
    *     {
    *       type: 'code',
    *       title: 'Post hello',
-   *       source: `export async function main({ macro }: StepContext) {
-   *   await macro.channels.byId('<channel id>').send('Hello');
+   *       source: `export async function main({ knobs }: StepContext) {
+   *   await knobs.channel.send('Hello');
    * }`,
+   *       knobs: [
+   *         {
+   *           type: 'entity',
+   *           name: 'channel',
+   *           label: 'Channel to post in',
+   *           entity_types: ['channel'],
+   *           value: { type: 'channel', entity: channel },
+   *         },
+   *       ],
+   *       sentence: 'Post hello in {channel}.',
    *     },
    *   ],
    *   dangerouslyOperateAsUser: true,
    * });
+   * // In a routine's code step: one follow-up per task, however often it runs.
+   * await macro.routines.create(
+   *   {
+   *     name: `Check on ${taskName}`,
+   *     trigger: { type: 'once', at: tomorrow },
+   *     steps: [
+   *       {
+   *         type: 'agent',
+   *         instructions: `Read task ${taskId} and post its status in the channel.`,
+   *         model: 'anthropic/claude-sonnet-5-5',
+   *       },
+   *     ],
+   *   },
+   *   { key: `check-${taskId}` },
+   * );
    *
    * @write
    */
-  async create(options: RoutineOptions): Promise<Routine> {
+  async create(
+    options: RoutineOptions,
+    extra?: {
+      /**
+       * Names the routine among its parent's sub-routines, up to 200
+       * characters. Only inside a routine's run.
+       */
+      key?: string;
+    },
+  ): Promise<Routine> {
     return Routine.from(
       this.client,
       unwrap(
         await this.client.scheduledAction.createScheduledAction({
           body: { ...routineBody(options), enabled: options.enabled ?? true },
+          query: { key: extra?.key },
         }),
       ),
     );
@@ -131,7 +196,10 @@ export class RoutineNamespace {
    * it would be stored. Check before creating, and fix what it reports.
    * `created` names what you created for the routine to use, such as the
    * database it writes to, so whoever reviews a drafted routine knows it
-   * exists.
+   * exists. `missingApps` names apps the routine's Ask AI step needs that
+   * the user hasn't connected (a connector's `slug` and `name` from
+   * `macro.connectedApps.discover`), which a drafted routine's review asks
+   * them to connect; the check returns them as `missingApps`.
    *
    * @example
    * const check = await macro.routines.check({
@@ -145,8 +213,12 @@ export class RoutineNamespace {
    */
   async check(
     options: RoutineOptions,
-    extra?: { created?: CreatedEntity[] },
+    extra?: {
+      created?: CreatedEntity[];
+      missingApps?: readonly RoutineApp[];
+    },
   ): Promise<RoutineCheck> {
+    const missingApps = appsBody(extra?.missingApps);
     return unwrap(
       await this.client.scheduledAction.checkScheduledAction({
         body: {
@@ -158,21 +230,24 @@ export class RoutineNamespace {
             entityType: item.entityType,
             entityId: item.id,
           })),
+          // Sent only when named, so a check reaches a server without it.
+          ...(missingApps?.length ? { missingApps } : {}),
         },
       }),
     );
   }
 
   /**
-   * Suggest a routine to the user. Only a routine suggestion session may
+   * Suggest a routine to the user. Only a routines generation session may
    * call this; any other session gets a 403. Suggest a catalog routine by
    * `key` with `knobs`, or a `routine` the catalog lacks, written as `check`
    * takes it and checked the same way. `surfaces` are the parts of the app
    * whose sidebar shows it, best fit first; `reason` is one line, shown to
    * the user, naming no one's email address; `keepProbability` is the
-   * chance, from 0 to 1, that the user keeps it on. Returns whether it was
-   * kept (`ok`) and, when not, the `problems` to fix before suggesting it
-   * again.
+   * chance, from 0 to 1, that the user keeps it on. A drafted `routine`
+   * also shows in the user's Suggestions feed, as its `card` says; a catalog
+   * routine takes no `card`. Returns whether it was kept (`ok`) and, when
+   * not, the `problems` to fix before suggesting it again.
    *
    * @example
    * const outcome = await macro.routines.suggest({
@@ -204,6 +279,8 @@ export class RoutineNamespace {
           reason: string;
           surfaces: Surface[];
           keepProbability: number;
+          /** How it shows in the user's Suggestions feed: a short title, an importance from 0 to 100, and fitting categories. */
+          card: RoutineSuggestionCard;
         },
   ): Promise<SuggestOutcome> {
     const body =
@@ -222,19 +299,57 @@ export class RoutineNamespace {
             reason: suggestion.reason,
             surfaces: suggestion.surfaces,
             keepProbability: suggestion.keepProbability,
+            card: suggestion.card,
           };
     return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
   }
 
   /**
-   * List routines, optionally including event triggers.
+   * Every routine suggestion AI made for the user, open or not, and how
+   * many more this session may hand back. Only a routines generation
+   * session may call this. Retire with `suggestion.retire(reason)` what no
+   * longer fits; suggestions are never rewritten.
+   *
+   * @mcp-exclude only a routines generation session may call it
+   */
+  async review(): Promise<{
+    suggestions: RoutineSuggestion[];
+    keptLeft: number;
+  }> {
+    const review = unwrap(
+      await this.client.scheduledAction.reviewRoutineSuggestions(),
+    );
+    return {
+      suggestions: review.suggestions.map((record) =>
+        RoutineSuggestion.from(this.client, record),
+      ),
+      keptLeft: review.keptLeft,
+    };
+  }
+
+  /**
+   * List the user's top-level routines, as their Routines list shows them:
+   * sub-routines, which other routines' runs created, are left out. Pass
+   * `parent` for one routine's sub-routines (its newest finished one-time
+   * ones included), or `includeChildren` to add active sub-routines; each
+   * sub-routine names its {@link Routine.parent} and
+   * {@link Routine.createdByRun}. `includeEvents` adds event-triggered
+   * routines.
    *
    * @readonly
    */
-  async list(options?: { includeEvents?: boolean }): Promise<Routine[]> {
+  async list(options?: {
+    includeEvents?: boolean;
+    includeChildren?: boolean;
+    parent?: Routine;
+  }): Promise<Routine[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActions({
-        query: { include_events: options?.includeEvents },
+        query: {
+          include_events: options?.includeEvents,
+          include_children: options?.includeChildren,
+          parent: options?.parent?.id,
+        },
       }),
     ).map((record) => Routine.from(this.client, record));
   }

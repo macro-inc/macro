@@ -104,7 +104,6 @@ export default {
     close: 'Fechar',
     delete: 'Eliminar',
     rename: 'Mudar o nome',
-    more: 'Mais',
     search: 'Pesquisar',
     settings: 'Definições',
   },
@@ -612,10 +611,6 @@ export default {
       other: '{{accepted}} de {{count}} itens marcados como não concluídos',
     },
     toastMarkNotDoneFailed: 'Não foi possível marcar como não concluído',
-    toastThreadStaysDone:
-      'Esta conversa não tem mensagens recebidas, por isso continua concluída',
-    toastThreadsStayDone:
-      'Estas conversas não têm mensagens recebidas, por isso continuam concluídas',
     toastCountNotRestored: {
       one: 'Não foi possível restaurar {{count}} item.',
       many: 'Não foi possível restaurar {{count}} de itens.',
@@ -722,8 +717,6 @@ export default {
     create: 'Criar',
     getMobileApp: 'Obter a app para dispositivos móveis',
     signedInAs: 'Sessão iniciada como {{name}}',
-    commandMenu: 'Menu de comandos',
-    searchEverything: 'Pesquisar tudo',
     customizeSidebar: 'Personalizar barra lateral',
     customizeSidebarDescription:
       'Escolha as apps que aparecem na barra lateral e arraste para as reordenar. Início fica sempre em primeiro.',

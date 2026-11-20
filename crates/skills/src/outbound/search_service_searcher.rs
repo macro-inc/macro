@@ -58,6 +58,7 @@ impl SkillSearcher for SearchServiceSkillSearcher {
             search_on: models_search::SearchOn::Name,
             include_crm: false,
             calendar_event_scope: Default::default(),
+            term_matching: models_search::TermMatching::All,
             collapse: None,
         };
 

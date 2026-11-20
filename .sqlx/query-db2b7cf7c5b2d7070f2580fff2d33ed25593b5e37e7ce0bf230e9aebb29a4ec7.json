@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                       SELECT 1 FROM comms_messages\n                       WHERE id = $1 AND parent_entity_type = 'channel'\n                         AND parent_entity_id = $2\n                   ) AS \"found!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "db2b7cf7c5b2d7070f2580fff2d33ed25593b5e37e7ce0bf230e9aebb29a4ec7"
+}

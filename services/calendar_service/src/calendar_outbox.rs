@@ -1,5 +1,8 @@
 //! Durable calendar backfill publication.
 
+#[cfg(test)]
+mod test;
+
 use crate::backfill_queue::{CalendarBackfillMessage, CalendarBackfillQueueClient};
 use calendar_events::domain::{
     changes::{CalendarChangeLogPruner, CalendarChangeLogRetention},
@@ -22,12 +25,12 @@ struct OutboxRow {
 
 /// Continuously schedule due syncs, reap wedged jobs, publish calendar outbox
 /// rows to calendar's own backfill queue, and hourly prune the calendar
-/// change log.
+/// change log and turn off Google calendars whose grant lacks the calendar
+/// capability.
 ///
 /// A row lock is held through each SQS publish. A crash after publish but
 /// before commit can duplicate a message, so every consumer remains
 /// idempotent by calendar job id.
-#[tracing::instrument(skip(db, queue, scheduler, retention))]
 pub async fn run<R, P>(
     db: PgPool,
     queue: CalendarBackfillQueueClient,
@@ -48,34 +51,9 @@ pub async fn run<R, P>(
         // unpublished and due syncs never re-arm — enabling the flag later
         // resumes everything without a migration.
         if calendar_sync_enabled {
-            scheduler
-                .run_once(Utc::now())
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(error=?error, "failed to schedule due Google Calendar syncs");
-                })
-                .ok();
-            scheduler
-                .reap_once(Utc::now())
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(error=?error, "failed to reap wedged Google Calendar syncs");
-                })
-                .ok();
-            drain_calendar(&db, &queue)
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(error = ?error, "failed to publish calendar backfill outbox");
-                })
-                .ok();
-            if tokio::time::Instant::now() >= next_retention {
-                retention
-                    .run_once(Utc::now())
-                    .await
-                    .inspect_err(|error| {
-                        tracing::error!(error = ?error, "failed to prune the calendar change log");
-                    })
-                    .ok();
+            let prune = tokio::time::Instant::now() >= next_retention;
+            run_round(&db, &queue, &scheduler, &retention, prune).await;
+            if prune {
                 next_retention = tokio::time::Instant::now() + CHANGE_LOG_RETENTION_INTERVAL;
             }
         }
@@ -83,6 +61,61 @@ pub async fn run<R, P>(
             _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
             _ = cancellation_token.cancelled() => return,
         }
+    }
+}
+
+/// One scheduler round, traced on its own so each round's queries and
+/// publishes form one finished trace.
+#[tracing::instrument(
+    name = "calendar.sync_scheduler",
+    skip_all,
+    fields(
+        scheduled = tracing::field::Empty,
+        reaped = tracing::field::Empty,
+        disabled = tracing::field::Empty,
+        published = tracing::field::Empty,
+        pruned = tracing::field::Empty,
+    )
+)]
+async fn run_round<R, P>(
+    db: &PgPool,
+    queue: &CalendarBackfillQueueClient,
+    scheduler: &GoogleCalendarSyncScheduler<R>,
+    retention: &CalendarChangeLogRetention<P>,
+    prune: bool,
+) where
+    R: GoogleCalendarSyncRepository,
+    P: CalendarChangeLogPruner,
+{
+    let span = tracing::Span::current();
+    if let Ok(scheduled) = scheduler.run_once(Utc::now()).await.inspect_err(|error| {
+        tracing::error!(error=?error, "failed to schedule due Google Calendar syncs");
+    }) {
+        span.record("scheduled", scheduled);
+    }
+    if let Ok(reaped) = scheduler.reap_once(Utc::now()).await.inspect_err(|error| {
+        tracing::error!(error=?error, "failed to reap wedged Google Calendar syncs");
+    }) {
+        span.record("reaped", reaped);
+    }
+    if prune
+        && let Ok(disabled) = scheduler.disable_without_capability_once().await.inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to turn off Google calendars without the calendar capability");
+        })
+    {
+        span.record("disabled", disabled);
+    }
+    if let Ok(published) = drain_calendar(db, queue).await.inspect_err(|error| {
+        tracing::error!(error = ?error, "failed to publish calendar backfill outbox");
+    }) {
+        span.record("published", published);
+    }
+    if prune
+        && let Ok(pruned) = retention.run_once(Utc::now()).await.inspect_err(|error| {
+            tracing::error!(error = ?error, "failed to prune the calendar change log");
+        })
+    {
+        span.record("pruned", pruned);
     }
 }
 

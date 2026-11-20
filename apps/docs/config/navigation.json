@@ -10,13 +10,7 @@
     {
       "group": "MCP",
       "pages": [
-        "AI/mcp/overview",
-        {
-          "group": "Tool Reference",
-          "pages": {
-            "$ref": "./tool-pages.json"
-          }
-        }
+        "AI/mcp/overview"
       ]
     }
   ]

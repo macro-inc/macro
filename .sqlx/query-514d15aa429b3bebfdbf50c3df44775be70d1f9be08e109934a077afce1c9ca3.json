@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT el.id, el.macro_id,\n                   ARRAY(\n                       SELECT mul.primary_macro_id\n                       FROM macro_user_links mul\n                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id\n                   ) AS \"delegates!\"\n            FROM email_links el\n            WHERE el.is_sync_active\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "delegates!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "514d15aa429b3bebfdbf50c3df44775be70d1f9be08e109934a077afce1c9ca3"
+}

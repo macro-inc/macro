@@ -660,7 +660,7 @@ export function UniversalInputFixture(
         if (filters.unresolved.length)
           return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
         if (searchNeedsKeywords(filters.state, input.fields.query))
-          return 'Add at least 3 search characters to search by sender or speaker.';
+          return 'Add search text to search by sender or speaker.';
       }
       if (params.has('person-references')) {
         const fields = input.fields;

@@ -1,8 +1,8 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { WorkspaceTask } from '../../../core/dummy-workspace';
@@ -32,6 +32,8 @@ export function TaskNotebook(props: {
   workspace: DummyWorkspace;
   task: WorkspaceTask;
   relatedContent?: JSX.Element;
+  /** Incoming mentions shown first in the details panel. */
+  referencesContent?: JSX.Element;
   /** Frozen rich task descriptions can include native inline mentions. */
   descriptionContent?: JSX.Element;
   navigation?: JSX.Element;
@@ -42,8 +44,12 @@ export function TaskNotebook(props: {
   hideCollectionNavigation?: boolean;
   /** Extra pills in the property row, e.g. linked GitHub pull requests. */
   pills?: JSX.Element;
+  /** Compact previews can start with the details panel closed. */
+  initialPanelOpen?: boolean;
 }) {
-  const [panel, setPanel] = createSignal<boolean>();
+  const [panel, setPanel] = createSignal<boolean | undefined>(
+    props.initialPanelOpen
+  );
   const save = (patch: Partial<WorkspaceTask>) =>
     props.workspace.updateTask(props.task.id, patch);
   return (
@@ -139,6 +145,11 @@ export function TaskNotebook(props: {
         open={panel()}
         panel={
           <>
+            <Show when={props.referencesContent}>
+              <PanelSection title="References" open>
+                {props.referencesContent}
+              </PanelSection>
+            </Show>
             <PanelSection title="Actions" open>
               <div class="flex gap-2">
                 <Button
@@ -199,17 +210,19 @@ export function TaskNotebook(props: {
                 </PanelRow>
               </PanelGrid>
             </PanelSection>
-            <PanelSection title="References">
-              <button
-                type="button"
-                onClick={() => {
-                  props.workspace.setChannel(props.task.channel);
-                  props.workspace.openItem('messages');
-                }}
-              >
-                #{props.task.channel}
-              </button>
-            </PanelSection>
+            <Show when={!props.referencesContent}>
+              <PanelSection title="References">
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.workspace.setChannel(props.task.channel);
+                    props.workspace.openItem('messages');
+                  }}
+                >
+                  #{props.task.channel}
+                </button>
+              </PanelSection>
+            </Show>
             <PanelSection title="History">
               <p class="text-xs">Changes in this demo stay in this session.</p>
             </PanelSection>
@@ -237,7 +250,7 @@ export function TaskNotebook(props: {
                   contentEditable
                   role="textbox"
                   aria-label="Task title"
-                  class="ph-no-capture text-2xl font-semibold outline-none"
+                  class="ph-no-capture text-2xl font-medium outline-none"
                   onBlur={(e) =>
                     save({
                       title:
@@ -255,7 +268,7 @@ export function TaskNotebook(props: {
                 </div>
               </div>
               <div class="spacer h-3" />
-              <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
+              <div class="sample-task-properties mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
                 <TaskStatusMenu
                   task={props.task}
                   onSave={(status) => save({ status })}

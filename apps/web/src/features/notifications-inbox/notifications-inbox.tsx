@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enablePasswords } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
@@ -12,6 +14,8 @@ import { setDoneOverride } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { useRespondToCalendarJoinRequestMutation } from '@queries/calendar/join-requests';
 import { revalidateNotificationReaders } from '@queries/notification/revalidation';
+import { useCurrentTeamQuery } from '@queries/team/teams';
+import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
@@ -24,7 +28,14 @@ import {
 } from './context/notifications-inbox-context';
 import { inboxSearchFor, useInboxShownRowLocation } from './inbox-location';
 import { useNotificationsCalendarPreview } from './notifications-calendar-preview';
-import { openNotificationInSplit } from './open-notification-in-split';
+import {
+  isVisibleInboxRow,
+  openNotificationInSplit,
+} from './open-notification-in-split';
+import {
+  INBOX_CLEAR_UPDATED,
+  parseInboxClearUpdate,
+} from './queries/inbox-clear-update';
 import { createNotificationInboxSource } from './queries/notification-inbox-source';
 import { resolveAccessRequest } from './queries/row-actions';
 import { NotificationsView } from './views/notifications-view';
@@ -56,7 +67,8 @@ function senderName(notification: UnifiedNotification): string | undefined {
 
 function createAppNotificationsInboxContext(
   userId: string,
-  answerJoinRequest: NotificationsInboxContext['requests']['answerJoinRequest']
+  answerJoinRequest: NotificationsInboxContext['requests']['answerJoinRequest'],
+  includeRow: (row: Parameters<typeof isVisibleInboxRow>[0]) => boolean
 ): NotificationsInboxContext {
   return {
     requests: { resolveAccessRequest, answerJoinRequest },
@@ -66,7 +78,14 @@ function createAppNotificationsInboxContext(
         cacheHost: getGraphqlCacheHost,
         scope,
         enabled: () => true,
+        includeRow,
         onReconnected: subscribeGraphqlSoupReconnected,
+        onClearUpdated: (listener) =>
+          createConnectionWebsocketEffect((message) => {
+            if (message.type !== INBOX_CLEAR_UPDATED) return;
+            const clearId = parseInboxClearUpdate(message.data);
+            if (clearId) listener(clearId);
+          }),
         overrideNotificationsDone: (ids) => setDoneOverride(ids, true),
         revalidateNotifications: revalidateNotificationReaders,
       }),
@@ -83,6 +102,13 @@ function createAppNotificationsInboxContext(
 /** The Notifications view with the app's feed, notification state and navigation. */
 export function NotificationsInbox() {
   const panel = useSplitPanelOrThrow();
+  const flag = useFeatureFlag(enablePasswords);
+  const enabled = () => !flag().loading && flag().enabled;
+  const team = useCurrentTeamQuery(enabled);
+  const passwords = {
+    enabled,
+    teamId: () => (team.isSuccess ? team.data?.team.id : undefined),
+  };
   const userId = useUserId();
   const { openSettings } = useSettingsState();
   const respondToJoinRequest = useRespondToCalendarJoinRequestMutation();
@@ -99,7 +125,11 @@ export function NotificationsInbox() {
     <Show when={userId()} keyed>
       {(id) => (
         <NotificationsInboxProvider
-          value={createAppNotificationsInboxContext(id, answerJoinRequest)}
+          value={createAppNotificationsInboxContext(
+            id,
+            answerJoinRequest,
+            (row) => isVisibleInboxRow(row, passwords)
+          )}
         >
           <NotificationsView
             onOpenSettings={() => openSettings('Notifications')}
@@ -118,6 +148,7 @@ export function NotificationsInbox() {
                 newSplit,
                 notification,
                 splitHandle: panel.handle,
+                passwords,
               })
             }
           />

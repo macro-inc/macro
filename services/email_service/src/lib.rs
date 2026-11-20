@@ -4,14 +4,8 @@
 //! caches as one rlib.
 
 mod api;
-/// Durable email-backfill completion orchestration.
-pub mod backfill_completion_service;
-/// Fenced email-backfill initialization orchestration.
-pub mod backfill_init_service;
 /// Durable publication of email backfill outbox rows.
 pub mod backfill_outbox;
-/// Connection-gateway refresh adapter for disconnecting an inbox's calendar.
-pub mod calendar_refresh;
 /// Google Calendar quota gate for disconnecting an inbox's calendar.
 pub mod calendar_request_gate;
 /// Access-token adapter for disconnecting an inbox's calendar.
@@ -20,6 +14,7 @@ pub mod composition;
 pub mod config;
 /// Periodic enrichment of pending CRM company directory entries.
 pub mod crm_enrichment_worker;
+pub mod email_policy_worker;
 /// Durable provider-neutral mailbox worker scheduling.
 pub mod mailbox_sync_worker;
 /// Outbound infrastructure adapters for email provider capabilities.

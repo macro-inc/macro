@@ -25,6 +25,7 @@ use sqlx::postgres::{PgConnectOptions, PgListener, PgPool, PgPoolOptions};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use whatsapp_fake_server::{FakeWhatsApp, test_signal};
+use whatsapp_session_service::domain::pictures::PicturePacing;
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
 use whatsapp_store_pg::kms::{FakeWhatsAppKms, GeneratedDataKey, WhatsAppKms, WhatsAppKmsError};
 use whatsmeow::{Dialer, WebSocketDialer};
@@ -46,6 +47,13 @@ pub const TIMINGS: Timings = Timings {
     health_every: Duration::from_secs(60),
     groups_refresh_interval: Duration::ZERO,
     backfill_timeout: Duration::from_secs(3),
+    // No warmup, so a check runs on the next tick; a short backoff so a rate
+    // limit lifts within a test.
+    pictures: PicturePacing {
+        spacing: Duration::from_millis(100),
+        warmup: Duration::ZERO,
+        backoff: Duration::from_secs(2),
+    },
 };
 
 /// One fake KMS shared by every replica, as they share the real KMS key.

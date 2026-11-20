@@ -1,0 +1,153 @@
+/* Retained from the published docs previews; scoped to guide content. */
+.documentation-body .routine-preview {
+  margin: 1.25rem auto;
+  max-width: 520px;
+  color: #18181b;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.documentation-body .routine-card {
+  border: 1px solid rgb(3 7 18 / 0.1);
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+}
+
+.documentation-body .routine-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #71717a;
+  font-size: 14px;
+}
+
+.documentation-body .routine-head > span {
+  flex: 1;
+}
+
+.documentation-body .routine-name {
+  margin: 16px 8px 0;
+  color: #a1a1aa;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+}
+
+.documentation-body .routine-prompt {
+  min-height: 96px;
+  margin: 16px 8px 0;
+  color: #a1a1aa;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.documentation-body .routine-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px;
+}
+
+.documentation-body .routine-chips > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgb(3 7 18 / 0.12);
+  border-radius: 999px;
+  color: #71717a;
+  font-size: 13px;
+}
+
+.documentation-body .routine-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 8px 0;
+  border-top: 1px solid rgb(3 7 18 / 0.08);
+}
+
+.documentation-body .routine-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #71717a;
+  font-size: 12px;
+}
+
+.documentation-body .routine-switch-track {
+  position: relative;
+  width: 32px;
+  height: 16px;
+  border-radius: 999px;
+  background: #3a6ea5;
+}
+
+.documentation-body .routine-switch-track::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 16px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgb(3 7 18 / 0.12);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.documentation-body .routine-submit {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #18181b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-preview {
+  color: #f4f4f5;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: #141414;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-head,
+html[data-theme-light='false'] .documentation-body .routine-switch {
+  color: #a1a1aa;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-name,
+html[data-theme-light='false'] .documentation-body .routine-prompt {
+  color: #71717a;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-chips > span {
+  border-color: rgb(255 255 255 / 0.12);
+  color: #a1a1aa;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-foot {
+  border-top-color: rgb(255 255 255 / 0.08);
+}
+
+html[data-theme-light='false'] .documentation-body .routine-switch-track {
+  background: oklch(0.7 0.12 250);
+}
+
+html[data-theme-light='false'] .documentation-body .routine-switch-track::after {
+  border-color: rgb(255 255 255 / 0.12);
+  background: #fff;
+}
+
+html[data-theme-light='false'] .documentation-body .routine-submit {
+  background: #f4f4f5;
+  color: #18181b;
+}

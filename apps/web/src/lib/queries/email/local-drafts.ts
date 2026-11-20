@@ -24,6 +24,7 @@ import { queryClient } from '../client';
 import {
   createLocalDraftStore,
   type DraftStorageSession,
+  type LocalDraftListOptions,
 } from './local-draft-store';
 
 import type { EmailSendIntent } from './send-intent';
@@ -195,9 +196,11 @@ export function watchEmailStorageEnded(
   };
 }
 
-export async function listLocalDrafts(): Promise<LocalDraft[]> {
+export async function listLocalDrafts(
+  options?: LocalDraftListOptions
+): Promise<LocalDraft[]> {
   const owner = await emailStorageSession();
-  return await localDraftStore.list(owner);
+  return await localDraftStore.list(owner, options);
 }
 export async function readLocalDraft(
   id: string
@@ -543,10 +546,28 @@ export async function recordLocalAttachment(
   });
 }
 
+/**
+ * Whether the copy is being discarded: requested beside it, or admitted by the
+ * queue. Only an edit withdraws a request, so until one does no save of this
+ * copy may take the discard's place in the queue.
+ */
+function draftDiscardPending(local: LocalDraft): boolean {
+  return local.status === 'deleting' || local.deleteAttemptId !== undefined;
+}
+
+export async function beginDraftAttempt(
+  local: LocalDraft,
+  operation: 'delete'
+): Promise<DraftAttempt>;
+/** Resolves with nothing when the copy is being discarded: the save must not be queued. */
+export async function beginDraftAttempt(
+  local: LocalDraft,
+  operation: 'save'
+): Promise<DraftAttempt | undefined>;
 export async function beginDraftAttempt(
   local: LocalDraft,
   operation: 'save' | 'delete'
-): Promise<DraftAttempt> {
+): Promise<DraftAttempt | undefined> {
   const owner = await emailStorageSession();
   if (local.accountId !== owner.accountId)
     throw new Error('This draft belongs to a previous account');
@@ -559,7 +580,9 @@ export async function beginDraftAttempt(
     revision: local.revision,
     operation,
   };
+  let discarding = false;
   await localDraftStore.update(owner, local.key, (current) => {
+    discarding = operation === 'save' && draftDiscardPending(current);
     if (
       current.generation !== local.generation ||
       current.revision !== local.revision
@@ -571,18 +594,18 @@ export async function beginDraftAttempt(
     if (operation === 'delete')
       return { ...current, deleteAttemptId: attempt.id };
 
-    if (draftSyncPaused(current) || current.status === 'deleting')
-      return current;
+    // A save of the revision being discarded is older than the discard,
+    // whichever started first: a newer edit would have withdrawn the request.
+    if (draftSyncPaused(current) || discarding) return current;
 
     return {
       ...current,
       latestAttemptId: attempt.id,
       queuedAttemptId: undefined,
-      deleteAttemptId: undefined,
       status: 'dirty',
     };
   });
-  return attempt;
+  return discarding ? undefined : attempt;
 }
 
 /**

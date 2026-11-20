@@ -1,7 +1,7 @@
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import Folder from '@phosphor/folder.svg';
-import Upload from '@phosphor/upload-simple.svg';
-import X from '@phosphor/x.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out.svg';
+import Folder from '@icon/system/regular/folder.svg';
+import Upload from '@icon/system/regular/upload-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { buttonClasses } from '@ui/components/Button';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 

@@ -15,12 +15,13 @@ export function canLabelChannel(
   );
 }
 
-/** Writes require a known matching team, unlike server-authorized membership display. */
+/** Manual writes require a matching team and cannot override name rules. */
 export function canAssignChannel(
   channel: Pick<ChannelEntity, 'channelType' | 'teamId'> | undefined,
-  label?: Pick<ChannelLabel, 'teamId'>
+  label?: Pick<ChannelLabel, 'teamId' | 'rule'>
 ): boolean {
   return (
+    !label?.rule &&
     canLabelChannel(channel, label) &&
     (!label?.teamId || channel?.teamId === label.teamId)
   );

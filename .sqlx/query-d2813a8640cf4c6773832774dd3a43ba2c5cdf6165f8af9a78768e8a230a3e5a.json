@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT grant_id FROM microsoft_oauth_grant_versions ORDER BY generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d2813a8640cf4c6773832774dd3a43ba2c5cdf6165f8af9a78768e8a230a3e5a"
+}

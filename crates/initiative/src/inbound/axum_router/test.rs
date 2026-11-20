@@ -71,6 +71,7 @@ fn share_permission() -> SharePermissionV2 {
 
 fn sample_basic() -> InitiativeBasic {
     InitiativeBasic {
+        appearance: None,
         id: existing_id(),
         name: "Launch".to_string(),
         owner_id: user(),
@@ -79,6 +80,7 @@ fn sample_basic() -> InitiativeBasic {
 
 fn sample_detail() -> InitiativeDetail {
     InitiativeDetail {
+        appearance: None,
         id: existing_id(),
         name: "Launch".to_string(),
         owner_id: user(),
@@ -94,6 +96,7 @@ fn sample_detail() -> InitiativeDetail {
 fn sample_list() -> InitiativeList {
     InitiativeList {
         initiatives: vec![InitiativeSummary {
+            appearance: None,
             id: existing_id(),
             name: "Launch".to_string(),
             updated_at: now(),
@@ -322,6 +325,14 @@ fn reject_name(name: &str) -> Result<(), InitiativeError> {
 }
 
 impl InitiativeService for FakeInitiativeService {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, InitiativeError> {
+        appearance.validate().map_err(InitiativeError::BadRequest)?;
+        Ok(appearance)
+    }
     async fn summary(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -660,6 +671,43 @@ async fn update_returns_200() {
     assert_eq!(service.calls(), vec![ServiceCall::Update]);
 }
 
+/// A scoped session renames an initiative but never changes its sharing.
+/// Members reach the service, whose grant writer refuses one who would gain
+/// access (`pg_initiative_repo` tests).
+#[tokio::test]
+async fn a_scoped_session_edits_an_initiative_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = FakeInitiativeService::default();
+    let router = build_router(service.clone(), FakeEntityAccessService::default());
+    let edit = |body: serde_json::Value| {
+        authed(axum::http::Request::patch(format!("/{}", existing_id())))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(json_body(body))
+            .expect("request should build")
+    };
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = serde_json::json!({ "sharePermission": { "teamShareAccessLevel": "view" } });
+    for (body, status) in [
+        (share.clone(), StatusCode::FORBIDDEN),
+        (
+            serde_json::json!({ "memberIds": ["macro|member@macro.com"] }),
+            StatusCode::OK,
+        ),
+        (serde_json::json!({ "name": "Renamed" }), StatusCode::OK),
+    ] {
+        let response = scope_attribution(no_send, send(router.clone(), edit(body.clone()))).await;
+        assert_eq!(response.status(), status, "{body}");
+    }
+    let response = send(router, edit(share)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(service.calls(), vec![ServiceCall::Update; 3]);
+}
+
 #[tokio::test]
 async fn delete_returns_200() {
     let service = FakeInitiativeService::default();
@@ -741,6 +789,33 @@ async fn task_membership_routes_are_gone() {
         assert!(response.status().is_client_error(), "{}", response.status());
     }
     assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn appearance_requires_edit_access() {
+    for (level, expected) in [
+        (AccessLevel::View, StatusCode::UNAUTHORIZED),
+        (AccessLevel::Edit, StatusCode::OK),
+        (AccessLevel::Owner, StatusCode::OK),
+    ] {
+        let response = send(
+            build_router(
+                FakeInitiativeService::default(),
+                FakeEntityAccessService {
+                    initiative_access: Some(level),
+                },
+            ),
+            authed(axum::http::Request::put(format!(
+                "/{}/appearance",
+                existing_id()
+            )))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(json_body(serde_json::json!({"color":"blue"})))
+            .unwrap(),
+        )
+        .await;
+        assert_eq!(response.status(), expected);
+    }
 }
 
 #[tokio::test]
@@ -875,6 +950,7 @@ impl ::activity::domain::ports::EntityActivityReads for FakeActivityReads {
         assert_eq!(cursor, None);
         let record = |id: u128, occurred_at: &str| ::activity::domain::models::ActivityRecord {
             agent_correlation_id: None,
+            agent_verb: None,
             id: Uuid::from_u128(id),
             actor: ::activity::domain::models::Actor::new_from_user(user()),
             subject_id: USER_ID.to_string(),

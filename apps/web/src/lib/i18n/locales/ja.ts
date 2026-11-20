@@ -103,7 +103,6 @@ export default {
     close: '閉じる',
     delete: '削除',
     rename: '名前を変更',
-    more: 'その他',
     search: '検索',
     settings: '設定',
   },
@@ -567,10 +566,6 @@ export default {
       other: '{{count}}件中{{accepted}}件を未完了にしました',
     },
     toastMarkNotDoneFailed: '未完了にできませんでした',
-    toastThreadStaysDone:
-      'このスレッドには受信したメッセージがないため、完了のままになります',
-    toastThreadsStayDone:
-      'これらのスレッドには受信したメッセージがないため、完了のままになります',
     toastCountNotRestored: {
       other: '{{count}}件を復元できませんでした。',
     },
@@ -664,8 +659,6 @@ export default {
     create: '作成',
     getMobileApp: 'モバイルアプリを入手',
     signedInAs: '{{name}}としてログイン中',
-    commandMenu: 'コマンドメニュー',
-    searchEverything: 'すべてを検索',
     customizeSidebar: 'サイドバーをカスタマイズ',
     customizeSidebarDescription:
       'サイドバーに表示するアプリを選択し、ドラッグして並べ替えます。ホームは常に先頭に表示されます。',

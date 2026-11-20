@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest';
 import type { DatabaseViewColumn } from './database-view';
 import { formatCellValue, optimisticRows, rowTitle } from './table';
 
+it('formats money with its row denomination without guessing absent row context', () => {
+  const column: DatabaseViewColumn = {
+    id: 'amount',
+    name: 'Amount',
+    dataType: 'NUMBER',
+    writable: true,
+    isMultiSelect: false,
+    options: [],
+    currencyColumnId: 'currency',
+  };
+  const amount = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 6,
+  }).format(12.5);
+  expect(formatCellValue(column, 12.5, { currency: 'EUR' })).toBe(
+    `EUR ${amount}`
+  );
+  expect(formatCellValue(column, 12.5, {})).toBe(`USD ${amount}`);
+  expect(formatCellValue(column, 12.5)).toBe('12.5');
+});
+
 describe('record title', () => {
   const entity: DatabaseViewColumn = {
     id: 'person',
@@ -79,6 +99,23 @@ describe('optimistic rows', () => {
     ]);
     // The grid redraws a row whose object changed; Ada's must not.
     expect(shown[0]).toBe(ada);
+  });
+});
+
+describe('percentage cells', () => {
+  it('shows the stored fraction as a percent', () => {
+    const share: DatabaseViewColumn = {
+      id: 'share',
+      name: 'Share',
+      dataType: 'NUMBER',
+      percentage: true,
+      isMultiSelect: false,
+      options: [],
+      writable: true,
+    };
+    expect(formatCellValue(share, 0.25)).toBe('25%');
+    expect(formatCellValue(share, 0.5)).toBe('50%');
+    expect(formatCellValue(share, null)).toBe('');
   });
 });
 

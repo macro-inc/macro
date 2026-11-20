@@ -1,7 +1,6 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
@@ -42,6 +41,7 @@ import {
   makeSetCompanyPropertyAction,
   makeShareAction,
 } from './index';
+import { makeBlockSenderAction } from './make-block-sender-action';
 import type { MarkDoneDelegate } from './mark-done-delegate';
 
 const reportEntityActionError = (error: unknown) =>
@@ -128,6 +128,7 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+  const blockSenderAction = makeBlockSenderAction();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
   });
@@ -541,6 +542,33 @@ export const useEntityActionHotkeys = (
     }).withGroup(group);
   }
 
+  // Block sender (command menu only, no keybinding)
+  registerHotkey({
+    scopeId,
+    description: () => t('entityActions.blockSender'),
+    keyDownHandler: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(blockSenderAction.canExecute)) return false;
+
+      fireAndForget(
+        blockSenderAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return (
+        entities.length > 0 && entities.every(blockSenderAction.canExecute)
+      );
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
   // Copy - 'cmd+d'
   registerHotkey({
     hotkey: ['cmd+d'],
@@ -715,11 +743,14 @@ export const useEntityActionHotkeys = (
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
-    description: () => t('entityActions.share'),
+    description: () =>
+      t('entityActions.shareCommand', {
+        count: getEntitiesForAction().length,
+      }),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!shareAction.canExecute(entities[0])) return false;
+      if (!entities.every(shareAction.canExecute)) return false;
       fireAndForget(
         shareAction.executeWithSoup(entities, list),
         'entity-actions'
@@ -729,7 +760,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length === 1 && isShareableEntityType(entities[0].type);
+      return entities.length > 0 && entities.every(shareAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

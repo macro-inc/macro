@@ -5,6 +5,7 @@ use favorites::domain::ports::FavoritesService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
+use tracing::Instrument;
 
 #[cfg(test)]
 mod test;
@@ -112,7 +113,9 @@ pub fn entity_favorite_loader<R>(
 where
     R: EntityFavoriteEdgeReader,
 {
-    DataLoader::new(EntityFavoriteLoader::new(user_id, reader), tokio::spawn)
+    DataLoader::new(EntityFavoriteLoader::new(user_id, reader), |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
 }
 
 /// Resolve favorite state from GraphQL request data.

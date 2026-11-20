@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -92,6 +93,15 @@ function serializeSnapshot<T>(
   const settled = finish();
   snapshotOperations.set(id, settled);
   return result;
+}
+
+// A failed request's text names hosts and transport internals, which tell the
+// person nothing; the span keeps it. Opening calls more than one service, so
+// the message names none of them.
+function openFailure(cause: unknown): string {
+  if (thrownResultErrorHasCode(cause, 'NETWORK_ERROR'))
+    return "Couldn't connect to open this canvas. Check your connection and try again.";
+  return cause instanceof Error ? cause.message : 'Unable to open this canvas.';
 }
 
 /** Durable scene ownership uses the same engine, WAL and transport as documents. */
@@ -441,14 +451,7 @@ export function createCanvasSession(options: CanvasSessionOptions) {
         setFailure(
           'Live canvas sync is unavailable. Local changes are preserved.'
         );
-      else if (!disposed)
-        setState({
-          t: 'error',
-          message:
-            cause instanceof Error
-              ? cause.message
-              : 'Unable to open this canvas.',
-        });
+      else if (!disposed) setState({ t: 'error', message: openFailure(cause) });
     }
   }
   const initialization = initialize();

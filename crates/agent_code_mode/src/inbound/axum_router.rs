@@ -1,12 +1,15 @@
 //! Session-authorized reads for code execution's existing tool components.
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode, connected_apps::*, reviews::*,
+    CodeModeError, ExecutionId, ExecutionRecord, SessionCodeMode,
+    connected_apps::*,
+    reviews::*,
+    ui_commands::{OpenInApp, UiCommandOutcome, UiCommandService},
 };
 use axum::{
     Json, Router,
     body::Bytes,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -18,8 +21,8 @@ use entity_access::{
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
 };
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOnly,
+    ActingUser, CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOnly, is_program_run,
 };
 use macro_uuid::Uuid;
 use std::sync::Arc;
@@ -29,6 +32,7 @@ pub struct CodeExecutionRouterState<Access, Auth> {
     service: Arc<dyn SessionCodeMode>,
     reviews: ReviewService,
     connected_apps: ConnectedAppService,
+    ui_commands: UiCommandService,
     entity_access: Arc<Access>,
     authorization: MacroAuthorizationState<Auth>,
 }
@@ -39,6 +43,7 @@ impl<Access, Auth> CodeExecutionRouterState<Access, Auth> {
         service: Arc<dyn SessionCodeMode>,
         reviews: ReviewService,
         connected_apps: ConnectedAppService,
+        ui_commands: UiCommandService,
         entity_access: Arc<Access>,
         authorization: MacroAuthorizationState<Auth>,
     ) -> Self {
@@ -46,6 +51,7 @@ impl<Access, Auth> CodeExecutionRouterState<Access, Auth> {
             service,
             reviews,
             connected_apps,
+            ui_commands,
             entity_access,
             authorization,
         }
@@ -58,6 +64,7 @@ impl<Access, Auth> Clone for CodeExecutionRouterState<Access, Auth> {
             service: self.service.clone(),
             reviews: self.reviews.clone(),
             connected_apps: self.connected_apps.clone(),
+            ui_commands: self.ui_commands.clone(),
             entity_access: self.entity_access.clone(),
             authorization: self.authorization.clone(),
         }
@@ -91,6 +98,10 @@ where
         )
         .route("/{session_id}/reviews", post(create_review::<Access, Auth>))
         .route("/{session_id}/views", post(present_view::<Access, Auth>))
+        .route(
+            "/{session_id}/ui-commands",
+            post(open_in_app::<Access, Auth>),
+        )
         .route(
             "/{session_id}/reviews/{review_id}",
             get(get_review::<Access, Auth>).post(decide_review::<Access, Auth>),
@@ -140,6 +151,23 @@ impl IntoResponse for CodeExecutionApiError {
                 (StatusCode::CONFLICT, "review changed; reload before acting").into_response()
             }
             CodeModeError::Invalid(message) => (StatusCode::BAD_REQUEST, message).into_response(),
+            error @ CodeModeError::ConnectedAppUnreachable => {
+                (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
+            }
+            CodeModeError::ConnectedAppRateLimited { retry_after } => {
+                let message = CodeModeError::ConnectedAppRateLimited { retry_after }.to_string();
+                let seconds = retry_after
+                    .map_or(1, |wait| {
+                        wait.as_secs() + u64::from(wait.subsec_nanos() > 0)
+                    })
+                    .max(1);
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [(axum::http::header::RETRY_AFTER, seconds.to_string())],
+                    message,
+                )
+                    .into_response()
+            }
             error => {
                 tracing::error!(error = ?error, "code execution read failed");
                 (
@@ -211,6 +239,28 @@ pub async fn present_view<Access: EntityAccessService, Auth: MacroAuthorizationS
         .map(|()| StatusCode::NO_CONTENT)
         .map_err(CodeExecutionApiError)
 }
+#[utoipa::path(post, path = "/agent-sessions/{session_id}/ui-commands", tag = "agent-sessions", operation_id = "open_in_app", params(("session_id" = Uuid, Path)), request_body = OpenInApp, responses((status = 200, body = UiCommandOutcome), (status = 400), (status = 403)))]
+/// Open an item in a new pane of the app tab the person who prompted the
+/// running turn typed in. Only a running execution of the session's current
+/// turn may send, as the account it acts as.
+pub async fn open_in_app<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    State(state): State<CodeExecutionRouterState<Access, Auth>>,
+    body: Bytes,
+) -> Result<Json<UiCommandOutcome>, CodeExecutionApiError> {
+    let input: OpenInApp = decode(&body).map_err(CodeExecutionApiError)?;
+    state
+        .ui_commands
+        .open(
+            &access.entity_access_receipt,
+            &caller.authorization.user.macro_user_id,
+            input,
+        )
+        .await
+        .map(Json)
+        .map_err(CodeExecutionApiError)
+}
 #[utoipa::path(get, path = "/agent-sessions/{session_id}/reviews/{review_id}", tag = "agent-sessions", operation_id = "get_session_review", params(("session_id" = Uuid, Path), ("review_id" = Uuid, Path)), responses((status = 200, body = ReviewRecord), (status = 403), (status = 404)))]
 /// Read a persisted interactive block.
 pub async fn get_review<Access: EntityAccessService, Auth: MacroAuthorizationService>(
@@ -239,16 +289,31 @@ pub async fn list_reviews<Access: EntityAccessService, Auth: MacroAuthorizationS
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
+
+/// Only a person decides a review: any program (see [`is_program_run`])
+/// is refused, or it could approve the draft it presented itself.
+fn decode_user_decision(
+    attribution: CredentialAttribution,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<ReviewDecision, CodeExecutionApiError> {
+    if is_program_run(attribution, headers) {
+        return Err(CodeExecutionApiError(CodeModeError::Forbidden));
+    }
+    decode(body).map_err(CodeExecutionApiError)
+}
+
 #[utoipa::path(post, path = "/agent-sessions/{session_id}/reviews/{review_id}", tag = "agent-sessions", operation_id = "decide_session_review", params(("session_id" = Uuid, Path), ("review_id" = Uuid, Path)), request_body = ReviewDecision, responses((status = 200, body = ReviewRecord), (status = 403), (status = 409)))]
 /// Save edits or atomically claim the exact draft revision the user submitted.
 pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, id)): Path<(Uuid, Uuid)>,
     body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
-    let decision: ReviewDecision = decode(&body).map_err(CodeExecutionApiError)?;
+    let decision = decode_user_decision(caller.authorization.attribution(), &headers, &body)?;
     state
         .reviews
         .decide(
@@ -432,3 +497,6 @@ pub async fn search_connected_app_tools<
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
+
+#[cfg(test)]
+mod test;

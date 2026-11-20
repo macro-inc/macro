@@ -17,6 +17,14 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 
 Document sync: [DSS sync router](architecture/sync-router.md).
 
+Email: [frontend architecture](architecture/email.md) and
+[backend composition and boundaries](architecture/email-backend.md).
+
+Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
+
+[Firecracker security model](architecture/firecracker-computers-security.md), the
+[Firecracker rollout](runbooks/firecracker-computers-rollout.md), and the
+
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).
 
@@ -28,3 +36,5 @@ Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).
 
 Agent session activity: [correlation and visibility](architecture/agent-activity-correlation.md).
+
+CRM: [selective email contribution design](design/crm-selective-email-contribution.md).

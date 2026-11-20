@@ -123,11 +123,11 @@ export function dummyData(): DummyData {
     ],
     [
       'follow-up',
-      'Send Valentina the rollout plan',
+      'Send Austin Barron the rollout plan',
       'Not Started',
       'Medium',
       'jacob',
-      'Share the rollout plan with Valentina and confirm the follow-up meeting.',
+      'Share the rollout plan with Austin Barron and confirm the follow-up meeting.',
     ],
     [
       'deploy',
@@ -182,7 +182,7 @@ export function dummyData(): DummyData {
       'Fix mobile demo scrolling',
       'In Progress',
       'High',
-      'valentina',
+      'austin',
       'Keep page scrolling natural around the interactive homepage demo. Check touch targets and the transition at phone widths.',
     ],
     [
@@ -302,7 +302,7 @@ export function dummyData(): DummyData {
         id: 'notes',
         tags: ['Customers', 'Follow up'],
         title: 'Demo call notes',
-        body: '## The Meadow\n\nValentina’s team wants email, tasks, and documents in one workspace.\n\n## Follow-up\n\nShare the rollout plan. Julia will help with setup. Thursday at 9 works for the follow-up.',
+        body: '## The Meadow\n\nAustin Barron’s team wants email, tasks, and documents in one workspace.\n\n## Follow-up\n\nShare the rollout plan. Julia will help with setup. Thursday at 9 works for the follow-up.',
         comments: [],
       },
       ...extraWorkspaceDocuments(),

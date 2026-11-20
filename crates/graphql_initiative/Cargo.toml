@@ -31,3 +31,4 @@ serde = { workspace = true }
 chrono = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+tracing-subscriber = { workspace = true }

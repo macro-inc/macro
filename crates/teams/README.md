@@ -21,7 +21,7 @@ between different teams is unspecified.
 | `team.invite_created` | A new invite is persisted; one event is produced per newly invited lowercase email | `team_id`, `invite_id`, `email`, `invited_by`, `team_name` |
 | `team.invite_rejected` | The invitee successfully rejects and deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
 | `team.invite_revoked` | An administrator successfully deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
-| `team.member_joined` | An invited, domain-auto-joined, or invite-link membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
+| `team.member_joined` | An invited, domain-auto-joined, invite-link, or team-agent membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
 | `team.member_removed` | Membership removal and all rollback-capable side effects succeed | `team_id`, `member_id`, `removed_by`, `role` |
 | `team.member_role_changed` | Each individual member role update succeeds | `team_id`, `actor_user_id`, `member_id`, `role`, `previous_role` |
 | `team.auto_join_domain_toggled` | An explicit auto-join-domain toggle succeeds | `team_id`, `actor_user_id`, `auto_join_domain` |
@@ -57,7 +57,9 @@ still decode.
 
 `join_method` is a tagged union. An accepted invite includes its invite UUID and
 the inviter; a domain auto-join is encoded as `{"type":"domain_auto_join"}` and
-a join through the team's shareable invite link as `{"type":"invite_link"}`.
+a join through the team's shareable invite link as `{"type":"invite_link"}`,
+and a team agent an admin added as
+`{"type":"team_agent","added_by":"macro|admin@example.com"}`.
 Consumers should ignore join methods they don't recognize.
 A complete invite-accepted membership envelope has this shape:
 
@@ -70,14 +72,14 @@ A complete invite-accepted membership envelope has this shape:
     "team_id": "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90",
     "member_id": "macro|joiner@acme.com",
     "teammate_ids": [
-      "macro|admin@acme.com",
+      "macro|admin@example.com",
       "macro|owner@acme.com"
     ],
     "role": "member",
     "join_method": {
       "type": "invite_accepted",
       "invite_id": "0197f776-6e7b-7c69-a251-780ae754d3e4",
-      "invited_by": "macro|admin@acme.com"
+      "invited_by": "macro|admin@example.com"
     }
   }
 }

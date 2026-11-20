@@ -1,0 +1,70 @@
+# stripe_inbox
+
+## What it is
+
+Part of billing: the Stripe event inbox. The webhook stores each verified
+event; per-consumer cursors apply them in order per Stripe customer, with
+retries and dead-lettering; a daily audit compares Stripe with what Macro
+holds. Design: `docs/architecture/stripe-event-inbox.md`.
+
+## Start here
+
+- `src/domain/translate.rs`: the only code that reads Stripe JSON. Webhook
+  payloads (endpoint version: `2019-12-03` on dev, `2025-09-30.clover` on
+  prod) and API reads (`async-stripe`'s `2023-10-16`) become the same facts.
+- `src/domain/model.rs`: `Consumer` (who applies which event types),
+  `BillingInboxEvent`, `Delivery`.
+- `src/domain/service.rs`: `receive` (webhook), `claim` and `drain` (the
+  worker in `src/inbound/worker.rs` keeps up to `CLAIM_BATCH` drains in a
+  `JoinSet`, claiming as each finishes), and `run_pass` (tests).
+- `src/outbound/pg.rs`: tables, leasing, the generation check on release.
+
+## Scope
+
+- Owns: `stripe_events`, `stripe_event_cursor`, `stripe_objects`,
+  `stripe_customer_listing`, `stripe_audit_run`, `stripe_audit_mismatch`.
+- Not here: what an event means for a domain. Consumers implement
+  `EventConsumers` in the host (`services/authentication_service`
+  `src/outbound/stripe_consumers.rs`).
+
+## Boundaries
+
+- Depends on: `async-stripe` (ids and raw reads), `macro_user_id`.
+- Used by: `services/authentication_service` (webhook, worker, audit,
+  `POST /internal/stripe_inbox/replay`).
+
+## Recipes
+
+- Add a consumer: `Consumer` + its `event_types` → the `stripe_consumer`
+  enum in a migration → the host's `EventConsumers::apply`.
+- Support a new endpoint API version: a fixture per event type in
+  `fixtures/` and a translator test → `SUPPORTED_API_VERSIONS`. Events in
+  an unsupported version dead-letter.
+
+## Checks
+
+- `cargo test -p stripe_inbox` (`SQLX_OFFLINE` unset; DB tests need a
+  migrated MacroDB).
+
+## Gotchas
+
+- Consumers must be idempotent: a cursor advances after the apply returns,
+  so a crash replays the last event. Stripe writes use
+  `Idempotency-Key = <consumer>:<event_id>:<action>`.
+- `ApplyError::Reject` dead-letters at once, until replayed; `Retry` backs
+  off from 5 s, doubling to 1 h, and dead-letters after `MAX_ATTEMPTS`
+  (about 74 hours, past Stripe's three days of redelivery). A new event
+  re-arms a cursor whose retries ran out (`dead_cause`), never a rejected
+  one.
+- A payload cleared by retention is skipped. An event older than
+  `PAYLOAD_RETENTION` never rewinds a cursor.
+- An event arriving behind a cursor rewinds it, so later events apply
+  again; that is why consumers must be idempotent beyond crash replays.
+- Deploy only through `deploy_all_services.yml`, which migrates first;
+  rollback and resend steps: `docs/runbooks/stripe-event-inbox.md`.
+- Same-second events order by event id, which is not Stripe's order; the
+  projection keeps the later-received snapshot on a tie.
+- Log messages `stripe inbox cursor dead-lettered`, `stripe inbox dead
+  cursors`, `stripe inbox backlog` and `stripe audit mismatch` are monitor
+  contracts
+  (`infra/stacks/monitoring/monitors/stripe-inbox.ts`).

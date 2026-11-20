@@ -1,5 +1,11 @@
+import {
+  isAllowedLinkUrl,
+  LINK_PROTOCOLS,
+} from '@macro-inc/lexical-core/utils/link-url';
+import { invoke } from '@tauri-apps/api/core';
 import shortuuid from 'short-uuid';
-import { isTauri } from './platform';
+import { fireAndForget } from './fireAndForget';
+import { getNativeMobilePlatform, isTauri } from './platform';
 import { getWebOrigin } from './webOrigin';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -23,6 +29,16 @@ type ExternalUrlInterceptor = (url: string) => boolean;
 const externalUrlInterceptors = new Set<ExternalUrlInterceptor>();
 
 /**
+ * The schemes {@link openExternalUrl} opens: a link's, plus the macOS settings
+ * pane `CallMediaPermissionHelp` opens for camera and microphone access.
+ * Relative URLs open too.
+ */
+const OPENABLE_PROTOCOLS: ReadonlySet<string> = new Set([
+  ...LINK_PROTOCOLS,
+  'x-apple.systempreferences:',
+]);
+
+/**
  * Registers a handler consulted by {@link openExternalUrl} before its default handling.
  * Interceptors are tried in registration order and the first to return true takes ownership of the URL.
  *
@@ -44,18 +60,68 @@ export function registerExternalUrlInterceptor(
  * over opens a new tab on web / the system browser.
  */
 export function openExternalUrl(url: string) {
+  // Callers pass URLs from content and other users; a script or local scheme
+  // must never reach a window or the native shell.
+  if (!isAllowedLinkUrl(url, OPENABLE_PROTOCOLS)) {
+    console.warn('openExternalUrl: refused a URL with an unsupported scheme');
+    return;
+  }
+
   for (const interceptor of externalUrlInterceptors) {
     if (interceptor(url)) return;
   }
 
-  if (isTauri()) {
-    // A same-window navigation reaches the native navigation plugin, which
-    // cancels the webview navigation and opens the URL in the system browser.
+  if (getNativeMobilePlatform()) {
+    // Mobile webviews have no new-window hook, so a same-window navigation
+    // reaches the native navigation plugin, which cancels it and opens the URL
+    // in the system browser.
     window.open(url, '_self')?.focus();
     return;
   }
 
+  // The native command takes only absolute URLs; anything else (a typed
+  // `example.com`) opens as a popup while the click's gesture is still live.
+  if (isTauri() && isAbsoluteUrl(url)) {
+    fireAndForget(openFromDesktop(url), 'open-external-url');
+    return;
+  }
+
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+}
+
+// `URL.canParse` is missing from older WebKitGTK releases.
+function isAbsoluteUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Desktop hands the URL to the native navigation policy, which opens the system
+ * browser or routes an app link in-app. Never navigate the app's own page: that
+ * runs its beforeunload handlers (ending a call, or raising a leave-page prompt
+ * that blocks the window) before the native side cancels the navigation. A
+ * popup request is no substitute: WebKitGTK drops one once the click's user
+ * gesture has expired, as it has after an awaited OAuth start.
+ */
+async function openFromDesktop(url: string) {
+  let opened: boolean;
+  try {
+    opened = await invoke<boolean>('open_external_url', { url });
+  } catch (error) {
+    // A native shell older than the command, or a failed call. The popup reaches the
+    // new-window hook on macOS and Windows; WebKitGTK may drop it now that
+    // the click's gesture has expired, as it did before the command existed.
+    window.open(url, '_blank', 'noopener,noreferrer');
+    if (error === 'Command open_external_url not found') return;
+    throw error;
+  }
+  // A standalone document on the app's origin needs a popup webview (no
+  // caller opens one through here today; WebKitGTK may drop it, as above).
+  if (!opened) window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export function transformShortIdInUrlPathname(pathname: string) {

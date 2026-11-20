@@ -6,6 +6,7 @@ use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
 };
+use entity_access::domain::telemetry::span_count;
 use futures::{StreamExt, stream};
 use initiative::domain::{
     models::InitiativeDetail,
@@ -13,6 +14,7 @@ use initiative::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::OnceCell;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{InitiativeGraphqlContext, graphql_error};
@@ -37,6 +39,12 @@ impl Loader<Uuid> for InitiativeLoader {
     type Value = async_graphql::Result<Arc<LoadedInitiative>>;
     type Error = Infallible;
 
+    #[tracing::instrument(
+        name = "graphql_initiative.load",
+        err,
+        skip_all,
+        fields(initiative_count = span_count(keys.len()))
+    )]
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
         Ok(stream::iter(keys.iter().copied().map(|id| async move {
             let result = self
@@ -65,7 +73,9 @@ pub fn initiative_loader(
     context: InitiativeGraphqlContext,
     user: MacroUserIdStr<'static>,
 ) -> DataLoader<InitiativeLoader> {
-    DataLoader::new(InitiativeLoader { context, user }, tokio::spawn)
+    DataLoader::new(InitiativeLoader { context, user }, |batch| {
+        tokio::spawn(batch.in_current_span())
+    })
 }
 
 async fn load_initiative(

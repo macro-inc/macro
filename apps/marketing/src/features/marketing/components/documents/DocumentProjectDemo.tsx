@@ -1,4 +1,4 @@
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   createEffect,

@@ -16,8 +16,8 @@ use macro_authorization::{
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::domain::activity_range::{ReadActivityError, ReadActivityResponse};
 use crate::domain::{ports::ActivityReads, service::ActivityReadService};
-use crate::inbound::toolset::{ReadActivityError, ReadActivityResponse};
 
 /// Router state: the activity read service and caller authentication.
 pub struct ActivityRouterState<R: ActivityReads, Auth> {

@@ -18,6 +18,8 @@ export type AnswerOption = { id: string; label: string; color: string | null };
 export type AnswerSource = {
   /** A table's text property holds markdown. */
   markdown: boolean;
+  /** A URL column: its text is a web or email address. */
+  link: boolean;
   /** The column's options, for a select column. */
   options: AnswerOption[];
   /** Tags always show their colour. */
@@ -64,6 +66,7 @@ function answerSource(
     markdown:
       kind.kind === 'text' &&
       detail?.definition.definition.data_type === 'STRING',
+    link: kind.kind === 'link',
     options:
       kind.kind === 'select'
         ? kind.options.map((option) => ({
@@ -82,6 +85,7 @@ function answerSource(
 function rowSource(table: string): AnswerSource {
   return {
     markdown: false,
+    link: false,
     options: [],
     tag: false,
     target: null,

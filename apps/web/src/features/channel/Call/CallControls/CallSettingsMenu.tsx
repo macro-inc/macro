@@ -23,7 +23,10 @@ export function CallSettingsMenu(props: {
           onOpenChange={props.onOpenChange}
         >
           <Dropdown.Trigger as={props.trigger} />
-          <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
+          <Dropdown.Content
+            portalScope="local"
+            class="w-80 max-w-[calc(100vw-2rem)]"
+          >
             {props.children}
           </Dropdown.Content>
         </Dropdown>

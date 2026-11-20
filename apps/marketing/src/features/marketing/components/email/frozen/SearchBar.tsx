@@ -1,7 +1,8 @@
 // Frozen from components/view-shell/SearchBar.tsx. Only the hotkey label is static.
+
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { TextField } from '@kobalte/core/text-field';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn, Surface } from '@ui';
 import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';

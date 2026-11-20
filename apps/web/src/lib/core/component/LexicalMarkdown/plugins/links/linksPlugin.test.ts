@@ -254,6 +254,39 @@ describe('composer link persistence', () => {
     cleanup();
   });
 
+  it('loads a URL sent before the composer linked it as a link', () => {
+    const url = 'https://example.com/status/1?a=x_y*z&s=20';
+    const { editor, cleanup } = editorWithLinks();
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        $getRoot().clear().append(paragraph);
+        paragraph.select();
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertText(url);
+      },
+      { discrete: true }
+    );
+    // The caret is still at the end of the URL, so it is not linked yet.
+    expect(textNodes(editor)).toEqual([
+      { text: url, linked: false, url: undefined },
+    ]);
+    const markdown = editor
+      .getEditorState()
+      .read(() => $convertToMarkdownString(INTERNAL_TRANSFORMERS));
+    cleanup();
+
+    const reopened = editorWithLinks();
+    reopened.editor.update(
+      () => $convertFromMarkdownString(markdown, INTERNAL_TRANSFORMERS),
+      { discrete: true }
+    );
+    expect(textNodes(reopened.editor)).toEqual([
+      { text: url, linked: true, url },
+    ]);
+    reopened.cleanup();
+  });
+
   it('keeps escaped URLs literal when imported into a live editor', () => {
     const editor = createEditor({
       nodes: SupportedNodeTypes,

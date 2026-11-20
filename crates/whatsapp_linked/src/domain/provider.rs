@@ -5,6 +5,7 @@
 use super::{
     jid::{Jid, is_group_jid},
     models::*,
+    people::ChatRoster,
     ports::*,
     service::{chat_fallback_name, connected},
 };
@@ -125,9 +126,13 @@ impl ChatProvider for WhatsAppProvider {
         self.groups.communities(chats).await
     }
 
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        self.groups.pictures(chats).await
+    }
+
     async fn members(&self, chat: &ChatRef) -> ExternalChatResult<Option<Members>> {
         Ok(self.groups.chat_roster(chat).await?.map(|roster| Members {
-            disappearing_seconds: roster.disappearing_seconds,
+            disappearing_seconds: roster.info.disappearing_seconds,
             members: members(&roster),
         }))
     }
@@ -283,7 +288,8 @@ impl ChatProvider for WhatsAppProvider {
 }
 
 /// A group's roster as the chat's side panel shows it.
-fn members(info: &GroupInfo) -> ExternalChatMembers {
+fn members(roster: &ChatRoster) -> ExternalChatMembers {
+    let info = &roster.info;
     ExternalChatMembers {
         name: info.name.clone(),
         participants: info
@@ -298,6 +304,7 @@ fn members(info: &GroupInfo) -> ExternalChatMembers {
                     .label()
                     .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
                 admin: participant.admin,
+                picture_file_id: roster.picture(&participant.identity.jid),
             })
             .collect(),
         announce: info.announce,

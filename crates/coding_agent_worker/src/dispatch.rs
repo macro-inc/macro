@@ -158,6 +158,7 @@ impl WorkExecutor for Dispatcher {
                     prompt: None,
                     prompt_action_id: None,
                     prompt_attachments: Vec::new(),
+                    prompt_client_id: None,
                     repo_url: self.workspace.repo_url.clone(),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
@@ -228,9 +229,10 @@ impl WorkExecutor for Dispatcher {
                 // uncovered window is the sub-millisecond gap between the
                 // websocket's 101 and the server's `on_upgrade` attach. If
                 // that race ever bites, failing the delivery is the right
-                // answer. SSE has no redelivery; a later `agent_trigger.existing`
-                // or a 409 on a repeat create (session already exists) is how
-                // a follow-up lands on the same session.
+                // answer. The stream resumes after the event it delivered,
+                // so this one is not redelivered; a later
+                // `agent_trigger.existing` or a 409 on a repeat create (session
+                // already exists) is how a follow-up lands on the same session.
                 self.api
                     .prompt(session, &sender, &content, message_id, context)
                     .await?;
@@ -255,6 +257,7 @@ impl WorkExecutor for Dispatcher {
                     prompt: None,
                     prompt_action_id: None,
                     prompt_attachments: Vec::new(),
+                    prompt_client_id: None,
                     repo_url: repo_url.or_else(|| self.workspace.repo_url.clone()),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),

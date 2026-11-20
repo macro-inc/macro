@@ -1,12 +1,12 @@
-import ChatText from '@phosphor/chat-text.svg';
-import FileIcon from '@phosphor/file.svg';
-import Hash from '@phosphor/hash.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Phone from '@phosphor/phone.svg';
-import PhoneCall from '@phosphor/phone-call.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import UserPlus from '@phosphor/user-plus.svg';
-import Users from '@phosphor/users.svg';
+import ChatText from '@icon/system/regular/chat-text.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Phone from '@icon/system/regular/phone.svg';
+import PhoneCall from '@icon/system/regular/phone-call.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
+import Users from '@icon/system/regular/users.svg';
 import { Button } from '@ui';
 import { TabsInset } from '@ui/components/TabsInset';
 import {
@@ -79,7 +79,7 @@ export function ChannelTopBar(props: {
     <ViewShell.TopBar class="call-bar call-channel-bar gap-3 py-0">
       <div class="flex min-w-0 shrink items-center gap-2">
         <Hash class="size-4 shrink-0" />
-        <span class="truncate text-sm font-semibold">launch</span>
+        <span class="truncate text-sm font-medium">launch</span>
       </div>
       <TabsInset
         class="call-channel-tabs shrink-0"
@@ -383,7 +383,7 @@ export function JoinCallEmptyState(props: {
           </For>
         </div>
         <div class="flex flex-col items-center gap-1">
-          <h2 class="text-lg font-semibold">Call in progress</h2>
+          <h2 class="text-lg font-medium">Call in progress</h2>
           <p class="max-w-sm text-sm text-ink-muted">
             {firstNames(props.people)}
           </p>

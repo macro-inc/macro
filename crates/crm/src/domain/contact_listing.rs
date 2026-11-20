@@ -26,7 +26,7 @@ pub struct CrmContactListQuery {
 /// Authorized scope chosen by the CRM service, never by a query filter.
 #[derive(Debug)]
 pub enum CrmContactListScope<'a> {
-    /// Every team the viewer belongs to. Hidden access is
+    /// Every team where the viewer currently has CRM access. Hidden access is
     /// checked separately against the viewer's role on each owning team.
     Viewer(&'a str),
     /// A verified team-scoped bot receipt, restricted to that team's records.

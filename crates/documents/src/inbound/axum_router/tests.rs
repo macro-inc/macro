@@ -152,6 +152,8 @@ struct FakeDocumentService {
     team_slug_result: Mutex<Option<TeamSlugResult>>,
     get_document_calls: Mutex<Vec<String>>,
     get_text_calls: Mutex<Vec<String>>,
+    /// Whether each edit asked to change sharing.
+    edit_calls: Mutex<Vec<bool>>,
     document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
     created_documents: Mutex<Vec<CreatedDocumentCall>>,
@@ -233,6 +235,17 @@ impl FakeDocumentService {
 }
 
 impl DocumentService for FakeDocumentService {
+    async fn set_appearance(
+        &self,
+        _receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        Ok(appearance)
+    }
+
     async fn internal_get_basic_document(
         &self,
         document_id: &str,
@@ -445,9 +458,13 @@ impl DocumentService for FakeDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
         _document_context: DocumentBasic,
-        _args: EditDocumentServiceArgs,
+        args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
-        panic!("unexpected edit_document call")
+        self.edit_calls
+            .lock()
+            .unwrap()
+            .push(args.share_permission.is_some());
+        Ok(())
     }
 
     async fn update_task_status(
@@ -643,6 +660,7 @@ fn create_document_response(owner: Owner) -> CreateDocumentResponseData {
         document_response: DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(
                 DocumentResponseMetadata {
+                    appearance: None,
                     document_id: "created-document".to_string(),
                     document_version_id: 1,
                     owner,
@@ -671,6 +689,7 @@ fn get_document_response(document_id: &str) -> GetDocumentResponseData {
     GetDocumentResponseData {
         document_metadata: DocumentMetadataWithContent::new(
             DocumentMetadata {
+                appearance: None,
                 document_id: document_id.to_string(),
                 document_version_id: 1,
                 owner: Owner::from_principal_str(JWT_USER_ID)
@@ -990,6 +1009,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),
@@ -1072,7 +1092,6 @@ fn canvas_routes(worker_url: &str) -> super::CanvasRouteDeps {
         ),
         admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
         recorder: Arc::new(ai_usage::NoOpUsageRecorder),
-        artifacts: Arc::new(|_| Box::pin(async { false })),
         images: Arc::new(FakeCanvasImages::default()),
     }
 }
@@ -1628,8 +1647,11 @@ async fn standard_internal_headers_reach_the_document_service() {
     )));
 }
 
+/// Different internal keys under the standard and legacy headers are two
+/// credentials, and which one the request acts with can't be told: refused
+/// before any is authorized.
 #[tokio::test]
-async fn standard_internal_headers_take_precedence_over_legacy_headers() {
+async fn different_keys_under_the_standard_and_legacy_headers_are_refused() {
     let (router, document_service, _access_service, authorization_service) = test_router();
     let request = finish_request(
         internal_create_request()
@@ -1642,25 +1664,9 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
 
     let (status, _body) = send(&router, request).await;
 
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        document_service.create_calls(),
-        [CreateDocumentCall {
-            principal: CreationPrincipal::User(user(STANDARD_INTERNAL_USER_ID)),
-        }]
-    );
-    assert!(document_service.import_calls().is_empty());
-    assert!(!authorization_service.calls().is_empty());
-    assert!(authorization_service.calls().iter().all(|call| matches!(
-        call,
-        AuthorizationCall::Internal {
-            provided_key,
-            claims: InternalIdentityClaims {
-                user_id: Some(user_id),
-                ..
-            },
-        } if provided_key == STANDARD_INTERNAL_KEY && user_id == STANDARD_INTERNAL_USER_ID
-    )));
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(document_service.create_calls().is_empty());
+    assert!(authorization_service.calls().is_empty());
 }
 
 #[tokio::test]
@@ -2287,4 +2293,33 @@ async fn missing_email_attachment_is_a_coded_not_found() {
         body["code"],
         model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
     );
+}
+
+/// A scoped session edits a document but never changes who it's shared with:
+/// the path is the same either way, so the handler reads the body.
+#[tokio::test]
+async fn a_scoped_session_edits_a_document_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let (router, documents, _, _) = test_router();
+    let edit = |body: Value| {
+        with_jwt(Request::patch("/text-document"))
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    };
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = json!({"sharePermission": {"teamShareAccessLevel": "view"}});
+    let (status, _) = scope_attribution(no_send, send(&router, edit(share.clone()))).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let rename = json!({"documentName": "Renamed"});
+    let (status, _) = scope_attribution(no_send, send(&router, edit(rename))).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = send(&router, edit(share)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(*documents.edit_calls.lock().unwrap(), [false, true]);
 }

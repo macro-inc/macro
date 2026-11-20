@@ -186,6 +186,7 @@ async fn a_skipped_section_needs_no_answers_and_its_answers_are_neither_checked_
                         }]),
                     },
                 ]],
+                ids: None,
             },
         }]
     );
@@ -276,6 +277,7 @@ async fn a_shown_section_asks_its_questions_and_later_gates_see_its_answers() {
                         }]),
                     },
                 ]],
+                ids: None,
             },
         }]
     );

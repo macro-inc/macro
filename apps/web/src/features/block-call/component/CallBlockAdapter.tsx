@@ -5,17 +5,19 @@ import {
   type CallTranscriptTarget,
   URL_PARAMS,
 } from '@block-call/constants';
-import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { callDetailSearch } from '../call-route';
+import { CallRecordingHeader } from '../views/call-recording-header';
+import { MobileCallRecordingHeader } from '../views/mobile/call-recording-header';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
-import { CallRecordingSplitHeader } from './CallRecording/CallRecordingSplitHeader';
+import { CallRecordingRoot } from './CallRecording/CallRecordingRoot';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
 
 export function CallBlockAdapter(props: CallBlockProps) {
@@ -128,10 +130,15 @@ export function CallBlockAdapter(props: CallBlockProps) {
       <div class="h-full flex flex-col @container">
         <Show when={callRecord.isPending ? undefined : callRecord.data}>
           {(data) => (
-            <SidePanel.Layout floating>
+            <CallRecordingRoot callId={callId}>
               <CallSidePanelSections record={data()} callId={callId} />
               <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-                <CallRecordingSplitHeader record={data()} />
+                <Show
+                  when={isTouchDevice()}
+                  fallback={<CallRecordingHeader record={data()} />}
+                >
+                  <MobileCallRecordingHeader record={data()} callId={callId} />
+                </Show>
                 <CallRecordingBody
                   record={data()}
                   callId={callId}
@@ -139,10 +146,10 @@ export function CallBlockAdapter(props: CallBlockProps) {
                   messageTarget={messageTarget()?.id}
                   messageTargetRequestKey={messageTarget()?.requestKey}
                   onClearMessageTarget={clearMessageTarget}
-                  showOverlayHeaderGap
+                  headerToggle
                 />
               </div>
-            </SidePanel.Layout>
+            </CallRecordingRoot>
           )}
         </Show>
       </div>

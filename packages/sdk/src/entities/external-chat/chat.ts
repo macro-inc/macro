@@ -4,8 +4,10 @@ import type {
   ExternalChatReplyContent,
   UpdateSharePermissionRequestV2,
 } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { FavoritableEntity } from '../entity';
 import { User } from '../users/user';
 import { communityOf, type WhatsAppCommunity } from '../whatsapp/chat';
@@ -37,6 +39,18 @@ export type ExternalChatContent =
 export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
   /** Canonical sharing and favorites kind. */
   readonly entityType = 'external_chat' as const;
+
+  /**
+   * Share this chat with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * chat; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'external_chat', this.id);
+  }
 
   /** Reference an added chat; access is checked on each request. */
   static byId(client: MacroClient, id: string): ExternalChat {
@@ -96,27 +110,29 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
   }
 
   /**
-   * Iterate newest-first timeline pages lazily.
+   * Iterate newest-first timeline pages lazily; `maxItems` caps the total.
    *
    * @readonly
    */
-  async *messages(
-    options: { limit?: number } = {},
+  messages(
+    options: { limit?: number; maxItems?: number } = {},
   ): AsyncGenerator<ExternalChatMessage> {
-    yield* paginate(async (before) => {
-      const page = unwrap(
-        await this.client.storage.externalChatMessages({
-          path: { chat_id: this.id },
-          query: { before, limit: options.limit },
-        }),
-      );
-      return {
-        items: page.messages.map((message) =>
-          ExternalChatMessage.from(this.client, this, message),
-        ),
-        nextCursor: page.nextCursor,
-      };
-    });
+    return iterate('externalChat.messages', options, { limit: true }, () =>
+      paginate(async (before) => {
+        const page = unwrap(
+          await this.client.storage.externalChatMessages({
+            path: { chat_id: this.id },
+            query: { before, limit: options.limit },
+          }),
+        );
+        return {
+          items: page.messages.map((message) =>
+            ExternalChatMessage.from(this.client, this, message),
+          ),
+          nextCursor: page.nextCursor,
+        };
+      }),
+    );
   }
 
   /**
@@ -193,7 +209,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     return ExternalChatUpload.from(this, record);
   }
 
-  /** Personal sessions and owner API credentials can send. Bots never send.
+  /** Send to the chat; an agent's program must quote the user's reply approving this send in `userConfirmation`, or it is refused (403).
+   *
+   * Write the message out, ask, and send only after the user says yes; the
+   * request that asked for the message is not the approval. Personal sessions
+   * and owner API credentials can send. Bots never send.
    * Preserve the idempotency key; uncertain outcomes are never automatically resent.
    * The server enforces one request per second per user.
    *
@@ -202,7 +222,12 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
    */
   async send(
     content: ExternalChatContent,
-    options: { idempotencyKey: string; replyTo?: ExternalChatMessage },
+    options: {
+      idempotencyKey: string;
+      replyTo?: ExternalChatMessage;
+      /** The user's own reply approving this send, quoted verbatim. Required from an agent's program. */
+      userConfirmation?: string;
+    },
   ): Promise<ExternalChatSend> {
     if (options.replyTo) this.assertChat(options.replyTo.chat);
     const message = match(content)
@@ -241,6 +266,7 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
           idempotencyKey: options.idempotencyKey,
           message,
           replyTo: options.replyTo?.id,
+          userConfirmation: options.userConfirmation,
         },
       }),
     );

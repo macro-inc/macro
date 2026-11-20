@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import {
   afterAll,
@@ -13,6 +13,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import { createRecordingPlayback } from '../../primitives/recording-playback';
 import { CallRecordingVideo } from './CallRecordingVideo';
 
 const recordingUrl =
@@ -84,6 +85,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  delete document.documentElement.dataset.modality;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -135,6 +138,60 @@ describe('CallRecordingVideo', () => {
       expect(screen.queryByRole('alert')).toBeNull();
     }
   );
+
+  it('dismisses controls after the pointer moves from controls to video', () => {
+    vi.useFakeTimers();
+    const { container, unmount } = render(() => {
+      const [element, setElement] = createSignal<HTMLVideoElement>();
+      const playback = createRecordingPlayback(element);
+      return (
+        <CallRecordingVideo
+          url={recordingUrl}
+          playback={playback}
+          setVideoRef={setElement}
+        />
+      );
+    });
+    const video = getVideo(container);
+    Object.defineProperty(video, 'paused', { value: false });
+    fireEvent.play(video);
+    const controls = container.querySelector('[data-recording-controls]');
+    expect(controls).not.toBeNull();
+    fireEvent.pointerEnter(controls!);
+    fireEvent.pointerMove(controls!);
+    vi.advanceTimersByTime(3000);
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
+    fireEvent.pointerMove(video);
+    vi.advanceTimersByTime(3000);
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+    unmount();
+  });
+  it('keeps controls reachable while the playback group has keyboard focus', () => {
+    vi.useFakeTimers();
+    const { container, unmount } = render(() => {
+      const [element, setElement] = createSignal<HTMLVideoElement>();
+      const playback = createRecordingPlayback(element);
+      return (
+        <CallRecordingVideo
+          url={recordingUrl}
+          playback={playback}
+          setVideoRef={setElement}
+        />
+      );
+    });
+    const video = getVideo(container);
+    Object.defineProperty(video, 'paused', { value: false });
+    fireEvent.play(video);
+    document.documentElement.dataset.modality = 'keyboard';
+    const group = screen.getByRole('group', { name: 'Recording playback' });
+    group.focus();
+    vi.advanceTimersByTime(3000);
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
+    group.blur();
+    vi.advanceTimersByTime(3000);
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+    unmount();
+  });
 
   it('clears the fallback when the recording URL changes', async () => {
     const [url, setUrl] = createSignal(recordingUrl);

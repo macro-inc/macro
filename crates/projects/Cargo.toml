@@ -12,6 +12,7 @@ ai_tools = [
   "ports",
 ]
 axum = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:entity_registry",
   "dep:macro_authorization",
@@ -44,6 +45,7 @@ service = ["dep:entity_access_management", "dep:shared_entity_registry", "ports"
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+agent_correlation = { path = "../agent_correlation", optional = true }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }

@@ -323,3 +323,36 @@ fn update_request_distinguishes_omitted_null_and_present_values() {
         Some(Some(AccessLevel::Comment))
     );
 }
+
+#[tokio::test]
+async fn a_session_that_may_not_share_creates_private_items() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    for scope in [SessionScope::Generation, SessionScope::NoSend] {
+        let attribution = Attribution {
+            scope: Some(scope),
+            ..Attribution::default()
+        };
+        let permissions = scope_attribution(attribution, async {
+            vec![
+                SharePermissionV2::new_document_share_permission(Some(FileType::Md), None),
+                SharePermissionV2::new_chat_share_permission(TEAM_PUBLIC),
+                SharePermissionV2::new_project_share_permission(TEAM_TEAM),
+                SharePermissionV2::new_initiative_share_permission(TEAM_PUBLIC),
+                SharePermissionV2::from_link_share_state(LinkShareState::On {
+                    scope: LinkShare::Public,
+                    level: AccessLevel::Edit,
+                }),
+            ]
+        })
+        .await;
+        for permission in permissions {
+            assert_eq!(permission, share(None, None));
+        }
+    }
+    assert_eq!(
+        SharePermissionV2::new_chat_share_permission(None),
+        share(Some(LinkShare::Public), Some(AccessLevel::View))
+    );
+}

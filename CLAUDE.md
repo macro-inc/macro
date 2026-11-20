@@ -27,6 +27,8 @@ patterns in older code.
 | `crates/` | Reusable backend libraries, domain services, and adapters. |
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
+| `agent-teammates/` | Agents that work in Macro as their own users: the `muppet` library and a `starter-agent` template. Outside the root workspace and its checks. |
+| `packages/muppet/`, `packages/starter-agent/` | The hosted agent teammate runtime, in the root workspace: the muppet library and the template each agent's repository starts from (`docs/design/agent-teammates.md`). |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
 | `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
 
@@ -38,7 +40,7 @@ patterns in older code.
 | `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
 | `.agents/skills/` | Task workflows. Cursor loads this directory. `.claude/skills` and `.pi/skills` symlink here. |
 | `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
-| `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
+| `.agents/agents/` | Subagents (`auditor`, `browser-verifier`, `db-reviewer`). `.claude/agents` symlinks here. |
 | `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
 | `rules/ast-grep/` | Mechanically enforced code rules, run by `just check`. |
 
@@ -52,9 +54,11 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
 | Editing frontend or backend code that adds a flow, view, or hot path, or tracing one | `instrumentation` skill |
 | Finding slow web or desktop app flows in Datadog | `perf-investigation` skill |
+| Finding why agent sessions are slow, costly, or wrong | `agent-session-analysis` skill |
 | Adding, reading or removing a feature flag (web or backend) | `feature-flags` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
+| Reviewing a diff before a push: query cost, migration locks | `review` skill |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
 | Android Play releases from pull requests | [Android development](docs/development/android.md) |
@@ -113,6 +117,8 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 
 - Commits, branches, and PRs follow the `git` skill: Conventional Commit titles
   such as `fix(onboarding): preserve team inputs`, and Why / What bodies with no test plan.
+- Run the `review` skill before every push to a PR, and fix or justify its
+  findings; changed SQL or migrations always get its database reviews.
 - Run the `audit` skill (via the `auditor` subagent) before saying work is done.
 - Update every doc your change makes stale, in the same change: the `AGENTS.md`
   of each directory you touched, `docs/guides/`, `docs/architecture/`, the
@@ -133,9 +139,9 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).
   `just check full` adds TypeScript checking and Rust clippy; `just rust-check` is
   the workspace Rust type check. These checks do not replace tests.
-- Exercise user-visible changes in a browser. If routes, creation flows, editors,
-  AI surfaces, or composer behavior change, update the corresponding
-  [app agent guide](docs/agent-guide/README.md) in the same change.
+- Leave browser checks, browser fixtures, and screenshots to the user when requested; keep the requested preview running and stop browsers or local stacks you started solely for verification.
+- If routes, creation flows, editors, AI surfaces, or composer behavior change,
+  update the corresponding [app agent guide](docs/agent-guide/README.md) in the same change.
 - Report what you tested and any checks blocked by the environment.
 
 ## Keeping guidance current

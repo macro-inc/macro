@@ -1,7 +1,6 @@
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { describe, expect, it } from 'vitest';
 import type { DriveSelection } from '../context/drive-source';
-import { availableDriveState } from '../primitives/drive-state';
 import {
   selectDriveDatabases,
   selectSidebarDatabases,
@@ -60,6 +59,21 @@ const listed: ListedDatabase[] = [
 const none: ReadonlySet<string> = new Set();
 
 describe('Drive database listing', () => {
+  it('keeps appearance-only changes in both list and sidebar projections', () => {
+    const appearance = {
+      icon: { kind: 'emoji' as const, value: '🚀' },
+      color: null,
+    };
+    const updated = listed.map((item) => ({
+      ...item,
+      database: { ...item.database, appearance },
+    }));
+    const rows = selectDriveDatabases(updated, selection, 'me', none);
+    const sidebar = selectSidebarDatabases(updated, none);
+    expect(rows[0]).toMatchObject({ id: 'mine', grant: 'owner', appearance });
+    expect(sidebar.map((item) => item.id)).toEqual(['shared', 'mine']);
+    expect(sidebar.every((item) => item.appearance === appearance)).toBe(true);
+  });
   it('separates owned and shared databases and excludes trash', () => {
     expect(
       selectDriveDatabases(listed, selection, 'me', none).map(
@@ -206,32 +220,6 @@ describe('Drive database listing', () => {
     expect(
       orderDriveEntities(entities, selected, []).map((entity) => entity.id)
     ).toEqual(['shared', 'mine']);
-  });
-});
-
-describe('disabled database filters', () => {
-  it('masks a persisted Database choice while keeping other types and route intent', () => {
-    const state = {
-      ...selection,
-      facets: { type: ['database', 'doc-markdown'], tags: ['urgent'] },
-      expandedFolderIds: [],
-      favoritesOpen: false,
-      databasesOpen: true,
-      rootOpen: true,
-    };
-    expect(availableDriveState(state, false, true).facets).toEqual({
-      type: ['doc-markdown'],
-      tags: ['urgent'],
-    });
-    expect(availableDriveState(state, true, true)).toBe(state);
-    expect(
-      availableDriveState(
-        { ...state, facets: { type: ['form', 'doc-markdown'], tags: [] } },
-        true,
-        false
-      ).facets.type
-    ).toEqual(['doc-markdown']);
-    expect(state.facets.type).toEqual(['database', 'doc-markdown']);
   });
 });
 

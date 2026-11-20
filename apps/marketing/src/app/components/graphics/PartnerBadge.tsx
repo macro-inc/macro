@@ -87,9 +87,9 @@ export function PartnerBadge() {
 
       <text
         fill="var(--c1)"
-        font-family="Inter, body, sans-serif"
+        font-family="Inter Variable, Inter, sans-serif"
         font-size="9.2"
-        font-weight="700"
+        font-weight="500"
         letter-spacing="2.4"
         textLength={RING_LEN}
         lengthAdjust="spacing"

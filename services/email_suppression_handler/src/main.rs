@@ -1,5 +1,7 @@
+mod composition;
+mod domain;
 mod handler;
-mod model;
+mod outbound;
 
 use handler::handler;
 
@@ -9,6 +11,7 @@ use lambda_runtime::{Error, LambdaEvent, run, service_fn, tracing};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 
 env_vars! {
     struct DatabaseUrl;
@@ -32,10 +35,14 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initialized db client");
 
+    let service = composition::service(db);
     let func = service_fn(move |event: LambdaEvent<SnsEvent>| {
-        let db = db.clone();
-        async move { handler(db, event).await }
+        let service = Arc::clone(&service);
+        async move { handler(service, event).await }
     });
 
     run(func).await
 }
+
+#[cfg(test)]
+mod test;

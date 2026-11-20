@@ -9,7 +9,7 @@ entities.
 ## Start here
 
 - `src/objects.rs`: `GraphqlCrmPipeline`/`GraphqlCrmPipelineEntry` and related
-  typed objects.
+  typed objects, including monetary-column currency links and system defaults.
 - `src/loaders.rs`: `PipelineEntriesLoader` — batches pipeline entries by
   record (company/contact) across a query.
 - `src/context.rs`: `CrmGraphqlContext` and the object-safe `CrmPipelineApi`

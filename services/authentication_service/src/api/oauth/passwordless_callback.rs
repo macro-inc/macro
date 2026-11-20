@@ -7,11 +7,16 @@ use axum::{
 use std::collections::HashMap;
 use tower_cookies::Cookies;
 
-use crate::api::{
-    context::ApiContext,
-    utils::{
-        append_signed_up_param_if_new_user, create_access_token_cookie, create_refresh_token_cookie,
+use crate::{
+    api::{
+        context::ApiContext,
+        utils::{
+            append_signed_up_param_if_new_user, create_access_token_cookie,
+            create_refresh_token_cookie,
+        },
     },
+    outbound::email_code_signup::EmailCodeSignupEffects,
+    service::user::email_code_signup::{EmailCodeLogin, finish_email_code_signup},
 };
 use fusionauth::error::FusionAuthClientError;
 
@@ -38,7 +43,9 @@ pub struct Params {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, cookies))]
+// The path holds the one-time login code and the query the email address;
+// keep both out of the span.
+#[tracing::instrument(skip_all)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     cookies: Cookies,
@@ -107,6 +114,24 @@ pub async fn handler(
             return Err((StatusCode::UNAUTHORIZED, "invalid code").into_response());
         }
     }
+
+    // The code proves the address. An account an email-code request created
+    // joins its domain team and is referred now, before the session that
+    // would show them starts.
+    finish_email_code_signup(
+        &EmailCodeSignupEffects {
+            pool: &ctx.db,
+            teams: &*ctx.teams_service,
+            referrals: &*ctx.referral_service,
+        },
+        EmailCodeLogin {
+            fusionauth_user_id: &passwordless_response.user.id,
+            email: &passwordless_response.user.email.to_lowercase(),
+            user_data: passwordless_response.user.data.as_ref(),
+            referral_code: passwordless_response.state.referral_code.as_deref(),
+        },
+    )
+    .await;
 
     cookies.add(create_access_token_cookie(&passwordless_response.token));
     cookies.add(create_refresh_token_cookie(

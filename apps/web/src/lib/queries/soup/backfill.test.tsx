@@ -21,10 +21,6 @@ import {
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
-const featureFlagMocks = vi.hoisted(() => ({
-  useFeatureFlag: vi.fn(),
-}));
-
 const graphqlMocks = vi.hoisted(() => ({
   getGraphqlSoupCacheHost: vi.fn(),
   hydrateGraphqlSoup: vi.fn(),
@@ -62,13 +58,8 @@ const mockCacheHost = {
   ),
 };
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: featureFlagMocks.useFeatureFlag,
-}));
-
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_BACKFILL: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 
 vi.mock('@core/cross-tab/tab-leader', () => ({
@@ -114,7 +105,7 @@ function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
     ...overrides,
   };
   localStorage.setItem(
-    'graphql-soup-backfill:v18:user-1:core-entities',
+    'graphql-soup-backfill:v19:user-1:core-entities',
     JSON.stringify(checkpoint)
   );
 }
@@ -134,9 +125,6 @@ function BackfillRunner(props: { userId: string }) {
 describe('runSoupBackfills', () => {
   beforeEach(() => {
     localStorage.clear();
-    featureFlagMocks.useFeatureFlag
-      .mockReset()
-      .mockReturnValue(() => ({ enabled: true, payload: undefined }));
     cacheGenerationCallbacks.clear();
     mockCacheHost.onCacheGenerationChanged.mockClear();
     mockCacheHost.currentStorageGeneration
@@ -334,6 +322,7 @@ describe('runSoupBackfills', () => {
     expect(
       DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
     ).toEqual([
+      'channels',
       'core-entities',
       'initiatives',
       'email-signal-filter-metadata',
@@ -749,25 +738,6 @@ describe('runSoupBackfills', () => {
     ]);
   });
 
-  it('starts after the GraphQL flag becomes enabled', async () => {
-    const [enabled, setEnabled] = createSignal(false);
-    featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
-      enabled: enabled(),
-      payload: undefined,
-    }));
-    graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
-
-    const rendered = render(() => <BackfillRunner userId="user-1" />);
-    expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
-
-    setEnabled(true);
-
-    await vi.waitFor(() =>
-      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled()
-    );
-    rendered.unmount();
-  });
-
   it('does not hydrate through a disabled cache host', async () => {
     vi.useFakeTimers();
     graphqlMocks.getGraphqlSoupCacheHost.mockReturnValue({
@@ -831,7 +801,7 @@ describe('runSoupBackfills', () => {
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v18:user-1:core-entities',
+        'graphql-soup-backfill:v19:user-1:channels',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -887,14 +857,14 @@ describe('runSoupBackfills', () => {
         storage === 'preserved'
           ? { nextCursor: 'stale-cursor', pagesFetched: 12 }
           : { nextCursor: null, pagesFetched: 0 };
-      expect(
-        loadSoupBackfillCheckpoint('user-1', 'core-entities')
-      ).toMatchObject(expected);
+      expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject(
+        expected
+      );
       finishPages[0]({ nextCursor: 'obsolete-cursor' });
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(
-        loadSoupBackfillCheckpoint('user-1', 'core-entities')
-      ).toMatchObject(expected);
+      expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject(
+        expected
+      );
       rendered.unmount();
     }
   );
@@ -903,9 +873,9 @@ describe('runSoupBackfills', () => {
     'resumes completed lane watermarks only for %s storage',
     async (storage) => {
       const watermark = '2026-09-01T00:00:00.000Z';
-      for (const checkpointId of ['core-entities', 'email-thread-pages']) {
+      for (const checkpointId of ['channels', 'email-thread-pages']) {
         localStorage.setItem(
-          `graphql-soup-backfill:v18:user-1:${checkpointId}`,
+          `graphql-soup-backfill:v19:user-1:${checkpointId}`,
           JSON.stringify({
             userId: 'user-1',
             storageGeneration: 'storage-1',
@@ -997,9 +967,7 @@ describe('runSoupBackfills', () => {
     const second = render(() => <BackfillRunner userId="user-1" />);
     try {
       await vi.waitFor(() =>
-        expect(
-          loadSoupBackfillCheckpoint('user-1', 'core-entities')
-        ).toMatchObject({
+        expect(loadSoupBackfillCheckpoint('user-1', 'channels')).toMatchObject({
           nextCursor: 'committed-page-cursor',
           pagesFetched: 1,
         })
@@ -1049,7 +1017,7 @@ describe('runSoupBackfills', () => {
       expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
     );
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'core-entities').scanStartedAt
+      loadSoupBackfillCheckpoint('user-1', 'channels').scanStartedAt
     ).not.toBeNull();
 
     setUserId('user-2');
@@ -1060,7 +1028,7 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[0]?.aborted).toBe(true);
     expect(fetchSignals[1]?.aborted).toBe(false);
     expect(
-      loadSoupBackfillCheckpoint('user-2', 'core-entities').scanStartedAt
+      loadSoupBackfillCheckpoint('user-2', 'channels').scanStartedAt
     ).not.toBeNull();
 
     rendered.unmount();
@@ -1071,10 +1039,6 @@ describe('runSoupBackfills', () => {
 it('warms sender metadata before paged backfill and pauses it without identity or leadership', () => {
   const [user, setUser] = createSignal<string>();
   const [leader, setLeader] = createSignal(true);
-  const [enabled, setEnabled] = createSignal(true);
-  featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
-    enabled: enabled(),
-  }));
   leaderMocks.createTabLeaderSignal.mockReturnValue(leader);
   mailAccounts.mockClear();
   const rendered = render(() => {
@@ -1089,8 +1053,7 @@ it('warms sender metadata before paged backfill and pauses it without identity o
     setLeader(false);
     expect(active()).toBe(false);
     setLeader(true);
-    setEnabled(false);
-    expect(active()).toBe(false);
+    expect(active()).toBe(true);
   } finally {
     rendered.unmount();
   }

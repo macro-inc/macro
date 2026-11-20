@@ -136,6 +136,9 @@ it('shows human approval before the coding result and opens its review', () => {
   expect(view.getAllByText(/build this\./)).toHaveLength(1);
   expect(view.queryByRole('button', { name: 'Open session' })).toBeNull();
   vi.advanceTimersByTime(6100);
+  // The completed Cursor session stays available after the old loop delay.
+  vi.advanceTimersByTime(20000);
+  expect(view.getByRole('button', { name: 'Open session' })).toBeTruthy();
   fireEvent.click(
     view.getByRole('button', { name: /#248 · Improve the client upload flow/ })
   );

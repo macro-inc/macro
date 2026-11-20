@@ -116,7 +116,7 @@ export class EmailDraft extends EmailMessage {
    * 8601, in the future). Write the draft out for the user and ask before
    * scheduling it; the request that asked for the email is not the approval.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async schedule(sendTime: string, options?: DraftSendOptions): Promise<void> {
@@ -142,7 +142,7 @@ export class EmailDraft extends EmailMessage {
    * about a minute; until then {@link unschedule} still stops it. Write the
    * draft out for the user and ask before sending it.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async send(options?: DraftSendOptions): Promise<void> {

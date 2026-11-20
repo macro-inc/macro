@@ -1,8 +1,8 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import FileText from '@phosphor/file-text.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Plus from '@phosphor/plus.svg';
-import Table from '@phosphor/table.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Table from '@icon/system/regular/table.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { homepagePeople } from '../../core/homepage-demo-people';

@@ -63,8 +63,8 @@ An API key always acts as the user who minted it. `requestedAs` is bot-only.
 #### Agent accounts
 
 An agent has its own account and seat. Invite one with
-`(await macro.teams.current()).invite('agent@example.com', { agent: true })`, or sign
-up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
+`(await macro.teams.current()).invite('agent@example.com', { agent: true })` from your own
+key (an agent's program is refused), or sign up at https://macro.com/app/signup/agent. After signing in, the agent sees its API key once in the
 web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
@@ -88,7 +88,9 @@ const grant = await macro.accountManagers.askToManage(person);
 const token = await grant.claimToken();
 ```
 
-A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+An agent's program (ExecuteCode, a routine) can't ask, approve or claim: those return 403,
+so an agent account uses its own API key. A person can ask instead, with
+`macro.accountManagers.askToBeManagedBy(agent)`. Only the
 manager can claim, so the agent approves and claims with its own client, using the grant id
 from the card in the DM: `macro.accountManagers.byId(id)`.
 
@@ -183,15 +185,38 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+### Entity appearance
+
+Markdown documents, snippets, initiatives (task projects), forms, databases,
+and routines expose `appearance()` and `setAppearance()`. Appearance is shared
+with other viewers and requires edit access to change.
+
+```ts
+await doc.setAppearance({
+  icon: { kind: 'emoji', value: '🌱' },
+  color: 'green',
+});
+const appearance = await doc.appearance();
+await doc.setAppearance({}); // restore the default icon and color
+```
+
+Writes replace both overrides without changing content timestamps. Omit an
+override to restore its default. Colors use the same twelve-color palette as
+tags and only tint Macro icons; native emoji keep their own colors.
+
+### Sharing permissions
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await doc.shareWithChannel(channel);
 await event.shareWithChannel(channel);
 ```
 
@@ -259,6 +284,7 @@ server refuses anything but one `SELECT` that compiles, and chart columns the
 `SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
 `<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
 views it. `withView()` restyles the answer without saving a new question.
+`macro.databases.saveQuery()` saves a question whose tables span databases.
 
 ```ts
 const question = await database.saveQuery({
@@ -442,26 +468,39 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
+Pass `{ silent: true }` to `send` or `reply` for a routine update that should
+notify nobody, mentioned people included; the message still appears in the
+channel. It works with every credential.
+
 ### Routines
 
-Create scheduled or event-triggered agent tasks through `macro.routines`.
-Routine configuration takes typed agent and event resource handles:
+Create scheduled or event-triggered routines through `macro.routines`. A
+routine runs `steps` in order: an `agent` ("Ask AI") step hands the run to a
+model or agent, and `code` steps run TypeScript against this SDK as the owner,
+type-checked when saved. Routine configuration takes typed agent and event
+resource handles:
 
 ```ts
 const routine = await macro.routines.create({
   name: 'Daily summary',
-  prompt: 'Summarize my open tasks.',
-  userPrompt: 'A daily task summary',
-  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+  trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'America/New_York' },
+  steps: [
+    {
+      type: 'agent',
+      instructions: 'Summarize my open tasks.',
+      model: 'anthropic/claude-sonnet-5-5',
+    },
+  ],
 });
 await routine.setEnabled(false);
 const transcript = await routine.execute(); // Chat or AgentSession, if available
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
-A routine can instead run `steps` in order: `code` steps run TypeScript against
-this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
-hands the run to a model or agent. Code steps' writes are attributed to Macro's
+A cron `schedule` has 6 fields (second minute hour day-of-month month
+day-of-week) or 7 with a year. The older single agent task (`prompt` and
+`userPrompt`, with `model`, `agent` or both, instead of `steps`) still saves
+and runs as one Ask AI step. Code steps' writes are attributed to Macro's
 agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
 user explicitly asks for the routine to act, send or post as them:
 
@@ -601,12 +640,93 @@ fails with a 409 conflict instead of being overwritten, and `view.refresh()`
 picks up the current revision. Order is personal; `reorder` sets yours for one
 kind.
 
+### CRM email contribution
+
+`macro.crm.emailPrivacy` manages only the authenticated member's contribution,
+including when their CRM viewing permission is off. `get()` is read-only and
+returns the current mode, selectors, mailbox handle and observed-state token.
+`settings()` reads domain exclusions; `excludedThreads()` lazily lists private
+thread exceptions. Existing team-wide domain methods remain on `macro.crm`;
+`emailPrivacy.blockDomain` and `unblockDomain` edit personal exclusions.
+
+Rules use `{ schemaVersion: 1, include: [...] }`. Selectors are `thread` with an
+`EmailThread`, `contact` with a `Contact`, `company` with a `Company`, or
+`address` / `domain` with the corresponding string. A participant match includes
+the whole thread, across eligible past and future mail. Contact/company rules
+follow live records. Private-thread, domain and personal-email exclusions always
+win. Narrowing or withdrawal leaves CRM records in place; a teammate's eligible
+copy remains independent.
+
+```ts
+const privacy = macro.crm.emailPrivacy;
+const state = await privacy.get();
+if (!state.authoringAvailable || !state.token) {
+  throw new Error('Selective contribution is unavailable.');
+}
+const checked = await privacy.validateRules({
+  schemaVersion: 1,
+  include: [{ kind: 'domain', domain: 'example.com' }],
+});
+const idempotencyKey = crypto.randomUUID();
+const result = await privacy.replaceRules(checked.rules, {
+  ifPolicy: state.token,
+  idempotencyKey,
+});
+```
+
+`replaceRules` directly activates the replacement; member-authorized agents need
+no separate human confirmation. `enableAll` and `withdraw` take the same options.
+Keep the exact token, key and command for retries. A 409 requires fresh inspection
+and a new decision; the SDK never refreshes or retries automatically. A result
+with `replayed: true` describes the original commit, not current sharing. Server
+rollout and credential restrictions remain authoritative.
+
+Optional counts use `preview()` to inspect the current slot, then
+`previewRules(rules, { ifPolicy: state.token, ifPreview: previousPreview })`.
+A preview handle's `get()` refreshes only that preview and `cancel()` names that
+exact identity. Superseded handles cannot read or cancel newer work. Only
+`status: 'complete'` means exact counts; running/partial counts are lower bounds,
+and stale/cancelled results are not current estimates. Counts are mailbox-local,
+limited to 10,000 scanned raw threads and five minutes. Previewing does not grant
+contribution or schedule mail backfill.
+
+`history()` iterates owner-only audit events in pages of fifty. Revision handles
+on current state, mutation outcomes and history read immutable definitions with
+`get()`; they never fetch target content or reapply rules. Verified agent/session
+provenance is read from history, never supplied by the caller.
+
+Legacy members without a policy token retain `setConsent(false)` for withdrawal.
+`setConsent(true, inbox)` uses the existing all-mail opt-in, bound to the chosen
+primary inbox; members with a policy token use `enableAll` / `withdraw` instead.
+`setThreadExcluded(thread, excluded)` reuses the existing thread-exclusion API and
+its rollout gate. The SDK changes no flags and adds no settings UI.
+
+### CRM member access
+
+`macro.crm.access()` reads the caller's current team and effective CRM access,
+even when access is denied. `team.members()` includes `crmAccess` for each member.
+Admins and owners use `team.setMemberCrmAccess(user, enabled)` to deny or restore
+an ordinary member; admins and owners cannot be denied. This never changes the
+member's mailbox contribution consent. The mutation returns 503 until the
+server rollout enables access changes; existing denials remain enforced while
+changes are disabled. Record, search, email and tool requests
+recheck access on the server. A separately shared pipeline still exposes its own
+rows and cell values, while its CRM record references need separate access.
+
 ### CRM contact fields
 
-`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
-an identical retry is safe. Existing addresses cannot be replaced or cleared.
-`setCompany(company)` links or switches a known personal-provider contact to a
-Company handle in the same team. Unlinking is not supported. Both preserve
+A contact holds several addresses, one of them primary: `contact.emails()` lists
+them, primary first. `addEmail(address)` adds one, `setEmail(address)` makes one
+the primary (adding it when the contact does not hold it), and
+`removeEmail(address)` removes one; removing the primary promotes the oldest
+address left. Removing an address deletes nothing else: the contact stops
+showing that address's mail. An identical retry of any of them is safe.
+
+`setCompany(company)` links or switches a contact with a personal-provider
+primary to a Company handle in the same team, and `unlinkCompany()` removes the
+link. A contact with an address on one of its company's domains
+(`contact.companyDomain()`) can do neither, and the last of those addresses
+(`contact.companyDomainEmails()`) cannot be removed. All of them preserve
 identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
@@ -622,6 +742,14 @@ order through pipeline permissions.
 atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
+
+A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
+`Won` or `Lost`, independent of Stage) and a currency field beside each
+monetary field, such as `Revenue currency`; new entries default to `Open` and
+`USD`, and neither field can be emptied. `listWithFields()` and `find()` name
+each monetary field's `currencyField`, `find()` returns one total per
+`currency` for it, never converted or combined, and an update's changes carry
+`beforeCurrency` and `afterCurrency` for a monetary field.
 
 `macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and
@@ -780,8 +908,10 @@ takes typed source/target references and returns a deletable mention handle.
 `macro.unfurls.get(url)` and `bulk(urls)` read URL preview metadata.
 
 `macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
-the handle only retains metadata. `list()` and `key.delete()` manage keys.
-`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+the handle only retains metadata. It and `bot.createToken()` are refused to an
+agent's program (ExecuteCode, a routine), whose results reach the model. `list()` and `key.delete()` manage keys.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization;
+an agent's program is refused.
 
 `chat.send({ content, model, attachments, toolset })` starts a generation and returns
 its chat, response message and cancellable stream handle. Use
@@ -815,7 +945,9 @@ const stop = await macro.events.listen();
 model as persisted webhooks. If you omit `filters`, it derives one filter from
 the event names already registered with `.on()`. Pass `scope: 'team'` for a
 team workspace (defaults to `'user'`). Delivery is best-effort: there is no
-replay if you disconnect.
+replay if you disconnect. Reconnecting sends `Last-Event-ID`, but the service
+replays only for clients that also ask `resume=true`, which `listen()` does
+not, so a reconnected listener gets the live stream as before.
 
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
@@ -951,9 +1083,10 @@ the build.
 
 You can add exceptions for stuff OpenAPI covers that we don't want the sdk to
 support by adding them to the `src/coverage/skipped.ts`. You can implement
-support by adding a wrapper to the appropriate model. There is CI to ensure that
-we don't forget to add coverage or explicitly skip coverage for new generated
-functions (endpoints).
+support by adding a wrapper to the appropriate model. Every wrapped generated
+method also needs a hand-assigned display verb in `src/utils/verbs.ts`; choose a
+read verb for a POST that only reads. Coverage fails for missing or stale verb
+entries as well as uncovered endpoints.
 
 ## Events
 

@@ -130,36 +130,41 @@ fn deploy() -> Job {
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
         .add_step(build_web_app::checkout())
-        .add_step(steps::mount_web_build_cache_volume())
+        // It compiles nothing, so like the build it mounts only Nix and Bun.
+        .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
-        .add_step(download_dist())
+        .add_step(download_dist(build_web_app::ARTIFACT))
         .add_step(install_infra_dependencies())
         .add_step(configure_aws_credentials())
-        .add_step(pulumi_up())
-        .add_step(upload_sourcemaps())
+        .add_step(pulumi_up(ENVIRONMENT))
+        .add_step(upload_sourcemaps(ENVIRONMENT))
         .add_step(upload_production_build())
         .add_step(steps::teardown_nix())
 }
 
-fn download_dist() -> Step<Use> {
+/// The environment this workflow deploys, as its steps spell it.
+const ENVIRONMENT: &str = "${{ inputs.environment }}";
+
+/// `artifact` is a [`build_web_app::ARTIFACT`] name the same run uploaded.
+pub fn download_dist(artifact: &str) -> Step<Use> {
     Step::new("Download dist")
         .uses(
             "actions",
             "download-artifact",
             "634f93cb2916e3fdff6788551b99b062d0335ce0",
         ) // v5
-        .add_with(("name", build_web_app::ARTIFACT))
+        .add_with(("name", artifact))
         .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
 }
 
-fn install_infra_dependencies() -> Step<Run> {
+pub fn install_infra_dependencies() -> Step<Run> {
     Step::new("Install infra dependencies")
         .run("bun install")
         .working_directory(xtask_paths::repo_dir!("infra"))
 }
 
-fn configure_aws_credentials() -> Step<Use> {
+pub fn configure_aws_credentials() -> Step<Use> {
     Step::new("Configure AWS Credentials")
         .uses(
             "aws-actions",
@@ -171,7 +176,7 @@ fn configure_aws_credentials() -> Step<Use> {
         .add_with(("aws-region", "us-east-1"))
 }
 
-fn pulumi_up() -> Step<Use> {
+pub fn pulumi_up(environment: &str) -> Step<Use> {
     Step::new("Deploy with Pulumi")
         .uses(
             "pulumi",
@@ -179,7 +184,7 @@ fn pulumi_up() -> Step<Use> {
             "8e5e406f4007fca908480587cb9893c07090f58d",
         ) // v6
         .add_with(("command", "up"))
-        .add_with(("stack-name", "macro-inc/${{ inputs.environment }}"))
+        .add_with(("stack-name", format!("macro-inc/{environment}")))
         .add_with(("work-dir", "./infra/stacks/web-app"))
         .add_env(Env::new("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
         .add_env(Env::new("DD_APP_KEY", vars::DD_APP_KEY))
@@ -187,9 +192,9 @@ fn pulumi_up() -> Step<Use> {
         .add_env(Env::new("DD_HOST", "https://api.us5.datadoghq.com/"))
 }
 
-fn upload_sourcemaps() -> Step<Run> {
+pub fn upload_sourcemaps(environment: &str) -> Step<Run> {
     Step::new("Upload sourcemaps to Datadog")
-        .run("bun run ddupload:${{ inputs.environment }}")
+        .run(format!("bun run ddupload:{environment}"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(Env::new("DATADOG_API_KEY", vars::DD_API_KEY))
         .add_env(Env::new("DATADOG_SITE", "us5.datadoghq.com"))

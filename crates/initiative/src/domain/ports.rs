@@ -30,7 +30,7 @@ pub trait InitiativeDescriptionSurfaces: Send + Sync + 'static {
         markdown: String,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// The description as GitHub-flavored markdown; empty while the surface was never ensured.
+    /// The description as lossless internal markdown; empty while the surface was never ensured.
     fn read(
         &self,
         initiative: InitiativeId,
@@ -49,6 +49,13 @@ pub trait InitiativeDescriptionSurfaces: Send + Sync + 'static {
 pub trait InitiativeRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<InitiativeError> + Send + std::fmt::Debug;
+
+    /// Atomically replace presentation and record attributed history, returning the previous value when changed.
+    fn set_appearance(
+        &self,
+        id: InitiativeId,
+        update: &activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Err>> + Send;
 
     /// Persist a new initiative, its members, and initial share state in one transaction.
     fn create(
@@ -111,6 +118,12 @@ pub trait InitiativeRepo: Send + Sync + 'static {
 
 /// Inbound service port: the initiative API used by drivers (HTTP).
 pub trait InitiativeService: Send + Sync + 'static {
+    /// Replace icon and color under the existing edit receipt.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, InitiativeError>> + Send;
     /// Read canonical properties and visible task progress for one authorized initiative.
     fn summary(
         &self,
@@ -178,7 +191,7 @@ pub trait InitiativeService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// The description of an initiative the receipt authorized for view, as GitHub-flavored
+    /// The description of an initiative the receipt authorized for view, as lossless internal
     /// markdown; empty while no one has opened or written it.
     fn read_description(
         &self,
@@ -211,4 +224,13 @@ pub trait InitiativeService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
+}
+
+/// Physical identity facts for trusted backend integrations; grants no access.
+pub trait InitiativeLifecycleReads: Send + Sync + 'static {
+    /// Initiatives are permanently deleted; a persisted identity is live.
+    fn initiative_is_live(
+        &self,
+        id: InitiativeId,
+    ) -> impl Future<Output = Result<bool, InitiativeError>> + Send;
 }

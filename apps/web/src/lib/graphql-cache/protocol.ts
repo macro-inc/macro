@@ -84,6 +84,9 @@ export function parseStorageGeneration(value: unknown): string {
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
+/** Ranks a record read with the typed search whose rows it loads. */
+export type RecordReadPriority = 'typed-search';
+
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
 
@@ -330,6 +333,8 @@ export type ReadRecordsByKeysArgs = {
   fragmentName: string;
   /** Canonical normalized entity keys; bounded by the selection page size. */
   keys: string[];
+  /** Set when the records are the rows of a typed search someone waits on. */
+  priority?: RecordReadPriority;
 };
 
 export type SelectedRecordByKeyWire = {
@@ -716,7 +721,11 @@ export type MutationUpsertKind =
   | { kind: 'replaced-pending'; removedTransactionId: string }
   | { kind: 'appended-after-active'; activeTransactionId: string };
 
-/** Read-only request snapshot; never contains a settlement lease token. */
+/**
+ * Read-only request snapshot. Its lease lets a runner release a claim whose
+ * owner has gone; every settlement still presents the owner and generation,
+ * which the engine checks. Native engines built before the lease omit it.
+ */
 export type MutationInspection = Pick<
   ClaimedMutation,
   | 'transactionId'
@@ -727,7 +736,13 @@ export type MutationInspection = Pick<
   | 'variables'
   | 'clientMetadata'
   | 'enqueuedAtMs'
-> & { optimisticData: unknown };
+> & { optimisticData: unknown; lease?: MutationLease };
+
+/** A queued mutation's current claim. */
+export type MutationLease = MutationClaim & {
+  /** When another runner may claim the mutation, in epoch milliseconds. */
+  expiresAtMs: number;
+};
 
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
@@ -922,6 +937,8 @@ export type CacheRequest = { id: number } & (
       document: string;
       fragmentName: string;
       keys: string[];
+      /** May overtake reads, fences and queued network results, never a local change. */
+      priority?: RecordReadPriority;
     }
   | PeopleRequest
   | {
@@ -969,6 +986,7 @@ export type CacheRequest = { id: number } & (
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
   | 'owner-lock-unavailable'
+  | 'cache-superseded'
   | 'owner-handoff-blocked'
   | 'admitted-enqueue-uncertain';
 
@@ -983,6 +1001,30 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
  */
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
+
+/**
+ * A newer app build took the database over. Like an unavailable owner lock the
+ * request never reached an engine, but this build never gets the cache back:
+ * only a reload into the newer build does.
+ */
+export const CACHE_SUPERSEDED_ERROR_CODE: CacheResponseErrorCode =
+  'cache-superseded';
+
+/** A text search someone is waiting on; an empty query only browses a list. */
+export function isTypedSearch(request: CacheRequest): boolean {
+  if (request.kind !== 'search') return false;
+
+  const query = request.request.query ?? '';
+  return query.trim() !== '';
+}
+
+/** The rows a typed search named: the search is not answered until they load. */
+export function isTypedSearchRowRead(request: CacheRequest): boolean {
+  return (
+    request.kind === 'read-records-by-keys' &&
+    request.priority === 'typed-search'
+  );
+}
 
 /**
  * A read-only request was refused because the database was moving between
@@ -1050,6 +1092,7 @@ export const isCacheResponseErrorCode = (
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+  value === CACHE_SUPERSEDED_ERROR_CODE ||
   value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
@@ -1061,13 +1104,26 @@ export const isOwnerEpochLostError = (
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
-/** Identifies a request refused because another context holds the database. */
+/** Identifies a request refused because another context holds the database,
+ * including a newer build that took it over. */
 export const isOwnerLockUnavailableError = (
   value: unknown
-): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+): value is Error & {
+  errorCode: 'owner-lock-unavailable' | 'cache-superseded';
+} =>
   value instanceof Error &&
   'errorCode' in value &&
-  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+  (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+    value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because a newer build took the database over;
+ * this page session never gets the cache back. */
+export const isCacheSupersededError = (
+  value: unknown
+): value is Error & { errorCode: 'cache-superseded' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === CACHE_SUPERSEDED_ERROR_CODE;
 
 /** Identifies a read refused while the database moved between owners. */
 export const isOwnerHandoffBlockedError = (

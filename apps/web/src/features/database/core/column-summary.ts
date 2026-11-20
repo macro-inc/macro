@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { DatabaseCellValue } from './database-view';
+import type { DatabaseCellValue, DatabaseViewColumn } from './database-view';
 
 export type ColumnCalculation =
   | 'none'
@@ -43,4 +43,29 @@ export function summarizeColumn(
         : null
     )
     .exhaustive();
+}
+
+/** Monetary calculations keep each denomination separate, including averages. */
+export function summarizeMoney(
+  column: DatabaseViewColumn,
+  rows: { cells: Record<string, DatabaseCellValue> }[],
+  calculation: ColumnCalculation
+): { currency: string; value: number }[] {
+  const currencyColumn = column.currencyColumnId;
+  if (!currencyColumn) return [];
+  const groups = new Map<string, DatabaseCellValue[]>();
+  for (const row of rows) {
+    const value = row.cells[column.id] ?? null;
+    if (value === null || value === '') continue;
+    const currency = String(row.cells[currencyColumn] ?? 'USD');
+    const values = groups.get(currency) ?? [];
+    values.push(value);
+    groups.set(currency, values);
+  }
+  return [...groups]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([currency, values]) => {
+      const value = summarizeColumn(values, calculation);
+      return value === null ? [] : [{ currency, value }];
+    });
 }

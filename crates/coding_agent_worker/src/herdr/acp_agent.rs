@@ -843,12 +843,13 @@ impl Adapter {
             let wait = tracing::info_span!(
                 "macrod.herdr.prompt_wait",
                 session_id = %session.id,
-                native_turns = 0u32,
-                exit_dismissed = false,
+                native_turns = tracing::field::Empty,
+                exit_dismissed = tracing::field::Empty,
                 outcome = tracing::field::Empty,
             );
-            let waited = async {
-                let mut native_turns = 0u32;
+            let mut native_turns = 0u32;
+            let mut exit_dismissed = false;
+            let waited: Result<_, RpcError> = async {
                 loop {
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -863,11 +864,10 @@ impl Adapter {
                     if info.as_ref().is_ok_and(|info| info.status == "blocked")
                         && self.stay(herdr, &live.name).await?
                     {
-                        tracing::Span::current().record("exit_dismissed", true);
+                        exit_dismissed = true;
                         continue;
                     }
                     native_turns += 1;
-                    tracing::Span::current().record("native_turns", native_turns);
                     // An interrupted native turn ends "cancelled" too; only a
                     // Stop from Macro drops the waiting prompt, which then
                     // answers as not delivered.
@@ -878,8 +878,10 @@ impl Adapter {
                 }
             }
             .instrument(wait.clone())
-            .await
-            .inspect_err(|error: &RpcError| {
+            .await;
+            wait.record("native_turns", native_turns);
+            wait.record("exit_dismissed", exit_dismissed);
+            let waited = waited.inspect_err(|error| {
                 wait.record("outcome", "failed");
                 tracing::warn!(parent: &wait, error = %error.message, "queued prompt failed while waiting");
             })?;

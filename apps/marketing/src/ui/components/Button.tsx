@@ -34,14 +34,14 @@ export const buttonVariants = createVariants(
       danger:
         'text-failure not-touch:not-disabled:hover:text-failure aria-pressed:text-failure',
       outline: '',
-      accent: 'text-ink font-semibold',
+      accent: 'text-ink font-medium',
       success:
         'text-success not-touch:not-disabled:hover:text-success aria-pressed:text-success',
       // Retained for existing callers; ordinary actions always have a frame.
       ghost: '',
       plain: 'border-0 bg-transparent',
-      strong: 'text-ink font-semibold',
-      cta: 'text-ink font-semibold',
+      strong: 'text-ink font-medium',
+      cta: 'text-ink font-medium',
       navigation: 'border-transparent bg-transparent',
     },
     size: {

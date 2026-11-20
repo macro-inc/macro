@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id AS link_id, l.email_address FROM (\n                   SELECT team_id,user_id,link_id,enabled,mode,consent_incarnation\n                   FROM crm_email_consent WHERE team_id=$1 AND user_id=$2 OFFSET 0\n               ) c\n               JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL\n               JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = c.user_id\n               WHERE c.enabled AND c.mode = 'all' AND c.consent_incarnation IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f8841ec4b4525ac30eb53f99e3f9ecc9e8199cec8620ce8d7cf9e8807eca4b30"
+}

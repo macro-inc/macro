@@ -1,5 +1,4 @@
 import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
-import { globalTabManager } from '@app/signal/tabLayout';
 import { goToChannelMessage } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -35,16 +34,12 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
   const panel = useSplitPanelOrThrow();
   const owner = Symbol('inline-preview');
   const [current, setCurrent] = createSignal<ContentIdentity>();
-  const activate = () => {
-    // A background desktop tab stays mounted and keeps its selection, so
-    // showing that selection means bringing the tab up.
-    if (globalTabManager()?.revealSplit(panel.handle.id)) return;
-
-    panel.handle.activate();
-  };
+  const activate = () => panel.handle.activate();
   const unregister = manager.registerOpenViews(() => {
     const content = current();
-    return content ? [{ owner, content, activate }] : [];
+    return content
+      ? [{ owner, content, activate, split: panel.handle.id }]
+      : [];
   });
   onCleanup(unregister);
 

@@ -76,6 +76,7 @@ where
             ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
                 RoutineSessionError::Forbidden
             }
+            ManagedPersonaError::TeamAgentComputer => RoutineSessionError::TeamAgentComputer,
             ManagedPersonaError::Lookup(error) => session_error(error),
             ManagedPersonaError::Unknown
             | ManagedPersonaError::NotAgent
@@ -181,7 +182,7 @@ where
                         owner: owner.clone(),
                         prompt: None,
                         profile: Some(profile),
-                        instructions: None,
+                        instructions: command.instructions,
                         model: selection.model.clone(),
                         source: command.source,
                         visibility: command.visibility,
@@ -267,6 +268,9 @@ where
                     action_id: Some(action.action_id),
                     actor: Some(action.owner),
                     context: command.context,
+                    client: None,
+                    // A routine's step has no person behind its words.
+                    prompter: crate::domain::model::PrompterKind::Program,
                 },
             )
             .await
@@ -308,6 +312,9 @@ where
                     action_id: Some(AgentActionId::mint()),
                     actor: Some(command.owner),
                     context: None,
+                    client: None,
+                    // A routine's step has no person behind its words.
+                    prompter: crate::domain::model::PrompterKind::Program,
                 },
             )
             .await
@@ -408,6 +415,7 @@ fn session_error(error: AgentSessionError) -> RoutineSessionError {
         | AgentSessionError::UnknownOwner
         | AgentSessionError::OwnerNotUser(_) => RoutineSessionError::Forbidden,
         AgentSessionError::SessionIdTaken(_) => RoutineSessionError::Conflict,
+        AgentSessionError::TeamAgentComputer => RoutineSessionError::TeamAgentComputer,
         AgentSessionError::RuntimeUnavailable(_) | AgentSessionError::Disconnected(_) => {
             RoutineSessionError::RuntimeUnavailable
         }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_contacts SET email = $3, company_id = $4, manually_created = TRUE WHERE id = $1 AND team_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74b5f1d983bc942560d25acb1d7bb34603c4a34062b9dc528e437add9d98dd29"
+}

@@ -1,0 +1,2 @@
+/* Feature pages mute links; the story keeps the homepage's white, underlined mentions. */
+.feature-page .email-draft-story .homepage-mention { color: #fff; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 25%, transparent); }

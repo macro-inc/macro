@@ -13,12 +13,16 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+    timeout-minutes: 10
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         filter: blob:none
         sparse-checkout: '.github'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: filter
       name: Filter changed paths
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
@@ -29,6 +33,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -39,6 +44,8 @@ jobs:
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
             - 'crates/natural_time/**'
+            - 'crates/password_import/**'
+            - 'crates/password_import_wasm/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -49,6 +56,9 @@ jobs:
             - 'services/ai-editing-worker/**'
             - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
+            - 'packages/muppet/**'
+            - 'packages/starter-agent/**'
+            - 'tooling/scripts/starter-agent-lock.sh'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
           web_artifact_changed:
@@ -56,6 +66,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -66,6 +77,8 @@ jobs:
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
             - 'crates/natural_time/**'
+            - 'crates/password_import/**'
+            - 'crates/password_import_wasm/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -84,6 +97,7 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+            - 'apps/web/src/components/gantt/**'
           calendar_details_changed:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
@@ -129,9 +143,13 @@ jobs:
       contents: read
       pull-requests: read
       statuses: read
+    timeout-minutes: 10
     steps:
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
@@ -330,14 +348,27 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+        filter: blob:none
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
+    - name: Prepare the blobless checkout
+      run: |
+        if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
+        git config diff.renames false
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
-        path: /home/runner/.bun/install/cache
+        path: |-
+          /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -347,6 +378,9 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
+      working-directory: packages/sdk
+    - name: Build SDK
+      run: bun run build
       working-directory: packages/sdk
     - name: Run checks
       run: |
@@ -365,6 +399,7 @@ jobs:
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
         check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
         check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Observability Package' 'packages/observability' 'bun run type-check && bun run test'
         check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
         check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
@@ -372,6 +407,8 @@ jobs:
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
         check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
         check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
+        check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
+        check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
         failed=0
         for index in "${!names[@]}"; do
           status=0
@@ -393,23 +430,30 @@ jobs:
     - path-check
     if: needs.path-check.outputs.codegen_changed == 'true'
     name: Generated Code Check
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-codegen
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
+          ${{ github.workspace }}/target
       continue-on-error: true
+    - name: Reuse the kept cargo target
+      run: "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n// Lets cargo reuse the `target` directory a CI job keeps on its cache\n// volume. Cargo counts a workspace crate as built when none of its\n// sources is newer than its last build, and a checkout stamps every file with\n// the current time, so without this every workspace crate rebuilds.\n//\n// The volume keeps, next to `target`, the time each tracked path's current\n// contents were first seen (`RECORD`). A path whose mode and object match the\n// record keeps that time; a changed or added path, and every directory above a\n// change (its tree object changes), gets the current time. A build made while\n// the contents were what they are now is newer than that time and stays fresh.\n// A build of other contents is older than it: units only an earlier, different\n// build left behind (other features, other dependencies) rebuild too.\n//\n// Some changes cargo can't see:\n// - sqlx reads `.sqlx` query data without telling rustc. A new query's data\n//   comes with the query's new source, so only changed data dates every path\n//   now and rebuilds every workspace crate. Removed data is not: another\n//   pull request's query, missing from this tree, is the common case. A job\n//   rebuilds everything when its own pull request changes data (see\n//   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while\n//   an unchanged query still needs it fails only a full build.\n// - rustc lists the file a symlink pointed to when it built, so a symlink that\n//   changed, appeared or went away dates the files it pointed to, before and\n//   after, now. A link is resolved by its text alone: one through another\n//   symlinked directory, or out of the repository, dates nothing.\n// Migrations need nothing here: `sqlx::migrate!` includes each file and\n// `macro_db_migrator`'s build script watches the directory. A build that checks\n// queries against a live database depends on the schema too; Cloud Storage's\n// test job dates those crates itself.\n//\n// A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace\n// crate anyway: Cloud Storage's jobs do when the pull request changes query\n// data.\n//\n// Units dated after now (another clock, or anything else writing `target`)\n// would look fresh against every change, so `target` starts over then.\n//\n// A job that builds into `target` without dating its checkout first (one whose\n// workflow predates this step, or a re-run of one) leaves units the record\n// doesn't describe. So the last step of a job that did date it writes `SEAL`,\n// and a unit newer than the seal rebuilds every workspace crate.\n//\n// It runs on a fresh checkout: it dates the index, not the work tree.\n\nimport { execFileSync } from \"node:child_process\";\nimport {\n\texistsSync,\n\tlutimesSync,\n\tmkdirSync,\n\treaddirSync,\n\treadFileSync,\n\treadlinkSync,\n\trmSync,\n\tstatfsSync,\n\tstatSync,\n\twriteFileSync,\n} from \"node:fs\";\nimport { dirname, join, posix } from \"node:path\";\n\nexport const TARGET = \"target\";\nexport const RECORD = `${TARGET}/.macro-source-times`;\n// Written by the last step of a job that dated its checkout; a unit newer than\n// it was built by a job that did not.\nexport const SEAL = `${TARGET}/.macro-sealed`;\n// Dependency upgrades leave old artifacts in `target`; start over if the volume\n// is nearly full. Namespace grows a volume as it fills (about 97 GB free at any\n// use, up to 100 GB used), so this guards a full disk, not the volume's size.\nconst MIN_FREE_BYTES = 20 * 1024 ** 3;\nconst SYMLINK = \"120000 \";\n// Directories under a profile that hold build outputs, not more profiles.\nconst UNIT_OUTPUTS = new Set([\"deps\", \"incremental\", \"examples\", \"doc\"]);\n\n/** Path to `<mode> <type> <object>`. */\nexport type Tree = Map<string, string>;\n/** Path to its signature and the time (seconds) those contents were first seen. */\nexport type SourceTimes = Map<string, { signature: string; time: number }>;\n\nexport type Plan = {\n\t/** What to date each tracked path, and to keep for the next run. */\n\trecord: SourceTimes;\n\tchanged: number;\n\t/** Why every path is dated now, when it is. */\n\trebuildAll?: string;\n};\n\n/** `git ls-tree -r -t -z` output. */\nexport function parseTree(output: string): Tree {\n\tconst tree: Tree = new Map();\n\tfor (const entry of output.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tif (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));\n\t}\n\treturn tree;\n}\n\nexport function parseRecord(text: string): SourceTimes {\n\tconst record: SourceTimes = new Map();\n\tfor (const entry of text.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tconst space = entry.indexOf(\" \");\n\t\tif (tab < 0 || space < 0 || space > tab) continue;\n\t\trecord.set(entry.slice(tab + 1), {\n\t\t\ttime: Number(entry.slice(0, space)),\n\t\t\tsignature: entry.slice(space + 1, tab),\n\t\t});\n\t}\n\treturn record;\n}\n\nexport function formatRecord(record: SourceTimes): string {\n\treturn [...record]\n\t\t.map(([path, { time, signature }]) => `${time} ${signature}\\t${path}\\0`)\n\t\t.join(\"\");\n}\n\n/** A symlink's signature carries what it points to, which the next run needs. */\nfunction signatureOf(mode: string, link: string | undefined): string {\n\treturn link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;\n}\n\n/** The repository path a symlink at `path` resolves to, when it stays inside. */\nfunction linkTarget(path: string, signature: string): string | undefined {\n\tif (!signature.startsWith(SYMLINK)) return;\n\tconst quoted = signature.indexOf(' \"');\n\tif (quoted < 0) return;\n\tconst target = posix.normalize(\n\t\tposix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),\n\t);\n\treturn target.startsWith(\"../\") || posix.isAbsolute(target)\n\t\t? undefined\n\t\t: target;\n}\n\n/** `links` holds what each tracked symlink in `tree` points to. */\nexport function plan(\n\tprevious: SourceTimes | undefined,\n\ttree: Tree,\n\tlinks: Map<string, string>,\n\tnow: number,\n\tforced?: string,\n): Plan {\n\tconst record: SourceTimes = new Map();\n\tconst linkedTo = new Set<string>();\n\tconst linked = (path: string, signature: string) => {\n\t\tconst target = linkTarget(path, signature);\n\t\tif (target !== undefined) linkedTo.add(target);\n\t};\n\tlet changed = 0;\n\tlet rebuildAll =\n\t\tforced || (previous ? undefined : \"no record of earlier builds\");\n\tfor (const [path, mode] of tree) {\n\t\tconst signature = signatureOf(mode, links.get(path));\n\t\tconst before = previous?.get(path);\n\t\tif (before?.signature === signature) {\n\t\t\trecord.set(path, before);\n\t\t\tcontinue;\n\t\t}\n\t\tchanged++;\n\t\trecord.set(path, { signature, time: now });\n\t\tlinked(path, signature);\n\t\tif (before) linked(path, before.signature);\n\t\tif (before && /(^|\\/)\\.sqlx\\//.test(path)) {\n\t\t\trebuildAll ??= `${path} (sqlx query data) changed`;\n\t\t}\n\t}\n\tfor (const [path, { signature }] of previous ?? []) {\n\t\tif (tree.has(path)) continue;\n\t\tchanged++;\n\t\tlinked(path, signature);\n\t}\n\tconst targets = [...linkedTo];\n\tfor (const [path, { signature, time }] of record) {\n\t\tconst dated =\n\t\t\trebuildAll !== undefined ||\n\t\t\ttargets.some(\n\t\t\t\t(target) => path === target || path.startsWith(`${target}/`),\n\t\t\t);\n\t\tif (dated && time !== now) record.set(path, { signature, time: now });\n\t}\n\treturn { record, changed, rebuildAll };\n}\n\nfunction git(...args: string[]): string {\n\treturn execFileSync(\"git\", args, { encoding: \"utf8\", maxBuffer: 1024 ** 3 });\n}\n\n/**\n * The newest time cargo compares sources against: a unit's fingerprint files\n * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in\n * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or\n * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).\n */\nfunction newestUnit(): number {\n\tlet newest = 0;\n\tconst consider = (path: string) => {\n\t\tif (existsSync(path)) {\n\t\t\tnewest = Math.max(newest, statSync(path).mtimeMs / 1000);\n\t\t}\n\t};\n\tconst children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);\n\tconst subdirectories = (dir: string) =>\n\t\texistsSync(dir)\n\t\t\t? readdirSync(dir, { withFileTypes: true })\n\t\t\t\t\t.filter((entry) => entry.isDirectory())\n\t\t\t\t\t.map((entry) => entry.name)\n\t\t\t: [];\n\tconst walk = (dir: string, depth: number) => {\n\t\tfor (const name of subdirectories(dir)) {\n\t\t\tconst path = join(dir, name);\n\t\t\tif (name === \".fingerprint\") {\n\t\t\t\tfor (const unit of children(path)) {\n\t\t\t\t\tfor (const file of children(join(path, unit))) {\n\t\t\t\t\t\tconsider(join(path, unit, file));\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else if (name === \"build\") {\n\t\t\t\tfor (const unit of children(path)) consider(join(path, unit, \"output\"));\n\t\t\t} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {\n\t\t\t\twalk(path, depth - 1);\n\t\t\t}\n\t\t}\n\t};\n\twalk(TARGET, 3);\n\treturn newest;\n}\n\nfunction emptyTarget(why: string) {\n\tconsole.log(`Emptying ${TARGET}: ${why}`);\n\tfor (const entry of readdirSync(TARGET))\n\t\trmSync(join(TARGET, entry), { recursive: true, force: true });\n}\n\nexport async function main() {\n\tconst now = Date.now() / 1000;\n\tmkdirSync(TARGET, { recursive: true });\n\tconst sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, \"utf8\")) : 0;\n\trmSync(SEAL, { force: true });\n\tconst { bavail, bsize } = statfsSync(TARGET);\n\tconsole.log(\n\t\t`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,\n\t);\n\tconst newest = newestUnit();\n\tif (bavail * bsize < MIN_FREE_BYTES) {\n\t\temptyTarget(\"the cache volume is running out of space\");\n\t} else if (newest > now) {\n\t\temptyTarget(\"a unit in it is dated after now\");\n\t}\n\n\tconst tree = parseTree(\n\t\tgit(\"ls-tree\", \"-r\", \"-t\", \"-z\", git(\"write-tree\").trim()),\n\t);\n\tconst links = new Map<string, string>();\n\tfor (const [path, mode] of tree) {\n\t\tif (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {\n\t\t\tlinks.set(path, readlinkSync(path));\n\t\t}\n\t}\n\tconst previous = existsSync(RECORD)\n\t\t? parseRecord(readFileSync(RECORD, \"utf8\"))\n\t\t: undefined;\n\tconst { record, changed, rebuildAll } = plan(\n\t\tprevious,\n\t\ttree,\n\t\tlinks,\n\t\tnow,\n\t\tprocess.env.CARGO_TARGET_REBUILD_ALL ||\n\t\t\t(previous && !(newest <= sealed)\n\t\t\t\t? \"a job built into it without dating its checkout\"\n\t\t\t\t: undefined),\n\t);\n\tfor (const [path, { time }] of record) {\n\t\ttry {\n\t\t\tlutimesSync(path, time, time);\n\t\t} catch (error) {\n\t\t\t// Paths outside a sparse checkout are not in the work tree.\n\t\t\tif ((error as NodeJS.ErrnoException).code !== \"ENOENT\") throw error;\n\t\t}\n\t}\n\twriteFileSync(RECORD, formatRecord(record));\n\tconsole.log(\n\t\trebuildAll\n\t\t\t? `Every workspace crate rebuilds: ${rebuildAll}`\n\t\t\t: `Reusing ${TARGET}: ${changed} paths differ from the last run`,\n\t);\n}\n\n/** The last step of a job that ran `main`: every unit it built is older than this. */\nexport async function seal() {\n\twriteFileSync(SEAL, String(Date.now() / 1000));\n\tconsole.log(`Sealed ${TARGET} for the next run`);\n}\n\nawait main();\nNODE_SCRIPT\n"
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
       with:
@@ -536,17 +580,6 @@ jobs:
           git diff -- packages/sdk | head -200
           exit 1
         fi
-    - name: Regenerate MCP tool pages
-      run: bun run generate:tools
-      working-directory: apps/docs
-    - name: Verify docs tool reference is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
-          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
-          git status --porcelain -- apps/docs
-          git diff -- apps/docs | head -200
-          exit 1
-        fi
     - name: Check Specta Types
       run: |
         just gen-agent-fold-types
@@ -566,17 +599,28 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
+    - name: Seal the kept cargo target
+      run: "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n// Lets cargo reuse the `target` directory a CI job keeps on its cache\n// volume. Cargo counts a workspace crate as built when none of its\n// sources is newer than its last build, and a checkout stamps every file with\n// the current time, so without this every workspace crate rebuilds.\n//\n// The volume keeps, next to `target`, the time each tracked path's current\n// contents were first seen (`RECORD`). A path whose mode and object match the\n// record keeps that time; a changed or added path, and every directory above a\n// change (its tree object changes), gets the current time. A build made while\n// the contents were what they are now is newer than that time and stays fresh.\n// A build of other contents is older than it: units only an earlier, different\n// build left behind (other features, other dependencies) rebuild too.\n//\n// Some changes cargo can't see:\n// - sqlx reads `.sqlx` query data without telling rustc. A new query's data\n//   comes with the query's new source, so only changed data dates every path\n//   now and rebuilds every workspace crate. Removed data is not: another\n//   pull request's query, missing from this tree, is the common case. A job\n//   rebuilds everything when its own pull request changes data (see\n//   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while\n//   an unchanged query still needs it fails only a full build.\n// - rustc lists the file a symlink pointed to when it built, so a symlink that\n//   changed, appeared or went away dates the files it pointed to, before and\n//   after, now. A link is resolved by its text alone: one through another\n//   symlinked directory, or out of the repository, dates nothing.\n// Migrations need nothing here: `sqlx::migrate!` includes each file and\n// `macro_db_migrator`'s build script watches the directory. A build that checks\n// queries against a live database depends on the schema too; Cloud Storage's\n// test job dates those crates itself.\n//\n// A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace\n// crate anyway: Cloud Storage's jobs do when the pull request changes query\n// data.\n//\n// Units dated after now (another clock, or anything else writing `target`)\n// would look fresh against every change, so `target` starts over then.\n//\n// A job that builds into `target` without dating its checkout first (one whose\n// workflow predates this step, or a re-run of one) leaves units the record\n// doesn't describe. So the last step of a job that did date it writes `SEAL`,\n// and a unit newer than the seal rebuilds every workspace crate.\n//\n// It runs on a fresh checkout: it dates the index, not the work tree.\n\nimport { execFileSync } from \"node:child_process\";\nimport {\n\texistsSync,\n\tlutimesSync,\n\tmkdirSync,\n\treaddirSync,\n\treadFileSync,\n\treadlinkSync,\n\trmSync,\n\tstatfsSync,\n\tstatSync,\n\twriteFileSync,\n} from \"node:fs\";\nimport { dirname, join, posix } from \"node:path\";\n\nexport const TARGET = \"target\";\nexport const RECORD = `${TARGET}/.macro-source-times`;\n// Written by the last step of a job that dated its checkout; a unit newer than\n// it was built by a job that did not.\nexport const SEAL = `${TARGET}/.macro-sealed`;\n// Dependency upgrades leave old artifacts in `target`; start over if the volume\n// is nearly full. Namespace grows a volume as it fills (about 97 GB free at any\n// use, up to 100 GB used), so this guards a full disk, not the volume's size.\nconst MIN_FREE_BYTES = 20 * 1024 ** 3;\nconst SYMLINK = \"120000 \";\n// Directories under a profile that hold build outputs, not more profiles.\nconst UNIT_OUTPUTS = new Set([\"deps\", \"incremental\", \"examples\", \"doc\"]);\n\n/** Path to `<mode> <type> <object>`. */\nexport type Tree = Map<string, string>;\n/** Path to its signature and the time (seconds) those contents were first seen. */\nexport type SourceTimes = Map<string, { signature: string; time: number }>;\n\nexport type Plan = {\n\t/** What to date each tracked path, and to keep for the next run. */\n\trecord: SourceTimes;\n\tchanged: number;\n\t/** Why every path is dated now, when it is. */\n\trebuildAll?: string;\n};\n\n/** `git ls-tree -r -t -z` output. */\nexport function parseTree(output: string): Tree {\n\tconst tree: Tree = new Map();\n\tfor (const entry of output.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tif (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));\n\t}\n\treturn tree;\n}\n\nexport function parseRecord(text: string): SourceTimes {\n\tconst record: SourceTimes = new Map();\n\tfor (const entry of text.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tconst space = entry.indexOf(\" \");\n\t\tif (tab < 0 || space < 0 || space > tab) continue;\n\t\trecord.set(entry.slice(tab + 1), {\n\t\t\ttime: Number(entry.slice(0, space)),\n\t\t\tsignature: entry.slice(space + 1, tab),\n\t\t});\n\t}\n\treturn record;\n}\n\nexport function formatRecord(record: SourceTimes): string {\n\treturn [...record]\n\t\t.map(([path, { time, signature }]) => `${time} ${signature}\\t${path}\\0`)\n\t\t.join(\"\");\n}\n\n/** A symlink's signature carries what it points to, which the next run needs. */\nfunction signatureOf(mode: string, link: string | undefined): string {\n\treturn link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;\n}\n\n/** The repository path a symlink at `path` resolves to, when it stays inside. */\nfunction linkTarget(path: string, signature: string): string | undefined {\n\tif (!signature.startsWith(SYMLINK)) return;\n\tconst quoted = signature.indexOf(' \"');\n\tif (quoted < 0) return;\n\tconst target = posix.normalize(\n\t\tposix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),\n\t);\n\treturn target.startsWith(\"../\") || posix.isAbsolute(target)\n\t\t? undefined\n\t\t: target;\n}\n\n/** `links` holds what each tracked symlink in `tree` points to. */\nexport function plan(\n\tprevious: SourceTimes | undefined,\n\ttree: Tree,\n\tlinks: Map<string, string>,\n\tnow: number,\n\tforced?: string,\n): Plan {\n\tconst record: SourceTimes = new Map();\n\tconst linkedTo = new Set<string>();\n\tconst linked = (path: string, signature: string) => {\n\t\tconst target = linkTarget(path, signature);\n\t\tif (target !== undefined) linkedTo.add(target);\n\t};\n\tlet changed = 0;\n\tlet rebuildAll =\n\t\tforced || (previous ? undefined : \"no record of earlier builds\");\n\tfor (const [path, mode] of tree) {\n\t\tconst signature = signatureOf(mode, links.get(path));\n\t\tconst before = previous?.get(path);\n\t\tif (before?.signature === signature) {\n\t\t\trecord.set(path, before);\n\t\t\tcontinue;\n\t\t}\n\t\tchanged++;\n\t\trecord.set(path, { signature, time: now });\n\t\tlinked(path, signature);\n\t\tif (before) linked(path, before.signature);\n\t\tif (before && /(^|\\/)\\.sqlx\\//.test(path)) {\n\t\t\trebuildAll ??= `${path} (sqlx query data) changed`;\n\t\t}\n\t}\n\tfor (const [path, { signature }] of previous ?? []) {\n\t\tif (tree.has(path)) continue;\n\t\tchanged++;\n\t\tlinked(path, signature);\n\t}\n\tconst targets = [...linkedTo];\n\tfor (const [path, { signature, time }] of record) {\n\t\tconst dated =\n\t\t\trebuildAll !== undefined ||\n\t\t\ttargets.some(\n\t\t\t\t(target) => path === target || path.startsWith(`${target}/`),\n\t\t\t);\n\t\tif (dated && time !== now) record.set(path, { signature, time: now });\n\t}\n\treturn { record, changed, rebuildAll };\n}\n\nfunction git(...args: string[]): string {\n\treturn execFileSync(\"git\", args, { encoding: \"utf8\", maxBuffer: 1024 ** 3 });\n}\n\n/**\n * The newest time cargo compares sources against: a unit's fingerprint files\n * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in\n * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or\n * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).\n */\nfunction newestUnit(): number {\n\tlet newest = 0;\n\tconst consider = (path: string) => {\n\t\tif (existsSync(path)) {\n\t\t\tnewest = Math.max(newest, statSync(path).mtimeMs / 1000);\n\t\t}\n\t};\n\tconst children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);\n\tconst subdirectories = (dir: string) =>\n\t\texistsSync(dir)\n\t\t\t? readdirSync(dir, { withFileTypes: true })\n\t\t\t\t\t.filter((entry) => entry.isDirectory())\n\t\t\t\t\t.map((entry) => entry.name)\n\t\t\t: [];\n\tconst walk = (dir: string, depth: number) => {\n\t\tfor (const name of subdirectories(dir)) {\n\t\t\tconst path = join(dir, name);\n\t\t\tif (name === \".fingerprint\") {\n\t\t\t\tfor (const unit of children(path)) {\n\t\t\t\t\tfor (const file of children(join(path, unit))) {\n\t\t\t\t\t\tconsider(join(path, unit, file));\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else if (name === \"build\") {\n\t\t\t\tfor (const unit of children(path)) consider(join(path, unit, \"output\"));\n\t\t\t} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {\n\t\t\t\twalk(path, depth - 1);\n\t\t\t}\n\t\t}\n\t};\n\twalk(TARGET, 3);\n\treturn newest;\n}\n\nfunction emptyTarget(why: string) {\n\tconsole.log(`Emptying ${TARGET}: ${why}`);\n\tfor (const entry of readdirSync(TARGET))\n\t\trmSync(join(TARGET, entry), { recursive: true, force: true });\n}\n\nexport async function main() {\n\tconst now = Date.now() / 1000;\n\tmkdirSync(TARGET, { recursive: true });\n\tconst sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, \"utf8\")) : 0;\n\trmSync(SEAL, { force: true });\n\tconst { bavail, bsize } = statfsSync(TARGET);\n\tconsole.log(\n\t\t`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,\n\t);\n\tconst newest = newestUnit();\n\tif (bavail * bsize < MIN_FREE_BYTES) {\n\t\temptyTarget(\"the cache volume is running out of space\");\n\t} else if (newest > now) {\n\t\temptyTarget(\"a unit in it is dated after now\");\n\t}\n\n\tconst tree = parseTree(\n\t\tgit(\"ls-tree\", \"-r\", \"-t\", \"-z\", git(\"write-tree\").trim()),\n\t);\n\tconst links = new Map<string, string>();\n\tfor (const [path, mode] of tree) {\n\t\tif (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {\n\t\t\tlinks.set(path, readlinkSync(path));\n\t\t}\n\t}\n\tconst previous = existsSync(RECORD)\n\t\t? parseRecord(readFileSync(RECORD, \"utf8\"))\n\t\t: undefined;\n\tconst { record, changed, rebuildAll } = plan(\n\t\tprevious,\n\t\ttree,\n\t\tlinks,\n\t\tnow,\n\t\tprocess.env.CARGO_TARGET_REBUILD_ALL ||\n\t\t\t(previous && !(newest <= sealed)\n\t\t\t\t? \"a job built into it without dating its checkout\"\n\t\t\t\t: undefined),\n\t);\n\tfor (const [path, { time }] of record) {\n\t\ttry {\n\t\t\tlutimesSync(path, time, time);\n\t\t} catch (error) {\n\t\t\t// Paths outside a sparse checkout are not in the work tree.\n\t\t\tif ((error as NodeJS.ErrnoException).code !== \"ENOENT\") throw error;\n\t\t}\n\t}\n\twriteFileSync(RECORD, formatRecord(record));\n\tconsole.log(\n\t\trebuildAll\n\t\t\t? `Every workspace crate rebuilds: ${rebuildAll}`\n\t\t\t: `Reusing ${TARGET}: ${changed} paths differ from the last run`,\n\t);\n}\n\n/** The last step of a job that ran `main`: every unit it built is older than this. */\nexport async function seal() {\n\twriteFileSync(SEAL, String(Date.now() / 1000));\n\tconsole.log(`Sealed ${TARGET} for the next run`);\n}\n\nawait seal();\nNODE_SCRIPT\n"
   biome-check:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         fetch-depth: '0'
+        filter: blob:none
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
+    - name: Prepare the blobless checkout
+      run: |
+        if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
+        git config diff.renames false
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -605,6 +649,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     strategy:
       matrix:
         shard:
@@ -618,12 +663,16 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
@@ -673,12 +722,14 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Build natural-time WASM for tests
       run: just build-natural-time-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Test
@@ -695,15 +746,20 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Functional Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
@@ -762,6 +818,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       working-directory: apps/web
     - name: Functional Browser Tests
       run: bun run test:functional
@@ -780,15 +837,20 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Browser Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
         path: |-
           /home/runner/.bun/install/cache
+          ${{ github.workspace }}/node_modules
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
@@ -840,6 +902,7 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Sign-up Browser Tests
@@ -872,9 +935,13 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount /nix cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -904,9 +971,13 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -967,6 +1038,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
@@ -1041,10 +1113,14 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    timeout-minutes: 10
     steps:
     - id: checkout
       name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: native-filter
       name: Detect native iOS changes
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
@@ -1401,55 +1477,3 @@ jobs:
           }
       env:
         IOS_GATE_STEPS: ${{ toJSON(steps) }}
-  status-check:
-    needs:
-    - path-check
-    - android-native-check
-    - typescript
-    - generated-code
-    - biome-check
-    - test
-    - functional
-    - browser
-    - cycles
-    - build
-    - ios-native-check
-    if: always()
-    name: Web App Status Check
-    runs-on: namespace-profile-linux-tiny-no-cache
-    steps:
-    - name: Check job results
-      run: |
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "android-native-check: ${{ needs.android-native-check.result }}"
-        echo "typescript: ${{ needs.typescript.result }}"
-        echo "generated-code: ${{ needs.generated-code.result }}"
-        echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "functional: ${{ needs.functional.result }}"
-        echo "browser: ${{ needs.browser.result }}"
-        echo "cycles: ${{ needs.cycles.result }}"
-        echo "build: ${{ needs.build.result }}"
-        echo "ios-native-check: ${{ needs.ios-native-check.result }}"
-
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.functional.result }}" == "failure" ]] || \
-           [[ "${{ needs.browser.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
-          echo "One or more jobs failed"
-          exit 1
-        fi
-
-        echo "All jobs passed or were skipped"

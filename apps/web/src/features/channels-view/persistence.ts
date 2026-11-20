@@ -98,6 +98,7 @@ const channelsPreferencesSchema = z.object({
             .enum(['viewed_at', 'updated_at', 'created_at', 'name', 'manual'])
             .optional(),
           unreadOnly: z.boolean().optional(),
+          unreadWhenCollapsed: z.boolean().optional(),
           height: z
             .number()
             .finite()

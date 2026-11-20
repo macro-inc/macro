@@ -1,7 +1,7 @@
 import { MacroMarkIcon } from '../../../app/components/graphics/MacroMarkIcon';
 import { WorkspaceTexture } from './WorkspaceTexture';
 import './workspace-intro.css';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { createUniqueId, For, type JSX, onCleanup } from 'solid-js';
 import { ContinueButton } from '../flow/shared';
 import {

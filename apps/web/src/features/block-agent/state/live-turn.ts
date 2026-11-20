@@ -6,7 +6,7 @@
  * closes it with no reason to stamp), and a runtime that dies mid-turn never
  * stamps the tail either. Read per message, both look like a live turn — so
  * a session that had been through a few of them showed a shimmering
- * "Thinking", a "Calling N tools", and a working row under every one of
+ * "Thinking", a "Using N tools", and a working row under every one of
  * them at once.
  *
  * The block already has one answer to "is the agent working" — the

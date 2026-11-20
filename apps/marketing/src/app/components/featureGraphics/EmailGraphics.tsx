@@ -1,3 +1,26 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconCalendarRow from '@icon/system/regular/calendar-blank.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconDotsThree from '@icon/system/regular/dots-three-vertical.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconEmailRow from '@icon/system/regular/envelope.svg';
+import IconDocMd from '@icon/system/regular/file.svg';
+import IconFilePdf from '@icon/system/regular/file-pdf.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconPriorityHigh from '@icon/system/regular/priority-high.svg';
+import IconPriorityLow from '@icon/system/regular/priority-low.svg';
+import IconPriorityMedium from '@icon/system/regular/priority-medium.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconChat from '@icon/system/regular/sparkle.svg';
+import IconTaskDone from '@icon/system/regular/task-done.svg';
+import IconTaskInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
+import IconX from '@icon/system/regular/x.svg';
 import {
   type Accessor,
   type Component,
@@ -11,30 +34,7 @@ import {
   untrack,
 } from 'solid-js';
 import inboxBgUrl from '../../../assets/graphics/inbox-bg.svg?url';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconCompany from '../../../assets/icons/icon-company.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import IconDotsThree from '../../../assets/icons/phosphor/dots-three-vertical.svg';
-import IconFilePdf from '../../../assets/icons/phosphor/file-pdf.svg';
 import IconSend from '../../../assets/icons/phosphor/paper-plane-tilt-fill.svg';
-import IconX from '../../../assets/icons/phosphor/x.svg';
-import IconTaskDone from '../../../assets/icons/square-task-done-circle.svg';
-import IconTaskInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import IconCalendarRow from '../../../assets/icons/wide-calendar.svg';
-import IconChat from '../../../assets/icons/wide-chat.svg';
-import IconEmailRow from '../../../assets/icons/wide-email.svg';
-import IconDocMd from '../../../assets/icons/wide-file-md.svg';
-import IconPriorityHigh from '../../../assets/icons/wide-priority-high.svg';
-import IconPriorityLow from '../../../assets/icons/wide-priority-low.svg';
-import IconPriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
 import avatarJacobPersonal from '../../../assets/people/jacob-personal.webp';
 import avatarJacobVc from '../../../assets/people/jacob-vc.webp';
 import avatarJacobWork from '../../../assets/people/jacob-work.webp';
@@ -162,7 +162,7 @@ function Avatar(props: {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * (props.fontScale ?? 0.38))}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         'place-items': 'center',
         width: `${s}px`,
@@ -522,7 +522,7 @@ export function HeroAppWindow() {
               color: 'color-mix(in srgb, var(--c1) 55%, var(--c2))',
               display: 'inline-flex',
               'font-family': appFont,
-              'font-weight': '550',
+              'font-weight': '500',
               gap: '6px',
             }}
           >
@@ -620,7 +620,7 @@ export function HeroAppWindow() {
                   style={{
                     color: 'var(--c1)',
                     'font-size': '15px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   Inbox zero
@@ -816,7 +816,7 @@ export function MultiInboxCard() {
             color: 'var(--c1)',
             'font-family': appFont,
             'font-size': '13.5px',
-            'font-weight': '600',
+            'font-weight': '500',
           }}
         >
           All inboxes
@@ -980,8 +980,8 @@ type ComposeFrame = {
 
 const COMPOSE_RECIPIENT: ComposePill = {
   kind: 'person',
-  label: 'Valentina',
-  initials: 'V',
+  label: 'Austin Barron',
+  initials: 'AB',
 };
 const COMPOSE_PDF: ComposePill = { kind: 'doc', label: 'Pitch memo.pdf' };
 const COMPOSE_DOC: ComposePill = { kind: 'ref', label: 'Website launch plan' };
@@ -1042,7 +1042,7 @@ function ComposeInlinePill(props: {
             flex: 'none',
             'font-family': appFont,
             'font-size': '8px',
-            'font-weight': '600',
+            'font-weight': '500',
             height: '22px',
             overflow: 'hidden',
             'place-items': 'center',
@@ -1173,7 +1173,7 @@ const COMPOSE_BLANK_MS = 880;
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const composeEase = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 /** How many stamps in a table have landed. */
 const countAt = (stamps: number[], now: number) => {
   let n = 0;
@@ -1629,7 +1629,7 @@ export function ComposeMentionGraphic() {
     <div
       ref={frameEl}
       role="img"
-      aria-label="A Macro email being composed: typing an @mention adds Valentina to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
+      aria-label="A Macro email being composed: typing an @mention adds Austin Barron to the recipients, and two more @mentions attach a document and a PDF inline, before the message is sent."
     >
       <ComposeMentionScene t={t} />
     </div>
@@ -1762,7 +1762,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -1791,7 +1791,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.06em',
     'line-height': 1.1,
@@ -1855,7 +1855,7 @@ function _ComparisonTable() {
                     display: 'flex',
                     'font-family': 'body',
                     'font-size': mobile() ? '13px' : '16px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     'line-height': 1.3,
                     padding: mobile() ? '14px 12px 14px 16px' : '16px 22px',
                     position: mobile() ? 'sticky' : 'static',
@@ -1923,7 +1923,7 @@ function _PrimaryCta(props: { buttonName: string; label?: string }) {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '16px' : '14px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '8px',
         height: mobile() ? '46px' : '48px',
         'justify-content': 'center',
@@ -2118,7 +2118,7 @@ function _EmailIntro() {
                   color: 'color-mix(in srgb, var(--c4) 60%, transparent)',
                   'font-family': 'Inter, body',
                   'font-size': compact() ? '11px' : '12px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   'letter-spacing': '0.14em',
                   'text-transform': 'uppercase',
                 }}
@@ -2142,7 +2142,7 @@ function _EmailIntro() {
                     color: 'var(--c2)',
                     'font-family': 'body',
                     'font-size': compact() ? '14px' : '15px',
-                    'font-weight': '700',
+                    'font-weight': '500',
                     'letter-spacing': '0.07em',
                     'line-height': 1.2,
                     margin: '0',
@@ -2156,7 +2156,7 @@ function _EmailIntro() {
                     color: 'var(--c4)',
                     'font-family': 'body',
                     'font-size': compact() ? '15px' : '16px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                     'line-height': 1.5,
                     margin: '0',
                     'max-width': '360px',
@@ -2588,7 +2588,7 @@ function _InboxRowContent(props: { row: InboxRowData }) {
             flex: 1,
             'font-family': appFont,
             'font-size': '14px',
-            'font-weight': r.unread ? '600' : '500',
+            'font-weight': '500',
             gap: '7px',
             'min-width': 0,
           }}
@@ -2618,7 +2618,7 @@ function _InboxRowContent(props: { row: InboxRowData }) {
           flex: 'none',
           'font-family': appFont,
           'font-size': '14px',
-          'font-weight': r.unread ? '600' : '500',
+          'font-weight': '500',
           'max-width': mobile() ? '110px' : '168px',
           overflow: 'hidden',
           'text-overflow': 'ellipsis',
@@ -2665,7 +2665,7 @@ function _InboxRowMeta(props: { row: InboxRowData }) {
     >
       <Show when={r.kind === 'pr'}>
         <span style={inboxPill()}>
-          <span style={{ color: SUCCESS, 'font-weight': '600' }}>
+          <span style={{ color: SUCCESS, 'font-weight': '500' }}>
             +{r.prAdds}
           </span>
           <span style={{ color: FAILURE }}>
@@ -2765,7 +2765,7 @@ const unifiedItems: UItem[] = [
   {
     kind: 'row',
     type: 'pr',
-    who: 'Valentina',
+    who: 'Austin Barron',
     subject: 'Adapt dark theme and input focus styling for mobile #4158',
     preview:
       'adapts the dark-theme tokens and input focus rings so they hold up on smaller screens',
@@ -3294,7 +3294,7 @@ function UnifiedInboxWindow() {
                         flex: 'none',
                         'font-family': appFont,
                         'font-size': '11.5px',
-                        'font-weight': 600,
+                        'font-weight': 500,
                         'padding-left': '6px',
                         'white-space': 'nowrap',
                       }}
@@ -3347,7 +3347,7 @@ function UnifiedInboxWindow() {
                         style={{
                           'font-family': appFont,
                           'font-size': '11.5px',
-                          'font-weight': 600,
+                          'font-weight': 500,
                           'white-space': 'nowrap',
                         }}
                       >
@@ -3372,7 +3372,7 @@ function UnifiedInboxWindow() {
                         color: '#8b8b8b',
                         'font-family': appFont,
                         'font-size': '11.5px',
-                        'font-weight': 600,
+                        'font-weight': 500,
                         'white-space': 'nowrap',
                       }}
                     >
@@ -3384,7 +3384,7 @@ function UnifiedInboxWindow() {
                         color: UNIFIED_META.calendar.color,
                         'font-family': appFont,
                         'font-size': '11.5px',
-                        'font-weight': 600,
+                        'font-weight': 500,
                         'white-space': 'nowrap',
                       }}
                     >
@@ -3521,7 +3521,7 @@ const kbRows: {
   { who: 'Marcus Lee', subject: 'Re: Q3 roadmap draft', time: 'Jun 15' },
   { who: 'Mom', subject: 'dinner sunday?', time: 'Jun 14', unread: true },
   {
-    who: 'Valentina',
+    who: 'Austin Barron',
     subject: 'Contract countersigned',
     time: 'Jun 9',
   },
@@ -3552,7 +3552,7 @@ function BigKey(props: {
         display: 'inline-grid',
         'font-family': 'Inter, body',
         'font-size': mobile() ? '16px' : '15px',
-        'font-weight': '700',
+        'font-weight': '500',
         height: mobile() ? '42px' : '48px',
         'line-height': 1,
         'min-width': mobile() ? '42px' : '48px',
@@ -3695,7 +3695,7 @@ function _KeyboardSpeedGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': compact() ? '14px' : '15px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Signal
@@ -3734,7 +3734,7 @@ function _KeyboardSpeedGraphic() {
                         color: 'var(--c1)',
                         'font-family': appFont,
                         'font-size': '15px',
-                        'font-weight': '600',
+                        'font-weight': '500',
                       }}
                     >
                       Inbox zero
@@ -3751,7 +3751,7 @@ function _KeyboardSpeedGraphic() {
                         cursor: 'pointer',
                         'font-family': 'Inter, body',
                         'font-size': '12px',
-                        'font-weight': '700',
+                        'font-weight': '500',
                         'letter-spacing': '0.06em',
                         padding: '7px 15px',
                         'text-transform': 'uppercase',
@@ -3812,7 +3812,7 @@ function _KeyboardSpeedGraphic() {
                             color: 'var(--c1)',
                             'font-family': appFont,
                             'font-size': compact() ? '13px' : '14px',
-                            'font-weight': entry.row.unread ? '700' : '500',
+                            'font-weight': '500',
                           }}
                         >
                           {entry.row.who}
@@ -3879,7 +3879,7 @@ function _KeyboardSpeedGraphic() {
                         color: 'var(--c4)',
                         'font-family': 'Inter, body',
                         'font-size': '12px',
-                        'font-weight': '700',
+                        'font-weight': '500',
                         'letter-spacing': '0.08em',
                         'margin-left': '4px',
                         'text-transform': 'uppercase',
@@ -3899,7 +3899,7 @@ function _KeyboardSpeedGraphic() {
           color: 'color-mix(in srgb, var(--c4) 70%, transparent)',
           'font-family': 'body',
           'font-size': '13px',
-          'font-weight': '600',
+          'font-weight': '500',
           'margin-top': compact() ? '20px' : '26px',
           'text-align': 'center',
         }}

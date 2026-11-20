@@ -269,6 +269,8 @@ async fn failed_channel_updates_retry_after_restart_without_reprompting() {
                 action: AgentAction::prompt("retry"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             })),
         )
         .await
@@ -332,6 +334,8 @@ async fn recovery_rebuilds_a_missed_completion_from_the_durable_protocol_log() {
                 action: AgentAction::prompt("retry"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             })),
         )
         .await
@@ -621,6 +625,8 @@ async fn creation_retries_repair_reservation_for_both_primary_key_and_thread_con
                 action: AgentAction::prompt("retry"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             })),
         )
         .await

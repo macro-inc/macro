@@ -171,8 +171,12 @@ fn map_error(error: import::domain::ports::ImportError) -> rootcause::Report<Imp
     let code = match &error {
         LedgerError::SourceMismatch => ImportError::SourceMismatch,
         LedgerError::SourceConfirmationRequired => ImportError::InvalidInput,
-        LedgerError::TargetConflict | LedgerError::TargetNotReserved => ImportError::Conflict,
-        LedgerError::Db(_) | LedgerError::Other(_) => ImportError::Retryable,
+        LedgerError::TargetConflict
+        | LedgerError::TargetNotReserved
+        | LedgerError::ImportRunning => ImportError::Conflict,
+        LedgerError::Db(_) | LedgerError::Other(_) | LedgerError::AccessCheck(_) => {
+            ImportError::Retryable
+        }
         // Canonical ledger operations do not perform discovery or AI work.
         // These errors are unexpected adapter failures, not permission to proceed.
         LedgerError::Admission(_)
@@ -182,6 +186,7 @@ fn map_error(error: import::domain::ports::ImportError) -> rootcause::Report<Imp
         | LedgerError::Tracker(_)
         | LedgerError::NotionNotConnected
         | LedgerError::NotionSharingRequired
+        | LedgerError::EntityNotAccessible(_)
         | LedgerError::NotReady(_) => ImportError::Internal,
     };
     rootcause::Report::new(error).context(code)

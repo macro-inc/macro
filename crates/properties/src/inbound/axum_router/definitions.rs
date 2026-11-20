@@ -124,7 +124,6 @@ pub async fn list_properties<
         scope = ?query.scope,
         include_system = include_system,
         for_entity_type = ?query.for_entity_type,
-        user_id = %user,
         "listing properties"
     );
 
@@ -154,7 +153,6 @@ pub async fn list_properties<
     tracing::info!(
         properties_count = response.len(),
         scope = ?query.scope,
-        user_id = %user,
         "successfully retrieved properties"
     );
 

@@ -157,85 +157,87 @@ export const RouteJobs: Component = () => {
   });
 
   return (
-    <div
-      style={{
-        'box-sizing': 'border-box',
-        display: 'grid',
-        gap: breakpoint() ? '20px' : '24px',
-        'justify-items': 'center',
-        'padding-top': breakpoint() ? '90px' : '110px',
-        width: '100%',
-      }}
-    >
-      <section
+    <>
+      <div
         style={{
+          'box-sizing': 'border-box',
           display: 'grid',
-          gap: breakpoint() ? '16px' : '20px',
+          gap: breakpoint() ? '20px' : '24px',
           'justify-items': 'center',
-          'max-width': '640px',
-          'padding-bottom': breakpoint() ? '20px' : '36px',
-          'text-align': 'center',
+          'padding-top': breakpoint() ? '90px' : '110px',
+          width: '100%',
         }}
       >
-        <div style={eyebrowStyle()}>We're hiring</div>
-        <h1
+        <section
           style={{
-            color: 'var(--c1)',
-            'font-family': 'display',
-            'font-size': breakpoint() ? '38px' : '50px',
-            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
-            'letter-spacing': '-0.035em',
-            'line-height': breakpoint() ? 1.04 : 1,
-            margin: '0',
-            'text-wrap': 'balance',
+            display: 'grid',
+            gap: breakpoint() ? '16px' : '20px',
+            'justify-items': 'center',
+            'max-width': '640px',
+            'padding-bottom': breakpoint() ? '20px' : '36px',
+            'text-align': 'center',
           }}
         >
-          Help us rebuild the office suite.
-        </h1>
-        <p
-          style={{
-            color: 'var(--c4)',
-            'font-size': breakpoint() ? '17px' : '20px',
-            'line-height': 1.45,
-            margin: '0',
-            'max-width': '520px',
-            'text-wrap': 'balance',
-          }}
-        >
-          We are a small, engineering-led team in NYC and Toronto, obsessed with
-          fast, keyboard-driven software.
-        </p>
-      </section>
+          <div style={eyebrowStyle()}>We're hiring</div>
+          <h1
+            style={{
+              color: 'var(--c1)',
+              'font-family': 'display',
+              'font-size': breakpoint() ? '38px' : '50px',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
+              'letter-spacing': '-0.035em',
+              'line-height': breakpoint() ? 1.04 : 1,
+              margin: '0',
+              'text-wrap': 'balance',
+            }}
+          >
+            Help us rebuild the office suite.
+          </h1>
+          <p
+            style={{
+              color: 'var(--c4)',
+              'font-size': breakpoint() ? '17px' : '20px',
+              'line-height': 1.45,
+              margin: '0',
+              'max-width': '520px',
+              'text-wrap': 'balance',
+            }}
+          >
+            We are a small, engineering-led team in NYC and Toronto, obsessed
+            with fast, keyboard-driven software.
+          </p>
+        </section>
 
-      <JobCard
-        eyebrow="Engineering"
-        title="Software Engineer"
-        body={
-          <>
-            If you love building from the ground up, working with high autonomy,
-            and sweating the details, we want to hear from you. We build with
-            Rust, TypeScript, and SolidJS.
-          </>
-        }
-        meta="NYC / Toronto · Full-time · Hybrid"
-        scene={<SceneComputer />}
-      />
+        <JobCard
+          eyebrow="Engineering"
+          title="Software Engineer"
+          body={
+            <>
+              If you love building from the ground up, working with high
+              autonomy, and sweating the details, we want to hear from you. We
+              build with Rust, TypeScript, and SolidJS.
+            </>
+          }
+          meta="NYC / Toronto · Full-time · Hybrid"
+          scene={<SceneComputer />}
+        />
 
-      <JobCard
-        eyebrow="Everything else"
-        title="General Application"
-        body={
-          <>
-            We're not just looking for engineers. If you're a designer who
-            thinks in systems, a writer who codes, or a community builder who
-            gets open source, we value raw talent and unconventional thinking
-            over credentials.
-          </>
-        }
-        meta="NYC / Toronto · Various roles"
-        scene={<SceneGlobe />}
-        flip
-      />
-    </div>
+        <JobCard
+          eyebrow="Everything else"
+          title="General Application"
+          body={
+            <>
+              We're not just looking for engineers. If you're a designer who
+              thinks in systems, a writer who codes, or a community builder who
+              gets open source, we value raw talent and unconventional thinking
+              over credentials.
+            </>
+          }
+          meta="NYC / Toronto · Various roles"
+          scene={<SceneGlobe />}
+          flip
+        />
+      </div>
+    </>
   );
 };

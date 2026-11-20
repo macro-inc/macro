@@ -309,6 +309,40 @@ pub struct Paged<T> {
     pub next_cursor: Option<String>,
 }
 
+/// One page of a data source's rows.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RowsPage {
+    /// The rows on this page.
+    pub rows: Vec<NotionPage>,
+    /// What comes after them.
+    pub next: RowsNext,
+}
+
+/// What comes after a page of a data source's rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowsNext {
+    /// More rows, from this cursor.
+    More {
+        /// Where the next page starts.
+        cursor: String,
+    },
+    /// No more rows: every row was listed.
+    End,
+    /// Notion's result cap stopped the query without progress, so rows
+    /// past it were never listed.
+    Truncated,
+}
+
+/// Every row of a data source, drained, each once.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrainedRows {
+    /// The rows, oldest first.
+    pub rows: Vec<NotionPage>,
+    /// Whether every row was listed; `false` when Notion's result cap
+    /// stopped the query short.
+    pub complete: bool,
+}
+
 /// What a search result is.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SearchHit {

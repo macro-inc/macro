@@ -1,0 +1,254 @@
+/* Retained from the published docs previews; scoped to guide content. */
+.documentation-body .share-preview {
+  width: min(100%, 560px);
+  margin: 1.25rem auto;
+  border: 1px solid rgb(3 7 18 / 0.1);
+  border-radius: 16px;
+  background: #fff;
+  color: #18181b;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.documentation-body .share-head,
+.documentation-body .share-to,
+.documentation-body .share-actions,
+.documentation-body .share-person,
+.documentation-body .share-link-head,
+.documentation-body .share-team {
+  display: flex;
+  align-items: center;
+}
+
+.documentation-body .share-head {
+  gap: 6px;
+  padding: 14px 16px 8px;
+  font-weight: 600;
+}
+
+.documentation-body .share-head svg {
+  color: oklch(60.6% 0.25 292.717);
+}
+
+.documentation-body .share-to {
+  gap: 8px;
+  margin: 0 12px;
+  padding: 0 8px 0 12px;
+  border: 1px solid rgb(3 7 18 / 0.1);
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.documentation-body .share-field {
+  flex: 1;
+  padding: 12px 0;
+  color: #a1a1aa;
+}
+
+.documentation-body .share-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgb(3 7 18 / 0.1);
+  border-radius: 8px;
+  background: #fff;
+  color: #3f3f46;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.documentation-body .share-note {
+  margin: 0 12px;
+  padding: 12px 12px 28px;
+  border-bottom: 1px solid rgb(3 7 18 / 0.08);
+  color: #a1a1aa;
+}
+
+.documentation-body .share-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.documentation-body .share-actions > span {
+  padding: 6px 10px;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+
+.documentation-body .share-actions > .share-send {
+  border-radius: 8px;
+  background: #18181b;
+  color: #fff;
+  font-weight: 600;
+}
+
+.documentation-body .share-section {
+  padding: 12px 16px 14px;
+  border-top: 1px solid rgb(3 7 18 / 0.08);
+}
+
+.documentation-body .share-section-title,
+.documentation-body .share-link-head {
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.documentation-body .share-person {
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.documentation-body .share-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.documentation-body .share-avatar,
+.documentation-body .share-hash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.documentation-body .share-avatar.is-avery {
+  background: #7c6f64;
+}
+
+.documentation-body .share-hash {
+  background: #3d6b8c;
+}
+
+.documentation-body .share-me,
+.documentation-body .share-role,
+.documentation-body .share-section p,
+.documentation-body .share-team span span {
+  color: #71717a;
+  font-weight: 370;
+}
+
+.documentation-body .share-me {
+  font-size: 12px;
+}
+
+.documentation-body .share-role {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.documentation-body .share-link-head {
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.documentation-body .share-status {
+  padding: 1px 8px;
+  border: 1px solid rgb(3 7 18 / 0.1);
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.documentation-body .share-scopes {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #f4f4f5;
+  font-size: 11px;
+}
+
+.documentation-body .share-scopes span {
+  flex: 1;
+  padding: 5px 6px;
+  border-radius: 6px;
+  color: #71717a;
+  text-align: center;
+}
+
+.documentation-body .share-scopes .is-on {
+  background: #fff;
+  color: #18181b;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(3 7 18 / 0.06);
+}
+
+.documentation-body .share-section p {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+
+.documentation-body .share-team {
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(3 7 18 / 0.08);
+}
+
+.documentation-body .share-team > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.documentation-body .share-team strong {
+  font-weight: 600;
+}
+
+.documentation-body .share-team span span {
+  font-size: 12px;
+}
+
+html[data-theme-light='false'] .documentation-body .share-preview {
+  border-color: rgb(255 255 255 / 0.1);
+  background: #141414;
+  color: #f4f4f5;
+}
+
+html[data-theme-light='false'] .documentation-body .share-to,
+html[data-theme-light='false'] .documentation-body .share-level,
+html[data-theme-light='false'] .documentation-body .share-scopes .is-on {
+  border-color: rgb(255 255 255 / 0.12);
+  background: #1c1c1c;
+  color: #e4e4e7;
+}
+
+html[data-theme-light='false'] .documentation-body .share-note,
+html[data-theme-light='false'] .documentation-body .share-section {
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+html[data-theme-light='false'] .documentation-body .share-actions > .share-send {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+html[data-theme-light='false'] .documentation-body .share-scopes {
+  background: #1c1c1c;
+}
+
+html[data-theme-light='false'] .documentation-body .share-status {
+  border-color: rgb(255 255 255 / 0.12);
+  background: #1c1c1c;
+  color: #a1a1aa;
+}
+
+html[data-theme-light='false'] .documentation-body .share-team {
+  border-top-color: rgb(255 255 255 / 0.08);
+}

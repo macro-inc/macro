@@ -571,6 +571,7 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
             entity_id,
             updated_at: ts(1000),
         })),
+        document_term_matching: None,
     };
 
     let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
@@ -583,4 +584,366 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
         panic!("expected the channel name cursor to survive the round trip");
     };
     assert_eq!(channel_cursor.as_updated_at(), Some((entity_id, ts(1000))));
+}
+
+fn caller(origin: macro_authorization::CredentialOrigin) -> MacroUserAuthentication {
+    let user_id = "macro|user@example.com";
+    MacroUserAuthentication {
+        origin,
+        agent_id: None,
+        agent_via: None,
+        routine_id: None,
+        macro_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_string())
+            .expect("valid user id"),
+        user_context: UserContext {
+            user_id: user_id.to_string(),
+            fusion_user_id: "fusion-user-id".to_string(),
+            permissions: None,
+            organization_id: None,
+        },
+    }
+}
+
+/// The span is what production traces keep of a search, so it holds the mode,
+/// the sizes and the caller, and nothing the user typed or picked.
+#[test]
+fn the_unified_search_span_carries_the_mode_and_not_the_request() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let chat_id = "0191b9a2-7c7e-7c3a-9d53-6f1f8b0d2a11";
+    let mut req = UnifiedSearchRequest {
+        query: "severance offer letter".to_string(),
+        match_type: MatchType::Partial,
+        filters: Default::default(),
+        search_on: SearchOn::NameContent,
+        include_crm: false,
+        calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
+        collapse: None,
+    };
+    req.filters.chat_filters.chat_ids = vec![chat_id.to_string()];
+    let query_params = SearchPaginationParams {
+        page: None,
+        page_size: Some(25),
+        cursor: None,
+    };
+
+    let span = unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::Internal),
+        &query_params,
+        &req,
+    );
+    span.in_scope(|| {
+        record_term_counts(&tracing::Span::current(), 3, 0);
+        tracing::Span::current().record(
+            "search.entity_types",
+            searched_entity_types(
+                &[
+                    models_opensearch::OpenSearchEntityType::Emails,
+                    models_opensearch::OpenSearchEntityType::Chats,
+                ]
+                .into(),
+                &[
+                    ("chats", true),
+                    ("channels", false),
+                    ("crm_companies", true),
+                ],
+            ),
+        );
+    });
+
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.caller"], "internal");
+    assert_eq!(span["search.caller_agent"], "false");
+    assert_eq!(span["search.search_on"], "name_content");
+    assert_eq!(span["search.match_type"], "partial");
+    assert_eq!(span["search.page_size"], "25");
+    assert_eq!(span["search.entity_types"], "chats,crm_companies,emails");
+    assert_eq!(span["search.terms"], "3");
+    assert_eq!(span["search.dropped_terms"], "0");
+    assert_eq!(
+        span.keys().copied().collect::<Vec<_>>(),
+        [
+            "search.caller",
+            "search.caller_agent",
+            "search.dropped_terms",
+            "search.entity_types",
+            "search.match_type",
+            "search.page_size",
+            "search.search_on",
+            "search.terms",
+            "user_id",
+        ]
+    );
+    for value in span.values() {
+        assert!(!value.contains("severance"), "the query reached the span");
+        assert!(!value.contains(chat_id), "a filter value reached the span");
+    }
+}
+
+#[test]
+fn the_unified_search_span_defaults_the_page_size() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let req = UnifiedSearchRequest {
+        query: "quarterly plan".to_string(),
+        match_type: MatchType::Exact,
+        filters: Default::default(),
+        search_on: SearchOn::Content,
+        include_crm: false,
+        calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
+        collapse: None,
+    };
+    let query_params = SearchPaginationParams {
+        page: None,
+        page_size: None,
+        cursor: None,
+    };
+
+    let _span = unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::Session),
+        &query_params,
+        &req,
+    );
+
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.caller"], "session");
+    assert_eq!(span["search.page_size"], "10");
+}
+
+// ============ Tests for read_until_page_kept (email thread states) ============
+
+/// A mailbox of `total` email threads, newest first, one hit each.
+fn mailbox(total: u128) -> Vec<SearchHit> {
+    (0..total)
+        .map(|n| SearchHit {
+            entity_id: Uuid::from_u128(n + 1),
+            entity_type: SearchEntityType::Emails,
+            updated_at: Some(ts(1_000_000 - n as i64)),
+            score: None,
+            highlight: Highlight::default(),
+            goto: None,
+        })
+        .collect()
+}
+
+/// Pages through `hits` the way OpenSearch does: `page_size` hits after the
+/// cursor's anchor, and a cursor on the last one while more remain.
+fn page_after(
+    hits: &[SearchHit],
+    cursor: &SearchCursorOption,
+    page_size: usize,
+) -> (Vec<SearchHit>, SearchCursorOption) {
+    let start = match cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (anchor, _) = cursor.as_updated_at().unwrap();
+            hits.iter().position(|hit| hit.entity_id == anchor).unwrap() + 1
+        }
+        _ => 0,
+    };
+    let page: Vec<SearchHit> = hits.iter().skip(start).take(page_size).cloned().collect();
+    let more = start + page.len() < hits.len();
+    let cursor = match page.last() {
+        Some(last) if more => SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+            entity_id: last.entity_id,
+            updated_at: last.updated_at.unwrap(),
+        })),
+        _ => SearchCursorOption::Done,
+    };
+    (page, cursor)
+}
+
+fn anchor(cursor: &SearchCursorOption) -> Uuid {
+    match cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => cursor.as_updated_at().unwrap().0,
+        other => panic!("expected a cursor, got {other:?}"),
+    }
+}
+
+fn page_args(page_size: u32) -> UnifiedSearchArgs {
+    UnifiedSearchArgs {
+        page_size,
+        ..Default::default()
+    }
+}
+
+async fn read_with_matching(
+    hits: &[SearchHit],
+    page_size: u32,
+    matches: impl Fn(Uuid) -> bool,
+    cursor: SearchCursorOption,
+) -> (ContentHits, StateCheckRounds) {
+    let mut args = page_args(page_size);
+    args.cursor = cursor;
+    read_until_page_kept(
+        args,
+        |args| std::future::ready(Ok(page_after(hits, &args.cursor, args.page_size as usize))),
+        |ids: Vec<Uuid>| {
+            std::future::ready(Ok(ids.into_iter().filter(|id| matches(*id)).collect()))
+        },
+    )
+    .await
+    .unwrap()
+}
+
+fn ids(content: &ContentHits) -> Vec<u128> {
+    content
+        .hits
+        .iter()
+        .map(|hit| hit.entity_id.as_u128())
+        .collect()
+}
+
+#[tokio::test]
+async fn matching_threads_behind_a_first_page_that_all_fails_are_returned() {
+    // The first 100 hits fail the filter; the matching threads come after.
+    let hits = mailbox(400);
+    let matches = |id: Uuid| id.as_u128() > 100 && id.as_u128().is_multiple_of(2);
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(content.hits.len(), 100);
+    assert_eq!(ids(&content)[0], 102);
+    assert_eq!(*ids(&content).last().unwrap(), 300);
+    assert!(content.hits.iter().all(|hit| matches(hit.entity_id)));
+    assert_eq!(rounds.rounds, 3);
+    assert!(!rounds.bound_reached);
+    // The next page starts after the last hit read, past the ones dropped.
+    assert_eq!(anchor(&content.cursor).as_u128(), 300);
+}
+
+#[tokio::test]
+async fn a_short_mailbox_ends_with_what_matched() {
+    let hits = mailbox(150);
+    let matches = |id: Uuid| id.as_u128() > 140;
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(ids(&content), (141..=150).collect::<Vec<_>>());
+    assert!(content.cursor.is_done());
+    assert_eq!(rounds.rounds, 2);
+    assert!(!rounds.bound_reached);
+}
+
+#[tokio::test]
+async fn reading_stops_at_the_bound_and_resumes_past_every_hit_read() {
+    // One match, far beyond what one request reads.
+    let page_size = 100u128;
+    let read_per_request = page_size * u128::from(MAX_EMAIL_STATE_ROUNDS);
+    let hits = mailbox(read_per_request * 3);
+    let target = read_per_request * 2 + 7;
+    let matches = |id: Uuid| id.as_u128() == target;
+
+    let (first, rounds) =
+        read_with_matching(&hits, 100, matches, SearchCursorOption::NotDone(None)).await;
+
+    assert!(first.hits.is_empty());
+    assert_eq!(rounds.rounds, MAX_EMAIL_STATE_ROUNDS);
+    assert!(rounds.bound_reached);
+    assert_eq!(rounds.threads_checked, read_per_request as usize);
+
+    // Each request moves the cursor a full bound on, so the match is reached.
+    let (second, _) = read_with_matching(&hits, 100, matches, first.cursor).await;
+    assert!(second.hits.is_empty());
+    let (third, rounds) = read_with_matching(&hits, 100, matches, second.cursor).await;
+    assert_eq!(ids(&third), vec![target]);
+    assert!(third.cursor.is_done());
+    assert!(!rounds.bound_reached);
+}
+
+#[tokio::test]
+async fn other_entity_types_are_kept_without_a_check() {
+    let mut hits = mailbox(10);
+    hits[3].entity_type = SearchEntityType::Documents;
+    let checked = std::sync::Mutex::new(Vec::new());
+
+    let (content, _) = read_until_page_kept(
+        page_args(100),
+        |args| std::future::ready(Ok(page_after(&hits, &args.cursor, args.page_size as usize))),
+        |ids: Vec<Uuid>| {
+            checked.lock().unwrap().extend(ids);
+            std::future::ready(Ok(HashSet::new()))
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(ids(&content), vec![4]);
+    assert!(!checked.lock().unwrap().contains(&Uuid::from_u128(4)));
+}
+
+#[test]
+fn a_checked_page_that_kept_nothing_still_moves_on() {
+    let read_past = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::from_u128(500),
+        updated_at: ts(500),
+    }));
+    let original = SearchCursorOption::NotDone(None);
+
+    let next = next_content_cursor(true, &read_past, 0, 0, None, &original);
+
+    assert_eq!(anchor(&next), Uuid::from_u128(500));
+}
+
+#[test]
+fn a_checked_page_resumes_after_the_last_hit_read_not_the_last_kept() {
+    let read_past = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::from_u128(500),
+        updated_at: ts(500),
+    }));
+    let last_kept = make_tagged_hit(Uuid::from_u128(20), Some(ts(980)), SearchSource::Content);
+
+    let next = next_content_cursor(
+        true,
+        &read_past,
+        3,
+        3,
+        Some(&last_kept),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    assert_eq!(anchor(&next), Uuid::from_u128(500));
+}
+
+#[test]
+fn a_checked_page_truncated_by_the_merge_resumes_after_the_last_hit_shown() {
+    let read_past = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::from_u128(500),
+        updated_at: ts(500),
+    }));
+    let last_kept = make_tagged_hit(Uuid::from_u128(20), Some(ts(980)), SearchSource::Content);
+
+    let next = next_content_cursor(
+        true,
+        &read_past,
+        2,
+        3,
+        Some(&last_kept),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    assert_eq!(anchor(&next), Uuid::from_u128(20));
+}
+
+#[tokio::test]
+async fn a_checked_page_counts_hits_as_an_unfiltered_page_does() {
+    // Two messages per thread: a page of 100 hits holds 50 threads.
+    let hits: Vec<SearchHit> = mailbox(400)
+        .into_iter()
+        .map(|mut hit| {
+            hit.entity_id = Uuid::from_u128(hit.entity_id.as_u128().div_ceil(2));
+            hit
+        })
+        .collect();
+
+    let (content, rounds) =
+        read_with_matching(&hits, 100, |_| true, SearchCursorOption::NotDone(None)).await;
+
+    assert_eq!(content.hits.len(), 100);
+    assert_eq!(rounds.rounds, 1);
 }

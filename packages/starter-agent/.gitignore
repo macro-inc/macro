@@ -1,0 +1,13 @@
+node_modules/
+*.tsbuildinfo
+.direnv/
+.scripts*/
+
+# State is kept by bucket (behavior/context/state.ts): memory and private are
+# committed to the agent's one repository; volatile state and logs (which go
+# to telemetry) stay on this machine.
+state/run/
+state/log/
+
+# Helpers work in their own worktrees of this repository.
+.worktrees/

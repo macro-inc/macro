@@ -76,9 +76,33 @@ verification value.
 `.github/workflows/deploy_website.yml` deploys dev on pushes to `main` that touch
 the site or this stack, and prod from `release-production`. Run it manually from
 the Actions tab to deploy `dev`, `prod`, or `both` (dev first; prod is cancelled
-if dev fails). To preview locally:
+if dev fails).
+
+Set `preview_only=true` on a manual dispatch to build the site and preview the
+stack with CI credentials without publishing. Review this run before the
+production dispatch with `preview_only=false`.
+
+To preview locally:
 
 ```sh
 cd apps/marketing && VITE_APP_BASE_URL=https://dev.macro.com bun run build
 cd ../../infra/stacks/website && bun run preview:dev
 ```
+
+## Consolidated website routes
+
+`apps/marketing/seo/page-redirects.json` is the shared permanent-redirect manifest.
+The stack injects it into `wwwRedirect/handler.js`; retired pages return 308
+responses before directory-index rewrites, retaining query parameters. Browsers
+retain existing fragments. Local serving uses the same map, and prerendering
+emits noindex redirect fallbacks for static hosts. Deploy this stack with the
+website when changing the manifest. The separate `apps/docs/docs.json` records
+cover the old docs hostname; publish those only after the destination site is live.
+
+Keep executable redirect helpers in this package: Pulumi uses CommonJS, so it
+cannot import TypeScript from the marketing package's ES module scope. Reading
+the shared JSON manifest is safe across this boundary.
+
+Run the marketing documentation redirect tests and full build before changing
+these routes. They verify the edge handler, destination files, old sitemap URLs,
+Markdown exports, and link fragments. No deployment is needed for these checks.

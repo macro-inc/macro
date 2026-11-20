@@ -9,12 +9,14 @@ export function OptionPill(props: {
   color?: string | null;
   tag?: boolean;
   empty?: boolean;
+  /** Full ink instead of the badge's muted ink, for a value the viewer can edit in a property list. */
+  ink?: boolean;
 }) {
   return (
     <Badge
       variant="outline"
       size="xs"
-      class="min-w-0 max-w-full"
+      class={props.ink ? 'min-w-0 max-w-full text-ink' : 'min-w-0 max-w-full'}
       classList={{ 'text-ink-placeholder': props.empty }}
       title={props.label}
     >
@@ -31,6 +33,7 @@ export function SelectPill(props: {
   label: string;
   column?: DatabaseViewColumn;
   empty?: boolean;
+  ink?: boolean;
 }) {
   return (
     <OptionPill
@@ -38,6 +41,7 @@ export function SelectPill(props: {
       color={props.column && optionOf(props.column, props.label)?.color}
       tag={props.column?.dataType === 'TAG'}
       empty={props.empty}
+      ink={props.ink}
     />
   );
 }

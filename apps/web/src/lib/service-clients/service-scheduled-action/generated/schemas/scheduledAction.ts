@@ -8,16 +8,20 @@
 
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineTask } from './routineTask';
 import type { RunVisibility } from './runVisibility';
 import type { ScheduledActionClaimed } from './scheduledActionClaimed';
 import type { ScheduledActionEventActivatedAt } from './scheduledActionEventActivatedAt';
 import type { ScheduledActionId } from './scheduledActionId';
 import type { ScheduledActionNextRunAt } from './scheduledActionNextRunAt';
+import type { ScheduledActionSubRoutine } from './scheduledActionSubRoutine';
 import type { ScheduledActionSuggestionId } from './scheduledActionSuggestionId';
 import type { ScheduledActionTemplateId } from './scheduledActionTemplateId';
 
 export interface ScheduledAction {
+  /** Optional presentation overrides; absent values use routine defaults. */
+  appearance?: EntityAppearance;
   claimed?: ScheduledActionClaimed;
   /** Independent of execution bookkeeping in `updated_at`. */
   configuration_revision: number;
@@ -41,6 +45,7 @@ rather than failing to parse. */
   owner: string;
   /** Whether the action's runs are listed in Home and the Agents list. */
   run_visibility: RunVisibility;
+  sub_routine?: ScheduledActionSubRoutine;
   /** The routine suggestion it was saved from, if any: a plain pointer
 that stays after the suggestion is replaced. */
   suggestion_id?: ScheduledActionSuggestionId;

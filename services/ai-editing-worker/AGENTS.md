@@ -32,6 +32,9 @@ before touching the edit flow.
   `spreadsheet.ts`, `comment-mark.ts`, `markdown.ts`. `spreadsheet.ts` also serves
   `/spreadsheet/instructions`, the SDK's spreadsheet writer model
   (`src/spreadsheet/writer.ts`).
+- `src/provider-account.ts`: model middleware recording an
+  `ai.provider_account_unavailable` span when a provider refuses Macro's
+  account; `infra/stacks/monitoring/monitors/ai-providers.ts` alerts on it.
 - `src/sync-document.ts`: sync-service's `/state` and revision-checked
   `/update`, shared by spreadsheets and markdown bodies; callers word its typed
   failures for their users.
@@ -65,7 +68,7 @@ before touching the edit flow.
 - Change the Canvas SDK: `src/canvas/editor.ts` and `schema.ts` →
   `scripts/generate-sandbox.ts` (regenerates `src/canvas/sandbox-code.ts`).
   Artifact operations also need `isArtifactOp` and `artifact-prompt.md`, the guide
-  given only to users with the `enable-canvas-artifacts` rollout.
+  given when a request sets `artifacts`.
   Commands validate on a disposable editor and commit once through the live
   backend. `mentionUser` inserts the shared person-chip format without flattening
   other text; ReadCanvas exposes bounded identities/offsets, with one U+FFFC per

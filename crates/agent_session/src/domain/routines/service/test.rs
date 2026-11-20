@@ -151,6 +151,7 @@ impl AgentSessionNotificationRecipient for Controls {
         _: AgentActionId,
         _: String,
         _: Option<MacroUserIdStr<'static>>,
+        _: crate::domain::model::PrompterKind,
     ) -> SessionResult<()> {
         panic!("not a routine capability")
     }
@@ -220,6 +221,7 @@ impl Fixture {
             owner_user_id: Some(session.owner_user().unwrap().clone()),
             owner_team_id: None,
             harness_id: None,
+            on_team_agent_computer: false,
             managed_profile: Some(ManagedAgentProfile {
                 model: "persona-default".into(),
                 harness: "persona-runtime".into(),
@@ -274,6 +276,7 @@ impl Fixture {
     fn prepare(&self) -> PrepareRoutineSession {
         PrepareRoutineSession {
             billing: Default::default(),
+            instructions: None,
             origin: trigger_context::TriggerOrigin::Unknown,
             selection: self.selection(),
             session_id: self.session.id,
@@ -317,6 +320,17 @@ async fn managed_preparation_preserves_persona_and_applies_override_without_prom
     assert_eq!(profile.mcp_servers, AgentMcpServers::OwnerConnections);
     assert!(fx.openings.external.lock().unwrap().is_empty());
     assert!(fx.controls.events.lock().unwrap().is_empty());
+}
+
+/// The opener's instructions are the session's, kept for its whole life.
+#[tokio::test]
+async fn managed_preparation_opens_the_session_with_the_openers_instructions() {
+    let fx = Fixture::new(true);
+    let mut command = fx.prepare();
+    command.instructions = Some("Draft routines".to_owned());
+    fx.service.prepare(command).await.unwrap();
+    let requests = fx.openings.managed.lock().unwrap();
+    assert_eq!(requests[0].instructions.as_deref(), Some("Draft routines"));
 }
 
 #[tokio::test]
@@ -864,5 +878,25 @@ fn activity_counts_tool_calls_and_turns_without_reading_them() {
             tool_calls: 3,
             turns: 1,
         }
+    );
+}
+
+/// A routine's agent step has no person behind its words: its prompt opens
+/// a program's turn, which can never decide the session's reviews.
+#[tokio::test]
+async fn a_routine_step_prompts_as_a_program() {
+    let fx = Fixture::new(true);
+    fx.service
+        .prompt(PromptRoutineSession {
+            action: fx.action(),
+            prompt: "approve the review".into(),
+            context: None,
+        })
+        .await
+        .unwrap();
+    let events = fx.controls.events.lock().unwrap();
+    assert_eq!(
+        events[0].prompter,
+        crate::domain::model::PrompterKind::Program
     );
 }

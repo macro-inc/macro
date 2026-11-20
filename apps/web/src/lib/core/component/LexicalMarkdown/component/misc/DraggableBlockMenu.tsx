@@ -1,4 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { getScrollParentElement } from '@core/util/scrollParent';
 import Dots from '@icon/system/regular/dots-six-vertical.svg';
 import { $isListItemNode, $isListNode, type ListItemNode } from '@lexical/list';
 import { $getNearestNodeFromDOMNode } from 'lexical';
@@ -10,6 +11,7 @@ import {
   DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
+import { FOLDABLE_HEADING_ATTRIBUTE } from '../../plugins/heading-folds';
 
 const HANDLE_SIZE = 20;
 const HANDLE_GAP = 4;
@@ -27,14 +29,24 @@ export function DraggableBlockMenu(props: {
     if (!elem) return null;
 
     const rect = elem.getBoundingClientRect();
-    const rootRect = editor()?.getRootElement()?.getBoundingClientRect();
-    if (!rootRect) return null;
+    const root = editor()?.getRootElement();
+    if (!root) return null;
+    const rootRect = root.getBoundingClientRect();
 
     const effectiveHeight = Math.min(rect.height, 24);
+    // A heading's fold control takes the gutter column next to the text, and
+    // the handle steps one column out. A gutter too narrow for both (a narrow
+    // pane) keeps the fold control, and the heading shows no drag handle.
+    const foldable = elem.hasAttribute(FOLDABLE_HEADING_ATTRIBUTE);
+    const columns = foldable ? 2 : 1;
+    const gutterLeft =
+      getScrollParentElement(root)?.getBoundingClientRect().left ?? 0;
+    if (foldable && rootRect.left - gutterLeft < 2 * (HANDLE_SIZE + HANDLE_GAP))
+      return null;
 
     return {
       top: rect.top + (effectiveHeight - HANDLE_SIZE) / 2,
-      left: rootRect.left - HANDLE_SIZE - HANDLE_GAP,
+      left: rootRect.left - columns * (HANDLE_SIZE + HANDLE_GAP),
     };
   };
 

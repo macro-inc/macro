@@ -21,9 +21,13 @@ import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
-export function TasksControls() {
+/** `inline`: on touch, the filter trigger sits in an in-flow header row. */
+export function TasksControls(props: { inline?: boolean }) {
   return (
-    <Show when={!isTouchDevice()} fallback={<TasksFilterDrawer />}>
+    <Show
+      when={!isTouchDevice()}
+      fallback={<TasksFilterDrawer inline={props.inline} />}
+    >
       <DesktopTasksControls />
     </Show>
   );
@@ -31,8 +35,7 @@ export function TasksControls() {
 
 function DesktopTasksControls() {
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState, projectsEnabled, ganttEnabled } =
-    useTasksView();
+  const { state, setPrimarySort, setState, ganttEnabled } = useTasksView();
   const filters = useTaskFilters();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
@@ -45,6 +48,7 @@ function DesktopTasksControls() {
         return current === menu ? undefined : current;
       });
     };
+  const isSearching = () => !!state.search.trim();
 
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -60,8 +64,9 @@ function DesktopTasksControls() {
     },
     sort: {
       description: 'Sort tasks',
+      condition: () => !isSearching(),
       run: () => {
-        if (!sortTrigger || state.search.trim()) return false;
+        if (!sortTrigger) return false;
 
         setOpenMenu('sort');
         return true;
@@ -70,16 +75,13 @@ function DesktopTasksControls() {
   });
 
   const primarySort = () => state.sort[0]?.id ?? 'updated_at';
-  const isSearching = () => !!state.search.trim();
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
       return TASK_GROUP_OPTIONS;
     }
 
-    return TASK_BOARD_GROUP_OPTIONS.filter((option) => {
-      return option.id !== 'project' || projectsEnabled();
-    });
+    return TASK_BOARD_GROUP_OPTIONS;
   };
 
   return (
@@ -141,17 +143,7 @@ function DesktopTasksControls() {
         </Show>
       </HeaderActionGroup>
       <HeaderActionGroup label="Task view options" size="md">
-        <Show
-          when={!isSearching()}
-          fallback={
-            <span
-              class="text-xs text-ink-muted"
-              title="Search keeps its existing result ordering. Clear search to sort tasks."
-            >
-              Search order
-            </span>
-          }
-        >
+        <Show when={!isSearching()}>
           <ListSortDropdown
             grouped
             size="icon-md"

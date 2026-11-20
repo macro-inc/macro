@@ -8,8 +8,6 @@ use email::inbound::axum::send_router::send_router;
 
 use crate::api::ApiContext;
 
-const BATCH_UPDATE_MESSAGE_LIMIT: usize = 10;
-
 pub fn router(_state: ApiContext) -> Router<ApiContext> {
     // Every route resolves its own inbox — send via EmailLinkExtractor, label
     // batch from the messages, and the reads union across the caller's inboxes —

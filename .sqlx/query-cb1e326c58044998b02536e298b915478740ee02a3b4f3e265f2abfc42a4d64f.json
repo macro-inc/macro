@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_work w SET sync_generation=l.sync_generation,grant_generation=l.grant_generation,\n            cursor=NULL,page_cursor=NULL,next_page=NULL,terminal_cursor=NULL,pending_ids='{}',visited_pages='{}',scan_id=gen_random_uuid(),full_scan=true,page_loaded=false,starts_at=$1,ends_at=$2,lease_id=NULL,lease_until=NULL,next_run_at=now(),attempts=0\n            FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id CROSS JOIN LATERAL(\n                SELECT x.id FROM calendar_outlook_work x WHERE x.account_id=a.id\n                    AND(x.account_id,x.sync_generation,x.grant_generation,x.ends_at)<(a.id,l.sync_generation,l.grant_generation,$2)\n                UNION ALL SELECT x.id FROM calendar_outlook_work x WHERE x.account_id=a.id\n                    AND(x.account_id,x.sync_generation,x.grant_generation)>(a.id,l.sync_generation,l.grant_generation)) stale\n            WHERE w.id=stale.id AND a.id=w.account_id AND l.is_sync_active AND a.provider='outlook' AND a.sync_status<>'disabled'\n            AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation OR w.ends_at<$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb1e326c58044998b02536e298b915478740ee02a3b4f3e265f2abfc42a4d64f"
+}

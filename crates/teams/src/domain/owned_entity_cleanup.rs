@@ -63,11 +63,21 @@ pub struct OwnedEntityRef {
     pub owner: TeamDeletionOwner,
 }
 
+/// Opaque lease retained until ordinary team deletion has completed or failed.
+/// The owning adapter decides which existing admission lease it represents.
+pub trait TeamDeletionGuard: fmt::Debug + Send + Sync {}
+
 /// What team deletion needs from outside the teams crate: the team's bots,
 /// what each owner holds, and a purge through each entity's owning service.
 pub trait OwnedEntityCleanup: Clone + Send + Sync + 'static {
     /// Error returned when a listing or a purge fails.
     type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Complete non-registry team cleanup before any ordinary deletion side effects.
+    fn prepare_team_deletion(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Box<dyn TeamDeletionGuard>>, Self::Err>> + Send;
 
     /// Every bot whose team is `team_id`, soft-deleted bots included.
     fn team_bots(
@@ -88,6 +98,15 @@ pub trait OwnedEntityCleanup: Clone + Send + Sync + 'static {
     /// cleanup is enqueued. An entity its owning service records under another
     /// owner is an error, and nothing is deleted.
     fn purge(&self, entity: &OwnedEntityRef) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Release every Macro computer the team has, through the computers'
+    /// own lifecycle (billing item removal, destroy, harness revocation), and
+    /// drop its purchases in flight, before its subscription and row go.
+    /// Safe to repeat.
+    fn release_computers(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The cleanup of a team service that was never given one.
@@ -105,6 +124,13 @@ pub struct OwnedEntityCleanupUnwired;
 impl OwnedEntityCleanup for UnwiredOwnedEntityCleanup {
     type Err = OwnedEntityCleanupUnwired;
 
+    async fn prepare_team_deletion(
+        &self,
+        _: Uuid,
+    ) -> Result<Option<Box<dyn TeamDeletionGuard>>, Self::Err> {
+        Err(OwnedEntityCleanupUnwired)
+    }
+
     async fn team_bots(&self, _team_id: Uuid) -> Result<Vec<BotId>, Self::Err> {
         Err(OwnedEntityCleanupUnwired)
     }
@@ -116,6 +142,10 @@ impl OwnedEntityCleanup for UnwiredOwnedEntityCleanup {
     async fn purge(&self, _entity: &OwnedEntityRef) -> Result<(), Self::Err> {
         Err(OwnedEntityCleanupUnwired)
     }
+
+    async fn release_computers(&self, _team_id: Uuid) -> Result<(), Self::Err> {
+        Err(OwnedEntityCleanupUnwired)
+    }
 }
 
 /// Proof that a team, and every bot it has had, owns nothing.
@@ -123,6 +153,7 @@ impl OwnedEntityCleanup for UnwiredOwnedEntityCleanup {
 /// Only [`clear_team`] constructs one, from a listing that came back empty.
 #[derive(Debug)]
 pub struct ClearedTeam {
+    _guard: Option<Box<dyn TeamDeletionGuard>>,
     team_id: Uuid,
     bot_ids: Vec<BotId>,
     purged: Vec<OwnedEntityRef>,
@@ -150,6 +181,7 @@ impl ClearedTeam {
     #[cfg(test)]
     pub(crate) fn assume_cleared(team_id: Uuid, bot_ids: Vec<BotId>) -> Self {
         Self {
+            _guard: None,
             team_id,
             bot_ids,
             purged: Vec::new(),
@@ -164,6 +196,13 @@ impl ClearedTeam {
 /// [`clear_team`] resumes with what is left.
 #[derive(Debug, thiserror::Error)]
 pub enum OwnedEntityCleanupError {
+    /// Non-registry cleanup refused deletion before ordinary team side effects.
+    #[error("team cleanup preflight failed")]
+    Prepare {
+        /// The owning service's sanitized failure.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// The team's bots could not be listed.
     #[error("unable to list the team's bots")]
     ListBots {
@@ -200,6 +239,13 @@ pub enum OwnedEntityCleanupError {
         /// How many discovery passes ran.
         passes: u8,
     },
+    /// The team's computers could not be released.
+    #[error("unable to release the team's computers")]
+    ReleaseComputers {
+        /// The port's error.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// A listing for one owner returned an entity recorded under another.
     #[error("listing the entities owned by {requested} returned {id}, which it does not own")]
     OwnerMismatch {
@@ -222,6 +268,12 @@ pub async fn clear_team<C: OwnedEntityCleanup>(
     cleanup: &C,
     team_id: Uuid,
 ) -> Result<ClearedTeam, OwnedEntityCleanupError> {
+    let guard = cleanup
+        .prepare_team_deletion(team_id)
+        .await
+        .map_err(|source| OwnedEntityCleanupError::Prepare {
+            source: Box::new(source),
+        })?;
     let mut purged = Vec::new();
     let mut purged_ids = HashSet::new();
     let mut passes: u8 = 0;
@@ -230,6 +282,7 @@ pub async fn clear_team<C: OwnedEntityCleanup>(
         let Census { bot_ids, mut owned } = take_census(cleanup, team_id).await?;
         if owned.is_empty() {
             return Ok(ClearedTeam {
+                _guard: guard,
                 team_id,
                 bot_ids,
                 purged,

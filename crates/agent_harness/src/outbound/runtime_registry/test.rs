@@ -40,8 +40,8 @@ impl HarnessBindings for Arc<FakeBindings> {
         &self,
         _harness: HarnessId,
         _acp_sessions: &[SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
-        Ok(Vec::new())
+    ) -> anyhow::Result<crate::domain::model::ListedSessions> {
+        Ok(crate::domain::model::ListedSessions::default())
     }
 }
 
@@ -234,6 +234,8 @@ enum PresenceEvent {
 
 #[derive(Default)]
 struct RecordingPresence {
+    /// Whether recording a connection binds an agent.
+    binds_an_agent: bool,
     events: Mutex<Vec<PresenceEvent>>,
     renewed: Mutex<Vec<Vec<(HarnessId, RuntimeConnectionId)>>>,
 }
@@ -243,12 +245,18 @@ impl HarnessPresence for RecordingPresence {
         self: Arc<Self>,
         _harness: HarnessId,
         connection: RuntimeConnectionId,
-    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        _accepts: RuntimeAccepts,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             self.events
                 .lock()
                 .unwrap()
                 .push(PresenceEvent::Connected(connection));
+            if self.binds_an_agent {
+                ConnectionRecorded::AgentBound
+            } else {
+                ConnectionRecorded::AgentsUnchanged
+            }
         })
     }
 
@@ -326,6 +334,10 @@ async fn a_close_waits_for_its_own_connected_write() {
     let listed = ListedConnection {
         id: RuntimeConnectionId::generate(),
         connection: RuntimeConnection::connect(runtime.clone()),
+        accepts: RuntimeAccepts {
+            agents_changed: true,
+            apply_agent: false,
+        },
     };
     registry
         .connections
@@ -369,6 +381,95 @@ async fn a_close_waits_for_its_own_connected_write() {
             PresenceEvent::Disconnected(listed.id)
         ]
     );
+}
+
+/// The dial that binds an agent tells its runtime to re-read its agents,
+/// once presence has it.
+#[tokio::test]
+async fn a_dial_that_binds_an_agent_tells_its_runtime_its_agents_changed() {
+    let presence = Arc::new(RecordingPresence {
+        binds_an_agent: true,
+        ..RecordingPresence::default()
+    });
+    let runtime = ContainerMock::default();
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+        accepts: RuntimeAccepts {
+            agents_changed: true,
+            apply_agent: false,
+        },
+    };
+
+    record_connected(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        HarnessId::TEST_A,
+        listed.clone(),
+    )
+    .await;
+
+    assert_eq!(
+        *presence.events.lock().unwrap(),
+        [PresenceEvent::Connected(listed.id)]
+    );
+    assert!(matches!(
+        runtime.sent().as_slice(),
+        [ToRuntimeMessage::AgentsChanged]
+    ));
+}
+
+/// A runtime that did not say it accepts the message never gets it, even
+/// on the dial that bound its first agent: it would log it as malformed.
+#[tokio::test]
+async fn a_runtime_that_does_not_accept_agents_changed_is_never_sent_it() {
+    let presence = Arc::new(RecordingPresence {
+        binds_an_agent: true,
+        ..RecordingPresence::default()
+    });
+    let runtime = ContainerMock::default();
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+        accepts: RuntimeAccepts::default(),
+    };
+
+    record_connected(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        HarnessId::TEST_A,
+        listed.clone(),
+    )
+    .await;
+
+    assert!(runtime.sent().is_empty(), "{:?}", runtime.sent());
+}
+
+/// Every other dial sends nothing new: a runtime too old to know the
+/// message must never be sent it.
+#[tokio::test]
+async fn a_dial_that_binds_nothing_sends_its_runtime_nothing() {
+    let presence = Arc::new(RecordingPresence::default());
+    let runtime = ContainerMock::default();
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+        accepts: RuntimeAccepts {
+            agents_changed: true,
+            apply_agent: false,
+        },
+    };
+
+    record_connected(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        HarnessId::TEST_A,
+        listed.clone(),
+    )
+    .await;
+
+    assert_eq!(
+        *presence.events.lock().unwrap(),
+        [PresenceEvent::Connected(listed.id)]
+    );
+    assert!(runtime.sent().is_empty(), "{:?}", runtime.sent());
 }
 
 #[tokio::test]

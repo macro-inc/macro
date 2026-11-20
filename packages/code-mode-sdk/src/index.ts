@@ -5,4 +5,5 @@ export * from '../../sdk/src/macro';
 export {
   setDefaultRequestGate as gateRequests,
   setDefaultRequestObserver as observeRequests,
+  setDefaultRequestVerbHeader as sendVerbHeaders,
 } from '../../sdk/src/utils/activity';

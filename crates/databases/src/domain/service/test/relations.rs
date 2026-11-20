@@ -71,6 +71,7 @@ async fn linked() -> Linked {
                         column: title,
                         value: CellValue::Text("Keynote".into()),
                     }]],
+                    ids: None,
                 },
             }]),
         )

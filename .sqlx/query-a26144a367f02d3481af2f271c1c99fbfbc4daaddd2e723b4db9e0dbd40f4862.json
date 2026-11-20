@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_totp_enrollments SET state='retired',erased_at=now(),cleanup_after=now()+interval '1 hour' WHERE team_id=$1 AND item_id=$2 AND key_id=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a26144a367f02d3481af2f271c1c99fbfbc4daaddd2e723b4db9e0dbd40f4862"
+}

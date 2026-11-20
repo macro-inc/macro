@@ -328,6 +328,7 @@ fn stale_input(message: Uuid) -> ResolvedDraftInput {
         provider_thread_id: None,
         thread_db_id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
         subject: "stale autosave".into(),
+        from_name: None,
         to: vec![],
         cc: vec![],
         bcc: vec![],

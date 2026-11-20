@@ -6,7 +6,6 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import ExpandIcon from '@icon/system/regular/arrows-out-simple.svg';
-import ClipboardIcon from '@icon/system/regular/clipboard.svg';
 import ThreeDotsIcon from '@icon/system/regular/dots-three-vertical.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -106,7 +105,8 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     const url = getImageUrl(id);
     return copyImageToClipboard(
       () => platformFetch(url).then((r) => r.blob()),
-      url
+      url,
+      { silent: true }
     );
   };
 
@@ -149,12 +149,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                       </Dropdown.Trigger>
                       <Dropdown.Content>
                         <Dropdown.Group>
-                          <Dropdown.Item
-                            onSelect={() => copyToClipboardById(image.id)}
+                          <Dropdown.CopyItem
+                            onCopy={() => copyToClipboardById(image.id)}
                           >
-                            <ClipboardIcon class="size-4 shrink-0" />
                             <span class="flex-1 truncate">Copy image</span>
-                          </Dropdown.Item>
+                          </Dropdown.CopyItem>
                           <Dropdown.Item
                             onSelect={() => downloadImageById(image.id)}
                           >

@@ -1,6 +1,6 @@
-# The Macro computer guest as a NixOS module: macrod, Claude Code, herdr,
-# Chromium on an Xvnc display, Docker and nix-ld. `_image.nix` adds the Incus
-# VM image on top; `_vm-test.nix` boots this module alone.
+# The Macro computer guest as a NixOS module: macrod, harnessd, Claude Code, herdr,
+# Chromium on an Xvnc display, Docker and nix-ld. `_container.nix` adds the
+# Docker image on top; `_vm-test.nix` boots this module alone.
 {
   config,
   lib,
@@ -17,6 +17,15 @@ let
   enrolledMarker = "/var/lib/macrod/enrolled";
   # /var/lib/macrod links here when there is a data disk.
   persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
+  # harnessd's state: the agents' credentials. On the data disk when there
+  # is one, so a sign-in survives image updates.
+  harnessdState = if cfg.dataDisk == null then "/var/lib/harnessd" else "/home/.system/harnessd";
+  harnessdSocket = "/run/harnessd/harnessd.sock";
+  claude = import ./_claude-wrapper.nix {
+    inherit pkgs;
+    inherit (cfg) claudeCode;
+    credential = "${cfg.harnessd.stateDirectory}/claude/credential.json";
+  };
   herdr = pkgs.callPackage "${cfg.herdrSource}/nix/package.nix" { };
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
   display = ":0";
@@ -28,17 +37,30 @@ let
     "/run/wrappers"
     "/run/current-system/sw"
   ];
-  claudeUserConfig = json.generate "claude.json" {
+  # `macro-chrome-devtools-mcp.socket` hands sessions their chrome-devtools
+  # MCP server here (`files/mcp-spare.mjs`); they reach it with socat. In
+  # macro's home, so the agent's sandbox (ProtectHome) can't.
+  chromeDevtoolsMcpSocket = "${home}/.cache/macro-mcp/chrome-devtools.sock";
+  claudeUserBase = json.generate "claude.json" {
     hasCompletedOnboarding = true;
     mcpServers.chrome-devtools = {
       type = "stdio";
-      command = lib.getExe cfg.chromeDevtoolsMcp;
+      command = lib.getExe pkgs.socat;
       args = [
-        "--browser-url"
-        "http://127.0.0.1:9222"
+        "STDIO"
+        "UNIX-CONNECT:${chromeDevtoolsMcpSocket}"
       ];
     };
   };
+  claudeUserConfig =
+    if cfg.claudeCodeFirstRunSeed then
+      import ./_claude-first-run.nix {
+        inherit pkgs;
+        inherit (cfg) claudeCode;
+        base = claudeUserBase;
+      }
+    else
+      claudeUserBase;
   # Real copies (mode), not store symlinks: useradd copies /etc/skel and
   # Claude Code rewrites ~/.claude.json.
   skel = {
@@ -83,15 +105,40 @@ let
   };
 in
 {
+  imports = [ ./_agent.nix ];
+
   options.macro.box = {
     macrod = lib.mkOption {
       type = lib.types.package;
       description = "The macrod package.";
     };
+    harnessd.package = lib.mkOption {
+      type = lib.types.package;
+      description = "The harnessd package: agent sign-ins.";
+    };
+    harnessd.stateDirectory = lib.mkOption {
+      type = lib.types.path;
+      readOnly = true;
+      default = harnessdState;
+      description = ''
+        Where harnessd keeps the agents' credentials (`claude/credential.json`
+        for Claude): `/home/.system/harnessd` on the data disk, else
+        `/var/lib/harnessd`.
+      '';
+    };
     claudeCode = lib.mkOption {
       type = lib.types.package;
       default = import ./_claude-code.nix { inherit pkgs; };
       description = "Claude Code, pinned for the models computers default to.";
+    };
+    claudeCodeFirstRunSeed = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Put the settings `claudeCode` writes on its first start into
+        /etc/skel's `~/.claude.json` (`_claude-first-run.nix` runs it once at
+        build time). Off for a `claudeCode` that isn't Claude Code (tests).
+      '';
     };
     claudeAgentAcp = lib.mkOption {
       type = lib.types.package;
@@ -109,13 +156,19 @@ in
     };
     enrollFrom = lib.mkOption {
       type = lib.types.str;
-      default = "incus";
-      description = "`macrod enroll --from`: `incus` or `file:<path>`.";
+      description = "`macrod enroll --from`: `mmds` or `file:<path>`.";
+    };
+    agentMode = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Run agents without administrator rights: the macro user loses
+        passwordless sudo and the docker group. False keeps both.
+      '';
     };
     dataDisk = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
-      # The Incus disk device named `data`.
-      default = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_data";
+      default = null;
       description = ''
         Block device mounted at /home, formatted on first boot. It keeps
         homes and macrod's state across image updates; null keeps them on
@@ -141,13 +194,13 @@ in
       isNormalUser = true;
       uid = 1000;
       group = "macro";
-      extraGroups = [ "docker" ];
+      extraGroups = lib.optionals (!cfg.agentMode) [ "docker" ];
       shell = pkgs.bashInteractive;
       # Starts the display, window manager and browser at boot.
       linger = true;
     };
     users.groups.macro.gid = 1000;
-    security.sudo.extraRules = [
+    security.sudo.extraRules = lib.optionals (!cfg.agentMode) [
       {
         users = [ "macro" ];
         commands = [
@@ -193,6 +246,9 @@ in
 
     systemd.tmpfiles.settings."10-macro-box" = {
       ${persistentMacrodState}.d.mode = "0755";
+      ${cfg.harnessd.stateDirectory}.d = macroOwner // {
+        mode = "0700";
+      };
       ${workspace}.d = macroDirectory;
       "${home}/.config".d = macroDirectory;
       "${home}/.config/chromium".d = macroDirectory;
@@ -215,7 +271,10 @@ in
 
     environment.systemPackages = [
       cfg.macrod
-      cfg.claudeCode
+      cfg.harnessd.package
+      # The pinned Claude Code behind the credential wrapper; harnessd runs
+      # the unwrapped one.
+      claude
       cfg.chromeDevtoolsMcp
       herdr
     ]
@@ -318,22 +377,17 @@ in
     # `#!/bin/bash` and `#!/usr/bin/python3` shebangs resolve through PATH.
     services.envfs.enable = true;
 
+    # Neither enrollment nor macrod waits for network-online.target: the
+    # claim retries every 250 ms and macrod redials from 250 ms, so each one
+    # starts as soon as its input exists (the Incus socket, the enrolled
+    # marker) and reaches the network the moment DHCP answers.
     systemd.services.macrod-enroll = {
       description = "Join this computer to Macro";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ];
-      after = [
-        "network-online.target"
-        "incus-agent.service"
-      ];
       before = [ "macrod.service" ];
       # Runs on every boot: `macrod enroll` re-enrolls for a newer
       # generation and keeps the existing enrollment otherwise.
-      unitConfig = {
-        # A retry that succeeds still starts macrod.
-        OnSuccess = "macrod.service";
-        StartLimitIntervalSec = 0;
-      };
+      unitConfig.StartLimitIntervalSec = 0;
       path = systemPath;
       # Agent discovery records adapter paths usable by the daemon user.
       environment = {
@@ -350,11 +404,14 @@ in
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";
-            runtimeInputs = [ pkgs.curl ];
+            runtimeInputs = [ pkgs.coreutils ];
             text = builtins.readFile ./files/check-enrollment-source;
           }
         );
         ExecStart = "${lib.getExe' cfg.macrod "macrod"} enroll --from \${MACRO_ENROLL_FROM} --config ${macrodConfig}";
+        # A retry that succeeds after boot gave up on macrod still starts it.
+        # (OnSuccess= never fires: with RemainAfterExit the unit stays active.)
+        ExecStartPost = "${lib.getExe' config.systemd.package "systemctl"} --no-block start macrod.service";
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };
@@ -363,12 +420,10 @@ in
     systemd.services.macrod = {
       description = "Macro agent daemon";
       wantedBy = [ "multi-user.target" ];
-      wants = [ "network-online.target" ];
-      requires = [ "macrod-enroll.service" ];
-      after = [
-        "network-online.target"
-        "macrod-enroll.service"
-      ];
+      # Wants, not Requires: a first enroll attempt that fails must not fail
+      # macrod's start for good; the enroll retry starts it once enrolled.
+      wants = [ "macrod-enroll.service" ];
+      after = [ "macrod-enroll.service" ];
       path = systemPath;
       environment.HOME = home;
       unitConfig = {
@@ -389,10 +444,29 @@ in
       };
     };
 
+    # Owns each agent's sign-in; the control plane runs `harnessd` (the
+    # client) through the fleet's exec. See crates/harnessd/AGENTS.md.
+    systemd.services.harnessd = {
+      description = "Agent sign-ins on this computer";
+      wantedBy = [ "multi-user.target" ];
+      path = systemPath;
+      environment.HOME = home;
+      unitConfig.StartLimitIntervalSec = 0;
+      serviceConfig = {
+        User = "macro";
+        Group = "macro";
+        RuntimeDirectory = "harnessd";
+        RuntimeDirectoryMode = "0700";
+        ExecStart = "${lib.getExe' cfg.harnessd.package "harnessd"} serve --socket ${harnessdSocket} --state-dir ${cfg.harnessd.stateDirectory} --claude ${lib.getExe' cfg.claudeCode "claude"}";
+        Restart = "always";
+        RestartSec = 1;
+      };
+    };
+
     systemd.user.services.macro-display =
       userService "Macro computer display (Xvnc :0 on 127.0.0.1:5900)"
         {
-          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp";
+          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp -nolisten local";
         };
     systemd.user.services.macro-openbox =
       userService "Openbox window manager on the Macro display" {
@@ -417,6 +491,35 @@ in
         ];
         environment.DISPLAY = display;
       };
+    # A chrome-devtools MCP server loaded ahead of each session after the
+    # first: one started by Claude Code itself spends ~0.6 s loading before
+    # the session's first turn can start. Socket-activated, so nothing runs
+    # (and no memory is used) until a computer's first session connects;
+    # each session still gets its own server process.
+    systemd.user.sockets.macro-chrome-devtools-mcp = {
+      description = "chrome-devtools MCP servers for agent sessions";
+      wantedBy = [ "sockets.target" ];
+      unitConfig.ConditionUser = "macro";
+      socketConfig = {
+        ListenStream = chromeDevtoolsMcpSocket;
+        SocketMode = "0600";
+      };
+    };
+    systemd.user.services.macro-chrome-devtools-mcp = {
+      description = "chrome-devtools MCP servers for agent sessions, one kept ready";
+      unitConfig.ConditionUser = "macro";
+      serviceConfig = {
+        ExecStart = lib.escapeShellArgs [
+          (lib.getExe pkgs.nodejs_24)
+          "${./files/mcp-spare.mjs}"
+          (lib.getExe cfg.chromeDevtoolsMcp)
+          "--browser-url"
+          "http://127.0.0.1:9222"
+        ];
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
 
     system.stateVersion = "26.05";
   };

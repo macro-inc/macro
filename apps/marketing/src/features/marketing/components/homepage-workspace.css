@@ -1,4 +1,4 @@
-.workspace-demo-panel { --message-padding-x: 20px; --user-icon-width: 32px; --color-surface: var(--color-panel); --color-composer: var(--color-surface-2); display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--color-panel); color: var(--color-ink); font: 400 14px/1.5 var(--font-sans), sans-serif; }
+.workspace-demo-panel { --message-padding-x: 20px; --user-icon-width: 32px; --color-surface: var(--color-panel); --color-composer: var(--color-surface-2); display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--color-panel); color: var(--color-ink); font: 370 14px/1.5 var(--font-sans), sans-serif; }
 .workspace-demo-scroll { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--color-edge) transparent; }
 .workspace-demo-composer { flex-shrink: 0; padding: 12px 16px 16px; }
 .workspace-demo-email { --homepage-email-height: 520px; }

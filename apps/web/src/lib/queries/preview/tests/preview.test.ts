@@ -13,14 +13,8 @@ const setGraphqlPreviewFileTypeMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewNameMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewOnCreateMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true, loading: false }),
-}));
-
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
   LOCAL_ONLY: false,
 }));
 
@@ -62,6 +56,7 @@ const {
   setPreviewFileType,
   setPreviewName,
   setPreviewOnCreate,
+  useItemIdentity,
   useItemPreview,
   useItemRawName,
 } = await import('../preview');
@@ -168,9 +163,43 @@ describe('preview transport facade', () => {
       expect(name()).toBe('Document');
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
+        false
+      );
+      dispose();
+    });
+  });
+
+  it('reads live appearance without loading document properties or exposing inaccessible metadata', () => {
+    createRoot((dispose) => {
+      const [data, setData] = createSignal<PreviewItem | undefined>();
+      createGraphqlItemPreviewQueryMock.mockReturnValue({
+        data,
+        shouldFallback: () => false,
+      });
+      const identity = useItemIdentity(() => ({
+        id: 'doc-1',
+        type: 'document',
+      }));
+      expect(identity()).toBeUndefined();
+      setData({
+        ...preview,
+        appearance: { icon: { kind: 'emoji', value: '🚀' }, color: null },
+      });
+      expect(identity()?.appearance?.icon).toEqual({
+        kind: 'emoji',
+        value: '🚀',
+      });
+      expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
         false
       );
+      setData({
+        id: 'doc-1',
+        type: 'document',
+        access: 'no_access',
+        loading: false,
+      });
+      expect(identity()).toBeUndefined();
       dispose();
     });
   });
@@ -326,7 +355,7 @@ describe('preview transport facade', () => {
     expect(setQueryDataMock).not.toHaveBeenCalled();
   });
 
-  it('invalidates only active REST fallbacks under the GraphQL flag', async () => {
+  it('invalidates only active REST fallbacks', async () => {
     await invalidatePreview('doc-1');
 
     const options = invalidateQueriesMock.mock.calls[0]?.[0];

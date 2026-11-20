@@ -45,6 +45,10 @@ enum Call {
         name: Option<String>,
         share: String,
     },
+    Appearance {
+        id: Uuid,
+        appearance: model_entity::EntityAppearance,
+    },
     Delete {
         id: Uuid,
         revision: i64,
@@ -89,6 +93,7 @@ fn view(id: Uuid) -> View {
         updated_at: at,
         revision: 3,
         shared_team_id: Some(TEAM),
+        appearance: None,
     }
 }
 
@@ -127,6 +132,7 @@ impl SavedViewApi for FakeSavedViews {
         name: String,
         _config: Value,
         team: Option<Uuid>,
+        _appearance: Option<model_entity::EntityAppearance>,
     ) -> Result<View, Error> {
         self.record(viewer, Call::Create { id, name, team })?;
         Ok(view(id))
@@ -153,6 +159,16 @@ impl SavedViewApi for FakeSavedViews {
                 share,
             },
         )?;
+        Ok(view(id))
+    }
+
+    async fn set_appearance(
+        &self,
+        viewer: &str,
+        id: Uuid,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<View, Error> {
+        self.record(viewer, Call::Appearance { id, appearance })?;
         Ok(view(id))
     }
 
@@ -326,6 +342,88 @@ async fn updates_change_sharing_only_when_asked() {
     );
 }
 
+/// A scoped session renames a saved view but never changes who it's shared
+/// with, to a team or back to private.
+#[tokio::test]
+async fn a_scoped_session_updates_a_saved_view_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = Arc::new(FakeSavedViews::default());
+    let uri = format!("/saved_views/definitions/{VIEW}");
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    for (body, status) in [
+        (
+            json!({ "expectedRevision": 3, "sharing": { "teamId": TEAM } }),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            json!({ "expectedRevision": 3, "sharing": { "teamId": null } }),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            json!({ "expectedRevision": 3, "name": "Renamed" }),
+            StatusCode::OK,
+        ),
+    ] {
+        let (got, _) = scope_attribution(
+            no_send,
+            send(&service, request("PATCH", &uri, Some(body.clone()))),
+        )
+        .await;
+        assert_eq!(got, status, "{body}");
+    }
+    let calls = service.calls();
+    assert_eq!(calls.len(), 1);
+    assert!(
+        matches!(&calls[0], Call::Update { share, .. } if share == "unchanged"),
+        "{calls:?}"
+    );
+}
+
+/// A scoped session creates a private saved view but not one shared with a
+/// team.
+#[tokio::test]
+async fn a_scoped_session_creates_only_private_saved_views() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = Arc::new(FakeSavedViews::default());
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    for (body, status) in [
+        (
+            json!({ "name": "Shared", "config": { "kind": "email" }, "sharedTeamId": TEAM }),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            json!({ "name": "Private", "config": { "kind": "email" } }),
+            StatusCode::CREATED,
+        ),
+    ] {
+        let (got, _) = scope_attribution(
+            no_send,
+            send(
+                &service,
+                request("POST", "/saved_views/definitions", Some(body.clone())),
+            ),
+        )
+        .await;
+        assert_eq!(got, status, "{body}");
+    }
+    let calls = service.calls();
+    assert_eq!(calls.len(), 1);
+    assert!(
+        matches!(&calls[0], Call::Create { team: None, .. }),
+        "{calls:?}"
+    );
+}
+
 #[tokio::test]
 async fn deletes_only_the_expected_revision() {
     let service = Arc::new(FakeSavedViews::default());
@@ -484,5 +582,49 @@ async fn requires_a_signed_in_user() {
     let (status, _) = send(&service, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn appearance_replaces_metadata_through_the_signed_in_owner_service() {
+    let service = Arc::new(FakeSavedViews::default());
+    let uri = format!("/saved_views/definitions/{VIEW}/appearance");
+    let (status, body) = send(
+        &service,
+        request(
+            "PUT",
+            &uri,
+            Some(json!({
+                "icon": { "kind": "emoji", "value": "📚" }, "color": "blue"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["revision"], json!(3));
+    assert_eq!(
+        service.calls(),
+        vec![Call::Appearance {
+            id: VIEW,
+            appearance: model_entity::EntityAppearance {
+                icon: Some(model_entity::AppearanceIcon::Emoji {
+                    value: "📚".into()
+                }),
+                color: Some(model_entity::AppearanceColor::Blue),
+            },
+        }]
+    );
+    let (status, _) = send(
+        &service,
+        request(
+            "PUT",
+            &uri,
+            Some(json!({
+                "icon": { "kind": "unknown", "value": "📚" }
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert!(service.calls().is_empty());
 }

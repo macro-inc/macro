@@ -5,7 +5,9 @@ import { cn } from '../utils/classname';
 export type SliderRootProps = ComponentProps<typeof KobalteSlider.Root>;
 export type SliderTrackProps = ComponentProps<typeof KobalteSlider.Track>;
 export type SliderFillProps = ComponentProps<typeof KobalteSlider.Fill>;
-export type SliderThumbProps = ComponentProps<typeof KobalteSlider.Thumb>;
+export type SliderThumbProps = ComponentProps<typeof KobalteSlider.Thumb> & {
+  appearance?: 'default' | 'switch';
+};
 
 function Root(props: SliderRootProps) {
   const [local, rest] = splitProps(props, ['class']);
@@ -39,7 +41,7 @@ function Fill(props: SliderFillProps) {
     <KobalteSlider.Fill
       {...rest}
       class={cn(
-        'absolute h-full rounded-full bg-accent data-[orientation=vertical]:w-full',
+        'absolute h-full rounded-full bg-accent data-[orientation=vertical]:h-auto data-[orientation=vertical]:w-full',
         local.class
       )}
     />
@@ -47,12 +49,14 @@ function Fill(props: SliderFillProps) {
 }
 
 function Thumb(props: SliderThumbProps) {
-  const [local, rest] = splitProps(props, ['class']);
+  const [local, rest] = splitProps(props, ['class', 'appearance']);
   return (
     <KobalteSlider.Thumb
       {...rest}
       class={cn(
         "absolute top-1/2 size-4 -translate-y-1/2 rounded-full border border-edge-muted bg-panel shadow-sm outline-none after:absolute after:-inset-3 after:content-[''] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel data-[disabled]:pointer-events-none data-[orientation=vertical]:left-1/2 data-[orientation=vertical]:top-auto data-[orientation=vertical]:-translate-x-1/2 data-[orientation=vertical]:translate-y-0",
+        local.appearance === 'switch' &&
+          'size-(--selection-thumb-size-sm) border-(--selection-thumb-edge) bg-(--selection-thumb-fill) shadow-(--selection-thumb-shadow)',
         local.class
       )}
     />

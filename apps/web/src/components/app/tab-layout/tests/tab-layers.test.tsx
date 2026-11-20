@@ -3,6 +3,7 @@ import {
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  type PaneId,
   type SplitRouter,
   type SplitRoutes,
 } from '@app/lib/split-router';
@@ -39,7 +40,11 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
 import { onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTabManager, type TabManager } from '../tab-manager';
+import {
+  createTabManager,
+  MAX_PARKED_TABS,
+  type TabManager,
+} from '../tab-manager';
 
 const panels = vi.hoisted(() => ({ mounted: 0, unmounted: 0 }));
 
@@ -73,7 +78,9 @@ const routes: SplitRoutes = {
 function setup(url: string) {
   let router!: SplitRouter;
   let manager!: SplitManager;
-  let tabManager!: TabManager;
+  let tabManager: TabManager | undefined;
+  /** The tab each block instance was created for. */
+  const blockScopes: (string | undefined)[] = [];
   render(() => {
     router = createSplitRouter({
       routes,
@@ -88,7 +95,10 @@ function setup(url: string) {
     });
     const orchestrator = {
       isBlockMounted: () => false,
-      createBlockInstance: vi.fn(),
+      createBlockInstance: () => {
+        blockScopes.push(tabManager?.blockScope());
+        return { element: () => null };
+      },
     } as unknown as BlockOrchestrator;
     manager = createSplitLayout(orchestrator, {
       router,
@@ -110,7 +120,7 @@ function setup(url: string) {
       </SplitRouterProvider>
     );
   });
-  return { router, tabManager, manager };
+  return { router, tabManager: tabManager!, manager, blockScopes };
 }
 
 /** A view's preview guard, as a host mounted in the router's first open pane creates it. */
@@ -154,10 +164,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Unmount first: clearing the tab manager while a later tab is live would
+  // mount the tabless layer without the stubs.
+  cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   setGlobalTabManager(undefined);
-  cleanup();
   panels.mounted = 0;
   panels.unmounted = 0;
 });
@@ -194,30 +206,7 @@ describe('desktop tab layers', () => {
     expect(layer(second)?.inert).toBe(true);
   });
 
-  it('selecting a preview held by a background tab switches to that tab', async () => {
-    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
-    const { router, tabManager, manager } = setup('/channels');
-    await flush(router);
-    const first = tabManager.activeTabId();
-    const channel = { type: 'channel', id: 'channel-two' } as const;
-    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
-
-    tabManager.newTab();
-    await flush(router);
-    expect(tabManager.activeTabId()).not.toBe(first);
-    const liveGuard = guardInFirstPane(router, manager);
-    const activeSplit = manager.activeSplitId();
-
-    expect(liveGuard.canSelect(channel)).toBe(false);
-    await flush(router);
-
-    expect(tabManager.activeTabId()).toBe(first);
-    expect(layer(first)?.inert).toBe(false);
-    expect(manager.activeSplitId()).not.toBe(activeSplit);
-    expect(alert).toHaveBeenCalledOnce();
-  });
-
-  it('a tab mounting onto an entity another tab holds does not switch back', async () => {
+  it('selecting a preview held by a background tab opens it in this tab', async () => {
     const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
     const { router, tabManager, manager } = setup('/channels');
     await flush(router);
@@ -227,12 +216,52 @@ describe('desktop tab layers', () => {
     tabManager.newTab();
     await flush(router);
     const second = tabManager.activeTabId();
+    expect(manager.findOpenView(channel)).toBeUndefined();
 
-    expect(guardInFirstPane(router, manager)(channel)).toBe(false);
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
     await flush(router);
 
     expect(tabManager.activeTabId()).toBe(second);
     expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('a preview held in the same tab still blocks a second one', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, manager } = setup('/channels');
+    await flush(router);
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(false);
+    expect(alert).toHaveBeenCalledOnce();
+  });
+
+  it('a document open in a background tab mounts again in this tab', async () => {
+    const { router, tabManager, manager, blockScopes } = setup('/md/doc-one');
+    await flush(router);
+    expect(blockScopes).toEqual([undefined]);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+
+    const result = manager.openWithSplit({ type: 'md', id: 'doc-one' });
+    await flush(router);
+
+    expect(result.status).not.toBe('reused');
+    expect(blockScopes).toEqual([undefined, second]);
+    expect(tabManager.activeTabId()).toBe(second);
+  });
+
+  it('a tab mounting onto a document another tab holds gets its own instance', async () => {
+    const { router, tabManager, blockScopes } = setup('/md/doc-one');
+    await flush(router);
+    const entry = router.entry(router.panes()[0]!)!;
+
+    tabManager.openEntryInNewTab(entry, { activate: true });
+    await flush(router);
+
+    expect(blockScopes).toEqual([undefined, tabManager.activeTabId()]);
   });
 
   it('a stacked tab parks and comes back stacked without remounting', async () => {
@@ -252,6 +281,46 @@ describe('desktop tab layers', () => {
     expect(router.layout()).toEqual(stacked);
     expect(panels.mounted).toBe(3);
     expect(panels.unmounted).toBe(0);
+  });
+
+  it(`keeps split state for at most ${MAX_PARKED_TABS} parked tabs as tabs are evicted`, async () => {
+    const { router, tabManager, manager } = setup('/channels/channel-one');
+    await flush(router);
+    const seen = new Set<PaneId>();
+    const retainedSplits = () =>
+      [...seen].filter((pane) => manager.splitState(splitOf(pane))).length;
+
+    const counts: number[] = [];
+    for (let i = 0; i < MAX_PARKED_TABS * 3; i += 1) {
+      tabManager.newTab();
+      await flush(router);
+      for (const pane of router.retainedPanes()) seen.add(pane);
+      counts.push(retainedSplits());
+    }
+
+    // One live tab and up to MAX_PARKED_TABS parked ones, each one pane:
+    // the count grows until tabs start being evicted, then stays put.
+    expect(counts).toEqual(
+      counts.map((_, i) => Math.min(i + 2, MAX_PARKED_TABS + 1))
+    );
+    // Tabs still parked keep their splits.
+    for (const pane of router.retainedPanes()) {
+      expect(manager.splitState(splitOf(pane))).toBeDefined();
+    }
+  });
+
+  it('closing a background tab forgets its splits', async () => {
+    const { router, tabManager, manager } = setup('/channels/channel-one');
+    await flush(router);
+    const first = tabManager.activeTabId();
+    const [firstPane] = router.panes();
+    tabManager.newTab();
+    await flush(router);
+    expect(manager.splitState(splitOf(firstPane!))).toBeDefined();
+
+    tabManager.closeTab(first);
+    await flush(router);
+    expect(manager.splitState(splitOf(firstPane!))).toBeUndefined();
   });
 
   it('closing a tab unmounts only its panes', async () => {

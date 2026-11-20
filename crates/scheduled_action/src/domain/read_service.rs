@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 
 use super::models::ScheduledAction;
-use super::ports::{ScheduledActionReadService, ScheduledActionRepo};
+use super::ports::{ScheduledActionReadService, ScheduledActionRepo, SubRoutines};
 use super::service::list_accessible_actions;
 
 pub struct ScheduledActionReadServiceImpl<R, G> {
@@ -21,7 +21,7 @@ impl<R, G> ScheduledActionReadServiceImpl<R, G> {
 
 impl<R, G> ScheduledActionReadService for ScheduledActionReadServiceImpl<R, G>
 where
-    R: ScheduledActionRepo,
+    R: ScheduledActionRepo + SubRoutines,
     G: ScheduledActionGrants,
 {
     async fn list_accessible(

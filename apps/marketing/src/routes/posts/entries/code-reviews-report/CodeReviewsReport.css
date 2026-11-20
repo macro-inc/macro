@@ -26,12 +26,6 @@
 
 .crr-post .crr-article h2 {
   border-top: 1px solid var(--crr-border);
-  color: var(--crr-text-bright);
-  font-family: 'display', Georgia, serif;
-  font-size: clamp(28px, 4vw, 38px);
-  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
-  letter-spacing: -0.02em;
-  line-height: 1.12;
   margin: 68px 0 24px;
   padding-top: 38px;
 }
@@ -43,16 +37,8 @@
 }
 
 .crr-post .crr-article p {
-  color: var(--crr-text);
-  font-family: 'body', system-ui, sans-serif;
   margin: 0 0 32px;
-  text-align: justify;
-}
-
-@media (max-width: 720px) {
-  .crr-post .crr-article p {
-    text-align: left;
-  }
+  text-align: left;
 }
 
 .crr-post .crr-article a {

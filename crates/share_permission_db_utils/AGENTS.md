@@ -11,6 +11,8 @@ team-level link-share defaults and team sharing.
 - `src/lib.rs`: `get_team_default_link_share` — resolves a user's team's
   link-share preference, with the strongest membership winning on multi-team
   users (mirrors `entity_access::get_user_team`).
+  `update_link_share` refuses any link-share change under an agent session
+  scope that may not share (`entity_access_db_utils::scoped_grants`).
 - `src/team_share.rs`: team share-permission helpers.
 
 ## Scope

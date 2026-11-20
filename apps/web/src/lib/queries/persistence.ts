@@ -33,6 +33,13 @@ export type PersistScope = Readonly<{
   shouldRestore?: (queryKey: QueryKey) => boolean;
   /** Reject persisted values before publishing them to query observers. */
   shouldRestoreData?: (data: unknown) => boolean;
+  /**
+   * For keys that change over time, such as a date range. An entry stays on
+   * the device after its query leaves memory, is restored stale so the query
+   * reads again, and is swept at setup once `maxAge` or the buster rejects
+   * it, because nothing may ever ask for that key again.
+   */
+  outlivesQuery?: boolean;
 }>;
 
 export type QueryPersistence = {
@@ -109,7 +116,7 @@ async function handleRestore(
   }
 
   queryClient.setQueryData(query.queryKey, entry.data, {
-    updatedAt: entry.dataUpdatedAt,
+    updatedAt: scope.outlivesQuery ? 0 : entry.dataUpdatedAt,
   });
 }
 
@@ -175,6 +182,9 @@ function clearQueryMemory(queryClient: QueryClient): void {
  */
 function handleUpdate(scope: PersistScope, query: Query): void {
   if (query.state.status !== 'success') return;
+  // Stamped 0: seeded or restored stale, not read. Writing it back would
+  // replace the entry's real age and expire it.
+  if (query.state.dataUpdatedAt === 0) return;
   scope.store.set({
     queryHash: query.queryHash,
     queryKey: query.queryKey,
@@ -262,10 +272,24 @@ export function setupQueryPersistence(
       fireAndForget(restore(query, scope), 'query-persistence');
     } else if (type === 'updated') {
       handleUpdate(scope, query);
-    } else {
+    } else if (!scope.outlivesQuery) {
       scope.store.remove(query.queryHash);
     }
   });
+
+  for (const scope of scopes) {
+    if (!scope.outlivesQuery) continue;
+    const maxAgeMs = scope.maxAge
+      ? parsedDurationToMilliseconds(scope.maxAge)
+      : undefined;
+    fireAndForget(
+      scope.store.prune(
+        (entry) =>
+          validatePersistedEntry(entry, scope.buster, maxAgeMs) === 'valid'
+      ),
+      'query-persistence'
+    );
+  }
 
   return {
     restoreQuery(queryKey) {

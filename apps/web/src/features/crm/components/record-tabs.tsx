@@ -42,6 +42,7 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
       fallback={
         <Tabs
           aria-label={t('tabs.recordSections')}
+          size="sm"
           class="shrink-0"
           options={props.sections.map((section) => ({
             value: section,

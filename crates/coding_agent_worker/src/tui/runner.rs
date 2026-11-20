@@ -12,6 +12,7 @@ use super::quickstart::{Quickstart, QuickstartAction};
 use super::ui;
 use crate::config::Config;
 use crate::daemon::InheritedAgent;
+use crate::profiles::ConfigSelection;
 use crate::update::{self, StagedUpdate};
 
 /// What the caller does once the panel hands over to an updated macrod.
@@ -37,10 +38,11 @@ const TICK: Duration = Duration::from_millis(120);
 /// or until a self-update is installed and the caller should relaunch.
 /// `inherited` is the agent a previous macrod handed over.
 pub async fn run(
-    config_path: &Path,
+    selection: &ConfigSelection,
     logs: LogBuffer,
     inherited: Option<InheritedAgent>,
 ) -> rootcause::Result<Option<Restart>> {
+    let config_path = selection.path.as_path();
     let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel();
     // A dedicated thread owns the blocking crossterm read; the loop below
     // stays async and free to poll the network.
@@ -94,7 +96,7 @@ pub async fn run(
         ratatui::restore();
         return Ok(None);
     }
-    let mut app = match App::load(config_path, logs, inherited) {
+    let mut app = match App::load(selection, logs, inherited) {
         Ok(app) => app,
         Err(error) => {
             ratatui::restore();

@@ -1,7 +1,7 @@
 import { SearchBar } from '@app/components/view-shell';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
@@ -85,7 +85,12 @@ export function ProjectAssignment(props: {
                   fireAndForget(assign(row.project.id), 'projects')
                 }
               >
-                <ProjectIcon class="size-4 shrink-0" />
+                <EntityIcon
+                  targetType="initiative"
+                  appearance={row.project.appearance}
+                  size="xs"
+                  theme="monochrome"
+                />
                 <span class="truncate">{row.project.name}</span>
                 <Show when={!canEditProject(row.project)}>
                   <span class="ml-auto text-xs text-ink-muted">Read only</span>

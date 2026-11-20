@@ -31,7 +31,7 @@ ChatGPT's directory review requires each operation as its own tool, so this
 server exposes the SDK as generated tools instead of code mode:
 
 - `packages/sdk-mcp` reads the SDK's types and TSDoc hint tags (`@readonly`,
-  `@write`, `@destructive`) into one operation per public method, grouped per
+  `@write`, `@send`, `@destructive`) into one operation per public method, grouped per
   SDK entity and hint class, or one tool per operation (`TOOL_GROUPING`).
 - The Worker is a resource server only. Its metadata names the broker; the
   broker answers `resource=<McpChatgptServiceUrl>/mcp` with a Macro API token

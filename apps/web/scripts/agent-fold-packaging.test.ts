@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { build, type Rollup } from 'vite';
+import { build, type Rolldown } from 'vite';
 import { expect, it } from 'vitest';
 import { createAppViteConfig } from '../vite.base';
 
@@ -35,12 +35,12 @@ it('bundles the agent fold client URL as a compiled worker in production', async
     build: {
       ...config.build,
       write: false,
-      rollupOptions: {
+      rolldownOptions: {
         input: `${root}/src/lib/core/agent-fold/client.ts`,
         preserveEntrySignatures: 'strict',
       },
     },
-  })) as Rollup.RollupOutput;
+  })) as Rolldown.RolldownOutput;
 
   const worker = result.output.find((file) =>
     /^fold\.worker-[\w-]+\.js$/.test(file.fileName)

@@ -94,6 +94,9 @@ impl AdoptionRepository for PgWhatsAppRepository {
             remote_member = true,can_post = excluded.can_post,observed_at = excluded.observed_at,reconciled = true"#,
             adopted.chat.id,account.id,account.authorization_generation,adoption.can_post,adoption.observed_at)
             .execute(&mut *tx).await.map_err(failure)?;
+        // Idempotent: re-adding a chat tracks its picture again if it was dropped.
+        super::pictures::track_pictures_in(&mut tx, user, std::slice::from_ref(&adoption.jid))
+            .await?;
         notify(&mut tx, signals::ACCOUNT_CHANGED, account.id).await?;
         tx.commit().await.map_err(failure)?;
         Ok(adopted)
@@ -107,6 +110,8 @@ impl AdoptionRepository for PgWhatsAppRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
+        // Checks are spent only on what an added chat shows.
+        super::pictures::release_detached_pictures_in(&mut tx, chat.id).await?;
         let observers = sqlx::query_scalar!(
             "UPDATE whatsapp_chat_membership SET consent_ended_at = COALESCE(consent_ended_at, now()) WHERE chat_id = $1 RETURNING account_id",
             chat.id

@@ -21,8 +21,11 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - `src/mail/reconciliation.rs`: invalidate contradicted Mail facts during an
   authoritative `Soup` first-page write. Use the supported view/filter and
   microsecond timestamp/key boundary; never infer thread deletion. Skip
-  backfills, partial/cursor pages, identity switches, and pending optimistic
-  rows. At most 500 local matches are checked per write; later full snapshots
+  backfills, partial/cursor pages and identity switches. Skip a row with queued
+  writes unless its authoritative facts and those facts after each prefix of
+  the queue all still match the page: a queued mark read does not keep a
+  thread the page left out, but an archive whose Undo is queued keeps its row.
+  At most 500 local matches are checked per write; later full snapshots
   restore completeness.
 - `src/mail/retention.rs`: retain same-query server rows while local facts are
   incomplete, reject proven nonmembers, and preserve the indexed cursor.
@@ -65,6 +68,11 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 - A thread may have Drafts/Sent previews with no All Mail preview (junk);
   keep those projections complete and let each tab apply its own membership.
+
+- Get an operation's parsed form from `parsed_document`, never
+  `Document::parse`: one cache write passes the same text through the
+  projection, notification, mail and property passes, and parsing a 20 KB Soup
+  operation for each cost more than the write.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

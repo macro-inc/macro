@@ -27,6 +27,7 @@ import {
 } from 'solid-js';
 import { HarnessIcon, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
+import { MachineSection } from './connected-runtimes-section';
 
 function errorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'string' && error.length > 0) return error;
@@ -133,8 +134,8 @@ export function LocalRuntimeCard() {
     <Show when={support()?.supported}>
       <div>
         <h2 class="mb-3 px-6 text-sm font-semibold text-ink">This computer</h2>
-        <SettingsCard>
-          <section class="flex gap-4 px-6 py-5">
+        <SettingsCard inset="wide">
+          <MachineSection>
             <HarnessIcon>
               <LaptopIcon />
             </HarnessIcon>
@@ -306,7 +307,7 @@ export function LocalRuntimeCard() {
                 </Match>
               </Switch>
             </div>
-          </section>
+          </MachineSection>
         </SettingsCard>
       </div>
     </Show>

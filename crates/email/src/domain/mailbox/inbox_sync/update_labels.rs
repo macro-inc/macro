@@ -1,0 +1,418 @@
+use super::label_writes::{add_message_labels, remove_message_labels};
+use super::pending_labels;
+use super::*;
+use crate::domain::events::{
+    EmailEventOrigin, LabelRef, ThreadArchivedMetadata, ThreadLabelsUpdatedMetadata,
+    ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
+};
+use macro_user_id::user_id::MacroUserIdStr;
+use models_email::gmail::inbox_sync::{UpdateLabelsPayload, UpsertMessagePayload};
+use models_email::service::{self, link};
+use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
+
+/// Compares a db message's labels to the gmail message's labels, adding/removing as necessary
+#[tracing::instrument(skip(ctx))]
+pub(super) async fn update_labels<L, R, G, Q, E>(
+    ctx: &InboxSyncService<L, R, G, Q, E>,
+    link: &link::Link,
+    payload: &UpdateLabelsPayload,
+) -> result::Result<(), ProcessingError>
+where
+    L: GmailOpsLinks,
+    R: InboxSyncRepository,
+    G: InboxSyncGmail,
+    Q: InboxSyncQueue,
+    E: MacroEventBroker + InboxSyncRefresher,
+{
+    let provider_message_id = &payload.provider_message_id;
+
+    // fetch simple message to get db_id from provider_id
+    let db_message_opt = ctx
+        .repository
+        .message(link.id, provider_message_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to get simple message from db".to_string()),
+            })
+        })?;
+
+    let db_message = match db_message_opt {
+        Some(m) => m,
+        None => {
+            // if message exists in gmail but not in db, we should try to upsert it
+            ctx.queue
+                .enqueue(InboxSyncPubsubMessage {
+                    link_id: link.id,
+                    operation: InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
+                        provider_message_id: provider_message_id.clone(),
+                    }),
+                })
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::SqsEnqueueFailed,
+                        source: e.into_original().context(format!(
+                            "Failed to enqueue upsert message {:?} for missing message on label update",
+                            provider_message_id
+                        )),
+                    })
+                })?;
+
+            return Err(ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::MessageNotFoundInDatabase,
+                source: anyhow::anyhow!(
+                    "Message {} not found in database. Upsert message queued.",
+                    provider_message_id
+                ),
+            }));
+        }
+    };
+
+    let db_message_labels = ctx.repository.labels(db_message.db_id).await.map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e
+                .into_original()
+                .context("Failed to get message labels from db".to_string()),
+        })
+    })?;
+
+    // After the database labels: a write accepted in between has its marker
+    // in place with its label change.
+    let provider_labels = pending_labels::read_around(
+        &ctx.repository,
+        db_message.db_id,
+        ctx.gmail
+            .message_labels(link.id, &payload.provider_message_id),
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e
+                .into_original()
+                .context("Failed to get pending label writes from db"),
+        })
+    })?;
+    let pending_label_ids = provider_labels.untrusted_labels();
+    let gmail_message_labels = match provider_labels.value {
+        Ok(Some(labels)) => labels,
+        Err(error) => {
+            return Err(handle_operation_error(
+                &ctx.queue,
+                ctx.retry_worker,
+                link.id,
+                InboxSyncOperation::UpdateLabels(payload.clone()),
+                error,
+            )
+            .await);
+        }
+        Ok(None) => {
+            tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
+                "Message not found in gmail when attempting to update labels");
+            return Ok(());
+        }
+    };
+
+    let db_label_ids: Vec<String> = db_message_labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+    let LabelDiff {
+        labels_to_add,
+        labels_to_delete,
+        kept_pending,
+    } = label_diff(&gmail_message_labels, &db_label_ids, &pending_label_ids);
+
+    if !kept_pending.is_empty() {
+        tracing::info!(
+            link_id = %link.id,
+            db_message_id = %db_message.db_id,
+            kept_labels = ?kept_pending,
+            "Kept local labels with a pending Gmail write over the provider's labels"
+        );
+    }
+
+    let has_label_changes = !labels_to_add.is_empty() || !labels_to_delete.is_empty();
+
+    if !labels_to_add.is_empty() {
+        add_message_labels(
+            &ctx.repository,
+            link,
+            db_message.db_id,
+            db_message.thread_db_id,
+            &labels_to_add,
+        )
+        .await?
+    }
+
+    if !labels_to_delete.is_empty() {
+        remove_message_labels(
+            &ctx.repository,
+            link,
+            db_message.db_id,
+            db_message.thread_db_id,
+            &labels_to_delete,
+        )
+        .await?
+    }
+
+    if has_label_changes {
+        publish_label_diff_events(
+            ctx,
+            link,
+            db_message.thread_db_id,
+            &labels_to_add,
+            &labels_to_delete,
+            &db_message_labels,
+        )
+        .await;
+
+        // tell FE to refresh user's inbox
+        ctx.effects
+            .refresh(
+                link.macro_id.as_ref(),
+                InboxSyncRefresh::UpdateLabels(link.id),
+            )
+            .await;
+    }
+
+    Ok(())
+}
+
+/// How one message's database labels change to match Gmail's.
+#[derive(Debug, PartialEq, Eq)]
+struct LabelDiff {
+    labels_to_add: Vec<String>,
+    labels_to_delete: Vec<String>,
+    /// Labels Gmail disagrees on that keep their local state, because Macro's
+    /// own write to them has not reached Gmail yet.
+    kept_pending: Vec<String>,
+}
+
+fn label_diff(
+    gmail_labels: &[String],
+    db_labels: &[String],
+    pending_labels: &[String],
+) -> LabelDiff {
+    let (kept_additions, labels_to_add): (Vec<String>, Vec<String>) = gmail_labels
+        .iter()
+        .filter(|label| !db_labels.contains(label))
+        .cloned()
+        .partition(|label| pending_labels.contains(label));
+    let (kept_deletions, labels_to_delete): (Vec<String>, Vec<String>) = db_labels
+        .iter()
+        .filter(|label| !gmail_labels.contains(label))
+        .cloned()
+        .partition(|label| pending_labels.contains(label));
+
+    LabelDiff {
+        labels_to_add,
+        labels_to_delete,
+        kept_pending: [kept_additions, kept_deletions].concat(),
+    }
+}
+
+/// System labels that never appear in a `thread_labels_updated` event:
+/// INBOX/TRASH/UNREAD/STARRED/SPAM map to dedicated thread-state events, and
+/// IMPORTANT/SENT/DRAFT changes are not published.
+const NON_USER_LABELS: [&str; 8] = [
+    service::label::system_labels::INBOX,
+    service::label::system_labels::SPAM,
+    service::label::system_labels::TRASH,
+    service::label::system_labels::UNREAD,
+    service::label::system_labels::STARRED,
+    service::label::system_labels::IMPORTANT,
+    service::label::system_labels::SENT,
+    service::label::system_labels::DRAFT,
+];
+
+fn build_provider_spam_changed_metadata(
+    link_id: Uuid,
+    owner: &MacroUserIdStr<'static>,
+    thread_id: Uuid,
+    labels_to_add: &[String],
+    labels_to_delete: &[String],
+) -> Option<ThreadSpamChangedMetadata> {
+    let spam_label = service::label::system_labels::SPAM;
+    let spam = if labels_to_add.iter().any(|label| label == spam_label) {
+        true
+    } else if labels_to_delete.iter().any(|label| label == spam_label) {
+        false
+    } else {
+        return None;
+    };
+
+    Some(ThreadSpamChangedMetadata {
+        link_id,
+        owner: owner.clone(),
+        actor: None,
+        thread_id,
+        spam,
+        origin: EmailEventOrigin::ProviderSync,
+    })
+}
+
+fn is_user_label(label: &str) -> bool {
+    !NON_USER_LABELS.contains(&label) && !label.starts_with("CATEGORY_")
+}
+
+/// Publish semantic macro.email events for a provider-side label diff, all
+/// with `origin = provider_sync`. Changes made through Macro update the DB
+/// optimistically, so by the time they echo back through Gmail history sync
+/// there is no diff and nothing is published here — user-initiated changes
+/// are published from their handlers, with `origin = user_action`.
+///
+/// The diff is per message, so a thread-wide provider change (e.g. Gmail
+/// marking a whole thread read) produces one event per affected message.
+/// For the read/archived states the payload carries the *thread row* state
+/// (recomputed by `update_thread_metadata` inside the label ops), so the
+/// repeated events are accurate and idempotent rather than message-inferred.
+async fn publish_label_diff_events<L, R, G, Q, E>(
+    ctx: &InboxSyncService<L, R, G, Q, E>,
+    link: &link::Link,
+    thread_db_id: Uuid,
+    labels_to_add: &[String],
+    labels_to_delete: &[String],
+    db_message_labels: &[models_email::db::label::Label],
+) where
+    L: GmailOpsLinks,
+    R: InboxSyncRepository,
+    G: InboxSyncGmail,
+    Q: InboxSyncQueue,
+    E: MacroEventBroker + InboxSyncRefresher,
+{
+    let added = |label: &str| labels_to_add.iter().any(|l| l == label);
+    let removed = |label: &str| labels_to_delete.iter().any(|l| l == label);
+
+    let needs_thread_state = added(service::label::system_labels::INBOX)
+        || removed(service::label::system_labels::INBOX)
+        || added(service::label::system_labels::UNREAD)
+        || removed(service::label::system_labels::UNREAD);
+    let thread_row = if needs_thread_state {
+        ctx.repository.thread(link.id, thread_db_id)
+            .await
+            .inspect_err(
+                |e| tracing::warn!(error=?e, thread_id=%thread_db_id, "failed to fetch thread row for macro.email event state"),
+            )
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
+
+    let mut events: Vec<EmailMacroEvent> = Vec::new();
+
+    if added(service::label::system_labels::INBOX) || removed(service::label::system_labels::INBOX)
+    {
+        events.push(EmailMacroEvent::thread_archived(ThreadArchivedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            archived: thread_row
+                .as_ref()
+                .map(|t| !t.inbox_visible)
+                .unwrap_or_else(|| removed(service::label::system_labels::INBOX)),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    if added(service::label::system_labels::TRASH) || removed(service::label::system_labels::TRASH)
+    {
+        events.push(EmailMacroEvent::thread_trashed(ThreadTrashedMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            trashed: added(service::label::system_labels::TRASH),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    if let Some(metadata) = build_provider_spam_changed_metadata(
+        link.id,
+        &link.macro_id,
+        thread_db_id,
+        labels_to_add,
+        labels_to_delete,
+    ) {
+        events.push(EmailMacroEvent::thread_spam_changed(metadata));
+    }
+
+    if added(service::label::system_labels::UNREAD)
+        || removed(service::label::system_labels::UNREAD)
+    {
+        events.push(EmailMacroEvent::thread_read(ThreadReadMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            is_read: thread_row
+                .as_ref()
+                .map(|t| t.is_read)
+                .unwrap_or_else(|| removed(service::label::system_labels::UNREAD)),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    if added(service::label::system_labels::STARRED)
+        || removed(service::label::system_labels::STARRED)
+    {
+        events.push(EmailMacroEvent::thread_starred(ThreadStarredMetadata {
+            link_id: link.id,
+            owner: link.macro_id.clone(),
+            actor: None,
+            thread_id: thread_db_id,
+            starred: added(service::label::system_labels::STARRED),
+            origin: EmailEventOrigin::ProviderSync,
+        }));
+    }
+
+    let added_user: Vec<LabelRef> = labels_to_add
+        .iter()
+        .filter(|label| is_user_label(label.as_str()))
+        .map(|l| LabelRef {
+            label_id: None,
+            provider_label_id: l.clone(),
+            name: None,
+        })
+        .collect();
+    let removed_user: Vec<LabelRef> = db_message_labels
+        .iter()
+        .filter(|label| {
+            labels_to_delete.contains(&label.provider_label_id)
+                && is_user_label(label.provider_label_id.as_str())
+        })
+        .map(|label| LabelRef {
+            label_id: Some(label.id),
+            provider_label_id: label.provider_label_id.clone(),
+            name: Some(label.name.clone()),
+        })
+        .collect();
+
+    if !added_user.is_empty() || !removed_user.is_empty() {
+        events.push(EmailMacroEvent::thread_labels_updated(
+            ThreadLabelsUpdatedMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                actor: None,
+                thread_id: thread_db_id,
+                added: added_user,
+                removed: removed_user,
+                origin: EmailEventOrigin::ProviderSync,
+            },
+        ));
+    }
+
+    for event in &events {
+        publish_email_event(&ctx.effects, event);
+    }
+}

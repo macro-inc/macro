@@ -1,14 +1,13 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
-  RedirectSplit,
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
-import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useLocation } from '@solidjs/router';
-import { createEffect, createMemo, lazy, on } from 'solid-js';
+import { createEffect, createMemo, on } from 'solid-js';
 import { pipelineTab } from './core/navigation';
+import { Crm } from './crm';
 import { crmViewPipelineId } from './crm-route';
 import {
   CRM_VIEW_URL_PARAM,
@@ -16,13 +15,7 @@ import {
 } from './queries/saved-view-codec';
 import { createCrmRoute } from './route-adapter';
 
-const Crm = lazy(async () => ({
-  default: (await import('./crm')).Crm,
-}));
-
 export const CompaniesRouteView = withAuth(() => {
-  if (!isFeatureEnabled(enableCrm))
-    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
   useViewRestoration();
   usePageViewTracking('companies');
   const panel = useSplitPanel();

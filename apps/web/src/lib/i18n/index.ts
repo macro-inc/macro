@@ -1,4 +1,4 @@
-export type { TranslationKey } from './dictionary';
+export type { PluralKey, TranslationKey } from './dictionary';
 export {
   browserInterfaceLanguage,
   formatLocale,

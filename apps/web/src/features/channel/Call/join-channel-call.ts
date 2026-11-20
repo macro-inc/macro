@@ -1,13 +1,15 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@channel/Channel/link';
+import type { CallJoinIntent } from './call-lifecycle';
 
 /**
- * Focuses the channel split (opens if needed) and pushes the
- * `?join_call=true` deep-link param so `ChannelCallAutoJoin` drops the user
- * straight into the call. Used for accept-call flows like clicking an
- * incoming-call browser notification.
+ * Focus the channel and carry the selected session through navigation.
+ * Only an explicit Start action sends the creation-capable intent.
  */
-export async function joinChannelCall(channelId: string): Promise<void> {
+export async function joinChannelCall(
+  channelId: string,
+  intent: CallJoinIntent = { kind: 'join' }
+): Promise<void> {
   const manager = globalSplitManager();
   if (!manager || !channelId) return;
 
@@ -24,6 +26,7 @@ export async function joinChannelCall(channelId: string): Promise<void> {
   const orchestrator = manager.getOrchestrator();
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
   await handle?.goToLocationFromParams({
-    [URL_PARAMS.joinCall]: 'true',
+    [URL_PARAMS.joinCall]:
+      intent.kind === 'start' ? 'start' : (intent.callId ?? 'true'),
   });
 }

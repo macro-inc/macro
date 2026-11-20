@@ -28,8 +28,6 @@ pub async fn setup_and_serve(
     config: Config,
     jwt_validation_args: JwtValidationArgs,
 ) -> anyhow::Result<()> {
-    let cors = macro_cors::cors_layer();
-
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let metadata_client = DynamodbClient::new(
@@ -48,7 +46,7 @@ pub async fn setup_and_serve(
     );
 
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        MacroAuthJwtValidator::new(jwt_validation_args),
+        MacroAuthJwtValidator::new(jwt_validation_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.as_ref().to_string(),
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
@@ -73,27 +71,7 @@ pub async fn setup_and_serve(
 
     let port = state.config.port;
     let environment = state.config.environment;
-    // Authentication is enforced per-handler by `MacroAuthorizationExtractor`,
-    // which accepts user credentials (JWT) as well as the internal service key.
-    let app = Router::new()
-        .nest(
-            "/api", // needed for cdn routing
-            Router::new().merge(file::router()).merge(health::router()),
-        )
-        .nest(
-            "/internal",
-            // Same file router; internal callers authenticate with the internal
-            // service key headers instead of a jwt
-            file::router(),
-        )
-        .with_state(state)
-        .merge(
-            SwaggerUi::new("/api/docs")
-                .url("/api/api-doc/openapi.json", swagger::ApiDoc::openapi()),
-        )
-        .layer(cors.clone())
-        .layer(DefaultBodyLimit::disable())
-        .layer(RequestBodyLimitLayer::new(MAX_REQUEST_SIZE)); // 1GB
+    let app = app(state, jwt_validation_args);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -109,3 +87,37 @@ pub async fn setup_and_serve(
         .await
         .context("error starting service")
 }
+
+/// Every route the service serves. Authentication is enforced per handler by
+/// `MacroAuthorizationExtractor`, which accepts user credentials (JWT) as well
+/// as the internal service key. A code-mode credential is refused outside the
+/// session scope it signs before any handler runs: this service has no
+/// database to look its correlation up in, so it checks the signed claim.
+fn app(state: AppState, jwt_validation_args: JwtValidationArgs) -> Router {
+    Router::new()
+        .nest(
+            "/api", // needed for cdn routing
+            Router::new().merge(file::router()).merge(health::router()),
+        )
+        .nest(
+            "/internal",
+            // Same file router; internal callers authenticate with the internal
+            // service key headers instead of a jwt
+            file::router(),
+        )
+        .with_state(state)
+        .merge(
+            SwaggerUi::new("/api/docs")
+                .url("/api/api-doc/openapi.json", swagger::ApiDoc::openapi()),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            jwt_validation_args,
+            agent_correlation::inbound::enforce_signed_scope,
+        ))
+        .layer(macro_cors::cors_layer())
+        .layer(DefaultBodyLimit::disable())
+        .layer(RequestBodyLimitLayer::new(MAX_REQUEST_SIZE)) // 1GB
+}
+
+#[cfg(test)]
+mod test;

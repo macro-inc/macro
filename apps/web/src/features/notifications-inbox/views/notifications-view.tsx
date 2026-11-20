@@ -117,6 +117,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
+import { InboxRowAvatar } from './inbox-row-avatar';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -178,7 +179,8 @@ const previewSelection = (
 ): PreviewPanelSelection | undefined =>
   entity.type === 'calendar_event' ||
   entity.type === 'initiative' ||
-  entity.type === 'harness'
+  entity.type === 'harness' ||
+  entity.type === 'team'
     ? undefined
     : entity;
 
@@ -280,23 +282,28 @@ export function NotificationsView(props: NotificationsViewProps) {
         if (id !== undefined) toast.dismiss(id);
       };
     },
-    announceCleared: (count, undo) => {
+    announceCleared: (count, undo, complete = true) => {
       const id =
-        count === 0
+        count === 0 && complete
           ? toast.success(t('notificationsInbox.clearedNothing'))
-          : toast.success(t('notificationsInbox.cleared', { count }), {
-              dismissStyle: 'icon',
-              actionLayout: 'inline',
-              actions: [
-                {
-                  label: t('notificationsInbox.undo'),
-                  icon: ArrowCounterClockwise,
-                  onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-                },
-              ],
-              duration: 8_000,
-              stack: true,
-            });
+          : toast.success(
+              complete
+                ? t('notificationsInbox.cleared', { count })
+                : t('notificationsInbox.stillClearing', { count }),
+              {
+                dismissStyle: 'icon',
+                actionLayout: 'inline',
+                actions: [
+                  {
+                    label: t('notificationsInbox.undo'),
+                    icon: ArrowCounterClockwise,
+                    onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                  },
+                ],
+                duration: 8_000,
+                stack: true,
+              }
+            );
       return () => {
         if (id !== undefined) toast.dismiss(id);
       };
@@ -722,14 +729,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
-          icon={
-            <InboxSenderAvatar
-              notification={card.row().content.notifications[0]}
-              kind={inboxCardKind(card.row())}
-              entity={card.row().content.entity}
-              badged
-            />
-          }
+          icon={<InboxRowAvatar row={card.row()} />}
           who={display().who}
           what={display().what}
           body={display().body}
@@ -831,7 +831,7 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const listBody = () => (
     <Switch>
-      <Match when={!filters.showsNothing() && view().t === 'loading'}>
+      <Match when={view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
           class="touch:pt-(--mobile-content-inset-top)"
@@ -864,14 +864,6 @@ export function NotificationsView(props: NotificationsViewProps) {
             }
           >
             {t('notificationsInbox.tryAgain')}
-          </Button>
-        </ListStatus>
-      </Match>
-      <Match when={filters.showsNothing()}>
-        <ListStatus>
-          <span>{t('notificationsInbox.allHidden')}</span>
-          <Button variant="secondary" size="sm" onClick={filters.reset}>
-            {t('notificationsInbox.resetFilters')}
           </Button>
         </ListStatus>
       </Match>
@@ -957,11 +949,11 @@ export function NotificationsView(props: NotificationsViewProps) {
   );
 
   const filterControls = {
-    isShown: filters.isShown,
+    isSelected: filters.isSelected,
     get activeCount() {
       return filters.activeCount();
     },
-    onShownChange: filters.setShown,
+    onSelectedChange: filters.setSelected,
     onReset: filters.reset,
   };
 
@@ -1068,7 +1060,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                           onClear={clear}
                         />
                         <Button
-                          size="icon-md"
+                          size="icon-xs"
                           variant="ghost"
                           aria-label={t('notificationsInbox.settings')}
                           tooltip={t('notificationsInbox.settings')}

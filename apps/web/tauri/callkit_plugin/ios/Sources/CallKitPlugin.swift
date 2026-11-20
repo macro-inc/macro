@@ -24,6 +24,15 @@ struct WatchParticipantIdentitiesArgs: Decodable {
     let channel: Channel
 }
 
+struct SelectAudioOutputArgs: Decodable {
+    let callId: String
+    let id: String
+}
+
+struct WatchAudioOutputArgs: Decodable {
+    let channel: Channel
+}
+
 struct SetVideoEnabledArgs: Decodable {
     let enabled: Bool
 }
@@ -50,6 +59,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     private var pendingParticipantDisplayNamesByIdentity: [String: String] = [:]
 
     // Singleton channels avoid leaking listeners across webview reloads/HMR.
+    private var audioOutputChannel: Channel?
     private var callAnsweredChannel: Channel?
     private var callEndedChannel: Channel?
     private var connectionStateChannel: Channel?
@@ -275,6 +285,35 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func getAudioOutput(_ invoke: Invoke) {
+        onMain { [weak self] in
+            invoke.resolve(["state": (self?.mediaSession?.audioOutputState() as Any?) ?? NSNull()])
+        }
+    }
+
+    @objc public func selectAudioOutput(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(SelectAudioOutputArgs.self)
+        onMain { [weak self] in
+            guard let session = self?.mediaSession,
+                  session.currentSnapshot()?.callId.lowercased() == args.callId.lowercased(),
+                  session.selectAudioOutput(args.id) else {
+                invoke.reject("Audio output is unavailable for this call")
+                return
+            }
+            invoke.resolve(["state": (session.audioOutputState() as Any?) ?? NSNull()])
+        }
+    }
+
+    @objc public func watchAudioOutput(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(WatchAudioOutputArgs.self)
+        onMain { [weak self] in
+            self?.audioOutputChannel = args.channel
+            if let state = self?.mediaSession?.audioOutputState() {
+                args.channel.send(state)
+            }
+            invoke.resolve()
+        }
+    }
     /// Asked before the join so the prompt appears over the call the user just
     /// started, not after the room connects, possibly behind the lock screen.
     @objc public func requestMicrophonePermission(_ invoke: Invoke) {
@@ -473,6 +512,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             },
             videoOverlay: videoOverlay
         )
+        mediaSession.onAudioOutputChanged = { [weak self] state in
+            self?.audioOutputChannel?.send(state)
+        }
         self.mediaSession = mediaSession
         replayPendingParticipantDisplayNames(to: mediaSession)
         return mediaSession

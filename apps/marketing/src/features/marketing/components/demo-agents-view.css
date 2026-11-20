@@ -671,7 +671,7 @@
 		margin: 0;
 		font-size: 24px;
 		line-height: 1.1;
-		font-weight: 600;
+		font-weight: 500;
 	}
 
 	:where(.agents-view, .agents-view-portal) .settings .desc {
@@ -744,7 +744,7 @@
 	:where(.agents-view, .agents-view-portal) .section .sh h2 {
 		margin: 0;
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 500;
 	}
 
 	:where(.agents-view, .agents-view-portal) .section .sh p {
@@ -1019,7 +1019,7 @@
 	:where(.agents-view, .agents-view-portal) .byoa h2 {
 		margin: 0;
 		font-size: 16px;
-		font-weight: 600;
+		font-weight: 500;
 		letter-spacing: -0.02em;
 		display: flex;
 		align-items: center;
@@ -1340,7 +1340,7 @@
 		border-radius: 4px;
 		display: grid;
 		place-items: center;
-		font: 600 8.5px var(--font-mono);
+		font: 500 8.5px var(--font-mono);
 		color: var(--ink);
 		background: var(--surface-3);
 		flex-shrink: 0;
@@ -1780,7 +1780,7 @@
 		border-radius: 4px;
 		display: grid;
 		place-items: center;
-		font: 600 8.5px var(--font-mono);
+		font: 500 8.5px var(--font-mono);
 		color: var(--ink);
 		background: var(--surface-3);
 	}

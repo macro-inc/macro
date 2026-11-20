@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import type { DateValue } from '@core/util/date';
 import type { SubType } from '@entity';
 import type { Property } from '@property/types';
@@ -18,6 +19,7 @@ export type PreviewItemNoAccess = {
 type BasePreviewItem<T extends ItemType = ItemType> = {
   id: string;
   type: T;
+  appearance?: EntityAppearance | null;
   owner?: string;
   updatedAt?: DateValue | null;
 };
@@ -40,6 +42,8 @@ type PreviewProjectAccess = {
   loading: false;
   rawName: string;
   name: string;
+  /** Folder names from the root down to this folder, on REST previews. */
+  path?: string[];
   fileType?: never;
   subType?: never;
   channelType?: never;

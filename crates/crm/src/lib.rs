@@ -27,6 +27,7 @@ pub mod inbound;
     feature = "outbound",
     feature = "search",
     feature = "lookup",
+    feature = "email_discovery",
     feature = "call_link"
 ))]
 pub mod outbound;

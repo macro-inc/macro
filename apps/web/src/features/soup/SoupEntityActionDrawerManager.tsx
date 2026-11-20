@@ -3,6 +3,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   createEffect,
   createSignal,
@@ -27,6 +28,10 @@ function ConfiguredSoupEntityActionDrawer() {
   const drawerState = useSoupEntityActionDrawer();
   const { buildActionGroups } = createSoupEntityActions({
     markDoneDelegate: () => drawerState?.entry()?.markDoneDelegate?.(),
+    selectedEntities: () => {
+      const entry = drawerState?.isOpen() ? drawerState.entry() : undefined;
+      return entry ? [entry.entity] : [];
+    },
   });
   const [projectTasks, setProjectTasks] = createSignal<string[]>();
 
@@ -83,8 +88,12 @@ function ConfiguredSoupEntityActionDrawer() {
 
 export function MaybeSoupEntityActionDrawerManager(props: {
   children: JSX.Element;
+  /** Keep the provider available when a touch list survives folding. */
+  keepOnWideTouch?: boolean;
 }) {
-  if (!isMobile()) return props.children;
+  if (!isMobile() && !(props.keepOnWideTouch && isTouchDevice())) {
+    return props.children;
+  }
 
   const [isOpen, setIsOpen] = createSignal(false);
   const [entry, setEntry] = createSignal<EntityActionDrawerEntry>();
@@ -96,7 +105,11 @@ export function MaybeSoupEntityActionDrawerManager(props: {
       setEntry(() => nextEntry);
       setIsOpen(true);
     },
-    close: () => setIsOpen(false),
+    close: () => {
+      if (!isOpen()) return;
+      setIsOpen(false);
+      entry()?.onClose?.();
+    },
   };
 
   let wrapperEl!: HTMLDivElement;

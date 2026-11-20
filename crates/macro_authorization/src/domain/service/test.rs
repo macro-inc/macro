@@ -182,6 +182,7 @@ fn bot_authentication() -> BotAuthentication {
             origin: crate::CredentialOrigin::Bot,
             agent_id: None,
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::try_from("macro|acting@example.com".to_string())
                 .expect("valid Macro user id"),
             user_context: UserContext {
@@ -333,6 +334,7 @@ async fn authorize_constructs_user_context_from_validated_identity() {
                 identity: ValidatedIdentity {
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     user_id: "macro|user@example.com".to_string(),
                     fusion_user_id: "fusion-user-id".to_string(),
                     organization_id: Some(42),
@@ -560,6 +562,7 @@ async fn authorize_identity_keeps_verified_agent_and_owner() {
                 identity: ValidatedIdentity {
                     agent_id: Some(bot_id::MACRO_NEW_BOT_ID),
                     agent_via: None,
+                    routine_id: None,
                     user_id: "macro|owner@example.com".into(),
                     fusion_user_id: "fusion-owner".into(),
                     organization_id: Some(42),

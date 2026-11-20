@@ -1,7 +1,7 @@
 -- Fixture for channel access request tests.
 --
 -- Users: owner and member participate in the private channel; outsider and
--- latecomer do not.
+-- latecomer do not. Only outsider has a profile name.
 -- Channels: ...10 private, ...11 public, ...12 direct message.
 INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
 ('00000000-0000-0000-0000-000000000001', 'owner@join.test', 'owner@join.test', 'join_owner'),
@@ -13,6 +13,8 @@ INSERT INTO "User" (id, email, macro_user_id) VALUES
 ('macro|member@join.test', 'member@join.test', '00000000-0000-0000-0000-000000000002'),
 ('macro|outsider@join.test', 'outsider@join.test', '00000000-0000-0000-0000-000000000003'),
 ('macro|latecomer@join.test', 'latecomer@join.test', '00000000-0000-0000-0000-000000000004');
+INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES
+('00000000-0000-0000-0000-000000000003', 'Olive', 'Outsider');
 INSERT INTO comms_channels (id, name, owner_id, channel_type) VALUES
 ('00000000-0000-0000-0000-000000000010', 'design', 'macro|owner@join.test', 'private'),
 ('00000000-0000-0000-0000-000000000011', 'general', 'macro|owner@join.test', 'public'),

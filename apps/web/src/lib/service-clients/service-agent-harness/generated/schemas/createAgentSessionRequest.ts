@@ -11,6 +11,7 @@ import type { CreateAgentSessionRequestModel } from './createAgentSessionRequest
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestPromptActionId } from './createAgentSessionRequestPromptActionId';
+import type { CreateAgentSessionRequestPromptClientId } from './createAgentSessionRequestPromptClientId';
 import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
@@ -70,14 +71,22 @@ for the bot's own sessions. With no claim, a team bot owns the session
 itself only while non-user owners are enabled. Every other bot still
 needs an owner. */
   owner?: CreateAgentSessionRequestOwner;
-  /** First prompt to deliver once the session is running. Managed sessions
-only - an external runtime sends its own first prompt through the
-control endpoint. Omitted, the session opens idle. */
+  /** First prompt to deliver once the session is running. The managed shape
+only: a persona its operator runs gets it through the session's control
+path once its runtime opens the session, while a runtime opening its
+own (the `workspace` shape) sends its first prompt through the control
+endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
   promptActionId?: CreateAgentSessionRequestPromptActionId;
   /** Files `prompt` refers to, in the order the user attached them.
 Requires `prompt`. */
   promptAttachments?: PromptAttachment[];
+  /** The app tab the person typed `prompt` in, as `clientId` on a control
+request, so what the first turn opens in the app reaches that tab
+only. Requires `prompt`. Only a person's own request may send it; a
+runtime's is refused, and a program using a person's credential has
+it dropped. */
+  promptClientId?: CreateAgentSessionRequestPromptClientId;
   /** Starting branch for a managed coding session's selected repository.
 Omitted, the session starts on the repository's default branch. */
   repoBranch?: CreateAgentSessionRequestRepoBranch;

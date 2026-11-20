@@ -8,6 +8,9 @@ link flow, following the hexagonal architecture pattern.
 
 ## Start here
 
+- `README.md` and `app-webhooks.json`: the GitHub App's reviewed webhook
+  subscriptions, minimum read permissions, full event inventory, and manual
+  registration steps. The JSON is a manifest fragment, not live configuration.
 - `src/domain/models.rs`: re-exports pull request domain types from
   `github_pull_requests` alongside this crate's own link/installation/sync
   models — most "GitHub" domain types actually live in that crate.
@@ -43,8 +46,10 @@ link flow, following the hexagonal architecture pattern.
 
 ## Recipes
 
-- Add a webhook event: `src/inbound/github_sync_router.rs` (dispatch) →
-  `src/domain/models.rs` (sync model) → `src/outbound/pg_github_sync_repo.rs`.
+- Add a routine webhook event: review `app-webhooks.json` and `README.md`, then
+  apply the registration settings manually after approval. Ingestion already
+  publishes any verified installation event; only new PR/installation sync
+  behavior needs domain handlers or persistence changes.
 - Add a new GitHub API call: `src/outbound/github_sync_client.rs` or
   `github_auth_client.rs` → the domain service that needs it.
 

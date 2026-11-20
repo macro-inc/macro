@@ -125,6 +125,7 @@ async fn one_read_per_record_type_answers_every_record_without_its_own_column() 
     let revenue_id = revenue.column.id;
     let row = RowId::new();
     let pipeline = Pipeline {
+        commercial_fields: Default::default(),
         id: Uuid::now_v7(),
         team_id: Uuid::now_v7(),
         name: "Deals".into(),

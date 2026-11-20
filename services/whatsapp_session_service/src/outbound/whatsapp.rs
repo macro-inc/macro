@@ -14,7 +14,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
     ChatUpdate, ClaimedSend, InboundEvent, LookupAnswer, MediaImport, MessageAnchor, OutboundMedia,
-    OutgoingContent, SessionScope, Target,
+    OutgoingContent, PictureAnswer, PictureCheck, SessionScope, Target,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
@@ -39,6 +39,7 @@ use crate::domain::ports::{
 use events::{Mapped, MediaLocator};
 
 pub mod events;
+mod pictures;
 #[cfg(test)]
 mod test;
 
@@ -57,6 +58,8 @@ pub struct WhatsmeowConnector<Kms> {
     dialer: Arc<dyn Dialer>,
     media_base_url: Option<String>,
     send_timeout: Duration,
+    /// Downloads profile pictures, whose URLs are plain HTTPS.
+    pictures_http: reqwest::Client,
 }
 
 impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
@@ -69,15 +72,16 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
         dialer: Arc<dyn Dialer>,
         media_base_url: Option<String>,
         send_timeout: Duration,
-    ) -> Self {
-        WhatsmeowConnector {
+    ) -> Result<Self, reqwest::Error> {
+        Ok(WhatsmeowConnector {
             pool,
             kms,
             signal,
             dialer,
             media_base_url,
             send_timeout,
-        }
+            pictures_http: pictures::http_client()?,
+        })
     }
 
     async fn open_store(&self, scope: SessionScope) -> Result<Arc<PgWhatsAppStore>, SessionError> {
@@ -186,6 +190,7 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
                 events: sender,
                 pairing: CancellationToken::new(),
                 send_timeout: self.send_timeout,
+                pictures_http: self.pictures_http.clone(),
             },
             receiver,
         ))
@@ -487,6 +492,11 @@ impl EventHandler for Forwarder {
         {
             return vote;
         }
+        if let Event::Picture(picture) = event {
+            let _ = self
+                .events
+                .send(events::picture_changed(self.store.as_ref(), picture).await);
+        }
         let seal = |locator: &MediaLocator| self.seal(locator);
         let mapped = events::map_event(self.account, event, Utc::now(), &seal);
         if mapped.is_empty() && matches!(event, Event::Message(_)) {
@@ -520,6 +530,7 @@ pub struct WhatsmeowSession {
     events: mpsc::UnboundedSender<SessionEvent>,
     pairing: CancellationToken,
     send_timeout: Duration,
+    pictures_http: reqwest::Client,
 }
 
 impl Drop for WhatsmeowSession {
@@ -1047,6 +1058,15 @@ impl WhatsAppSession for WhatsmeowSession {
             .await
             .map_err(internal)?;
         Ok(events::lookup_answer(self.store.as_ref(), self.store.as_ref(), phone, &answers).await)
+    }
+
+    async fn profile_picture(&self, check: &PictureCheck) -> Result<PictureAnswer, SessionError> {
+        Ok(Box::pin(pictures::profile_picture(
+            &self.client,
+            &self.pictures_http,
+            check,
+        ))
+        .await)
     }
 
     async fn logout(&self) {

@@ -157,8 +157,9 @@ export const documentComparisons: readonly FeatureComparison[] = [
       'https://www.notion.com/help/export-your-content',
       'https://www.notion.com/help/create-a-subpage',
       'https://www.notion.com/help/notion-agent',
-      'https://docs.macro.com/product/docs',
-      'https://docs.macro.com/product/drive',
+      '/documents#guide',
+      '/drive#guide',
+      '/docs/product/home',
     ],
   },
 ];

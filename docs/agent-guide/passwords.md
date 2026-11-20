@@ -1,0 +1,186 @@
+# Passwords
+
+Passwords is a Macro-managed team vault: Macro's servers decrypt protected
+values on explicit reveal or copy. The `enable-passwords-v1` feature flag controls
+the `/passwords` route, and the route also needs a team: without the flag it
+redirects to Home, and without a team it shows "Passwords is for teams". The
+rail entry and phone dock entry appear only when both hold. By default the rail
+entry sits below Calendar and above Agents; a saved custom rail order without
+it gets it right after Calendar, and the user can reorder it like any other.
+
+The view uses the shared view shell and standard shimmering skeletons while
+the team or password list loads. The inner sidebar (Drive's sidebar
+patterns) has a New dropdown, All items, Favorites, Recently used, Shared, and
+a Folders section: a Passwords root row and the folder tree, built from Drive's
+`FolderTree`. Folders nest; selecting one lists its items and its subfolders'
+items. Drag a folder onto another folder to nest it, or onto Passwords to
+move it to the root; a folder cannot move into itself or its descendants. Item
+rows drag onto a folder (or Passwords to unfile). Escape or switching away
+cancels a drag. Right-click a
+folder, or open the "…" folder actions beside New in the list header (no
+tooltip, so it never covers the menu), for New
+subfolder, Rename (inline), Move to folder (an inline destination list), and
+Delete folder. Delete confirms in place and says how many items move to All
+items and how many subfolders go too; it never deletes items or their values.
+Folder rows use the same Tab, Enter and Space controls as Drive; context menus
+use arrow keys and Escape. Inline names commit with Enter and cancel with Escape.
+On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
+Folders shows the same tree, and the floating New button opens the item kinds.
+Create folders from the Folders section's "+" on desktop or in the phone's
+Folders tab. A failed create offers Retry with the original name and parent.
+
+The list header filters and groups by type with the Tasks header's menus:
+Filter items (funnel; a Type submenu of the six kinds, a count on the button
+while any apply, and Clear filters) and Group by (None or Type; Type adds a
+section header with the kind's icon and count per kind, in the New menu's
+order). On a phone they live in the filter drawer at the start of the header
+pills, as in Tasks. The type filter combines with the collection, folder and
+search; with a type filter on, an empty list shows "No passwords here yet"
+instead of the empty-vault buttons. Like Tasks, both are kept with the split's
+history entry, so going back restores them.
+
+New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
+API credential, or Verification code. Each kind's form and detail label
+the shared username, password, website and notes values for that kind (Card:
+Cardholder and Card number; API credential: Endpoint, Key and Secret; Identity
+and Card start with labeled custom fields such as Expires or Email; those
+template fields type in the clear, while secret ones such as Security code and
+fields you add stay masked). A new item
+appears as a Draft row at the top of the list. New items belong to the team
+and are shared with it by default; the form's Shared with team / Private
+control leaves out the team grant (team admins and people it is shared with
+still have access). The list labels each item Team or Private. Share changes sharing afterwards. Share,
+Delete item and dragging into folders appear only for items the viewer can
+manage (their creator or a team admin). Edit and Add verification code
+appear only for items the viewer can edit; a view-only share can still reveal
+and copy. Drafts and in-place edits stay
+in memory while you select other items, start other kinds, lock, switch apps or
+hide the tab; Discard or a successful Save ends them. Leaving the view with
+drafts asks Keep editing or Discard and leave. Name is required and websites
+must use HTTP or HTTPS. Drafts are never written to the query cache or browser
+storage.
+
+A Verification code item needs its secret key (or `otpauth://` link) before it
+saves. The item saves first and the key enrolls next; if enrollment fails the
+draft stays open on the saved item with a notice, and Save retries only the
+enrollment. Logins can add a verification code in the form or the detail pane.
+Show verification code loads the current code with a countdown ring and reloads
+it when it expires; a failed load offers Retry.
+
+The detail header shows the logo tile, name, folder path and kind, then
+Favorite, Share, Edit and "…" (Activity, Delete item). The star is personal:
+anyone who can view an item can add or remove it from their own Favorites,
+including a viewer without edit rights. It updates immediately and rolls back
+with an error if saving fails. Starring never edits the credential or adds a
+shared Activity entry. The Favorite checkbox sets the initial creator preference
+on creation; after creation, use the detail star instead of the credential edit
+form.
+
+Usernames load with a Copy action and never reveal the password. An empty account
+identifier or API Key shows a dash; lookup failures stay visible. When Macro does
+not answer (offline, or a gateway returning 502 or 504) the banner, the username
+row and a notice above the list read "Can't reach Macro. Check your connection.";
+when the service answers 503 they read "Passwords is temporarily unavailable.
+Try again in a minute." Either notice's Retry reloads the list and the selected
+username. Missing provider username slots read as
+empty without requiring a re-import. Any signed-in team member with
+access can reveal and copy the password, notes and verification code; there is
+no separate re-sign-in step. Revealed values and codes clear on Lock
+Passwords (a client-side conceal only), after a minute, when the window loses
+focus or the tab hides, on selection change, or on unmount. Password history
+reveals an explicitly selected version. The generator
+picks a length (12–128) and character classes; every selected class is always
+present, and characters are drawn uniformly with rejection sampling.
+
+When an agent asks to use an item, the item's human creator and the team's
+admins get an inbox row, "<agent> requested access to <item>", grouped under
+the current team while Passwords is enabled. Opening the row or a notification
+in its stack selects the requested item in Passwords; teams have no separate
+inbox page, and requests for another team are hidden. In the detail pane,
+people who can manage the item see Agent access: a pending request offers Allow
+view, Allow edit and Deny, and an agent that can use the item or still holds a
+grant offers Remove access ("Remove approval" also appears for an approved
+shared grant). Remove approval keeps the grant: the row then reads "<agent>
+requires approval to use this item" and keeps Remove access, also while a later
+request is pending or after it is denied. Once the grant is removed, the row
+disappears unless a request is pending. A request
+that changed meanwhile shows the latest state with a notice after a successful
+refresh. The section loads inside the item pane using a local skeleton; a
+failed read offers Retry, and obsolete actions stay hidden until that retry
+succeeds. The section is
+hidden when the agent vault is off or the viewer can't review, and ordinary
+sharing never lists agents.
+
+## Importing from 1Password or Bitwarden
+
+The New menu (desktop sidebar and list header) and the phone's floating New end
+with Import…, which opens the import dialog (a full-screen sheet on phones).
+An empty vault (All, no search) shows "No passwords yet" with New login and
+Import buttons; Import opens the same dialog.
+Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON,
+CSV or `.zip` export (its attachments are counted, not imported). The file is parsed on the device: `crates/password_import`
+compiled to wasm (`crates/password_import_wasm`, built by
+`just ensure-password-import-wasm`) runs in a worker started for that file and
+terminated after it answers; the raw file is never uploaded or stored. An
+unreadable or encrypted file shows the reason in place.
+
+The dialog is a `Panel` with a header close button (disabled only while
+items are being sent), like the invite and customize-sidebar dialogs; reading
+the file shows a spinner. The preview shows the format, counts per kind, the
+source folder tree, one Not carried over section (whole items left out by
+reason, parts of imported items such as passkeys and previous passwords, and
+one Files and attachments line for both file items and attachments; Show
+items lists the left-out items by name), and how many items
+look like ones the vault has (same kind, name ignoring case, website host).
+Skip items I already have is on by default; when it would leave nothing to
+import, the preview says so (turn it off to import copies) and offers Done. When the vault list is at its
+500-item cap, or still loading or failed, the export's distinct names are matched in the vault with
+`POST …/items/match` (names trimmed and lower-cased once on the client, in
+the body, never a URL; at most 500 names and 192 KiB per request, metadata
+only); if a request fails the preview says the vault could not be checked
+for duplicates, and if an answer is capped it says some may not be
+recognized. Import into shows the full destination with a Change menu beside it: a new folder
+"Imported from <source> <date>" (default; numbered " (2)", " (3)"… when a root
+folder already has that name, except when continuing an import, which reuses
+its folder), an existing folder, or the root; source folders nest under it. Keep imported
+items private to me, under Who can see them, leaves out the team grant. The 500-folder team limit and
+the 8-level depth limit are checked here and block the import.
+
+Import sends batches of at most 25 items and 3.5 MiB, one at a time, to
+`POST /passwords/teams/{team}/imports/{importId}/items`; items the vault
+answers busy are resent after a backoff. While sending, a progress bar, an
+estimate from the rate so far, and a note to keep the page open (or import
+the same file again in this tab to finish) show, and leaving the page asks
+first. The result counts imported, already present, skipped and failed items,
+lists the failed ones by reason (couldn't reach the server, which includes a
+gateway's 502 or 504, server error (including a service 503), busy, folder deleted, not accepted, not
+allowed, no answer, account changed) and offers Open folder. The import id is
+kept in sessionStorage under a hash of the viewer and the file's contents
+(hashed in the worker), with the destination, privacy and the source keys of
+items that may be unfinished: failed with an item id, or verification-code
+items sent without an answer yet (written only when that set changes). Importing the same file again in the tab continues the
+import with the same destination and privacy (locked in the preview) and
+resends those unfinished items rather than skipping them as duplicates, which
+finishes a verification code an earlier run could not set up. If the folder
+the import used is gone, the entry is dropped and the preview says it starts a
+new import. A batch request is resent only after no answer, a busy vault
+or a server error; items answered busy, unavailable or folder missing go into
+a later round. A file over the parser's 50 MB limit is refused before it is
+read. Spans: `passwords.import.parse`,
+`passwords.import.duplicates`, and `passwords.import` around the batches, with
+counts, format and import id only.
+
+## Checks
+
+The backend-free desktop and phone interaction suite mounts the actual vault
+with an injected fake source:
+
+```sh
+bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts
+```
+
+Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Nix Chrome binary when required.
+Its import case uses the real wasm parser: run `just ensure-password-import-wasm`
+in `apps/web` first.
+The fixture suite complements authenticated local-stack verification.
+

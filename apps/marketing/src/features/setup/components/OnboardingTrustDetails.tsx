@@ -1,5 +1,5 @@
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { For, type JSX, Show } from 'solid-js';
 
 function EvidenceLink(props: { href: string; children: JSX.Element }) {

@@ -192,6 +192,49 @@ fn html_redirect_works() {
     assert!(res.contains(r#"<meta http-equiv="refresh" content="0;url=https://example.com/">"#));
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn redirect_telemetry_carries_no_session_code() {
+    let state = Some(SsoState {
+        // A code left over from an earlier attempt rides in on the state.
+        original_url: Some(
+            "https://macro.com/app/login?token=stale-code"
+                .parse()
+                .unwrap(),
+        ),
+        is_mobile: true,
+        referral_code: None,
+        is_agent: false,
+    });
+    let (traces, _guard) = crate::api::trace_capture::capture_traces();
+    let mut dummy = DummyCb::default();
+    get_redirect_url(&state, async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
+    traces.rearm();
+    let url = get_redirect_url(&state, async |x| dummy.cb(x).await)
+        .await
+        .unwrap();
+    let code = url
+        .query_pairs()
+        .find(|(k, _)| k == "token")
+        .map(|(_, v)| v.into_owned())
+        .unwrap();
+
+    let text = traces.text();
+    assert!(
+        text.contains("get_redirect_url"),
+        "spans were captured: {text}"
+    );
+    assert!(
+        !text.contains(&code),
+        "session code reached telemetry: {text}"
+    );
+    assert!(
+        !text.contains("stale-code"),
+        "stale code reached telemetry: {text}"
+    );
+}
+
 fn sso_state(original_url: Option<&str>) -> SsoState {
     SsoState {
         original_url: original_url.map(|url| url.parse().unwrap()),

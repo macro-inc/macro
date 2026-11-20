@@ -1,13 +1,24 @@
-//! Opt-in telemetry for `just run_local`: how long a bring-up, each of its steps,
-//! each build and each service's health wait took, sent to Loki as OTLP logs (the
-//! same design as CI's `service_name="ci-telemetry"` events) and, as spans, to
-//! Tempo.
+//! Local build telemetry for `just run_local` and the stack commands: how long a
+//! bring-up, each of its steps, each build and each service's health wait took,
+//! sent to Loki as OTLP logs (the same design as CI's
+//! `service_name="ci-telemetry"` events) and, as spans, to Tempo.
 //!
-//! Off unless the user's opt-in file exists (see [`config`]); then [`Recorder::start`]
-//! returns `None` and nothing is written or sent. On, every event is appended to a
-//! buffer file first and a background thread sends it, so recording never waits
-//! on the network. A process killed mid-run leaves its file behind, and the next
-//! recording process sends it, closed off as an `interrupted` run.
+//! On by default. Opted out (see [`config`]), [`Recorder::start`] returns `None`
+//! and nothing is written or sent; it does the same while a recent attempt to
+//! provision the token failed (see [`provision`]). On, every event is appended to
+//! a buffer file first and a background thread provisions the token if needed
+//! and sends it, so recording never waits on the network or on Doppler. A
+//! process killed mid-run leaves its file behind, and the next recording process
+//! sends it, closed off as an `interrupted` run.
+//!
+//! `services = true` in the settings also forwards the local stack's own
+//! telemetry, which [`forwarding`] decides and `xtask_local` runs. Its runs, and
+//! those of a machine with a `machine` setting, carry the readable machine name
+//! as `host_name`; every run carries `machine`, that name or the hashed host.
+//!
+//! A run's trace id is its `run_id`. An event with a span key ([`Event::span`])
+//! is the parent of the events naming that key ([`Event::under`]); the others
+//! hang under the run's root span.
 
 #![deny(missing_docs)]
 
@@ -24,13 +35,17 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 pub mod config;
+pub mod forwarding;
 mod otlp;
+pub mod provision;
 mod sender;
 
 #[cfg(test)]
 mod test;
 
-pub use config::{ConfigError, Paths};
+pub use config::{ConfigError, Paths, Switch};
+pub use forwarding::{Forwarding, ForwardingError, MachineName, host_name};
+pub use provision::take_hint;
 
 /// One thing that happened: a finished step, a build, a service turning healthy.
 #[derive(Clone, Debug)]
@@ -39,6 +54,8 @@ pub struct Event {
     name: Option<String>,
     at: SystemTime,
     duration: Option<Duration>,
+    span: Option<String>,
+    parent: Option<String>,
     fields: BTreeMap<String, Value>,
 }
 
@@ -50,8 +67,24 @@ impl Event {
             name: None,
             at: SystemTime::now(),
             duration: None,
+            span: None,
+            parent: None,
             fields: BTreeMap::new(),
         }
+    }
+
+    /// Name the event's span with `key`, unique within the run, so other events
+    /// can hang under it with [`Event::under`]. Without one, the span gets an id
+    /// of its own that nothing can refer to.
+    pub fn span(mut self, key: &str) -> Self {
+        self.span = Some(key.to_owned());
+        self
+    }
+
+    /// Hang the event's span under the span keyed `key` instead of the run's root.
+    pub fn under(mut self, key: &str) -> Self {
+        self.parent = Some(key.to_owned());
+        self
     }
 
     /// A structured-metadata field. Keep values low in size; never paths or secrets.
@@ -74,10 +107,10 @@ impl Event {
     }
 }
 
-/// Why telemetry stayed off for this process although the user opted in.
+/// Why telemetry stayed off for this process although it wasn't opted out.
 #[derive(Debug, thiserror::Error)]
 pub enum StartError {
-    /// The opt-in file can't be used.
+    /// The settings file can't be used.
     #[error(transparent)]
     Config(#[from] ConfigError),
     /// The buffer directory or file couldn't be created and locked.
@@ -106,6 +139,13 @@ pub(crate) struct Record {
     pub name: Option<String>,
     pub at_ns: u64,
     pub duration_ns: Option<u64>,
+    /// The key the span is known by, from [`Event::span`]. Buffers written
+    /// before it existed have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<String>,
+    /// The key of the span it hangs under, from [`Event::under`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
     pub fields: BTreeMap<String, Value>,
 }
 
@@ -114,16 +154,32 @@ pub(crate) struct Record {
 #[serde(tag = "line", rename_all = "snake_case")]
 pub(crate) enum Line {
     Begin(Begin),
-    /// A step began. Never sent: it names what an interrupted run was doing.
+    /// A step began. Never sent as is: it names what an interrupted run was
+    /// doing, and becomes that step's span, so the spans under it keep their
+    /// parent.
     Started {
         step: String,
         at_ns: u64,
+        /// The key its finished event would carry, from [`Event::span`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        span: Option<String>,
+        /// The key of the step it began inside, from [`Event::under`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent: Option<String>,
     },
     Record(Record),
 }
 
 /// The event that closes a run, and the root span its steps hang under.
 pub(crate) const RUN_EVENT: &str = "run";
+/// The common field naming the machine, as forwarded telemetry's `host.name`
+/// arrives in Loki, so one filter finds both.
+pub(crate) const MACHINE_FIELD: &str = "host_name";
+/// The common field holding the hashed hostname, which `common` provides.
+pub(crate) const HOST_FIELD: &str = "host";
+/// The common field every run is grouped by machine with: `host_name` when the
+/// machine has a readable name, else the hashed `host`.
+pub(crate) const MACHINE_LABEL_FIELD: &str = "machine";
 
 /// Records one process's events: one run (a bring-up, a rebuild, a stop).
 pub struct Recorder {
@@ -188,19 +244,33 @@ impl Shared {
 }
 
 impl Recorder {
-    /// Start recording a run that began at `started_at`, if the user opted in.
+    /// Start recording a run that began at `started_at`, unless opted out.
     /// `common` builds the fields every event carries (kind, mode, instance,
-    /// host, ...); it is only called once the user has opted in.
+    /// host, ...); it is only called when recording. The machine's readable name
+    /// joins them as `host_name` when the settings name it or forward services,
+    /// and `machine` is that name or else the hashed `host`.
     ///
-    /// `Ok(None)` means opted out: nothing was created, `common` was not called,
-    /// and nothing will be sent.
+    /// `Ok(None)` means off: opted out, or no settings file and no way to get one
+    /// now (no provisioning, or it failed within the hour). Nothing was created,
+    /// `common` was not called, and nothing will be sent.
     pub fn start(
         paths: &Paths,
         started_at: SystemTime,
         common: impl FnOnce() -> BTreeMap<String, Value>,
     ) -> Result<Option<Self>, StartError> {
-        let Some(config) = config::Config::load(&paths.config)? else {
+        if paths.switch == Switch::Off {
             return Ok(None);
+        }
+        let config = match config::Config::load(&paths.config)? {
+            config::Setting::Off => return Ok(None),
+            config::Setting::On(config) => Some(config),
+            // The sender thread provisions it, off the caller's path.
+            config::Setting::Missing => {
+                if paths.provision.is_none() || provision::backing_off(&paths.buffer_dir) {
+                    return Ok(None);
+                }
+                None
+            }
         };
         let buffer_error = |path: &PathBuf| {
             let path = path.clone();
@@ -208,11 +278,32 @@ impl Recorder {
         };
         std::fs::create_dir_all(&paths.buffer_dir).map_err(buffer_error(&paths.buffer_dir))?;
 
+        // Forwarding tags the stack's telemetry with this name; the same name on
+        // the runs puts both under one machine. A `machine` the developer chose
+        // names their runs even without forwarding; the hostname only with it.
+        let machine = config.as_ref().and_then(|config| {
+            config
+                .machine()
+                .cloned()
+                .or_else(|| config.services().then(MachineName::of_this_host).flatten())
+        });
+        let mut common = common();
+        if let Some(machine) = machine {
+            common.insert(MACHINE_FIELD.to_owned(), Value::from(machine.as_str()));
+        }
+        // One field to group machines by: the readable name, else the hashed host.
+        if let Some(label) = common
+            .get(MACHINE_FIELD)
+            .or_else(|| common.get(HOST_FIELD))
+            .cloned()
+        {
+            common.insert(MACHINE_LABEL_FIELD.to_owned(), label);
+        }
         let run_id = uuid::Uuid::now_v7().simple().to_string();
         let begin = Begin {
             run_id,
             started_ns: unix_ns(started_at),
-            common: common(),
+            common,
         };
         let own_file = paths.buffer_dir.join(format!("{}.jsonl", begin.run_id));
         // Locked and holding its begin line before it gets the name other
@@ -243,11 +334,11 @@ impl Recorder {
 
         let (done_tx, done) = mpsc::channel();
         let sender_shared = Arc::clone(&shared);
-        let buffer_dir = paths.buffer_dir.clone();
+        let sender_paths = paths.clone();
         std::thread::Builder::new()
             .name("local-telemetry".to_owned())
             .spawn(move || {
-                sender::run(&config, &buffer_dir, &sender_shared);
+                sender::run(config, &sender_paths, &sender_shared);
                 let _ = done_tx.send(());
             })
             .map_err(buffer_error(&paths.buffer_dir))?;
@@ -259,12 +350,25 @@ impl Recorder {
         &self.shared.begin.run_id
     }
 
-    /// Note that a step began. Only an interrupted run reports it, as the step it
-    /// was in when it stopped.
-    pub fn step_started(&self, step: &str) {
+    /// The name this run's machine is grouped by, the `machine` field of every
+    /// event: its readable name, else the hashed host.
+    pub fn machine(&self) -> Option<&str> {
+        self.shared
+            .begin
+            .common
+            .get(MACHINE_LABEL_FIELD)
+            .and_then(Value::as_str)
+    }
+
+    /// Note that a step began, keyed `span` and inside `parent` as its finished
+    /// event will be. Only an interrupted run reports it: as the step it was in
+    /// when it stopped, and as an `interrupted` step for each one still open.
+    pub fn step_started(&self, step: &str, span: Option<&str>, parent: Option<&str>) {
         self.shared.append(&Line::Started {
             step: step.to_owned(),
             at_ns: unix_ns(SystemTime::now()),
+            span: span.map(str::to_owned),
+            parent: parent.map(str::to_owned),
         });
     }
 
@@ -279,6 +383,8 @@ impl Recorder {
             duration_ns: event
                 .duration
                 .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)),
+            span: event.span,
+            parent: event.parent,
             fields: event.fields,
         }));
     }

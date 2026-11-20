@@ -18,8 +18,8 @@ export const sampleHomeFeed: { title: string; items: HomeFeedItem[] }[] = [
       {
         view: 'messages',
         id: 'dm-julia',
-        person: 'julia',
-        title: 'Julia',
+        person: 'eric',
+        title: 'Eric Hayes',
       },
       {
         view: 'agents',
@@ -32,7 +32,7 @@ export const sampleHomeFeed: { title: string; items: HomeFeedItem[] }[] = [
         view: 'messages',
         id: 'engineers',
         thread: 'eng-release',
-        title: 'Teo replied in #engineers',
+        title: 'Rahul Batra replied in #engineers',
       },
       { view: 'email', id: 'dana' },
       {
@@ -52,7 +52,7 @@ export const sampleHomeFeed: { title: string; items: HomeFeedItem[] }[] = [
         view: 'messages',
         id: 'launch',
         thread: 'm1',
-        title: 'Julia and Teo in #launch',
+        title: 'Eric Hayes and Rahul Batra in #launch',
       },
       {
         view: 'agents',
@@ -67,13 +67,13 @@ export const sampleHomeFeed: { title: string; items: HomeFeedItem[] }[] = [
         id: 'launch-status',
         title: 'What’s left before launch?',
       },
-      { view: 'messages', id: 'dm-teo', person: 'teo', title: 'Teo' },
+      { view: 'messages', id: 'dm-teo', person: 'rahul', title: 'Rahul Batra' },
       { view: 'documents', id: 'rollout' },
       {
         view: 'messages',
         id: 'design',
         thread: 'design-review',
-        title: 'Valentina replied in #design',
+        title: 'Austin Barron replied in #design',
       },
       { view: 'tasks', id: 'invite' },
       {

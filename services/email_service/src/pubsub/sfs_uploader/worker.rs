@@ -1,10 +1,15 @@
+use crate::outbound::sfs_upload::{
+    PgSfsPhotoContacts, PgSfsPhotoMappings, PhotoSyncedGateway, SfsPhotoUploadClient,
+};
 use crate::pubsub::sfs_uploader::context::SFSUploaderContext;
 use crate::pubsub::sfs_uploader::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use email::domain::mailbox::contacts::sfs_upload::SfsPhotoUploadService;
 use futures::StreamExt;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
@@ -24,6 +29,24 @@ pub async fn run_worker(
     .await;
 }
 
+/// Builds the production context for the worker loop.
+pub(crate) fn context(
+    worker: &sqs_worker::SQSWorker,
+    db: PgPool,
+    sfs_client: StaticFileServiceClient,
+    connection_gateway_client: ConnectionGatewayClient,
+) -> SFSUploaderContext {
+    SFSUploaderContext {
+        service: Arc::new(SfsPhotoUploadService {
+            mappings: PgSfsPhotoMappings(db.clone()),
+            contacts: PgSfsPhotoContacts(db),
+            uploader: SfsPhotoUploadClient(sfs_client),
+            notifier: PhotoSyncedGateway(connection_gateway_client),
+        }),
+        sqs_worker: worker.clone(),
+    }
+}
+
 /// Ingests SFS uploader messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -34,12 +57,7 @@ pub async fn run_worker_with_cancellation(
     connection_gateway_client: ConnectionGatewayClient,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = SFSUploaderContext {
-        db,
-        sfs_client,
-        sqs_worker: worker.clone(),
-        connection_gateway_client,
-    };
+    let ctx = context(&worker, db, sfs_client, connection_gateway_client);
     loop {
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();

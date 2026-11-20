@@ -113,7 +113,7 @@ pub(crate) struct FakeAuth;
 impl MacroAuthorizationService for FakeAuth {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         match jwt {
-            "owner" => Ok(UserContext {
+            "owner" | "agent" | "routine" => Ok(UserContext {
                 user_id: USER.into(),
                 ..Default::default()
             }),
@@ -137,9 +137,23 @@ impl MacroAuthorizationService for FakeAuth {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
-        self.authorize(jwt)
+        let mut credential = self
+            .authorize(jwt)
             .await
-            .map(macro_authorization::ValidatedCredential::session)
+            .map(macro_authorization::ValidatedCredential::session)?;
+        // The owner's credential signed for an agent, or for a routine's run.
+        match jwt {
+            "agent" => {
+                credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+                credential.identity.agent_id = Some(bot_id::BotId::TEST_A);
+            }
+            "routine" => {
+                credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+                credential.identity.routine_id = Some(macro_uuid::Uuid::from_u128(9));
+            }
+            _ => {}
+        }
+        Ok(credential)
     }
 
     async fn authorize_bot(
@@ -163,6 +177,7 @@ impl MacroAuthorizationService for FakeAuth {
                     MacroUserAuthentication {
                         agent_id: None,
                         agent_via: None,
+                        routine_id: None,
                         origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),
@@ -347,7 +362,7 @@ impl EntityAccessService for FakeEntityAccessService {
     }
 }
 
-fn router(events: bool) -> Router {
+pub(crate) fn router(events: bool) -> Router {
     router_with(service(events), FakeEntityAccessService::owner_only())
 }
 
@@ -535,7 +550,7 @@ async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found
 }
 
 #[tokio::test]
-async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
+async fn foreign_owner_can_neither_read_nor_manage_and_list_is_empty() {
     let app = router(true);
     let (_, action) = request(
         &app,
@@ -546,11 +561,8 @@ async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
     )
     .await;
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
-    assert_eq!(
-        request(&app, "GET", &url, "other", Value::Null).await.0,
-        StatusCode::OK
-    );
     for (method, path, body) in [
+        ("GET", url.clone(), Value::Null),
         ("PUT", url.clone(), cron_action()),
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
@@ -672,6 +684,12 @@ async fn maps_typed_errors_and_sanitizes_internal_failures() {
             StatusCode::CONFLICT,
         ),
         (
+            anyhow::Error::from(ActionPolicyError::InvalidAppearance(
+                "Choose a single emoji".into(),
+            )),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             anyhow::Error::from(AlreadyRunningError {
                 action_id: macro_uuid::generate_uuid_v7(),
             }),
@@ -775,7 +793,10 @@ async fn target_configuration_is_validated_through_http_and_gate_defaults_off() 
 #[tokio::test]
 async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_manageable() {
     use crate::domain::{
-        service::test::{FakeExecutor, FakeGrants, FakeRepo, TestService},
+        service::{
+            ScheduledActionServiceImpl,
+            test::{FakeExecutor, FakeGrants, FakeRepo},
+        },
         target_validation::{
             TargetValidation,
             test::{Sessions, agent_task},
@@ -785,7 +806,7 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -913,11 +934,11 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
     );
     assert_eq!(
         request(&app, "GET", &url, "viewer", Value::Null).await.0,
-        StatusCode::OK
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
         request(&app, "GET", &url, "stranger", Value::Null).await.0,
-        StatusCode::OK
+        StatusCode::UNAUTHORIZED
     );
     assert_eq!(
         request(
@@ -1113,4 +1134,123 @@ async fn the_catalog_is_served_in_the_zone_asked_for() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+async fn internal_get(app: &Router, uri: &str, acting_user: Option<&str>) -> StatusCode {
+    let mut request = Request::builder().uri(uri).header(
+        macro_authorization::INTERNAL_API_KEY_HEADER,
+        "test-internal-key",
+    );
+    if let Some(user) = acting_user {
+        request = request.header(macro_authorization::INTERNAL_MACRO_USER_ID_HEADER, user);
+    }
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
+}
+
+#[tokio::test]
+async fn reading_a_routine_answers_like_its_history() {
+    let app = router_with(
+        service(true),
+        FakeEntityAccessService::with([(USER, AccessLevel::Owner), (VIEWER, AccessLevel::View)]),
+    );
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
+    let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+    let history = format!("{url}/history");
+
+    let (status, routine) = request(&app, "GET", &url, "owner", Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(routine["id"], created["id"]);
+    assert_eq!(internal_get(&app, &url, Some(USER)).await, StatusCode::OK);
+
+    // A grant without ownership reads neither, and no configuration leaks.
+    for path in [&url, &history] {
+        let (status, body) = request(&app, "GET", path, "viewer", Value::Null).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(body.get("task").is_none());
+    }
+
+    for path in [&url, &history] {
+        let (status, body) = request(&app, "GET", path, "stranger", Value::Null).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert!(body.get("task").is_none());
+        assert_eq!(
+            internal_get(&app, path, Some("macro|stranger@macro.com")).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            internal_get(&app, path, None).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+}
+
+/// Only a person makes a routine write as them: the route takes the owner's
+/// credential signed for an agent or a routine's run, the code-execution
+/// mark, a bot or an internal caller for a program's, and refuses it.
+#[tokio::test]
+async fn a_program_cannot_create_a_routine_that_writes_as_its_owner() {
+    let app = router_with(service(false), FakeEntityAccessService::owner_only());
+    let owner_identity = json!({
+        "name": "as me",
+        "kind": "Agent",
+        "trigger": {"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"},
+        "task": {
+            "dangerously_operate_as_user": true,
+            "steps": [{"type": "code", "title": "Create a task", "source": "export async function main() {}"}],
+        },
+        "enabled": true,
+    });
+    let refusal = "only you can make a routine write as you: an agent or a routine can't create or change one to";
+    for token in ["agent", "routine"] {
+        let (status, body) = request(
+            &app,
+            "POST",
+            "/scheduled-actions",
+            token,
+            owner_identity.clone(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{token}: {body}");
+        assert_eq!(body, json!(refusal), "{token}");
+    }
+    let marked = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scheduled-actions")
+                .header(header::AUTHORIZATION, "Bearer owner")
+                .header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(owner_identity.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(marked.status(), StatusCode::FORBIDDEN);
+    let internal = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/scheduled-actions")
+                .header(
+                    macro_authorization::INTERNAL_API_KEY_HEADER,
+                    "test-internal-key",
+                )
+                .header(macro_authorization::INTERNAL_MACRO_USER_ID_HEADER, USER)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(owner_identity.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(internal.status(), StatusCode::FORBIDDEN);
+    // The person gets past it, to the checks a code step needs.
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", owner_identity).await;
+    assert_ne!(body, json!(refusal), "{status}");
 }

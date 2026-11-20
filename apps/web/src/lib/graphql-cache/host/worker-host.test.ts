@@ -139,8 +139,8 @@ class FakePageAdapter {
     this.options.onTerminalError?.(error);
   }
 
-  unavailable(reason: string): void {
-    this.options.onCacheUnavailable?.(reason);
+  unavailable(reason: string, superseded = false): void {
+    this.options.onCacheUnavailable?.(reason, superseded);
   }
 
   superseded(reason: string): void {
@@ -449,6 +449,7 @@ describe('createWorkerCacheHost', () => {
         document: 'fragment Item on GraphqlSoupDocument { id }',
         fragmentName: 'Item',
         keys: ['GraphqlSoupDocument:item-1'],
+        priority: 'typed-search',
       }),
       host.search({
         profile: 'quick-access-v1',
@@ -507,6 +508,9 @@ describe('createWorkerCacheHost', () => {
     expect(
       requests.find((request) => request.kind === 'rollback-optimistic-write')
     ).toMatchObject({ errorCode: 'DRAFT_ALREADY_SENT', error: 'denied' });
+    expect(
+      requests.find((request) => request.kind === 'read-records-by-keys')
+    ).toMatchObject({ priority: 'typed-search' });
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],
@@ -792,6 +796,125 @@ describe('createWorkerCacheHost', () => {
       host.dispose();
     }
   );
+
+  it('keeps a search queued through a blocked handoff and answers it from the replacement engine', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    adapter.ignoredKinds.add('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const read = host.readQuery({ opKey: 7, query: 'query Parked { user }' });
+    const refused = expect(read).rejects.toThrow('owner handoff timeout');
+    const page = { documents: [], nextCursor: null };
+    const search = host.search({
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: 'todo',
+      limit: 20,
+    });
+    // A browse has callers with a network result to return instead.
+    const browse = host.search({
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: '',
+      limit: 20,
+    });
+    const browseRefused = expect(browse).rejects.toThrow(
+      'owner handoff timeout'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    await refused;
+    await browseRefused;
+    await vi.advanceTimersByTimeAsync(9);
+
+    const queued = adapter.requests.find(
+      (request) => request.kind === 'search' && request.request.query === 'todo'
+    );
+    if (!queued) throw new Error('missing search');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    adapter.respond(queued.id, page);
+    await expect(search).resolves.toEqual(page);
+    host.dispose();
+  });
+
+  it('ends a kept search when the owner change never completes, and releases one its caller superseded', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const typed = (query: string, signal?: AbortSignal) =>
+      host.search(
+        { profile: 'quick-access-v1', buckets: ['document'], query, limit: 20 },
+        { signal }
+      );
+    const superseded = new AbortController();
+    const earlier = typed('to', superseded.signal);
+    const dropped = expect(earlier).rejects.toThrow('superseded');
+    const latest = typed('todo');
+    const expired = expect(latest).rejects.toThrow('owner handoff timeout');
+    await vi.advanceTimersByTimeAsync(0);
+
+    superseded.abort();
+    await dropped;
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    await vi.advanceTimersByTimeAsync(9);
+    await vi.advanceTimersByTimeAsync(1);
+    await expired;
+
+    // The coordinator may still answer either copy once an engine arrives.
+    for (const request of adapter.requests) {
+      if (request.kind === 'search') {
+        adapter.respond(request.id, { documents: [], nextCursor: null });
+      }
+    }
+    await expect(typed('', AbortSignal.abort())).rejects.toThrow('superseded');
+
+    // A settled search no longer listens to the signal its replays share.
+    adapter.ignoredKinds.delete('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    const shared = new AbortController();
+    const removeListener = vi.spyOn(shared.signal, 'removeEventListener');
+    await typed('todo', shared.signal);
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+    host.dispose();
+  });
+
+  it('releases a superseded search that is still waiting for the host to initialize', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const superseded = new AbortController();
+    const search = host.search(
+      {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'to',
+        limit: 20,
+      },
+      { signal: superseded.signal }
+    );
+    const dropped = expect(search).rejects.toThrow('superseded');
+    await vi.advanceTimersByTimeAsync(0);
+
+    superseded.abort();
+    await dropped;
+    expect(requireAdapter().requests.map((request) => request.kind)).toEqual([
+      'init',
+    ]);
+    host.dispose();
+  });
 
   it('queues parked reads, writes, and teardown in call order without background timeouts', async () => {
     vi.useFakeTimers();
@@ -1583,8 +1706,9 @@ describe('createWorkerCacheHost', () => {
     adapter.superseded('duplicate notice');
 
     expect(onSuperseded).toHaveBeenCalledOnce();
+    // This build never gets the database back, so recovery must not retry.
     expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ errorCode: 'owner-lock-unavailable' })
+      expect.objectContaining({ errorCode: 'cache-superseded' })
     );
     // Leaving like a navigating page stops the engine without counting as a
     // lost owner, so the newer build opens the same database.
@@ -1596,7 +1720,64 @@ describe('createWorkerCacheHost', () => {
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
     await expect(
       host.readQuery({ query: 'query Q { q }' })
-    ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
+    ).rejects.toMatchObject({ errorCode: 'cache-superseded' });
+  });
+
+  it('marks a host that registers after a newer build took over as superseded', async () => {
+    configureAdapter = (fake) => {
+      fake.ignoredKinds.add('init');
+    };
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const read = host.readQuery({ query: 'query Q { q }' });
+    const refused = expect(read).rejects.toMatchObject({
+      errorCode: 'cache-superseded',
+    });
+    await vi.waitFor(() =>
+      expect(requireAdapter().requests.map(({ kind }) => kind)).toContain(
+        'init'
+      )
+    );
+
+    requireAdapter().unavailable(
+      'a newer version of the app took over the local cache',
+      true
+    );
+
+    await refused;
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ errorCode: 'cache-superseded' })
+    );
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+  });
+
+  it('retires as superseded when a request is refused for a newer build', async () => {
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.clear();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    const read = host.readQuery({ query: 'query Q { q }' });
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('read'));
+
+    adapter.reject(
+      adapter.requests.at(-1)?.id ?? -1,
+      'a newer version of the app took over the local cache',
+      'cache-superseded'
+    );
+
+    await expect(read).rejects.toMatchObject({ errorCode: 'cache-superseded' });
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ errorCode: 'cache-superseded' })
+    );
   });
 
   it('reports an enqueue in flight at the handover as uncertain, never unsent', async () => {
@@ -1621,7 +1802,7 @@ describe('createWorkerCacheHost', () => {
       errorCode: 'admitted-enqueue-uncertain',
     });
     const readRejected = expect(read).rejects.toMatchObject({
-      errorCode: 'owner-lock-unavailable',
+      errorCode: 'cache-superseded',
     });
     await vi.waitFor(() =>
       expect(adapter.requests.map(({ kind }) => kind)).toEqual(

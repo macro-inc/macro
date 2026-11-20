@@ -1,6 +1,7 @@
 import { AssistantActivityGroup } from '@core/component/AI/component/message/AssistantActivityGroup';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { ThinkingBlock } from '@core/component/AI/component/message/ThinkingBlock';
+import { codeRunLabel } from '@core/component/AI/component/tool/CodeMode';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
 import { useChatContext } from '@core/component/AI/context';
@@ -62,6 +63,35 @@ type RenderItem =
       part: Extract<AssistantMessagePart, { type: 'toolCall' }>;
       index: number;
     };
+
+/**
+ * The agent looking up its own tools. People never see that it works in
+ * code, so these are not steps: no row, no count, no preview.
+ */
+const LOOKUP_TOOLS: ReadonlySet<string> = new Set([
+  'DescribeCodeTools',
+  'ReadCodeDocs',
+  'SearchTools',
+  'LoadTools',
+]);
+
+/** A tool lookup, or its result or error. */
+function isToolLookup(part: AssistantMessagePart) {
+  return (
+    (part.type === 'toolCall' ||
+      part.type === 'toolCallResponseJson' ||
+      part.type === 'toolCallErr') &&
+    LOOKUP_TOOLS.has(part.name)
+  );
+}
+
+/**
+ * Whether every part is a tool lookup, so the message shows nothing and must
+ * not render as an empty bubble.
+ */
+export function onlyToolLookups(parts: readonly AssistantMessagePart[]) {
+  return parts.length > 0 && parts.every(isToolLookup);
+}
 
 /**
  * Tools rendered outside the standard grouped activity chrome own their full
@@ -224,6 +254,7 @@ export function AssistantMessageParts(props: {
     keyedParts().orderedKeys.forEach((key, index) => {
       const part = keyedParts().partsByKey.get(key);
       if (!part) return;
+      if (isToolLookup(part)) return;
 
       // Standalone tools (e.g. the dashboard, or SendEmail's interactive
       // compose UI) break out of the tool group and render on their own.
@@ -392,6 +423,12 @@ export function AssistantMessageParts(props: {
       }
       if (part.type === 'mcpToolCall') {
         return part.display_name ?? `${part.service} / ${part.name}`;
+      }
+      if (part.name === 'ExecuteCode') {
+        // A call that completed with no receipt ended in an error.
+        const receipt = responseById().get(part.id)?.json;
+        const failed = receipt === undefined && isCompleteSelector(part.id);
+        return codeRunLabel(receipt, failed ? { kind: 'failed' } : undefined);
       }
       return part.name;
     });

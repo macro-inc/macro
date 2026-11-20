@@ -12,7 +12,7 @@
   .email-desktop-demo[data-agent-showcase=true] .email-desktop-content { height:760px; }
 }
 
-.agent-folder-mockup { width:600px; height:480px; transform-origin:top left; border:1px solid var(--color-edge-muted); border-radius:12px; background:var(--color-panel); color:var(--color-ink); text-align:left; font:400 14px/1.5 var(--font-sans); }
+.agent-folder-mockup { width:600px; height:480px; transform-origin:top left; border:1px solid var(--color-edge-muted); border-radius:12px; background:var(--color-panel); color:var(--color-ink); text-align:left; font:370 14px/1.5 var(--font-sans); }
 .agent-folder-mockup p { margin:0; }
 .agent-folder-mockup p + p { margin-top:4px; }
 .agent-design-attachment { border:1px solid var(--color-edge-muted); padding:12px; background:var(--color-surface-2); }
@@ -22,7 +22,7 @@
 
 /* Remote-cursor.tsx: thin peer caret with its persistent AI name tag. */
 .agent-writing-caret { position:absolute; width:2px; background:var(--color-pink); pointer-events:none; z-index:8; }
-.agent-writing-caret > span { position:absolute; bottom:calc(100% + 2px); left:0; display:flex; align-items:center; height:20px; padding:0 8px; border-radius:2px; background:var(--color-pink); color:var(--color-surface); font:400 12px/20px var(--font-sans); }
+.agent-writing-caret > span { position:absolute; bottom:calc(100% + 2px); left:0; display:flex; align-items:center; height:20px; padding:0 8px; border-radius:2px; background:var(--color-pink); color:var(--color-surface); font:370 12px/20px var(--font-sans); }
 
 .agent-editing-frame { position:relative; overflow:hidden; }
 

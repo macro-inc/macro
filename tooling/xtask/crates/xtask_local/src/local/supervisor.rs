@@ -226,7 +226,7 @@ pub struct Job {
     path: PathBuf,
     record: Mutex<JobRecord>,
     lock: Mutex<Option<File>>,
-    /// `None` unless the user opted in to local telemetry.
+    /// `None` when local telemetry is off (opted out, or no token yet).
     telemetry: Mutex<Option<RunTelemetry>>,
 }
 
@@ -247,8 +247,12 @@ impl Job {
         record.pid = Some(std::process::id());
         // A detached run started when its foreground wrote the record.
         let started_at = UNIX_EPOCH + Duration::from_secs(record.started_at);
-        let telemetry =
-            RunTelemetry::begin(instance, kind.into(), started_at, record.log.is_some());
+        let telemetry = RunTelemetry::begin(
+            Some(instance),
+            kind.into(),
+            started_at,
+            record.log.is_some(),
+        );
         let job = Arc::new(Self {
             path: job_path(instance),
             record: Mutex::new(record),
@@ -263,10 +267,10 @@ impl Job {
         self.record.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    pub(super) fn step_started(&self, label: &str) {
+    pub(super) fn step_started(&self, label: &str, lane: &'static str) {
         self.record().step_started(label);
         self.save();
-        self.with_telemetry(|telemetry| telemetry.step_started(label));
+        self.with_telemetry(|telemetry| telemetry.step_started(label, lane));
     }
 
     pub(super) fn step_failed(&self, label: &str) {
@@ -640,6 +644,7 @@ pub(super) fn plan_for(mode: Mode, flags: &RunLocalFlags, run: &RunArgs, start: 
         share_app,
         infra_only: false,
         start,
+        computers: run.computers.fleet(),
     }
 }
 
@@ -691,7 +696,7 @@ pub fn supervise(mode: Mode, flags: &RunLocalFlags, run: &RunArgs) -> Result<()>
             None
         };
         stage.print_timings("bring-up");
-        super::print_stack_summary(mode, &instance, &up, &plan)?;
+        super::print_stack_summary(&stage, mode, &instance, &up, &plan)?;
         Ok((frontend, up.tunnels))
     })();
     let (frontend, tunnels) = job.finish(result)?;

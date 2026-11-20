@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::scheduled::{EmailSchedulingRepo, ScheduleChange};
-use email_db_client::messages::scheduled::delivery::{
+use crate::domain::scheduled_delivery::state::{
     DeliveryClaim, begin_submission, claim_delivery, pause_delivery, release_preparation,
 };
 

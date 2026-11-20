@@ -11,11 +11,13 @@ export function RoutineDescribe(props: {
   onDescribe(description: string): Promise<string | undefined>;
   /** A description to revise, e.g. the one the current draft came from. */
   initialValue?: string;
+  /** Why the request in `initialValue` couldn't be drafted. */
+  initialError?: string;
   disabled?: boolean;
 }) {
   const [description, setDescription] = createSignal(props.initialValue ?? '');
   const [pending, setPending] = createSignal(false);
-  const [error, setError] = createSignal<string>();
+  const [error, setError] = createSignal(props.initialError);
   const submit = async () => {
     const text = description().trim();
     if (!text || pending()) return;
@@ -79,7 +81,7 @@ export function RoutineDescribe(props: {
       </Card>
       <Show when={error()}>
         {(message) => (
-          <span role="alert" class="px-1 text-xs text-failure">
+          <span role="alert" class="px-1 pt-3 text-xs text-failure">
             {message()}
           </span>
         )}

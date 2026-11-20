@@ -58,7 +58,7 @@ afterEach(() => {
 });
 
 it('passes the chosen parent into one task creation and warns without retrying if linking was rejected', async () => {
-  render(() => <TasksCreateAction presentation="toolbar" projectsEnabled />);
+  render(() => <TasksCreateAction presentation="toolbar" />);
   fireEvent.click(screen.getByRole('button', { name: 'Subtask' }));
   expect(mocks.popover).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Choose parent' }));

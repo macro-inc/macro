@@ -155,6 +155,7 @@ export function SlideRail(props: SlideRailProps) {
           }}
           tabIndex={0}
           data-testid="pptx-slide-list"
+          data-owns-arrow-keys
           onKeyDown={onKeyDown}
           onCopy={(e: ClipboardEvent) => props.onCopy?.(e)}
           onCut={(e: ClipboardEvent) => props.onCut?.(e)}

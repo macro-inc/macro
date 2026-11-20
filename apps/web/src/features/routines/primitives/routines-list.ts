@@ -46,44 +46,65 @@ function describeWhen(triggers: RoutineTriggerDraft[]): string {
     .join(' · ');
 }
 
+/**
+ * The list's rows, newest first. With `nested`, each carries the routines
+ * its runs created that still have work to do; without it (a phone) only
+ * top-level routines show.
+ */
 export function createRoutineRows(
   source: RoutineListSource,
-  userId: Accessor<string | undefined>
+  userId: Accessor<string | undefined>,
+  nested: Accessor<boolean> = () => true
 ) {
+  const newestFirst = (routines: readonly RoutineSnapshot[]) =>
+    routines.toSorted(
+      (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
+    );
+  const toRow = (routine: RoutineSnapshot): RoutineRow => {
+    const created = nested()
+      ? source.subRoutines().filter((child) => child.parent?.id === routine.id)
+      : [];
+    return {
+      ...describe(routine),
+      children: newestFirst(created).map((child) => ({
+        ...describe(child),
+        children: [],
+      })),
+    };
+  };
+  const describe = (routine: RoutineSnapshot): Omit<RoutineRow, 'children'> => {
+    const draft = routine.draft;
+    const running = isClaimActive(routine.claimedAt);
+    const scheduled = hasOnlyScheduledTriggers(draft?.triggers);
+    const completed = scheduled && !routine.nextRunAt && !running;
+    const work = draft
+      ? summarizeWork(draft.steps, draft.prompt)
+      : { text: '' };
+    const [first] = draft?.triggers ?? [];
+    return {
+      id: routine.id,
+      name: routine.name,
+      description: draft?.description?.trim() || undefined,
+      createdAt: routine.createdAt,
+      when: describeWhen(draft?.triggers ?? []),
+      whenKind: first ? triggerKind(first) : undefined,
+      does: work.text,
+      ai: work.chip,
+      group: scheduled ? 'schedule' : 'activity',
+      lastRun: lastRun(routine),
+      status: running
+        ? 'Running'
+        : completed
+          ? 'Completed'
+          : routine.enabled
+            ? 'Active'
+            : 'Paused',
+      enabled: routine.enabled,
+      editable: routine.ownerId === userId(),
+      pausedByParent: routine.parent?.pausedByParent ?? false,
+    };
+  };
   return createMemo<RoutineRow[]>(() =>
-    source
-      .routines()
-      .toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-      .map((routine) => {
-        const draft = routine.draft;
-        const running = isClaimActive(routine.claimedAt);
-        const scheduled = hasOnlyScheduledTriggers(draft?.triggers);
-        const completed = scheduled && !routine.nextRunAt && !running;
-        const work = draft
-          ? summarizeWork(draft.steps, draft.prompt)
-          : { text: '' };
-        const [first] = draft?.triggers ?? [];
-        return {
-          id: routine.id,
-          name: routine.name,
-          description: draft?.description?.trim() || undefined,
-          createdAt: routine.createdAt,
-          when: describeWhen(draft?.triggers ?? []),
-          whenKind: first ? triggerKind(first) : undefined,
-          does: work.text,
-          ai: work.chip,
-          group: scheduled ? 'schedule' : 'activity',
-          lastRun: lastRun(routine),
-          status: running
-            ? 'Running'
-            : completed
-              ? 'Completed'
-              : routine.enabled
-                ? 'Active'
-                : 'Paused',
-          enabled: routine.enabled,
-          editable: routine.ownerId === userId(),
-        };
-      })
+    newestFirst(source.routines()).map(toRow)
   );
 }

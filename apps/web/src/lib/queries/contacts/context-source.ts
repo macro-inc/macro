@@ -11,6 +11,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import type { QueryAccount } from '../auth/account-scope';
 import { channelActivityQueryOptions } from '../channel/activity';
 import {
@@ -21,7 +22,9 @@ import type { CachedGraphqlChannel } from '../channel/graphql';
 import { emailLinksQueryOptions } from '../email/link';
 import { queryReadyGate } from '../gate';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
 import { buildContactContextFacts } from './context-facts';
+import { watchContactReaders } from './readers';
 
 // Selectors capture resolved ownership. Retained data from an old observer/key
 // can never be relabeled with the current account during Solid reconciliation.
@@ -76,6 +79,7 @@ export function createContactContextSource(options: {
   const links = useQuery(() =>
     linksOptions(options.account(), options.enabled())
   );
+  const readersOpen = watchContactReaders();
   const cached = useQuery(() =>
     cachedOptions(
       options.account(),
@@ -91,7 +95,13 @@ export function createContactContextSource(options: {
         subscribeToVisibleCacheChanges(
           host,
           () => cached.refetch({ cancelRefetch: false }),
-          { searchBuckets: () => ['channel', 'dm'] }
+          {
+            // Only DM rows reach contact facts, and only an open contact
+            // window, in any tab, reads them; the first to open catches up.
+            searchBuckets: () => ['dm'],
+            intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+            live: readersOpen,
+          }
         )
       );
     })
@@ -106,7 +116,8 @@ export function createContactContextSource(options: {
       !queryReadyGate(links)
     )
       return;
-    const c = channels.data;
+    // Raw rows: walking them through the store creates a signal per field.
+    const c = unwrap(channels.data);
     const a = activity.data;
     const l = links.data;
     if (

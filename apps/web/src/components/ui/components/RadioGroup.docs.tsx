@@ -8,6 +8,19 @@ const SCOPE_OPTIONS = [
   { value: 'all', label: 'All events' },
 ];
 
+const ACCESS_OPTIONS = [
+  {
+    value: 'team',
+    label: 'Team',
+    description: 'Anyone on the team can find and join',
+  },
+  {
+    value: 'invite',
+    label: 'Invite only',
+    description: 'Only invited people can view or join',
+  },
+];
+
 // #region demo:basic
 function BasicDemo() {
   const [value, setValue] = createSignal('this_event');
@@ -49,6 +62,38 @@ function HorizontalDemo() {
         <RadioGroup.ItemControl />
         <RadioGroup.ItemLabel>All events</RadioGroup.ItemLabel>
       </RadioGroup.Item>
+    </RadioGroup>
+  );
+}
+// #endregion
+
+// #region demo:cards
+function CardsDemo() {
+  const [value, setValue] = createSignal('team');
+
+  return (
+    <RadioGroup
+      variant="cards"
+      value={value()}
+      onChange={setValue}
+      aria-label="Who can join"
+      class="max-w-md grid-cols-1 sm:grid-cols-2"
+    >
+      <For each={ACCESS_OPTIONS}>
+        {(option) => (
+          <RadioGroup.Item value={option.value}>
+            <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <RadioGroup.ItemLabel class="text-sm font-medium text-ink">
+                {option.label}
+              </RadioGroup.ItemLabel>
+              <RadioGroup.ItemDescription class="text-xs text-ink-muted">
+                {option.description}
+              </RadioGroup.ItemDescription>
+            </div>
+            <RadioGroup.ItemControl class="mt-0.5" />
+          </RadioGroup.Item>
+        )}
+      </For>
     </RadioGroup>
   );
 }
@@ -130,6 +175,13 @@ export default defineDoc({
       description:
         'The root defaults to a vertical stack. Use size="sm" and flex-row for a compact inline selector while keeping native arrow-key behavior.',
       render: HorizontalDemo,
+    },
+    {
+      id: 'cards',
+      title: 'Cards',
+      description:
+        '`variant="cards"` frames each choice as a card with a title and a description, for a decision that needs explaining. The whole card selects; lay the cards out with grid classes on the root.',
+      render: CardsDemo,
     },
     {
       id: 'states',

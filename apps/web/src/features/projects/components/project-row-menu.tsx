@@ -1,32 +1,50 @@
+import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import {
   SoupEntityActionDrawer,
   type SoupEntityDrawerActionGroup,
 } from '@app/features/soup/SoupEntityActionDrawer';
 import { t } from '@app/lib/i18n';
+import { canOpenInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
+  CopyMenuItem,
   MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
+import { RENAME_FIELD_SELECTOR } from '@entity/utils/rename-field-focus';
+import ShareIcon from '@icon/share.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
+import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import TaskInProgressIcon from '@icon/system/regular/task-in-progress.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import PriorityHighIcon from '@icon/wide-priority-high.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import type { Property } from '@property/types';
 import { formatOptionValue } from '@property/utils/formatting';
 import { Dropdown } from '@ui';
 import {
+  type Component,
   createSignal,
   For,
+  type JSX,
   Match,
   type ParentProps,
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { ProjectRow } from '../context/projects-context';
 import { type ProjectMenuItem, projectMenuGroups } from '../core/project-menu';
@@ -39,14 +57,17 @@ type ProjectMenuProps = {
   priority?: Property;
   canOpenInNewSplit: boolean;
   onOpenInNewSplit(row: ProjectRow): void;
+  onChangeIcon?(row: ProjectRow): void;
+  /** Omit where the host cannot open a project in a new desktop tab. */
+  onOpenInNewTab?(row: ProjectRow): void;
   onRename(row: ProjectRow): void;
   onSetOption(
     rows: readonly ProjectRow[],
     property: Property,
     optionId: string
   ): void;
-  onCopyLink(row: ProjectRow): void;
-  onCopyId(row: ProjectRow): void;
+  onCopyLink(row: ProjectRow): void | Promise<unknown>;
+  onCopyId(row: ProjectRow): void | Promise<unknown>;
   /** Omit where the host cannot show the Share menu. */
   onShare?(row: ProjectRow): void;
   onDelete(rows: readonly ProjectRow[]): void;
@@ -61,13 +82,16 @@ type ProjectMenuEntry =
       shortcut?: string;
       disabled?: boolean;
       destructive?: boolean;
-      run(): void;
+      icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+      copy?: boolean;
+      run(): void | Promise<unknown>;
     }
   | {
       kind: 'options';
       id: ProjectMenuItem;
       label: string;
       property: Property;
+      icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
       options: { id: string; label: string }[];
       choose(optionId: string): void;
     };
@@ -76,16 +100,23 @@ function projectMenuEntries(
   props: ProjectMenuProps,
   rows: readonly ProjectRow[]
 ): ProjectMenuEntry[][] {
-  const single = (callback?: (row: ProjectRow) => void) => () => {
-    const row = rows[0];
-    if (row) callback?.(row);
-  };
+  const single =
+    (callback?: (row: ProjectRow) => void | Promise<unknown>) => () => {
+      const row = rows[0];
+      if (row) return callback?.(row);
+    };
   const action = (
     id: ProjectMenuItem,
     label: string,
-    run: () => void,
-    extra: { shortcut?: string; disabled?: boolean; destructive?: boolean } = {}
-  ): ProjectMenuEntry[] => [{ kind: 'action', id, label, run, ...extra }];
+    run: () => void | Promise<unknown>,
+    icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>,
+    extra: {
+      shortcut?: string;
+      disabled?: boolean;
+      destructive?: boolean;
+      copy?: boolean;
+    } = {}
+  ): ProjectMenuEntry[] => [{ kind: 'action', id, label, run, icon, ...extra }];
   const options = (
     id: ProjectMenuItem,
     label: string,
@@ -98,6 +129,7 @@ function projectMenuEntries(
             id,
             label,
             property,
+            icon: id === 'status' ? TaskInProgressIcon : PriorityHighIcon,
             options: (property.options ?? []).map((option) => ({
               id: option.id,
               label: formatOptionValue(option),
@@ -110,7 +142,9 @@ function projectMenuEntries(
     rows.map((row) => row.project),
     {
       splits: !isMobile(),
+      tabs: Boolean(props.onOpenInNewTab) && canOpenInNewTab(),
       share: Boolean(props.onShare),
+      appearance: Boolean(props.onChangeIcon),
       status: Boolean(props.status),
       priority: Boolean(props.priority),
     }
@@ -122,6 +156,7 @@ function projectMenuEntries(
             id,
             t('entityActions.openInNewSplit'),
             single(props.onOpenInNewSplit),
+            SplitIcon,
             {
               shortcut: 'shift+enter',
               // Without room for another split the open would replace this one.
@@ -129,8 +164,34 @@ function projectMenuEntries(
             }
           )
         )
+        .with('open-in-tab', (id) =>
+          action(
+            id,
+            t('entityActions.openInNewTab'),
+            single(props.onOpenInNewTab),
+            ArrowSquareOutIcon
+          )
+        )
         .with('rename', (id) =>
-          action(id, t('entityActions.rename'), single(props.onRename))
+          action(
+            id,
+            t('entityActions.rename'),
+            () => {
+              triggerFocusNewElement(RENAME_FIELD_SELECTOR, {
+                touchOnly: true,
+              });
+              return single(props.onRename)();
+            },
+            PencilIcon
+          )
+        )
+        .with('change-icon', (id) =>
+          action(
+            id,
+            t('appearance.title'),
+            single(props.onChangeIcon),
+            PaintBrushIcon
+          )
         )
         .with('status', (id) =>
           options(id, t('entityActions.setStatus'), props.status)
@@ -139,18 +200,36 @@ function projectMenuEntries(
           options(id, t('entityActions.setPriority'), props.priority)
         )
         .with('copy-link', (id) =>
-          action(id, t('entityActions.copyLink'), single(props.onCopyLink))
+          action(
+            id,
+            t('entityActions.copyLink'),
+            single(props.onCopyLink),
+            LinkIcon,
+            { copy: true }
+          )
         )
         .with('copy-id', (id) =>
-          action(id, t('entityActions.copyId'), single(props.onCopyId))
+          action(
+            id,
+            t('entityActions.copyId'),
+            single(props.onCopyId),
+            CopyIcon,
+            { copy: true }
+          )
         )
         .with('share', (id) =>
-          action(id, t('entityActions.share'), single(props.onShare))
+          action(id, t('entityActions.share'), single(props.onShare), ShareIcon)
         )
         .with('delete', (id) =>
-          action(id, t('entityActions.delete'), () => props.onDelete(rows), {
-            destructive: true,
-          })
+          action(
+            id,
+            t('entityActions.delete'),
+            () => props.onDelete(rows),
+            TrashIcon,
+            {
+              destructive: true,
+            }
+          )
         )
         .exhaustive()
     )
@@ -171,6 +250,8 @@ function drawerGroups(
               disabled: entry.disabled,
               destructive: entry.destructive,
               onClick: entry.run,
+              icon: entry.icon,
+              copy: entry.copy,
             },
           ]
         : []
@@ -201,6 +282,7 @@ const initiativeEntity = (row: ProjectRow): InitiativeEntity => ({
   id: row.project.id,
   name: row.project.name,
   ownerId: '',
+  appearance: row.project.appearance,
 });
 
 /**
@@ -290,10 +372,11 @@ export function ProjectMenuDropdown(props: ProjectMenuProps) {
 }
 
 function ProjectMenuItems(props: ProjectMenuProps) {
-  // Mounted per opening, so the entries match the rows they act on.
-  const entries = projectMenuEntries(props, props.targets());
+  // Freeze action targets per opening; keep available actions reactive.
+  const rows = props.targets();
+  const entries = () => projectMenuEntries(props, rows);
   return (
-    <For each={entries}>
+    <For each={entries()}>
       {(group, index) => (
         <>
           <Show when={index() > 0}>
@@ -303,17 +386,31 @@ function ProjectMenuItems(props: ProjectMenuProps) {
             {(entry) =>
               match(entry)
                 .with({ kind: 'action' }, (action) => (
-                  <MenuItem
-                    text={action.label}
-                    shortcut={action.shortcut}
-                    disabled={action.disabled}
-                    class={action.destructive ? 'text-failure-ink' : undefined}
-                    onClick={action.run}
-                  />
+                  <Show
+                    when={action.id === 'change-icon' && rows[0]}
+                    fallback={
+                      <Dynamic
+                        component={action.copy ? CopyMenuItem : MenuItem}
+                        text={action.label}
+                        icon={action.icon}
+                        shortcut={action.shortcut}
+                        disabled={action.disabled}
+                        class={
+                          action.destructive ? 'text-failure-ink' : undefined
+                        }
+                        onClick={action.run}
+                        onCopy={async () => (await action.run()) !== false}
+                      />
+                    }
+                  >
+                    {(row) => (
+                      <EntityAppearanceMenu entity={initiativeEntity(row())} />
+                    )}
+                  </Show>
                 ))
                 .with({ kind: 'options' }, (entry) => (
                   <ContextMenu.Sub>
-                    <SubTrigger text={entry.label} />
+                    <SubTrigger text={entry.label} icon={entry.icon} />
                     <ContextMenuContent
                       submenu
                       class="min-w-48 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"

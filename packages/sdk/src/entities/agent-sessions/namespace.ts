@@ -25,8 +25,8 @@ import {
  *
  * Start sessions from ExecuteCode. For coding work, macro.agents.coding() lists the coding personas the user can start right now, built-in ones such as Cursor included; for a chat agent, macro.agents.list() lists the user's configurable agents. Choose by name, description and instructions, preferring an agent the user named, and pass its `agent` handle to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use Macro's default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
  *
- * ```javascript
- * export async function main({macro}) {
+ * ```typescript
+ * export async function main({macro}: CodeContext) {
  *   const coding = await macro.agents.coding();
  *   const chosen = coding.find((option) => option.name === 'Cursor');
  *   if (!chosen) return {data: {error: 'Cursor is not connected', available: coding.map((option) => option.name)}};
@@ -43,7 +43,7 @@ import {
  *
  * ## Sessions waiting for the user
  *
- * macro.agentSessions.updates() lists the user's sessions waiting on them (permission requests, questions, held tool approvals) or stalled. A session's held tool calls come from session.pendingApprovals(); approve or deny one only when the user said so for that call. session.linkTask(task) links a session the user owns to its Macro task, and the session's pull request with it.
+ * macro.agentSessions.updates() lists the user's sessions waiting on them (permission requests, questions, held tool approvals) or stalled. The user answers them only on cards: in ExecuteCode, whenever it returns items, present them with execution.views.present({widgets: [{type: "agentUpdates", items: updates.items}]}). A session's held tool calls come from session.pendingApprovals(); approve or deny one only when the user said so for that call. session.linkTask(task) links a session the user owns to its Macro task, and the session's pull request with it.
  */
 export class AgentSessionNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -114,9 +114,10 @@ export class AgentSessionNamespace {
   }
 
   /**
-   * The caller's coding sessions waiting for them: permission requests,
-   * questions and held tool approvals to answer, and sessions stalled for
-   * over 20 minutes, newest activity first. Read a session's held approvals
+   * List coding sessions awaiting the caller or stalled over 20 minutes.
+   *
+   * Includes permission requests, questions and held tool approvals to
+   * answer, and stalled sessions, newest activity first. Read a session's held approvals
    * with {@link AgentSession.pendingApprovals}.
    *
    * @readonly

@@ -18,6 +18,7 @@ import { createEmailThreadSource } from './thread-source';
 vi.mock('@queries/client', () => ({
   queryClient: {
     getQueryData: () => ({ authenticated: true, id: 'owner' }),
+    getQueryState: () => undefined,
     getQueryCache: () => ({ subscribe: () => () => {} }),
   },
 }));
@@ -69,7 +70,6 @@ it.each([false, true])(
     });
     const reopened = createRoot((dispose) => {
       const source = createEmailThreadSource(() => 'thread', {
-        transport: 'graphql',
         isSuccess: true,
         isError: false,
         resolvedThreadId: 'thread',
@@ -118,7 +118,6 @@ it('reopens a first-use local draft without sender metadata or any server thread
   const loaded = Promise.withResolvers<void>();
   const reopened = createRoot((dispose) => {
     const source = createEmailThreadSource(() => 'first-thread', {
-      transport: 'graphql',
       isSuccess: false,
       isError: false,
       isLoading: true,

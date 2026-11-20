@@ -4,6 +4,7 @@ import type {
   PendingInteraction,
 } from '@service-agent-fold/generated/types';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
+import type { AgentUpdate as ListedAgentUpdate } from '@service-cognition/generated/tools/types';
 import { match } from 'ts-pattern';
 import {
   isCoderHarness,
@@ -32,6 +33,39 @@ export type UpdateSession = Pick<
   | 'turnState'
   | 'updatedAt'
 >;
+
+/** The fields of a listed agent update that open its session's cards. */
+export type UpdateItem = Pick<
+  ListedAgentUpdate,
+  'sessionId' | 'sessionName' | 'harness' | 'kind' | 'since'
+>;
+
+/**
+ * One entry per session in a ListAgentUpdates result or an `agentUpdates`
+ * view. Waiting sessions are opened live, so their cards show the current
+ * request and leave once it is answered.
+ */
+export function sessionsOf(
+  updates: { items: readonly UpdateItem[] },
+  ownerId: string | undefined
+): UpdateSession[] {
+  if (!ownerId) return [];
+  const sessions = new Map<string, UpdateSession>();
+  for (const item of updates.items) {
+    if (sessions.has(item.sessionId)) continue;
+    sessions.set(item.sessionId, {
+      id: item.sessionId,
+      name: item.sessionName,
+      ownerId,
+      archivedBy: null,
+      harness: item.harness,
+      botId: '',
+      turnState: item.kind === 'stalled' ? 'running' : 'blocked',
+      updatedAt: item.since,
+    });
+  }
+  return [...sessions.values()];
+}
 
 export function eligibleSessions(
   sessions: readonly UpdateSession[],

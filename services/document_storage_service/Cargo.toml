@@ -44,6 +44,8 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+passwords = { path = "../../crates/passwords" }
+password_events = { path = "../../crates/password_events" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
@@ -75,9 +77,9 @@ axum = { workspace = true, features = [
 ] }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
-bots = { path = "../../crates/bots" }
+bots = { path = "../../crates/bots", features = ["realtime"] }
 bot_id = { path = "../../crates/bot_id" }
-calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "gateway-refresh", "inbound", "mutation-client", "notify", "postgres"] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 feature_flags = { path = "../../crates/feature_flags" }
@@ -175,6 +177,7 @@ graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound"] }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
@@ -184,6 +187,7 @@ initiative = { path = "../../crates/initiative", features = ["inbound", "postgre
 jsonwebtoken = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
+lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
@@ -215,6 +219,7 @@ model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
+models_email = { path = "../../crates/models_email" }
 models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_pagination = { path = "../../crates/models_pagination", features = [
@@ -224,7 +229,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
-notification_inbox = { path = "../../crates/notification_inbox" }
+notification_inbox = { path = "../../crates/notification_inbox", features = ["outbound"] }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }
@@ -248,6 +253,7 @@ reqwest = { workspace = true }
 rootcause = { workspace = true }
 sha2 = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
+model_entity = { package = "model-entity", path = "../../crates/model-entity" }
 saved_views = { path = "../../crates/saved_views" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
@@ -318,13 +324,13 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 bebop = { workspace = true }
 sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
 tokio-tungstenite = { workspace = true }
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }

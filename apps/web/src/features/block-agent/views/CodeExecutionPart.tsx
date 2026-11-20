@@ -1,13 +1,11 @@
-import { useAgentCodeExecutionQuery } from '@queries/agent-session/code-execution';
-import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
-import { createEffect, createMemo, on, Suspense } from 'solid-js';
+import { createEffect, on, Suspense } from 'solid-js';
 import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
 import type {
   ToolCallCommon,
   ToolCallContext,
   ToolUsePart,
 } from '../component/parts/shared';
-import { codeExecutionInput, isExecutionId } from '../state/code-execution';
+import { useCodeExecutionRecord } from './code-execution-record';
 
 /** Production wiring; the result components receive only data and context. */
 export function CodeExecutionPart(props: {
@@ -15,31 +13,19 @@ export function CodeExecutionPart(props: {
   common: ToolCallCommon;
   context: ToolCallContext;
 }) {
-  const receipt = createMemo(() => {
-    const detail = props.part.detail;
-    const raw =
-      detail.kind === 'other'
-        ? (detail.result ?? detail.output)
-        : detail.kind === 'macro'
-          ? detail.output
-          : undefined;
-    const parsed = ExecutionReceipt.safeParse(raw);
-    return parsed.success && isExecutionId(parsed.data.executionId)
-      ? parsed.data
-      : undefined;
-  });
-  const requestedExecutionId = () =>
-    codeExecutionInput(props.part)?.executionId;
-  const executionId = () => {
-    const saved = receipt()?.executionId;
-    if (saved) return saved;
-    return props.part.status === 'pending' ? undefined : requestedExecutionId();
-  };
-  const query = useAgentCodeExecutionQuery(
+  const {
+    receipt,
+    requestedExecutionId,
+    executionId,
+    query,
+    source,
+    record,
+    error,
+  } = useCodeExecutionRecord(
+    () => props.part,
     () => props.context.sessionId,
-    executionId
+    () => props.context.inFlight
   );
-  const source = () => codeExecutionInput(props.part)?.source;
 
   if (import.meta.env.DEV) {
     let loggedCall: string | undefined;
@@ -69,9 +55,6 @@ export function CodeExecutionPart(props: {
     );
   }
 
-  // A rejected duplicate ID must not display the previous program's results.
-  const record = () =>
-    query.isSuccess && query.data.source === source() ? query.data : undefined;
   const status = () => record()?.status ?? receipt()?.status;
   const common = (): ToolCallCommon => {
     const outcome = status();
@@ -100,11 +83,7 @@ export function CodeExecutionPart(props: {
         common={common()}
         context={props.context}
         record={record()}
-        error={
-          record()?.error ??
-          receipt()?.error ??
-          ('error' in props.part.detail ? props.part.detail.error : undefined)
-        }
+        error={error()}
         loading={Boolean(executionId()) && query.isPending}
         unavailable={
           query.isError || (query.isSuccess && query.data.source !== source())

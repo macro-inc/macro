@@ -55,56 +55,57 @@ let
       legendFormat = column.name;
     }) entry.columns;
 
+  # A table of instant queries over the range: `entry` is shaped like a report
+  # table (title, description, by, columns, optional sort and limit).
+  lokiTableOf = id: entry: gridPos: {
+    inherit id gridPos;
+    inherit (entry) title description;
+    type = "table";
+    datasource = loki;
+    targets = instantTargets entry;
+    transformations = [
+      {
+        id = "merge";
+        options = { };
+      }
+      {
+        id = "organize";
+        options = {
+          excludeByName.Time = true;
+          renameByName = lib.listToAttrs (
+            lib.imap0 (index: column: lib.nameValuePair "Value #${refId index}" column.name) entry.columns
+          );
+          indexByName = lib.listToAttrs (lib.imap0 (index: label: lib.nameValuePair label index) entry.by);
+        };
+      }
+    ]
+    ++ lib.optional (entry ? sort) {
+      id = "sortBy";
+      options.sort = [
+        {
+          field = entry.sort;
+          desc = true;
+        }
+      ];
+    }
+    ++ lib.optional (entry ? limit) {
+      id = "limit";
+      options.limitField = entry.limit;
+    };
+    fieldConfig = {
+      # The default minimum column width hides the last columns of a half-width panel.
+      defaults.custom.minWidth = 60;
+      overrides = map (column: unitOverride column.name column.unit) entry.columns;
+    };
+    options = {
+      showHeader = true;
+      cellHeight = "sm";
+    };
+  };
+
   lokiTable =
     id: tableId: gridPos:
-    let
-      entry = table tableId;
-    in
-    {
-      inherit id gridPos;
-      inherit (entry) title description;
-      type = "table";
-      datasource = loki;
-      targets = instantTargets entry;
-      transformations = [
-        {
-          id = "merge";
-          options = { };
-        }
-        {
-          id = "organize";
-          options = {
-            excludeByName.Time = true;
-            renameByName = lib.listToAttrs (
-              lib.imap0 (index: column: lib.nameValuePair "Value #${refId index}" column.name) entry.columns
-            );
-            indexByName = lib.listToAttrs (lib.imap0 (index: label: lib.nameValuePair label index) entry.by);
-          };
-        }
-      ]
-      ++ lib.optional (entry ? sort) {
-        id = "sortBy";
-        options.sort = [
-          {
-            field = entry.sort;
-            desc = true;
-          }
-        ];
-      }
-      ++ lib.optional (entry ? limit) {
-        id = "limit";
-        options.limitField = entry.limit;
-      };
-      fieldConfig = {
-        # The default minimum column width hides the last columns of a half-width panel.
-        defaults.custom.minWidth = 60;
-        overrides = map (column: unitOverride column.name column.unit) entry.columns;
-      };
-      options = {
-        showHeader = true;
-        cellHeight = "sm";
-      };
-    };
+    lokiTableOf id (table tableId) gridPos;
 
   lokiStat =
     id: tableId: gridPos:
@@ -217,6 +218,7 @@ in
     lokiSeries
     lokiStat
     lokiTable
+    lokiTableOf
     row
     ;
 }

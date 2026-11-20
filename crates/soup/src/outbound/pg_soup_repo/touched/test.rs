@@ -137,8 +137,8 @@ async fn entity_filters_compose_with_the_touch_gate(pool: Pool<Postgres>) -> any
 }
 
 #[test]
-fn view_tags_render_as_quoted_list() {
-    assert_eq!(view_tags_sql(), "'opened'");
+fn non_touch_tags_render_as_quoted_list() {
+    assert_eq!(non_touch_tags_sql(), "'opened', 'appearance_changed'");
 }
 
 #[test]

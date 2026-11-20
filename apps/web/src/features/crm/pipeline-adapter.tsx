@@ -22,6 +22,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  DatabaseLinkValue,
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
@@ -199,6 +200,7 @@ function PipelineRecords(props: {
           }
           renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
           renderTextValue={(value) => <DatabaseTextValue value={value} />}
+          renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
           renderMentionPicker={(picker) => (
             <DatabaseMentionPicker {...picker} />
           )}
@@ -381,6 +383,7 @@ function PipelineToolbar(props: {
                     renderTextValue={(value) => (
                       <DatabaseTextValue value={value} />
                     )}
+                    renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
                     renderMentionPicker={(picker) => (
                       <DatabaseMentionPicker {...picker} />
                     )}

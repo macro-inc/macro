@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_totp_enrollments enrollment SET state='retired',cleanup_after=CASE WHEN enrollment.cleanup_started_at IS NULL THEN now()+interval '180 seconds' ELSE enrollment.cleanup_after END,cleanup_started_at=COALESCE(enrollment.cleanup_started_at,now()) FROM password_item_entities item WHERE item.team_id=enrollment.team_id AND item.id=enrollment.item_id AND enrollment.team_id=$1 AND enrollment.item_id=$2 AND enrollment.key_id=$3 AND (item.totp_key_id IS DISTINCT FROM enrollment.key_id OR item.deleting) RETURNING enrollment.cleanup_after<=now() AS \"ready!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ready!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1e19e4461110c9fa57fe441a3e4aadc5f93c6d75521f2e8a25bd19e1bdaab851"
+}

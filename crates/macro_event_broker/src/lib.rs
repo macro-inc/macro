@@ -17,6 +17,7 @@
 /// Domain layer: models, ports, and service.
 pub mod domain;
 
+pub use agent_correlation::AgentVerb;
 #[doc(hidden)]
 pub use uuid::Uuid as EventUuid;
 

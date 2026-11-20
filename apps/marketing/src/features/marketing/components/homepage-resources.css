@@ -1,0 +1,19 @@
+.homepage-resources p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; font-weight: 370; color: color-mix(in srgb, var(--color-ink) 70%, transparent); }
+.homepage-resources nav + p { margin-top: 24px; }
+.page-outline-layout .homepage-resources a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 6px 16px; border-left: 1px solid color-mix(in srgb, var(--color-ink) 8.4%, transparent); color: color-mix(in srgb, var(--color-ink) 60%, transparent); text-decoration: none; }
+.page-outline-layout .homepage-resources a:hover { color: var(--color-ink); border-color: currentColor; }
+@media (min-width: 1440px) {
+  #app-scroll-root:has(.homepage-resources) .site-header,
+  .macro-homepage:has(.homepage-resources) > .site-header { top: 20px; right: 32px; height: auto; padding: 0; }
+}
+@media (max-width: 1439px) {
+  .homepage-resources { display: none; }
+  .macro-home-scroll:has(> .homepage-resources) .homepage-sections-inner { padding-bottom: 0; }
+  .macro-home-scroll:has(> .homepage-resources) .homepage-feature-end { padding: 48px 0 32px; }
+}
+
+.homepage-resources nav.homepage-social-links { display: flex; flex-wrap: nowrap; gap: 0; }
+.page-outline-layout .homepage-social-links a { justify-content: center; width: 32px; min-height: 36px; padding: 6px; flex-shrink: 0; border: 0; border-radius: 6px; }
+.page-outline-layout .homepage-social-links a:hover { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+.page-outline-layout .homepage-social-links a:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+.homepage-social-links svg { width: 20px; height: 20px; }

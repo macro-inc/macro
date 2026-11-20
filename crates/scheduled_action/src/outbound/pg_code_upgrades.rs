@@ -118,7 +118,7 @@ impl CodeUpgrades for PgCodeUpgrades {
         let mut transaction = self.pool.begin().await?;
         // Equivalent code under the same configuration: the revision stays,
         // and an edit the owner saved meanwhile wins.
-        sqlx::query!(
+        let saved = sqlx::query!(
             r#"
             UPDATE scheduled_action SET task = $3
             WHERE id = $1 AND configuration_revision = $2
@@ -129,6 +129,23 @@ impl CodeUpgrades for PgCodeUpgrades {
         )
         .execute(&mut *transaction)
         .await?;
+        if saved.rows_affected() == 0 {
+            // The owner's edit won, checked against the current SDK when it
+            // was saved: this run's rewrite was never applied, so it leaves
+            // no record of one.
+            sqlx::query!(
+                r#"
+                DELETE FROM scheduled_action_code_upgrade
+                WHERE action_id = $1 AND to_sdk = $2 AND outcome = 'running'
+                "#,
+                id,
+                sdk.as_str(),
+            )
+            .execute(&mut *transaction)
+            .await?;
+            transaction.commit().await?;
+            return Ok(());
+        }
         sqlx::query!(
             r#"
             UPDATE scheduled_action_code_upgrade
@@ -154,7 +171,7 @@ impl CodeUpgrades for PgCodeUpgrades {
     ) -> Result<()> {
         let (id, revision) = identity(action)?;
         let mut transaction = self.pool.begin().await?;
-        sqlx::query!(
+        let paused = sqlx::query!(
             r#"
             UPDATE scheduled_action SET enabled = false, updated_at = now()
             WHERE id = $1 AND configuration_revision = $2
@@ -164,6 +181,21 @@ impl CodeUpgrades for PgCodeUpgrades {
         )
         .execute(&mut *transaction)
         .await?;
+        // Its sub-routines pause with it, and resume when the owner switches
+        // it back on.
+        if paused.rows_affected() != 0 {
+            sqlx::query!(
+                r#"
+                UPDATE scheduled_action
+                SET enabled = false, paused_by_parent = true, updated_at = now()
+                WHERE parent_id = $1 AND parent_id IS NOT NULL AND enabled
+                  AND NOT (trigger_type = 'once' AND next_run_at IS NULL)
+                "#,
+                id,
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
         sqlx::query!(
             r#"
             UPDATE scheduled_action_code_upgrade

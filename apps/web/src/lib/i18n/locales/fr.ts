@@ -104,7 +104,6 @@ export default {
     close: 'Fermer',
     delete: 'Supprimer',
     rename: 'Renommer',
-    more: 'Plus',
     search: 'Rechercher',
     settings: 'Paramètres',
   },
@@ -613,10 +612,6 @@ export default {
       other: '{{accepted}} sur {{count}} éléments marqués comme non terminés',
     },
     toastMarkNotDoneFailed: 'Impossible de marquer comme non terminé',
-    toastThreadStaysDone:
-      'Ce fil ne contient aucun message reçu, il reste donc terminé',
-    toastThreadsStayDone:
-      'Ces fils ne contiennent aucun message reçu, ils restent donc terminés',
     toastCountNotRestored: {
       one: '{{count}} élément n’a pas pu être restauré.',
       many: '{{count}} d’éléments n’ont pas pu être restaurés.',
@@ -723,8 +718,6 @@ export default {
     create: 'Créer',
     getMobileApp: 'Obtenir l’app mobile',
     signedInAs: 'Connecté en tant que {{name}}',
-    commandMenu: 'Menu des commandes',
-    searchEverything: 'Tout rechercher',
     customizeSidebar: 'Personnaliser la barre latérale',
     customizeSidebarDescription:
       'Choisissez les apps affichées dans la barre latérale et faites-les glisser pour les réorganiser. Accueil reste toujours en premier.',

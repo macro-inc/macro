@@ -56,7 +56,17 @@ export default defineConfig({
           return `${directory}/task-filter-adapters.tsx`;
         if (importer?.includes('/tasks-view/')) {
           if (
+            importer.endsWith('/filters/task-project-options.tsx') &&
+            [
+              '@app/features/projects/queries/project-identity',
+              '@app/features/projects/queries/project-soup',
+              '@service-storage/graphql-soup',
+            ].includes(source)
+          )
+            return `${directory}/task-filter-adapters.tsx`;
+          if (
             source === '../tasks-view-context' ||
+            source === '../../tasks-view-context' ||
             source === '../views/task-saved-views'
           )
             return `${directory}/task-filter-adapters.tsx`;
@@ -156,6 +166,6 @@ export default defineConfig({
       }).map(([find, replacement]) => ({ find, replacement })),
     ],
   },
-  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  optimizeDeps: { rolldownOptions: { transform: { target: 'esnext' } } },
   server: { host: '127.0.0.1', strictPort: true },
 });

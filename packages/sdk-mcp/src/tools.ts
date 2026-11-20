@@ -43,7 +43,8 @@ const SUMMARY_LENGTH = 160;
 const HINT_TITLES: Record<HintClass, string> = {
   read: 'read',
   write: 'create and change',
-  delete: 'delete, overwrite and send',
+  send: 'send',
+  delete: 'delete, overwrite and other irreversible changes',
 };
 
 /**
@@ -67,17 +68,31 @@ function firstSentence(text: string) {
     : flat;
 }
 
+/** An operation that only creates something new (`documents.create`). */
+function onlyCreates(operation: Operation) {
+  return /^create/.test(operation.method);
+}
+
+/**
+ * MCP hints, read the way OpenAI's review reads them. A change is
+ * destructive unless every operation only creates something new: edits,
+ * moves and permission changes can overwrite what's there. Every change is
+ * open-world: Macro is shared, so a write reaches collaborators, channels
+ * or a share link.
+ */
 function annotations(
   title: string,
   hint: HintClass,
   operations: readonly Operation[]
 ): ToolAnnotations {
+  const read = hint === 'read';
   return {
     title,
-    readOnlyHint: hint === 'read',
-    destructiveHint: hint === 'delete',
+    readOnlyHint: read,
+    destructiveHint:
+      hint === 'delete' || (!read && !operations.every(onlyCreates)),
     idempotentHint: operations.every((operation) => operation.idempotent),
-    openWorldHint: operations.some((operation) => operation.openWorld),
+    openWorldHint: !read || operations.some((operation) => operation.openWorld),
   };
 }
 
@@ -197,7 +212,7 @@ function entityTool(
   };
 }
 
-const HINT_ORDER: readonly HintClass[] = ['read', 'write', 'delete'];
+const HINT_ORDER: readonly HintClass[] = ['read', 'write', 'send', 'delete'];
 
 /** The catalog's tools, in a stable order; fails on a tool name used twice. */
 export function buildTools(catalog: Catalog, grouping: ToolGrouping): Tool[] {

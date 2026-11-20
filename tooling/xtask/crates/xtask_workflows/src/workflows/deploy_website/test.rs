@@ -21,7 +21,9 @@ fn deploy_publishes_the_marketing_build_through_the_website_stack() {
     .for_each(check);
 
     let build = yaml.find("bun run build").expect("build step");
-    let deploy = yaml.find("command: up").expect("pulumi up");
+    let deploy = yaml
+        .find("command: ${{ inputs.preview_only && 'preview' || 'up' }}")
+        .expect("preview-only dispatches must not run pulumi up");
     assert!(
         build < deploy,
         "the site must be built before pulumi syncs it"

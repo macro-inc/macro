@@ -1,4 +1,4 @@
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal, Show } from 'solid-js';
 import { IntegrationResults } from '../components/IntegrationResults';
 import { FEATURED_MCP_SERVERS } from '../core/featuredIntegrations';

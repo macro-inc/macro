@@ -15,10 +15,11 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
   the command menu.
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
-  External sidebar is hidden on touch. Like Channels, the account list omits the floating split
-  header; the WhatsApp title uses the shared collection header directly below
-  the safe area on phones and tablets, above the scrollable **In Macro** chats.
-  Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
+  External sidebar docks above 720px and opens as an overlay at narrower widths.
+  Show navigation is the leading header control when it is collapsed. The account
+  list omits the floating split header on touch; the WhatsApp title uses the shared
+  collection header above its scrollable **In Macro** chats. Opening a chat drills
+  in full-screen; its **Back to WhatsApp** button returns.
 
 ## Sidebar
 
@@ -104,7 +105,12 @@ states show loading, unavailable or unsupported. Senders, reactors (the
 reaction chip's tooltip), poll voters, members and mentioned people who are
 not Macro users go by the chat owner's contact name for them, else their
 WhatsApp name, else their phone number; "WhatsApp participant" only when
-WhatsApp gave neither (a LID with no number). `@<number>` in a body shows the
+WhatsApp gave neither (a LID with no number). They show the WhatsApp
+profile picture the chat owner's account can see (`img[data-provider-picture]`)
+over their initials, which stay when the picture is hidden, unset or not
+fetched yet; the chat header and External's sidebar show the group's or
+person's picture the same way, over the provider badge or the group/person
+icon. `@<number>` in a body shows the
 person: a verified Macro user as Chat's mention chip, anyone else that name in
 bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded

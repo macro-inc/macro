@@ -21,6 +21,8 @@ type LambdaArgs<T extends Record<string, any>> = {
   };
   timeout?: number;
   memorySize?: number;
+  /** Size of `/tmp` in MB, from 512 (the default) to 10,240. */
+  ephemeralStorageSize?: number;
   reservedConcurrentExecutions?: number;
   layers?: pulumi.Input<pulumi.Input<string>[]>;
   tags: { [key: string]: string };
@@ -43,6 +45,7 @@ export class Lambda<
       role,
       timeout,
       memorySize,
+      ephemeralStorageSize,
       reservedConcurrentExecutions,
       layers,
       tags,
@@ -142,6 +145,9 @@ export class Lambda<
         timeout: timeout ? timeout : 30,
         role: role.arn,
         memorySize,
+        ephemeralStorage: ephemeralStorageSize
+          ? { size: ephemeralStorageSize }
+          : undefined,
         vpcConfig:
           vpc && lambdaSg
             ? {

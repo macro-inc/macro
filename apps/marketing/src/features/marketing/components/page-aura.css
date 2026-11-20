@@ -1,0 +1,85 @@
+/* One diffuse, static backdrop per page; feature colors come from its video. */
+:is(
+	main.feature-page,
+	.page-aura,
+	.marketing-content:not(:has(.feature-page, .wall-of-love))
+) {
+	position: relative;
+	isolation: isolate;
+}
+
+:is(
+	main.feature-page,
+	.page-aura,
+	.marketing-content:not(:has(.feature-page, .wall-of-love))
+)::before,
+:is(
+	main.feature-page,
+	.page-aura,
+	.marketing-content:not(:has(.feature-page, .wall-of-love))
+)::after {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	inset: 0 -15%;
+	pointer-events: none;
+	mask-image:
+		linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+		linear-gradient(
+			transparent,
+			#000 160px,
+			#000 calc(100% - 220px),
+			transparent
+		);
+	mask-composite: intersect;
+}
+
+:is(
+	main.feature-page,
+	.page-aura,
+	.marketing-content:not(:has(.feature-page, .wall-of-love))
+)::before {
+	opacity: 0.65;
+	background:
+		radial-gradient(
+			ellipse 55% 750px at 30% 530px,
+			color-mix(in srgb, var(--page-aura-primary, #91b7ce) 17%, transparent),
+			transparent 75%
+		),
+		radial-gradient(
+			ellipse 55% 850px at 80% 1000px,
+			color-mix(in srgb, var(--page-aura-secondary, #657fbc) 16%, transparent),
+			transparent 75%
+		),
+		radial-gradient(
+			ellipse 60% 1000px at 18% 38%,
+			color-mix(in srgb, var(--page-aura-primary, #91b7ce) 11%, transparent),
+			transparent 75%
+		),
+		radial-gradient(
+			ellipse 65% 1100px at 82% 63%,
+			color-mix(in srgb, var(--page-aura-secondary, #657fbc) 13%, transparent),
+			transparent 75%
+		),
+		radial-gradient(
+			ellipse 65% 900px at 30% 90%,
+			color-mix(in srgb, var(--page-aura-deep, #424a86) 18%, transparent),
+			transparent 75%
+		);
+}
+
+:is(
+	main.feature-page,
+	.page-aura,
+	.marketing-content:not(:has(.feature-page, .wall-of-love))
+)::after {
+	opacity: 0.045;
+	background-size: 180px 180px;
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E/filter%3E%3Cpath filter='url(%23n)' opacity='.7' d='M0 0h180v180H0z'/%3E/svg%3E");
+}
+
+/* The homepage already spans the viewport; keep its decoration inside it. */
+.page-aura::before,
+.page-aura::after {
+	inset-inline: 0;
+}

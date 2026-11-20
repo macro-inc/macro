@@ -1,3 +1,4 @@
+mod folder_events;
 mod pull_requests;
 
 use std::collections::HashSet;
@@ -5,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
+use channels::domain::broker_events::ChannelDeletedMetadata;
 use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
@@ -14,7 +16,7 @@ use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
     DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentUpdatedMetadata, EmailAttachmentsReleasedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -36,6 +38,7 @@ use properties::domain::events::{
 use uuid::Uuid;
 
 use super::*;
+use crate::domain::models::Delivery;
 
 struct TestMessage {
     payload: Vec<u8>,
@@ -67,6 +70,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -92,13 +96,13 @@ struct FlakyService {
 }
 
 impl SoupRealtimeService for FlakyService {
-    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
-        self.patches.lock().expect("patches lock").push(patch);
+    async fn notify_users(&self, patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
+        self.patches.lock().expect("patches lock").extend(patches);
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if self.failures.contains(&attempt) {
             Err(rootcause::report!("temporary fan-out failure"))
         } else {
-            Ok(())
+            Ok(Delivery::default())
         }
     }
 }
@@ -162,9 +166,35 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
 }
 
 #[test]
+fn released_email_attachments_leave_open_lists_only_when_trashed() {
+    let second = Uuid::now_v7().to_string();
+    let event = DocumentTopicEvent::EmailAttachmentsReleased(EmailAttachmentsReleasedMetadata {
+        trashed_document_ids: vec![DOCUMENT_ID.to_string(), second.clone()],
+        kept_document_ids: vec![Uuid::now_v7().to_string()],
+    });
+
+    let patches = patches_from_document_event(&event);
+
+    assert_eq!(patches.len(), 2);
+    assert!(
+        patches
+            .iter()
+            .all(|patch| matches!(patch.patch, Patch::Deleted(_)))
+    );
+    assert_eq!(
+        patches
+            .iter()
+            .map(|patch| patch_entity(patch).entity_id.clone())
+            .collect::<Vec<_>>(),
+        vec![DOCUMENT_ID.to_string(), second]
+    );
+}
+
+#[test]
 fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     let previous_project_id = Uuid::now_v7().to_string();
     let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -638,6 +668,32 @@ fn posted(
 }
 
 #[test]
+fn deleting_a_channel_reaches_the_members_it_had() {
+    let channel_id = Uuid::now_v7();
+    let members = vec![
+        user(),
+        MacroUserIdStr::try_from("macro|member@example.com".to_string()).expect("valid user id"),
+    ];
+    let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+        channel_id,
+        actor: ChannelSender::new_from_user(user()),
+        participant_user_ids: members.clone(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+
+    assert_eq!(
+        patches,
+        vec![
+            SoupRealtimePatch::for_entity(Patch::Deleted(
+                EntityType::Channel.with_entity_string(channel_id.to_string())
+            ))
+            .with_named_recipients(members)
+        ]
+    );
+}
+
+#[test]
 fn attachment_events_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
     let message_id = Uuid::now_v7();
@@ -858,15 +914,15 @@ fn reindex_event(thread_ids: Vec<Uuid>) -> DeclaredMacroEvent {
 }
 
 #[tokio::test(start_paused = true)]
-async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
-    let thread_ids = vec![Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+async fn multi_batch_event_retries_only_the_failed_batch_before_committing() {
+    let thread_ids: Vec<_> = (0..NOTIFY_BATCH_SIZE + 2).map(|_| Uuid::now_v7()).collect();
     let event = reindex_event(thread_ids.clone());
     let mut service = flaky_service(0);
     service.failures.insert(2);
     let commits = AtomicUsize::new(0);
 
     let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
-        assert_eq!(service.attempts.load(Ordering::SeqCst), 4);
+        assert_eq!(service.attempts.load(Ordering::SeqCst), 3);
         commits.fetch_add(1, Ordering::SeqCst);
     })
     .await;
@@ -875,10 +931,13 @@ async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
     let patches = service.patches.lock().expect("patches lock");
     let attempts: Vec<_> = patches
         .iter()
-        .map(|patch| patch_entity(patch).entity_id.as_ref())
+        .map(|patch| patch_entity(patch).entity_id.to_string())
         .collect();
-    let expected: Vec<_> = [thread_ids[0], thread_ids[1], thread_ids[1], thread_ids[2]]
-        .into_iter()
+    let last_batch = &thread_ids[NOTIFY_BATCH_SIZE..];
+    let expected: Vec<_> = thread_ids[..NOTIFY_BATCH_SIZE]
+        .iter()
+        .chain(last_batch)
+        .chain(last_batch)
         .map(|id| id.to_string())
         .collect();
     assert_eq!(attempts, expected);
@@ -886,8 +945,10 @@ async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn partial_event_failure_discards_remaining_patches_and_commits() {
-    let thread_ids = vec![Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+async fn partial_event_failure_discards_remaining_batches_and_commits() {
+    let thread_ids: Vec<_> = (0..2 * NOTIFY_BATCH_SIZE + 1)
+        .map(|_| Uuid::now_v7())
+        .collect();
     let event = reindex_event(thread_ids.clone());
     let mut service = flaky_service(0);
     service.failures = (2..=MAX_NOTIFY_ATTEMPTS + 1).collect();
@@ -905,15 +966,13 @@ async fn partial_event_failure_discards_remaining_patches_and_commits() {
     assert!(matches!(outcome, EventOutcome::Dropped));
     assert_eq!(commits.load(Ordering::SeqCst), 1);
     let patches = service.patches.lock().expect("patches lock");
-    assert_eq!(
-        patch_entity(&patches[0]).entity_id,
-        thread_ids[0].to_string()
-    );
-    assert!(
-        patches[1..]
-            .iter()
-            .all(|patch| { patch_entity(patch).entity_id == thread_ids[1].to_string() })
-    );
+    let attempted: HashSet<String> = patches
+        .iter()
+        .map(|patch| patch_entity(patch).entity_id.to_string())
+        .collect();
+    assert_eq!(patches.len(), NOTIFY_BATCH_SIZE * (1 + MAX_NOTIFY_ATTEMPTS));
+    assert_eq!(attempted.len(), 2 * NOTIFY_BATCH_SIZE);
+    assert!(!attempted.contains(&thread_ids[2 * NOTIFY_BATCH_SIZE].to_string()));
 }
 
 #[tokio::test]
@@ -935,15 +994,15 @@ async fn ignored_event_commits_without_notifying() {
 struct GatedService(tokio::sync::Semaphore);
 
 impl SoupRealtimeService for GatedService {
-    async fn notify_users(&self, _patch: SoupRealtimePatch) -> Result<(), Report> {
+    async fn notify_users(&self, _patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
         self.0.acquire().await.expect("gate remains open").forget();
-        Ok(())
+        Ok(Delivery::default())
     }
 }
 
 #[tokio::test]
-async fn offset_is_committed_only_after_every_patch_finishes() {
-    let event = reindex_event(vec![Uuid::now_v7(), Uuid::now_v7()]);
+async fn offset_is_committed_only_after_every_batch_finishes() {
+    let event = reindex_event((0..NOTIFY_BATCH_SIZE + 1).map(|_| Uuid::now_v7()).collect());
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
     let process = process_event(&service, &NoPullRequestSessions, &event, || {

@@ -1,6 +1,6 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import {
@@ -21,7 +21,7 @@ export function MiniCalendar(props: { workspace: DummyWorkspace }) {
     );
   return (
     <div class="sample-mini-calendar">
-      <div class="flex items-center justify-between pb-3 text-xs font-semibold">
+      <div class="flex items-center justify-between pb-3 text-xs font-medium">
         <span>{monthLabel(w.calendarDate())}</span>
         <Button
           size="icon-sm"

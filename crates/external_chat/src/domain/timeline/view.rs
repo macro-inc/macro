@@ -10,13 +10,20 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod test;
 
+/// What a stored person is called and how they look.
+#[derive(Debug)]
+struct KnownPerson {
+    name: String,
+    picture_file_id: Option<Uuid>,
+}
+
 /// Who the people of a chat are, as far as the chat knows: by the provider
 /// ids that mentions, system lines and votes name, and by the stored person
 /// that sent, reacted or voted.
 #[derive(Debug)]
 pub struct People {
     by_id: HashMap<String, ExternalChatPersonRef>,
-    by_person: HashMap<Uuid, String>,
+    by_person: HashMap<Uuid, KnownPerson>,
     unnamed: fn(&str) -> Option<String>,
 }
 
@@ -43,9 +50,15 @@ impl People {
         self.by_id.entry(id.to_owned()).or_insert(person);
     }
 
-    /// Learn what a stored person is called.
-    pub fn name_person(&mut self, person: Uuid, name: String) {
-        self.by_person.insert(person, name);
+    /// Learn what a stored person is called and their picture.
+    pub fn name_person(&mut self, person: Uuid, name: String, picture_file_id: Option<Uuid>) {
+        self.by_person.insert(
+            person,
+            KnownPerson {
+                name,
+                picture_file_id,
+            },
+        );
     }
 
     /// The person behind an id: their name when known, else what `unnamed`
@@ -57,19 +70,20 @@ impl People {
         ExternalChatPersonRef {
             name: (self.unnamed)(id).unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
             user_id: None,
+            picture_file_id: None,
         }
     }
 
     /// A stored person by the name the provider gave them, else a generic
     /// name.
     pub fn person(&self, person: &StoredPerson) -> ExternalChatPersonRef {
+        let known = self.by_person.get(&person.person_id);
         ExternalChatPersonRef {
-            name: self
-                .by_person
-                .get(&person.person_id)
-                .cloned()
+            name: known
+                .map(|known| known.name.clone())
                 .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
             user_id: person.user_id.clone(),
+            picture_file_id: known.and_then(|known| known.picture_file_id),
         }
     }
 }
@@ -205,6 +219,7 @@ pub fn message_view(
             person_id: message.sender.person_id,
             user_id: sender.user_id,
             name: sender.name,
+            picture_file_id: sender.picture_file_id,
         },
         body: message.body,
         reply_to: message.reply_to,

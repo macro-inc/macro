@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_activity(team_id,item_id,id,user_id,action,trace_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(team_id,item_id,id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ad1de042b749f5658fcb5a0cabbbe79d0c7614982b97763a2fed4fefd371fa8"
+}

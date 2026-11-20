@@ -6,6 +6,7 @@ use webhook::domain::models::WebhookFilter;
 fn test_client(storage_url: &str) -> EventStreamClient {
     EventStreamClient::new(
         &MacroApi {
+            egress_url: None,
             api_url: "http://unused".to_owned(),
             storage_url: storage_url.to_owned(),
             web_url: "https://macro.com/app".to_owned(),
@@ -13,6 +14,7 @@ fn test_client(storage_url: &str) -> EventStreamClient {
         &HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test".to_owned(),
+            pairing_id: None,
         },
     )
 }
@@ -73,15 +75,20 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
     .await;
     let client = test_client(&url);
     let mut stream = client
-        .connect::<Envelope>(&[WebhookFilter {
-            events: vec!["agent_trigger.new".to_owned()],
-            ids: None,
-        }])
+        .connect::<Envelope>(
+            &[WebhookFilter {
+                events: vec!["agent_trigger.new".to_owned()],
+                ids: None,
+            }],
+            None,
+        )
         .await
         .expect("open the stream");
 
+    assert_eq!(stream.last_event_id(), None);
     let first = stream.next_event().await.expect("read").expect("first");
     assert_eq!(first, Envelope { n: 1 });
+    assert_eq!(stream.last_event_id(), Some("evt-1"));
     let second = stream.next_event().await.expect("read").expect("second");
     assert_eq!(second, Envelope { n: 2 });
     assert!(stream.next_event().await.expect("closed").is_none());
@@ -99,6 +106,66 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
 }
 
 #[tokio::test]
+async fn connect_resumes_after_the_cursor_it_is_given() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind test listener");
+    let url = format!(
+        "http://{}",
+        listener.local_addr().expect("listener address")
+    );
+    let server = tokio::spawn(async move {
+        let mut requests = Vec::new();
+        for response in [
+            TEAM_HARNESS,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
+        ] {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut buf = vec![0u8; 4096];
+            let read = socket.read(&mut buf).await.unwrap_or(0);
+            requests.push(String::from_utf8_lossy(&buf[..read]).to_lowercase());
+            let _ = socket.write_all(response.as_bytes()).await;
+            let _ = socket.shutdown().await;
+        }
+        requests
+    });
+
+    let cursor = cursor_at(std::time::SystemTime::now());
+    test_client(&url)
+        .connect::<Envelope>(
+            &[WebhookFilter {
+                events: vec!["agent_trigger.new".to_owned()],
+                ids: None,
+            }],
+            Some(&cursor),
+        )
+        .await
+        .expect("open the stream");
+
+    let requests = server.await.unwrap();
+    assert!(
+        requests[1].contains(&format!("last-event-id: {cursor}")),
+        "{requests:?}"
+    );
+    // Replay is opt-in on the service; only a client that asks resumes.
+    assert!(requests[1].contains("&resume=true"), "{requests:?}");
+}
+
+#[test]
+fn a_time_cursor_is_the_first_uuidv7_of_its_millisecond() {
+    let time = std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_700_000_000_123);
+    let cursor = macro_uuid::Uuid::parse_str(&cursor_at(time)).unwrap();
+    assert_eq!(cursor.get_version_num(), 7);
+    assert_eq!(
+        cursor.get_timestamp().map(|timestamp| timestamp.to_unix()),
+        Some((1_700_000_000, 123_000_000))
+    );
+    assert!(cursor_at(time) < cursor_at(time + std::time::Duration::from_millis(1)));
+}
+
+#[tokio::test]
 async fn connect_refuses_a_non_2xx_answer() {
     let (url, _) = serve(vec![
         TEAM_HARNESS,
@@ -108,7 +175,7 @@ async fn connect_refuses_a_non_2xx_answer() {
     let client = test_client(&url);
 
     let error = client
-        .connect::<Envelope>(&[])
+        .connect::<Envelope>(&[], None)
         .await
         .err()
         .expect("a 403 is refused");
@@ -116,23 +183,27 @@ async fn connect_refuses_a_non_2xx_answer() {
 }
 
 #[tokio::test]
-async fn bound_bot_ids_are_sorted_and_unique() {
+async fn bound_agents_are_sorted_unique_and_dated_by_the_service() {
     let (url, _) = serve(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\
+         Date: Tue, 17 Nov 2026 22:00:05 GMT\r\n\r\n\
          [{\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b\",\"handle\":\"b\"},\
           {\"bot_id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"a\",\"handle\":\"a\"},\
           {\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b2\",\"handle\":\"b2\"}]",
     ])
     .await;
     let client = test_client(&url);
-    let ids = client.bound_bot_ids().await.expect("list agents");
+    let agents = client.bound_agents().await.expect("list agents");
     assert_eq!(
-        ids,
+        agents.bot_ids,
         vec![
             "00000000-0000-0000-0000-000000000001".to_owned(),
             "00000000-0000-0000-0000-000000000002".to_owned()
         ]
     );
+    // A second before the service's `Date`, which has whole seconds.
+    let date = chrono::DateTime::parse_from_rfc2822("Tue, 17 Nov 2026 22:00:04 GMT").unwrap();
+    assert_eq!(agents.read_by, Some(std::time::SystemTime::from(date)));
 }
 
 /// Answer one connection per response, in order, recording each request line.

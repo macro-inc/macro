@@ -33,5 +33,7 @@ export default {
   goForward: 'Go forward',
   focusSplitRight: 'Focus split right',
   focusSplitLeft: 'Focus split left',
+  focusSplitDown: 'Focus split down',
+  focusSplitUp: 'Focus split up',
   createEventFromEmail: 'Create event from email',
 };

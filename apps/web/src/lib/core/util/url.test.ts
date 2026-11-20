@@ -13,6 +13,18 @@ import {
   registerExternalUrlInterceptor,
 } from './url';
 
+const platform = vi.hoisted(() => ({
+  tauri: false,
+  mobile: undefined as 'ios' | 'android' | undefined,
+}));
+vi.mock('./platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./platform')>()),
+  isTauri: () => platform.tauri,
+  getNativeMobilePlatform: () => platform.mobile,
+}));
+const invoke = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+
 it('copies routine links using the canonical route', () => {
   expect(
     new URL(buildSimpleEntityUrl({ type: 'routine', id: 'routine-1' })).pathname
@@ -36,6 +48,9 @@ describe('openExternalUrl', () => {
   });
 
   afterEach(() => {
+    platform.tauri = false;
+    platform.mobile = undefined;
+    invoke.mockReset();
     for (const dispose of disposers.splice(0)) dispose();
     openSpy.mockRestore();
   });
@@ -92,5 +107,109 @@ describe('openExternalUrl', () => {
       '_blank',
       'noopener,noreferrer'
     );
+  });
+
+  it('hands the URL to the native policy on desktop without touching the page', async () => {
+    platform.tauri = true;
+    invoke.mockResolvedValue(true);
+
+    openExternalUrl('https://example.com');
+
+    expect(invoke).toHaveBeenCalledWith('open_external_url', {
+      url: 'https://example.com',
+    });
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens a popup on desktop when the native policy leaves it to the page', async () => {
+    platform.tauri = true;
+    invoke.mockResolvedValue(false);
+
+    openExternalUrl('http://tauri.localhost/presenter.html');
+
+    await vi.waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith(
+        'http://tauri.localhost/presenter.html',
+        '_blank',
+        'noopener,noreferrer'
+      )
+    );
+  });
+
+  it('opens a popup on a native shell older than the command', async () => {
+    platform.tauri = true;
+    invoke.mockRejectedValue('Command open_external_url not found');
+
+    openExternalUrl('https://example.com');
+
+    await vi.waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://example.com',
+        '_blank',
+        'noopener,noreferrer'
+      )
+    );
+  });
+
+  it('opens a popup at once on desktop for a string that is not a URL', () => {
+    platform.tauri = true;
+
+    openExternalUrl('example.com');
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledWith(
+      'example.com',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    ' JavaScript:alert(1)',
+    '\u0001javascript:alert(1)',
+    'java\tscript:alert(1)',
+    'vbscript:msgbox(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'blob:https://example.com/0b7d2c52',
+    'file:///etc/passwd',
+  ])('refuses to open %j on any platform', (url) => {
+    const interceptor = vi.fn(() => false);
+    register(interceptor);
+
+    for (const [tauri, mobile] of [
+      [false, undefined],
+      [true, undefined],
+      [true, 'ios'],
+    ] as const) {
+      platform.tauri = tauri;
+      platform.mobile = mobile;
+      openExternalUrl(url);
+    }
+
+    expect(interceptor).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'tel:100',
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
+    '/app/md/2b6a1f0e',
+  ])('still opens %j', (url) => {
+    openExternalUrl(url);
+
+    expect(openSpy).toHaveBeenCalledWith(url, '_blank', 'noopener,noreferrer');
+  });
+
+  it('navigates in place on mobile, where only navigation reaches native', () => {
+    platform.tauri = true;
+    platform.mobile = 'ios';
+
+    openExternalUrl('https://example.com');
+
+    expect(openSpy).toHaveBeenCalledWith('https://example.com', '_self');
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

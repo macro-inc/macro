@@ -2,23 +2,23 @@ import { AgentMessage } from './DemoAgentMessage';
 import { AgentRosterRow, ViewShell } from './DemoWorkspaceChrome';
 import './demo-agents-view.css';
 import MacroLogo from '@icon/macro-logo.svg';
+import ShareIcon from '@icon/share.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import DocumentIcon from '@icon/system/regular/file-text.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import MicrophoneIcon from '@icon/system/regular/microphone.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import SheetIcon from '@icon/system/regular/table.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import DocumentIcon from '@phosphor/file-text.svg';
-import HashIcon from '@phosphor/hash.svg';
-import InfoIcon from '@phosphor/info.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import MicrophoneIcon from '@phosphor/microphone.svg';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import ShareIcon from '@phosphor/share.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import SheetIcon from '@phosphor/table.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
   createEffect,
@@ -199,7 +199,7 @@ function DocumentDemo(props: { demo: WorkspaceDemo }) {
   const initialDocument = props.demo.document();
   return (
     <div class="workspace-demo-scroll workspace-demo-document">
-      <h1 class="mb-6 text-2xl font-semibold">Website launch plan</h1>
+      <h1 class="mb-6 text-2xl font-medium">Website launch plan</h1>
       <div
         contentEditable
         role="textbox"
