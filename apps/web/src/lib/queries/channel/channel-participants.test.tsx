@@ -60,6 +60,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import { useChannelParticipantsQuery } from './channel-participants';
+import { channelKeys } from './keys';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
@@ -125,9 +126,12 @@ function restClient() {
   return testQueryClient.current as QueryClient;
 }
 
-function mount() {
+function mount(options: { staleTime?: number } = {}) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, staleTime: options.staleTime },
+      mutations: { retry: false },
+    },
   });
   testQueryClient.current = client;
   let query!: ReturnType<typeof useChannelParticipantsQuery>;
@@ -300,6 +304,91 @@ describe('useChannelParticipantsQuery', () => {
     await waitFor(() => expect(query.isSuccess).toBe(true));
     expect(ids()).toEqual(['owner']);
     expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks REST again when the GraphQL read fails, over rows cached earlier', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([
+        restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+        restRow('member', '2026-01-02T00:00:00Z'),
+      ])
+    );
+    // The app's five-minute freshness, and REST rows from before the member joined.
+    const { query, ids } = mount({ staleTime: 300_000 });
+    restClient().setQueryData(
+      channelKeys.participantsFallback('channel-1').queryKey,
+      [{ ...restRow('owner', '2026-01-01T00:00:00Z', 'owner'), left_at: null }]
+    );
+    failDetail();
+
+    await waitFor(() => expect(ids()).toEqual(['owner', 'member']));
+    expect(query.isSuccess).toBe(true);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a succeeded add on a REST roster after its overlay expires', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(
+        ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+      )
+      .mockResolvedValue(
+        ok([
+          restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+          restRow('new', '2026-01-03T00:00:00Z'),
+        ])
+      );
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+    missChannel();
+    await vi.waitFor(() => expect(ids()).toEqual(['owner']));
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    expect(ids()).toEqual(['owner', 'new']);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a succeeded remove on a REST roster after its overlay expires', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(
+        ok([
+          restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+          restRow('member', '2026-01-02T00:00:00Z'),
+        ])
+      )
+      .mockResolvedValue(
+        ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+      );
+    storage.removeParticipantsFromChannel.mockResolvedValue(ok({}));
+    const { remove, ids } = mount();
+    failDetail();
+    await vi.waitFor(() => expect(ids()).toEqual(['owner', 'member']));
+
+    remove.mutate({ channelId: 'channel-1', participants: ['member'] });
+    await vi.waitFor(() => expect(remove.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('matches REST rows to the channel whatever the id letter case', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([
+        {
+          ...restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+          channel_id: 'CHANNEL-1',
+        },
+      ])
+    );
+    const { query, ids } = mount();
+    missChannel();
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
   });
 
   it('has no participants for a channel the viewer cannot read', async () => {

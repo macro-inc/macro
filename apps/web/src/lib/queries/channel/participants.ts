@@ -74,6 +74,20 @@ async function refreshChannelDetail(query: QueryRevalidation) {
   if (result.error) throw result.error;
 }
 
+/**
+ * A reader showing REST rows (a channel the soup read leaves out, or a failed
+ * read) gets no soup update for an add or remove, so it reads REST again once
+ * the change succeeds rather than lose it when its overlay expires.
+ */
+function rereadFallbackParticipants(
+  _response: MessageResponse,
+  { channelId }: ChannelParticipantsMutationVariables
+) {
+  return queryClient.invalidateQueries({
+    queryKey: channelKeys.participantsFallback(channelId).queryKey,
+  });
+}
+
 // Readers show these mutations over the channel's participants while they are
 // pending and until the channel's soup update confirms them
 // (`useChannelParticipantsQuery`); a failed one drops out, which rolls it back.
@@ -108,6 +122,7 @@ export function useAddParticipantsMutation(
       unknown
     >(
       {
+        onSuccess: rereadFallbackParticipants,
         onError(error) {
           console.error('failed to add participants', error);
           toast.failure('Failed to add participants to channel');
@@ -148,6 +163,7 @@ export function useRemoveParticipantsMutation(
       unknown
     >(
       {
+        onSuccess: rereadFallbackParticipants,
         onError(error) {
           console.error('failed to remove participants', error);
           toast.failure('Failed to remove participants from channel');

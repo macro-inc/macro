@@ -244,7 +244,10 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
       // A failed REST refetch keeps its last participants. Rows still from the
       // previous channel's REST read never show for this one.
       const rows = fallback.isPending ? undefined : fallback.data;
-      const own = rows?.every((participant) => participant.channel_id === id);
+      const own = rows?.every(
+        (participant) =>
+          participant.channel_id.toLowerCase() === id.toLowerCase()
+      );
       return { channelId: id, participants: own ? rows : undefined };
     }
     // A failed refresh keeps the participants on screen.
