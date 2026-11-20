@@ -395,7 +395,7 @@ impl IntoResponse for CrmError {
             CrmError::CompanyAlreadyExistsForTeam => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    message: "a crm company already exists for this domain; get it with GET /crm/companies/by-domain".into(),
+                    message: "a crm company already exists for this domain; get it with GET /crm/companies/by-domain, which returns an archived company to team admins only".into(),
                 }),
             ),
             CrmError::ContactAlreadyExistsForCompany => (

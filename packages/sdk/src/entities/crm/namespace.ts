@@ -92,9 +92,9 @@ export class CrmNamespace {
   }
 
   /**
-   * The caller's current team's company for a domain such as `acme.com`, if
-   * the team tracks one. Exact and current, unlike {@link searchCompanies}, so
-   * use it after `createCompany` reports the domain is already tracked.
+   * The team's company for a domain. Exact and current, unlike
+   * {@link searchCompanies}, so use it after `createCompany` reports the domain
+   * is already tracked. An archived company is returned to team admins only.
    *
    * @readonly
    */
