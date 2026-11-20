@@ -1158,7 +1158,9 @@ async fn with_the_rollout_off_for_its_creator_the_agents_repo_is_closed_to_every
         AgentGitAdapters {
             repos: FakeRepos::default(),
             store: FakeStore::default(),
-            admins: FakeAdmins::default(),
+            admins: FakeAdmins {
+                admins: HashSet::from([(TEAM, ADMIN.to_owned())]),
+            },
             limiter: FakeLimiter {
                 remaining: Arc::new(Mutex::new(30)),
             },
@@ -1178,21 +1180,23 @@ async fn with_the_rollout_off_for_its_creator_the_agents_repo_is_closed_to_every
         .await
         .unwrap();
 
-    for endpoint in [
-        GitEndpoint::Rpc(GitService::UploadPack),
-        GitEndpoint::Rpc(GitService::ReceivePack),
-    ] {
-        assert!(matches!(
-            service
-                .serve_git(
-                    GitCredential::RepoToken(created.token.clone()),
-                    &agent,
-                    request(endpoint, b""),
-                )
-                .await,
-            // The same answer as a missing repo, so it reveals nothing.
-            Err(AgentGitError::InvalidToken)
-        ));
+    let credentials = [
+        GitCredential::RepoToken(created.token.clone()),
+        GitCredential::User(MacroUserIdStr::try_from(ADMIN.to_owned()).unwrap()),
+    ];
+    for credential in credentials {
+        for endpoint in [
+            GitEndpoint::Rpc(GitService::UploadPack),
+            GitEndpoint::Rpc(GitService::ReceivePack),
+        ] {
+            assert!(matches!(
+                service
+                    .serve_git(credential.clone(), &agent, request(endpoint, b""))
+                    .await,
+                // The same answer as a missing repo, so it reveals nothing.
+                Err(AgentGitError::InvalidToken)
+            ));
+        }
     }
 }
 

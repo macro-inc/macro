@@ -288,7 +288,8 @@ async fn the_hold_is_released_by_the_deadline_even_while_the_response_is_unread(
             },
             GitHold::new(held),
         )
-        .await;
+        .await
+        .expect("git starts and sends its headers");
 
     // A client that stops reading: the response is kept, never polled.
     let released = tokio::time::timeout(std::time::Duration::from_secs(10), released).await;
@@ -321,7 +322,8 @@ async fn the_hold_outlives_a_dropped_response_until_git_exits() {
             },
             GitHold::new(held),
         )
-        .await;
+        .await
+        .expect("git starts and sends its headers");
 
     // The client is gone, but git is still reading its request.
     drop(response);

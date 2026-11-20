@@ -352,6 +352,7 @@ where
 
         let access = request.endpoint.access();
 
+        let is_repo_token = matches!(credential, GitCredential::RepoToken(_));
         match credential {
             GitCredential::RepoToken(token) => {
                 if !repo.token_hash.matches(&token.hash()) {
@@ -370,10 +371,6 @@ where
                 if !is_admin {
                     return Err(AgentGitError::InvalidToken);
                 }
-                // Admins read; only the agent's token pushes.
-                if access == GitAccess::Push {
-                    return Err(AgentGitError::Forbidden(access));
-                }
             }
         }
 
@@ -383,6 +380,11 @@ where
         // triggers a flag evaluation whose latency would tell it apart.
         if !self.rollout_on(agent_user_id).await {
             return Err(AgentGitError::InvalidToken);
+        }
+
+        // Admins read; only the agent's token pushes.
+        if access == GitAccess::Push && !is_repo_token {
+            return Err(AgentGitError::Forbidden(access));
         }
 
         if request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack)

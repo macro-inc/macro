@@ -191,23 +191,23 @@ impl GitBackend for GitHttpBackend {
             .process_group(0)
             .kill_on_drop(true);
 
-        command
-            .env(
-                "GIT_CONFIG_COUNT",
-                if repo.max_input_size().is_some() {
-                    "3"
-                } else {
-                    "2"
-                },
-            )
-            .env("GIT_CONFIG_KEY_0", "receive.fsckObjects")
-            .env("GIT_CONFIG_VALUE_0", "true")
-            .env("GIT_CONFIG_KEY_1", "transfer.fsckObjects")
-            .env("GIT_CONFIG_VALUE_1", "true");
+        let mut config = vec![
+            ("receive.fsckObjects", "true".to_owned()),
+            ("transfer.fsckObjects", "true".to_owned()),
+            // Auto gc and maintenance after a push stay in the foreground,
+            // inside the process group, so the deadline and the slot cover
+            // them; detached, they would outlive both.
+            ("gc.autoDetach", "false".to_owned()),
+            ("maintenance.autoDetach", "false".to_owned()),
+        ];
         if let Some(remaining) = repo.max_input_size() {
+            config.push(("receive.maxInputSize", remaining.to_string()));
+        }
+        command.env("GIT_CONFIG_COUNT", config.len().to_string());
+        for (index, (key, value)) in config.into_iter().enumerate() {
             command
-                .env("GIT_CONFIG_KEY_2", "receive.maxInputSize")
-                .env("GIT_CONFIG_VALUE_2", remaining.to_string());
+                .env(format!("GIT_CONFIG_KEY_{index}"), key)
+                .env(format!("GIT_CONFIG_VALUE_{index}"), value);
         }
 
         // http-backend refuses receive-pack without an authenticated user.

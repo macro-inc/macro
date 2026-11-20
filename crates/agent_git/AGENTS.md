@@ -66,7 +66,7 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
   admin or owner reads only. Missing repos, bad tokens, non-admin users and
   the rollout off all get the same 401; the rollout is checked after the
   credential, so an unauthenticated caller costs no flag evaluation. Only an
-  admin's push is 403.
+  admin's push, with the rollout on, is 403.
 - Creating again for the same team keeps the repo and replaces the token
   (explicit re-key); another team is 409.
 - Directories are `<sha256(user id)>.git`. Delete removes the directory before
@@ -91,7 +91,9 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
   drops when git exits, not when the response does. Fetch (upload-pack)
   request bodies are capped at 8 MiB as sent, so gzip counts compressed. Every
   git process runs in its own process group, killed with it after
-  `GIT_REQUEST_DEADLINE` (10 min) or when its task is dropped at shutdown. These bound fetches instead of a per-minute fetch budget, which
+  `GIT_REQUEST_DEADLINE` (10 min) or when its task is dropped at shutdown. Auto gc
+  and maintenance after a push run in the foreground (`gc.autoDetach` and
+  `maintenance.autoDetach` off), so the group kill covers them. These bound fetches instead of a per-minute fetch budget, which
   would cost a Postgres write per clone.
 - git runs with a cleared environment so `APP_SECRETS_JSON` never reaches it.
 - `enable-agent-teammates` off for the repo agent's creator (the
