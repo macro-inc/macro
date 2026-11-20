@@ -57,7 +57,7 @@ fn worker(server: &MockServer) -> ContactsWorker<CountingRepository, NoopNotifie
     ContactsWorker::new(sqs, Arc::new(service))
 }
 
-async fn expect_deletes(server: &MockServer, count: u64) {
+async fn expect_delete(server: &MockServer) {
     Mock::given(method("POST"))
         .and(header("x-amz-target", "AmazonSQS.DeleteMessage"))
         .and(body_json(serde_json::json!({
@@ -65,7 +65,7 @@ async fn expect_deletes(server: &MockServer, count: u64) {
             "ReceiptHandle": RECEIPT_HANDLE,
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
-        .expect(count)
+        .expect(1)
         .mount(server)
         .await;
 }
@@ -82,21 +82,21 @@ fn sqs_message(body: Option<&str>) -> aws_sdk_sqs::types::Message {
 async fn unparseable_messages_are_left_for_the_dlq() {
     for body in [None, Some("not json"), Some(r#"{"unknown":"shape"}"#)] {
         let server = MockServer::start().await;
-        expect_deletes(&server, 0).await;
         let worker = worker(&server);
 
         let result = worker.process_message(&sqs_message(body)).await;
 
         assert!(result.is_err(), "{body:?} must not be acknowledged");
         assert_eq!(worker.service.repository.writes.load(Ordering::SeqCst), 0);
-        server.verify().await;
+        let requests = server.received_requests().await.unwrap();
+        assert!(requests.is_empty(), "{body:?} must not reach SQS");
     }
 }
 
 #[tokio::test]
 async fn processed_messages_are_deleted() {
     let server = MockServer::start().await;
-    expect_deletes(&server, 1).await;
+    expect_delete(&server).await;
     let worker = worker(&server);
     let body = include_str!("../../../tests/fixtures/add_connection.json");
 

@@ -48,7 +48,14 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
         }
     }
 
-    #[instrument(skip(self, message), fields(message_id = message.message_id), err)]
+    #[instrument(
+        skip(self, message),
+        fields(
+            message_id = message.message_id,
+            receive_count = sqs_worker::receive_count(message),
+        ),
+        err
+    )]
     async fn process_message(
         &self,
         message: &aws_sdk_sqs::types::Message,
