@@ -23,6 +23,7 @@ import {
 import type { Client } from '@urql/core';
 import { createRenderEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fromPromise, make, pipe, type Source, toPromise } from 'wonka';
 import {
   initialSoupBackfillCheckpoint,
   markSoupBackfillLaneFailed,
@@ -156,11 +157,24 @@ function page(
   };
 }
 
-/** A stand-in for the urql client: only `query(...).toPromise()` is read. */
+/** A stand-in for the urql client. Like urql's, `query` returns a result
+ * source that also has `toPromise`; the stand-in answers with that source,
+ * or with `{ toPromise }`, whose answer becomes the source's one result. */
 function fakeClient(
   query: (...args: never[]) => unknown
 ): Pick<Client, 'query'> {
-  return { query } as unknown as Pick<Client, 'query'>;
+  return {
+    query: (...args: never[]) => {
+      const answer = query(...args) as
+        | Source<unknown>
+        | { toPromise: () => Promise<unknown> };
+      if (typeof answer === 'function') return answer;
+      const source = fromPromise(answer.toPromise());
+      return Object.assign(source, {
+        toPromise: () => pipe(source, toPromise),
+      });
+    },
+  } as unknown as Pick<Client, 'query'>;
 }
 
 /** By-id outcomes keyed by test name, keyed by id. */
@@ -381,6 +395,26 @@ describe('fetchJoinedChannels', () => {
       fetchJoinedChannels(network.client, controller.signal)
     ).rejects.toThrow();
     expect(network.query).not.toHaveBeenCalled();
+  });
+
+  it('ends the page read it waits on when aborted', async () => {
+    let ended = false;
+    // Like urql's, the request ends only when its subscriber leaves.
+    const held = make<never>(() => () => {
+      ended = true;
+    });
+    const client = fakeClient(() =>
+      Object.assign(held, { toPromise: () => pipe(held, toPromise) })
+    );
+    const controller = new AbortController();
+    const rejected = expect(
+      fetchJoinedChannels(client, controller.signal)
+    ).rejects.toThrow();
+
+    controller.abort();
+
+    await vi.waitFor(() => expect(ended).toBe(true));
+    await rejected;
   });
 });
 

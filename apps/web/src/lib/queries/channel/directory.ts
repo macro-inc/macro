@@ -10,6 +10,7 @@
  */
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { abortedBy } from '@core/util/abort-signal';
 import { deepEqual } from '@core/util/compareUtils';
 import { debounce, throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -17,6 +18,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ChannelDirectoryPageDocument,
+  type ChannelDirectoryPageQuery,
   SoupChannelDirectoryBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -37,7 +39,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/solid-query';
-import type { Client } from '@urql/core';
+import type { Client, OperationResult } from '@urql/core';
 import {
   type Accessor,
   createMemo,
@@ -46,6 +48,16 @@ import {
   untrack,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import {
+  concat,
+  filter,
+  fromValue,
+  map,
+  merge,
+  pipe,
+  take,
+  toPromise,
+} from 'wonka';
 import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import {
@@ -313,22 +325,52 @@ type DirectoryPage = {
   nextCursor: string | null;
 };
 
-/** One network page of the directory's query, without the cache. */
+type DirectoryPageSettled =
+  | {
+      kind: 'answered';
+      result: OperationResult<ChannelDirectoryPageQuery>;
+    }
+  | { kind: 'ended' }
+  | { kind: 'aborted' };
+
+/** One network page of the directory's query, without the cache. An abort
+ * leaves the query's result source, which is what ends urql's request: urql
+ * replaces a `fetchOptions.signal` with its own. */
 async function fetchDirectoryPage(
   client: UrqlQuery,
   input: GraphqlSoupInput,
   signal: AbortSignal | undefined
 ): Promise<DirectoryPage> {
-  const result = await client
-    .query(
-      ChannelDirectoryPageDocument,
-      { input },
-      {
-        requestPolicy: 'network-only',
-        ...(signal ? { fetchOptions: { signal } } : {}),
-      }
-    )
-    .toPromise();
+  const settled = await pipe(
+    merge<DirectoryPageSettled>([
+      concat<DirectoryPageSettled>([
+        pipe(
+          client.query(
+            ChannelDirectoryPageDocument,
+            { input },
+            { requestPolicy: 'network-only' }
+          ),
+          // The answer, as urql's own toPromise takes it.
+          filter((result) => !result.stale && !result.hasNext),
+          map((result) => ({ kind: 'answered' as const, result }))
+        ),
+        fromValue({ kind: 'ended' as const }),
+      ]),
+      pipe(
+        abortedBy(signal),
+        map(() => ({ kind: 'aborted' as const }))
+      ),
+    ]),
+    take(1),
+    toPromise
+  );
+  if (settled.kind === 'aborted') {
+    signal?.throwIfAborted();
+    throw new Error('Channel directory page read was cancelled');
+  }
+  if (settled.kind === 'ended')
+    throw new Error('Channel directory page read ended without an answer');
+  const { result } = settled;
   if (result.error) throw result.error;
   const soup = result.data?.user.soup;
   if (!soup) throw new Error('Channel directory page returned no data');
