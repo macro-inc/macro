@@ -3103,6 +3103,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -7354,6 +7355,7 @@ dependencies = [
  "serde_json",
  "soup-filter-projection",
  "thiserror 2.0.18",
+ "tracing",
  "uuid",
 ]
 

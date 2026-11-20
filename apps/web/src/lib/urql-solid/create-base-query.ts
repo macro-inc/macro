@@ -1,4 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -10,6 +11,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { crmSnapshotAuthorization } from './authorization';
 import { useOptionalUrqlClient } from './context';
 import type { ObserverClientOptions, UrqlObserverFactory } from './observer';
 import {
@@ -32,7 +34,10 @@ export function createBaseQuery<
   // traceParentExchange.
   const flow = useFlowTrace();
   const options = createMemo(() => {
-    const next = getOptions();
+    const input = getOptions();
+    const next = crmSnapshotAuthorization().paused
+      ? { ...input, enabled: false }
+      : input;
     if (!flow) return next;
     return {
       ...next,
@@ -120,17 +125,23 @@ export function createBaseQuery<
 
   let firstOptionsRun = true;
   let currentClient = initialClient;
+  let generation = untrack(crmSnapshotAuthorization).epoch;
 
   createComputed(() => {
     const nextOptions = options();
     const nextClient = client();
+    const nextGeneration = crmSnapshotAuthorization().epoch;
     if (firstOptionsRun) {
       firstOptionsRun = false;
       return;
     }
 
     const current = untrack(observer);
-    if (nextClient !== currentClient) {
+    if (
+      nextClient !== currentClient ||
+      !cacheSessionGeneration.isCurrent(generation)
+    ) {
+      generation = nextGeneration;
       const replacement = untrack(() =>
         createObserver(nextClient, nextOptions)
       );

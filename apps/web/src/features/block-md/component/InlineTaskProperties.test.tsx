@@ -546,7 +546,6 @@ it('selects a shared property and edits its draft value without an entity write'
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[draftDefinition]}
         properties={[]}
         onAdd={onAdd}
@@ -602,7 +601,6 @@ it('creates a property through the shared dialog and saves its value into the dr
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[]}
         properties={[]}
         onAdd={onAdd}
@@ -673,7 +671,6 @@ it('leaves creation for the built-in property the create dialog suggests', async
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[]}
         properties={[]}
         onAdd={onAdd}
@@ -734,7 +731,6 @@ it('opens the suggested built-in property on the value the draft holds', async (
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[]}
         properties={[
           {
@@ -795,7 +791,6 @@ it('hands focus back to the search field when the create dialog closes', async (
       saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
     >
       <TaskComposerPropertyEditor
-        name="New task"
         definitions={[]}
         properties={[]}
         onAdd={async () => {}}

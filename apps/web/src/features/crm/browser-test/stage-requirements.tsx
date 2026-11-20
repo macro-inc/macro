@@ -16,6 +16,9 @@ const unused = (): never => {
   throw new Error('Unused fixture capability');
 };
 const context: CrmContext = {
+  canAccess: () => true,
+  accessState: () => 'allowed',
+  retryAccess: async () => {},
   EmailThreadMention: unused,
   createEmailPrivacy: unused,
   createEmailPolicy: unused,

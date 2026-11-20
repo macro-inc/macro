@@ -100,6 +100,17 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Property editor
+
+`PropertyEditorModal` is the editor that list rows and a multi-row selection,
+CRM stage, owner and revenue actions, an open item's commands, inline title
+pills and the side panel's **Add property** open; the task composer renders its
+`PropertyEditorDialog` directly. The dialog has no title row for the items it
+edits. When the modal saves a value for the selected items, a toast names only
+the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
+set on 3 items" for several). Tag assignment shows no toast, and the composer
+writes to its draft without one.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates
@@ -115,9 +126,20 @@ in `properties` (the composer's `draftProperties`): the picker starts from that
 value and adds to it, and without it a pick would replace what the draft
 already links. Whichever way the create dialog closes, the editor's search
 field takes focus back on desktop: left on the page, the next keys would reach
-the app's shortcuts. The note never disables **Create**. Add a name there
+the app's shortcuts. That note never disables **Create**. Add a name there
 only for a built-in property whose look-alike breaks something a person would
 expect, not for every system property.
+
+A name that is a built-in property's own (the whole name, any case) is
+different: the server refuses it with a 409, because built-in names are reserved
+for user and team properties. The dialog reads the built-in definitions
+(`scope: 'system'`), says the name is taken, and disables **Create**. It offers
+**Use …** only when that property applies to the entity being edited, which it
+learns from the same list narrowed by `forEntityType`; `PropertyEditorDialog`
+passes the type the selected entities share, and a draft host supplies it
+through its `PropertiesProvider`. If the list has not loaded and the request
+goes out, the refusal (`isPropertyNameReserved`) shows the same sentence in
+place of the generic create error.
 
 ## Assignee selection
 

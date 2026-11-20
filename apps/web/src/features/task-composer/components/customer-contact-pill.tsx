@@ -3,7 +3,8 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { Property } from '@property';
 import type { EntityProperty, PropertyApiValues } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo } from 'solid-js';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   customerContactReferences,
@@ -47,47 +48,49 @@ export function CustomerContactPill(props: {
   };
 
   return (
-    <Property.Root
-      property={property()}
-      canEdit={!props.disabled}
-      onSave={save}
-    >
-      {(shown) => (
-        <>
-          {/* The hover card names both records, as the pill shows only one. */}
-          <Property.Tooltip
-            property={{
-              ...property(),
-              isMultiSelect: true,
-              value: customerContactReferences(props.values),
-            }}
-          >
-            <Property.Pill variant="secondary" size="xs">
-              <Property.Text
-                property={shown()}
-                resolveSingleEntity
-                class="min-w-0 max-w-60"
-                fallback={
-                  <Property.Empty
-                    propertyDefinitionId={shown().propertyDefinitionId}
-                    label={shown().displayName}
-                    iconClass="size-3 touch:size-4 shrink-0"
-                  />
-                }
-              />
-              <Property.Caret />
-            </Property.Pill>
-          </Property.Tooltip>
-          <Dynamic
-            component={props.editor}
-            entityPicker={{
-              entityTypes: ENTITY_TYPES,
-              placeholder: t('crm.searchCustomerContact'),
-              emptyMessage: t('crm.noCustomerContactFound'),
-            }}
-          />
-        </>
-      )}
-    </Property.Root>
+    <Show when={crmAccessAllowed()}>
+      <Property.Root
+        property={property()}
+        canEdit={!props.disabled}
+        onSave={save}
+      >
+        {(shown) => (
+          <>
+            {/* The hover card names both records, as the pill shows only one. */}
+            <Property.Tooltip
+              property={{
+                ...property(),
+                isMultiSelect: true,
+                value: customerContactReferences(props.values),
+              }}
+            >
+              <Property.Pill variant="secondary" size="xs">
+                <Property.Text
+                  property={shown()}
+                  resolveSingleEntity
+                  class="min-w-0 max-w-60"
+                  fallback={
+                    <Property.Empty
+                      propertyDefinitionId={shown().propertyDefinitionId}
+                      label={shown().displayName}
+                      iconClass="size-3 touch:size-4 shrink-0"
+                    />
+                  }
+                />
+                <Property.Caret />
+              </Property.Pill>
+            </Property.Tooltip>
+            <Dynamic
+              component={props.editor}
+              entityPicker={{
+                entityTypes: ENTITY_TYPES,
+                placeholder: t('crm.searchCustomerContact'),
+                emptyMessage: t('crm.noCustomerContactFound'),
+              }}
+            />
+          </>
+        )}
+      </Property.Root>
+    </Show>
   );
 }

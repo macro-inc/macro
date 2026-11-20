@@ -1,0 +1,13 @@
+id: email-link-lock-transactions-time-out
+valid:
+  - |
+    async fn save(pool: &PgPool) { let mut tx = super::begin(pool).await?; }
+  - |
+    async fn admit(&self) { let mut tx = super::begin(&self.pool).await?; }
+  - |
+    async fn read(pool: &PgPool) { sqlx::query!("SELECT 1").fetch_one(pool).await; }
+invalid:
+  - |
+    async fn save(pool: &PgPool) { let mut tx = pool.begin().await?; }
+  - |
+    async fn admit(&self) { let mut tx = self.pool.begin().await?; }
