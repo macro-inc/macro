@@ -660,3 +660,89 @@ fn a_window_ending_inside_the_cutoff_tie_widens_past_it() {
         }
     });
 }
+
+/// A tie wider than the cap: every window of a page inside it ends inside it,
+/// so the plan falls back to the set-based page. A continuation seeks to the
+/// tie's start and steps over the part already read, so its cost grows with
+/// how far into the tie the window has read, which the cap bounds.
+#[test]
+fn a_tie_wider_than_the_cap_falls_back_with_the_same_pages() {
+    const TIE: u32 = 5_000;
+    const TIED: i64 = 1_000;
+    block_on(async {
+        for direction in [SortDirection::Asc, SortDirection::Desc] {
+            let sign = match direction {
+                SortDirection::Asc => 1,
+                SortDirection::Desc => -1,
+            };
+            let mut storage = TursoStorage::open_in_memory("bounded-wide-tie").unwrap();
+            storage
+                .put_batch_with_projections(
+                    Vec::new(),
+                    (0..TIE + 40)
+                        .map(|n| {
+                            let value = if n < 20 {
+                                i64::from(n)
+                            } else if n < TIE + 20 {
+                                TIED
+                            } else {
+                                TIED + i64::from(n)
+                            };
+                            ProjectionMutation::Replace(document(n, sign * value))
+                        })
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            for tie in [SortDirection::Asc, SortDirection::Desc] {
+                let mut page = query(PredicateExpr::All, direction, tie);
+                // The first page ends before the tie; the next two lie inside it.
+                for _ in 0..3 {
+                    let found = hits(&storage.connection(), &page, &[]);
+                    assert_eq!(found.len(), 20);
+                    assert_eq!(found, reference(&storage.connection(), &page, &[]));
+                    let (key, value) = found.last().unwrap();
+                    page = page
+                        .after(*value, PredicateRecordKey::new(key.clone()).unwrap())
+                        .unwrap();
+                }
+                assert!(
+                    try_select(&storage.connection(), &page, &[])
+                        .unwrap()
+                        .is_none()
+                );
+            }
+            // A continuation 4,000 records into the tie.
+            let order = match direction {
+                SortDirection::Asc => "ASC",
+                SortDirection::Desc => "DESC",
+            };
+            let rows = driver::query(
+                &storage.connection(),
+                &format!(
+                    "SELECT document_id FROM sort_facts WHERE value = ? ORDER BY document_id {order} LIMIT 1 OFFSET 4000"
+                ),
+                vec![Value::from_i64(sign * TIED)],
+            )
+            .unwrap();
+            let position = Position {
+                value: sign * TIED,
+                document: required_i64(&rows[0], 0).unwrap(),
+            };
+            let query = query(PredicateExpr::All, direction, direction);
+            let (sql, parameters) = candidate_sql(
+                query.as_query(),
+                conjunction::FactSource::Authority,
+                &[],
+                Some(position),
+                MIN_CANDIDATES,
+            );
+            let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
+            let rows = driver::query_prepared(&mut statement, parameters).unwrap();
+            assert_eq!(rows.len(), MIN_CANDIDATES);
+            let steps = statement.metrics().vm_steps;
+            println!("{order}: a continuation 4,000 records into a tie: {steps} VM steps");
+            assert!(steps < 40_000, "{steps} VM steps");
+        }
+    });
+}
