@@ -25,8 +25,10 @@ import {
   type DocumentView,
   type OpacityCache,
   readDocument,
+  type SerializedNode,
   textsOf,
   verifyKey,
+  walk,
 } from './document';
 import { EditRefusal, type RequestedBlock, requestedMarkdown } from './edits';
 import { uploadedSources } from './media';
@@ -117,14 +119,24 @@ export function checkDeletions(
     );
 }
 
-/** Refuse a result that does not read back exactly as requested. */
-export function verifyResult(wanted: string[], afterView: DocumentView): void {
-  for (const text of textsOf(afterView.nodes))
-    if (LEAK_RE.test(text))
-      throw new EditRefusal(
-        'markup_leak',
-        'the edit leaves literal markup (a placeholder or an <m-…> tag) in the text'
-      );
+const leaks = (view: DocumentView) =>
+  textsOf(view.nodes).filter((text) => LEAK_RE.test(text)).length;
+
+/**
+ * Refuse a result that does not read back exactly as requested, or that turns
+ * markup into literal text. Literal markup already in `before` (an inline
+ * code run quoting `</td>`) is not the edit's doing.
+ */
+export function verifyResult(
+  wanted: string[],
+  afterView: DocumentView,
+  before: DocumentView
+): void {
+  if (leaks(afterView) > leaks(before))
+    throw new EditRefusal(
+      'markup_leak',
+      'the edit leaves literal markup (a placeholder or an <m-…> tag) in the text'
+    );
   const got = afterView.blocks.map((block) => block.markdown);
   const emptyDocument =
     wanted.length === 0 && got.length === 1 && got[0] === '';
@@ -161,24 +173,35 @@ export function checkCommentsKept(
     );
 }
 
+function mediaCount(node: SerializedNode): number {
+  let count = 0;
+  walk(node, (n) => {
+    if (n.type === 'image' || n.type === 'video') count++;
+  });
+  return count;
+}
+
+/**
+ * Refuse a result where a block that survived the edit kept its images and
+ * videos but one lost its uploaded source identity: its link was changed.
+ * Deleting the block or the media in it is the deletion policy's business.
+ */
 function checkUploads(
   view: DocumentView,
   afterView: DocumentView,
-  wanted: string[]
+  match: number[]
 ): void {
   const afterSources = new Set(afterView.nodes.flatMap(uploadedSources));
-  const wantedText = wanted.join('\n');
-  for (const node of view.nodes)
-    for (const source of uploadedSources(node)) {
-      if (afterSources.has(source)) continue;
-      // Still referenced by URL: an edit of the upload, not its deletion.
-      const url = source.split('|').slice(2).join('|');
-      if (wantedText.includes(url))
-        throw new EditRefusal(
-          'frozen_media',
-          'an uploaded image or video cannot be edited as markdown (only moved, deleted, or its alt text changed); keep its link exactly as it was'
-        );
-    }
+  match.forEach((i, j) => {
+    if (i < 0 || !afterView.nodes[j]) return;
+    const before = view.nodes[i];
+    const lost = uploadedSources(before).some((s) => !afterSources.has(s));
+    if (lost && mediaCount(afterView.nodes[j]) >= mediaCount(before))
+      throw new EditRefusal(
+        'frozen_media',
+        'an uploaded image or video cannot be edited as markdown (only moved, deleted, or its alt text changed); keep its link exactly as it was'
+      );
+  });
 }
 
 /** Compute the Loro update turning `snapshot` into `requested`. */
@@ -343,9 +366,9 @@ export async function commitBlocks(
       'the edited document exceeds the 4 MiB size limit'
     );
   const afterView = await readDocument(documentId, after, options.opacity);
-  verifyResult(wanted, afterView);
+  verifyResult(wanted, afterView, view);
   checkCommentsKept(view, afterView, options.allowDeletingContent ?? false);
-  checkUploads(view, afterView, wanted);
+  checkUploads(view, afterView, match);
 
   const afterIds = new Set(afterView.blocks.map((block) => block.id));
   const commentIds = (v: DocumentView) =>

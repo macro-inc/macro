@@ -7,6 +7,7 @@
  * Ported from the ai-edit harness's mdpatch v1 committer.
  */
 import {
+  $createTextNode,
   $isElementNode,
   $isTextNode,
   $parseSerializedNode,
@@ -454,7 +455,8 @@ const inMark = (node: LexicalNode) =>
  * prefix and suffix by character and format) and put the new middle into one
  * existing run of its format. Inserted text joins the left run unless that run
  * is inside a comment mark and the right one is not, so new text joins a mark
- * only from inside it. False (the caller falls back) when the new middle mixes
+ * only from inside it; text inserted just before a mark from outside it gets a
+ * run of its own before the mark. False (the caller falls back) when the new middle mixes
  * formats or no run has its format.
  */
 function spliceRuns(
@@ -515,8 +517,37 @@ function spliceRuns(
       host = cut.run;
     }
   }
-  const texts = oldGap.map(() => '');
   const inserted = insert.map((ch) => ch.c).join('');
+  // Text inserted at a comment mark's start from outside it must not extend
+  // the mark: it goes into a run of its own just before the mark.
+  let beforeMark: { mark: LexicalNode; text: TextNode } | null = null;
+  if (
+    host >= 0 &&
+    host === right &&
+    host !== left &&
+    inMark(oldGap[right].node) &&
+    (left < 0 ||
+      oldGap[left].node.getParent() !== oldGap[right].node.getParent()) &&
+    // Replacing marked text keeps the replacement in the mark.
+    !oldChars
+      .slice(prefix, oldChars.length - suffix)
+      .some(
+        (ch) =>
+          oldGap[ch.run].node.getParent() === oldGap[right].node.getParent()
+      )
+  ) {
+    const anchor = oldGap[right].node;
+    const mark = anchor.getParent();
+    if (!$isTextNode(anchor) || anchor.getType() !== 'text' || !mark)
+      return false;
+    if (mark.getFirstChild() !== anchor) return false;
+    const text = $createTextNode(inserted);
+    text.setFormat(anchor.getFormat());
+    text.setStyle(anchor.getStyle());
+    beforeMark = { mark, text };
+    host = -1;
+  }
+  const texts = oldGap.map(() => '');
   let placed = false;
   for (let k = 0; k <= oldChars.length; k++) {
     if (k === prefix && !placed && host >= 0) {
@@ -528,6 +559,10 @@ function spliceRuns(
     texts[oldChars[k].run] += oldChars[k].c;
   }
   if (host >= 0 && !placed) texts[host] += inserted;
+  if (beforeMark) {
+    beforeMark.mark.insertBefore(beforeMark.text);
+    counters.textEdits++;
+  }
   oldGap.forEach((item, run) => {
     if (texts[run] === item.serialized.text) return;
     const text = item.node as TextNode;
