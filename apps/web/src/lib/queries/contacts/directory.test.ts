@@ -640,7 +640,7 @@ it('finds the teammates and the whole address a typed search names by ID, wherev
   });
   await expect(read('teo')).rejects.toBeInstanceOf(ContactDirectoryScopeError);
 });
-it('lists the server page as it came when a read of who the text names fails', async () => {
+it('still ranks the rows it has when the reads of who the text names fail', async () => {
   remote.mockResolvedValue(
     contactPage([
       contact('mateo@example.com', 'Mateo Rossi'),
@@ -660,6 +660,77 @@ it('lists the server page as it came when a read of who the text names fails', a
     'Teo Nys',
     'Mateo Rossi',
   ]);
+
+  // One read failing keeps what the other found.
+  lookedUp.mockResolvedValue({
+    user: {
+      id: VIEWER,
+      contactsByUserIds: [contact('teo.zed@example.com', 'Teo Zed')],
+    },
+  });
+  const lookedUpOnly = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'teo', teammates: ['macro|teo.zed@example.com'] },
+    signal()
+  );
+  expect(lookedUpOnly.users.map((user) => user.name)).toEqual([
+    'Teo Zed',
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+  named.mockResolvedValue(
+    contactPage([contact('teo.park@example.com', 'Teo Park')])
+  );
+  lookedUp.mockRejectedValue(new Error('lookup failed'));
+  const exactOnly = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'teo', teammates: ['macro|teo.zed@example.com'] },
+    signal()
+  );
+  expect(exactOnly.users.map((user) => user.name)).toEqual([
+    'Teo Park',
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+
+  // An answer past its bound is a failed read, not a longer page.
+  lookedUp.mockResolvedValue({
+    user: {
+      id: VIEWER,
+      contactsByUserIds: [
+        contact('teo.zed@example.com', 'Teo Zed'),
+        contact('teo.yew@example.com', 'Teo Yew'),
+      ],
+    },
+  });
+  const oversized = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'teo', teammates: ['macro|teo.zed@example.com'] },
+    signal()
+  );
+  expect(oversized.users.map((user) => user.name)).toEqual([
+    'Teo Park',
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+
+  // An answer for another account fails the whole read.
+  lookedUp.mockResolvedValue({
+    user: { id: 'macro|other@example.com', contactsByUserIds: [] },
+  });
+  await expect(
+    readContactDirectory(
+      VIEWER,
+      undefined,
+      { query: 'teo', teammates: ['macro|teo.zed@example.com'] },
+      signal()
+    )
+  ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+  lookedUp.mockReset();
+  named.mockReset();
 
   // The page itself failing, or the read being cancelled, still fails.
   remote.mockRejectedValue(new Error('denied'));

@@ -181,8 +181,13 @@ export function createContactDirectoryList(
       };
     }
 
+    // A server's first page also lists the people its text names, however
+    // many, so the bound applies to what is listed, not to each page.
+    const users = [...firstPage(listed), ...listed.later].slice(
+      0,
+      MAX_LISTED_CONTACTS
+    );
     // Ranking metadata accompanies only the listed rows, newest page first.
-    const users = [...firstPage(listed), ...listed.later];
     const ids = new Set(users.map((user) => user.id));
     const people = new Map<string, RankedPerson>();
     for (const person of [...(page.people ?? []), ...(shown?.people ?? [])]) {

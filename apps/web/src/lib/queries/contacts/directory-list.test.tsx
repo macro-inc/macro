@@ -380,3 +380,100 @@ it('orders the first server page by who the viewer works with, and leaves later 
   ]);
   client.clear();
 });
+
+it('keeps the bound when a server page names more people than it', async () => {
+  vi.useFakeTimers();
+  const everyone = Array.from({ length: 520 }, (_, index) => person(index));
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => ({
+      query: request.query,
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      users: everyone,
+      named: { exact: [], wordStart: everyone.map((user) => user.id) },
+      nextCursor: {
+        source: 'server',
+        after: 'next',
+        userId: viewer,
+        query: request.query,
+        policyKey: hashKey([request.policy]),
+      },
+    }));
+  const client = new QueryClient();
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    const [search] = createSignal('person');
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      { search, debounceMs: 0 }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(list?.data()?.users).toHaveLength(500);
+  expect(list?.data()?.users[499].id).toBe(person(499).id);
+  expect(list?.data()?.nextCursor).toBeNull();
+  client.clear();
+});
+
+it('reads the roster only for a typed search, so browsing keeps its pages when it loads', async () => {
+  vi.useFakeTimers();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) =>
+      overlappingPage(request)
+    );
+  const client = new QueryClient();
+  const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
+    new Set()
+  );
+  const [search, setSearch] = createSignal('');
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      { search, debounceMs: 0, teammates }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const shown = () => list?.data()?.users.map((user) => user.id);
+  await vi.advanceTimersByTimeAsync(0);
+  await list?.loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  const browsed = shown();
+  expect(browsed).toHaveLength(5);
+
+  // The roster arrives while two browsed pages are listed.
+  const reads = reader.mock.calls.length;
+  setTeammates(new Set([person(9).id]));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.calls).toHaveLength(reads);
+  expect(shown()).toEqual(browsed);
+  expect(reader.mock.calls.every(([, , request]) => !request.teammates)).toBe(
+    true
+  );
+
+  setSearch('per');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.lastCall?.[2]).toMatchObject({
+    query: 'per',
+    teammates: [person(9).id],
+  });
+  client.clear();
+});

@@ -75,7 +75,8 @@ partners (most recent first), then teammates, then everyone else, exact matches
 before word-start ones; the server's looser matches follow in the same three
 groups. Recipient and filter pickers have no direct-message facts there and
 order by teammates only. Later pages are listed below in server order. If one
-of the extra reads fails, the page lists as the server returned it. Hydration/context changes restart stale windows and
+of the extra reads fails, the page lists without the people that read would
+have added and still ranks the rows it has. Hydration/context changes restart stale windows and
 must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
 person target. Resolving 500 selected people keeps all 500 and looks up self
 separately when that would otherwise overflow the batch.

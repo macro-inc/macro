@@ -250,7 +250,7 @@ request, so its span has none under it and the request sits in the trace of the
 search that started it. The window records `contacts.named_exact_count` and
 `contacts.named_word_start_count`, how many of the listed people the text
 names, and `contacts.named_failed` when one of the extra reads failed and the
-page was listed without them.
+page was listed without the people it would have added.
 
 ## Agent sessions
 

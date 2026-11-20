@@ -113,7 +113,11 @@ export function createContactDirectoryWindow(
             senderDomain: value.senderDomain,
           }
         : undefined;
-      const teammates = [...(options.teammates?.() ?? [])].sort();
+      // Only a typed search reads its teammates. Browsing leaves the roster
+      // out, so one that loads later never restarts its pages.
+      const teammates = search().trim()
+        ? [...(options.teammates?.() ?? [])].sort()
+        : [];
       return {
         query: search(),
         policy,

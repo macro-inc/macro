@@ -405,12 +405,25 @@ async function readLateAwareServerWindow(
 /** The most people one lookup by ID reads: the server's bound for a request. */
 const MAX_NAMED_LOOKUP = 500;
 
+/** The rows one extra read answered with, or none when it failed or answered
+ * past its bound. */
+function answeredRows<Answer>(
+  read: PromiseSettledResult<Answer | undefined>,
+  rows: (answer: Answer) => readonly ContactDirectoryFieldsFragment[],
+  bound: number
+): readonly ContactDirectoryFieldsFragment[] | undefined {
+  if (read.status === 'rejected') return undefined;
+  const found = read.value ? rows(read.value) : [];
+  return found.length > bound ? undefined : found;
+}
+
 /** Reads the people typed text may name, for the first server page: the
  * server's exact name matches, and by ID a whole typed address or the viewer's
  * teammates (the first 500). The exact search scans only the first 2,000
  * contacts; a lookup by ID finds a person however large the directory is.
- * These reads only improve the order, so one that fails leaves the page as
- * the server lists it. */
+ * Each read only adds people to rank, so one that fails costs the page those
+ * people and nothing else: the other read's people and the page's own rows
+ * are still ranked. */
 async function readNamedPeople(
   typed: TypedText,
   { viewer, request, limit, signal, span }: WindowInput
@@ -429,40 +442,42 @@ async function readNamedPeople(
     if (supported && lookupIds.size < MAX_NAMED_LOOKUP)
       lookupIds.add(supported);
   }
-  try {
-    const [exact, lookedUp] = await Promise.all([
-      // No name is an address: a whole one is looked up by ID, and nothing
-      // equals part of one.
-      typed.text.includes('@')
-        ? undefined
-        : span.span('contacts.read_server_exact', () =>
-            fetchContactReferencePage(
-              { limit, search: request.query, matching: 'ANY_NAME' },
-              signal
-            )
-          ),
-      lookupIds.size
-        ? span.span('contacts.read_server_named', () =>
-            fetchContactDirectoryByIds([...lookupIds], signal)
+  const [exact, lookedUp] = await Promise.allSettled([
+    // No name is an address: a whole one is looked up by ID, and nothing
+    // equals part of one.
+    typed.text.includes('@')
+      ? undefined
+      : span.span('contacts.read_server_exact', () =>
+          fetchContactReferencePage(
+            { limit, search: request.query, matching: 'ANY_NAME' },
+            signal
           )
-        : undefined,
-    ]);
-    if ([exact, lookedUp].some((read) => read && read.user.id !== viewer))
+        ),
+    lookupIds.size
+      ? span.span('contacts.read_server_named', () =>
+          fetchContactDirectoryByIds([...lookupIds], signal)
+        )
+      : undefined,
+  ]);
+  // A superseded read ends here, whatever its reads answered.
+  signal.throwIfAborted();
+  for (const read of [exact, lookedUp]) {
+    const answer = read.status === 'fulfilled' ? read.value : undefined;
+    if (answer && answer.user.id !== viewer)
       throw new ContactDirectoryScopeError();
-
-    const named = {
-      exact: exact?.user.contacts.nodes ?? [],
-      lookedUp: lookedUp?.user.contactsByUserIds ?? [],
-    };
-    if (named.exact.length > limit || named.lookedUp.length > lookupIds.size)
-      throw new Error('Contact response exceeds its window');
-    return named;
-  } catch (error) {
-    if (signal.aborted || error instanceof ContactDirectoryScopeError)
-      throw error;
-    span.setAttr('contacts.named_failed', true);
-    return { exact: [], lookedUp: [] };
   }
+
+  const named = {
+    exact: answeredRows(exact, (answer) => answer.user.contacts.nodes, limit),
+    lookedUp: answeredRows(
+      lookedUp,
+      (answer) => answer.user.contactsByUserIds,
+      lookupIds.size
+    ),
+  };
+  if (!named.exact || !named.lookedUp)
+    span.setAttr('contacts.named_failed', true);
+  return { exact: named.exact ?? [], lookedUp: named.lookedUp ?? [] };
 }
 
 /** Lists the people the text names ahead of the rest of the server's page,
