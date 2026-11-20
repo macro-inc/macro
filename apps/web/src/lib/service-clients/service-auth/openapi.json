@@ -6007,6 +6007,174 @@
         }
       }
     },
+    "/team_agents/{agent_user_id}/inbox": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "The agent's email inbox: its address and state. Asks email_service again\nwhile the inbox is being created. Requires a team admin or owner.",
+        "operationId": "get_team_agent_inbox",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInbox"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such agent, or it has no inbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["team-agents"],
+        "summary": "Give the agent its own email inbox, or retry the one it has; one inbox\nper agent however often this is called. Its mail belongs to the agent's\nown account. Requires a team admin or owner.",
+        "operationId": "add_team_agent_inbox",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The inbox; `failed` with a reason when the provider refused, `provisioning` while it keeps trying",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInbox"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No email provider is set up, or email inboxes didn't answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team_agents/{agent_user_id}/voice": {
       "get": {
         "tags": ["team-agents"],
@@ -7615,6 +7783,56 @@
         "description": "A provider an agent can bring its own key for.",
         "enum": ["anthropic", "openai"]
       },
+      "AgentInbox": {
+        "type": "object",
+        "description": "An agent's inbox, as admins see it.",
+        "required": ["state"],
+        "properties": {
+          "address": {
+            "type": ["string", "null"],
+            "description": "Its address, once the provider gave one."
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentInboxFailure",
+                "description": "Why it failed, with [`AgentInboxState::Failed`]."
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/AgentInboxState",
+            "description": "Where it is."
+          }
+        }
+      },
+      "AgentInboxFailure": {
+        "type": "string",
+        "description": "Why an inbox couldn't be created.",
+        "enum": [
+          "not_configured",
+          "address_taken",
+          "quota_exceeded",
+          "throttled",
+          "unavailable",
+          "rejected"
+        ]
+      },
+      "AgentInboxState": {
+        "type": "string",
+        "description": "Where an agent's inbox is.",
+        "enum": [
+          "provisioning",
+          "active",
+          "failed",
+          "paused",
+          "releasing",
+          "released"
+        ]
+      },
       "AgentSetupResponse": {
         "type": "object",
         "description": "What an agent needs to start using the SDK.",
@@ -8296,6 +8514,10 @@
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Profile picture URL (a static file the caller uploaded)."
+          },
+          "inbox": {
+            "type": "boolean",
+            "description": "Give the agent its own email inbox once its computer is bought. An\ninbox that can't be made never fails the invite."
           },
           "jobDescription": {
             "type": "string",
@@ -10884,6 +11106,17 @@
           "createdBy": {
             "type": ["string", "null"],
             "description": "Admin who invited the agent."
+          },
+          "inbox": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentInbox",
+                "description": "The agent's email inbox, if it was given one."
+              }
+            ]
           },
           "jobDescription": {
             "type": "string",
