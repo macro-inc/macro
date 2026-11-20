@@ -95,3 +95,14 @@ pub enum ContactsMessage {
     /// A message containing explicit relationships.
     Connections(ContactConnections),
 }
+
+impl ContactsMessage {
+    /// The message's shape, safe to record on a span.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Change(_) => "change",
+            Self::Nodes(_) => "nodes",
+            Self::Connections(_) => "connections",
+        }
+    }
+}

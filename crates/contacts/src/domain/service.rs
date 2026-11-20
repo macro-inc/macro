@@ -38,7 +38,7 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
     ContactsDomainService<R, N>
 {
     /// Queries a user's contacts from the repository.
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(name = "contacts.query", skip_all, err)]
     async fn query_contacts(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -52,7 +52,16 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
 
     /// Processes a list-aware directory change, the existing complete-graph
     /// message, or a separate explicit-relationships message.
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(
+        name = "contacts.process_message",
+        skip_all,
+        fields(
+            kind = msg.kind(),
+            users = tracing::field::Empty,
+            connections = tracing::field::Empty,
+        ),
+        err
+    )]
     pub(crate) async fn process_message(
         &self,
         msg: ContactsMessage,
@@ -81,6 +90,10 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
                 (users, connections)
             }
         };
+
+        let span = tracing::Span::current();
+        span.record("users", users.len() as i64);
+        span.record("connections", connections.len() as i64);
 
         let invalidations = invalidations_by_user(users, &connections);
         self.repository.create_connections(connections).await?;
