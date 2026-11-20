@@ -59,6 +59,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 sqs_worker = { path = "../sqs_worker", optional = true }
+strum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true, optional = true }

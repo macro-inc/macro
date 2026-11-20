@@ -1,5 +1,9 @@
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
-use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
+use crate::domain::models::invalidation::ContactsInvalidation;
+use crate::domain::models::list::InboxSource;
+use crate::domain::models::messages::{
+    ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
+};
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
@@ -21,6 +25,36 @@ pub trait ContactsRepository: Send + Sync + 'static {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Writes to directed, list-aware directory membership. Every write is
+/// idempotent and reports only the rows it added, so a repeat reports nothing.
+pub trait ContactListRepository: Send + Sync + 'static {
+    /// Add every user and every peer to each other's `interacted` list,
+    /// skipping self-pairs. Returns the added (owner, contact) pairs.
+    fn record_interactions(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        peers: &[MacroUserIdStr<'static>],
+    ) -> impl Future<
+        Output = Result<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>, Report>,
+    > + Send;
+
+    /// Add contacts to the inbox owner's list for that inbox, skipping the
+    /// owner. Writes nothing once the inbox is disconnected. Returns the
+    /// contacts added.
+    fn record_inbox_contacts(
+        &self,
+        inbox: &InboxSource,
+        contacts: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Remove the user's own lists and every list entry naming them. Returns
+    /// the other owners who lost them.
+    fn delete_user_lists(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Bounded directory reads, separate from the deployed full-list API.
@@ -130,10 +164,11 @@ pub trait ContactDirectory: Send + Sync + 'static {
 
 /// Port trait for notifying users about contact changes.
 pub trait ContactsNotifier: Send + Sync + 'static {
-    /// Invalidates cached contacts for the given user IDs.
+    /// Tells each user's clients their directory changed, naming the contacts
+    /// to re-read when they are known.
     fn invalidate_contacts_for_users(
         &self,
-        user_ids: Vec<MacroUserIdStr<'_>>,
+        invalidations: Vec<ContactsInvalidation>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -161,6 +196,12 @@ pub trait ContactsIngressQueue: Send + Sync + 'static {
         &self,
         message: ContactConnections,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Publishes one bounded list-aware directory change to the queue.
+    fn publish_change(
+        &self,
+        message: DirectoryChange,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port trait for enqueuing contacts messages for async processing.
@@ -175,6 +216,41 @@ pub trait ContactsIngress: Send + Sync + 'static {
     fn enqueue_contact_connections(
         &self,
         connections: Vec<ContactConnection>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Producer API for list-aware directory changes. Each call is split into
+/// queue messages small enough for SQS, and each message is applied on its own,
+/// so a retry after a partial publish only repeats idempotent writes.
+pub trait ContactListIngress: Send + Sync + 'static {
+    /// Record that every user and every peer have interacted. Mutual: each
+    /// gains the other. Pass the same set as both to pair a whole channel.
+    fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Record the people the inbox owner knows through that inbox. Directed:
+    /// the contacts' own directories are unchanged.
+    fn record_inbox_contacts(
+        &self,
+        inbox: InboxSource,
+        contacts: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Tell each user's clients to re-read `changed`. Empty, or more than one
+    /// lookup holds, means unknown: the clients fall back to their scan.
+    fn directory_changed(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Drop the deleted user's directory and remove them from every other.
+    fn user_deleted(
+        &self,
+        user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

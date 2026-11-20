@@ -5403,6 +5403,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "strum 0.27.2",
  "subsequence_match",
  "tokio",
  "tower 0.5.3",

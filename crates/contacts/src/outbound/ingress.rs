@@ -1,4 +1,4 @@
-use crate::domain::models::messages::{ContactConnections, ContactsNodes};
+use crate::domain::models::messages::{ContactConnections, ContactsNodes, DirectoryChange};
 use crate::domain::ports::ContactsIngressQueue;
 use rootcause::Report;
 
@@ -37,6 +37,11 @@ impl ContactsIngressQueue for SqsContactsQueue {
 
     #[tracing::instrument(skip(self, message), err)]
     async fn publish_connections(&self, message: ContactConnections) -> Result<(), Report> {
+        self.publish(&message).await
+    }
+
+    #[tracing::instrument(skip(self, message), err)]
+    async fn publish_change(&self, message: DirectoryChange) -> Result<(), Report> {
         self.publish(&message).await
     }
 }

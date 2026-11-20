@@ -2,6 +2,10 @@
 pub mod contact;
 /// Generic graph data structures (vertices and edges).
 pub mod graph;
+/// Directory invalidations sent to a user's clients.
+pub mod invalidation;
+/// The lists a contact belongs to, and inbox sources.
+pub mod list;
 /// SQS message types for the contacts queue.
 pub mod messages;
 /// Validated limits, cursors, and pages for bounded directory reads.
