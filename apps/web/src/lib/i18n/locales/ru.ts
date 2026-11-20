@@ -103,7 +103,6 @@ export default {
     close: 'Закрыть',
     delete: 'Удалить',
     rename: 'Переименовать',
-    more: 'Ещё',
     search: 'Поиск',
     settings: 'Настройки',
   },
@@ -742,8 +741,6 @@ export default {
     create: 'Создать',
     getMobileApp: 'Скачать мобильное приложение',
     signedInAs: 'Вы вошли как {{name}}',
-    commandMenu: 'Меню команд',
-    searchEverything: 'Искать везде',
     customizeSidebar: 'Настроить боковую панель',
     customizeSidebarDescription:
       'Выберите приложения для боковой панели и перетащите их, чтобы изменить порядок. Главная всегда остаётся первой.',

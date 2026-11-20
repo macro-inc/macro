@@ -22,9 +22,9 @@ const MACROD_PAIRING_CODE = `grep '"event":"pairing"' ~/.macrod/agent.log`;
 
 const MACROD_APPROVE = `await macro.harnesses.pairing('<code>').approve();`;
 
-const PRODUCT_DOCS_URL = 'https://docs.macro.com';
+const PRODUCT_DOCS_URL = 'https://macro.com/docs';
 const SDK_DOCS_URL = 'https://sdk.macro.com';
-const MACROD_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
+const MACROD_DOCS_URL = 'https://macro.com/docs/AI/bring-your-own';
 const MACROD_SOURCE_URL =
   'https://github.com/macro-inc/macro/tree/main/crates/coding_agent_worker';
 

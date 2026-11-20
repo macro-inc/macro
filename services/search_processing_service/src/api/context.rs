@@ -9,6 +9,7 @@ use tokio_util::task::TaskTracker;
 use crate::BackfillServiceImpl;
 use crate::config::Config;
 use crate::domain::jobs::BackfillJobs;
+use crate::outbound::backfill_control::DynamoBackfillControl;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<NoopMacroAuthJwtValidator>;
 pub(crate) type SpsEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
@@ -22,5 +23,11 @@ pub(crate) struct ApiContext {
     pub config: Arc<Config>,
     pub backfill_service: Arc<BackfillServiceImpl>,
     pub backfill_jobs: BackfillJobs,
+    /// The switch that pauses every backfill, in every task.
+    pub backfill_control: DynamoBackfillControl,
+    /// The cap and pause every backfill in this task passes.
+    pub backfill_gate: crate::domain::backfill_gate::BackfillGate,
+    pub email_attachment_status_backfill: Arc<crate::EmailAttachmentStatusBackfill>,
+    pub deleted_chat_message_repair: Arc<crate::DeletedChatMessageRepair>,
     pub macro_event_broker: SpsEventBroker,
 }

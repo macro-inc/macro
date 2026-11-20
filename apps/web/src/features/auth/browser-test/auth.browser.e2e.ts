@@ -293,3 +293,43 @@ test('with Microsoft sign-up off, the work step is Google only as before', async
     page.getByRole('button', { name: 'Continue with Microsoft' })
   ).toHaveCount(0);
 });
+
+test('the Apple sign-in icon fits its viewport on a phone', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openFixture(page, '/?page=login&apple=true');
+  const button = page.getByRole('button', { name: 'Continue with Apple' });
+  await expect(button).toBeVisible();
+  const icon = button.locator('svg');
+  const bounds = await icon.evaluate((svg: SVGSVGElement) => {
+    const viewport = svg.getBoundingClientRect();
+    const paths = Array.from(svg.querySelectorAll('path')).map((path) => {
+      const box = path.getBBox();
+      const matrix = path.getScreenCTM();
+      if (!matrix) throw new Error('Apple icon is not laid out');
+      const start = new DOMPoint(box.x, box.y).matrixTransform(matrix);
+      const end = new DOMPoint(
+        box.x + box.width,
+        box.y + box.height
+      ).matrixTransform(matrix);
+      return { left: start.x, top: start.y, right: end.x, bottom: end.y };
+    });
+    return {
+      viewport: {
+        left: viewport.left,
+        top: viewport.top,
+        right: viewport.right,
+        bottom: viewport.bottom,
+      },
+      paths,
+    };
+  });
+  await page.screenshot({ path: test.info().outputPath('apple-sign-in.png') });
+  for (const path of bounds.paths) {
+    expect(path.left).toBeGreaterThanOrEqual(bounds.viewport.left);
+    expect(path.top).toBeGreaterThanOrEqual(bounds.viewport.top);
+    expect(path.right).toBeLessThanOrEqual(bounds.viewport.right);
+    expect(path.bottom).toBeLessThanOrEqual(bounds.viewport.bottom);
+  }
+});

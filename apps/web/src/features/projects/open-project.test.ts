@@ -12,7 +12,6 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({ getSplitByContent: mocks.getSplitByContent }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => true,
 }));
 

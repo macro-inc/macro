@@ -97,6 +97,10 @@ impl Endpoints {
             "LOCAL_E2E_NOTIFICATION_URL".into(),
             format!("{}/notification", self.proxy_url),
         );
+        env.insert(
+            "LOCAL_E2E_AUTHENTICATION_URL".into(),
+            format!("{}/auth", self.proxy_url),
+        );
         env
     }
 }

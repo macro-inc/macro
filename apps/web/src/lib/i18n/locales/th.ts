@@ -103,7 +103,6 @@ export default {
     close: 'ปิด',
     delete: 'ลบ',
     rename: 'เปลี่ยนชื่อ',
-    more: 'เพิ่มเติม',
     search: 'ค้นหา',
     settings: 'การตั้งค่า',
   },
@@ -655,8 +654,6 @@ export default {
     create: 'สร้าง',
     getMobileApp: 'ดาวน์โหลดแอปบนอุปกรณ์เคลื่อนที่',
     signedInAs: 'ลงชื่อเข้าใช้เป็น {{name}}',
-    commandMenu: 'เมนูคำสั่ง',
-    searchEverything: 'ค้นหาทุกอย่าง',
     customizeSidebar: 'ปรับแต่งแถบด้านข้าง',
     customizeSidebarDescription:
       'เลือกแอปที่จะแสดงในแถบด้านข้าง แล้วลากเพื่อจัดลำดับใหม่ หน้าแรกจะอยู่ลำดับแรกเสมอ',

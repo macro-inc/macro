@@ -66,7 +66,7 @@ export function chatEntity(props: DocxHeaderProps) {
 export function BetaBadge() {
   return (
     <Badge variant="outline" size="xs">
-      Beta
+      {t('entityActions.betaBadge')}
     </Badge>
   );
 }

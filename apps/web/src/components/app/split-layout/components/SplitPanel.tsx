@@ -27,6 +27,7 @@ import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
+import { resolveComponent } from '../componentRegistry';
 import {
   type SplitBottomPanelRegistration,
   type SplitFileMenuActionGroups,
@@ -37,6 +38,7 @@ import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton, splitViewId } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { splitContentFromLocation } from '../split-router/legacy-route';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
 import { SplitDrawerGroup } from './SplitDrawerContext';
@@ -57,7 +59,7 @@ export function SplitPanel(props: SplitPanelProps) {
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const navigationCollapsed = createSignal(true);
+  const navigationCollapsed = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -161,6 +163,24 @@ export function SplitPanel(props: SplitPanelProps) {
   };
 
   const router = useOptionalSplitRouter();
+  const ownsCollectionState = () => {
+    const entry = router?.entry(props.handle.id as string as PaneId);
+    if (!entry) {
+      return (
+        props.split.mount.kind === 'component' &&
+        props.split.mount.meta.ownsCollectionState
+      );
+    }
+
+    // The outlet can render a committed route before the layout mirror updates.
+    // Choose its provider from that same entry, so leaving CRM supplies the
+    // collection context before a destination such as Calls mounts.
+    const content = splitContentFromLocation(entry.location);
+    return (
+      content.type === 'component' &&
+      resolveComponent(content.id).initialMeta?.ownsCollectionState
+    );
+  };
   const hasExternalChat = () =>
     router
       ?.entry(props.handle.id as string as PaneId)
@@ -173,8 +193,12 @@ export function SplitPanel(props: SplitPanelProps) {
 
   const hasSplitHeader = () => {
     const content = props.handle.content();
+    // Composable views own desktop chrome, but mobile islands still need the
+    // split header's portal targets while their MobileHeader is mounted.
+    const ownsMobileHeader =
+      isTouchDevice() && mobileHeaderOwner[0]() !== undefined;
     return (
-      !usesComposableLayout() &&
+      (!usesComposableLayout() || ownsMobileHeader) &&
       !(
         isTouchDevice() &&
         content.type === 'component' &&
@@ -204,10 +228,7 @@ export function SplitPanel(props: SplitPanelProps) {
     >
       <Suspense>
         <Show
-          when={
-            props.split.mount.kind === 'component' &&
-            props.split.mount.meta.ownsCollectionState
-          }
+          when={ownsCollectionState()}
           fallback={
             <SoupViewContextProvider soup={nextSoup}>
               <SplitRouter.Outlet

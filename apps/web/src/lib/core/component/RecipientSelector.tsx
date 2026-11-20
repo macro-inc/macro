@@ -657,6 +657,37 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     () => {}
   );
 
+  // Read the next page of suggestions when the end of the list is in view:
+  // on scroll, and whenever a page lands still short of the end, an empty one
+  // included. One page is in flight at a time, and a failed page waits for
+  // Retry.
+  const [listHandle, setListHandle] = createSignal<VirtualizerHandle | null>(
+    null
+  );
+  const loadNearEnd = () => {
+    if (!source || !isOpen()) return;
+    if (source.loading() || source.error() || !source.hasNext()) return;
+    const handle = listHandle();
+    const remaining =
+      handle && visibleOptionKeys().size > 0
+        ? handle.scrollSize - handle.scrollOffset - handle.viewportSize
+        : 0;
+    if (remaining > RECIPIENT_OPTION_HEIGHT_PX * 3) return;
+    fireAndForget(source.next(), 'recipient-directory');
+  };
+  createEffect(
+    on(
+      [
+        listHandle,
+        isOpen,
+        () => visibleOptionKeys().size,
+        () => source?.loading(),
+        () => source?.hasNext(),
+      ],
+      loadNearEnd
+    )
+  );
+
   const selectedLen = () => props.selectedOptions.length;
 
   let contentEl: HTMLElement | undefined;
@@ -1113,13 +1144,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 autoFocus="first"
               >
                 {(items) => {
-                  const arr = Array.from(items());
-                  const count = arr.length;
-                  const visibleCount = Math.min(
-                    count,
-                    RECIPIENT_OPTION_MAX_VISIBLE_COUNT
-                  );
-                  const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
+                  // Read the options only inside the list, never in this
+                  // function: Kobalte reruns it on every read it makes, which
+                  // would remount the list at the top when a page appends.
+                  const arr = createMemo(() => Array.from(items()));
+                  const height = () =>
+                    Math.min(arr().length, RECIPIENT_OPTION_MAX_VISIBLE_COUNT) *
+                    RECIPIENT_OPTION_HEIGHT_PX;
 
                   const [handle, setHandle] =
                     createSignal<VirtualizerHandle | null>(null);
@@ -1127,7 +1158,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   setScrollToItem(() => (key: string) => {
                     const virtualizerHandle = handle();
                     if (virtualizerHandle) {
-                      const ndx = arr.findIndex((item) => item.key === key);
+                      const ndx = arr().findIndex((item) => item.key === key);
                       if (ndx > -1) {
                         virtualizerHandle.scrollToIndex(ndx, {
                           align: 'nearest',
@@ -1138,12 +1169,16 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
                   return (
                     <VList
-                      data={arr}
+                      data={arr()}
                       itemSize={RECIPIENT_OPTION_HEIGHT_PX}
                       style={{
-                        height: `${height}px`,
+                        height: `${height()}px`,
                       }}
-                      ref={setHandle}
+                      ref={(value) => {
+                        setHandle(value ?? null);
+                        setListHandle(value ?? null);
+                      }}
+                      onScroll={loadNearEnd}
                     >
                       {(item) => {
                         return (

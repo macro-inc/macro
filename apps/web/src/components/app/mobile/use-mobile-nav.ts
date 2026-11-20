@@ -6,6 +6,7 @@ import {
   reviewsTabSearch,
   reviewsTabSearchCodec,
 } from '@app/features/reviews-view/reviews-tab-search';
+import type { SplitLocation } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -22,6 +23,7 @@ import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
 export type MobileDockNavId =
   | ListView
   | 'calendar'
+  | 'projects'
   | 'reviews'
   | 'booking-links'
   | 'external'
@@ -29,6 +31,29 @@ export type MobileDockNavId =
   | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
+  if (id === 'projects') {
+    return {
+      type: 'component' as const,
+      id: 'tasks',
+      entryMetadata: {
+        route: paneRoute(
+          { id: 'view-tasks', params: {} },
+          { id: 'tasks-projects', params: { projectsTab: 'projects' } }
+        ),
+        search: { tasks: { tab: ['projects'] } },
+      },
+    };
+  }
+  if (id === 'tasks') {
+    return {
+      type: 'component' as const,
+      id,
+      entryMetadata: {
+        route: paneRoute({ id: 'view-tasks', params: {} }),
+        search: { tasks: { tab: ['my-tasks'] } },
+      },
+    };
+  }
   if (id === 'documents') {
     return {
       type: 'component' as const,
@@ -69,6 +94,14 @@ export function useForegroundMobileView(): Accessor<
     const content = globalSplitManager()?.activeSplit()?.content();
     if (!content) return undefined;
     if (content.type !== 'component') return undefined;
+    if (content.id === 'tasks') {
+      const location = content.entryMetadata as SplitLocation | undefined;
+      const projectRoute = location?.route?.matches.some((match) =>
+        match.id.startsWith('tasks-project')
+      );
+      if (projectRoute) return 'projects';
+    }
+    if (content.id === 'tasks-projects') return 'projects';
     // The unified Notifications view is the dock's bell.
     if (content.id === 'notifications') return 'home';
     return isMobileNavViewId(content.id) ? content.id : undefined;
@@ -110,7 +143,9 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
       resume: id !== 'search',
       mergeHistory: isOnNavView,
       // Route through the router so an existing pane receives the default tab.
-      search: id === 'documents' || id === 'reviews' ? {} : undefined,
+      search: ['documents', 'reviews', 'projects', 'tasks'].includes(id)
+        ? {}
+        : undefined,
     });
   };
 }

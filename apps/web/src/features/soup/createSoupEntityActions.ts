@@ -29,6 +29,7 @@ import {
   makeRemoveFromProjectAction,
   makeRenameAction,
   makeShareAction,
+  notificationSettingsMenuFor,
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
@@ -50,11 +51,7 @@ import {
   openInNewTab,
 } from '@components/app/tab-layout/open-in-new-tab';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import {
-  enableEntityAppearance,
-  enableProjects,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -74,7 +71,6 @@ import CubeIcon from '@icon/system/regular/cube.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
-import FlagIcon from '@icon/system/regular/flag.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import ImageIcon from '@icon/system/regular/image.svg';
@@ -84,12 +80,16 @@ import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import ProhibitIcon from '@icon/system/regular/prohibit.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
+import TaskInProgressIcon from '@icon/system/regular/task-in-progress.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
+import PriorityHighIcon from '@icon/wide-priority-high.svg';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
+import type { NotificationSettingsMenuProps } from '@notifications/components/NotificationSettingsMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
+import { useChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { type Component, createComponent, type JSX } from 'solid-js';
@@ -109,6 +109,7 @@ export type SoupEntityActionItem = {
   destructive?: boolean;
   disabled?: boolean;
   muteMenu?: NotificationMuteMenuProps;
+  notificationSettingsMenu?: NotificationSettingsMenuProps;
   /** Desktop-only composed item, such as an entity picker submenu. */
   menuItem?: Component<{ onActionComplete?: () => void }>;
 };
@@ -161,7 +162,6 @@ export function createSoupEntityActions(
   isFavorited: (entity: EntityData) => boolean;
 } {
   const analytics = useAnalytics();
-  const projectsFlag = useFeatureFlag(enableProjects);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const userId = useUserId();
   const changeIcon = useChangeEntityIcon();
@@ -217,8 +217,10 @@ export function createSoupEntityActions(
 
   const copyAction = makeCopyAction();
   const favoriteAction = makeFavoriteAction();
+  const channelSettings = useChannelNotificationSettings();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
+    channelSettings,
   });
   const moveToProjectAction = makeMoveToProjectAction({
     userId: () => userId(),
@@ -258,11 +260,9 @@ export function createSoupEntityActions(
 
     // Projects act through the Projects view's dialogs. Rows carry no access
     // level, so rename and delete wait for ownership, which allows both.
-    const projectIds =
-      projectsFlag().enabled &&
-      canExecuteAll((entity) => entity.type === 'initiative')
-        ? entities.map((entity) => entity.id)
-        : [];
+    const projectIds = canExecuteAll((entity) => entity.type === 'initiative')
+      ? entities.map((entity) => entity.id)
+      : [];
     const ownsProjects =
       projectIds.length > 0 &&
       entities.every((entity) => entity.ownerId === userId());
@@ -508,16 +508,34 @@ export function createSoupEntityActions(
       });
     }
 
+    // With Notification Settings, Mute joins it in a group of its own.
+    const notificationSettingsMenu = notificationSettingsMenuFor(
+      channelSettings,
+      entities
+    );
+    const notificationItems: SoupEntityActionItem[] = [];
+    const muteItems = notificationSettingsMenu
+      ? notificationItems
+      : middleItems;
     if (canExecuteAll(muteAction.canExecute)) {
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
-      middleItems.push({
+      const muteMenu = muteAction.menu(entities);
+      muteItems.push({
         id: 'mute',
         icon: allMuted ? BellIcon : BellSlashIcon,
-        label: allMuted
-          ? t('entityActions.unmuteNotifications')
-          : t('entityActions.muteNotifications'),
+        label: allMuted ? muteMenu.unmuteLabel : muteMenu.label,
         onClick: handle(muteAction.executeWithSoup),
-        muteMenu: muteAction.menu(entities),
+        muteMenu,
+      });
+    }
+
+    if (notificationSettingsMenu) {
+      notificationItems.push({
+        id: 'notification-settings',
+        icon: BellIcon,
+        label: t('channelSections.notificationSettings'),
+        onClick: () => {},
+        notificationSettingsMenu,
       });
     }
 
@@ -550,18 +568,12 @@ export function createSoupEntityActions(
       });
     }
 
-    if (
-      projectsFlag().enabled &&
-      openProjectPicker &&
-      canExecuteAll(isTaskEntity)
-    ) {
+    if (openProjectPicker && canExecuteAll(isTaskEntity)) {
       middleItems.push({
         id: 'set-initiative',
         icon: CubeIcon,
         label: t('entityActions.addToProject'),
-        onClick: () => {
-          if (isFeatureEnabled(enableProjects)) openProjectPicker();
-        },
+        onClick: () => openProjectPicker(),
       });
     }
 
@@ -573,13 +585,13 @@ export function createSoupEntityActions(
           SYSTEM_PROPERTY_IDS.STATUS,
           t('entityActions.setStatus'),
           TOKENS.entity.action.status,
-          CheckCircleIcon,
+          TaskInProgressIcon,
         ],
         [
           SYSTEM_PROPERTY_IDS.PRIORITY,
           t('entityActions.setPriority'),
           TOKENS.entity.action.priority,
-          FlagIcon,
+          PriorityHighIcon,
         ],
         [
           SYSTEM_PROPERTY_IDS.ASSIGNEES,
@@ -793,6 +805,7 @@ export function createSoupEntityActions(
     return [
       { id: 'top', items: topItems },
       { id: 'middle', items: middleItems },
+      { id: 'notifications', items: notificationItems },
       { id: 'sender', items: senderItems },
       { id: 'crm', items: crmItems },
       { id: 'delete', items: deleteItems },

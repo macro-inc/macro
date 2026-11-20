@@ -3,7 +3,6 @@ import {
   NIL_UUID,
   type SoupSearchRequest,
 } from '@app/features/soup';
-import { notificationStatesForFilter } from '@notifications/notification-state';
 import type { SearchSoupQueryArgs } from '@queries/soup/search';
 import type {
   EmailFilters,
@@ -11,6 +10,7 @@ import type {
 } from '@service-search/generated/models';
 import { match } from 'ts-pattern';
 import { isExcludedEmailFolder } from '../constants';
+import { EMAIL_ATTACHMENT_KINDS } from '../filters/email-facets';
 import type { EmailTab } from '../types';
 import type { EmailQueryContext } from './email-query';
 
@@ -26,9 +26,8 @@ const nonEmailFilters: EntityFilters = {
   project_filters: { project_ids: [NIL_UUID] },
 };
 
-// Search has no draft/sent scoping, so those tabs (like All) search the
-// user's own threads — the same reach the legacy mail search had. It cannot
-// filter archive state either, so `emailMatchesTab` trims Archived hits.
+// Each tab searches the threads its list shows. Favorites narrows by thread id
+// in `buildEmailSearchRequest`; Scheduled and Reminders have no search.
 function tabFilters(tab: EmailTab): EmailFilters {
   // Focus filters its own list on the client; this search stays dormant there.
   return (
@@ -45,16 +44,10 @@ function tabFilters(tab: EmailTab): EmailFilters {
       .with('shared', () => ({ shared: 'only' as const }))
       // These views disable service search; fail closed if called independently.
       .with('spam', 'trash', () => ({ email_thread_ids: [NIL_UUID] }))
-      .with('archived', () => ({ shared: 'exclude' as const }))
-      .with(
-        'favorites',
-        'drafts',
-        'scheduled',
-        'reminders',
-        'sent',
-        'all',
-        () => ({})
-      )
+      .with('archived', () => ({ shared: 'exclude' as const, done: true }))
+      .with('sent', () => ({ view: 'sent' as const }))
+      .with('drafts', () => ({ view: 'drafts' as const }))
+      .with('favorites', 'scheduled', 'reminders', 'all', () => ({}))
       .exhaustive(() => ({}))
   );
 }
@@ -62,10 +55,15 @@ function tabFilters(tab: EmailTab): EmailFilters {
 const soleSelection = (selection: string[] | undefined) =>
   selection?.length === 1 ? selection[0] : undefined;
 
+const isAttachmentOption = (
+  id: string
+): id is keyof typeof EMAIL_ATTACHMENT_KINDS => id in EMAIL_ATTACHMENT_KINDS;
+
 /**
  * The read and done facets are single-select, so at most one option of each
- * reaches the service. Attachment facets have no service counterpart; those
- * refine the results client-side like the list page.
+ * reaches the service. Done is the thread being out of the inbox, as in the
+ * list, not its notification state. Attachment options match a thread with
+ * any of the selected kinds, as the list's attachment facet does.
  */
 function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   const filters: Partial<EmailFilters> = {};
@@ -74,17 +72,43 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   if (read === 'read') filters.is_read = true;
 
   const done = soleSelection(facets.done);
-  if (done === 'not-done' || done === 'done') {
-    filters.notification_filters = {
-      states: notificationStatesForFilter('done', done === 'done'),
-    };
-  }
+  if (done === 'done') filters.done = true;
+  if (done === 'not-done') filters.done = false;
 
   if ((facets.calendar ?? []).includes('has-calendar-invite')) {
     filters.calendar_only = true;
   }
 
+  const attachments = [
+    ...new Set(
+      (facets.attachments ?? [])
+        .filter(isAttachmentOption)
+        .map((id) => EMAIL_ATTACHMENT_KINDS[id])
+    ),
+  ];
+  if (attachments.length > 0) filters.attachments = attachments;
+
   return filters;
+}
+
+/**
+ * The facet groups `buildEmailSearchRequest` sends to the service. Search hits
+ * carry no attachment or invitation fields, so these must not be re-tested on
+ * the client against a hit.
+ */
+const SERVICE_FACET_GROUPS = [
+  'read',
+  'done',
+  'calendar',
+  'attachments',
+  'tags',
+] as const;
+
+/** The part of `facets` that service search leaves to the client. */
+export function facetsLeftToClient(facets: FacetSelection): FacetSelection {
+  const left: FacetSelection = { ...facets };
+  for (const group of SERVICE_FACET_GROUPS) delete left[group];
+  return left;
 }
 
 /** Mirrors the Email view's tab, inbox, and facet scoping for service-backed search. */
@@ -101,14 +125,24 @@ export function buildEmailSearchRequest(
           (id) => admittedIds === undefined || admittedIds.includes(id)
         )
       : admittedIds;
+  const tab = tabFilters(context.tab);
+  const facets = facetFilters(
+    admittedIds ? { ...context.facets, read: [] } : context.facets
+  );
+  // The tab and a facet are ANDed, as in the list: Archived with Not done
+  // matches nothing.
+  const contradicts =
+    tab.done !== undefined &&
+    facets.done !== undefined &&
+    tab.done !== facets.done;
   const emailFilters: EmailFilters = {
-    ...tabFilters(context.tab),
-    ...facetFilters(
-      admittedIds ? { ...context.facets, read: [] } : context.facets
-    ),
-    ...(threadIds
-      ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
-      : {}),
+    ...tab,
+    ...facets,
+    ...(contradicts
+      ? { email_thread_ids: [NIL_UUID] }
+      : threadIds
+        ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
+        : {}),
   };
 
   if (context.inboxIds !== undefined) {

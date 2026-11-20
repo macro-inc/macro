@@ -11,6 +11,9 @@
 //! or its owner adopted it, in which case it is kept as it is. Every claimed
 //! row leaves the queue either way.
 //!
+//! Documents that lost their links before the queue existed are found and
+//! queued by [`orphans`].
+//!
 //! A batch writes what a document's own trash writes and publishes one
 //! [`EmailAttachmentsReleased`](super::events::DocumentTopicEvent::EmailAttachmentsReleased)
 //! event naming its trashed and kept documents, none of which is an email
@@ -21,6 +24,7 @@ use super::events::{DocumentMacroEvent, EmailAttachmentsReleasedMetadata};
 use macro_event_broker::MacroEventBroker;
 use std::future::Future;
 
+pub mod orphans;
 #[cfg(test)]
 mod test;
 

@@ -21,6 +21,9 @@ use anyhow::Result;
 use super::instance::{Instance, Port};
 use super::{Mode, frontend, identity, proxy, resources};
 
+/// Issuer of the local Passwords service JWTs that OpenBao team roles trust.
+pub const PASSWORDS_JWT_ISSUER: &str = "macro-local-passwords";
+
 /// The public hostnames `--with-cf-tunnel` minted for this run.
 ///
 /// Both exist for the same reason: an agent that is not on this machine — a
@@ -134,11 +137,12 @@ impl LocalEnv {
     pub fn to_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
         env.insert("ENVIRONMENT".into(), self.environment.into());
+        // The services are debug builds: a request that goes deep (a mailbox's
+        // first backfill, a Soup query) overflows a worker thread's default
+        // stack and aborts the process.
+        env.insert("RUST_MIN_STACK".into(), "67108864".into());
         env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
-        env.insert(
-            "PASSWORDS_JWT_ISSUER".into(),
-            "macro-local-passwords".into(),
-        );
+        env.insert("PASSWORDS_JWT_ISSUER".into(), PASSWORDS_JWT_ISSUER.into());
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
@@ -278,6 +282,15 @@ impl InfraEnv {
                 "{}/{}",
                 self.local_aws_public_url,
                 resources::DOC_STORAGE_BUCKET
+            ),
+        );
+        // Received email attachments are downloaded from the same endpoint.
+        env.insert(
+            "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
+            format!(
+                "{}/{}",
+                self.local_aws_public_url,
+                resources::EMAIL_ATTACHMENTS_BUCKET
             ),
         );
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
@@ -718,6 +731,12 @@ impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         // DSS requires a project key at boot; real flag evaluation needs Doppler.
         env.insert("POSTHOG_API_KEY".into(), "local-posthog-project-key".into());
+        // The email focus worker polls its flag with this; a placeholder fails
+        // each poll, so a local worker classifies nothing without Doppler.
+        env.insert(
+            "POSTHOG_FEATURE_FLAGS_SECURE_API_KEY".into(),
+            "local-posthog-feature-flags-key".into(),
+        );
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
@@ -772,6 +791,9 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
             "local-cloudfront-signer-private-key".into(),
         );
+        // Local stacks run a computer fleet, so the agents worker that takes
+        // back agent teammates of released computers is on.
+        env.insert("COMPUTERS_AGENT_EFFECTS".into(), "true".into());
         // authentication_service's third-party OAuth/Stripe config. The Google
         // pair is the client the stack's Gmail emulator is given (see
         // google_emulator.rs); the FusionAuth kickstart only creates the
@@ -795,7 +817,7 @@ impl BootStubEnv {
             "local-account-link-state-secret-0123456789".into(),
         );
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
-        env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
+        env.insert("STRIPE_PRICE_ID".into(), "price_local".into());
         env.insert(
             "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID".into(),
             "price_local_computer_standard_monthly".into(),
@@ -854,13 +876,10 @@ impl BootStubEnv {
         // email_service's GCP pubsub queue (gmail watch notifications) and
         // its own CloudFront signer for attachment presigned URLs.
         env.insert("GMAIL_GCP_QUEUE".into(), "gmail-gcp-queue-local".into());
-        env.insert(
-            "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
-            "http://localhost:8100".into(),
-        );
+        // A key the service can sign with: it signs every attachment link.
         env.insert(
             "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY".into(),
-            "local".into(),
+            identity::ATTACHMENT_LINK_SIGNING_KEY.into(),
         );
         env.insert(
             "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID".into(),
@@ -934,9 +953,10 @@ impl BootStubEnv {
         // Doppler; real provider calls still fail on the dummy keys.
         // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
         env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        env.insert("CEREBRAS_API_KEY".into(), "local-cerebras-key".into());
         env.insert(
-            "GOOGLE_GENERATIVE_AI_API_KEY".into(),
-            "local-google-generative-ai-key".into(),
+            super::model_emulator::API_KEY_VAR.into(),
+            super::model_emulator::PLACEHOLDER_API_KEY.into(),
         );
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(

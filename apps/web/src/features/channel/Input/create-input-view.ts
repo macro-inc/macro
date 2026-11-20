@@ -1,6 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { Telemetry } from '@macro-inc/observability';
-import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
   createEffect,
@@ -8,6 +7,7 @@ import {
   createSignal,
   on,
 } from 'solid-js';
+import { holdPersistedDraftText } from './shared-draft';
 import type {
   InputAttachmentTracker,
   InputCallbacks,
@@ -38,12 +38,10 @@ export type InputView = {
 };
 
 export function createInputView(options: CreateInputViewOptions): InputView {
-  const rawValue = createSignal<string | undefined>(
-    options.initialInput.value || undefined
-  );
+  const initialValue = options.initialInput.value || undefined;
   const [persistedValue, setValueSignal] = options.persistenceKey
-    ? makePersisted(rawValue, { name: options.persistenceKey })
-    : rawValue;
+    ? holdPersistedDraftText(options.persistenceKey, initialValue)
+    : createSignal<string | undefined>(initialValue);
   const value = () => persistedValue() ?? '';
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(

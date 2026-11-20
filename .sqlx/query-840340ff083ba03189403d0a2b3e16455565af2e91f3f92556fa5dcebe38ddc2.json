@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_consent SET consent_incarnation=$3 WHERE team_id=$1 AND user_id=$2 AND consent_incarnation IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "840340ff083ba03189403d0a2b3e16455565af2e91f3f92556fa5dcebe38ddc2"
+}

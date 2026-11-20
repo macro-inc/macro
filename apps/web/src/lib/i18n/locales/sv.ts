@@ -104,7 +104,6 @@ export default {
     close: 'Stäng',
     delete: 'Ta bort',
     rename: 'Byt namn',
-    more: 'Mer',
     search: 'Sök',
     settings: 'Inställningar',
   },
@@ -688,8 +687,6 @@ export default {
     create: 'Skapa',
     getMobileApp: 'Hämta mobilappen',
     signedInAs: 'Inloggad som {{name}}',
-    commandMenu: 'Kommandomeny',
-    searchEverything: 'Sök i allt',
     customizeSidebar: 'Anpassa sidofältet',
     customizeSidebarDescription:
       'Välj vilka appar som visas i sidofältet och dra för att ändra ordningen. Hem ligger alltid först.',

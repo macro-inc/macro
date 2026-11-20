@@ -39,6 +39,7 @@ const row = (
 ): NotificationInboxRow => ({
   id: 'row',
   type: 'task',
+  alsoListedAs: [],
   revision: 'rev',
   latestAt: 1,
   actor,
@@ -173,6 +174,7 @@ const stack = (
 ): NotificationInboxRow => ({
   id: 'stack',
   type,
+  alsoListedAs: [],
   threadId,
   revision: 'rev',
   latestAt: 1,

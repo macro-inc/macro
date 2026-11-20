@@ -365,7 +365,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     folder: Uuid,
     share: bool,
     people: &PeopleMap,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<Uuid> {
@@ -408,13 +408,14 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
+                    let links = links.read().await.clone();
                     writer
                         .create_task(
                             user,
                             id,
                             title,
                             &body,
-                            links,
+                            &links,
                             &properties,
                             Some(tasks_folder),
                             Some(SourceDates::from(&row)),

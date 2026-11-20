@@ -1,5 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { batch, createSignal, onCleanup } from 'solid-js';
-import type { MobilePaneStack } from './createMobilePaneStack';
+import { createMobileEdgeSwipe } from './createMobileEdgeSwipe';
+
+export const SWIPE_ANIMATION_MS = 88;
+export const BG_PEEK_OFFSET = 110;
 
 type SplitTransformStyle = {
   transform: string;
@@ -8,52 +12,57 @@ type SplitTransformStyle = {
 };
 
 type MobileSwipeBackGestureOptions = {
-  animationMs: number;
-  bgPeekOffset: number;
-  edgeThreshold: number;
-  velocityThreshold: number;
-  distanceThreshold: number;
-  stack: MobilePaneStack;
-  canStart: () => boolean;
+  canGoBack: () => boolean;
+  completeGoBack: () => void | Promise<void>;
+  width?: () => number;
+  inPaneBack?: { canGoBack(): boolean; goBack(): void };
 };
 
 export function createMobileSwipeBackGesture(
   options: MobileSwipeBackGestureOptions
 ) {
   const [dragOffset, setDragOffset] = createSignal(0);
-  const [isDragging, setIsDragging] = createSignal(false);
+  const [dragging, setDragging] = createSignal<false | 'pane' | 'route'>(false);
+  const isDragging = () => dragging() !== false;
   const [isAnimatingOut, setIsAnimatingOut] = createSignal(false);
 
-  let startX = 0;
-  let startTime = 0;
   let animationTimer: ReturnType<typeof setTimeout> | undefined;
+  let animation = 0;
+  const width = () => options.width?.() || window.innerWidth;
 
   function clearScheduledAnimation() {
     clearTimeout(animationTimer);
+    animation++;
   }
 
   onCleanup(clearScheduledAnimation);
 
   function reset() {
+    gesture.reset();
     clearScheduledAnimation();
     batch(() => {
-      setIsDragging(false);
+      setDragging(false);
       setIsAnimatingOut(false);
       setDragOffset(0);
     });
   }
 
-  function animateComplete(onDone: () => void) {
+  async function completeBack() {
+    const current = animation;
+    try {
+      await options.completeGoBack();
+    } finally {
+      if (current === animation) reset();
+    }
+  }
+
+  function animateComplete() {
     clearScheduledAnimation();
     setIsAnimatingOut(true);
-    setDragOffset(window.innerWidth);
+    setDragOffset(width());
     animationTimer = setTimeout(() => {
-      batch(() => {
-        setIsAnimatingOut(false);
-        setDragOffset(0);
-        onDone();
-      });
-    }, options.animationMs);
+      fireAndForget(completeBack(), 'mobile-swipe-back');
+    }, SWIPE_ANIMATION_MS);
   }
 
   function animateSnapBack() {
@@ -62,71 +71,45 @@ export function createMobileSwipeBackGesture(
     setDragOffset(0);
     animationTimer = setTimeout(
       () => setIsAnimatingOut(false),
-      options.animationMs
+      SWIPE_ANIMATION_MS
     );
   }
 
   function trigger() {
-    if (!options.canStart() || isAnimatingOut()) return;
-    if (!options.stack.canGoBack()) return;
-    animateComplete(() => options.stack.completeGoBack());
-  }
-
-  function handleTouchStart(e: TouchEvent) {
-    if (!options.canStart() || isAnimatingOut()) return;
-    if (!options.stack.canGoBack()) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const left =
-      e.currentTarget instanceof Element
-        ? e.currentTarget.getBoundingClientRect().left
-        : 0;
-    if (touch.clientX - left > options.edgeThreshold) return;
-    // Buttons can sit inside the swipe-edge zone. If we start the gesture, the preventDefault() in touchmove suppresses the synthesized click on iOS.
-    if (
-      e.target instanceof Element &&
-      e.target.closest('button, a, [role="button"]')
-    ) {
+    if (!options.canGoBack() || isAnimatingOut()) return;
+    if (options.inPaneBack?.canGoBack()) {
+      // Navigation can expose a route step during a pane drag. Clear its offset first.
+      reset();
+      options.inPaneBack.goBack();
       return;
     }
-    startX = touch.clientX;
-    startTime = Date.now();
-    setIsDragging(true);
+    animateComplete();
   }
 
-  function handleTouchMove(e: TouchEvent) {
-    if (!isDragging()) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dx = Math.max(0, touch.clientX - startX);
-    setDragOffset(dx);
-  }
-
-  function handleTouchEnd() {
-    if (!isDragging()) return;
-    setIsDragging(false);
-    const dx = dragOffset();
-    const elapsed = Date.now() - startTime;
-    const velocity = elapsed > 0 ? dx / elapsed : 0;
-    const threshold = window.innerWidth * options.distanceThreshold;
-    if (dx > threshold || velocity > options.velocityThreshold) {
-      trigger();
-    } else {
-      animateSnapBack();
-    }
-  }
-
-  function handleTouchCancel() {
-    if (!isDragging()) return;
-    setIsDragging(false);
-    animateSnapBack();
-  }
+  const gesture = createMobileEdgeSwipe({
+    enabled: () => options.canGoBack() && !isAnimatingOut(),
+    onStart: () =>
+      setDragging(options.inPaneBack?.canGoBack() ? 'route' : 'pane'),
+    onMove: setDragOffset,
+    onEnd(completed) {
+      if (dragging() === 'route') {
+        reset();
+        if (completed && options.inPaneBack?.canGoBack())
+          options.inPaneBack.goBack();
+        return;
+      }
+      batch(() => {
+        setDragging(false);
+        if (completed) trigger();
+        else animateSnapBack();
+      });
+    },
+  });
 
   function getTransition(): string {
     if (isDragging()) return 'none';
     if (isAnimatingOut()) {
-      return `transform ${options.animationMs}ms ease-out`;
+      return `transform ${SWIPE_ANIMATION_MS}ms ease-out`;
     }
     return 'none';
   }
@@ -141,13 +124,21 @@ export function createMobileSwipeBackGesture(
 
   function backgroundStyle(): SplitTransformStyle {
     return {
-      transform: `translateX(${-options.bgPeekOffset + (dragOffset() / window.innerWidth) * options.bgPeekOffset}px)`,
+      transform: `translateX(${(Math.min(dragOffset() / width(), 1) - 1) * BG_PEEK_OFFSET}px)`,
       transition: getTransition(),
       'will-change': 'transform',
     };
   }
 
   function styleForSlot(isForeground: boolean) {
+    // An in-pane route has no second pane to reveal; keep the current view
+    // stationary until the gesture commits instead of previewing another pane.
+    if (dragging() === 'route')
+      return {
+        transform: 'none',
+        transition: 'none',
+        'will-change': 'auto',
+      };
     return isForeground ? foregroundStyle() : backgroundStyle();
   }
 
@@ -156,10 +147,10 @@ export function createMobileSwipeBackGesture(
     isAnimatingOut,
     reset,
     trigger,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-    handleTouchCancel,
+    handleTouchStart: gesture.handleTouchStart,
+    handleTouchMove: gesture.handleTouchMove,
+    handleTouchEnd: gesture.handleTouchEnd,
+    handleTouchCancel: gesture.handleTouchCancel,
     styleForSlot,
   };
 }

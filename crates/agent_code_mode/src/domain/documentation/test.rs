@@ -407,6 +407,8 @@ fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
     for rule in [
         "never bug-reports-archive",
         "never an id, and never an `ids` key",
+        "through an `entity` knob",
+        "never a text knob with its name, and never an id in the code",
         "Create nothing else.",
         "makes no task today",
         "weekday numbers start at 1 = Sunday",
@@ -476,7 +478,9 @@ async fn a_routed_routine_request_brings_the_compose_routines_skill() {
 #[tokio::test]
 async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
     let skill = system_skills::compose_routines::CODE.to_string();
-    let relevant = &["routines", "documents", "channels", "databases"];
+    // Entities that fit the cap with room for the SDK to grow, but would not
+    // if the skill counted against it.
+    let relevant = &["routines", "tasks", "channels"];
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
         requests: Mutex::new(vec![]),
         delay: Duration::ZERO,
@@ -486,7 +490,7 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
     let routed = select_documentation(
         &user(),
         RoutingRequest {
-            latest: "when a row is added to Leads, post it in #sales",
+            latest: "when a task is done, post it in #sales",
             previous: None,
         },
         Some(&classifier),
@@ -507,6 +511,7 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
     assert!(loaded >= 3, "only {loaded} entities fit beside the skill");
     let without_skill = routed.replacen(&format!("\n{skill}\n"), "", 1);
     assert!(without_skill.len() <= 48 * 1024 + "</macro_sdk>\n".len());
+    assert!(without_skill.len() + skill.len() > 48 * 1024);
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
         requests: Mutex::new(vec![]),
         delay: Duration::ZERO,

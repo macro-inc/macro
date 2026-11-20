@@ -15,7 +15,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { type SoupSearchPoolEntry, useOptionalSearchContext } from './context';
+import type { SoupSearchPoolEntry } from './context';
 import { createSoupFreshSearch, nameFuzzySearchFilter } from './utils';
 
 const LOCAL_SEARCH_DEBOUNCE_MS = 20;
@@ -111,8 +111,6 @@ function trackSettledSearches(
  * retaining the established Soup search behavior.
  */
 export function createSearchState(options: CreateSearchStateOptions) {
-  const context = useOptionalSearchContext();
-
   const text = createMemo(() => options.text().trim());
   const localText = debouncedDependent(text, LOCAL_SEARCH_DEBOUNCE_MS);
   const serviceText = debouncedDependent(text, SERVICE_SEARCH_DEBOUNCE_MS);
@@ -136,11 +134,7 @@ export function createSearchState(options: CreateSearchStateOptions) {
     () => ({ enabled: queryEnabled() })
   );
 
-  const localPool = () => {
-    if (options.localPool) return options.localPool();
-    if (context) return context.entityPool();
-    return [];
-  };
+  const localPool = () => options.localPool?.() ?? [];
 
   const localFuzzyPoolResults = createMemo((): WithSearch<EntityData>[] => {
     const query = localText();

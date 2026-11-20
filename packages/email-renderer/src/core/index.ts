@@ -1,4 +1,3 @@
-export { stripColorSchemeMediaQueries } from './css';
 export type {
   BodyOptions,
   EmailBodyInput,

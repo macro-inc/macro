@@ -103,7 +103,6 @@ export default {
     close: '關閉',
     delete: '刪除',
     rename: '重新命名',
-    more: '更多',
     search: '搜尋',
     settings: '設定',
   },
@@ -649,8 +648,6 @@ export default {
     create: '建立',
     getMobileApp: '取得行動應用程式',
     signedInAs: '已登入為 {{name}}',
-    commandMenu: '指令選單',
-    searchEverything: '搜尋全部內容',
     customizeSidebar: '自訂側邊欄',
     customizeSidebarDescription:
       '選擇要顯示在側邊欄中的應用程式，並拖曳調整順序。首頁一律排在最前面。',

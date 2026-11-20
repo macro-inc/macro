@@ -202,6 +202,7 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
                 prompt: "inspect".to_owned(),
                 attachments: Vec::new(),
                 client: Some(tab),
+                prompter: agent_session::domain::model::PrompterKind::User,
             }),
             repo_url: None,
             repo_branch: None,

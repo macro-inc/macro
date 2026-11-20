@@ -5,13 +5,10 @@ use macro_event_broker::MacroEvent as _;
 use model::document::FileType;
 use sqs_client::search::document::SearchExtractorMessage;
 
-use super::{
-    EventOutcome, KafkaProcessingContext, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY,
-    retry_processing,
-};
+use super::{Attempted, Attempts, Handled, KafkaProcessingContext};
 use crate::process::document::{
-    process_extract_sync_message, process_extract_text_message, process_remove_message,
-    process_update_name_message,
+    process_extract_sync_message, process_extract_text_message, process_release_email_attachments,
+    process_remove_message, process_update_name_message,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +24,10 @@ pub(super) enum DocumentIndexAction {
     },
     RefreshName,
     Remove,
+    /// The documents stopped being email attachments.
+    ReleaseEmailAttachments {
+        document_ids: Vec<String>,
+    },
     Ignore,
 }
 
@@ -90,10 +91,17 @@ pub(super) fn describe_document_event(event: &DocumentTopicEvent) -> DocumentEve
             document_id: metadata.document_id.clone(),
             event_type: "document.interaction",
         },
-        // The index has no attachment field yet; trash leaves it alone, as
-        // document.deleted does.
+        // Trashed and kept documents alike lost their last email link; the
+        // trash itself leaves the index alone, as document.deleted does.
         DocumentTopicEvent::EmailAttachmentsReleased(metadata) => DocumentEventDescription {
-            action: DocumentIndexAction::Ignore,
+            action: DocumentIndexAction::ReleaseEmailAttachments {
+                document_ids: metadata
+                    .trashed_document_ids
+                    .iter()
+                    .chain(&metadata.kept_document_ids)
+                    .cloned()
+                    .collect(),
+            },
             document_id: metadata
                 .trashed_document_ids
                 .first()
@@ -177,6 +185,9 @@ async fn process_document_index_action(
             process_update_name_message(opensearch_client, &context.db, document_id).await
         }
         DocumentIndexAction::Remove => process_remove_message(opensearch_client, document_id).await,
+        DocumentIndexAction::ReleaseEmailAttachments { document_ids } => {
+            process_release_email_attachments(opensearch_client, &document_ids).await
+        }
         DocumentIndexAction::Ignore => Ok(()),
     }
 }
@@ -186,7 +197,8 @@ pub(super) async fn process_document_event(
     event: &DocumentMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_document_event(&event.event().event);
     let document_id = description.document_id.as_str();
     let event_type = description.event_type;
@@ -199,55 +211,23 @@ pub(super) async fn process_document_event(
             offset,
             "ignoring document event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     }
 
-    let result = retry_processing(|attempt| {
-        let action = description.action.clone();
-        async move {
-            tracing::trace!(
-                document_id,
-                event_type,
-                partition,
-                offset,
-                attempt,
-                "processing document search-index event"
-            );
-            process_document_index_action(context, document_id, action)
-                .await
-                .inspect_err(|error| {
-                    if attempt < MAX_PROCESSING_ATTEMPTS {
-                        let retry_delay =
-                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                        tracing::warn!(
-                            error = ?error,
-                            document_id,
-                            event_type,
-                            partition,
-                            offset,
-                            attempt,
-                            delay_secs = retry_delay.as_secs(),
-                            "document search-index processing failed, retrying"
-                        );
-                    }
-                })
-        }
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                document_id,
-                event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping document event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
+    attempts
+        .run(|attempt| {
+            let action = description.action.clone();
+            async move {
+                tracing::trace!(
+                    document_id,
+                    event_type,
+                    partition,
+                    offset,
+                    attempt,
+                    "processing document search-index event"
+                );
+                process_document_index_action(context, document_id, action).await
+            }
+        })
+        .await
 }

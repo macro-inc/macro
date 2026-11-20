@@ -1,12 +1,18 @@
 import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
+import {
+  capPeople,
+  rankAgentsAfterPeople,
+} from '@core/user/people-before-agents';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { preserveOrderedWindow } from '@core/util/ordered-window';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -25,7 +31,7 @@ import {
 } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { Button, cn, InlineCheckbox, inputClasses } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
@@ -33,14 +39,14 @@ import {
   createSignal,
   For,
   type JSX,
-  Match,
   on,
   Show,
-  Switch,
 } from 'solid-js';
 import {
+  allowsEntityType,
   type CombinedEntity,
   createEntitySearchConfig,
+  createRosterSearch,
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
@@ -66,6 +72,8 @@ type EntityInputProps = {
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
+  /** Standalone sheet spacing; leaves the popover presentation unchanged. */
+  presentation?: 'sheet';
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
 };
@@ -193,10 +201,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const quickAccessItems = quickAccess.items;
   const isQuickAccessLoading = quickAccess.isLoading;
 
-  // Fetch emails for browsing (only when THREAD type or generic ENTITY)
+  // Fetch emails for browsing whenever threads are allowed: THREAD alone,
+  // among several kinds, or any kind.
   const needsEmailSearch = () =>
-    props.config.specificEntityType === 'THREAD' ||
-    !props.config.specificEntityType;
+    allowsEntityType(props.config.specificEntityType, 'THREAD');
 
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
     disabled: () => !needsEmailSearch(),
@@ -293,8 +301,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const pinnedUsers = usePinnedContactUsers(
     props.selectedOptions,
     () =>
-      (!props.config.specificEntityType ||
-        props.config.specificEntityType === 'USER') &&
+      allowsEntityType(props.config.specificEntityType, 'USER') &&
       !props.config.users
   );
 
@@ -344,9 +351,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       }
     }
 
-    // For generic entity type, also include emails
-    if (!specificEntityType) {
-      converted.push(...emails().map(threadMapper));
+    // Where threads are one of the allowed kinds, add the email browse list.
+    if (allowsEntityType(specificEntityType, 'THREAD')) {
+      const listed = new Set(converted.map((entity) => entity.id));
+      converted.push(
+        ...emails()
+          .map(threadMapper)
+          .filter((entity) => !listed.has(entity.id))
+      );
     }
 
     return converted;
@@ -371,6 +383,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return userToEntity({ id: emailToId(email), email, name: email });
   };
 
+  const rosterSearch = createRosterSearch(currentUserDomain, currentUserId);
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -442,16 +455,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     // Get visible entities based on search
     // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     let localResults: CombinedEntity[];
-    if (term) {
+    if (term && props.config.users) {
+      localResults = capPeople(
+        rankAgentsAfterPeople(
+          rosterSearch(allEntities.filter(excludeFilter), term),
+          (entity) => entity.id
+        ),
+        (entity) => entity.id,
+        maxLocalResults
+      );
+    } else if (term) {
       localResults = entitySearch(allEntities, term)
         .slice(0, maxLocalResults)
         .map((result) => result.item)
         .filter(excludeFilter);
     } else {
-      localResults = sortEntitiesWithSelfFirst(
+      const ordered = sortEntitiesWithSelfFirst(
         allEntities.filter(excludeFilter),
         userId
-      ).slice(0, maxLocalResults);
+      );
+      localResults = props.config.users
+        ? capPeople(ordered, (entity) => entity.id, maxLocalResults)
+        : ordered.slice(0, maxLocalResults);
     }
 
     // For THREAD or generic entity: merge local + server results
@@ -528,11 +553,27 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
-  createEffect(() => {
-    search();
-    resultCount();
-    setSelectedIndex(0);
+  // Hold the row the user moved to by identity while pages are added around
+  // it; a new search releases it.
+  const highlight = createSelectionAnchor({
+    items: sortedEntities,
+    key: (entity) => entity.id,
+    scope: search,
+    selectedIndex,
+    setSelectedIndex,
   });
+  // A new search moves the highlight and the list to the top; a further page
+  // listed below keeps both where the user put them.
+  createEffect(
+    on(
+      search,
+      () => {
+        setSelectedIndex(0);
+        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
+      },
+      { defer: true }
+    )
+  );
   let previousWindow: string | undefined;
   createEffect(
     on(quickAccess.windowKey, (key) => {
@@ -545,6 +586,38 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     })
   );
   const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
+  // Read each failed source again: a failed later email page is the next one
+  // still to fetch, and a failed first page is read from the start.
+  const retryEmailPages = (query: {
+    data?: unknown[];
+    error: unknown;
+    fetchNextPage: () => Promise<unknown>;
+    refetch: () => Promise<unknown>;
+  }) => {
+    if (!query.error) return undefined;
+    return query.data?.length ? query.fetchNextPage() : query.refetch();
+  };
+  const retryPages = () =>
+    fireAndForget(
+      Promise.all([
+        quickAccess.error() ? quickAccess.retry() : undefined,
+        needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
+        emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
+      ]),
+      'property-picker'
+    );
+  // Further pages load as the end of the list scrolls into view. With no rows
+  // listed, the sentinel sits below the empty list and keeps reading pages
+  // until one matches or the sources end. A failed page waits for Retry. The
+  // sentinel opts out of scroll anchoring: as the anchor, it would be held in
+  // view while each page lands above it, and every page would load the next.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasMore() && !paginationError(),
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadNext,
+  });
 
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
@@ -576,11 +649,13 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
       setSelectedIndex((prev) => (Math.min(prev, total - 1) + 1) % total);
+      highlight.hold();
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
       setSelectedIndex(
         (prev) => (Math.min(prev, total - 1) - 1 + total) % total
       );
+      highlight.hold();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const idx = Math.min(selectedIndex(), total - 1);
@@ -598,6 +673,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   useSearchInputFocus(() => searchInputRef);
 
   const fills = () => props.config.fillHeight === true;
+  const inSheet = () => props.presentation === 'sheet';
   const keepSearchFocus = (event: Event) => event.preventDefault();
 
   const selectedEntityCountAtOpen = createMemo(() => {
@@ -618,10 +694,22 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   return (
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
       <div class="relative shrink-0">
-        <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
-          <SearchIcon class="size-4 text-ink-muted" />
+        <div
+          class={cn(
+            'flex w-full items-center gap-2',
+            inSheet() ? 'px-4 pb-4' : 'py-2 px-2 border-b border-edge-muted'
+          )}
+        >
+          <Show when={!inSheet()}>
+            <SearchIcon class="size-4 text-ink-muted" />
+          </Show>
           <input
-            class="w-full caret-accent"
+            class={
+              inSheet()
+                ? inputClasses({ class: 'min-h-11' })
+                : 'w-full caret-accent'
+            }
+            aria-label={props.config.placeholder}
             ref={searchInputRef}
             type="text"
             value={inputValue()}
@@ -637,7 +725,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           it would drop the phone keyboard until the refocus below. iOS
           devices still send mousedown after a cancelled pointerdown. */}
         <div
-          class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
+          class={cn(
+            inSheet() ? 'px-4' : 'p-1.5',
+            fills() && 'flex min-h-0 flex-1 flex-col'
+          )}
           onPointerDown={keepSearchFocus}
           onMouseDown={keepSearchFocus}
         >
@@ -660,32 +751,54 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
                   return (
                     <>
-                      <Show when={shouldShowSelectedDivider(index())}>
+                      <Show
+                        when={!inSheet() && shouldShowSelectedDivider(index())}
+                      >
                         <div class="my-1 border-t border-edge-muted" />
                       </Show>
                       <div
                         data-entity-index={index()}
+                        role={inSheet() ? 'checkbox' : undefined}
+                        aria-checked={inSheet() ? isSelected() : undefined}
+                        tabIndex={inSheet() ? 0 : undefined}
                         class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                         classList={{
                           'bg-hover': isKeyboardSelected(),
                         }}
                         onClick={() => toggleEntity(entity)}
-                        onKeyDown={(e) =>
-                          e.key === 'Enter' && toggleEntity(entity)
-                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === 'Enter' ||
+                            (inSheet() && event.key === ' ')
+                          ) {
+                            event.preventDefault();
+                            toggleEntity(entity);
+                          }
+                        }}
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
                             setSelectedIndex(index());
+                            highlight.hold();
                           }
                         }}
                       >
                         <Show when={props.config.isMultiSelect}>
                           <div class="shrink-0 flex">
-                            <OptionCheckBox
-                              checked={isSelected()}
-                              multiselect
-                              visible={props.config.visibleCheckboxes}
-                            />
+                            <Show
+                              when={inSheet()}
+                              fallback={
+                                <OptionCheckBox
+                                  checked={isSelected()}
+                                  multiselect
+                                  visible={props.config.visibleCheckboxes}
+                                />
+                              }
+                            >
+                              <InlineCheckbox
+                                checked={isSelected()}
+                                size="md"
+                              />
+                            </Show>
                           </div>
                         </Show>
                         <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -758,6 +871,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   );
                 }}
               </For>
+              <Show when={hasMore()}>
+                <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+              </Show>
             </div>
           </Show>
           <Show when={customEmail()}>
@@ -813,7 +929,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         ) : (
           <div class="text-center py-4 text-ink-muted text-sm">
             <Show
-              when={!isLoadingEntities()}
+              when={!isLoadingEntities() && !hasMore()}
               fallback={<span>Loading...</span>}
             >
               {props.config.emptyMessage ??
@@ -822,17 +938,23 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </div>
         )}
       </Show>
-      <Show when={hasMore()}>
+      <Show when={sortedEntities().length === 0 && hasMore()}>
+        <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
+      </Show>
+      <Show when={isLoadingMore()}>
+        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
+          {t('common.loadingOptions')}
+        </div>
+      </Show>
+      <Show when={paginationError()}>
         <Button
           variant="ghost"
           class="w-full"
           disabled={isLoadingMore()}
           onPointerDown={(event) => event.preventDefault()}
-          onClick={loadNext}
+          onClick={retryPages}
         >
-          <Switch fallback={t('viewMenus.nextOptions')}>
-            <Match when={isLoadingMore()}>{t('common.loadingOptions')}</Match>
-          </Switch>
+          {t('viewMenus.retryOptions')}
         </Button>
       </Show>
     </div>

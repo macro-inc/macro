@@ -266,6 +266,117 @@ fn it_expands_email_thread_ids() {
 }
 
 #[test]
+fn it_expands_email_done_to_inbox_visibility() {
+    for (done, inbox_visible) in [(true, false), (false, true)] {
+        let f = EntityFilters {
+            email_filters: crate::EmailFilters {
+                done: Some(done),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let ast = Arc::into_inner(
+            EntityFilterAst::new_from_filters(f)
+                .unwrap()
+                .unwrap()
+                .email_filter
+                .tree
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            serde_json::to_value(ast).unwrap(),
+            json!({ "l": { "InboxVisible": inbox_visible } })
+        );
+    }
+}
+
+#[test]
+fn email_filters_without_done_are_empty() {
+    assert!(crate::EmailFilters::default().is_empty());
+    assert!(
+        !crate::EmailFilters {
+            done: Some(false),
+            ..Default::default()
+        }
+        .is_empty()
+    );
+}
+
+#[test]
+fn it_expands_email_attachments_to_any_of_the_kinds() {
+    use crate::ast::email::AttachmentKind;
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            attachments: vec![
+                AttachmentKind::Pdf,
+                AttachmentKind::Image,
+                AttachmentKind::Pdf,
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .email_filter
+            .tree
+            .unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(Expr::or(
+            Expr::Literal(email::EmailLiteral::Attachment(AttachmentKind::Pdf)),
+            Expr::Literal(email::EmailLiteral::Attachment(AttachmentKind::Image)),
+        ))
+        .unwrap()
+    );
+}
+
+#[test]
+fn expanding_an_email_view_into_a_list_filter_is_an_error() {
+    for view in [crate::EmailSearchView::Sent, crate::EmailSearchView::Drafts] {
+        let f = EntityFilters {
+            email_filters: crate::EmailFilters {
+                view: Some(view),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            EntityFilterAst::new_from_filters(f),
+            Err(ExpandErr::SearchOnlyEmailView)
+        ));
+    }
+}
+
+#[test]
+fn email_filters_with_a_view_or_attachments_are_not_empty() {
+    assert!(
+        !crate::EmailFilters {
+            view: Some(crate::EmailSearchView::Drafts),
+            ..Default::default()
+        }
+        .is_empty()
+    );
+    assert!(
+        !crate::EmailFilters {
+            attachments: vec![crate::ast::email::AttachmentKind::Document],
+            ..Default::default()
+        }
+        .is_empty()
+    );
+}
+
+#[test]
 fn it_expands_email_thread_ids_with_sender() {
     let thread_id = Uuid::new_v4();
     let f = EntityFilters {

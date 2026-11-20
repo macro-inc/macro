@@ -138,7 +138,7 @@ function ParticipantTileWrapper(props: {
           <div
             class={cn(
               'absolute top-2 right-2 z-40 flex items-center gap-1 opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto group-focus-within/tile:opacity-100 group-focus-within/tile:pointer-events-auto [&:has([data-expanded])]:opacity-100 [&:has([data-expanded])]:pointer-events-auto',
-              isMobile() && props.isPinned && 'opacity-100 pointer-events-auto'
+              isMobile() && 'opacity-100 pointer-events-auto'
             )}
           >
             {props.actions}

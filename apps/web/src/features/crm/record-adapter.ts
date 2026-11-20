@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  disableCrmContactSearch,
-  enableCrm,
-} from '@core/constant/featureFlags';
+import { disableCrmContactSearch } from '@core/constant/featureFlags';
 import { useDmActivityByUserId } from '@core/context/channels';
 import type { EntityItem } from '@core/context/quickAccess';
 import { useQuickAccess } from '@core/context/quickAccess/context';
@@ -46,10 +43,9 @@ export function useCrmContactByEmailQuery(
 
 /** Quick Access feed of visible contacts across the viewer's CRM-enabled teams. */
 export function useQuickAccessCrmContactsQuery() {
-  const flag = useFeatureFlag(enableCrm);
   return createContactSuggestions(
     { storage: storageServiceClient, client: useQueryClient() },
-    () => flag().enabled
+    () => true
   );
 }
 
@@ -82,7 +78,8 @@ export function useCrmContactMentionSource(
     search,
     enabled,
     resolveUsers,
-    hasMore: () => !!query.hasNextPage,
+    // A failed page ends paging, so a menu reading on scroll cannot repeat it.
+    hasMore: () => !!query.hasNextPage && !query.isFetchNextPageError,
     loadMore: async () => {
       await query.fetchNextPage();
     },
@@ -113,14 +110,10 @@ export function useCrmContactDiscovery(
   search: Accessor<string>,
   active: Accessor<boolean>
 ) {
-  const flag = useFeatureFlag(enableCrm);
   const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const query = () => search().trim();
   const enabled = () =>
-    flag().enabled &&
-    !contactSearchDisabled().enabled &&
-    active() &&
-    query().length > 0;
+    !contactSearchDisabled().enabled && active() && query().length > 0;
   const serverQuery = debouncedDependent(query, CONTACT_SEARCH_DEBOUNCE_MS);
   const cached = useQuickAccess().useList({
     buckets: ['crm_contact'],

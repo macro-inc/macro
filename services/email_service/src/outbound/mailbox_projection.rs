@@ -47,11 +47,12 @@ fn failed<E: std::fmt::Debug>(error: E) -> MailboxError {
 }
 
 /// A database step of an effect keeps its SQLSTATE, so it reports as
-/// `persistence` rather than as an effect failure.
+/// `persistence` (or `unstorable`, for a value the database refuses) rather
+/// than as an effect failure.
 fn database_failed(error: &dyn std::fmt::Debug, cause: Option<&sqlx::Error>) -> MailboxError {
     tracing::warn!(?error, "mailbox projection effect deferred");
     cause.map_or(MailboxError::Persistence, |cause| {
-        MailboxError::Database(DatabaseFailure::from(cause))
+        MailboxError::database(DatabaseFailure::from(cause))
     })
 }
 
@@ -180,6 +181,7 @@ where
                     backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
                         link_id: correspondence.link_id,
                         payload: PopulateCrmContactPayload {
+                            live_mail: true,
                             contact_email: contact.email,
                             contact_name: contact.name,
                             first_at: contact.at,

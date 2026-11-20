@@ -1,17 +1,59 @@
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type {
   CalendarCommitArgs,
   CalendarRangeCacheResult,
 } from '@graphql-cache/index';
+import { CalendarsDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { createClient, fetchExchange } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type CalendarChangesPage,
   CalendarSyncController,
+  refetchCalendarList,
 } from '../sync-controller';
 import { graphqlEvent, graphqlOccurrence } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
 }));
+
+it('refreshes the calendar list while the visible list is reading the cache', async () => {
+  const cacheReadStarted = Promise.withResolvers<void>();
+  const finishCacheRead = Promise.withResolvers<void>();
+  const emptyList = { user: { id: 'viewer', calendars: [] } };
+  const discoveredList = {
+    user: { id: 'viewer', calendars: [{ id: 'new-calendar' }] },
+  };
+  const host = createNoopCacheHost();
+  const read = vi.spyOn(host, 'readQuery').mockImplementation(async () => {
+    cacheReadStarted.resolve();
+    await finishCacheRead.promise;
+    return { kind: 'hit', data: emptyList };
+  });
+  const write = vi.spyOn(host, 'writeQuery');
+  const fetch = vi.fn(async () => Response.json({ data: discoveredList }));
+  const client = createClient({
+    url: 'https://example.test/graphql',
+    exchanges: [normalizedCacheExchange(host), fetchExchange],
+    fetch,
+  });
+  vi.mocked(getGraphqlSoupClient).mockReturnValue(client);
+
+  const visible = client.query(CalendarsDocument, {}).toPromise();
+  await cacheReadStarted.promise;
+  const refreshed = refetchCalendarList();
+  finishCacheRead.resolve();
+
+  await expect(refreshed).resolves.toEqual(discoveredList);
+  await expect(visible).resolves.toMatchObject({ data: emptyList });
+  expect(read).toHaveBeenCalledOnce();
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(write).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ data: discoveredList })
+  );
+});
 
 const syncState = (
   watermark: Array<{ linkId: string; seq: string }> | null

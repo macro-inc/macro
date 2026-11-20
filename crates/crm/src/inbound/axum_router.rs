@@ -63,6 +63,8 @@ pub mod team_settings;
 /// Fresh viewer authority for session cache retirement.
 pub mod member_access;
 
+/// Own-member contribution rules and consent commands.
+pub mod email_policy;
 /// Individual email consent and domain blocklists.
 pub mod email_privacy;
 
@@ -145,13 +147,16 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
 /// Build the CRM router with all endpoints.
 pub fn crm_router<C, St, Eas, Auth, S>(state: CrmRouterState<C, St, Eas, Auth>) -> Router<S>
 where
-    C: CrmService,
+    C: CrmService
+        + crate::domain::email_policy_api::EmailPolicyService
+        + crate::domain::email_policy_preview::EmailPreviewService,
     St: CrmStageService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     Router::new()
+        .merge(email_policy::routes::<C, St, Eas, Auth>())
         .route(
             "/member-access",
             get(member_access::handler::<C, St, Eas, Auth>),
@@ -273,6 +278,12 @@ impl IntoResponse for CrmError {
                     message: message.into(),
                 }),
             ),
+            CrmError::BlocksConnectedMailbox(reason) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: reason.to_string().into(),
+                }),
+            ),
             CrmError::AccessDenied => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
@@ -295,6 +306,44 @@ impl IntoResponse for CrmError {
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
                     message: "thread exclusions are not available".into(),
+                }),
+            ),
+            CrmError::SelectiveEmailUnavailable => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "selective email contribution is not available".into(),
+                }),
+            ),
+            CrmError::EmailPolicyConflict => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message:
+                        "email contribution changed; inspect the current policy before retrying"
+                            .into(),
+                }),
+            ),
+            CrmError::EmailPolicySharingRefused => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "this credential cannot enable email contribution".into(),
+                }),
+            ),
+            CrmError::EmailPreviewRateLimited => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse {
+                    message: "wait before starting another email contribution preview".into(),
+                }),
+            ),
+            CrmError::EmailRuleLimitExceeded(error) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: error.to_string().into(),
+                }),
+            ),
+            CrmError::EmailPreviewBudgetExhausted => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    message: "email contribution preview reached its work budget".into(),
                 }),
             ),
             CrmError::StageEditRoleRequired(role) => (

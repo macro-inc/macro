@@ -40,7 +40,7 @@ fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ErrorResponse<'
     responses(
         (status = 200, body = AgentSetupResponse),
         (status = 401, body = String),
-        (status = 403, body = ErrorResponse, description = "The account is not an agent"),
+        (status = 403, body = ErrorResponse, description = "The account is not an agent, or the caller is an agent's program"),
         (status = 409, body = ErrorResponse, description = "Setup is already confirmed"),
         (status = 500, body = ErrorResponse),
     ),
