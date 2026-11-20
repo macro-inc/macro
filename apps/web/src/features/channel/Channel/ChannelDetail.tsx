@@ -13,6 +13,7 @@ import {
   DmWorkProvider,
   DmWorkToggle,
 } from '@app/features/agent-work/views/dm-work';
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { TeamAgentDmStatusChip } from '@app/features/settings/views/team-agent-dm-status';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
@@ -220,6 +221,19 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
         </DebugSuspense>
       </Show>
       <HeaderActionGroup label="Conversation actions">
+        <Show when={channelType()} keyed>
+          {(type) => (
+            <AskMacroButton
+              grouped
+              entity={{
+                type: 'channel',
+                id: props.channelId,
+                name: channelName() ?? 'New Channel',
+                channelType: type,
+              }}
+            />
+          )}
+        </Show>
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
         >

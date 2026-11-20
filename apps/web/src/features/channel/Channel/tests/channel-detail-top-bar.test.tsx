@@ -13,6 +13,11 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   openChatWithAgent: vi.fn(),
+  AskMacroButton: (props: { entity: { id: string; channelType: string } }) => (
+    <button type="button">
+      Ask Macro {props.entity.id} {props.entity.channelType}
+    </button>
+  ),
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
   toSingleEntityActionListState: () => ({}),
@@ -171,6 +176,16 @@ describe('channel top bar title menu', () => {
     expect(actions.parentElement).toBe(
       screen.getByTestId('breadcrumbs').parentElement
     );
+  });
+
+  it('offers Ask Macro about the conversation as a top bar button', async () => {
+    render(() => <ChannelDetailTopBar channelId="channel-1" />);
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Ask Macro channel-1 private',
+      })
+    ).toBeTruthy();
   });
 
   it('waits for the conversation rather than showing an empty menu', async () => {
