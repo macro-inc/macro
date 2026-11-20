@@ -13,7 +13,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 fn db(error: sqlx::Error) -> EmailErr {
-    EmailErr::RepoErr(error.into())
+    super::repo_error(error)
 }
 fn invalid() -> EmailErr {
     EmailErr::InvalidDraft("The draft changed while moving; reload it and try again".into())
@@ -34,7 +34,7 @@ async fn lock_links(
     let ids = vec![request.source_link_id, request.destination_link_id];
     let rows=sqlx::query!(r#"SELECT id,provider::text AS "provider!",email_address,sync_generation,grant_generation,is_sync_active,
         (macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2)) AS "authorized!"
-        FROM email_links l WHERE id=ANY($1) ORDER BY id FOR UPDATE"#,&ids,actor).fetch_all(tx).await.map_err(db)?;
+        FROM email_links l WHERE id=ANY($1) ORDER BY id FOR SHARE"#,&ids,actor).fetch_all(tx).await.map_err(db)?;
     if rows.len() != 2
         || rows
             .iter()
@@ -80,6 +80,18 @@ async fn source_facts(
     ),
     EmailErr,
 > {
+    // Other user writes share the link lock, so the draft's own row is what
+    // orders a transfer after them. Its facts are read in the next statement,
+    // which sees everything committed while this one waited.
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id=$1 AND link_id=$2 FOR UPDATE",
+        request.source_id,
+        request.source_link_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db)?
+    .ok_or(EmailErr::MessageNotFound(request.source_id))?;
     let row=sqlx::query!(r#"SELECT m.updated_at,m.provider_id,m.thread_id,
         CASE WHEN l.provider='OUTLOOK' THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,
         m.is_draft,m.is_sent,
@@ -98,7 +110,7 @@ async fn source_facts(
             jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='CC') AS cc_addresses,
             jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='BCC') AS bcc_addresses
             FROM email_message_recipients r JOIN email_contacts c ON c.id=r.contact_id WHERE r.message_id=m.id) recipients
-        WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE OF m"#,request.source_id,request.source_link_id,request.draft_generation).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
+        WHERE m.id=$1 AND m.link_id=$2"#,request.source_id,request.source_link_id,request.draft_generation).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
     validate_transfer(TransferEligibility {
         authorized: true,
         draft: row.is_draft && !row.is_sent,
@@ -137,6 +149,8 @@ impl DraftTransferRepository for EmailPgRepo {
         actor: &str,
         id: Uuid,
     ) -> Result<Option<DraftTransferReceipt>, EmailErr> {
+        // Locks the transfer, not the links.
+        // ast-grep-ignore: email-link-lock-transactions-time-out
         let mut tx = self.pool.begin().await.map_err(db)?;
         sqlx::query!(
             "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
@@ -167,7 +181,7 @@ impl DraftTransferRepository for EmailPgRepo {
         actor: &str,
         request: &DraftTransferRequest,
     ) -> Result<TransferPreparation, EmailErr> {
-        let mut tx = self.pool.begin().await.map_err(db)?;
+        let mut tx = super::begin(&self.pool).await.map_err(db)?;
         let (
             source_mailbox,
             destination_mailbox,
@@ -287,7 +301,7 @@ impl DraftTransferRepository for EmailPgRepo {
         contacts: &UpsertedContacts,
         files: Vec<MaterializedTransferFile>,
     ) -> Result<DraftTransferReceipt, EmailErr> {
-        let mut tx = self.pool.begin().await.map_err(db)?;
+        let mut tx = super::begin(&self.pool).await.map_err(db)?;
         let (source, destination, _, _, _) =
             lock_links(&mut tx, &plan.actor, &plan.request).await?;
         if source != plan.source_mailbox || destination != plan.destination_mailbox {
@@ -498,6 +512,8 @@ impl DraftTransferRepository for EmailPgRepo {
                 return Ok(());
             }
         };
+        // Locks the transfer, not the links.
+        // ast-grep-ignore: email-link-lock-transactions-time-out
         let mut tx = self
             .pool
             .begin()

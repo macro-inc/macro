@@ -164,9 +164,15 @@ intake), which the image exports as process environment.
 `MACRO_SETUP_TRACEPARENT` comes from a file of its own, never agent.env.
 
 Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
-credential is missing or invalid. Anything but 0 and 75 before the healthy-boot
-marker moves is a failed boot (78 too, unless the boot was already on the last
-good HEAD: then the enrollment, not the code, is wrong), and three in a row
-roll the workspace back to the last good HEAD, recorded as a commit so it
-stays rolled back. A lock that differs from the image's is adopted unless the
+credential is missing or invalid. The launcher (`start-agent`) adds: `78` when
+landed code needs a newer muppet than the image's (`muppetApi` above its
+`apiLevel`) and last-good would run, so it rolls back; and `79` when there
+is nothing that would run to roll back to (a new agent, last-good itself, or a
+last-good that needs more too), which the service doesn't restart until the
+computer boots a newer image. Anything but 0, 75 and 79 before the
+healthy-boot marker moves is a failed boot (78 too, unless the boot was
+already on the last good HEAD: then the enrollment, not the code, is wrong),
+and three in a row roll the workspace back to the last good HEAD, recorded as
+a commit so it stays rolled back. Any stop of last-good's code starts the
+count again. A lock that differs from the image's is adopted unless the
 agent changed `package.json`.

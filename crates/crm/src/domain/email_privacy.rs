@@ -170,7 +170,10 @@ pub trait EmailPrivacyRepository: Clone + Send + Sync + 'static {
         change: EmailPrivacyChange,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Admission check before metadata enrichment or contact ingestion.
+    /// Admission check before metadata enrichment or contact ingestion:
+    /// mailbox, membership, consent and the contact's domain. It reads no
+    /// message history; population checks eligible history in its own
+    /// transaction.
     fn may_contribute_contact(
         &self,
         team: Uuid,

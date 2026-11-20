@@ -20,6 +20,12 @@ import type { ToggleNonAdminInvitesResponse } from '@service-auth/generated/sche
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { authKeys } from '../auth';
+import {
+  assertQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -142,14 +148,46 @@ type PatchTeamArgs = { teamId: string; request: PatchTeamRequest };
 type PatchTeamCallbacks = MutationCallbacks<void, Error, PatchTeamArgs>;
 
 export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
+  const account = useQueryAccount();
   return useMutation(() => ({
-    mutationFn: async ({ request }: PatchTeamArgs) => {
+    meta: { queryAccount: account() },
+    mutationFn: async ({ request }: PatchTeamArgs, context) => {
+      assertQueryAccount(mutationQueryAccount(context));
       await throwOnErr(() => authServiceClient.patchTeam(request));
     },
 
     ...withCallbacks<void, Error, PatchTeamArgs>(
       {
-        onSuccess: (_data, { teamId }) => {
+        onSuccess: (_data, { teamId, request }, _result, context) => {
+          if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
+          const access = request.member_crm_access;
+          if (access) {
+            // The PATCH committed even if the following GET fails. Keep the
+            // confirmed preference so the next switch action reverses it.
+            const applyAccess = (old: TeamWithMembers | null | undefined) => {
+              if (
+                old?.team.id !== teamId ||
+                old.members.find((member) => member.user_id === access.user_id)
+                  ?.role !== TeamRole.member
+              )
+                return old;
+              return {
+                ...old,
+                crm_member_access: {
+                  ...old.crm_member_access,
+                  [access.user_id]: access.enabled,
+                },
+              };
+            };
+            queryClient.setQueryData<TeamWithMembers | null>(
+              teamKeys.detail(teamId).queryKey,
+              applyAccess
+            );
+            queryClient.setQueryData<TeamWithMembers | null>(
+              teamKeys.currentTeam.queryKey,
+              applyAccess
+            );
+          }
           fireAndForget(invalidateTeam(teamId), 'team-settings');
           invalidateUserTeams();
           toast.success('Team updated');

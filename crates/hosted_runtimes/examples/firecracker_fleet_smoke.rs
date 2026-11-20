@@ -128,6 +128,7 @@ async fn main() -> Result<(), rootcause::Report> {
         )?,
         created_at: now,
         enrolled_at: None,
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,

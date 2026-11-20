@@ -14,6 +14,14 @@ import { toRowType } from './decode';
 const RESUBSCRIBE_DELAY_MS = 3_000;
 
 /**
+ * The latest counts each client delivered. urql shares one subscription
+ * among every reader of it on a client and replays nothing to a reader that
+ * joins later, so a reader mounted after the stream opened would wait for
+ * the next change; it starts from these instead.
+ */
+const latestCounts = new WeakMap<Client, readonly InboxUnreadCount[]>();
+
+/**
  * The unread rows of the viewer's whole inbox by kind, kept live.
  *
  * The server sends the current counts when the stream opens and again each
@@ -47,13 +55,13 @@ export function createInboxUnread(options: {
           }
           const payload = result.data?.notificationInboxUnreadUpdates;
           if (!payload) return;
-          setCounts(
-            payload.map((entry) => ({
-              type: toRowType(entry.rowType),
-              passwordRequests: entry.rowType === 'PASSWORD_ACCESS_REQUESTED',
-              count: entry.count,
-            }))
-          );
+          const next = payload.map((entry) => ({
+            type: toRowType(entry.rowType),
+            passwordRequests: entry.rowType === 'PASSWORD_ACCESS_REQUESTED',
+            count: entry.count,
+          }));
+          latestCounts.set(client, next);
+          setCounts(next);
         })
       );
       stopStream = unsubscribe;
@@ -73,7 +81,11 @@ export function createInboxUnread(options: {
     on([options.enabled, options.client], ([enabled, client]) => {
       // Counts belong to the session that read them.
       setCounts(undefined);
-      if (!enabled) return;
+      if (!enabled) {
+        latestCounts.delete(client);
+        return;
+      }
+      setCounts(latestCounts.get(client));
       onCleanup(follow(client));
     })
   );

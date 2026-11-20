@@ -3,16 +3,19 @@
 # the runtime wrote last-good for this boot. A configuration error (78)
 # counts like any other: on last-good it is reset below (the enrollment, not
 # the code, is wrong), and on a new head a self-edit that broke agent.json
-# must roll back.
+# must roll back. A boot whose code needs a newer image (79) isn't restarted
+# and has nothing to roll back to: it never counts.
 # `_agent.nix` prepends `last_good`, `failures` and `boot_head`.
-[[ ${SERVICE_RESULT:-} == success ]] && exit 0
-if [[ ${EXIT_CODE:-} == exited ]]; then
-  case ${EXIT_STATUS:-} in 0 | 75) exit 0 ;; esac
-fi
 head=$(cat "$boot_head" 2>/dev/null || true)
+# Any stop of last-good's code, clean or not, starts the count again: what
+# failed before was other code.
 if [[ -n $head && "$(cat "$last_good" 2>/dev/null || true)" == "$head" ]]; then
   echo 0 > "$failures"
   exit 0
+fi
+[[ ${SERVICE_RESULT:-} == success ]] && exit 0
+if [[ ${EXIT_CODE:-} == exited ]]; then
+  case ${EXIT_STATUS:-} in 0 | 75 | 79) exit 0 ;; esac
 fi
 count=$(cat "$failures" 2>/dev/null || echo 0)
 echo $((count + 1)) > "$failures"

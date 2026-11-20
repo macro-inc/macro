@@ -1,7 +1,7 @@
 use super::*;
 
 fn yaml() -> String {
-    crate::workflows::render_patched(deploy_observability, patch).expect("workflow yaml")
+    crate::workflows::render_gh_workflow(deploy_observability)().expect("workflow yaml")
 }
 
 fn workflow() -> serde_yaml::Value {

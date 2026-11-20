@@ -7,6 +7,7 @@ import { Chat } from '../src/entities/chats/chat';
 import { Document } from '../src/entities/documents/document';
 import { EmailThread } from '../src/entities/email/thread';
 import { Macro } from '../src/macro';
+import { setDefaultSearchLimit } from '../src/utils/concurrency';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -231,4 +232,67 @@ test('rejects an empty query, an unknown type and an unknown tag before searchin
     macro().search.page('plan', { tags: [{ label: 'Missing' }] }),
   ).rejects.toThrow('Unknown tag "Missing". Available tags: Launch (personal)');
   expect(searches).toBe(0);
+});
+
+/** Serves searches, holding each until the test answers it. */
+function heldSearches(count: number) {
+  const seen = { inFlight: 0, most: 0, arrived: [] as string[] };
+  const arrivals = Array.from({ length: count }, () =>
+    Promise.withResolvers<void>(),
+  );
+  const answers = Array.from({ length: count }, () =>
+    Promise.withResolvers<void>(),
+  );
+  serve(async (request) => {
+    const { query } = (await request.json()) as { query: string };
+    const index = seen.arrived.length;
+    seen.arrived.push(query);
+    seen.inFlight++;
+    seen.most = Math.max(seen.most, seen.inFlight);
+    arrivals[index]?.resolve();
+    await answers[index]?.promise;
+    seen.inFlight--;
+    return Response.json({ results: [] });
+  });
+  return { seen, arrivals, answers };
+}
+
+test("a process search limit holds every client's searches together", async () => {
+  setDefaultSearchLimit(2);
+  try {
+    const { seen, arrivals, answers } = heldSearches(3);
+    const first = macro();
+    const second = macro();
+    const searches = [
+      first.search.page('first'),
+      Array.fromAsync(second.documents.search('second')),
+      second.search.page('third'),
+    ];
+    await Promise.all([arrivals[0]?.promise, arrivals[1]?.promise]);
+    answers[0]?.resolve();
+    await arrivals[2]?.promise;
+    answers[1]?.resolve();
+    answers[2]?.resolve();
+    await Promise.all(searches);
+
+    expect([...seen.arrived].sort()).toEqual(['first', 'second', 'third']);
+    expect(seen.most).toBe(2);
+  } finally {
+    setDefaultSearchLimit(undefined);
+  }
+});
+
+test('without a process search limit a client sends its searches at once', async () => {
+  const { seen, arrivals, answers } = heldSearches(3);
+  const client = macro();
+  const searches = [
+    client.search.page('first'),
+    client.search.page('second'),
+    client.search.page('third'),
+  ];
+  await Promise.all(arrivals.map((arrival) => arrival.promise));
+  for (const answer of answers) answer.resolve();
+  await Promise.all(searches);
+
+  expect(seen.most).toBe(3);
 });

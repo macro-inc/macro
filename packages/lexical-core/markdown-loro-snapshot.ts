@@ -58,12 +58,17 @@ export function serializedEditorStateToLoroSnapshot(
 }
 
 export async function markdownToLoroSnapshot(
-  markdown: string
+  markdown: string,
+  initialPins?: readonly string[]
 ): Promise<Uint8Array | undefined> {
-  // Blank markdown is exactly the golden — return it verbatim so all empty docs
-  // share identical bytes and skip the mirror round-trip.
-  if (markdown === '') return MARKDOWN_GOLDEN;
-  return serializedEditorStateToLoroSnapshot(
-    markdownToSerializedEditorState(markdown)
-  );
+  // Keep the golden ancestor verbatim only when no explicit root pins exist.
+  if (markdown === '' && initialPins === undefined) return MARKDOWN_GOLDEN;
+  const state = markdownToSerializedEditorState(markdown);
+  if (initialPins !== undefined) {
+    state.root.$ = {
+      ...state.root.$,
+      pinnedPropertyIds: [...new Set(initialPins.map((id) => `pending:${id}`))],
+    };
+  }
+  return serializedEditorStateToLoroSnapshot(state);
 }

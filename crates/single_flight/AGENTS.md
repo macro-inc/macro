@@ -41,3 +41,12 @@ lookups use it so overlapping searches by one user run one database query.
 - `run` records `coalesced` on the caller's span when the span declares that
   field as `tracing::field::Empty`, and links a waiting caller's span to the
   span that started the work (`follows_from`), where the query's time is.
+- `run` drops the work when its last caller goes away. `run_to_completion`
+  spawns a task on the current Tokio runtime that drives the work to its end
+  instead, so callers arriving before then join it; use it for work whose
+  effects outlast the call (`get_user_accessible_items` keeps document
+  checks). Only that task polls the work: callers wait for the output it
+  delivers, because a caller polling alongside could meet the work poisoned by
+  a panic on the task's thread. When the task ends without delivering (a
+  panic, or the task dropped), it signals the panic and the waiting callers
+  run the work themselves.

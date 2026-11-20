@@ -12,15 +12,19 @@
 //! the fork changed `.github` or the workflow generator, and `report` trusts
 //! only a run of `pr-ci.yml`.
 
+use gh_workflow::expr::typed::{Bool, Expr, Str, github};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequestTarget, PullRequestType, Workflow,
-    WorkflowRun, WorkflowRunType,
+    Event, Job, Level, Permissions, PullRequestTarget, PullRequestType, Workflow, WorkflowRun,
+    WorkflowRunType,
 };
 
 use crate::workflows::pr_ci;
 
-const FORK_PULL_REQUEST: &str =
-    "github.event.pull_request.head.repo.full_name != github.repository";
+fn fork_pull_request() -> Expr<Bool> {
+    github()
+        .event::<Str>("pull_request.head.repo.full_name")
+        .ne(github().repository())
+}
 
 /// Build the workflow.
 pub fn ci_gate_fork() -> Workflow {
@@ -43,10 +47,13 @@ pub fn ci_gate_fork() -> Workflow {
 fn request() -> Job {
     Job::default()
         .name("Take a fork's CI request")
-        .cond(Expression::new(format!(
-            "github.event_name == 'pull_request_target' && github.event.label.name == '{}' && {FORK_PULL_REQUEST}",
-            pr_ci::RUN_LABEL
-        )))
+        .cond(
+            github()
+                .event_name()
+                .eq("pull_request_target")
+                .and(github().event::<Str>("label.name").eq(pr_ci::RUN_LABEL))
+                .and(fork_pull_request()),
+        )
         .runs_on("ubuntu-latest")
         .timeout_minutes(5u32)
         .permissions(Permissions {
@@ -58,13 +65,13 @@ fn request() -> Job {
         })
         .add_step(
             pr_ci::gate_step("Open the CI gate request", "fork-request")
-                .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-                .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-                .add_env(("BASE_REF", "${{ github.event.pull_request.base.ref }}"))
+                .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
+                .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
+                .add_env(("BASE_REF", github().event::<Str>("pull_request.base.ref")))
                 .add_env(("CI_GATE_DOCS_URL", pr_ci::GATE_DOCS_URL))
                 .add_env((
                     "PR_CHECKS_URL",
-                    "${{ github.event.pull_request.html_url }}/checks",
+                    format!("{}/checks", github().event::<Str>("pull_request.html_url")),
                 )),
         )
 }
@@ -72,9 +79,21 @@ fn request() -> Job {
 fn report() -> Job {
     Job::default()
         .name("Report a fork's CI result")
-        .cond(Expression::new(
-            "github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name != github.repository",
-        ))
+        .cond(
+            github()
+                .event_name()
+                .eq("workflow_run")
+                .and(
+                    github()
+                        .event::<Str>("workflow_run.event")
+                        .eq("pull_request"),
+                )
+                .and(
+                    github()
+                        .event::<Str>("workflow_run.head_repository.full_name")
+                        .ne(github().repository()),
+                ),
+        )
         .runs_on("ubuntu-latest")
         .timeout_minutes(5u32)
         .permissions(Permissions {

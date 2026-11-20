@@ -1,9 +1,12 @@
 use super::StaticFileServiceClient;
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+#[cfg(test)]
+mod test;
 
 // HACK: duplicate logic. put into model crate later
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,7 +36,12 @@ pub struct PutFileResponse {
 
 impl StaticFileServiceClient {
     pub async fn put_file(&self, file_url: &str) -> Result<PutFileResponse> {
-        let response = self.client.get(file_url).send().await?;
+        let response = self
+            .client
+            .get(file_url)
+            .send()
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         let content_type = response
             .headers()
@@ -42,7 +50,10 @@ impl StaticFileServiceClient {
             .map(String::from)
             .context("content-type header not found")?;
 
-        let file_bytes = response.bytes().await?;
+        let file_bytes = response
+            .bytes()
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         self.put_file_with_bytes(file_url, file_bytes, content_type)
             .await
@@ -163,11 +174,12 @@ impl StaticFileServiceClient {
                 content_length,
             })
             .send()
-            .await?;
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         let status_code = res.status();
         if status_code != reqwest::StatusCode::OK {
-            let body: String = res.text().await?;
+            let body: String = res.text().await.map_err(reqwest::Error::without_url)?;
             tracing::error!(
                 body=%body,
                 status=%status_code,
@@ -176,7 +188,7 @@ impl StaticFileServiceClient {
             anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
-        Ok(res.json().await?)
+        Ok(res.json().await.map_err(reqwest::Error::without_url)?)
     }
 
     /// Reserve a file (owned by `owner_id`, when given) and PUT its bytes to
@@ -193,12 +205,12 @@ impl StaticFileServiceClient {
         if let Some(owner_id) = owner_id {
             request = request.header(crate::INTERNAL_MACRO_USER_ID_HEADER, owner_id);
         }
-        let res = request.send().await?;
+        let res = request.send().await.map_err(reqwest::Error::without_url)?;
 
         let status_code = res.status();
 
         if status_code != reqwest::StatusCode::OK {
-            let body: String = res.text().await?;
+            let body: String = res.text().await.map_err(reqwest::Error::without_url)?;
             tracing::error!(
                 body=%body,
                 status=%status_code,
@@ -207,7 +219,7 @@ impl StaticFileServiceClient {
             anyhow::bail!(body);
         }
 
-        let res = res.json().await?;
+        let res = res.json().await.map_err(reqwest::Error::without_url)?;
 
         let put_file_data: PutFileResponse = serde_json::from_value(res)?;
 
@@ -218,13 +230,17 @@ impl StaticFileServiceClient {
         let presigned_url =
             macro_aws_config::transform_aws_url_for_internal_fetch(&put_file_data.upload_url);
 
+        // Without the explicit length an empty file goes out with no
+        // Content-Length at all, which storage refuses with 411.
         let upload_response = self
             .client
             .put(&presigned_url)
             .header(CONTENT_TYPE, content_type)
+            .header(CONTENT_LENGTH, bytes.len())
             .body(bytes.to_vec())
             .send()
-            .await?;
+            .await
+            .map_err(reqwest::Error::without_url)?;
 
         if !upload_response.status().is_success() {
             anyhow::bail!("Upload failed: {}", upload_response.status());

@@ -257,3 +257,50 @@ async fn typed_refusals_keep_the_legacy_payload_status_and_body() {
         );
     }
 }
+
+#[tokio::test]
+async fn a_busy_inbox_is_a_503_never_a_sharing_conflict() {
+    // Web clients released before the coded 409s read every 409 from this
+    // route as a sharing conflict.
+    let response = InitError::from(ConnectionError::MailboxInitialization(
+        InitializationError::Contended,
+    ))
+    .into_response();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn a_share_conflict_is_coded_and_keeps_its_fields_at_the_top() {
+    let link = Uuid::now_v7();
+    let response = InitError::from(ConnectionError::SharedInboxConflict {
+        email_address: "team@example.com".into(),
+        existing_owner_email: "owner@example.com".into(),
+        existing_link_id: link,
+    })
+    .into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = body_json(response).await;
+    assert_eq!(body["code"], "SHARED_INBOX_CONFLICT");
+    // Clients released before the codes read these fields where they were.
+    assert_eq!(body["email_address"], "team@example.com");
+    assert_eq!(body["existing_owner_email"], "owner@example.com");
+    assert_eq!(body["existing_link_id"], link.to_string());
+}
+
+#[tokio::test]
+async fn other_conflicts_carry_their_own_code_and_no_share_fields() {
+    for (error, code) in [
+        (
+            InitializationError::IdentityConflict,
+            "INBOX_IDENTITY_CONFLICT",
+        ),
+        (InitializationError::Changed, "INBOX_CHANGED"),
+    ] {
+        let response =
+            InitError::from(ConnectionError::MailboxInitialization(error)).into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = body_json(response).await;
+        assert_eq!(body["code"], code);
+        assert!(body.get("email_address").is_none());
+    }
+}

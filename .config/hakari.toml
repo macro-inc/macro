@@ -55,6 +55,8 @@ workspace-members = [
     "xtask_graphql_schema_compat",
     "xtask_kafka_topics",
     "xtask_workflows",
+    # The workflow model xtask_workflows builds, vendored from gh-workflow.
+    "gh_workflow",
     "xtask_email_coverage",
     "xtask_local",
     "xtask_ports",

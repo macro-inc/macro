@@ -89,6 +89,9 @@ export default {
   noneSelectedTitle: 'No notification selected',
   noneSelectedDescription: 'Pick a notification to see it here.',
   settings: 'Notification settings',
+  settingsItem: 'Notification settings…',
+  displayOptions: 'Display options',
+  condensed: 'Condensed',
 
   // Date dividers, in Home's sections
   dateLastFewMinutes: 'Last few minutes',
