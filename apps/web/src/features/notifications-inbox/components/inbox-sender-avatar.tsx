@@ -81,6 +81,7 @@ export function InboxSenderAvatar(props: {
           >
             <InboxKindIcon
               kind={props.kind}
+              entity={props.entity}
               class="size-[11px] mobile:size-3.5"
             />
           </span>
@@ -101,6 +102,7 @@ export function InboxSenderAvatar(props: {
         >
           <InboxKindIcon
             kind={props.kind}
+            entity={props.entity}
             class={
               props.compact
                 ? 'size-2.5 mobile:size-3.5'
