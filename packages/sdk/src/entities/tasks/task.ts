@@ -276,14 +276,11 @@ export class Task extends Document {
   });
 }
 
-/**
- * Property values for a new task, or `null` to keep the service's defaults
- * (creator assigned, Not started). Sending any value replaces those defaults,
- * so the defaults are spelled out here.
- */
 /** The Source property's reference to a task's source; throws for anything else. */
 function sourceReference(source: TaskSource): EntityReference {
-  // Code-mode programs are untyped, so `source` can be anything.
+  // Code-mode programs are untyped, so `source` can be anything, including a
+  // handle's JSON, which has an `entityType` but no `toMention`.
+  if (typeof source?.toMention !== 'function') return notASource();
   return match<TaskSource, EntityReference>(source)
     .with({ entityType: 'channel_message' }, (message) => ({
       entity_id: message.channelId,
@@ -298,11 +295,13 @@ function sourceReference(source: TaskSource): EntityReference {
       entity_id: chat.id,
       entity_type: 'CHAT',
     }))
-    .otherwise(() => {
-      throw new MacroError(
-        'tasks.create takes `source` as a channel message, document or chat handle, e.g. `channel.message(id)`.',
-      );
-    });
+    .otherwise(notASource);
+}
+
+function notASource(): never {
+  throw new MacroError(
+    'tasks.create takes `source` as a channel message, document or chat handle, e.g. `channel.message(id)`.',
+  );
 }
 
 /** The task body: a chip linking its source, then the caller's markdown. */
@@ -315,6 +314,11 @@ function taskBody(
   return markdown ? `${link}\n\n${markdown}` : link;
 }
 
+/**
+ * Property values for a new task, or `null` to keep the service's defaults
+ * (creator assigned, Not started). Sending any value replaces those defaults,
+ * so the defaults are spelled out here.
+ */
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],

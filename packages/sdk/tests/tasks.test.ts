@@ -395,6 +395,19 @@ describe('Task.create', () => {
     ).rejects.toThrow('`source` as a channel message, document or chat');
   });
 
+  test("rejects a handle's JSON passed back as the source", async () => {
+    const macro = new Macro({ token: 'user-token' });
+    await expect(
+      macro.tasks.create({
+        name: 'Bad source',
+        source: {
+          entityType: 'document',
+          id: '0198a4cc-e138-7670-a308-a6b766602725',
+        } as never,
+      }),
+    ).rejects.toThrow('`source` as a channel message, document or chat');
+  });
+
   test('keeps the service defaults when no properties are given', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input, init) => {

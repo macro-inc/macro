@@ -116,3 +116,34 @@ fn markdown_without_app_links_is_borrowed() {
 fn an_app_url_that_is_not_an_origin_is_refused() {
     assert!(AppLinkChips::new("not a url").is_err());
 }
+
+#[test]
+fn links_with_titles_reference_definitions_and_attributes_keep_their_syntax() {
+    for markdown in [
+        format!("[spec]({TASK_URL} \"Title\")"),
+        format!("[1]: {TASK_URL}\n\nSee [the task][1]."),
+        format!("<a href=\"{TASK_URL}\">task</a>"),
+        format!("<a href='{TASK_URL}'>task</a>"),
+    ] {
+        assert_eq!(prod().rewrite(&markdown), markdown);
+    }
+}
+
+#[test]
+fn indented_and_nested_fences_stay_code() {
+    let nested = format!("- step\n    ```\n    {TASK_URL}\n    ```\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&nested),
+        format!("- step\n    ```\n    {TASK_URL}\n    ```\n{TASK_CHIP}\n")
+    );
+    let longer = format!("````md\n```\n{TASK_URL}\n```\n````\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&longer),
+        format!("````md\n```\n{TASK_URL}\n```\n````\n{TASK_CHIP}\n")
+    );
+    let tildes = format!("~~~\n```\n{TASK_URL}\n~~~\n{TASK_URL}");
+    assert_eq!(
+        prod().rewrite(&tildes),
+        format!("~~~\n```\n{TASK_URL}\n~~~\n{TASK_CHIP}")
+    );
+}

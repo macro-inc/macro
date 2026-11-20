@@ -83,16 +83,26 @@ impl AppLinkChips {
     pub fn rewrite<'a>(&self, markdown: &'a str) -> Cow<'a, str> {
         let mut out = String::new();
         let mut changed = false;
-        let mut in_fence = false;
+        let mut open_fence: Option<&str> = None;
         for line in markdown.split_inclusive('\n') {
-            if is_fence(line) {
-                in_fence = !in_fence;
-                out.push_str(line);
-                continue;
-            }
-            if in_fence {
-                out.push_str(line);
-                continue;
+            match (open_fence, fence(line)) {
+                (None, Some(opening)) => {
+                    open_fence = Some(opening);
+                    out.push_str(line);
+                    continue;
+                }
+                (Some(opening), Some(closing))
+                    if closing.starts_with(opening) && line.trim().len() == closing.len() =>
+                {
+                    open_fence = None;
+                    out.push_str(line);
+                    continue;
+                }
+                (Some(_), _) => {
+                    out.push_str(line);
+                    continue;
+                }
+                (None, None) => {}
             }
             let mut written = 0;
             for protected in
@@ -132,6 +142,13 @@ impl AppLinkChips {
             } else if let Some(auto) = captures.name("auto") {
                 (auto.as_str(), "")
             } else if let Some(bare) = captures.name("bare") {
+                // A link the inline pattern refused (one with a title), a
+                // reference definition or an HTML attribute: chipping the URL
+                // would break the syntax around it.
+                let before = &text[..whole.start()];
+                if ["](", "]: ", "=\"", "='"].iter().any(|opening| before.ends_with(opening)) {
+                    continue;
+                }
                 let url = bare.as_str().trim_end_matches(TRAILING_PUNCTUATION);
                 (url, &bare.as_str()[url.len()..])
             } else {
@@ -190,8 +207,11 @@ fn bare_host(host: &str) -> &str {
     host.strip_prefix("www.").unwrap_or(host)
 }
 
-/// A line that opens or closes a fenced code block.
-fn is_fence(line: &str) -> bool {
-    let trimmed = line.trim_start_matches(' ');
-    line.len() - trimmed.len() <= 3 && (trimmed.starts_with("```") || trimmed.starts_with("~~~"))
+/// The fence (its run of backticks or tildes) a line opens or closes a fenced
+/// code block with. Fences in list items are indented, so any indent counts.
+fn fence(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    let marker = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'))?;
+    let run = &trimmed[..trimmed.len() - trimmed.trim_start_matches(marker).len()];
+    (run.len() >= 3).then_some(run)
 }
