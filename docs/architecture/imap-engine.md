@@ -48,8 +48,13 @@ reconciliation. MIME is retrieved lazily and parsed with explicit size/depth
 bounds; a corrupt message must not prevent the next message from synchronizing.
 
 Drafts and uploads are engine-side staging. Sending persists admission before
-SMTP side effects. A final response lost after DATA is an uncertain submission,
-which must remain Unknown rather than being retried as a fresh send. The engine
+SMTP side effects. Explicit 4xx/5xx refusals before DATA fail the attempt. A
+negative or lost final response after the body remains Unknown rather than
+being retried as a fresh send. SMTP telemetry records only phase and reply class.
+Read-only reconciliation targets the requested draft and requires one exact
+Message-ID header in Sent; substring search hits, duplicate IDs and a missing
+Sent folder cannot establish delivery. Reconciliation never APPENDs evidence.
+The engine
 associates the remote Sent copy with the stable draft identity and preserves a
 readable fallback until association succeeds. Bcc belongs in the SMTP envelope
 and must not be exposed in delivered MIME.

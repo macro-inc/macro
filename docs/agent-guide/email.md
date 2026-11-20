@@ -1346,7 +1346,11 @@ notice that stays on screen until the send ends and changes in place: **Undo**
 leaves at the deadline, and **Sending…** then becomes **Email sent** only after
 delivery; it never closes and reopens while the send is in motion. A send
 that makes no progress for 30 seconds (retrying, or waiting on sign-in) lets
-its notice expire, and a new one follows it once the server accepts it. This holds
+its notice expire, and a new one follows it once the server accepts it. After
+the undo deadline, a send with no progress for 30 seconds shows **Delivery
+unconfirmed** while confirmation continues. Repeated unchanged status polls
+must not restart that deadline; a later confirmed delivery becomes **Email sent**.
+This holds
 when another Mail tab delivers or cancels the send first, and a cancelled reply
 still returns its thread to Inbox. When the server cannot say how such a send
 ended, the notice closes. A send that fails after it was queued turns the

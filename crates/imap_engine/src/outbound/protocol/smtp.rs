@@ -294,25 +294,82 @@ async fn deliver<S: AsyncRead + AsyncWrite + Unpin>(
         mail_from.push_str(" BODY=8BITMIME");
     }
     mail_from.push_str("\r\n");
-    command(stream, mail_from.as_bytes(), 250).await?;
+    submission_command(stream, mail_from.as_bytes(), 250, "mail-from").await?;
     for recipient in recipients {
-        if let Err(error) =
-            command(stream, format!("RCPT TO:<{recipient}>\r\n").as_bytes(), 250).await
+        if let Err(error) = submission_command(
+            stream,
+            format!("RCPT TO:<{recipient}>\r\n").as_bytes(),
+            250,
+            "rcpt-to",
+        )
+        .await
         {
             let _ = command(stream, b"RSET\r\n", 250).await;
             return Err(error);
         }
     }
-    command(stream, b"DATA\r\n", 354).await?;
+    submission_command(stream, b"DATA\r\n", 354, "data-command").await?;
     // Admission was persisted before IO. Lost DATA delivery acknowledgments remain Unknown.
     if stream.write_all(&data).await.is_err() {
+        tracing::warn!(
+            smtp.phase = "data-body",
+            "SMTP delivery remains unconfirmed"
+        );
         return Ok(SubmissionOutcome::Unknown);
     }
     match response(stream).await {
-        Ok((250, _)) => Ok(SubmissionOutcome::Accepted),
-        Ok((code, _)) if (400..500).contains(&code) => Err(Error::ConnectionUnavailable),
-        Ok((code, _)) if code >= 500 => Err(Error::SendRejected),
-        _ => Ok(SubmissionOutcome::Unknown),
+        Ok((250, _)) => {
+            tracing::info!(
+                smtp.phase = "data-result",
+                smtp.reply_class = 2_i64,
+                "SMTP delivery accepted"
+            );
+            Ok(SubmissionOutcome::Accepted)
+        }
+        Ok((code, _)) => {
+            // Delivery bytes have left the client. Retain the durable Unknown
+            // fence and reconcile Sent rather than opening an automatic resend.
+            tracing::warn!(
+                smtp.phase = "data-result",
+                smtp.reply_class = i64::from(code / 100),
+                "SMTP delivery remains unconfirmed"
+            );
+            Ok(SubmissionOutcome::Unknown)
+        }
+        Err(_) => {
+            tracing::warn!(
+                smtp.phase = "data-result",
+                "SMTP delivery remains unconfirmed"
+            );
+            Ok(SubmissionOutcome::Unknown)
+        }
+    }
+}
+
+#[tracing::instrument(name = "smtp.submission.command", skip_all, fields(smtp.phase = phase), err)]
+async fn submission_command<S: AsyncRead + AsyncWrite + Unpin>(
+    stream: &mut S,
+    bytes: &[u8],
+    expected: u16,
+    phase: &'static str,
+) -> Result<(), Error> {
+    stream
+        .write_all(bytes)
+        .await
+        .map_err(|_| Error::ConnectionUnavailable)?;
+    let code = response(stream).await?.0;
+    if code == expected || (phase == "rcpt-to" && matches!(code, 251 | 252)) {
+        return Ok(());
+    }
+    tracing::warn!(
+        smtp.phase = phase,
+        smtp.reply_class = i64::from(code / 100),
+        "SMTP submission refused"
+    );
+    if (400..600).contains(&code) {
+        Err(Error::SendRejected)
+    } else {
+        Err(Error::ConnectionUnavailable)
     }
 }
 

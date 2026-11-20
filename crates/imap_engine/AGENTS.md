@@ -36,7 +36,9 @@ accepts bearer access to a remote mail server.
 - Fence optional watches, exclusions, role updates and server information to the
   current owner and both link generations. Reconnect advances the preference revision.
 - A persisted Unknown submission is never dispatched again. A lost SMTP final
-  response does not prove non-delivery.
+  response or a negative reply after DATA retains Unknown. Reconcile only the
+  requested draft using one exact Message-ID in an existing Sent folder; never
+  treat substring search hits as delivery proof or APPEND to prove an unknown send.
 - Every sent draft id retains a readable fallback until the remote Sent copy
   is associated with it. Commit `sent_copy_attempted` before an APPEND-capable call;
   later reconciliation searches without another APPEND after an uncertain result.

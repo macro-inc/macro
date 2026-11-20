@@ -387,6 +387,7 @@ pub(crate) struct UncertainTransport {
     pub(crate) repository: Arc<MemoryRepository>,
     pub(crate) submissions: std::sync::atomic::AtomicU32,
     pub(crate) deadline: AtomicBool,
+    pub(crate) sent_found: std::sync::Mutex<std::collections::BTreeSet<String>>,
 }
 #[async_trait::async_trait]
 impl MailTransport for UncertainTransport {
@@ -448,7 +449,7 @@ impl MailTransport for UncertainTransport {
     async fn save_sent(
         &self,
         _: &Credentials,
-        _: &str,
+        message_id: &str,
         _: &[u8],
         allow_append: bool,
     ) -> Result<bool, Error> {
@@ -465,7 +466,7 @@ impl MailTransport for UncertainTransport {
             self.submissions.fetch_add(1, Ordering::AcqRel);
             Err(Error::ConnectionUnavailable)
         } else {
-            Ok(false)
+            Ok(self.sent_found.lock().unwrap().contains(message_id))
         }
     }
 }
@@ -480,6 +481,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         repository: repository.clone(),
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(false),
+        sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
     });
     let binding = Binding {
         link_id: Uuid::now_v7(),
@@ -531,12 +533,58 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
     );
     let second: SubmissionOutcome = serde_json::from_value(
         restarted
-            .execute(binding, Operation::Submit { id: created.id })
+            .execute(
+                binding,
+                Operation::Submit {
+                    id: created.id.clone(),
+                },
+            )
             .await
             .unwrap(),
     )
     .unwrap();
     assert_eq!(second, SubmissionOutcome::Unknown);
+    assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
+    {
+        let mut state = transport.repository.state.lock().unwrap();
+        let mut unrelated = state.drafts[&created.id].clone();
+        unrelated.draft.id = "a-unprovable".into();
+        let mut send: SendRequest =
+            serde_json::from_value(unrelated.frozen_content.take().unwrap()).unwrap();
+        send.message_id = Some("unprovable@example.com".into());
+        unrelated.frozen_content = Some(serde_json::to_value(send).unwrap());
+        state.drafts.insert("a-unprovable".into(), unrelated);
+    }
+    let pending: Option<Draft> = serde_json::from_value(
+        restarted
+            .execute(
+                binding,
+                Operation::GetDraft {
+                    id: created.id.clone(),
+                },
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(pending.unwrap().is_draft);
+    transport
+        .sent_found
+        .lock()
+        .unwrap()
+        .insert("send-once@example.net".into());
+    let confirmed: Option<Draft> = serde_json::from_value(
+        restarted
+            .execute(binding, Operation::GetDraft { id: created.id })
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(!confirmed.unwrap().is_draft);
+    assert_eq!(
+        transport.repository.state.lock().unwrap().drafts["a-unprovable"].submission,
+        Some(SubmissionOutcome::Unknown)
+    );
     assert_eq!(transport.submissions.load(Ordering::Acquire), 1);
 }
 
@@ -551,6 +599,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         repository: repository.clone(),
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(true),
+        sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
     });
     let binding = Binding {
         link_id: Uuid::now_v7(),
@@ -731,6 +780,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         repository: repository.clone(),
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(false),
+        sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
     });
     let binding = Binding {
         link_id: Uuid::now_v7(),
@@ -836,6 +886,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         repository: repository.clone(),
         submissions: std::sync::atomic::AtomicU32::new(0),
         deadline: AtomicBool::new(false),
+        sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
     });
     let engine = Engine::new(
         repository,

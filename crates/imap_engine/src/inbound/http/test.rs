@@ -20,6 +20,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             repository: repository.clone(),
             submissions: AtomicU32::new(0),
             deadline: AtomicBool::new(false),
+            sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         });
         let engine = Arc::new(Engine::new(
             repository,

@@ -445,7 +445,20 @@ impl Engine {
                 value(p.get_body_raw().map_err(|_| Error::Invalid)?)
             }
             Operation::Apply { id, request } => self.apply_organization(a, id, request).await,
-            Operation::GetDraft { id } => value(a.state.drafts.get(&id).map(|d| &d.draft)),
+            Operation::GetDraft { id } => {
+                if a.state
+                    .drafts
+                    .get(&id)
+                    .is_some_and(|d| d.submission == Some(SubmissionOutcome::Unknown))
+                {
+                    let credentials = self
+                        .cipher
+                        .decrypt(a.binding.link_id, &a.user_id, &a.ciphertext)
+                        .await?;
+                    self.reconcile_submission(a, &credentials, &id).await?;
+                }
+                value(a.state.drafts.get(&id).map(|d| &d.draft))
+            }
             Operation::FindDrafts { correlation } => value(
                 a.state
                     .drafts

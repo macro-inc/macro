@@ -110,7 +110,24 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             actor
         };
         if !self.repo.draft_authorized(lease, actor).await? {
-            return self.repo.fail_draft(lease, DraftFailure::Denied).await;
+            let submitted = lease.checkpoint.as_ref().is_some_and(|checkpoint| {
+                checkpoint.submission_started
+                    && matches!(
+                        checkpoint.stage,
+                        DraftStage::Submitting | DraftStage::Confirming
+                    )
+            });
+            return self
+                .repo
+                .fail_draft(
+                    lease,
+                    if submitted {
+                        DraftFailure::SendUnknown
+                    } else {
+                        DraftFailure::Denied
+                    },
+                )
+                .await;
         }
         let mut checkpoint = match &lease.checkpoint {
             Some(checkpoint) => checkpoint.clone(),
@@ -570,7 +587,20 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         checkpoint: &mut DraftCheckpoint,
     ) -> Result<(), MailboxError> {
         let prior = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
-        let found = self.provider.get_draft(lease.mailbox, &prior.id).await?;
+        let found = match self.provider.get_draft(lease.mailbox, &prior.id).await {
+            Ok(found) => found,
+            Err(error) => {
+                // A read outage cannot keep an uncertain send running forever.
+                // Its deadline never grants permission to submit it again.
+                if Utc::now() - checkpoint.stage_started_at >= UNCERTAIN_WAIT {
+                    return self.repo.fail_draft(lease, DraftFailure::SendUnknown).await;
+                }
+                return self
+                    .repo
+                    .release_draft(lease, super::retry_seconds(&error))
+                    .await;
+            }
+        };
         if let Some(draft) = found
             && !draft.is_draft
         {
@@ -632,6 +662,7 @@ fn definitively_rejected(error: &EmailApiError) -> bool {
     matches!(
         error,
         EmailApiError::AuthRequired
+            | EmailApiError::SendRejected { .. }
             | EmailApiError::Forbidden
             | EmailApiError::NotFound
             | EmailApiError::Conflict

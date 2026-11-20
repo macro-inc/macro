@@ -6,6 +6,7 @@ mod gmail;
 mod identity;
 mod login;
 mod message;
+mod sent;
 mod smtp;
 mod wire;
 use crate::domain::{models::*, ports::*, server_features::ServerFeatures};
@@ -860,93 +861,6 @@ async fn ehlo<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<Vec<u
         return Err(Error::ConnectionUnavailable);
     }
     Ok(lines)
-}
-
-impl ProtocolTransport {
-    #[tracing::instrument(skip_all, err)]
-    async fn save_sent_inner(
-        &self,
-        c: &Credentials,
-        message_id: &str,
-        mime: &[u8],
-        allow_append: bool,
-    ) -> Result<bool, Error> {
-        if message_id.len() > 998 || message_id.chars().any(char::is_control) {
-            return Err(Error::Invalid);
-        }
-        let mut session = self.command_session(c).await?;
-        let mut catalog = self.folders(&mut session).await?;
-        let mut preferences = match (&self.settings, c.binding) {
-            (Some(settings), Some(binding)) => settings.preferences(binding).await?,
-            _ => crate::domain::account_settings::FolderPreferences::default(),
-        };
-        preferences.retain_listed(catalog.iter().map(|(folder, _)| folder.id.as_str()));
-        for (folder, _) in &mut catalog {
-            folder.role = preferences.role(folder);
-        }
-        let mut copied = true;
-        if let Some((_, path)) = catalog
-            .into_iter()
-            .find(|(f, _)| f.role == FolderRole::Sent)
-        {
-            let selected = session
-                .select(&path)
-                .await
-                .map_err(|e| imap_error(e, false))?;
-            let query = format!("HEADER Message-ID {}", quoted(message_id)?);
-            let mut found = session
-                .uid_search(query)
-                .await
-                .map_err(|e| imap_error(e, false))?;
-            if found.is_empty() {
-                // Some interoperable servers do not index Message-ID for HEADER SEARCH.
-                // Inspect a bounded recent UID window before risking another APPEND.
-                let start = selected.uid_next.unwrap_or(1).saturating_sub(200).max(1);
-                let recent = session
-                    .uid_fetch(format!("{start}:*"), "(UID BODY.PEEK[HEADER])")
-                    .await
-                    .map_err(|e| imap_error(e, false))?
-                    .take(201)
-                    .try_collect::<Vec<_>>()
-                    .await
-                    .map_err(|e| imap_error(e, false))?;
-                if recent.len() > 200 {
-                    return Err(Error::Throttled);
-                }
-                for item in recent {
-                    let Some(header) = item.header() else {
-                        continue;
-                    };
-                    let Ok((headers, _)) = mailparse::parse_headers(header) else {
-                        continue;
-                    };
-                    if headers.iter().any(|h| {
-                        h.get_key().eq_ignore_ascii_case("Message-ID")
-                            && h.get_value().trim().trim_matches(['<', '>'])
-                                == message_id.trim().trim_matches(['<', '>'])
-                    }) && let Some(uid) = item.uid
-                    {
-                        found.insert(uid);
-                    }
-                }
-            }
-            let server_saves_copy = session
-                .capabilities()
-                .await
-                .map_err(|e| imap_error(e, false))?
-                .has_str("X-GM-EXT-1");
-            if found.is_empty() && !server_saves_copy && allow_append {
-                session
-                    .append(&path, Some("(\\Seen)"), None, mime)
-                    .await
-                    .map_err(|e| imap_error(e, false))?;
-            } else if found.is_empty() {
-                copied = false;
-            }
-        }
-        self.return_command(c, session).await;
-        Ok(copied)
-    }
 }
 
 impl ProtocolTransport {

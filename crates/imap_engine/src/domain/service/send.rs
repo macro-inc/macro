@@ -2,6 +2,39 @@
 use super::*;
 
 impl Engine {
+    pub(super) async fn reconcile_submission(
+        &self,
+        a: &mut Account,
+        credentials: &Credentials,
+        id: &str,
+    ) -> Result<(), Error> {
+        let draft = a.state.drafts.get(id).ok_or(Error::NotFound)?;
+        if draft.submission != Some(SubmissionOutcome::Unknown) {
+            return Ok(());
+        }
+        let send: SendRequest = serde_json::from_value(
+            draft
+                .frozen_content
+                .as_ref()
+                .unwrap_or(&draft.input.content)
+                .clone(),
+        )
+        .map_err(|_| Error::Invalid)?;
+        let message_id = send.message_id.as_ref().ok_or(Error::Invalid)?;
+        let mime = send.build_mime().map_err(|_| Error::Invalid)?;
+        // Reconcile exactly the requested attempt. Another unconfirmed draft
+        // must not hide its Sent evidence or monopolize background copy work.
+        if self
+            .transport
+            .save_sent(credentials, message_id, &mime, false)
+            .await?
+        {
+            accept_submission(a, id, &mime, false)?;
+            self.repository.save(a).await?;
+        }
+        Ok(())
+    }
+
     pub(super) async fn reconcile_sent(
         &self,
         a: &mut Account,
@@ -178,8 +211,6 @@ impl Engine {
         if mime.len() > 25 * 1024 * 1024 {
             return Err(Error::Invalid);
         }
-        let conversation = draft.draft.conversation_id.clone();
-        let correlation = draft.input.correlation;
         let frozen_input = serde_json::to_value(&send).map_err(|_| Error::Invalid)?;
         let draft = a.state.drafts.get_mut(id).ok_or(Error::NotFound)?;
         draft.frozen_content = Some(frozen_input);
@@ -224,29 +255,7 @@ impl Engine {
             }
         }
         if outcome == SubmissionOutcome::Accepted {
-            let folder = a
-                .state
-                .folders
-                .values()
-                .find(|f| f.folder.role == FolderRole::Sent)
-                .map(|f| f.folder.id.clone())
-                .unwrap_or_else(|| "virtual:sent".into());
-            let snapshot = Message {
-                id: id.into(),
-                thread_id: conversation,
-                folder_id: folder,
-                flags: vec!["\\Seen".into()],
-                tags: Vec::new(),
-                version: format!("sent:{correlation}"),
-                mime_base64: STANDARD.encode(&mime),
-                source_complete: true,
-                classification: None,
-                received_at: Utc::now(),
-                size: u32::try_from(mime.len()).map_err(|_| Error::Invalid)?,
-                is_sent: true,
-                draft_correlation: Some(correlation),
-            };
-            a.state.messages.insert(id.into(), snapshot);
+            accept_submission(a, id, &mime, true)?;
         }
         self.repository.save(a).await?;
         if outcome == SubmissionOutcome::Accepted {
@@ -254,4 +263,45 @@ impl Engine {
         }
         value(outcome)
     }
+}
+
+fn accept_submission(
+    a: &mut Account,
+    id: &str,
+    mime: &[u8],
+    copy_pending: bool,
+) -> Result<(), Error> {
+    let draft = a.state.drafts.get_mut(id).ok_or(Error::NotFound)?;
+    draft.submission = Some(SubmissionOutcome::Accepted);
+    draft.draft.is_draft = false;
+    draft.sent_copy_pending = copy_pending;
+    draft.answered_pending = draft.input.reply_to.is_some();
+    let conversation = draft.draft.conversation_id.clone();
+    let correlation = draft.input.correlation;
+    let folder = a
+        .state
+        .folders
+        .values()
+        .find(|f| f.folder.role == FolderRole::Sent)
+        .map(|f| f.folder.id.clone())
+        .unwrap_or_else(|| "virtual:sent".into());
+    a.state.messages.insert(
+        id.into(),
+        Message {
+            id: id.into(),
+            thread_id: conversation,
+            folder_id: folder,
+            flags: vec!["\\Seen".into()],
+            tags: Vec::new(),
+            version: format!("sent:{correlation}"),
+            mime_base64: STANDARD.encode(mime),
+            source_complete: true,
+            classification: None,
+            received_at: Utc::now(),
+            size: u32::try_from(mime.len()).map_err(|_| Error::Invalid)?,
+            is_sent: true,
+            draft_correlation: Some(correlation),
+        },
+    );
+    Ok(())
 }

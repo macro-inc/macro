@@ -22,6 +22,8 @@ struct State {
     creates: usize,
     updates: usize,
     submissions: usize,
+    submission_error: Option<EmailApiError>,
+    read_error: Option<EmailApiError>,
     additions: usize,
     /// Checkpoints after a provider update that time out on a busy mailbox.
     locked_checkpoints: u32,
@@ -99,6 +101,8 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         creates: 0,
         updates: 0,
         submissions: 0,
+        submission_error: None,
+        read_error: None,
         additions: 0,
         locked_checkpoints: 0,
     })))
@@ -198,7 +202,11 @@ impl DraftGateway for Harness {
         _: MailboxKey,
         _: &ProviderId,
     ) -> Result<Option<ProviderDraft>, EmailApiError> {
-        Ok(self.0.lock().unwrap().remote.clone())
+        let mut state = self.0.lock().unwrap();
+        if let Some(error) = state.read_error.take() {
+            return Err(error);
+        }
+        Ok(state.remote.clone())
     }
     async fn find_drafts(
         &self,
@@ -324,6 +332,9 @@ impl DraftGateway for Harness {
             DraftStage::Submitting
         );
         s.submissions += 1;
+        if let Some(error) = s.submission_error.take() {
+            return Err(error);
+        }
         Ok(SubmissionOutcome::Unknown)
     }
 }
@@ -375,6 +386,23 @@ async fn unknown_send_is_only_read_back_until_a_sent_copy_is_confirmed() {
 }
 
 #[tokio::test]
+async fn explicit_submission_rejection_fails_once_without_reclaiming_the_send() {
+    let h = harness(Some(DraftStage::Ready));
+    h.0.lock().unwrap().submission_error = Some(EmailApiError::SendRejected {
+        message: "Synthetic SMTP refusal before DATA".into(),
+    });
+    let service = service(&h);
+    assert!(service.execute_once().await.unwrap());
+    assert!(matches!(
+        h.0.lock().unwrap().failure,
+        Some(DraftFailure::SendRejected)
+    ));
+    assert_eq!(h.0.lock().unwrap().submissions, 1);
+    assert!(!service.execute_once().await.unwrap());
+    assert_eq!(h.0.lock().unwrap().submissions, 1);
+}
+
+#[tokio::test]
 async fn crash_after_submission_marker_never_replays_the_send() {
     let h = harness(Some(DraftStage::Submitting));
     let service = service(&h);
@@ -392,6 +420,23 @@ async fn crash_after_submission_marker_never_replays_the_send() {
         h.0.lock().unwrap().failure,
         Some(DraftFailure::SendUnknown)
     ));
+}
+
+#[tokio::test]
+async fn reconciliation_read_outages_cannot_extend_the_unknown_send_deadline() {
+    let h = harness(Some(DraftStage::Confirming));
+    {
+        let mut state = h.0.lock().unwrap();
+        state.read_error = Some(EmailApiError::Transient {
+            message: "Synthetic provider read outage".into(),
+        });
+        state.lease.checkpoint.as_mut().unwrap().stage_started_at =
+            Utc::now() - Duration::minutes(11);
+    }
+    assert!(service(&h).execute_once().await.unwrap());
+    let state = h.0.lock().unwrap();
+    assert!(matches!(state.failure, Some(DraftFailure::SendUnknown)));
+    assert_eq!(state.submissions, 0);
 }
 
 #[tokio::test]
@@ -607,4 +652,42 @@ async fn a_checkpoint_that_stays_locked_gives_up_inside_the_lease() {
         s.lease.checkpoint.as_ref().unwrap().stage,
         DraftStage::Updating
     );
+}
+
+#[tokio::test]
+async fn confirmation_permission_failures_do_not_claim_non_delivery() {
+    for error in [
+        EmailApiError::Forbidden,
+        EmailApiError::Conflict,
+        EmailApiError::Permanent {
+            message: "Synthetic read refusal".into(),
+        },
+    ] {
+        let h = harness(Some(DraftStage::Confirming));
+        h.0.lock().unwrap().read_error = Some(error);
+        assert!(service(&h).execute_once().await.unwrap());
+        {
+            let mut state = h.0.lock().unwrap();
+            assert!(state.failure.is_none());
+            assert_eq!(state.submissions, 0);
+            state.lease.checkpoint.as_mut().unwrap().stage_started_at =
+                Utc::now() - Duration::minutes(11);
+        }
+        assert!(service(&h).execute_once().await.unwrap());
+        assert!(matches!(
+            h.0.lock().unwrap().failure,
+            Some(DraftFailure::SendUnknown)
+        ));
+        assert_eq!(h.0.lock().unwrap().submissions, 0);
+    }
+}
+
+#[tokio::test]
+async fn revoked_access_after_submission_preserves_the_unknown_outcome_without_provider_io() {
+    let h = harness(Some(DraftStage::Submitting));
+    h.0.lock().unwrap().authorized = false;
+    assert!(service(&h).execute_once().await.unwrap());
+    let state = h.0.lock().unwrap();
+    assert!(matches!(state.failure, Some(DraftFailure::SendUnknown)));
+    assert_eq!(state.submissions, 0);
 }

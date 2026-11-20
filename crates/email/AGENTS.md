@@ -392,7 +392,8 @@ tools — hexagonal, heavily feature-gated.
   keep relational guards in SQL. Compose `ScheduledDeliveryService` once while
   keeping claims and transactions per delivery. Scheduled page validation and
   expansion sequencing live in `domain/scheduled/drafts.rs`.
-- Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
+- Durable send admission supports Gmail, Outlook and IMAP; Outlook and IMAP delivery use the mailbox draft coordinator.
+- Treat a typed pre-DATA send rejection as terminal failure and keep uncertain-send reconciliation bounded even when provider reads fail.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
 - Gmail thread label writes stage each thread's DB change, then enqueue one

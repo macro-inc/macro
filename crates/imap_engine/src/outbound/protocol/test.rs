@@ -2,6 +2,8 @@ use super::*;
 use crate::outbound::network::LocalEndpoints;
 use std::collections::BTreeMap;
 
+mod submission;
+
 #[test]
 fn bcc_headers_and_continuations_are_not_transmitted() {
     let source=b"From: sender@example.net\r\nTo: visible@example.net\r\nBcc: hidden@example.net,\r\n another@example.net\r\nResent-Bcc: secret@example.net\r\nSubject: privacy\r\n\r\nBody containing Bcc: stays.";

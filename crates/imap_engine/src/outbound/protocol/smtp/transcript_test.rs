@@ -85,6 +85,98 @@ const ASCII: &str =
     "From: owner@example.net\r\nTo: recipient@example.net\r\nSubject: ASCII\r\n\r\nbody\r\n";
 
 #[tokio::test]
+async fn refusal_before_data_is_definite_and_any_negative_final_reply_is_unknown() {
+    for (phase, refusal, expected) in [
+        ("mail", 451, Err(Error::SendRejected)),
+        ("mail", 550, Err(Error::SendRejected)),
+        ("recipient", 450, Err(Error::SendRejected)),
+        ("recipient", 550, Err(Error::SendRejected)),
+        ("data", 451, Err(Error::SendRejected)),
+        ("data", 554, Err(Error::SendRejected)),
+        ("final", 451, Ok(SubmissionOutcome::Unknown)),
+        ("final", 554, Ok(SubmissionOutcome::Unknown)),
+        ("final", 250, Ok(SubmissionOutcome::Accepted)),
+    ] {
+        let (mut client, server) = tokio::io::duplex(65536);
+        let peer = tokio::spawn(async move {
+            let mut server = BufReader::new(server);
+            let mut body_seen = false;
+            server
+                .get_mut()
+                .write_all(b"220 synthetic peer\r\n")
+                .await
+                .unwrap();
+            loop {
+                let mut command = String::new();
+                if server.read_line(&mut command).await.unwrap() == 0 {
+                    return body_seen;
+                }
+                let stage = if command.starts_with("MAIL FROM:") {
+                    "mail"
+                } else if command.starts_with("RCPT TO:") {
+                    "recipient"
+                } else if command == "DATA\r\n" {
+                    "data"
+                } else {
+                    "other"
+                };
+                if phase == stage {
+                    server
+                        .get_mut()
+                        .write_all(format!("{refusal} synthetic refusal\r\n").as_bytes())
+                        .await
+                        .unwrap();
+                } else if command.starts_with("EHLO ") {
+                    server
+                        .get_mut()
+                        .write_all(b"250 synthetic peer\r\n")
+                        .await
+                        .unwrap();
+                } else if stage == "data" {
+                    server
+                        .get_mut()
+                        .write_all(b"354 continue\r\n")
+                        .await
+                        .unwrap();
+                    loop {
+                        let mut body = String::new();
+                        assert!(server.read_line(&mut body).await.unwrap() > 0);
+                        if body == ".\r\n" {
+                            break;
+                        }
+                        body_seen = true;
+                    }
+                    server
+                        .get_mut()
+                        .write_all(format!("{refusal} synthetic result\r\n").as_bytes())
+                        .await
+                        .unwrap();
+                } else {
+                    server
+                        .get_mut()
+                        .write_all(b"250 accepted\r\n")
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+        assert_eq!(response(&mut client).await.unwrap().0, 220);
+        let extensions = Extensions::parse(&ehlo(&mut client).await.unwrap());
+        let outcome = deliver(
+            &mut client,
+            &extensions,
+            "sender@example.com",
+            &["recipient@example.com".into()],
+            ASCII,
+        )
+        .await;
+        assert_eq!(outcome, expected);
+        drop(client);
+        assert_eq!(peer.await.unwrap(), phase == "final");
+    }
+}
+
+#[tokio::test]
 async fn missing_smtputf8_rejects_international_sender_and_recipient_before_mail() {
     for (from, to) in [
         ("δοκιμή@example.net", "recipient@example.net"),

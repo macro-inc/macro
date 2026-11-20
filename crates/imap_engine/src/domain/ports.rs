@@ -299,6 +299,7 @@ pub trait MailTransport: Send + Sync {
     ) -> Result<TransportSubmission, Error>;
     /// Reconcile Sent by Message-ID; only the durably admitted first attempt may APPEND.
     /// False preserves pending reconciliation and the readable fallback without another APPEND.
+    /// With `allow_append = false`, true requires one exact Message-ID in an existing Sent folder.
     async fn save_sent(
         &self,
         credentials: &Credentials,
