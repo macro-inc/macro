@@ -1379,9 +1379,14 @@ seconds. Readers that decide from absence (section membership, notification
 bulk actions, scope checks, built-in section mute) wait for `complete()` or
 call `readComplete()`, which pages the network while the cache is still
 filling. When the lane gives up in a generation, the backfill marks it
-(`markSoupBackfillLaneFailed`, cleared by its next saved page) and the
-directory completes from the network instead; `failed()` and `retry()` report
-and retry that read. Channel writes outside the cache's soup updates (join
+(`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
+memory for the tab when storage refuses the write) and the directory pages the
+joined channels from the network instead. Its membership is the network's
+list, updated by each cached record that changed or was removed after that
+read began; a cached record unchanged since is older than the network's row,
+so a stale joined row the network left out stays out. A lane pass that
+finishes later makes the cache answer alone again. `failed()` says the
+directory is not complete and that read failed; `retry()` reads again. Channel writes outside the cache's soup updates (join
 links, renames, new DMs) call `refreshChannelDirectory`, which rereads the
 in-memory directory, reading again after a first read that was already in
 flight. The viewer's own views reach no soup update, so a recorded view stamps

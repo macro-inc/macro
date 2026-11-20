@@ -10,6 +10,7 @@
  */
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { deepEqual } from '@core/util/compareUtils';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -522,7 +523,11 @@ type CachedDirectoryDeps = {
     input: GraphqlSoupInput,
     options: Pick<FetchGraphqlSoupOptions, 'signal'>
   ) => Promise<GraphqlSoupHydrationPage>;
+  /** Every joined channel, for `readComplete` before the directory is
+   * complete; may answer from a recent read. */
   fetchAll: () => Promise<readonly DirectoryChannel[]>;
+  /** Every joined channel, paged from the network now, for the fallback. */
+  pageAll: (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>;
 };
 
 /** The joined channels paged from the network once the channel lane gave
@@ -560,14 +565,38 @@ function readLaneProgress(
   };
 }
 
-/** The cached records, plus the network's channels the cache lacks. A cached
- * record follows soup updates; the network's list is as of its read. */
-function withNetworkChannels(
-  cached: readonly DirectoryChannel[],
-  network: readonly DirectoryChannel[]
+/** A channel's record as the cache showed it after a change, or null once
+ * the cache removed it. */
+type ObservedChange = DirectoryChannel | null;
+
+/**
+ * The network's joined channels, updated by what the cache saw change after
+ * the network's read began. A change the cache saw since is at least as new
+ * as the page that listed the channel; a record it did not change is as of
+ * before that read, so the network's row wins and a cached channel the
+ * network left out stays out.
+ */
+export function fallbackChannels(
+  network: readonly DirectoryChannel[],
+  changes: ReadonlyMap<string, ObservedChange>
 ): DirectoryChannel[] {
-  const ids = new Set(cached.map(({ id }) => id));
-  return [...cached, ...network.filter(({ id }) => !ids.has(id))];
+  const channels: DirectoryChannel[] = [];
+  const listed = new Set<string>();
+  for (const channel of network) {
+    listed.add(channel.id);
+    const change = changes.get(channel.id);
+    if (change === undefined) channels.push(channel);
+    else if (change !== null) channels.push(change);
+  }
+  for (const [id, change] of changes)
+    if (change && !listed.has(id)) channels.push(change);
+  return channels;
+}
+
+function recordsById(read: ChannelDirectoryRead | undefined) {
+  return new Map(
+    (read?.channels ?? []).map((channel) => [channel.id, channel])
+  );
 }
 
 /**
@@ -598,6 +627,12 @@ export function createCachedChannelDirectory(
   // records a by-id read wrote.
   let wantFull = true;
   const wantKeys = new Set<string>();
+  // While the network fallback runs: the records the last read found, and
+  // what changed in the cache after the fallback's read began.
+  let observed: Map<string, DirectoryChannel> | undefined;
+  let changes: Map<string, ObservedChange> | undefined;
+  // A fallback read that a later start or stop overtook settles nothing.
+  let fallbackRun = 0;
 
   const reader = createByIdReader(async (ids, signal) => {
     const page = await deps.hydrate(
@@ -621,24 +656,57 @@ export function createCachedChannelDirectory(
   const networkState = () => {
     const network = untrack(fallback);
     return network.status === 'loaded'
-      ? channelDirectoryState(network.channels, [], true)
+      ? channelDirectoryState(
+          fallbackChannels(network.channels, changes ?? new Map()),
+          [],
+          true
+        )
       : EMPTY_CHANNEL_DIRECTORY_STATE;
+  };
+
+  /** Notes each record this read found changed or removed since the last,
+   * while the fallback runs. A record that now lacks a field is not a
+   * change: it keeps what was seen of it. */
+  const observe = (read: ChannelDirectoryRead) => {
+    if (!observed || !changes) return;
+    const next = recordsById(read);
+    for (const [id, channel] of next) {
+      const before = observed.get(id);
+      if (before !== channel && !deepEqual(before, channel))
+        changes.set(id, channel);
+    }
+    const incomplete = new Set(read.incompleteIds);
+    for (const id of observed.keys())
+      if (!next.has(id) && !incomplete.has(id)) changes.set(id, null);
+    observed = next;
+  };
+
+  const stopFallback = () => {
+    if (untrack(fallback).status === 'idle') return;
+    fallbackRun += 1;
+    observed = undefined;
+    changes = undefined;
+    setFallback({ status: 'idle' });
   };
 
   const publish = (read: ChannelDirectoryRead) => {
     lastRead = read;
+    observe(read);
+    // A finished pass reconciled the cache: it answers alone again.
+    if (lane.complete) stopFallback();
     const network = untrack(fallback);
-    const networkChannels =
-      !lane.complete && network.status === 'loaded'
-        ? network.channels
-        : undefined;
-    const next = channelDirectoryState(
-      networkChannels
-        ? withNetworkChannels(read.channels, networkChannels)
-        : read.channels,
-      read.incompleteIds,
-      lane.complete || networkChannels !== undefined
-    );
+    const next =
+      network.status === 'loaded'
+        ? channelDirectoryState(
+            fallbackChannels(network.channels, changes ?? new Map()),
+            read.incompleteIds,
+            true
+          )
+        : channelDirectoryState(
+            read.channels,
+            read.incompleteIds,
+            lane.complete
+          );
     if (!sameState(untrack(state), next)) setState(next);
     // Before the lane finishes it fills these itself.
     if (lane.complete)
@@ -650,25 +718,29 @@ export function createCachedChannelDirectory(
     if (lane.failed) startFallback();
   };
 
-  const loadFallback = async () => {
+  const loadFallback = async (run: number) => {
     const signal = controller.signal;
     try {
-      const channels = await deps.fetchAll();
-      if (signal.aborted) return;
+      const channels = await deps.pageAll(signal);
+      if (signal.aborted || run !== fallbackRun) return;
       setFallback({ status: 'loaded', channels });
       if (lastRead) publish(lastRead);
       else setState(networkState());
     } catch (error) {
-      if (signal.aborted) return;
+      if (signal.aborted || run !== fallbackRun) return;
       Telemetry.error(error, { surface: 'channel-directory-fallback' });
       setFallback({ status: 'failed' });
     }
   };
   const startFallback = () => {
     if (untrack(fallback).status !== 'idle') return;
+    fallbackRun += 1;
+    // Changes from here on are at least as new as the pages it reads.
+    observed = recordsById(lastRead);
+    changes = new Map();
     setFallback({ status: 'loading' });
     // Never rejects: a failed read is reported inside.
-    fireAndForget(loadFallback(), 'channel-directory-fallback');
+    fireAndForget(loadFallback(fallbackRun), 'channel-directory-fallback');
   };
 
   /** The cache's storage generation while it holds this viewer's records,
@@ -764,6 +836,8 @@ export function createCachedChannelDirectory(
         generation = undefined;
         lane = LANE_NOT_STARTED;
         lastRead = undefined;
+        // What the new storage holds was written since.
+        if (observed) observed = new Map();
         reader.reset();
         adopted = undefined;
         setState(networkState());
@@ -796,7 +870,7 @@ export function createCachedChannelDirectory(
       if (current.complete) return current.joined;
       return deps.fetchAll();
     },
-    failed: () => fallback().status === 'failed',
+    failed: () => !state().complete && fallback().status === 'failed',
     retry() {
       if (untrack(fallback).status !== 'failed') return;
       setFallback({ status: 'idle' });
@@ -925,6 +999,13 @@ export function createAppChannelDirectory(): ChannelDirectory {
       fetchAll: async () => {
         const channels = await queryClient.fetchQuery(
           channelDirectoryPagesQueryOptions(userId, getGraphqlSoupClient)
+        );
+        return channels.filter(({ isParticipant }) => isParticipant);
+      },
+      pageAll: async (signal) => {
+        const channels = await fetchJoinedChannels(
+          getGraphqlSoupClient(),
+          signal
         );
         return channels.filter(({ isParticipant }) => isParticipant);
       },
