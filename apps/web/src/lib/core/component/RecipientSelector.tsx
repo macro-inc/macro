@@ -1059,7 +1059,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         return;
                       }
 
-                      if (e.key === 'Tab' && context.isOpen()) {
+                      // Tab accepts the highlighted row or a complete typed
+                      // address, as Enter would. With neither (no match, or
+                      // results still loading) it moves focus on, so the
+                      // field never keeps focus on Tab.
+                      const focusedKey = list.selectionManager().focusedKey();
+                      const hasHighlightedRow =
+                        focusedKey !== undefined &&
+                        list.collection().getItem(focusedKey) !== undefined;
+                      if (
+                        e.key === 'Tab' &&
+                        context.isOpen() &&
+                        (hasHighlightedRow || hasValidCustomEmail())
+                      ) {
                         e.preventDefault();
                         e.stopPropagation();
                         inputRef()?.dispatchEvent(
