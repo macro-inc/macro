@@ -526,3 +526,101 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
     );
     assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_some());
 }
+
+/// Ends the current claim as a worker that stopped would: its lease runs out.
+async fn expire_lease(db: &PgPool, link: Uuid, provider_id: &str) {
+    sqlx::query!(
+        "UPDATE email_message_reconciliation SET lease_until = now() - interval '1 second' WHERE link_id = $1 AND provider_id = $2",
+        link,
+        provider_id
+    )
+    .execute(db)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until_it_changes(
+    db: PgPool,
+) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "fatal", 0).await;
+    for claimed_after in 0..5 {
+        let lease = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+        assert_eq!(lease.unfinished_claims, claimed_after);
+        expire_lease(&db, link, "fatal").await;
+    }
+    // A read would take an answer from the provider, which has none.
+    let service = sync(&repo, Provider::answering(Vec::new()));
+
+    assert!(service.reconcile_once().await.is_err());
+
+    let abandoned = row(&db, link, "fatal").await;
+    assert!(abandoned.abandoned);
+    assert_eq!(abandoned.attempts, 0);
+    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
+    assert_eq!(
+        outcomes(&telemetry),
+        [("abandoned".into(), "unfinished".into(), None)]
+    );
+    let events = telemetry.events("mailbox message abandoned");
+    let [(level, fields)] = events.as_slice() else {
+        panic!("expected one abandonment, got {events:?}");
+    };
+    assert_eq!(*level, tracing::Level::WARN);
+    assert_eq!(fields["link_id"], link.to_string());
+    assert_eq!(fields["attempts"], "6");
+    assert_eq!(fields["defer_reason"], "unfinished");
+
+    // A new change from the provider queues it again from scratch.
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &stream,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("fatal").unwrap()],
+            removed: Vec::new(),
+            position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    let revived = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert_eq!(revived.provider_id.as_str(), "fatal");
+    assert_eq!((revived.attempts, revived.unfinished_claims), (1, 0));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "flaky", 0).await;
+    for _ in 0..4 {
+        repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+        expire_lease(&db, link, "flaky").await;
+    }
+    let service = sync(
+        &repo,
+        Provider::answering(vec![Err(EmailApiError::Conflict)]),
+    );
+
+    // Four unfinished claims are under the limit, so the fifth reads the
+    // message, and its failure is an outcome.
+    assert!(service.reconcile_once().await.is_err());
+    assert!(!row(&db, link, "flaky").await.abandoned);
+    sqlx::query!(
+        "UPDATE email_message_reconciliation SET available_at = now() WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let next = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert_eq!(next.unfinished_claims, 0);
+}
