@@ -57,13 +57,13 @@ channel, session, document or thread), and the newest line, with its sender when
 there are several people.
 Choosing a stack opens it and leaves it folded; only its caret unfolds it. At phone
 width the caret sits on the first line; wider, it sits at the bottom of the row with
-how many more (**2 more**) and, once open, at the bottom of the stack as **Hide**.
-The row stays exactly as it was, its notifications list below it indented to its
-text, and every other row dims until you close it. Hovering or moving to a dimmed
-row brings it back. Each unfolded notification opens that notification:
+how many more (**2 more**) and, once open, reads **Hide** in the same place and
+again at the bottom of the stack; either folds it. The row stays exactly as it
+was, its notifications list below it indented to its text, and the other rows
+stay as they are. Each unfolded notification opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time always shows. With a pointer, the first line ends with the time and Mark done: Mark done shows on hover in a slot that stays empty otherwise, so it sits at the same spot on every row, stacked or not, read or not, and nothing moves. Touch has no Mark done button and no empty slot. The author is
+A stack stays open as new notifications land. The first line ends with the time. With a pointer, hovering a row hides its time and shows Mark done in its place, as on an unfolded notification, so nothing moves. Touch has no Mark done button. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
