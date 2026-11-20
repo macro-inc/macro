@@ -2,10 +2,13 @@
 
 The Email Focus worker (`services/email_focus_worker`) classifies mail for the
 Focus tab of inboxes in the `enable-email-focus` rollout: an inbox is in while
-its owner or a user it is linked to has the flag, so a secondary inbox follows
-the flag of the person whose tab lists it, and an inbox whose owner and linked
-users are all outside the rollout is not classified. The rollout widens in
-steps; each step goes on only while the numbers below hold.
+its owner or a user it is linked to has the flag and has used Macro in the
+last 7 days (had it open, or changed something themselves; work an agent
+did for them does not count). So a secondary inbox follows the person whose
+tab lists it, and an inbox whose owner and linked users are all outside the
+rollout or away is not classified, backfilled or swept; it is backfilled when
+one of them returns. `FOCUS_ACTIVE_DAYS` (7) sets the window. The rollout
+widens in steps; each step goes on only while the numbers below hold.
 They are on the **Email Focus rollout** Grafana dashboard
 (`/d/email-focus-rollout`), and the rules in the `Email Focus` alert group fire
 on them. The rules notify through GoAlert and never page: an alert means hold

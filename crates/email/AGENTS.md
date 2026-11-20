@@ -270,7 +270,11 @@ tools — hexagonal, heavily feature-gated.
   rollout (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus`
   flag): its owner, or a user it is linked to (`macro_user_links.primary_macro_id`,
   read as `delegates` by `thread_inbox`, `inboxes_with_focus` and
-  `syncing_inboxes`), so a linked inbox follows its primary user's flag. Check it
+  `syncing_inboxes`), so a linked inbox follows its primary user's flag. The
+  worker counts someone in only while `activity`'s `UserActivity` finds them
+  active in the last 7 days (`ActiveEnrollment` over the flag), so an inbox
+  nobody reading it has used Macro for is not classified, backfilled or swept,
+  and is backfilled again when they return. Check it
   after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
   `syncing_inboxes` inbox, so a person who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by
