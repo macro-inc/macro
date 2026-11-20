@@ -7,11 +7,13 @@ import type { SerializedNode } from './document';
 import { walk } from './document';
 
 /**
- * A whole data: URI, up to the whitespace or `)` that ends a markdown image
- * source: RFC 2397 parameters may be percent-encoded (`;name=a%20b`) and the
- * data may hold `:` (an SVG's `http://` namespace).
+ * A whole data: URI, up to the whitespace, `)` or `"` that ends a markdown
+ * image source or tag JSON: RFC 2397 parameters may be percent-encoded
+ * (`;name=a%20b`) and the data may hold `:` (an SVG's `http://` namespace).
+ * An unescaped SVG holding spaces or quotes is covered only up to the first;
+ * markdown image sources cannot hold those unescaped anyway.
  */
-const DATA_URI_RE = /data:[a-z]+\/[a-z0-9.+-]+(?:;[^,\s)]*)*,[^\s)"]+/gi;
+const DATA_URI_RE = /data:[a-z]+\/[a-z0-9.+-]+(?:;[^;,\s)]*)*,[^\s)"]+/gi;
 const PLACEHOLDER_RE = /data:redacted,[0-9a-zA-Z]*/g;
 
 export class FrozenMediaError extends Error {}
@@ -61,7 +63,7 @@ export function restoreMedia(
       if (original) return original;
       // Prose that merely reads like a placeholder is left alone; only a
       // media source naming an unknown one is refused.
-      if (!/(\]\(|"url":")$/.test(text.slice(Math.max(0, at - 7), at)))
+      if (!/(\]\(<?|"url"\s*:\s*")$/.test(text.slice(Math.max(0, at - 12), at)))
         return placeholder;
       throw new FrozenMediaError(
         `unknown embedded image ${placeholder}; keep data:redacted,… links exactly as given`

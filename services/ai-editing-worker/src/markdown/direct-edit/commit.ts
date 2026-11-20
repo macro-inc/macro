@@ -119,8 +119,16 @@ export function checkDeletions(
     );
 }
 
-const leaks = (view: DocumentView) =>
-  textsOf(view.nodes).filter((text) => LEAK_RE.test(text)).length;
+const LEAKS_RE = new RegExp(LEAK_RE.source, 'g');
+
+/** Every leaking markup occurrence in the view's text, counted by its text. */
+function leaks(view: DocumentView): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const text of textsOf(view.nodes))
+    for (const [found] of text.matchAll(LEAKS_RE))
+      counts.set(found, (counts.get(found) ?? 0) + 1);
+  return counts;
+}
 
 /**
  * Refuse a result that does not read back exactly as requested, or that turns
@@ -132,7 +140,8 @@ export function verifyResult(
   afterView: DocumentView,
   before: DocumentView
 ): void {
-  if (leaks(afterView) > leaks(before))
+  const had = leaks(before);
+  if ([...leaks(afterView)].some(([found, n]) => n > (had.get(found) ?? 0)))
     throw new EditRefusal(
       'markup_leak',
       'the edit leaves literal markup (a placeholder or an <m-…> tag) in the text'
@@ -173,18 +182,21 @@ export function checkCommentsKept(
     );
 }
 
-function mediaCount(node: SerializedNode): number {
-  let count = 0;
+/** Every image and video source in a block, uploaded or not. */
+function mediaSources(node: SerializedNode): Set<string> {
+  const sources = new Set<string>();
   walk(node, (n) => {
-    if (n.type === 'image' || n.type === 'video') count++;
+    if (n.type === 'image' || n.type === 'video')
+      sources.add(`${String(n.srcType)}|${String(n.url)}`);
   });
-  return count;
+  return sources;
 }
 
 /**
- * Refuse a result where a block that survived the edit kept its images and
- * videos but one lost its uploaded source identity: its link was changed.
- * Deleting the block or the media in it is the deletion policy's business.
+ * Refuse a result where a block that survived the edit lost an uploaded
+ * image's or video's source and gained a media source it did not have: its
+ * link was changed. Deleting the block or the media in it only loses sources
+ * and is the deletion policy's business.
  */
 function checkUploads(
   view: DocumentView,
@@ -196,7 +208,11 @@ function checkUploads(
     if (i < 0 || !afterView.nodes[j]) return;
     const before = view.nodes[i];
     const lost = uploadedSources(before).some((s) => !afterSources.has(s));
-    if (lost && mediaCount(afterView.nodes[j]) >= mediaCount(before))
+    const had = mediaSources(before);
+    const gained = [...mediaSources(afterView.nodes[j])].some(
+      (source) => !had.has(source)
+    );
+    if (lost && gained)
       throw new EditRefusal(
         'frozen_media',
         'an uploaded image or video cannot be edited as markdown (only moved, deleted, or its alt text changed); keep its link exactly as it was'
