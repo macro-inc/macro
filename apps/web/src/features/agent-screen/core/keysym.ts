@@ -51,6 +51,7 @@ const RIGHT_MODIFIER_KEYSYMS: Record<string, number> = {
 
 export const KEYSYM_ESCAPE = NAMED_KEYSYMS.Escape;
 export const KEYSYM_CONTROL = NAMED_KEYSYMS.Control;
+export const KEYSYM_CONTROL_RIGHT = RIGHT_MODIFIER_KEYSYMS.Control;
 export const KEYSYM_ALT = NAMED_KEYSYMS.Alt;
 export const KEYSYM_DELETE = NAMED_KEYSYMS.Delete;
 export const KEYSYM_TAB = NAMED_KEYSYMS.Tab;

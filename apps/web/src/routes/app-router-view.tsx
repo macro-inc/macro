@@ -42,10 +42,10 @@ import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
+  AgentScreenRouteView,
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
-  AgentScreenRouteView,
   CallDetailRouteView,
   CallsCallDetail,
   CallsRouteView,
@@ -97,6 +97,7 @@ import {
   accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentScreenRoute,
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
@@ -108,7 +109,6 @@ import {
   bookingLinksRoute,
   bookingReceiptRoute,
   calendarSplitRoute,
-  agentScreenRoute,
   callDetailRoute,
   callsCallRoute,
   callsRoute,

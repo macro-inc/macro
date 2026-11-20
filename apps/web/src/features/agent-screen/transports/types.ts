@@ -138,11 +138,13 @@ export interface ScreenTransport {
   /**
    * Opens the socket and renders media into `element` (a canvas, video or
    * iframe the transport creates inside it). Resolves once media flows;
-   * rejects when the socket never opens.
+   * rejects when the socket never opens. `signal` abandons a connect that
+   * hasn't resolved: the transport closes everything it opened and rejects.
    */
   connect(
     element: HTMLElement,
     ticket: ScreenTicketGrant,
-    handlers: ScreenSessionHandlers
+    handlers: ScreenSessionHandlers,
+    signal: AbortSignal
   ): Promise<ScreenSession>;
 }

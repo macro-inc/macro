@@ -18,6 +18,13 @@ export function Loupe(props: {
   at: Point;
   /** The guest pixel under it. */
   guest: Point;
+  /**
+   * Guest pixels per loupe pixel's inverse: at least 1, and more than the
+   * view's own scale once zoomed in, so the loupe always magnifies.
+   */
+  magnification: number;
+  /** The viewer's width, to keep the loupe inside it at the right edge. */
+  containerWidth: number;
   /** The canvas or video the transport renders into, when the app can read it. */
   media: () => Element | undefined;
   /** A copy of a guest region, for a transport that renders out of reach (vnc). */
@@ -27,26 +34,48 @@ export function Loupe(props: {
   let frame = 0;
   let disposed = false;
 
-  const paint = (source: CanvasImageSource, x: number, y: number) => {
+  const paint = (
+    source: CanvasImageSource,
+    rect: { x: number; y: number; width: number; height: number }
+  ) => {
     const context = canvas?.getContext('2d');
     if (!context) return;
     const scale = window.devicePixelRatio;
     context.setTransform(scale, 0, 0, scale, 0, 0);
-    context.drawImage(source, x, y, WIDTH, HEIGHT, 0, 0, WIDTH, HEIGHT);
+    context.drawImage(
+      source,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+      0,
+      0,
+      WIDTH,
+      HEIGHT
+    );
   };
 
   const draw = async () => {
+    const magnification = Math.max(1, props.magnification);
+    const width = Math.max(1, Math.round(WIDTH / magnification));
+    const height = Math.max(1, Math.round(HEIGHT / magnification));
     const rect = {
-      x: Math.round(props.guest.x - WIDTH / 2),
-      y: Math.round(props.guest.y - HEIGHT / 2),
-      width: WIDTH,
-      height: HEIGHT,
+      x: Math.round(props.guest.x - width / 2),
+      y: Math.round(props.guest.y - height / 2),
+      width,
+      height,
     };
     const pending = props.snapshot(rect);
     if (pending) {
       // One snapshot in flight at a time; the next frame asks again.
       const bitmap = await pending;
-      if (bitmap && !disposed) paint(bitmap, 0, 0);
+      if (bitmap && !disposed)
+        paint(bitmap, {
+          x: 0,
+          y: 0,
+          width: bitmap.width,
+          height: bitmap.height,
+        });
       bitmap?.close();
     } else {
       const source = props.media();
@@ -54,7 +83,7 @@ export function Loupe(props: {
         source instanceof HTMLCanvasElement ||
         source instanceof HTMLVideoElement
       ) {
-        paint(source, rect.x, rect.y);
+        paint(source, rect);
       }
     }
     if (!disposed) frame = requestAnimationFrame(tick);
@@ -66,7 +95,11 @@ export function Loupe(props: {
     cancelAnimationFrame(frame);
   });
 
-  const left = () => Math.max(4, props.at.x - WIDTH / 2);
+  const left = () =>
+    Math.max(
+      4,
+      Math.min(props.containerWidth - WIDTH - 4, props.at.x - WIDTH / 2)
+    );
   const top = () => {
     const above = props.at.y - HEIGHT - GAP;
     return above < 4 ? props.at.y + GAP : above;

@@ -1,5 +1,5 @@
 import { createRoot } from 'solid-js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ScreenInputEvent } from '../transports/types';
 import { createScreenInput } from './screen-input';
 
@@ -56,6 +56,106 @@ describe('createScreenInput keyboard', () => {
         { kind: 'key', keysym: 0x61, down: false },
         { kind: 'text', text: '日本' },
       ]);
+      dispose();
+    });
+  });
+
+  it("lets go of held keys before a hand-back, maps a Mac's Cmd to Ctrl, and pastes the guest's clipboard when nothing local arrives", async () => {
+    vi.useFakeTimers();
+    const sent: ScreenInputEvent[] = [];
+    await createRoot(async (dispose) => {
+      const input = createScreenInput({
+        frame: () => ({ width: 1920, height: 1080 }),
+        container: () => ({ width: 960, height: 540 }),
+        rotation: () => 0,
+        sendsInput: () => true,
+        send: (event) => sent.push(event),
+        onHandBackHold: () => {},
+        isMac: true,
+      });
+      const field = document.createElement('textarea');
+      const keyDown = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent('keydown', {
+          cancelable: true,
+          ...init,
+        });
+        Object.defineProperty(event, 'currentTarget', { value: field });
+        input.onKeyDown(event);
+      };
+
+      // Cmd+C on a Mac is Ctrl+C in the Linux guest.
+      keyDown({ key: 'Meta', code: 'MetaLeft', metaKey: true });
+      keyDown({ key: 'c', code: 'KeyC', metaKey: true });
+      // Cmd+V with an empty local clipboard: no paste event arrives, so the
+      // guest pastes its own clipboard (Cmd is already down as Ctrl).
+      keyDown({ key: 'v', code: 'KeyV', metaKey: true });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(sent).toEqual([
+        { kind: 'key', keysym: 0xffe3, down: true },
+        { kind: 'key', keysym: 0x63, down: true },
+        { kind: 'key', keysym: 0x76, down: true },
+        { kind: 'key', keysym: 0x76, down: false },
+      ]);
+
+      sent.length = 0;
+      keyDown({ key: 'a', code: 'KeyA', metaKey: true });
+      // Holding Esc (or the Hand back button) lets go of all of it first.
+      input.releaseAll();
+      expect(sent).toEqual([
+        { kind: 'key', keysym: 0x61, down: true },
+        { kind: 'key', keysym: 0xffe3, down: false },
+        { kind: 'key', keysym: 0x63, down: false },
+        { kind: 'key', keysym: 0x61, down: false },
+      ]);
+      dispose();
+    });
+    vi.useRealTimers();
+  });
+
+  it('Ctrl+Alt+Shift leaves the keyboard without handing back', () => {
+    const sent: ScreenInputEvent[] = [];
+    let handedBack = false;
+    createRoot((dispose) => {
+      const input = createScreenInput({
+        frame: () => ({ width: 1920, height: 1080 }),
+        container: () => ({ width: 960, height: 540 }),
+        rotation: () => 0,
+        sendsInput: () => true,
+        send: (event) => sent.push(event),
+        onHandBackHold: () => {
+          handedBack = true;
+        },
+        isMac: false,
+      });
+      const field = document.createElement('textarea');
+      document.body.append(field);
+      field.focus();
+      const keyDown = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent('keydown', {
+          cancelable: true,
+          ...init,
+        });
+        Object.defineProperty(event, 'currentTarget', { value: field });
+        input.onKeyDown(event);
+      };
+      keyDown({ key: 'Control', code: 'ControlLeft', ctrlKey: true });
+      keyDown({ key: 'Alt', code: 'AltLeft', ctrlKey: true, altKey: true });
+      keyDown({
+        key: 'Shift',
+        code: 'ShiftLeft',
+        ctrlKey: true,
+        altKey: true,
+        shiftKey: true,
+      });
+
+      expect(document.activeElement).not.toBe(field);
+      expect(handedBack).toBe(false);
+      // The two modifiers the guest saw go down come back up.
+      expect(sent.slice(2)).toEqual([
+        { kind: 'key', keysym: 0xffe3, down: false },
+        { kind: 'key', keysym: 0xffe9, down: false },
+      ]);
+      field.remove();
       dispose();
     });
   });

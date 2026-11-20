@@ -1,5 +1,6 @@
+import { Telemetry } from '@macro-inc/observability';
 import { parseServerMessage, sendControl, waitForOpen } from './control';
-import { encodeInput, withoutCursorEncodings } from './rfb-input';
+import { encodeInput } from './rfb-input';
 import type {
   ScreenEndReason,
   ScreenSession,
@@ -7,6 +8,8 @@ import type {
   ScreenTicketGrant,
   ScreenTransport,
 } from './types';
+import { createRfbClientFilter } from './vnc-frame/client-filter';
+import { loadVncFrameCode } from './vnc-frame/frame-code';
 import { createPendingReplies } from './vnc-frame/pending-replies';
 import {
   type FromVncFrame,
@@ -22,8 +25,9 @@ import {
  * srcdoc frame (`sandbox="allow-scripts"`, never `allow-same-origin`: an
  * opaque origin with no access to the app's cookies, storage or DOM) whose CSP
  * allows no network at all. The transport keeps the socket: binary frames go
- * to the frame over a MessagePort, what noVNC sends comes back the same way,
- * and text frames (JSON control) never reach the frame.
+ * to the frame over a MessagePort, what noVNC sends comes back the same way
+ * through a filter that lets only a view-only client's messages reach the
+ * server, and text frames (JSON control) never reach the frame.
  *
  * noVNC runs view only. Input arrives already mapped to guest pixels through
  * `sendInput`, which writes RFB KeyEvent / PointerEvent / ClientCutText
@@ -32,13 +36,18 @@ import {
  */
 
 /** Nothing loads from anywhere; the one inline module script is the bundle below. */
-const FRAME_CSP =
+export const VNC_FRAME_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:";
 
-function frameDocument(code: string): string {
-  // `</script` inside the bundle would end the inline script early.
-  const inline = code.replaceAll('</script', '<\\/script');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}"><style>html,body,#screen{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head><body><div id="screen"></div><script type="module">${inline}</script></body></html>`;
+/**
+ * The frame's document. `</script`, `<script` and `<!--` inside the bundle
+ * (in any case) would end or change the inline script, so their `<` is
+ * written as `\x3c`, which means the same inside the JavaScript strings and
+ * regexes where such text can occur.
+ */
+export function vncFrameDocument(code: string): string {
+  const inline = code.replace(/<(\/?script|!--)/gi, '\\x3c$1');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${VNC_FRAME_CSP}"><style>html,body,#screen{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head><body><div id="screen"></div><script type="module">${inline}</script></body></html>`;
 }
 
 /** A loupe snapshot the frame hasn't answered by then is given up on. */
@@ -47,31 +56,55 @@ const SNAPSHOT_TIMEOUT_MS = 500;
 /** How long the frame gets to load its script and ask for a port. */
 const FRAME_READY_TIMEOUT_MS = 10_000;
 
+/** The largest framebuffer side the frame may report (RFB allows 65535). */
+const MAX_FRAME_SIDE = 16_384;
+
+function frameSide(value: number): number | undefined {
+  return Number.isInteger(value) && value > 0 && value <= MAX_FRAME_SIDE
+    ? value
+    : undefined;
+}
+
+function abortError(): DOMException {
+  return new DOMException('The screen connection was abandoned', 'AbortError');
+}
+
 /**
  * Mounts the sandboxed frame and resolves with its port once it asks for one;
  * rejects (and removes the frame) when it never does, e.g. a CSP that blocks
- * its inline script.
+ * its inline script, or when `signal` aborts first.
  */
 function mountFrame(
   element: HTMLElement,
-  code: string
+  code: string,
+  signal: AbortSignal
 ): Promise<{
   frame: HTMLIFrameElement;
   port: MessagePort;
 }> {
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts');
+  // No powerful features, and no referrer, for whatever runs in there.
+  frame.setAttribute('allow', '');
+  frame.setAttribute('referrerpolicy', 'no-referrer');
   frame.setAttribute('aria-hidden', 'true');
   frame.tabIndex = -1;
   frame.style.cssText =
     'display:block;width:100%;height:100%;border:0;pointer-events:none;background:transparent';
 
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
+    const stop = (error: Error) => {
+      clearTimeout(timeout);
       window.removeEventListener('message', onReady);
+      signal.removeEventListener('abort', onAbort);
       frame.remove();
-      reject(new Error('The vnc frame did not start'));
-    }, FRAME_READY_TIMEOUT_MS);
+      reject(error);
+    };
+    const onAbort = () => stop(abortError());
+    const timeout = setTimeout(
+      () => stop(new Error('The vnc frame did not start')),
+      FRAME_READY_TIMEOUT_MS
+    );
     const onReady = (event: MessageEvent) => {
       // Only this frame's own window, and only its first ready, gets a port.
       if (event.source !== frame.contentWindow) return;
@@ -85,13 +118,15 @@ function mountFrame(
 
       clearTimeout(timeout);
       window.removeEventListener('message', onReady);
+      signal.removeEventListener('abort', onAbort);
       const channel = new MessageChannel();
       frame.contentWindow?.postMessage(null, '*', [channel.port2]);
       resolve({ frame, port: channel.port1 });
     };
     window.addEventListener('message', onReady);
+    signal.addEventListener('abort', onAbort, { once: true });
 
-    frame.srcdoc = frameDocument(code);
+    frame.srcdoc = vncFrameDocument(code);
     element.append(frame);
   });
 }
@@ -99,19 +134,43 @@ function mountFrame(
 async function connectVnc(
   element: HTMLElement,
   ticket: ScreenTicketGrant,
-  handlers: ScreenSessionHandlers
+  handlers: ScreenSessionHandlers,
+  signal: AbortSignal
 ): Promise<ScreenSession> {
+  if (signal.aborted) throw abortError();
   const socket = new WebSocket(ticket.socketUrl);
   socket.binaryType = 'arraybuffer';
   let endReason: ScreenEndReason | undefined;
   let closedByViewer = false;
   let rfbReady = false;
+  const filter = createRfbClientFilter();
 
   // Server bytes that arrive before the frame is listening wait here.
   let port: MessagePort | undefined;
+  let frame: HTMLIFrameElement | undefined;
   const pending: ArrayBuffer[] = [];
   const toFrame = (message: ToVncFrame, transfer: Transferable[] = []) =>
     port?.postMessage(message, transfer);
+  const snapshots = createPendingReplies<ImageBitmap>(SNAPSHOT_TIMEOUT_MS);
+
+  /** Ends everything this connection opened; safe to call more than once. */
+  const close = () => {
+    closedByViewer = true;
+    rfbReady = false;
+    toFrame({ type: 'close' });
+    snapshots.settleAll();
+    port?.close();
+    frame?.remove();
+    socket.close();
+    if (filter.dropped() > 0) {
+      Telemetry.warn('computer.screen.frame_messages_dropped', {
+        'screen.dropped': filter.dropped(),
+      });
+    }
+  };
+  // Abandoned before it resolved (pane closed, Retry, waking): close now,
+  // rather than leave a socket streaming into a removed frame.
+  signal.addEventListener('abort', close, { once: true });
 
   socket.addEventListener('message', (event: MessageEvent) => {
     if (typeof event.data === 'string') {
@@ -138,43 +197,51 @@ async function connectVnc(
     handlers.onEnded(endReason ?? 'connectionLost');
   });
 
-  // The bundled noVNC is a sizeable string; load it only when a screen opens.
-  const [{ default: code }] = await Promise.all([
-    import(
-      'virtual:sandboxed-frame/features/agent-screen/transports/vnc-frame/frame-main'
-    ),
-    waitForOpen(socket),
-  ]);
-  const mounted = await mountFrame(element, code).catch((error: unknown) => {
-    closedByViewer = true;
-    socket.close();
+  let code: string;
+  try {
+    [code] = await Promise.all([loadVncFrameCode(), waitForOpen(socket)]);
+    if (signal.aborted) throw abortError();
+    const mounted = await mountFrame(element, code, signal);
+    port = mounted.port;
+    frame = mounted.frame;
+  } catch (error) {
+    close();
     throw error;
-  });
-  port = mounted.port;
-
-  const snapshots = createPendingReplies<ImageBitmap>(SNAPSHOT_TIMEOUT_MS);
+  }
+  const framePort = port;
 
   const connected = new Promise<void>((resolve, reject) => {
-    mounted.port.onmessage = (event: MessageEvent<FromVncFrame>) => {
+    signal.addEventListener('abort', () => reject(abortError()), {
+      once: true,
+    });
+    framePort.onmessage = (event: MessageEvent<FromVncFrame>) => {
       const message = event.data;
       if (message.type === 'send') {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(withoutCursorEncodings(new Uint8Array(message.data)));
+        let messages: Uint8Array[];
+        try {
+          messages = filter.push(new Uint8Array(message.data));
+        } catch (error) {
+          // A stream the filter can't frame can't be trusted past this point.
+          Telemetry.error(error, { 'screen.transport': 'vnc' });
+          reject(error);
+          close();
+          if (rfbReady) handlers.onEnded('error');
+          return;
         }
+        if (socket.readyState !== WebSocket.OPEN) return;
+        for (const bytes of messages) socket.send(bytes);
       } else if (message.type === 'connected') {
         resolve();
       } else if (message.type === 'disconnected') {
         // Before the handshake finished this is a failed connect, reported
         // by the rejection; after it, the socket's close reports the end.
         reject(new Error('RFB handshake failed'));
-        if (!rfbReady) {
-          closedByViewer = true;
-          mounted.port.close();
-          mounted.frame.remove();
-        }
-        socket.close();
+        if (!rfbReady) close();
+        else socket.close();
       } else if (message.type === 'size') {
-        handlers.onFrameSize({ width: message.width, height: message.height });
+        const width = frameSide(message.width);
+        const height = frameSide(message.height);
+        if (width && height) handlers.onFrameSize({ width, height });
       } else if (message.type === 'snapshot') {
         const bitmap = message.bitmap ?? undefined;
         // Too late: the loupe moved on; free the pixels.
@@ -198,15 +265,7 @@ async function connectVnc(
     takeOver: () => sendControl(socket, { type: 'takeOver' }),
     handBack: (note) => sendControl(socket, { type: 'handBack', note }),
     stop: () => sendControl(socket, { type: 'stop' }),
-    close() {
-      closedByViewer = true;
-      rfbReady = false;
-      toFrame({ type: 'close' });
-      snapshots.settleAll();
-      mounted.port.close();
-      mounted.frame.remove();
-      socket.close();
-    },
+    close,
     snapshot(rect) {
       return snapshots.request((id) =>
         toFrame({ type: 'snapshot', id, ...rect })

@@ -37,8 +37,15 @@ export async function requestScreenTicket(
     return err(failure);
   }
 
+  // A socket upgrade carries no custom headers: the trace context rides in
+  // the query, so the harness can join the socket to this trace.
+  const socketUrl = new URL(
+    agentHarnessServiceClient.screenSocketUrl(result.value)
+  );
+  const traceparent = span.traceparent();
+  if (traceparent) socketUrl.searchParams.set('traceparent', traceparent);
   return ok({
-    socketUrl: agentHarnessServiceClient.screenSocketUrl(result.value),
+    socketUrl: socketUrl.toString(),
     expiresAt: result.value.expiresAt,
   });
 }

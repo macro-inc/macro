@@ -1,3 +1,4 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import {
@@ -74,7 +75,6 @@ import {
 } from '@core/constant/settingsTabsConfig';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
-import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import { APP_ROUTE_ID, NOT_FOUND_ROUTE_ID } from './app-route';
 
 export const EMAIL_SIGNUP_CALLBACK_PATH = '/email-signup-callback';

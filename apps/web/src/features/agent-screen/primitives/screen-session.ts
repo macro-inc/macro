@@ -26,6 +26,9 @@ import type {
   ScreenTransportKind,
 } from '../transports/types';
 
+/** A connection that drops sooner than this after going live is flapping. */
+const FLAPPING_MS = 10_000;
+
 export type ScreenSessionOptions = {
   harnessId: string;
   /** Manage on the computer: connect with a drive ticket so Take over needs no reconnect. */
@@ -35,6 +38,13 @@ export type ScreenSessionOptions = {
    * ticket waits for it, so an owner never starts on a view ticket.
    */
   accessKnown: Accessor<boolean>;
+  /**
+   * This view takes over from another view of the same viewer that was
+   * driving (a pop-out): once live, take the lease it left behind.
+   */
+  continueDriving?: boolean;
+  /** The view's load flow (`useFlow().span`): the first connection is its phase. */
+  parentSpan?: () => Span;
   currentUserId: Accessor<string | undefined>;
   transport: Accessor<ScreenTransportKind>;
   capabilities: ScreenCapabilities;
@@ -72,7 +82,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     server: undefined,
     takingOver: false,
     notice: undefined,
-    controlLost: false,
+    controlLost: options.continueDriving ?? false,
   });
 
   let element: HTMLElement | undefined;
@@ -84,21 +94,72 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let disposed = false;
   /** The mode of the ticket the current connection was opened with. */
   let connectedMode: 'view' | 'drive' | undefined;
+  let firstConnect = true;
+  /** Abandons the connect in flight, if any (see `ScreenTransport.connect`). */
+  let pendingConnect: AbortController | undefined;
+  /** When the current connection went live, to tell a flapping one apart. */
+  let liveSince: number | undefined;
+  /** Set by a pop-out: the lease goes with the view that replaces this one. */
+  let leaseCarriedAway = false;
+  /** Stop already handed back; closing must not do it twice. */
+  let handedBackOnLeaving = false;
+  /** Releases keys and buttons held in the guest (the input controller's). */
+  let releaseInput: () => void = () => {};
   const [attached, setAttached] = createSignal(false);
 
-  const sessionSpan: Span = Telemetry.span('computer.screen.session');
-  sessionSpan.setAttr('harness.id', options.harnessId);
+  /**
+   * One span per connection, from its ticket until it ends (never one for
+   * the whole view): the first is a phase of the view's load flow when there
+   * is one, later ones (reconnects) start their own traces. What happens on a
+   * connection (take over, hand back, errors) is an event on it.
+   */
+  let connectionSpan: Span | undefined;
+  const endConnectionSpan = (outcome: string) => {
+    connectionSpan?.setAttr('computer.screen.outcome', outcome);
+    connectionSpan?.end();
+    connectionSpan = undefined;
+  };
+  /** An event on the current connection, or a span of its own between them. */
+  const record = (
+    name: string,
+    attributes?: Record<string, string | boolean>
+  ) => {
+    if (connectionSpan) {
+      connectionSpan.event(name, attributes);
+      return;
+    }
+    const span = Telemetry.span(name, {
+      attributes: { 'harness.id': options.harnessId, ...attributes },
+    });
+    span.end();
+  };
 
   const teardown = () => {
+    pendingConnect?.abort();
+    pendingConnect = undefined;
     session?.close();
     session = undefined;
     element?.replaceChildren();
   };
 
+  /**
+   * Leaving on purpose while driving (closing the pane, Stop, a new
+   * connection) hands back first, so the agent resumes at once instead of
+   * waiting out the lease; only an unplanned drop keeps the lease's grace.
+   */
+  const handBackIfDriving = () => {
+    if (!session || !drivingMe() || leaseCarriedAway || handedBackOnLeaving)
+      return;
+    handedBackOnLeaving = true;
+    record('computer.screen.hand_back', { reason: 'leaving' });
+    releaseInput();
+    session.handBack(null);
+  };
+
   const apply = (step: NextStep, attempt: number) => {
     setStore({ status: step.status, takingOver: false });
     if (step.kind === 'show') {
-      sessionSpan.event('computer.screen.status', { status: step.status.kind });
+      record('computer.screen.status', { status: step.status.kind });
       return;
     }
     clearTimeout(retryTimer);
@@ -114,11 +175,20 @@ export function createScreenSession(options: ScreenSessionOptions) {
     const target = element;
     forgetServer();
     teardown();
+    const abandon = new AbortController();
+    pendingConnect = abandon;
 
     const transportKind = options.transport();
     const mode = options.canDrive() ? 'drive' : 'view';
     connectedMode = mode;
-    const connectSpan = sessionSpan.span('computer.screen.connect');
+    endConnectionSpan('replaced');
+    const parent = firstConnect ? options.parentSpan?.() : undefined;
+    firstConnect = false;
+    connectionSpan = parent
+      ? parent.span('computer.screen.connection')
+      : Telemetry.span('computer.screen.connection');
+    connectionSpan.setAttr('harness.id', options.harnessId);
+    const connectSpan = connectionSpan.span('computer.screen.connect');
     connectSpan.setAttr('harness.id', options.harnessId);
     connectSpan.setAttr('screen.transport', transportKind);
     connectSpan.setAttr('screen.mode', mode);
@@ -140,6 +210,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     if (ticket.isErr()) {
       connectSpan.setAttr('screen.ticket_failure', ticket.error);
       connectSpan.end();
+      endConnectionSpan(`ticket_${ticket.error}`);
       apply(afterConnectFailed(ticket.error, attempt), attempt + 1);
       return;
     }
@@ -147,68 +218,87 @@ export function createScreenSession(options: ScreenSessionOptions) {
     let connected = false;
     try {
       const transport = options.capabilities.transport(transportKind);
-      const opened = await transport.connect(target, ticket.value, {
-        onState: (state) => {
-          if (current !== generation) return;
-          const driving =
-            state.driver?.userId === options.currentUserId() &&
-            state.drivingHere !== false;
-          setStore({
-            server: state,
-            takingOver: store.takingOver && !driving,
-            // The server kept our lease across the reconnect.
-            controlLost: store.controlLost && !driving,
-          });
-          resumeDriving();
-          // Until the first frame, say the computer is waking while it is.
-          if (store.status.kind !== 'live') {
-            if (state.waking) setStore('status', { kind: 'waking' });
-            else if (store.status.kind === 'waking')
-              setStore('status', { kind: 'connecting' });
-          }
+      const opened = await transport.connect(
+        target,
+        ticket.value,
+        {
+          onState: (state) => {
+            if (current !== generation) return;
+            const driving =
+              state.driver?.userId === options.currentUserId() &&
+              state.drivingHere !== false;
+            setStore({
+              server: state,
+              takingOver: store.takingOver && !driving,
+              // The server kept our lease across the reconnect.
+              controlLost: store.controlLost && !driving,
+            });
+            resumeDriving();
+            // Until the first frame, say the computer is waking while it is.
+            if (store.status.kind !== 'live') {
+              if (state.waking) setStore('status', { kind: 'waking' });
+              else if (store.status.kind === 'waking')
+                setStore('status', { kind: 'connecting' });
+            }
+          },
+          onFrameSize: (size) => {
+            if (current === generation) setStore('frame', size);
+          },
+          onError: (error) => {
+            if (current !== generation) return;
+            record('computer.screen.error', { code: error.code });
+            setStore({ notice: error, takingOver: false });
+          },
+          onEnded: (reason) => {
+            if (current !== generation) return;
+            record('computer.screen.ended', { reason });
+            endConnectionSpan(reason);
+            session = undefined;
+            forgetServer();
+            // A session that stayed live a while starts its retries afresh; one
+            // that keeps dropping right after going live counts on.
+            if (connected && flapping()) connected = false;
+            const step = afterSessionEnded(reason, connected ? 0 : attempt);
+            // Over for good (stopped, revoked): there is no control to win back.
+            if (step.kind === 'show') setStore('controlLost', false);
+            apply(step, connected ? 1 : attempt + 1);
+          },
         },
-        onFrameSize: (size) => {
-          if (current === generation) setStore('frame', size);
-        },
-        onError: (error) => {
-          if (current !== generation) return;
-          sessionSpan.event('computer.screen.error', { code: error.code });
-          setStore({ notice: error, takingOver: false });
-        },
-        onEnded: (reason) => {
-          if (current !== generation) return;
-          sessionSpan.event('computer.screen.ended', { reason });
-          session = undefined;
-          forgetServer();
-          // A session that went live starts its retries afresh.
-          const step = afterSessionEnded(reason, connected ? 0 : attempt);
-          // Over for good (stopped, revoked): there is no control to win back.
-          if (step.kind === 'show') setStore('controlLost', false);
-          apply(step, connected ? 1 : attempt + 1);
-        },
-      });
+        abandon.signal
+      );
+      if (pendingConnect === abandon) pendingConnect = undefined;
       if (current !== generation || disposed) {
         opened.close();
         return;
       }
       session = opened;
       connected = true;
+      liveSince = Date.now();
       setStore({ status: { kind: 'live' }, notice: undefined });
       resumeDriving();
     } catch (error) {
       connectSpan.error(error);
-      if (current === generation)
-        apply(afterConnectFailed('failed', attempt), attempt + 1);
+      if (current !== generation) return;
+      endConnectionSpan('connect_failed');
+      apply(afterConnectFailed('failed', attempt), attempt + 1);
     } finally {
       connectSpan.end();
     }
   }
 
+  /** Went live less than `FLAPPING_MS` ago: the drop doesn't reset retries. */
+  function flapping() {
+    return liveSince !== undefined && Date.now() - liveSince < FLAPPING_MS;
+  }
+
   onCleanup(() => {
+    handBackIfDriving();
     disposed = true;
+    // Late results from any attempt in flight are dropped from here on.
+    generation += 1;
     clearTimeout(retryTimer);
     teardown();
-    sessionSpan.end();
+    endConnectionSpan('closed');
   });
 
   // The first connect waits for the element and for access to be known.
@@ -230,7 +320,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       (canDrive) => {
         if (!canDrive || connectedMode !== 'view') return;
         if (store.status.kind !== 'live') return;
-        sessionSpan.event('computer.screen.upgrade_to_drive');
+        record('computer.screen.upgrade_to_drive');
         fireAndForget(connect(0), 'agent-screen.connect');
       },
       { defer: true }
@@ -262,8 +352,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
       setStore('controlLost', false);
       return;
     }
-    if (store.server.driver && !drivingElsewhere()) return;
-    sessionSpan.event('computer.screen.resume_driving');
+    // Only a lease that is still ours: when it is free, someone (perhaps us,
+    // from another tab) handed back on purpose, and the banner offers it.
+    if (!drivingElsewhere()) return;
+    record('computer.screen.resume_driving');
     setStore({ takingOver: true, notice: undefined, controlLost: false });
     session.takeOver();
   }
@@ -276,7 +368,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
   function forgetServer() {
     if (!store.server) return;
     const wasDriving = drivingMe();
-    if (wasDriving) sessionSpan.event('computer.screen.control_lost');
+    if (wasDriving) record('computer.screen.control_lost');
     setStore({
       server: undefined,
       takingOver: false,
@@ -323,20 +415,34 @@ export function createScreenSession(options: ScreenSessionOptions) {
     },
     takeOver() {
       if (!session || !options.canDrive()) return;
-      sessionSpan.event('computer.screen.take_over');
+      record('computer.screen.take_over');
       setStore({ takingOver: true, notice: undefined, controlLost: false });
       session.takeOver();
     },
     handBack(note: string | null) {
-      sessionSpan.event('computer.screen.hand_back', {
+      record('computer.screen.hand_back', {
         has_note: note !== null,
       });
       setStore('controlLost', false);
+      releaseInput();
       session?.handBack(note);
     },
     stop() {
-      sessionSpan.event('computer.screen.stop');
+      record('computer.screen.stop');
+      handBackIfDriving();
       session?.stop();
+    },
+    /**
+     * This view is being replaced by another of the same viewer (a pop-out):
+     * don't hand back on the way out; the new view takes the lease over.
+     */
+    carryLeaseAway() {
+      leaseCarriedAway = drivingMe();
+      return leaseCarriedAway;
+    },
+    /** How to let go of keys and buttons held in the guest before handing back. */
+    setInputReleaser(release: () => void) {
+      releaseInput = release;
     },
     /**
      * A copy of a guest region, from a transport that draws where the app

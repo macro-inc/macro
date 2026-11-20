@@ -106,6 +106,8 @@ export function KeyBar(props: {
           size="sm"
           variant="secondary"
           aria-pressed={modifiers().includes('control')}
+          // Keep the text field focused, so the phone keyboard stays up.
+          onPointerDown={(event: PointerEvent) => event.preventDefault()}
           onClick={() => toggle('control')}
         >
           {t('agentScreen.keyControl')}
@@ -114,6 +116,8 @@ export function KeyBar(props: {
           size="sm"
           variant="secondary"
           aria-pressed={modifiers().includes('alt')}
+          // Keep the text field focused, so the phone keyboard stays up.
+          onPointerDown={(event: PointerEvent) => event.preventDefault()}
           onClick={() => toggle('alt')}
         >
           {t('agentScreen.keyAlt')}

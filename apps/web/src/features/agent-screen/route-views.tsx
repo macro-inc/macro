@@ -1,8 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { useRouteParams } from '@app/lib/split-router';
+import { TraceFlow, useFlow, usePending } from '@app/observability/flow';
 import { agentScreenRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
 import { withAuth } from '@components/app/split-layout/split-router/app-route-shell';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -12,6 +14,7 @@ import {
   useSetComputerPowerMutation,
 } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -35,7 +38,10 @@ const PRODUCTION_CAPABILITIES: ScreenCapabilities = {
       .exhaustive(),
 };
 
-function AgentScreenModelProvider(props: { harnessId: string }) {
+function AgentScreenModelProvider(props: {
+  harnessId: string;
+  continueDriving: boolean;
+}) {
   const capabilities = useScreenCapabilities();
   const currentUserId = useUserId();
   const harnesses = useHarnessesQuery();
@@ -68,10 +74,13 @@ function AgentScreenModelProvider(props: { harnessId: string }) {
   };
   useSplitDisplayName(agentName);
 
+  const flow = useFlow();
   const session = createScreenSession({
     harnessId: props.harnessId,
     canDrive,
     accessKnown,
+    continueDriving: props.continueDriving,
+    parentSpan: () => flow.span,
     currentUserId,
     transport: () => 'vnc',
     capabilities,
@@ -84,16 +93,33 @@ function AgentScreenModelProvider(props: { harnessId: string }) {
   const input = createScreenInput({
     frame: () => session.store.frame,
     container: () => containerSize(),
+    // Rotation is wired through the geometry (all four quarter turns are
+    // tested) but no control sets it yet: a phone's landscape is the layout.
     rotation: () => 0,
     sendsInput: session.drivingMe,
     send: (event) => session.sendInput(event),
     onHandBackHold: () => session.handBack(null),
   });
+  // The view has loaded once the first picture shows (or it can't).
+  usePending('computer.screen.first_picture', () => {
+    const kind = session.store.status.kind;
+    return kind === 'connecting' || kind === 'waking';
+  });
+
+  // Keys and buttons held in the guest are let go before any hand-back.
+  session.setInputReleaser(() => input.releaseAll());
 
   const turnOn = async () => {
     const target = computer();
     if (!target) return;
-    await setPower.mutateAsync({ computerId: target.id, on: true });
+    const powered = await ResultAsync.fromPromise(
+      setPower.mutateAsync({ computerId: target.id, on: true }),
+      () => 'failed' as const
+    );
+    if (powered.isErr()) {
+      toast.failure(t('agentScreen.turnOnFailed'));
+      return;
+    }
     session.retry();
   };
 
@@ -131,13 +157,25 @@ function AgentScreenModelProvider(props: { harnessId: string }) {
  * URL; split content (`agentScreenContent`) renders it from the component
  * registry with the same harness id.
  */
-export const AgentScreenView = withAuth((props: { harnessId: string }) => (
-  <ScreenCapabilitiesProvider value={PRODUCTION_CAPABILITIES}>
-    <Show when={props.harnessId} keyed>
-      {(harnessId) => <AgentScreenModelProvider harnessId={harnessId} />}
-    </Show>
-  </ScreenCapabilitiesProvider>
-));
+export const AgentScreenView = withAuth(
+  (props: { harnessId: string; continueDriving?: boolean }) => (
+    <ScreenCapabilitiesProvider value={PRODUCTION_CAPABILITIES}>
+      <Show when={props.harnessId} keyed>
+        {(harnessId) => (
+          <TraceFlow
+            name="view.agent_screen"
+            attributes={{ 'harness.id': harnessId }}
+          >
+            <AgentScreenModelProvider
+              harnessId={harnessId}
+              continueDriving={props.continueDriving ?? false}
+            />
+          </TraceFlow>
+        )}
+      </Show>
+    </ScreenCapabilitiesProvider>
+  )
+);
 
 export function AgentScreenRouteView() {
   const params = useRouteParams(agentScreenRoute);

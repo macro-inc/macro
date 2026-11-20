@@ -14,6 +14,7 @@ import { createSignal, Match, Show, Switch } from 'solid-js';
 import { ControlLostBanner } from '../components/control-lost-banner';
 import { HandBackDialog } from '../components/hand-back-dialog';
 import { StatusPill } from '../components/status-pill';
+import { ZoomControl } from '../components/zoom-control';
 import { agentScreenContent } from '../core/route';
 import type { AgentScreenModel } from './shared/agent-screen-model';
 import { driverLabel, screenTitle } from './shared/labels';
@@ -32,7 +33,11 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
   const isPopover = () => panel?.handle.isPopover() ?? false;
 
   const popOut = () => {
-    popoverSplit(agentScreenContent(props.model.harnessId));
+    // Driving moves with the view instead of being handed back and lost.
+    const continueDriving = session.carryLeaseAway();
+    popoverSplit(
+      agentScreenContent(props.model.harnessId, { continueDriving })
+    );
     panel?.handle.close();
   };
 
@@ -69,6 +74,16 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
 
       <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
         <ScreenPicture model={props.model} class="min-h-48 flex-1 rounded-lg">
+          {/* A way back to fit after a trackpad pinch (Ctrl+wheel). */}
+          <Show when={props.model.input.viewport().zoom > 1}>
+            <ZoomControl
+              zoom={props.model.input.viewport().zoom}
+              top={false}
+              onZoomIn={() => props.model.input.zoomBy(1.5)}
+              onZoomOut={() => props.model.input.zoomBy(1 / 1.5)}
+              onFit={() => props.model.input.fit()}
+            />
+          </Show>
           <Show when={live() && driver()}>
             <div class="absolute top-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-amber bg-panel px-3 py-1 text-xs font-medium text-amber-ink shadow">
               <CursorIcon class="size-3.5" />
@@ -94,6 +109,9 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
                   }}
                 >
                   {t('agentScreen.holdEscToHandBack')}
+                </span>
+                <span class="border-l border-current pl-2">
+                  {t('agentScreen.leaveKeyboardHint')}
                 </span>
               </Show>
             </div>

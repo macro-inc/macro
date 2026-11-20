@@ -1,4 +1,11 @@
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { IS_MAC } from '@core/constant/isMac';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import {
   FIT_VIEWPORT,
   frameTransform,
@@ -21,6 +28,7 @@ import {
 } from '../core/gestures';
 import {
   KEYSYM_CONTROL,
+  KEYSYM_CONTROL_RIGHT,
   KEYSYM_ESCAPE,
   KEYSYM_SUPER_LEFT,
   KEYSYM_SUPER_RIGHT,
@@ -43,7 +51,15 @@ export type ScreenInputOptions = {
   send: (event: ScreenInputEvent) => void;
   /** Esc held for `HAND_BACK_HOLD_MS` while driving. */
   onHandBackHold: () => void;
+  /** A Mac's Cmd drives the guest's Ctrl (a Linux guest copies with Ctrl+C). */
+  isMac?: boolean;
 };
+
+/** Ctrl+V with nothing local to paste still pastes the guest's own clipboard after this. */
+const PASTE_FALLBACK_MS = 60;
+
+/** The three modifiers held together leave the keyboard without handing back. */
+const RELEASE_CHORD_KEYS = ['Control', 'Alt', 'Shift'];
 
 function pointerKind(type: string): PointerKind {
   if (type === 'mouse') return 'mouse';
@@ -78,6 +94,19 @@ export function createScreenInput(options: ScreenInputOptions) {
   // Keysyms sent down per physical key, so the release matches the press
   // even when a modifier changed `key` in between.
   let pressedKeys: Record<string, number> = {};
+  /** The guest pointer as last sent, to let go of a held button. */
+  let lastPointer: { x: number; y: number; buttons: number } | undefined;
+  let pasteFallback: ReturnType<typeof setTimeout> | undefined;
+  const isMac = options.isMac ?? IS_MAC;
+
+  /** The keysym a key press sends; a Mac's Cmd becomes Ctrl. */
+  const keysymFor = (event: KeyboardEvent) => {
+    const keysym = keysymForKey(event.key, event.location);
+    if (!isMac) return keysym;
+    if (keysym === KEYSYM_SUPER_LEFT) return KEYSYM_CONTROL;
+    if (keysym === KEYSYM_SUPER_RIGHT) return KEYSYM_CONTROL_RIGHT;
+    return keysym;
+  };
 
   const geometry = (): ViewGeometry | undefined => {
     const frame = options.frame();
@@ -105,6 +134,10 @@ export function createScreenInput(options: ScreenInputOptions) {
     for (const effect of effects) {
       if (effect.type === 'input') {
         options.send(effect.event);
+        if (effect.event.kind === 'pointer') {
+          const { x, y, buttons } = effect.event;
+          lastPointer = { x, y, buttons };
+        }
         followPointer(effect.event);
       }
       if (effect.type === 'viewport') setViewport(effect.viewport);
@@ -153,12 +186,33 @@ export function createScreenInput(options: ScreenInputOptions) {
     });
   };
 
+  /** Lets go, in the guest, of every key and button this viewer holds down. */
   const releaseKeys = () => {
     for (const keysym of Object.values(pressedKeys)) {
       options.send({ kind: 'key', keysym, down: false });
     }
     pressedKeys = {};
+    if (lastPointer && lastPointer.buttons !== 0) {
+      options.send({ kind: 'pointer', ...lastPointer, buttons: 0 });
+      lastPointer = { ...lastPointer, buttons: 0 };
+    }
   };
+
+  // The lease went elsewhere: the guest no longer takes our input, so only
+  // forget what we held (a later key-up must not be sent for it).
+  createEffect(
+    on(
+      options.sendsInput,
+      (sends) => {
+        if (sends) return;
+        pressedKeys = {};
+        lastPointer = undefined;
+        clearTimeout(pasteFallback);
+        cancelEscapeHold();
+      },
+      { defer: true }
+    )
+  );
 
   const cancelEscapeHold = () => {
     clearTimeout(escapeTimer);
@@ -168,8 +222,23 @@ export function createScreenInput(options: ScreenInputOptions) {
 
   onCleanup(() => {
     clearTimeout(longPressTimer);
+    clearTimeout(pasteFallback);
     cancelEscapeHold();
   });
+
+  /** Ctrl+V in the guest, with a Mac's Cmd (sent as Ctrl) already down or not. */
+  const pasteInGuest = () => {
+    const controlHeld = Object.values(pressedKeys).some(
+      (keysym) => keysym === KEYSYM_CONTROL || keysym === KEYSYM_CONTROL_RIGHT
+    );
+    const keysymV = 0x76;
+    if (!controlHeld)
+      options.send({ kind: 'key', keysym: KEYSYM_CONTROL, down: true });
+    options.send({ kind: 'key', keysym: keysymV, down: true });
+    options.send({ kind: 'key', keysym: keysymV, down: false });
+    if (!controlHeld)
+      options.send({ kind: 'key', keysym: KEYSYM_CONTROL, down: false });
+  };
 
   const zoomBy = (factor: number) => {
     const current = geometry();
@@ -233,6 +302,22 @@ export function createScreenInput(options: ScreenInputOptions) {
         return;
       }
 
+      // Ctrl+Alt+Shift held together leaves the keyboard (focus moves out)
+      // without handing back: the way out of the guest by keyboard alone.
+      if (
+        event.ctrlKey &&
+        event.altKey &&
+        event.shiftKey &&
+        RELEASE_CHORD_KEYS.includes(event.key)
+      ) {
+        event.preventDefault();
+        cancelEscapeHold();
+        releaseKeys();
+        if (event.currentTarget instanceof HTMLElement)
+          event.currentTarget.blur();
+        return;
+      }
+
       // Esc is held to hand back; a short press still reaches the guest on release.
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -249,12 +334,21 @@ export function createScreenInput(options: ScreenInputOptions) {
 
       // Ctrl+V / Cmd+V: let the browser paste, so the guest gets this
       // computer's clipboard first (see onPaste).
+      // When nothing local arrives (an empty clipboard, an image, a refused
+      // permission), the guest still pastes its own clipboard.
       const pasteShortcut =
         (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v';
-      if (pasteShortcut) return;
+      if (pasteShortcut) {
+        clearTimeout(pasteFallback);
+        pasteFallback = setTimeout(() => {
+          pasteFallback = undefined;
+          if (options.sendsInput()) pasteInGuest();
+        }, PASTE_FALLBACK_MS);
+        return;
+      }
       event.preventDefault();
 
-      const keysym = keysymForKey(event.key, event.location);
+      const keysym = keysymFor(event);
       if (keysym === undefined) return;
       pressedKeys[event.code] = keysym;
       options.send({ kind: 'key', keysym, down: true });
@@ -292,27 +386,19 @@ export function createScreenInput(options: ScreenInputOptions) {
       if (!options.sendsInput()) return;
       const text = event.clipboardData?.getData('text/plain');
       if (!text) return;
+      clearTimeout(pasteFallback);
+      pasteFallback = undefined;
       event.preventDefault();
+      // This computer's text goes to the guest's clipboard, then pastes.
       options.send({ kind: 'clipboard', text });
-
-      // Then paste in the guest. A Linux guest pastes with Ctrl+V, so a Mac's
-      // Cmd (sent as Super) is let go first.
-      const releaseSuper = Object.entries(pressedKeys).filter(
-        ([, keysym]) =>
-          keysym === KEYSYM_SUPER_LEFT || keysym === KEYSYM_SUPER_RIGHT
-      );
-      for (const [code, keysym] of releaseSuper) {
-        options.send({ kind: 'key', keysym, down: false });
-        delete pressedKeys[code];
-      }
-      const controlHeld = Object.values(pressedKeys).includes(KEYSYM_CONTROL);
-      const keysymV = 0x76;
-      if (!controlHeld)
-        options.send({ kind: 'key', keysym: KEYSYM_CONTROL, down: true });
-      options.send({ kind: 'key', keysym: keysymV, down: true });
-      options.send({ kind: 'key', keysym: keysymV, down: false });
-      if (!controlHeld)
-        options.send({ kind: 'key', keysym: KEYSYM_CONTROL, down: false });
+      pasteInGuest();
+    },
+    /** Lets go of everything held in the guest; the session calls it before a hand-back. */
+    releaseAll() {
+      cancelEscapeHold();
+      clearTimeout(pasteFallback);
+      pasteFallback = undefined;
+      releaseKeys();
     },
   };
 }

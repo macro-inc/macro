@@ -300,7 +300,10 @@ registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 // Settings → Machines); the route renders the same view from the URL.
 registerComponent(AGENT_SCREEN_ROUTE_ID, (params) =>
   typeof params.harnessId === 'string' && params.harnessId ? (
-    <AgentScreenView harnessId={params.harnessId} />
+    <AgentScreenView
+      harnessId={params.harnessId}
+      continueDriving={params.continueDriving === 'true'}
+    />
   ) : (
     <NotFound />
   )

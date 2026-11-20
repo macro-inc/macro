@@ -53,6 +53,7 @@ describe('ScreenStage keyboard', () => {
     const { unmount } = render(() => (
       <ScreenStage
         label="Scout's desktop"
+        keyboardLabel="Keyboard for Scout's desktop"
         frame={{ width: 1920, height: 1080 }}
         transform={undefined}
         driven
@@ -65,7 +66,9 @@ describe('ScreenStage keyboard', () => {
         frameRef={() => {}}
       />
     ));
-    const keyboard = screen.getByRole('textbox', { name: "Scout's desktop" });
+    const keyboard = screen.getByRole('textbox', {
+      name: "Keyboard for Scout's desktop",
+    });
     keyboard.focus();
     for (const key of ['m', 'a', 'c', 'r', 'o']) {
       keyboard.dispatchEvent(
@@ -81,6 +84,59 @@ describe('ScreenStage keyboard', () => {
     unmount();
 
     // Outside the viewer the same key still opens Create.
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'c',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(openCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a key pressed outside and released inside the viewer go, so no app hotkey sticks', () => {
+    const openCreate = vi.fn(() => true);
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      useHotKeyRoot();
+      registerHotkey({
+        scopeId: 'global',
+        hotkey: 'c',
+        description: 'Create',
+        keyDownHandler: openCreate,
+      });
+    });
+    const { unmount } = render(() => (
+      <ScreenStage
+        label="Scout's desktop"
+        keyboardLabel="Keyboard for Scout's desktop"
+        frame={{ width: 1920, height: 1080 }}
+        transform={undefined}
+        driven
+        drivingMe
+        stale={false}
+        loupe={undefined}
+        snapshot={() => undefined}
+        handlers={handlers(() => {})}
+        containerRef={() => {}}
+        frameRef={() => {}}
+      />
+    ));
+    const keyboard = screen.getByRole('textbox', {
+      name: "Keyboard for Scout's desktop",
+    });
+
+    // Shift+Tab from the Hand back button: Tab goes down outside the viewer…
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })
+    );
+    // …and comes up inside it.
+    keyboard.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'Tab', bubbles: true })
+    );
+    unmount();
+
+    // Back in the app, "c" is "c", not "tab+c".
     document.body.dispatchEvent(
       new KeyboardEvent('keydown', {
         key: 'c',

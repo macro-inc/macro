@@ -482,4 +482,209 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+  it('abandons a connect still waking when the view goes away, closing what it opened', async () => {
+    let abandoned: AbortSignal | undefined;
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => ({
+        kind: 'vnc',
+        connect: (_element, _ticket, handlers, signal) => {
+          abandoned = signal;
+          handlers.onState({
+            driver: null,
+            agentHeld: false,
+            waking: true,
+            transport: 'vnc',
+            viewers: 1,
+          });
+          // Never resolves: the computer is still waking.
+          return new Promise(() => {});
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      expect(session.store.status).toEqual({ kind: 'waking' });
+      expect(abandoned?.aborted).toBe(false);
+
+      dispose();
+      expect(abandoned?.aborted).toBe(true);
+    });
+  });
+
+  it('hands back before Stop and before the view closes while driving, but not when a pop-out carries the lease', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const drivenByAlice = {
+      driver: { userId: 'user-alice', name: 'Alice' },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere: true,
+    };
+    const released: string[] = [];
+    const open = async () =>
+      createRoot(async (dispose) => {
+        const session = createScreenSession({
+          harnessId: 'harness-1',
+          canDrive: () => true,
+          accessKnown: () => true,
+          currentUserId: () => 'user-alice',
+          transport: () => 'vnc',
+          capabilities,
+        });
+        session.setInputReleaser(() => released.push('released'));
+        session.attach(document.createElement('div'));
+        await settle();
+        connections.at(-1)?.handlers.onState(drivenByAlice);
+        return { session, dispose };
+      });
+
+    const stopping = await open();
+    stopping.session.stop();
+    expect(connections[0].controls).toEqual(['handBack:null', 'stop']);
+    expect(released).toEqual(['released']);
+    stopping.dispose();
+
+    const closing = await open();
+    closing.dispose();
+    expect(connections[1].controls).toEqual(['handBack:null', 'close']);
+
+    const poppingOut = await open();
+    expect(poppingOut.session.carryLeaseAway()).toBe(true);
+    poppingOut.dispose();
+    expect(connections[2].controls).toEqual(['close']);
+  });
+
+  it('a popped-out view takes over the lease its old view left, once live', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        continueDriving: true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({
+        driver: { userId: 'user-alice', name: 'Alice' },
+        agentHeld: true,
+        waking: false,
+        transport: 'vnc',
+        viewers: 2,
+        drivingHere: false,
+      });
+      expect(connections[0].controls).toEqual(['takeOver']);
+      dispose();
+    });
+  });
+
+  it('does not take the lease back after a reconnect when it was handed back meanwhile', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({
+        driver: { userId: 'user-alice', name: 'Alice' },
+        agentHeld: true,
+        waking: false,
+        transport: 'vnc',
+        viewers: 1,
+        drivingHere: true,
+      });
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      // Another tab of the same person handed back while this one was away.
+      connections[1].handlers.onState({
+        driver: null,
+        agentHeld: false,
+        waking: false,
+        transport: 'vnc',
+        viewers: 1,
+        drivingHere: false,
+      });
+
+      expect(connections[1].controls).toEqual([]);
+      expect(session.controlLost()).toEqual({ kind: 'released', driver: null });
+      dispose();
+    });
+  });
+
+  it('gives up on a connection that keeps dropping right after it goes live', async () => {
+    let issued = 0;
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t1',
+          expiresAt: '',
+        });
+      },
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        currentUserId: () => 'user-bob',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      // Each connection completes and drops within a second.
+      for (let drop = 0; drop < 10; drop++) {
+        if (session.store.status.kind === 'ended') break;
+        connections.at(-1)?.handlers.onEnded('connectionLost');
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+
+      expect(session.store.status).toEqual({ kind: 'ended', reason: 'failed' });
+      expect(issued).toBeLessThanOrEqual(7);
+      dispose();
+    });
+  });
 });

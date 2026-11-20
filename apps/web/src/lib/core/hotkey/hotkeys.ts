@@ -622,17 +622,21 @@ export function useHotKeyRoot() {
   // dispatches trusted keydown/keyup events with no `key`; they are not key
   // presses either.
   //
-  // A control marked `data-owns-keyboard` (the agent screen viewer while it
-  // drives a remote computer) takes every key itself: no app hotkey may run,
-  // or typing "macro" into the remote desktop opens Create at the "c".
   const shouldIgnoreKeyEvent = (e: KeyboardEvent) =>
     typeof e.key !== 'string' ||
-    (!e.isTrusted && import.meta.env.MODE !== 'test') ||
-    (e.target instanceof Element &&
-      e.target.closest('[data-owns-keyboard]') !== null);
+    (!e.isTrusted && import.meta.env.MODE !== 'test');
+
+  // A control marked `data-owns-keyboard` (the agent screen viewer while it
+  // drives a remote computer) takes every key itself: no app hotkey may run,
+  // or typing "macro" into the remote desktop opens Create at the "c". Its
+  // key-ups still release keys pressed before focus moved in, or they would
+  // stick (a Tab pressed on a button, let go in the viewer).
+  const insideKeyboardOwner = (target: EventTarget | null) =>
+    target instanceof Element &&
+    target.closest('[data-owns-keyboard]') !== null;
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (shouldIgnoreKeyEvent(e)) return;
+    if (shouldIgnoreKeyEvent(e) || insideKeyboardOwner(e.target)) return;
     document.documentElement.dataset.modality = 'keyboard';
     const key = normalizeEventKeyPress(e);
 
@@ -687,7 +691,14 @@ export function useHotKeyRoot() {
       );
     }
 
+    if (insideKeyboardOwner(e.target)) return;
     checkHotKeys(e);
+  };
+
+  // Keys still down as focus enters a keyboard owner never get their key-up
+  // here (the owner may cancel it): forget them, as on window blur.
+  const handleFocusIn = (e: FocusEvent) => {
+    if (insideKeyboardOwner(e.target)) setPressedKeys(new Set<string>());
   };
 
   // Clear all pressed keys when window loses focus
@@ -698,12 +709,14 @@ export function useHotKeyRoot() {
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown, { capture: true });
     document.addEventListener('keyup', handleKeyUp, { capture: true });
+    document.addEventListener('focusin', handleFocusIn, { capture: true });
     window.addEventListener('blur', handleWindowBlur);
   });
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown, { capture: true });
     document.removeEventListener('keyup', handleKeyUp, { capture: true });
+    document.removeEventListener('focusin', handleFocusIn, { capture: true });
     window.removeEventListener('blur', handleWindowBlur);
   });
 

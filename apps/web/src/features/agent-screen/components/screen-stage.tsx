@@ -1,5 +1,5 @@
 import { cn } from '@ui/utils/classname';
-import { type JSX, Show } from 'solid-js';
+import { createEffect, type JSX, on, Show } from 'solid-js';
 import type { Point } from '../core/geometry';
 import type { ScreenFrameSize, ScreenRect } from '../transports/types';
 import { Loupe } from './loupe';
@@ -26,6 +26,8 @@ export type ScreenStageHandlers = {
  */
 export function ScreenStage(props: {
   label: string;
+  /** The hidden text field's name: where keys go while driving. */
+  keyboardLabel: string;
   frame: ScreenFrameSize | undefined;
   transform: string | undefined;
   /** Amber frame while someone drives. */
@@ -34,7 +36,9 @@ export function ScreenStage(props: {
   drivingMe: boolean;
   /** Grey the last picture out while it isn't live. */
   stale: boolean;
-  loupe: { at: Point; guest: Point } | undefined;
+  loupe:
+    | { at: Point; guest: Point; magnification: number; containerWidth: number }
+    | undefined;
   snapshot: (rect: ScreenRect) => Promise<ImageBitmap | undefined> | undefined;
   handlers: ScreenStageHandlers;
   containerRef: (element: HTMLDivElement) => void;
@@ -44,6 +48,20 @@ export function ScreenStage(props: {
 }) {
   let frameElement: HTMLDivElement | undefined;
   let keyboardField: HTMLTextAreaElement | undefined;
+
+  // Handed back, or the lease went to someone else: give the keyboard back to
+  // the app, rather than keep typing invisibly into the hidden field.
+  createEffect(
+    on(
+      () => props.drivingMe,
+      (driving) => {
+        if (driving || !keyboardField) return;
+        keyboardField.value = '';
+        if (document.activeElement === keyboardField) keyboardField.blur();
+      },
+      { defer: true }
+    )
+  );
 
   return (
     <div
@@ -78,7 +96,7 @@ export function ScreenStage(props: {
       */}
       <textarea
         ref={keyboardField}
-        aria-label={props.label}
+        aria-label={props.keyboardLabel}
         tabIndex={props.drivingMe ? 0 : -1}
         // While driving every key belongs to the remote computer: the app's
         // hotkeys stand down (core/hotkey) and nothing bubbles past here.
@@ -101,7 +119,7 @@ export function ScreenStage(props: {
         onPaste={(event) => props.handlers.onPaste(event)}
       />
       <div
-        role="application"
+        role="img"
         aria-label={props.label}
         class="absolute inset-0 touch-none outline-hidden select-none"
         onPointerDown={(event) => {
@@ -122,6 +140,8 @@ export function ScreenStage(props: {
           <Loupe
             at={loupe().at}
             guest={loupe().guest}
+            magnification={loupe().magnification}
+            containerWidth={loupe().containerWidth}
             media={() =>
               frameElement?.querySelector('canvas, video') ?? undefined
             }

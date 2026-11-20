@@ -70,6 +70,9 @@ export function StatusPill(props: {
 
   return (
     <span
+      // Who drives, and the connection's state, are announced as they change.
+      role="status"
+      aria-live="polite"
       class={cn(
         'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium',
         content().tone === 'live' && 'bg-green-bg text-green-ink',

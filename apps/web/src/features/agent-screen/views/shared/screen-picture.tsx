@@ -3,7 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { createEffect, type JSX, on } from 'solid-js';
 import { ScreenOverlay } from '../../components/screen-overlay';
 import { ScreenStage } from '../../components/screen-stage';
-import { toGuestPoint } from '../../core/geometry';
+import { layoutFrame, toGuestPoint } from '../../core/geometry';
 import type { AgentScreenModel } from './agent-screen-model';
 
 /**
@@ -32,22 +32,29 @@ export function ScreenPicture(props: {
     const at = input.loupePoint();
     const frame = session.store.frame;
     if (!at || !frame) return undefined;
-    const guest = toGuestPoint(
-      {
-        container: { width: size.width ?? 0, height: size.height ?? 0 },
-        frame,
-        rotation: 0,
-      },
-      input.viewport(),
+    const geometry = {
+      container: { width: size.width ?? 0, height: size.height ?? 0 },
+      frame,
+      rotation: 0 as const,
+    };
+    const guest = toGuestPoint(geometry, input.viewport(), at, true);
+    if (!guest) return undefined;
+    // Twice the view's own scale, never less than 1:1.
+    const viewScale = layoutFrame(geometry, input.viewport()).scale;
+    return {
       at,
-      true
-    );
-    return guest ? { at, guest } : undefined;
+      guest,
+      magnification: Math.max(1, viewScale * 2),
+      containerWidth: geometry.container.width,
+    };
   };
 
   return (
     <ScreenStage
       label={t('agentScreen.desktopTitle', { name: props.model.agentName() })}
+      keyboardLabel={t('agentScreen.keyboardFor', {
+        name: props.model.agentName(),
+      })}
       frame={session.store.frame}
       transform={input.transform()}
       driven={
