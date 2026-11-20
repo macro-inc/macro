@@ -48,6 +48,7 @@ async fn stop_does_not_wait_for_in_flight_work() {
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,
         runtime_connected: watch::channel(false).1,
+        trigger_stream: watch::channel(TriggerStreamHealth::Connecting).1,
         _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 
@@ -113,6 +114,14 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
     .await
     .unwrap();
     storage_task.await.unwrap();
+    let mut health = daemon.trigger_stream_health();
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        health.wait_for(|health| *health == TriggerStreamHealth::NoAgentsBound),
+    )
+    .await
+    .expect("the panel must hear that no agent is bound")
+    .unwrap();
     socket
         .send(Message::Text(
             serde_json::to_string(&ToRuntimeMessage::ModelProbeRequest)
