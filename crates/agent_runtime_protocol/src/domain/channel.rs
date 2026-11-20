@@ -53,7 +53,8 @@ impl<Tx, Rx> Channel<Tx, Rx> {
 /// carrier apart is for. They run as separate tasks rather than arms of one
 /// `select!` specifically so that a `recv` already mid-flight is always polled
 /// to completion instead of being raced against, and possibly cancelled by, an
-/// outgoing send becoming ready.
+/// outgoing send becoming ready. The inbound task races its `recv` only
+/// against its caller going away, when nothing would read the message.
 ///
 /// Not exposed outside this crate: outbound adapters adapt to [`Channel`],
 /// they don't hand pumps to callers.
