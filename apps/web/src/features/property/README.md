@@ -100,7 +100,10 @@ button calls `onUseBuiltIn(propertyDefinitionId)`. `PropertyEditorDialog`
 answers by selecting that property as if it had been picked from the list, so a
 host that keeps the property out of its list (the task composer, which edits
 Companies and Contacts through its Customer / Contact pill) still receives the
-value through `onSave`. The note never disables **Create**. Add a name there
+value through `onSave`. Such a host passes the property with its current value
+in `properties` (the composer's `draftProperties`): the picker starts from that
+value and adds to it, and without it a pick would replace what the draft
+already links. The note never disables **Create**. Add a name there
 only for a built-in property whose look-alike breaks something a person would
 expect, not for every system property.
 

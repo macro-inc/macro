@@ -381,7 +381,7 @@ a viewer with no connected mailbox. Files, Tasks, and Calls list items
 message attaches) the company or one of those contacts. Tasks and References
 also list a task whose own custom entity property (one a team or a person
 created, such as a `Contact` property) names the company or one of those
-contacts; Files and Calls read only the `Companies` and `Contacts` properties.
+contacts; Files and Calls do not read custom properties.
 Contacts beyond the Team
 tab's first page count, hidden contacts count only for team admins and owners,
 and an item matching several ways appears once. Files lists non-task documents

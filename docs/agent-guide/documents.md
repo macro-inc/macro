@@ -2634,8 +2634,8 @@ command menu. Values show the record's name and open the company or contact.
 An entity can carry the property without listing it (set at creation or through
 the API); adding that property pins the existing value rather than clearing it.
 A custom entity property can point at a company or contact too. A task set that
-way is listed on the record's Tasks tab and in its References; every other
-record list and the Sales views read only the two system properties.
+way is listed on the record's Tasks tab and in its References; no other record
+list and no Sales view reads a custom property.
 **Create property** therefore points at them: a property named `Contact`,
 `Contacts`, `Company`, `Companies`, `Customer` or `Customers` shows a note under
 the name that the built-in property exists and what it links, with **Use

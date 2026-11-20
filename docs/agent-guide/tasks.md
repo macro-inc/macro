@@ -959,7 +959,11 @@ and contacts that writes the Companies and Contacts properties. Picking a compan
 leaves the contact unset; picking a contact also sets its company, and the pill
 shows the contact with both named on hover. A team with no CRM records sees the
 pill with "No customers or contacts found". Neither property is offered separately
-under **Add property**.
+under **Add property**. Creating a property there under a look-alike name
+(`Contact`, `Company`, `Customer`) shows a note with **Use Contacts** or **Use
+Companies**, which opens that property's own multi-select picker on the draft's
+current value; picks add to it. The pill then shows the record, or a count when
+there are several, and its hover card names them all.
 
 Customers supplies its preset. Record-level task
 creation prefills the company or contact, including the contact's company when
