@@ -3666,7 +3666,9 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
@@ -4012,7 +4014,8 @@ export type ChannelTopicEvent = {
 } | {
     event_type: 'channel.updated';
     /**
-     * A channel's metadata was updated (rename).
+     * A channel's settings were patched (a rename, a team conversion, or an
+     * auto-join change); the names are equal when it was not a rename.
      */
     metadata: ChannelUpdatedMetadata;
 } | {
@@ -4059,7 +4062,8 @@ export type ChannelUpdatedMetadata = {
      */
     channel_id: string;
     /**
-     * New channel name.
+     * Stored channel name after the update; equal to `previous_name` when
+     * the update was not a rename.
      */
     channel_name?: string | null;
     /**

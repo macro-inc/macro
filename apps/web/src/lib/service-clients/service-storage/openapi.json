@@ -36372,7 +36372,7 @@
           },
           "is_participant": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
+            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels,\nand, when the filter admits only channels it names by id, to public\nchannels too.\nNone to ignore (participant channels only, today's default)."
           },
           "mentions": {
             "type": "array",
@@ -36897,7 +36897,7 @@
           },
           {
             "type": "object",
-            "description": "A channel's metadata was updated (rename).",
+            "description": "A channel's settings were patched (a rename, a team conversion, or an\nauto-join change); the names are equal when it was not a rename.",
             "required": ["metadata", "event_type"],
             "properties": {
               "event_type": {
@@ -36906,7 +36906,7 @@
               },
               "metadata": {
                 "$ref": "#/components/schemas/ChannelUpdatedMetadata",
-                "description": "A channel's metadata was updated (rename)."
+                "description": "A channel's settings were patched (a rename, a team conversion, or an\nauto-join change); the names are equal when it was not a rename."
               }
             }
           },
@@ -36994,7 +36994,7 @@
           },
           "channel_name": {
             "type": ["string", "null"],
-            "description": "New channel name."
+            "description": "Stored channel name after the update; equal to `previous_name` when\nthe update was not a rename."
           },
           "previous_name": {
             "type": ["string", "null"],

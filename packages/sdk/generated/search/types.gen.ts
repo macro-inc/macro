@@ -389,7 +389,9 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
