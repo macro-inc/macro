@@ -3,20 +3,36 @@
 #[cfg(test)]
 mod test;
 
+use std::sync::LazyLock;
+use std::time::Duration;
+
 use rootcause::Report;
 
 use crate::domain::models::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitOk, RateLimitResult,
+    TokenBucketConfig, TokenBucketResult,
 };
-use crate::domain::ports::RateLimitPort;
+use crate::domain::ports::{RateLimitPort, TokenBucketPort};
 
 /// Redis key prefix for rate limit counters.
 const KEY_PREFIX: &str = "rtl";
+
+/// Redis key prefix for token buckets, apart from the counters so a bucket
+/// and a counter built from the same data never share a key.
+const TOKEN_BUCKET_PREFIX: &str = "rtb";
 
 /// Format a [`RateLimitKey`] into the Redis key string used for storage.
 fn redis_key(key: &RateLimitKey) -> String {
     format!("{KEY_PREFIX}:{}", key.to_hex_string())
 }
+
+/// Format a [`RateLimitKey`] into the Redis key of its token bucket.
+fn token_bucket_key(key: &RateLimitKey) -> String {
+    format!("{TOKEN_BUCKET_PREFIX}:{}", key.to_hex_string())
+}
+
+static TOKEN_BUCKET_SCRIPT: LazyLock<redis::Script> =
+    LazyLock::new(|| redis::Script::new(include_str!("redis/token_bucket.lua")));
 
 /// Redis-based implementation of the rate limit port.
 ///
@@ -46,6 +62,42 @@ pub trait RedisRateLimitOps {
 
     /// Decrement the counter for a key, flooring at zero.
     fn decrement(&self, key: &str) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+}
+
+/// Trait for the Redis operations the token bucket needs.
+pub trait RedisTokenBucketOps {
+    /// Refill the bucket at `key` for the time since it last gained a token
+    /// and take one token if any is left, in one script, reading the time
+    /// from Redis. Returns `(taken, tokens_left, retry_after_ms)`.
+    fn take_token(
+        &self,
+        key: &str,
+        capacity: u64,
+        refill_ms: u64,
+    ) -> impl std::future::Future<Output = Result<(bool, u64, u64), Report>> + Send;
+}
+
+impl RedisTokenBucketOps for redis::Client {
+    async fn take_token(
+        &self,
+        key: &str,
+        capacity: u64,
+        refill_ms: u64,
+    ) -> Result<(bool, u64, u64), Report> {
+        let mut conn = self.get_multiplexed_async_connection().await?;
+        let (taken, tokens, retry_after_ms): (i64, i64, i64) = TOKEN_BUCKET_SCRIPT
+            .key(key)
+            .arg(capacity)
+            .arg(refill_ms)
+            .invoke_async(&mut conn)
+            .await?;
+
+        Ok((
+            taken == 1,
+            u64::try_from(tokens).unwrap_or(0),
+            u64::try_from(retry_after_ms).unwrap_or(0),
+        ))
+    }
 }
 
 impl RedisRateLimitOps for redis::Client {
@@ -141,5 +193,29 @@ impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLi
     async fn decrement(&self, key: &RateLimitKey) -> Result<(), Report> {
         let key_str = redis_key(key);
         self.redis.decrement(&key_str).await
+    }
+}
+
+impl<R: RedisTokenBucketOps + Send + Sync + 'static> TokenBucketPort for RedisRateLimitAdapter<R> {
+    async fn take(
+        &self,
+        key: RateLimitKey,
+        config: TokenBucketConfig,
+    ) -> Result<TokenBucketResult, Report> {
+        let refill_ms = u64::try_from(config.refill_interval.as_millis())
+            .unwrap_or(u64::MAX)
+            .max(1);
+        let (taken, remaining, retry_after_ms) = self
+            .redis
+            .take_token(&token_bucket_key(&key), config.capacity, refill_ms)
+            .await?;
+
+        if taken {
+            Ok(TokenBucketResult::Taken { remaining })
+        } else {
+            Ok(TokenBucketResult::Empty {
+                retry_after: Duration::from_millis(retry_after_ms),
+            })
+        }
     }
 }

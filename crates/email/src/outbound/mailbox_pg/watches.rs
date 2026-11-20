@@ -19,7 +19,7 @@ async fn guard(tx: &mut sqlx::PgConnection, lease: &WatchLease) -> Result<(), Ma
 impl MailboxWatchRepository for PgMailboxSync {
     async fn claim_watch(&self, lease_id: Uuid) -> Result<Option<WatchLease>, MailboxError> {
         let row=sqlx::query!(r#"WITH candidate AS(SELECT w.link_id FROM email_mailbox_watch_work w JOIN email_links l ON l.id=w.link_id
-            WHERE l.is_sync_active AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())
+            WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())
             ORDER BY w.next_run_at LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE email_mailbox_watch_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate c,email_links l WHERE w.link_id=c.link_id AND l.id=w.link_id
@@ -36,7 +36,7 @@ impl MailboxWatchRepository for PgMailboxSync {
         }))
     }
     async fn renew_watch_lease(&self, lease: &WatchLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         sqlx::query!("UPDATE email_mailbox_watch_work SET lease_until=now()+interval '3 minutes' WHERE link_id=$1",lease.mailbox.link_id)
             .execute(&mut *tx).await.map_err(db_error)?;
@@ -64,7 +64,7 @@ impl MailboxWatchRepository for PgMailboxSync {
         verifier: &[u8],
         expires: DateTime<Utc>,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         sqlx::query!("INSERT INTO email_provider_subscriptions(id,link_id,generation,client_state_hash,expires_at) VALUES($1,$2,$3,$4,$5)",id,lease.mailbox.link_id,lease.mailbox.sync_generation,verifier,expires)
             .execute(&mut *tx).await.map_err(db_error)?;
@@ -76,7 +76,7 @@ impl MailboxWatchRepository for PgMailboxSync {
         id: Uuid,
         subscription: &MailboxSubscription,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         let updated=sqlx::query!("UPDATE email_provider_subscriptions SET provider_id=$3,expires_at=$4 WHERE id=$1 AND link_id=$2 AND (provider_id IS NULL OR provider_id=$3)",id,lease.mailbox.link_id,subscription.id.as_str(),subscription.expires_at)
             .execute(&mut *tx).await.map_err(db_error)?;
@@ -86,7 +86,7 @@ impl MailboxWatchRepository for PgMailboxSync {
         tx.commit().await.map_err(db_error)
     }
     async fn forget_watch(&self, lease: &WatchLease, id: Uuid) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         sqlx::query!(
             "DELETE FROM email_provider_subscriptions WHERE id=$1 AND link_id=$2",
@@ -130,7 +130,7 @@ impl MailboxWatchRepository for PgMailboxSync {
         subscription: &str,
         hint: &WatchHint,
     ) -> Result<Option<Uuid>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let Some(binding)=sqlx::query!(r#"SELECT s.link_id,l.sync_generation FROM email_provider_subscriptions s JOIN email_links l ON l.id=s.link_id
             WHERE s.id=$1 AND s.generation=$2 AND s.client_state_hash=$3 AND l.is_sync_active AND l.sync_generation=s.generation
             AND (s.provider_id IS NULL OR s.provider_id=$4) FOR UPDATE OF l,s"#,id,expected.generation,&expected.verifier,subscription)

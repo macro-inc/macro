@@ -1,6 +1,7 @@
 use gh_workflow::{Event, Job, Push, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsSetupNode;
 use crate::workflows::{steps, vars};
 
 #[cfg(test)]
@@ -41,16 +42,8 @@ fn check_package() -> Job {
         .name("SDK Package Check")
         .runs_on("ubuntu-latest")
         .add_step(steps::checkout(false, false))
-        .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
-        .add_step(
-            Step::new("Setup Node")
-                .uses(
-                    "actions",
-                    "setup-node",
-                    "49933ea5288caeca8642d1e84afbd3f7d6820020",
-                )
-                .add_with(("node-version", "24")),
-        )
+        .add_step(steps::setup_bun_action().bun_version(steps::SDK_BUN_VERSION))
+        .add_step(ActionsSetupNode::new("Setup Node").node_version("24"))
         .add_step(install_dependencies())
         .add_step(typecheck())
         .add_step(run_tests())

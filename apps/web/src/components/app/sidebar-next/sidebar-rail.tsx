@@ -77,6 +77,7 @@ export const SidebarRail = () => {
                       item={item}
                       unread={unread.has(item.id)}
                       unreadCount={unread.count(item.id)}
+                      homeMode={gates().homeMode}
                     />
                   }
                 >

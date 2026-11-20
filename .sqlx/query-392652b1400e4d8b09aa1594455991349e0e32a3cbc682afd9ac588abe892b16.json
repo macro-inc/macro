@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_attachments SET upload_claimed_at = NULL\n                WHERE id = $1 AND upload_claimed_at = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "392652b1400e4d8b09aa1594455991349e0e32a3cbc682afd9ac588abe892b16"
+}

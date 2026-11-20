@@ -65,9 +65,12 @@ narrow split that shows the conversation alone, Esc reaches the split as before
 (clearing a selection, leaving spotlight).
 
 A click in a draft moves the caret where it lands, including a quick
-trackpad tap and a click while the page is busy. The composer re-focuses itself
-only for clicks outside its text (`MarkdownShell`); re-focusing on a click in
-the text wrote the previous caret back over the new one.
+trackpad or touch tap and a click while the page is busy. The composer
+re-focuses itself only for clicks outside its text; re-focusing on a click in
+the text wrote the previous caret back over the new one. Every Lexical input
+shares this rule (`focusEditorFromClick`, used by `MarkdownShell` and
+`MarkdownTextarea`), so the email body, event descriptions and Universal Input
+drafts behave the same way.
 
 To check this, arrow through several conversations (focus stays in the list),
 press Enter (the composer takes focus), press Esc twice (back on the same row),
