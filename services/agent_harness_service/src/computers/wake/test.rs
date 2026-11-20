@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use agent_harness::domain::ports::RuntimeConnectionId;
 use agent_harness::testing::helpers::containers::ContainerMock;
 use uuid::Uuid;
 
@@ -51,10 +52,7 @@ impl RuntimeConnections for Offline {
         false
     }
 
-    fn connection_of(
-        &self,
-        _harness: HarnessId,
-    ) -> Option<agent_harness::domain::ports::RuntimeConnectionId> {
+    fn connection_of(&self, _harness: HarnessId) -> Option<RuntimeConnectionId> {
         None
     }
 

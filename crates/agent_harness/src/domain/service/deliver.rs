@@ -155,7 +155,7 @@ where
     /// loaded, so the caller can dispatch what it holds. That holds for a
     /// session an earlier attempt attached before failing to load its queue,
     /// so a retry finishes the job instead of stranding the queue.
-    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty))]
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty, agent.session.displaced_connection = tracing::field::Empty))]
     pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
         let span = tracing::Span::current();
         let session = self.sessions.get_session(session_id).await?;
@@ -175,7 +175,11 @@ where
             // winding down but has not left yet. Wait for it to go, or the
             // session would count as restored while the new connection drops
             // its frames.
-            self.sessions.close_session(session_id).await?;
+            span.record("agent.session.displaced_connection", true);
+            self.sessions
+                .close_session(session_id)
+                .instrument(tracing::info_span!("agent.session.close_displaced"))
+                .await?;
         }
         self.reconnect(session_id).await?;
         span.record("agent.session.reattached", true);

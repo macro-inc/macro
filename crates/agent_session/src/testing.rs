@@ -149,8 +149,8 @@ impl InMemoryAgentSessionRepo {
         Self::default()
     }
 
-    /// Make appends of a `disconnected` event wait until the returned hold
-    /// is released, as a slow store would, so a test can catch a session
+    /// Make appends of a `disconnected` event, for every session, wait until
+    /// the returned hold is released, as a slow store would, so a test can catch a session
     /// actor in the middle of winding down.
     #[must_use]
     pub fn hold_disconnects(&self) -> HeldDisconnects {

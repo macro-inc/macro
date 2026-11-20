@@ -127,6 +127,7 @@ where
     }
 
     /// The dial a harness's runtime is connected on here, if any.
+    #[must_use]
     pub fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
         self.connections.get(&harness).map(|listed| listed.id)
     }
