@@ -26,6 +26,8 @@ cat >"$root/bin/bun" <<EOF
 echo "\$*" >>"$root/bun.ran"
 echo "\${MACRO_SETUP_TRACEPARENT-unset}" >"$root/bun.trace"
 echo "\${OTEL_EXPORTER_OTLP_ENDPOINT-unset}" >"$root/bun.otlp"
+echo "\${MACRO_LAUNCH_TIMINGS-unset}" >"$root/bun.launch"
+echo "\${OTEL_EXPORTER_OTLP_HEADERS-unset}" >"$root/bun.headers"
 EOF
 chmod +x "$root/bin/bun"
 export PATH=$root/bin:$PATH
@@ -307,5 +309,19 @@ fresh
 echo 'OTEL_EXPORTER_OTLP_ENDPOINT="https://intake.test/i/otlp"' >>"$root/case/agent.env"
 start
 check 'B12 the runtime exports where agent.env says' bash -c "[[ \$(cat '$root/bun.otlp') == https://intake.test/i/otlp ]]"
+check 'B12 without a computer id it sends no header' bash -c "[[ \$(cat '$root/bun.headers') == unset ]]"
+echo 'MACRO_COMPUTER_ID=01900000-0000-7000-8000-000000000001' >>"$root/case/agent.env"
+start
+check 'B12 and names its computer to the intake' bash -c "[[ \$(cat '$root/bun.headers') == x-macro-computer-id=01900000-0000-7000-8000-000000000001 ]]"
+
+# --- B13: the runtime gets the times of start-agent's steps -------------------
+step='[0-9]{16}:[0-9]{16}'
+first="^started:[0-9]{16},settings:$step,clone:$step,configure:$step,rollback:$step,packages:$step,compatibility:$step,exec:[0-9]{16}\$"
+again="^started:[0-9]{16},settings:$step,configure:$step,rollback:$step,packages:$step,compatibility:$step,exec:[0-9]{16}\$"
+fresh
+start
+check 'B13 a first start times each step, the clone included' bash -c "[[ \$(cat '$root/bun.launch') =~ $first ]]"
+start
+check 'B13 a restart has no clone step' bash -c "[[ \$(cat '$root/bun.launch') =~ $again ]]"
 
 exit "$failed"

@@ -454,6 +454,11 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
     assert_eq!(std::fs::read_to_string(home_file).unwrap(), "keep me");
 }
 
+/// The computer `ENROLLMENT_JSON` enrolls.
+fn computer() -> hosted_runtimes::domain::ids::ComputerId {
+    "00000000-0000-0000-0000-00000000000c".parse().unwrap()
+}
+
 #[tokio::test]
 async fn an_enrollment_naming_an_intake_starts_telemetry_there_over_http() {
     let directory = tempfile::tempdir().expect("temp dir");
@@ -482,9 +487,10 @@ async fn an_enrollment_naming_an_intake_starts_telemetry_there_over_http() {
 
     assert_eq!(
         started.into_inner(),
-        Some(Some(crate::telemetry::Exporter::Http(
-            "https://intake.example.com/i/otlp".to_owned()
-        )))
+        Some(Some(crate::telemetry::Exporter::Http {
+            endpoint: "https://intake.example.com/i/otlp".to_owned(),
+            computer: Some(computer()),
+        }))
     );
 }
 
@@ -495,14 +501,17 @@ fn the_telemetry_settings_are_written_for_the_service_and_removed_without_an_int
 
     write_telemetry_env(
         &path,
-        Some(&crate::telemetry::Exporter::Http(
-            "https://intake.example.com/i/otlp".to_owned(),
-        )),
+        Some(&crate::telemetry::Exporter::Http {
+            endpoint: "https://intake.example.com/i/otlp".to_owned(),
+            computer: Some(computer()),
+        }),
     )
     .unwrap();
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
-        "OTEL_EXPORTER_OTLP_ENDPOINT=https://intake.example.com/i/otlp\nOTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf\n"
+        "OTEL_EXPORTER_OTLP_ENDPOINT=https://intake.example.com/i/otlp\n\
+         OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf\n\
+         OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=00000000-0000-0000-0000-00000000000c\n"
     );
 
     write_telemetry_env(&path, None).unwrap();

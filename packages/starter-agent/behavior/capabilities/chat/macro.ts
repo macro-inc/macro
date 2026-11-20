@@ -164,6 +164,7 @@ export const sdkChat = ({
   trace = passthrough,
   now = () => new Date(),
   sleep = (ms) => Bun.sleep(ms),
+  stream = { dropped: () => {}, opened: () => {} },
 }: {
   readonly macro: () => Promise<Macro>;
   /** What the agent's own messages are recorded as from. */
@@ -174,6 +175,11 @@ export const sdkChat = ({
   readonly now?: () => Date;
   /** Waits before a catch-up and between retries. */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** Told when the events stream drops and when it opens (again). */
+  readonly stream?: {
+    readonly dropped: () => void;
+    readonly opened: () => void;
+  };
 }): Chat => {
   const listening = Promise.withResolvers<void>();
   // Messages delivered but not handled yet, by id: the earlier of when each
@@ -630,6 +636,7 @@ export const sdkChat = ({
         },
         onDrop: (droppedAt) => {
           open = false;
+          stream.dropped();
           // From the last event this connection carried, or its open if it
           // carried none: before the open, the previous gap covered it.
           const gap = new Date(
@@ -642,6 +649,7 @@ export const sdkChat = ({
         onOpen: (at) => {
           openedAt = at;
           open = true;
+          stream.opened();
           if (!opened) {
             opened = true;
             // A first start has no cursor: one now covers a crash from here.

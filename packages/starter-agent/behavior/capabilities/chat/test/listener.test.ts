@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { passthrough } from '../../../agent/claude.ts';
 import { batches } from '../../../context/stream.ts';
 import { join, memoryDisk } from '../../../context/test/fakes.ts';
 import { type Listening, listen } from '../../../events/handlers/chat.ts';
@@ -51,6 +52,7 @@ const listening = () => {
     waiting: { push: (_channelId, message) => void pushed.push(message) },
     log: { event: async () => undefined },
     relevanceScreen: async () => screen,
+    trace: passthrough,
     config: { identity: { name: 'Pip' } },
   };
   return { context, history, writes, pushed };

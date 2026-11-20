@@ -3,11 +3,12 @@ import { behavior } from '@macro-inc/muppet/core/behavior';
 import { isoText } from '@macro-inc/muppet/utilities/time';
 import type { ChatContext } from '../../capabilities/chat/context.ts';
 import type { Incoming } from '../../capabilities/chat/entry.ts';
-import { judge } from '../../capabilities/chat/listen.ts';
+import { judge, screenAttributes } from '../../capabilities/chat/listen.ts';
 import { replyPrompt, threadOf } from '../../capabilities/chat/prompt.ts';
 import type { chatSources } from '../sources/chat.ts';
 
 const listenLog = 'listen';
+const screenSpan = 'chat.screen';
 const replyLog = 'replies';
 const handledLog = 'handled';
 const screenHistory = 6;
@@ -24,29 +25,41 @@ export type Listening = {
   readonly log: Pick<ChatContext['log'], 'event'>;
   readonly relevanceScreen: ChatContext['relevanceScreen'];
   readonly config: { readonly identity: { readonly name: string } };
+  readonly trace: ChatContext['trace'];
 };
 
 /** The listener: records every message, and queues the ones that are for the agent. */
 export const listen = async (
   incoming: Incoming,
-  { chat, history, waiting, log, relevanceScreen, config }: Listening
+  { chat, history, waiting, log, relevanceScreen, config, trace }: Listening
 ): Promise<void> => {
   const { channelId, channel, entry } = incoming;
   // A replayed or caught-up message the agent already judged.
   if (await history.recorded(channelId, entry.id)) return;
-  const recent = await history.recent(channelId, screenHistory);
-  const verdict = await judge(incoming, {
-    me: await chat.me(),
-    name: config.identity.name,
-    history: recent,
-    screen: await relevanceScreen(),
-    decide: chat.decide,
-    failed: (error) =>
-      log.event(listenLog, {
-        channel,
-        message_id: entry.id,
-        decide_error: String(error),
-      }),
+  // One span per message: how long the screen took and what it decided.
+  const verdict = await trace(screenSpan, async (span) => {
+    span.set('chat.channel_id', channelId);
+    span.set('chat.message_id', entry.id);
+    const recent = await history.recent(channelId, screenHistory);
+    span.set('chat.screen.history', recent.length);
+    const judged = await judge(incoming, {
+      me: await chat.me(),
+      name: config.identity.name,
+      history: recent,
+      screen: await relevanceScreen(),
+      decide: chat.decide,
+      failed: (error) => {
+        span.set('chat.screen.retried', true);
+        return log.event(listenLog, {
+          channel,
+          message_id: entry.id,
+          decide_error: String(error),
+        });
+      },
+    });
+    for (const [key, value] of Object.entries(screenAttributes(judged)))
+      span.set(key, value);
+    return judged;
   });
   // Recorded, so a restart from here needn't judge it again. A message
   // for the agent is queued first: recorded but not queued, it would
