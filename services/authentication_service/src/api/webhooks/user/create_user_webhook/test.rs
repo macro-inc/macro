@@ -66,6 +66,7 @@ fn user_create_webhook(email: &str, data: Option<Value>) -> FusionAuthUserWebhoo
             linked_object_id: "linked-object-id".to_string(),
             info: EventInfo {
                 ip_address: "198.51.100.42".to_string(),
+                user_agent: None,
             },
             user: FusionAuthWebhookUser {
                 email: email.to_string(),

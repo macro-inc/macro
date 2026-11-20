@@ -1,7 +1,7 @@
 use axum::{
     Json,
     extract::{self, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, header::USER_AGENT},
     response::{IntoResponse, Response},
 };
 use macro_middleware::tracking::ClientIp;
@@ -15,6 +15,7 @@ use crate::{
     },
     generate_password::generate_random_password,
     service::user::email_code_signup::email_code_signup_data,
+    service::user::signup_meta::SignupClickIds,
 };
 use fusionauth::error::FusionAuthClientError;
 use model::authentication::login::{
@@ -35,9 +36,10 @@ use model::authentication::login::{
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
+#[tracing::instrument(skip(ctx, req, headers, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    headers: HeaderMap,
     ip_context: ClientIp,
     extract::Json(req): extract::Json<PasswordlessRequest>,
 ) -> Result<Response, Response> {
@@ -116,6 +118,13 @@ pub async fn handler(
                             signup_forbidden_response()
                         })?;
 
+                let mut signup_data = email_code_signup_data(req.is_agent);
+                SignupClickIds::from_parts(
+                    header_text(&headers, "x-macro-fbp").as_deref(),
+                    header_text(&headers, "x-macro-fbc").as_deref(),
+                    header_text(&headers, USER_AGENT.as_str()).as_deref(),
+                )
+                .merge_into(&mut signup_data);
                 let fusionauth_user_id = ctx
                     .auth_client
                     .create_user(
@@ -123,7 +132,7 @@ pub async fn handler(
                             email: (&lowercase_email).into(),
                             password: generate_random_password().into(),
                             username: None,
-                            data: Some(email_code_signup_data(req.is_agent)),
+                            data: Some(signup_data),
                         },
                         true,
                         ip_context.origin_ip(),
@@ -195,4 +204,13 @@ pub async fn handler(
     };
 
     Ok((StatusCode::OK, Json(body)).into_response())
+}
+
+fn header_text(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }

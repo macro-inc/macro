@@ -1,3 +1,7 @@
+import {
+  appendMetaClickIds,
+  metaClickHeaders,
+} from '@app/lib/analytics/metaClickIds';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { authServiceClient } from '@service-auth/client';
@@ -48,7 +52,10 @@ export async function sendEmailCode(input: {
     `${SERVER_HOSTS['auth-service']}/login/passwordless`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...metaClickHeaders(),
+      },
       body: JSON.stringify({
         redirect_uri: REDIRECT_URI,
         email,
@@ -78,6 +85,7 @@ export async function sendEmailCode(input: {
     sso.searchParams.set('idp_id', body.idp_id);
     sso.searchParams.set('login_hint', email);
     if (referral_code) sso.searchParams.set('referral_code', referral_code);
+    appendMetaClickIds(sso);
     window.location.href = sso.toString();
     return { t: 'redirected' };
   }
