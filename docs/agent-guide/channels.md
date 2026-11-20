@@ -1838,10 +1838,14 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Invite` and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. `Ask Macro` lives in the channel
-title menu (the `...` after the name, or the split title's menu) on every
-platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
+`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. On desktop both the inline
+conversation header and the split header (the channel block, which the
+Notifications preview shows) show them left to right as
+`Ask Macro`, `Invite`, `Call`, after the live viewer avatars; `Ask Macro` is the
+same button a document header shows before Share. The channel title menu (the
+`...` after the name, or the split title's menu) also offers `Ask Macro` on every
+platform; phones show it only there. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
@@ -1865,8 +1869,8 @@ Other channels and views retain the floating pill.
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
-and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Invite` buttons. An ellipsis follows the name — after the breadcrumb where
+and name, the same inset tab strip, live viewer avatars, and the `Ask Macro`,
+`Invite`, and `Call` buttons. An ellipsis follows the name — after the breadcrumb where
 the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,
