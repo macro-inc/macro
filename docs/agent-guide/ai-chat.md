@@ -773,7 +773,8 @@ the shimmer.
   the owner must have access through the connected GitHub App.
   Paired macrod agents also receive the repository choice. With native Herdr,
   macrod finds an existing clone or clones it using local Git credentials, then
-  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  creates a worktree from a fresh `origin/main` and opens the session in its own
+  Herdr workspace. **Branch** shows `main`
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
@@ -866,7 +867,7 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
-  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  This works in herdr 0.9 and in the herdr app (herdr-core, which names its `hc` in each terminal's `HC_BIN`),
   where session tabs open in macrod's space. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
   versions" in `crates/coding_agent_worker/README.md`.

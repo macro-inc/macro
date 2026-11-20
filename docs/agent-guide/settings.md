@@ -277,7 +277,7 @@ second failed start, which the server undoes (computer released, charge
 refunded, agent taken back), with **Retry** buying afresh. Other refusals
 (a trial, an invite already in flight, a failed workspace) show in place.
 The new agent appears in **Team → Members** as its own row (name, **Agent**
-tag) with a status in place of a role: **Setting up** with a spinner while its
+tag) with a status on the summary line where a person's role and plan are: **Setting up** with a spinner while its
 computer provisions, with the computer's setup step under it (**Creating the
 computer**, **Starting up**, **Connecting to Macro**), then **Starting**
 (spinner; the computer is up and the agent hasn't reported online yet), then
@@ -285,8 +285,8 @@ computer**, **Starting up**, **Connecting to Macro**), then **Starting**
 after setup, or crashed and is restarting; it comes back by itself),
 **Needs attention** or **Released**. A failed
 computer's row offers owners and admins **Retry**, the computer's own retry,
-so it never buys a second computer. Owners and admins pick a voice later with the
-row's waveform button (**Change voice**): **Save voice** calls
+so it never buys a second computer. Owners and admins pick a voice later from
+the row's ⋯ (**Change voice**), which also holds **Remove agent**: **Save voice** calls
 `PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
@@ -739,12 +739,15 @@ Max stays active until renewal; **Keep Max plan** cancels a pending downgrade
 without resetting usage. Failed renewal-detail reads offer **Try again**.
 Team members who cannot manage billing see the notice without its action.
 
-`Team → Members` (`/app/settings/team-members`; on a paid team each row shows the seat's plan,
-and admins/owners can move a seat between Pro and Max with the `Seat plan`
-menu; Max upgrades are immediate and prorated, except the first Max seat on a
+`Team → Members` (`/app/settings/team-members`; every row, owner, admin,
+member or agent, is the picture, name, email, one summary line (role, then the
+seat's plan on a paid team) and a ⋯ holding what the viewer can change: a menu
+on desktop and a sheet on touch, like Machines. Admins/owners move a seat
+between Pro and Max under the ⋯'s **Plan**; Max upgrades are immediate and prorated, except the first Max seat on a
 trialing team, which ends the trial and bills Max for a new cycle today.
-Pro downgrades start at renewal.
-**Keep Max** appears only for a confirmed pending downgrade and cancels it;
+Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
+until then.
+**Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
 scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
 count preview and history subpages, and team/personal domain exclusions;
