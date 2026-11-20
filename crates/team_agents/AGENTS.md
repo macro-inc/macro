@@ -9,6 +9,9 @@ PostHog flag. Served at `/team_agents` in authentication_service.
 ## How it works
 
 `POST /team_agents` (team admin, own credential) → flag check (fails closed) →
+`validate` parses the request into a `TeamAgentInvite` (`AgentName`,
+hosted_runtimes' `PurchaseKey`, profile and avatar checks), so a bad field is a
+400 before anything is created →
 account rows + `team_agents` row in one transaction (`"User"."isAgent"`, a
 placeholder `@agents.macro.invalid` address, no sign-in) →
 `TeamService::add_team_agent` (included seat, no Stripe change) → workspace

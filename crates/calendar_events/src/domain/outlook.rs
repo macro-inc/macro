@@ -509,8 +509,19 @@ impl<
                         .refresh_calendar_event(&token, target, &id)
                         .await?
                     {
-                        OutlookEventRefresh::Refreshed { upsert, skipped } => {
+                        OutlookEventRefresh::Refreshed {
+                            mut upsert,
+                            skipped,
+                        } => {
                             span.record("outcome", "refreshed");
+                            // A series without an occurrence Macro could not
+                            // read is not the calendar's whole snapshot of
+                            // it. Stored under no role, it stays out of team
+                            // reads, which would take the gap for free time,
+                            // as Google fails such a series instead.
+                            if !skipped.is_empty() {
+                                upsert.source.details_mut().observed_access_role = None;
+                            }
                             if let Some(first) = skipped.first() {
                                 span.record("rejected_field", first.field.as_str());
                                 span.record("skipped_occurrences", skipped.len() as i64);

@@ -10,7 +10,7 @@ version = "0.1.0"
 # OpenSearch step.
 [[test]]
 name = "content_search"
-path = "tests/content_search.rs"
+path = "tests/content_search/main.rs"
 test = false
 
 [dev-dependencies]
@@ -41,5 +41,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tokio-retry = { workspace = true }
 tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -48,3 +48,15 @@ it('restores the play button if the browser refuses playback', async () => {
   );
   expect(analytics.track).not.toHaveBeenCalled();
 });
+
+it.each([
+  ['company-graph', '0:47'],
+  ['ai-tagging', '0:39'],
+  ['workspace-events', '0:49'],
+  ['automatic-permissions', '0:42'],
+  ['unified-search', '0:46'],
+] as const)('keeps the %s watch label and duration together', (tutorial, length) => {
+  render(() => <TutorialVideoEmbed tutorial={tutorial} />);
+  const button = screen.getByRole('button', { name: /^Play Learn how/ });
+  expect(button.textContent).toContain(`Watch\u00a0demo\u00a0·\u00a0${length}`);
+});

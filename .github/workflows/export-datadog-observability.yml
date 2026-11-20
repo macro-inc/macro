@@ -1,6 +1,8 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/export_datadog_observability.rs
 name: Export Datadog observability definitions
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 permissions:
   contents: read
 jobs:
@@ -9,16 +11,19 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          persist-credentials: false
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       - name: Read dashboards and monitors
+        run: bun infra/stacks/observability/migration/export-datadog.ts /tmp/datadog-inventory
         env:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-        run: bun infra/stacks/observability/migration/export-datadog.ts /tmp/datadog-inventory
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: datadog-observability-definitions
           path: /tmp/datadog-inventory
-          retention-days: 7
+          name: datadog-observability-definitions
+          retention-days: '7'

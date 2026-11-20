@@ -34,6 +34,11 @@ Moving the start date or time moves the end with it, keeping the event's length
 after that the end stays put, and a start past it shows the end-before-start
 error.
 
+If a permission change retires a successful create response, the composer uses
+the preserved server identity. If that identity cannot be read yet, it closes
+and refreshes the calendar without opening the event or offering a duplicate
+creation. The universal input reports **Event created** without an Open action.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
@@ -214,11 +219,12 @@ The calendar view's setup prompt decides and acts on own inboxes alone too: a
 delegate with no inbox of their own sees **Connect your calendar**, the Calendar
 is off vs Enable calendar wording counts only own inboxes, and Grant access, Turn
 on and Reconnect only start consent for one of them. It covers the grid only in a
-week without events and with no working calendar the viewer can see; a working
-calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week. On desktop the
-pill rides above the toast stack while it shows anything, so the app-wide
-prompt for the same inbox doesn't cover it.
+week without events and with no working calendar the viewer can see. Otherwise
+(a teammate's out-of-office on the grid, or a working calendar shared with them)
+it is a banner in the page's flow with the same title, description and action,
+above the grid on desktop and tablets and below it on phones, where
+`RangeUnavailableBanner` sits, so it never covers an event. A delegate whose only
+working calendar is shared sees the banner in every week.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for

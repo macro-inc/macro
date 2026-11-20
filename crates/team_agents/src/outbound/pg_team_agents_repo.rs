@@ -282,7 +282,7 @@ impl PgTeamAgentsRepo {
             VALUES ($1, $2, $3, $4)
             "#,
             macro_user_id,
-            account.name,
+            account.name.as_str(),
             account.avatar_url,
             account.avatar_face.as_ref().map(sqlx::types::Json) as _,
         )
@@ -296,8 +296,8 @@ impl PgTeamAgentsRepo {
             "#,
             account.user_id.as_ref(),
             account.email,
-            account.name,
-            account.name,
+            account.name.as_str(),
+            account.name.as_str(),
             macro_user_id,
         )
         .execute(&mut *transaction)
@@ -327,7 +327,7 @@ impl PgTeamAgentsRepo {
             account.team_id,
             account.created_by.as_ref(),
             sqlx::types::Json(&account.persona_seed) as _,
-            account.purchase_key,
+            account.purchase_key.as_str(),
         )
         .fetch_optional(&mut *transaction)
         .await?;
@@ -344,7 +344,7 @@ impl PgTeamAgentsRepo {
                 WHERE team_id = $1 AND purchase_key = $2
                 "#,
                 account.team_id,
-                account.purchase_key,
+                account.purchase_key.as_str(),
             )
             .fetch_optional(&self.pool)
             .await?

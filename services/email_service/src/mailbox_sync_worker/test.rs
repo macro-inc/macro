@@ -2,8 +2,8 @@ use super::*;
 use email::domain::mailbox::MailboxKey;
 use email::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::domain::models::{
-    MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart, StreamPosition,
-    StreamToken,
+    MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -20,8 +20,8 @@ struct Provider {
 }
 
 impl MailboxGateway for Provider {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,

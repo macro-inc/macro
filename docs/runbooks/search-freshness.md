@@ -29,15 +29,16 @@ The oldest unindexed change of a non-email entity type has been older than
 60 s for five minutes (warning: 30 s). The age is measured from the event's
 Kafka timestamp, so it includes time the event waited behind others.
 
-- **Processing has stopped** (the outcome panel is flat): the consumer is
-  stalled.
+- **Processing has stopped** (the outcome panel is flat for the live entity
+  types, everything but email): the live lane's consumer is stalled.
   - Check `aws.ecs.service.running` for the service and the
-    `kafka.consumer_stop` spans for restarts.
+    `kafka.consumer_stop` spans (`lane:live`) for restarts.
   - Check OpenSearch health (the [OpenSearch monitors](../../infra/stacks/monitoring/monitors/opensearch.ts),
     CPU, rejected writes). A slow or failing OpenSearch holds every worker.
-- **Processing continues**: the live topics are waiting behind other work on
-  the same consumer.
-  - Look for an email backlog or a reindex running at the same time.
+- **Processing continues**: the live topics are waiting behind other work in
+  their lane. Email has a lane of its own, so an email backlog is not the
+  cause.
+  - Look for a backlog on one live topic, such as a document reindex.
   - Look for one key, such as a busy agent session or document, that fills its
     worker.
 - **Levers**:
@@ -116,6 +117,29 @@ again. The tags say how it was lost:
 
 Recovery: reindex the affected entities by id with the backfill routes (below).
 
+## Failed bulk items
+
+For 30 minutes, OpenSearch has failed items of one entity type's bulk index
+writes in every 5 minutes. The events behind them are queued for a replay,
+and if that fails too they are dropped (see [Dropped events](#dropped-events)).
+Until a write succeeds, those changes are missing from search. Only bulk
+writes report failed items: documents, email messages, call segments and
+chat repair. Single-document writes (channel messages, projects, calendar
+events, properties) and a refusal of a whole request count none; the
+backlog and dropped-events monitors catch those. `failure` says why:
+
+- **`overloaded`**: OpenSearch refused items inside the bulk response to
+  protect itself (a 429 per item, usually a full write queue). A bulk load,
+  such as a mailbox import drain, can do this. Check the domain's write
+  rejections and JVM pressure (`aws.es.threadpool_write_rejected`,
+  `aws.es.jvmmemory_pressure`) and whether a backfill is running, and slow or
+  pause it. A short burst the replays absorb does not reach this alert.
+- **`bulk_items`**: OpenSearch accepted the request but failed the items:
+  usually a document the mapping rejects, or a write to an index that does
+  not exist. The `process_event` spans with `failed_items` above 0 carry the
+  entity id and the error; the same documents fail on every replay until the
+  code or the mapping is fixed.
+
 ## Offset reset
 
 librdkafka reset a partition's position after an error. Usually the position
@@ -140,15 +164,19 @@ permissions instead.
 
 ## No readings
 
-No indexer task has reported a backlog reading for 10 minutes. Either the
+No indexer task has reported a backlog reading for one lane, the live topics
+or `macro.email`, for 10 minutes. Each task reads the two lanes on separate
+consumers, so one lane can stop while the other runs. Either that lane's
 consumer is down, or its metrics do not reach Datadog. In both cases its lag is
 unknown, not zero.
 
 - Check `aws.ecs.service.running` and the task stop reasons.
 - Check for the consumer supervisor's "event consumer failed" or
-  "panicked" logs.
-- If the tasks run and process events (APM still shows `process_event` spans),
-  the metrics export is broken: check the Datadog agent sidecar.
+  "panicked" logs, whose `lane` field names the lane.
+- If the tasks run and the quiet lane still processes events (APM shows
+  `process_event` spans with `entity_type:email` for the email lane, any other
+  `entity_type` for the live lane), the metrics export is broken: check the
+  Datadog agent sidecar. The other lane's spans say nothing about this one.
 
 ## Probe late
 
