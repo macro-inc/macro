@@ -224,14 +224,16 @@ consumer is making progress by its librdkafka statistics
 the consumer is polled), every assigned partition's broker connected, and each
 partition caught up or advancing. A heartbeat reaches every open stream
 whatever its filters, after the events already queued for it, and is never
-replayed. A client that hears neither an event nor a heartbeat for three
-intervals can reconnect and resume; macrod does, and only when the header is
-present, so it never reconnects in a loop to an older server. SDK listeners
-skip the heartbeat, which has no `event_type`.
+replayed. A client that misses three heartbeats in a row, hearing no event
+either, can reconnect and resume; macrod does after 70 s, and only when the
+header is present, so it never reconnects in a loop to an older server. SDK
+listeners skip the heartbeat, which has no `event_type`.
 
-A stream that falls more than 1,024 events behind its process's feed ends,
-rather than skipping what it missed: a client that resumes replays it from the
-retained events.
+A resuming stream (`resume=true` with a readable `Last-Event-ID`) that falls
+more than 1,024 events behind its process's feed ends rather than skipping what
+it missed, so its client reopens it and replays them from the retained events.
+Any other stream skips them and continues, as before: its client could not
+replay them, and the SDK's listener does not reopen a stream that ends.
 
 ## Queue contract, deduplication, and ordering
 

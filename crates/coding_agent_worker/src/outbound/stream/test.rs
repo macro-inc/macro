@@ -229,9 +229,10 @@ fn the_heartbeat_interval_comes_from_the_header_only() {
 }
 
 /// A heartbeating service whose stream carries only keep-alive comments has a
-/// dead event source: the stream ends after three missed heartbeats.
+/// dead event source: the stream ends half an interval after the third missed
+/// heartbeat came due.
 #[tokio::test(start_paused = true)]
-async fn a_heartbeating_stream_that_goes_silent_stalls_after_three_intervals() {
+async fn a_heartbeating_stream_that_goes_silent_stalls_after_three_missed_heartbeats() {
     let interval = Duration::from_secs(20);
     let mut stream = EventStream::<Envelope>::new(
         body(&[KEEP_ALIVE, KEEP_ALIVE, KEEP_ALIVE, KEEP_ALIVE]),
@@ -242,7 +243,7 @@ async fn a_heartbeating_stream_that_goes_silent_stalls_after_three_intervals() {
     let error = stream.next_event().await.err().expect("a stall");
 
     assert!(format!("{error}").contains("stalled"), "{error}");
-    assert_eq!(started.elapsed(), interval * STALL_AFTER_HEARTBEATS);
+    assert_eq!(started.elapsed(), Duration::from_secs(70));
 }
 
 /// Old server, new macrod: without the header nothing says the event source
@@ -256,6 +257,23 @@ async fn a_stream_without_the_header_never_stalls() {
             .await
             .is_err(),
         "a service that does not heartbeat must not be reconnected to"
+    );
+}
+
+/// The heartbeat after two missed ones arrives exactly three intervals after
+/// the last: it keeps the stream open rather than racing its deadline.
+#[tokio::test(start_paused = true)]
+async fn two_missed_heartbeats_do_not_stall_the_stream() {
+    let interval = Duration::from_secs(20);
+    let (sender, receiver) = futures::channel::mpsc::unbounded();
+    let mut stream = EventStream::<Envelope>::new(receiver, Some(interval));
+
+    tokio::time::advance(interval * 3).await;
+    sender.unbounded_send(Ok(HEARTBEAT)).unwrap();
+
+    assert_eq!(
+        stream.next_event().await.unwrap(),
+        Some(StreamNext::Heartbeat)
     );
 }
 
@@ -289,7 +307,7 @@ async fn a_heartbeat_that_arrived_while_the_caller_was_busy_is_not_a_stall() {
     let interval = Duration::from_secs(20);
     let mut stream = EventStream::<Envelope>::new(body(&[HEARTBEAT]), Some(interval));
 
-    tokio::time::advance(interval * (STALL_AFTER_HEARTBEATS + 1)).await;
+    tokio::time::advance(interval * (STALL_AFTER_MISSED_HEARTBEATS + 1)).await;
 
     assert_eq!(
         stream.next_event().await.unwrap(),

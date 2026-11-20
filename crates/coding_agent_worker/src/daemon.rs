@@ -185,8 +185,12 @@ impl Daemon {
                     }
                     ServeOutcome::Ended(error) => {
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
+                        // A stream that was live starts over from the fast
+                        // reconnects: a stall must reopen within the
+                        // service's two-minute replay retention.
                         if matches!(*health.borrow(), TriggerStreamHealth::Live { .. }) {
                             attempt = 0;
+                            delays.reset();
                         }
                         attempt = attempt.saturating_add(1);
                         health.send_replace(TriggerStreamHealth::Reconnecting {

@@ -469,7 +469,39 @@ async fn open_stream_rejects_empty_or_degenerate_filters() {
 }
 
 #[tokio::test]
-async fn a_lagging_stream_ends_so_the_subscriber_resumes_and_replays() {
+async fn a_lagging_live_only_stream_skips_missed_events_and_continues() {
+    let feed = StreamFeed::new(2, WEBHOOK_STREAM_REPLAY_CAPACITY);
+    let service = WebhookEventStreamServiceImpl::new(
+        feed.clone(),
+        Arc::new(FakeAccessService::allowing(&[DOCUMENT_ID])),
+        FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
+        FakeContactChecker::default(),
+    );
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
+
+    feed.publish(document_candidate("document.updated", DOCUMENT_ID));
+    feed.publish(document_candidate("document.updated", DOCUMENT_ID));
+    let latest = document_candidate("document.updated", DOCUMENT_ID);
+    let latest_id = latest.event.event_id.clone();
+    feed.publish(latest);
+
+    let delivered = next_within(&mut stream).await;
+    assert_ne!(delivered.event_id, latest_id);
+    assert_eq!(next_within(&mut stream).await.event_id, latest_id);
+}
+
+#[tokio::test]
+async fn a_lagging_resumed_stream_ends_so_the_subscriber_resumes_and_replays() {
     let feed = StreamFeed::new(2, WEBHOOK_STREAM_REPLAY_CAPACITY);
     let service = WebhookEventStreamServiceImpl::new(
         feed.clone(),
@@ -484,7 +516,7 @@ async fn a_lagging_stream_ends_so_the_subscriber_resumes_and_replays() {
                 subscriber(),
                 WebhookScope::Team,
                 filter(&["document.updated"]),
-                None,
+                Some(since),
             )
             .await
             .expect("stream opens"),

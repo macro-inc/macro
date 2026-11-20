@@ -19,9 +19,10 @@
 //! While the broker consumer is making progress it sends a heartbeat through
 //! the feed ([`StreamFeed::heartbeat`]). Every subscriber passes it on in order
 //! after the events queued before it, so a client that stops hearing them
-//! knows its stream is dead even while the connection stays open. A
+//! knows its stream is dead even while the connection stays open. A resuming
 //! subscriber that falls too far behind ends its stream, so its client
-//! reconnects and replays from its cursor instead of silently missing events.
+//! reconnects and replays from its cursor instead of silently missing events;
+//! one that cannot replay skips them and continues.
 
 #[cfg(test)]
 mod test;
@@ -42,7 +43,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 /// Number of events retained for each active subscriber before it falls
-/// behind and its stream ends.
+/// behind.
 pub const WEBHOOK_STREAM_CHANNEL_CAPACITY: usize = 1_024;
 
 /// Most events the feed keeps for subscribers resuming from a cursor.
@@ -350,6 +351,9 @@ struct StreamState<A, R, C> {
     /// Retained events after the subscriber's cursor, delivered first.
     replay: VecDeque<Arc<StreamCandidateEvent>>,
     receiver: broadcast::Receiver<FeedItem>,
+    /// Whether falling behind ends the stream: only a subscriber that
+    /// resumed from a cursor can reopen and replay what it missed.
+    ends_when_behind: bool,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
     contact_checker: C,
@@ -462,8 +466,8 @@ where
     /// Await the next heartbeat, or event that matches the filters and passes
     /// access.
     ///
-    /// Returns `None` when the channel closes, the subscriber fell behind, or
-    /// an access check fails.
+    /// Returns `None` when the channel closes, a resuming subscriber fell
+    /// behind, or an access check fails.
     async fn next_delivered(&mut self) -> Option<StreamItem> {
         loop {
             let next = match self.replay.pop_front() {
@@ -473,14 +477,19 @@ where
             let candidate = match next {
                 Ok(FeedItem::Event(candidate)) => candidate,
                 Ok(FeedItem::Heartbeat) => return Some(StreamItem::Heartbeat),
-                // Ending lets the client reconnect from its cursor and replay
-                // what it missed; continuing would lose those events silently.
-                Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                // Ending lets a resuming client reconnect from its cursor and
+                // replay what it missed. Any other client could not replay
+                // them, and the SDK listener does not reopen an ended stream.
+                Err(broadcast::error::RecvError::Lagged(skipped)) if self.ends_when_behind => {
                     tracing::warn!(
                         skipped,
                         "webhook event stream subscriber fell behind; ending the stream"
                     );
                     return None;
+                }
+                Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                    tracing::warn!(skipped, "webhook event stream subscriber missed events");
+                    continue;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     return None;
@@ -559,6 +568,7 @@ where
         let state = StreamState {
             replay,
             receiver,
+            ends_when_behind: after.is_some(),
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
             contact_checker: self.contact_checker.clone(),

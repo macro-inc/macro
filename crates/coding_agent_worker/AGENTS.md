@@ -42,8 +42,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   before their agent was bound here (before the last agents read that did not
   list it), which belonged to another runtime.
   A service that sends `x-macro-stream-heartbeat` heartbeats the stream only
-  while its event source progresses; three missed intervals with no event or
-  heartbeat end the stream as stalled, and it reopens from the cursor. Without
+  while its event source progresses; three heartbeats missed in a row with no
+  event (70 s at 20 s) end the stream as stalled, and it reopens from the
+  cursor at the fastest reconnect delay. Without
   the header (older service) there is no such deadline. `Daemon::trigger_stream_health`
   publishes the stream's state (`src/daemon/health.rs`) for the panel.
   A failed runtime dial and a dropped event stream retry after 250 ms,

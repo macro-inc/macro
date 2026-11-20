@@ -21,7 +21,7 @@ before changing ingestion or delivery behavior.
   clients that ask `resume=true` with a `Last-Event-ID` (`StreamCursor`);
   without `resume=true` the stream is live-only, as before. Heartbeats flow
   while the stream's Kafka consumer progresses (`kafka_stream_consumer.rs`,
-  `kafka_util::progress`); a lagging subscriber's stream ends. See README's
+  `kafka_util::progress`); a lagging resuming subscriber's stream ends. See README's
   "Live event stream and resuming".
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.

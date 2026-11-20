@@ -243,14 +243,16 @@ async fn statistics_keep_arriving_while_idle_and_stop_without_polling() {
         .expect("assignment");
     consumer.assign(&assignment).expect("manual assignment");
 
-    let idle = std::time::Duration::from_secs(2);
+    // librdkafka samples on its own thread, so this waits in real time; ten
+    // 50 ms intervals each way are enough to tell samples from none.
+    let idle = std::time::Duration::from_millis(500);
     assert!(
         tokio::time::timeout(idle, consumer.recv()).await.is_err(),
         "nothing was published"
     );
     let while_polling = samples.load(Ordering::SeqCst);
     assert!(
-        while_polling >= 10,
+        while_polling >= 5,
         "an idle recv kept sampling: {while_polling} samples in {idle:?}"
     );
 

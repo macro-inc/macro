@@ -10,8 +10,8 @@
 //!
 //! A service that heartbeats says so in a response header. Its heartbeats flow
 //! only while its event source is making progress, so a stream that hears
-//! neither an event nor a heartbeat for [`STALL_AFTER_HEARTBEATS`] intervals
-//! ends as stalled, and the caller reopens it from its cursor. A service that
+//! neither an event nor a heartbeat while [`STALL_AFTER_MISSED_HEARTBEATS`]
+//! heartbeats come due ends as stalled, and the caller reopens it from its cursor. A service that
 //! sends no header gets no such deadline: its stream ends only when it closes.
 
 use std::collections::BTreeSet;
@@ -225,10 +225,23 @@ fn heartbeat_interval(headers: &reqwest::header::HeaderMap) -> Option<Duration> 
     (seconds > 0).then(|| Duration::from_secs(seconds))
 }
 
-/// How many heartbeat intervals pass without an event or a heartbeat before
-/// a stream counts as stalled. One missed heartbeat is a slow tick; three is
-/// a service whose event source stopped.
-pub const STALL_AFTER_HEARTBEATS: u32 = 3;
+/// How many heartbeats in a row may be missed before a stream counts as
+/// stalled. One or two are a broker reconnecting; three is a service whose
+/// event source stopped.
+pub const STALL_AFTER_MISSED_HEARTBEATS: u32 = 3;
+
+/// How long a stream heartbeating every `interval` may stay silent: until
+/// half an interval after the last allowed miss, so the heartbeat after it,
+/// due exactly then, does not race the deadline.
+fn stall_after(interval: Duration) -> Duration {
+    interval * STALL_AFTER_MISSED_HEARTBEATS + interval / 2
+}
+
+/// When a heartbeating stream counts as stalled.
+struct StallDeadline {
+    interval: Duration,
+    at: Pin<Box<tokio::time::Sleep>>,
+}
 
 /// The SSE header a stream resumes after.
 const LAST_EVENT_ID_HEADER: &str = "Last-Event-ID";
@@ -262,10 +275,9 @@ pub enum StreamNext<E> {
 pub struct EventStream<E> {
     events: SseEvents,
     last_event_id: Option<String>,
-    heartbeat: Option<Duration>,
-    /// When the stream counts as stalled, pushed back by every event and
-    /// heartbeat; `None` for a service that does not heartbeat.
-    stalls_at: Option<Pin<Box<tokio::time::Sleep>>>,
+    /// Pushed back by every event and heartbeat; `None` for a service that
+    /// does not heartbeat.
+    stall: Option<StallDeadline>,
     _envelope: PhantomData<E>,
 }
 
@@ -280,9 +292,10 @@ impl<E: DeserializeOwned> EventStream<E> {
         Self {
             events: Box::pin(body.eventsource()),
             last_event_id: None,
-            heartbeat,
-            stalls_at: heartbeat
-                .map(|interval| Box::pin(tokio::time::sleep(interval * STALL_AFTER_HEARTBEATS))),
+            stall: heartbeat.map(|interval| StallDeadline {
+                interval,
+                at: Box::pin(tokio::time::sleep(stall_after(interval))),
+            }),
             _envelope: PhantomData,
         }
     }
@@ -290,7 +303,7 @@ impl<E: DeserializeOwned> EventStream<E> {
     /// The service's heartbeat interval, when it heartbeats: only then can a
     /// silent stream be told from a quiet one.
     pub fn heartbeat_interval(&self) -> Option<Duration> {
-        self.heartbeat
+        self.stall.as_ref().map(|stall| stall.interval)
     }
 
     /// The id of the last event this stream delivered or skipped: where the
@@ -307,18 +320,17 @@ impl<E: DeserializeOwned> EventStream<E> {
     /// once a heartbeating stream stalls. Cancel-safe.
     pub async fn next_event(&mut self) -> rootcause::Result<Option<StreamNext<E>>> {
         loop {
-            let next = match self.stalls_at.as_mut() {
+            let next = match self.stall.as_mut() {
                 None => self.events.next().await,
-                Some(stalls_at) => tokio::select! {
+                Some(stall) => tokio::select! {
                     // What already arrived wins: a caller that was busy
                     // handling an event may come back after the deadline.
                     biased;
                     next = self.events.next() => next,
-                    () = stalls_at.as_mut() => {
+                    () = stall.at.as_mut() => {
                         rootcause::bail!(
-                            "the event stream stalled: no event or heartbeat for {} heartbeat \
-                             intervals",
-                            STALL_AFTER_HEARTBEATS
+                            "the event stream stalled: {} heartbeats in a row missed",
+                            STALL_AFTER_MISSED_HEARTBEATS
                         );
                     }
                 },
@@ -327,10 +339,9 @@ impl<E: DeserializeOwned> EventStream<E> {
                 return Ok(None);
             };
             let event = event.context("could not read the event stream")?;
-            if let (Some(stalls_at), Some(interval)) = (self.stalls_at.as_mut(), self.heartbeat) {
-                stalls_at
-                    .as_mut()
-                    .reset(tokio::time::Instant::now() + interval * STALL_AFTER_HEARTBEATS);
+            if let Some(stall) = self.stall.as_mut() {
+                let at = tokio::time::Instant::now() + stall_after(stall.interval);
+                stall.at.as_mut().reset(at);
             }
             if event.event == STREAM_HEARTBEAT_EVENT {
                 return Ok(Some(StreamNext::Heartbeat));

@@ -31,7 +31,9 @@ struct Backlog {
 }
 
 fn backlog(stats: &Statistics) -> Option<Backlog> {
-    stats.topics.get(TOPIC)?;
+    if !stats.topics.contains_key(TOPIC) {
+        return None;
+    }
     let mut result = Backlog {
         connected_brokers: stats
             .brokers
