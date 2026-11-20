@@ -225,40 +225,67 @@ CDP (127.0.0.1:9223) are reachable only from inside the container's own
 network namespace. The host and the LAN can't reach them.
 
 The teammate needs the internet: Macro, the model gateway, git, and the web
-for its browser. **In v1 its egress is open on every engine.** Measured on
-a cloud VM (method and numbers in
-`docs/design/teammate-runtime-measurements.md`): from Docker's bridge, from
+for its browser. It must not reach the machine it runs on, the owner's
+network, a cloud VM's metadata service, or another teammate. Neither engine
+stops that by itself. Measured on a cloud VM (method and numbers in
+`docs/design/teammate-runtime-measurements.md`), from Docker's bridge, from
 pasta (the network rootless Podman uses) and from pasta with
 `--no-map-gw`, a TCP connect reached:
 
 - the cloud metadata address `169.254.169.254:80`;
 - the network's gateway (its DNS port).
 
-pasta splices connections onto the host's own sockets, so it doesn't isolate
-either. The only thing none of them reached was the host's own address.
+**So macrod enforces egress itself, the same way on both engines** (status:
+being built; results in the *Test log*). The rules live in the install's own
+network namespace, never in the host's firewall:
 
-So the trust warning says plainly: *"Ada can reach whatever your computer's
-network can reach, including other machines on your network and, on a cloud
-VM, its metadata service."* macrod takes no root and writes no firewall
-rules in v1.
+1. **Holder.** `macro-teammate-<install>-net` owns the network namespace: the
+   pinned image running `sleep` as uid 1000 with every capability dropped, on
+   the install's bridge network.
+2. **Guard.** A one-shot container from the same image joins the holder's
+   namespace with `NET_ADMIN` only (uid 0, every other capability dropped).
+   It loads one nftables ruleset, reads it back, checks it, and exits.
+3. **Teammate.** It joins the holder's namespace (`--network
+   container:<holder>`) with no `NET_ADMIN` or `NET_RAW`, so it can't change
+   the rules. A restart reuses the holder. If the holder dies, the teammate
+   has no network: it fails closed.
+
+The teammate starts only after the guard has verified the rules. If they
+can't be applied, the start is refused with `failed:
+networkIsolationUnavailable`; it never falls back to an open network. A
+dockerd, firewalld or host iptables reload doesn't touch rules inside a
+container's namespace. A stop removes the holder and the network with the
+install.
+
+The ruleset filters each connection by its destination, after DNS, for TCP,
+UDP and ICMP alike:
+
+- **Allowed:** the container's own loopback, replies, DNS to the engine's
+  resolver only, and every public address.
+- **Dropped:** the host's own addresses (enumerated at each apply) and its
+  gateway; IPv4 0/8, 10/8, 100.64/10 (CGNAT and tailnets), 127/8 off
+  loopback, 169.254/16 (link-local and metadata), 172.16/12, 192.0.0/24,
+  192.168/16, 198.18/15, multicast and reserved; IPv6 `::1` off loopback,
+  `::ffff:0:0/96` (v4-mapped), the NAT64 prefixes, `fc00::/7` (ULA,
+  including `fd00:ec2::254`), `fe80::/10` and multicast.
+- **Exceptions:** only the owner's explicit `[teammates] allow` entries in
+  macrod's config, each a CIDR and its TCP ports. There are no wildcards.
+
+Because the filter sees the connection, not the lookup, DNS rebinding, a
+redirect, a proxy `CONNECT` to a private target and odd IP spellings all end
+in a dropped connect.
+
+macrod picks the engine with `[teammates] engine = "auto" | "docker" |
+"podman"`. `auto` tries Docker, then Podman, and takes the first whose
+isolation probe passes. The host report names the engine, and a machine
+where no engine can enforce the rules reports `networkIsolationUnavailable`,
+so the Invite form shows it disabled with that reason.
 
 On a local stack only, macrod's `[macro] teammate_network` names the stack's
-Docker network (`macro-<instance>_services`), which every teammate container
-also joins, so the agent reaches the stack's services by their in-network
-names; the service gives a local install those addresses, as it gives a local
-Macro computer. Production never sets it.
-
-Really restricting egress is a follow-up, not built here. Either of these
-works:
-
-- **An egress proxy (engine-independent, no root).** The container joins an
-  `--internal` network with no route out. Only a proxy container that macrod
-  runs on both networks reaches out. It refuses link-local, RFC 1918, CGNAT
-  and the host's own addresses, and the agent gets `HTTPS_PROXY` set. This
-  also covers Docker Desktop and Podman machine.
-- **Host firewall rules.** On rootful Docker, a `DOCKER-USER` rule set that
-  the owner installs once with sudo, rejecting those ranges from the
-  install's bridge subnets.
+Docker network (`macro-<instance>_services`), which the holder also joins,
+and allows that network's subnet, so the agent reaches the stack's services
+by their in-network names; the service gives a local install those
+addresses, as it gives a local Macro computer. Production never sets it.
 
 ### Identity, installs and the single-active lease
 
@@ -359,14 +386,14 @@ reaches a self-hosted install, and labels every step:
 | Step | How it works | Status |
 | --- | --- | --- |
 | Which image an install runs | `TeammateRuntimeImage` in `team_agents` holds one image id per architecture, the config digest the Nix build fixes. Both ids are `None` today, because no image is published. So every machine reads *unsupported platform* and gets no install. | untested |
-| A new image reaches a machine | A new image id is a new generation for every install. Each is delivered like any generation: on the machine's next connection, or at once while it is connected. Raising the generation when the constant changes isn't built yet. | planned |
+| A new image reaches a machine | A new image id is a new generation for every install. Each is delivered like any generation: on the machine's next connection, or at once while it is connected. The service raises the generation when a machine reports an install whose delivered image differs from the configured one. | tested (end to end, *Test log*) |
 | Publishing the image to a registry | It needs approval and isn't part of this change. Until then a machine gets the image with `docker load` (`nix build .#teammate-runtime-image`), as the tests do. | planned |
 | Fetch and verify before replacing | macrod loads `<repository>:<id hex>`, refuses an image whose id differs (`failed: imageMismatch`), and leaves the running container alone until the new image is verified. | untested |
 | The agent's volume is kept | A new generation recreates the container on the same `macro-teammate-<install>` volume (workspace, state, browser, Claude's files). Only a stop deletes the volume. | untested |
 | Checkpoint before a container is replaced or stopped | `docker stop -t 90`. On `SIGTERM`, the agent runs one last commit, `pull --rebase` and push when no wake is running. | tested (image test: stop exits 0 after the last sync is pushed) |
 | Credentials across an update | Each delivery mints the agent's key again, which revokes the previous one, so the replaced container's key stops working. The new container, or a rolled-back one, runs with the new delivery's credentials. | untested |
-| A failed pull or start of the new image | macrod keeps the previous image's id in its install store. If the new image can't be fetched or verified, or its container doesn't stay up for 120 seconds, macrod starts the previous image again with the new credentials and reports `rolledBack {reason}`. The rollback is to the previous image only, never further back. | planned in this branch |
-| Code that needs a newer runtime | The launcher's muppet API check (`muppetApi` in the code against the image's `apiLevel`) runs in the container as on hosted computers. If landed code needs more and last-good would run, it exits 78 and the next start rolls the workspace back. If there is nothing older to roll back to, it exits 79. macrod treats 79 as `failed: incompatibleRuntime` and doesn't restart the container until a newer image arrives. | planned in this branch: the check is on `main` (exit 79/78) and comes in with the merge; macrod's handling of 79 is next |
+| A failed pull or start of the new image | macrod keeps the previous image's id in its install store. If the new image can't be fetched or verified, or its container doesn't stay up for 120 seconds, macrod starts the previous image again with the new credentials and reports `rolledBack {reason}`. The rollback is to the image the replaced container ran, never further back. | tested (end to end, *Test log*) |
+| Code that needs a newer runtime | The launcher's muppet API check (`muppetApi` in the code against the image's `apiLevel`) runs in the container as on hosted computers. If landed code needs more and last-good would run, it exits 78 and the next start rolls the workspace back. If there is nothing older to roll back to, it exits 79. macrod treats 79 as `failed: incompatibleRuntime` and doesn't restart the container until a newer image arrives. | tested (end to end with a test image that exits 79) |
 | Other exits | Like the hosted unit (`Restart=always`): macrod restarts the container with a backoff from 2 to 60 seconds. Three failed boots in a row roll the code back to last-good, inside the container. Three 78s in a row are `failed: badConfiguration`, which the service answers with a new delivery, at most once per 5 minutes. | planned in this branch |
 | Offline machines | An offline machine keeps running the generation it has. Its key stays valid, because a key is minted only when a delivery reaches a connected machine. When it reconnects, its report shows it behind, and it gets the new generation then. A reconnect at the same generation and delivery sends nothing. | untested (the delivery tests are in the service's test run) |
 | Runtime before code | Rolling a new image out before code that needs it is a recommendation, not something this change coordinates. The muppet API check is what makes the opposite order safe: the code stops or rolls back instead of breaking. | not built (recommendation) |
@@ -726,3 +753,5 @@ Filled in from runs that actually passed, each with its command or CI job.
 | 2026-11-20 | Service: delivery, image updates, telemetry ingest (local throwaway Postgres) | `cargo test -p agent_harness_service --all-features` at d9c6acd0696 | 371 + 15 + 39 passed, 13 ignored |
 | 2026-11-20 | Installs, eligibility, invite, move, remove, the local image override | `cargo test -p team_agents --all-features` at d9c6acd0696 | 115 passed |
 | 2026-11-20 | Web: draft, machine list and queries | `bunx vitest run src/features/settings/core src/lib/queries/team-agents` | 81 passed |
+| 2026-11-20 | End to end on a local stack, Linux x86-64, Docker 29.5.1: macrod built from the branch, paired; owner invites an agent onto the machine from the Invite form | `just run_local` with the image override, macrod with `teammate_network`, the PostHog flag forced on by a local stand-in, at 1b6e8b13a91 | The agent's container ran read-only as uid 1000 with every capability dropped, the agent greeted in its DM and answered a message. macrod quit and restarted: the container kept running and was adopted. |
+| 2026-11-20 | End to end: image update and failures, same stack | the runtime image override changed to derived test images, at 157a87d3400 | A new image id made a new generation and replaced the container; the agent answered after. An image whose start exits 1 rolled back to the image that had been running (`rolled_back`, `crash_loop`). An exit 79 was `failed: incompatibleRuntime` and wasn't restarted. An exit 77 was `failed: badConfiguration`; the service delivered once more, which failed the same way. Setting a good image again ran it. |
