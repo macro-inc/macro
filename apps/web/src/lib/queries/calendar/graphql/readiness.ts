@@ -10,6 +10,14 @@ const answeredHosts = new WeakSet<object>();
  */
 export const CALENDAR_CACHE_HEAD_START_MS = 1_000;
 
+/**
+ * How long a calendar view waits on the cache path before a REST read races
+ * it. A covered week answers in milliseconds and an uncovered one in about a
+ * network round trip, while a cache waiting for another tab to hand over its
+ * database can hold a read for minutes.
+ */
+export const CALENDAR_CACHE_READ_DEADLINE_MS = 3_000;
+
 export function markCalendarCacheAnswered(host: object): void {
   answeredHosts.add(host);
 }
