@@ -19,7 +19,7 @@ pub struct ReplacementSnapshot {
     pub time: EventTime,
     /// Number of guests receiving a fresh invitation.
     pub attendee_count: usize,
-    /// Whether this replaces an entire recurring series.
+    /// Whether the replacement is a recurring series.
     pub is_series: bool,
     /// Whether the replacement omits the provider conference.
     pub remove_conference: bool,
@@ -102,7 +102,7 @@ pub struct CalendarReplacementView {
     pub time: EventTime,
     /// Guest count for cancellation and reinvitation confirmation.
     pub attendee_count: usize,
-    /// Entire recurring series, including exceptions, is replaced.
+    /// The replacement is a recurring series.
     pub is_series: bool,
     /// The provider conference is removed.
     pub remove_conference: bool,
@@ -203,7 +203,8 @@ pub trait CalendarReplacementRepository: Send + Sync + 'static {
 
 /// Provider I/O needed by the replacement use case. No actor authorization lives here.
 pub trait CalendarReplacementProvider: Send + Sync + 'static {
-    /// Read fresh, complete provider details without writing.
+    /// Read fresh, complete provider details without writing, and freeze the
+    /// replacement as the saved event with `changes` laid over it.
     fn inspect_replacement(
         &self,
         token: &str,
@@ -211,6 +212,7 @@ pub trait CalendarReplacementProvider: Send + Sync + 'static {
         master: &str,
         recurrence_id: Option<&str>,
         remove_conference: bool,
+        changes: &CalendarEventPatch,
     ) -> impl Future<Output = Result<ReplacementSnapshot, CalendarProviderError>> + Send;
     /// Resolve a provider-owned HTTPS event link without constructing one on the frontend.
     fn event_url(
@@ -248,7 +250,9 @@ pub trait CalendarReplacementProvider: Send + Sync + 'static {
 pub trait CalendarReplacementService: Send + Sync + 'static {
     /// Recover confirmed operations after client disconnects and service restarts.
     fn recover_replacements(&self) -> impl Future<Output = Result<usize, Report>> + Send;
-    /// Prepare an organizer-only replacement; never modifies the provider.
+    /// Prepare an organizer-only replacement carrying the editor's unsaved
+    /// `changes`; never modifies the provider. A preview nobody confirmed yet
+    /// is discarded and prepared again, so the latest changes apply.
     fn prepare_replacement(
         &self,
         user_id: &str,
@@ -256,6 +260,7 @@ pub trait CalendarReplacementService: Send + Sync + 'static {
         calendar_id: Option<Uuid>,
         recurrence_id: Option<String>,
         remove_conference: bool,
+        changes: CalendarEventPatch,
     ) -> impl Future<Output = Result<CalendarReplacementView, CalendarMutationError>> + Send;
     /// Confirm the saved preview, or safely resume the same confirmed operation.
     fn confirm_replacement(

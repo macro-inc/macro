@@ -57,15 +57,17 @@ function ReplacementConfirmation(props: {
 /** Pure presentation: all provider I/O and retry decisions are supplied by the owner. */
 export function EventReplacementDialog(props: {
   controller: EventReplacementController;
-  hasConference: boolean;
-  hasOccurrence: boolean;
-  recurring: boolean;
   onOpenUrl: (url: string) => void;
   onDone: () => void;
 }) {
   const state = props.controller;
   return (
-    <Dialog open={state.open()} onOpenChange={state.setOpen}>
+    <Dialog
+      open={state.open()}
+      onOpenChange={(open) => {
+        if (!open) state.close();
+      }}
+    >
       <Panel
         depth={2}
         class="w-full max-w-[min(32rem,calc(100vw-2rem))] rounded-xl text-ink"
@@ -77,53 +79,16 @@ export function EventReplacementDialog(props: {
           <Show
             when={state.preview()}
             fallback={
-              <>
-                <p>
-                  Replace the saved event to reset guest RSVPs or remove Teams.
-                  You will review the event before any invitations are sent.
-                </p>
-                <Show when={props.hasConference}>
-                  <label class="flex gap-2">
-                    <input
-                      type="checkbox"
-                      checked={state.removeConference()}
-                      disabled={state.pending()}
-                      onChange={(e) =>
-                        state.setRemoveConference(e.currentTarget.checked)
-                      }
-                    />
-                    Remove online meeting from the replacement
-                  </label>
-                </Show>
-                <Show when={props.hasOccurrence}>
-                  <label class="flex gap-2">
-                    <input
-                      type="checkbox"
-                      checked={state.onlyOccurrence()}
-                      disabled={state.pending()}
-                      onChange={(e) =>
-                        state.setOnlyOccurrence(e.currentTarget.checked)
-                      }
-                    />
-                    Only this occurrence
-                  </label>
-                </Show>
-                <Show when={props.recurring && !state.onlyOccurrence()}>
-                  <p>
-                    This replaces the entire recurring series, including its
-                    edited and cancelled occurrences.
-                  </p>
-                </Show>
+              <Show when={state.error() && !state.pending()}>
                 <Button
                   variant="secondary"
-                  disabled={state.pending()}
                   onClick={() =>
                     fireAndForget(state.prepare(), 'calendar-replacement')
                   }
                 >
                   Review replacement
                 </Button>
-              </>
+              </Show>
             }
           >
             {(preview) => (
@@ -192,18 +157,6 @@ export function EventReplacementDialog(props: {
                           fireAndForget(state.confirm(), 'calendar-replacement')
                         }
                       />
-                      <Button
-                        variant="ghost"
-                        disabled={state.pending()}
-                        onClick={() =>
-                          fireAndForget(
-                            state.changeOptions(),
-                            'calendar-replacement'
-                          )
-                        }
-                      >
-                        Change options
-                      </Button>
                     </Show>
                   }
                 >
@@ -247,7 +200,7 @@ export function EventReplacementDialog(props: {
           <Show when={state.pending()}>
             <p role="status">Checking Outlook…</p>
           </Show>
-          <Button variant="ghost" onClick={() => state.setOpen(false)}>
+          <Button variant="ghost" onClick={() => state.close()}>
             Close
           </Button>
         </Panel.Body>
