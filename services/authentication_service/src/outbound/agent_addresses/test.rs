@@ -25,3 +25,23 @@ fn loopback_credentialed_or_wrong_scheme_addresses_are_refused() {
         assert!(checked("X", raw, websocket).is_err(), "{raw}");
     }
 }
+
+#[test]
+fn an_own_machine_gets_the_public_addresses_never_a_fleets_override() {
+    let variables = PublicAgentAddresses(Environment::Production)
+        .environment()
+        .unwrap();
+    let value = |key: &str| {
+        variables
+            .iter()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| value.clone())
+            .unwrap()
+    };
+
+    assert_eq!(value(GATEWAY_KEY), "https://gateway.macro.com");
+    assert_eq!(
+        value(ANTHROPIC_BASE_URL_KEY),
+        "https://gateway.macro.com/agent-harness-egress/brain/anthropic"
+    );
+}

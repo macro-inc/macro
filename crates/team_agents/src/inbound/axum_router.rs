@@ -34,9 +34,12 @@ use uuid::Uuid;
 
 use crate::domain::avatar::AgentAvatar;
 use crate::domain::models::{
-    ComputerId, ComputerSize, CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgents,
+    ComputerId, ComputerSize, CreateTeamAgent, HarnessId, TeamAgent, TeamAgentError, TeamAgents,
 };
 use crate::domain::ports::TeamAgentService;
+use crate::domain::self_hosting::{
+    FloorResource, HostIneligibility, IssuedInstall, MoveTeammate, TeammateHosts,
+};
 use crate::domain::voice::AgentVoice;
 
 /// Router state.
@@ -79,14 +82,19 @@ impl IntoResponse for TeamAgentError {
             | Self::InvalidAvatar
             | Self::InvalidAvatarFace
             | Self::InvalidPurchaseKey
+            | Self::InvalidComputer
             | Self::InvalidAgentId => StatusCode::BAD_REQUEST,
             Self::UnknownVoice => StatusCode::BAD_REQUEST,
             Self::NotFound | Self::NoVoice => StatusCode::NOT_FOUND,
-            Self::NotEnabled | Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::NotEnabled | Self::SelfHostedNotEnabled | Self::Forbidden(_) => {
+                StatusCode::FORBIDDEN
+            }
             Self::ComputerUnavailable(_)
             | Self::NoRoom(_)
             | Self::PurchaseConfirming
-            | Self::InviteInProgress => StatusCode::CONFLICT,
+            | Self::InviteInProgress
+            | Self::HostNotEligible(_)
+            | Self::NotSelfHosted => StatusCode::CONFLICT,
             Self::PaymentDeclined => StatusCode::PAYMENT_REQUIRED,
             Self::RepoUnavailable(_) | Self::VoiceUnavailable(_) => StatusCode::BAD_GATEWAY,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -110,7 +118,13 @@ impl IntoResponse for TeamAgentError {
             Self::NoRoom(_) => Some(PurchaseRefusalCode::NoRoom),
             Self::PaymentDeclined => Some(PurchaseRefusalCode::PaymentDeclined),
             Self::InviteInProgress => Some(PurchaseRefusalCode::InviteInProgress),
+            Self::HostNotEligible(_) => Some(PurchaseRefusalCode::HostNotEligible),
+            Self::SelfHostedNotEnabled => Some(PurchaseRefusalCode::SelfHostedNotEnabled),
             _ => None,
+        };
+        let (reason, resource) = match &self {
+            Self::HostNotEligible(eligibility) => (eligibility.reason, eligibility.resource),
+            _ => (None, None),
         };
         let size = match &self {
             Self::NoRoom(size) => Some(*size),
@@ -122,6 +136,8 @@ impl IntoResponse for TeamAgentError {
                 message,
                 code,
                 size,
+                reason,
+                resource,
             }),
         )
             .into_response()
@@ -140,12 +156,23 @@ pub struct TeamAgentErrorBody {
     /// The size there was no room for, with [`PurchaseRefusalCode::NoRoom`].
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<ComputerSize>,
+    /// Why the machine can't host the agent, with
+    /// [`PurchaseRefusalCode::HostNotEligible`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<HostIneligibility>,
+    /// The resource that is short, with [`HostIneligibility::BelowFloor`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resource: Option<FloorResource>,
 }
 
 /// The team agents router:
 ///
-/// - `POST /` — a team admin invites an agent teammate and buys its computer.
+/// - `POST /` — a team admin invites an agent teammate and buys its computer,
+///   or installs it on one of their own machines.
 /// - `GET /` — a team member lists the team's agents.
+/// - `GET /hosts` — a team admin's own machines, for the Invite dialog.
+/// - `POST /{agent_user_id}/install` — a team admin moves an agent to
+///   another of their own machines.
 /// - `POST /me/online` — an agent reports that it is online.
 /// - `DELETE /{agent_user_id}` — a team admin removes an agent.
 /// - `GET`/`PUT /{agent_user_id}/voice` — a team admin reads or changes the
@@ -164,6 +191,11 @@ where
                 .get(list_team_agents_handler::<S, Eas, Auth>),
         )
         .route("/me/online", post(agent_online_handler::<S, Eas, Auth>))
+        .route("/hosts", get(list_teammate_hosts_handler::<S, Eas, Auth>))
+        .route(
+            "/{agent_user_id}/install",
+            post(move_team_agent_handler::<S, Eas, Auth>),
+        )
         .route(
             "/{agent_user_id}/avatar",
             put(set_team_agent_avatar_handler::<S, Eas, Auth>),
@@ -180,8 +212,10 @@ where
         .with_state(state)
 }
 
-/// Invite an agent teammate and buy its computer. Requires a team admin or
-/// owner using their own credential. The agent comes back `provisioning`.
+/// Invite an agent teammate and buy its computer, or install it on one of the
+/// inviter's own machines (`computer: {kind: "own", harnessId}`). Requires a
+/// team admin or owner using their own credential. The agent comes back
+/// `provisioning`.
 #[utoipa::path(
     post,
     tag = "team-agents",
@@ -193,8 +227,9 @@ where
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 402, body = TeamAgentErrorBody, description = "The card was declined (`payment_declined`); nothing was created"),
-        (status = 403, body = ErrorResponse),
-        (status = 409, body = TeamAgentErrorBody, description = "No room for the size (`no_room`, with `size`), or the invite is in flight (`invite_in_progress`); nothing was created"),
+        (status = 403, body = TeamAgentErrorBody, description = "Not a person's own request, agent teammates are off, or hosting on one's own machine is off (`self_hosted_not_enabled`)"),
+        (status = 404, body = ErrorResponse, description = "The named machine isn't one of the inviter's own"),
+        (status = 409, body = TeamAgentErrorBody, description = "No room for the size (`no_room`, with `size`), the invite is in flight (`invite_in_progress`), or the own machine can't host the agent (`host_not_eligible`, with `reason` and `resource`); nothing was created"),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )
@@ -291,6 +326,35 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// The acting admin's own machines, each with whether it can host an agent
+/// teammate now, for the Invite dialog.
+#[utoipa::path(
+    get,
+    tag = "team-agents",
+    operation_id = "list_teammate_hosts",
+    path = "/team_agents/hosts",
+    responses(
+        (status = 200, body = TeammateHosts),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = TeamAgentErrorBody),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn list_teammate_hosts_handler<S, Eas, Auth>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+) -> Result<Json<TeammateHosts>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Ok(Json(
+        state.service.hosts(access.entity_access_receipt).await?,
+    ))
+}
+
 /// Path for one agent.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Path)]
@@ -375,6 +439,61 @@ where
         .delete(access.entity_access_receipt, &agent)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Move an agent on an own machine to another of the admin's own machines.
+/// The machine it leaves stops it first, so its last push lands; then it
+/// runs on the new machine with fresh credentials. Requires a team admin or
+/// owner using their own credential.
+#[utoipa::path(
+    post,
+    tag = "team-agents",
+    operation_id = "move_team_agent",
+    path = "/team_agents/{agent_user_id}/install",
+    params(AgentPath),
+    request_body = MoveTeammate,
+    responses(
+        (status = 200, body = TeamAgent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = TeamAgentErrorBody),
+        (status = 404, body = ErrorResponse),
+        (status = 409, body = TeamAgentErrorBody, description = "The agent runs on a Macro computer, or the machine can't host it (`host_not_eligible`)"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn move_team_agent_handler<S, Eas, Auth>(
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: axum::http::HeaderMap,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
+    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
+    Path(path): Path<AgentPath>,
+    Json(body): Json<MoveTeammate>,
+) -> Result<Json<TeamAgent>, TeamAgentError>
+where
+    S: TeamAgentService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    // Moving revokes the agent's credentials on one machine and mints them
+    // on another: a person does that, never an agent's program.
+    let attribution = authorization.authorization.user.attribution();
+    if macro_authorization::is_program_run(attribution, &headers) {
+        tracing::warn!(?attribution, "refused moving a team agent to a program");
+        return Err(TeamAgentError::Forbidden(
+            "An agent's program cannot move an agent teammate. Tell the user to move it in Macro, under Settings, Agents.",
+        ));
+    }
+    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
+        .map(MacroUserIdStr::into_owned)
+        .map_err(|_| TeamAgentError::InvalidAgentId)?;
+    Ok(Json(
+        state
+            .service
+            .move_install(access.entity_access_receipt, &agent, body)
+            .await?,
+    ))
 }
 
 /// The agent's call voice, as committed in its workspace repository.
@@ -482,8 +601,15 @@ impl<S, Auth> FromRef<AgentEnrollmentRouterState<S, Auth>> for MacroAuthorizatio
     }
 }
 
-/// Internal-only: `POST /team_agent_enrollment/{computer_id}/{generation}`,
-/// the agent part of a computer's enrollment, for the computer operator.
+/// Internal-only routes for the replica holding a machine's socket:
+///
+/// - `POST /team_agent_enrollment/{computer_id}/{generation}`: the agent part
+///   of a Macro computer's enrollment.
+/// - `POST /team_agent_install/{harness_id}/{install_id}`: the next delivery
+///   of an install's credentials.
+/// - `POST /team_agent_install/{install_id}/checkpointed`: the machine
+///   stopped an install that is moving or being removed, or the wait gave
+///   up.
 pub fn agent_enrollment_router<S, Auth, T>(state: AgentEnrollmentRouterState<S, Auth>) -> Router<T>
 where
     S: TeamAgentService,
@@ -494,6 +620,14 @@ where
         .route(
             "/team_agent_enrollment/{computer_id}/{generation}",
             post(issue_agent_enrollment_handler::<S, Auth>),
+        )
+        .route(
+            "/team_agent_install/{harness_id}/{install_id}",
+            post(issue_install_handler::<S, Auth>),
+        )
+        .route(
+            "/team_agent_install/{install_id}/checkpointed",
+            post(install_checkpointed_handler::<S, Auth>),
         )
         .with_state(state)
 }
@@ -529,4 +663,69 @@ where
         }
         None => StatusCode::NO_CONTENT.into_response(),
     })
+}
+
+/// What the machine last said it runs of an install.
+#[derive(Debug, Clone, Copy, serde::Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportedDelivery {
+    /// Its generation.
+    pub generation: u64,
+    /// Which delivery of it.
+    pub delivery: u64,
+}
+
+/// Body of the internal install issuance.
+#[derive(Debug, Clone, Copy, serde::Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueInstallRequest {
+    /// What the machine runs of the install; `None` when nothing.
+    pub reported: Option<ReportedDelivery>,
+}
+
+/// The next delivery of an install's credentials: 200 with it, 204 when
+/// there is nothing to deliver. Never cached.
+#[tracing::instrument(skip_all, fields(%harness_id, %install_id), err)]
+pub async fn issue_install_handler<S, Auth>(
+    _authorization: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    State(state): State<AgentEnrollmentRouterState<S, Auth>>,
+    Path((harness_id, install_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<IssueInstallRequest>,
+) -> Result<Response, StatusCode>
+where
+    S: TeamAgentService,
+    Auth: MacroAuthorizationService,
+{
+    let reported = body
+        .reported
+        .map(|reported| (reported.generation, reported.delivery));
+    let issued: Option<IssuedInstall> = state
+        .service
+        .issue_install(HarnessId::new_from_uuid(harness_id), install_id, reported)
+        .await
+        .map_err(|error| match error {
+            AgentEnrollmentError::NotFound => StatusCode::NOT_FOUND,
+            AgentEnrollmentError::Unavailable | AgentEnrollmentError::IssuanceFailed => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
+        })?;
+    Ok(match issued {
+        Some(issued) => ([(header::CACHE_CONTROL, "no-store")], Json(issued)).into_response(),
+        None => StatusCode::NO_CONTENT.into_response(),
+    })
+}
+
+/// Finish an install's move or removal: 204, also when nothing was pending.
+#[tracing::instrument(skip_all, fields(%install_id), err)]
+pub async fn install_checkpointed_handler<S, Auth>(
+    _authorization: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    State(state): State<AgentEnrollmentRouterState<S, Auth>>,
+    Path(install_id): Path<Uuid>,
+) -> Result<StatusCode, TeamAgentError>
+where
+    S: TeamAgentService,
+    Auth: MacroAuthorizationService,
+{
+    state.service.finish_checkpoint(install_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

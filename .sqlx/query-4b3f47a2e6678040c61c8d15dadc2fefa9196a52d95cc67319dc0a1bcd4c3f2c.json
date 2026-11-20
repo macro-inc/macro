@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT h.id, h.name, h.last_connected_at, h.last_disconnected_at,\n                   EXISTS (\n                       SELECT 1 FROM harness_runtime_connection c\n                       WHERE c.harness_id = h.id AND c.lease_expires_at > now()\n                   ) AS \"has_live_connection!\",\n                   EXISTS (\n                       SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id\n                   ) AS \"has_connection_record!\",\n                   t.report AS \"report?\"\n            FROM harnesses h\n            LEFT JOIN harness_teammate_hosts t ON t.harness_id = h.id\n            WHERE h.owner_user_id = $1 AND h.deleted_at IS NULL AND h.computer_id IS NULL\n            ORDER BY h.name, h.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_connected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_disconnected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "has_live_connection!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "has_connection_record!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "report?",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "4b3f47a2e6678040c61c8d15dadc2fefa9196a52d95cc67319dc0a1bcd4c3f2c"
+}

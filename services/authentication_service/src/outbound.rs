@@ -13,6 +13,7 @@ pub mod stripe_consumers;
 pub mod stripe_identity;
 pub mod subscription_checkout;
 pub mod team_owned_entity_cleanup;
+pub mod teammate_runtimes;
 pub mod user_deletion;
 
 pub mod subscription_billing;
