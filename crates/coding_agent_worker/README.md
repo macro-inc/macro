@@ -174,8 +174,9 @@ macrod drives both herdrs and picks by where it runs (`src/herdr/cli.rs`):
   which herdr-core sets when it starts a terminal (a terminal already running
   before herdr-core was updated has none until it is restarted). macrod never looks `hc` up on
   `PATH`: a process `hc run` starts inherits the herdr-core server's `PATH`,
-  not the shell's. Without `HC_BIN`, macrod logs an error naming it, the herdr
-  agents read unavailable, and `macrod herdr-acp` exits. Each session is a core terminal labelled with the app's
+  not the shell's. Without `HC_BIN`, sessions open no herdr tabs and the
+  daemon log says why, the herdr agents are not offered, and `macrod
+  herdr-acp` exits with the same error. Each session is a core terminal labelled with the app's
   `herdr.space` and `herdr.tab`, so the app shows it as a tab in macrod's space.
   A managed worktree gets its own space. macrod starts the shell and then types
   `exec <agent> …` into it, so the agent gets the operator's login environment.

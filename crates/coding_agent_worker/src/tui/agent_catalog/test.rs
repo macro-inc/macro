@@ -272,12 +272,9 @@ fn a_herdr_core_terminal_runs_herdr_agents_through_the_hc_it_names() {
         "{available:?}"
     );
 
-    let unnamed = agent.availability(
-        Err(crate::herdr::HcBinMissing),
-        &Commands::new(&["claude"]),
-    );
+    let unnamed = agent.availability(Err(crate::herdr::HcBinMissing), &Commands::new(&["claude"]));
     assert!(
-        matches!(&unnamed, Availability::Unavailable { missing } if missing == &["HC_BIN (update herdr-core, then restart this terminal)"]),
+        matches!(&unnamed, Availability::Unavailable { missing } if missing == &["HC_BIN"]),
         "{unnamed:?}"
     );
 }

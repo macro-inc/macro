@@ -23,7 +23,7 @@ impl AgentPreset for HerdrTui {
     }
 
     fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        self.availability(crate::herdr::HerdrSession::detect(), commands)
+        self.availability(HerdrSession::detect(), commands)
     }
 
     fn recognizes(&self, harness: &Harness) -> bool {
@@ -47,7 +47,7 @@ impl HerdrTui {
             }
             Err(HcBinMissing) => {
                 return Availability::Unavailable {
-                    missing: vec!["HC_BIN (update herdr-core, then restart this terminal)"],
+                    missing: vec!["HC_BIN"],
                 };
             }
         };

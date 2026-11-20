@@ -102,6 +102,16 @@ pub(crate) fn instance_directory(id: impl std::fmt::Display) -> rootcause::Resul
     Ok(home.join(".macrod/herdr").join(id.to_string()))
 }
 
+/// The variables [`HerdrSession::detect`] reads.
+#[derive(Debug, Default)]
+struct HerdrEnvironment {
+    hc_terminal_id: Option<String>,
+    hc_bin: Option<String>,
+    herdr_env: Option<String>,
+    herdr_bin_path: Option<String>,
+    herdr_workspace_id: Option<String>,
+}
+
 /// The herdr macrod was started in.
 #[derive(Debug, Clone)]
 pub(crate) enum HerdrSession {
@@ -126,27 +136,38 @@ impl HerdrSession {
     /// a core started from an old herdr pane passes `HERDR_ENV` on to its
     /// terminals.
     pub(crate) fn detect() -> Result<Option<Self>, HcBinMissing> {
-        if let Some(terminal) = environment::HcTerminalId::new()
-            .and_then(|id| id.value().map(str::to_owned))
-            .filter(|id| !id.is_empty())
-        {
-            let bin = environment::HcBin::new()
-                .and_then(|path| path.value().map(PathBuf::from))
-                .filter(|path| !path.as_os_str().is_empty());
-            let bin = bin.ok_or(HcBinMissing)?;
-            return Ok(Some(Self::Core { bin, terminal }));
+        Self::from_environment(HerdrEnvironment {
+            hc_terminal_id: environment::HcTerminalId::new()
+                .and_then(|var| var.value().map(str::to_owned)),
+            hc_bin: environment::HcBin::new().and_then(|var| var.value().map(str::to_owned)),
+            herdr_env: environment::HerdrEnv::new().and_then(|var| var.value().map(str::to_owned)),
+            herdr_bin_path: environment::HerdrBinPath::new()
+                .and_then(|var| var.value().map(str::to_owned)),
+            herdr_workspace_id: environment::HerdrWorkspaceId::new()
+                .and_then(|var| var.value().map(str::to_owned)),
+        })
+    }
+
+    /// [`Self::detect`] over values already read; an empty value counts as unset.
+    fn from_environment(environment: HerdrEnvironment) -> Result<Option<Self>, HcBinMissing> {
+        let set = |value: Option<String>| value.filter(|value| !value.is_empty());
+        if let Some(terminal) = set(environment.hc_terminal_id) {
+            let bin = set(environment.hc_bin).ok_or(HcBinMissing)?;
+            return Ok(Some(Self::Core {
+                bin: PathBuf::from(bin),
+                terminal,
+            }));
         }
-        let inside = environment::HerdrEnv::new().is_some_and(|value| value.value() == Some("1"));
-        if !inside {
+        if environment.herdr_env.as_deref() != Some("1") {
             return Ok(None);
         }
-        let bin = environment::HerdrBinPath::new()
-            .and_then(|path| path.value().map(PathBuf::from))
-            .unwrap_or_else(|| PathBuf::from("herdr"));
-        let workspace_id = environment::HerdrWorkspaceId::new()
-            .and_then(|id| id.value().map(str::to_owned))
-            .filter(|id| !id.is_empty());
-        Ok(Some(Self::Legacy { bin, workspace_id }))
+        let bin = environment
+            .herdr_bin_path
+            .map_or_else(|| PathBuf::from("herdr"), PathBuf::from);
+        Ok(Some(Self::Legacy {
+            bin,
+            workspace_id: set(environment.herdr_workspace_id),
+        }))
     }
 
     /// The command looked up on `PATH` to drive this herdr, when its
