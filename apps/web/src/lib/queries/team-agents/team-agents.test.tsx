@@ -110,6 +110,7 @@ describe('teamAgentsPollInterval', () => {
       address: null,
       state: 'provisioning' as const,
       failure: null,
+      fakeProvider: true,
     };
     expect(teamAgentsPollInterval([{ ...grace, inbox }])).toBe(3000);
     expect(

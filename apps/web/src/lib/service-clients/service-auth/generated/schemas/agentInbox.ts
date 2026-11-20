@@ -15,6 +15,8 @@ export interface AgentInbox {
   /** Its address, once the provider gave one. */
   address?: AgentInboxAddress;
   failure?: AgentInboxFailureProperty;
+  /** A stand-in provider serves it: no real mail moves. */
+  fakeProvider: boolean;
   /** Where it is. */
   state: AgentInboxState;
 }

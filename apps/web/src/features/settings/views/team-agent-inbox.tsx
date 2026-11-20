@@ -8,7 +8,7 @@ import type {
   TeamAgent,
 } from '@service-auth/team-agents';
 import { Checkbox } from '@ui';
-import { Match, type ParentProps, Switch } from 'solid-js';
+import { Match, type ParentProps, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 
 function failureText(failure: AgentInboxFailure | null | undefined): string {
@@ -98,6 +98,11 @@ export function TeamAgentInbox(props: { teamId: string; agent: TeamAgent }) {
               >
                 {t('teamAgents.inboxCopy')}
               </InboxAction>
+              <Show when={inbox()?.fakeProvider}>
+                <span class="text-ink-extra-muted" data-agent-inbox-fake>
+                  {t('teamAgents.inboxFakeProvider')}
+                </span>
+              </Show>
             </>
           )}
         </Match>

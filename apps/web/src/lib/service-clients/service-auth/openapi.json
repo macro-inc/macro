@@ -7786,7 +7786,7 @@
       "AgentInbox": {
         "type": "object",
         "description": "An agent's inbox, as admins see it.",
-        "required": ["state"],
+        "required": ["state", "fakeProvider"],
         "properties": {
           "address": {
             "type": ["string", "null"],
@@ -7802,6 +7802,10 @@
                 "description": "Why it failed, with [`AgentInboxState::Failed`]."
               }
             ]
+          },
+          "fakeProvider": {
+            "type": "boolean",
+            "description": "A stand-in provider serves it: no real mail moves."
           },
           "state": {
             "$ref": "#/components/schemas/AgentInboxState",
