@@ -66,6 +66,31 @@ fn membership_is_a_bound_only_when_every_match_requires_it() {
     );
 }
 
+#[test]
+fn timeout_detection_includes_membership_in_or_and_not() {
+    let documents = Expr::or(
+        task_membership(),
+        Expr::val(DocumentLiteral::Id(Uuid::from_u128(1))),
+    );
+    assert!(membership::contains_documents(Some(&documents)));
+    assert!(!membership::bounds_documents(Some(&documents)));
+    assert!(membership::contains_documents(Some(&Expr::is_not(
+        documents
+    ))));
+    assert!(!membership::contains_documents(None));
+
+    let initiatives = Expr::or(
+        project_membership(),
+        Expr::val(InitiativeLiteral::NameContains("example".into())),
+    );
+    assert!(membership::contains_initiatives(Some(&initiatives)));
+    assert!(!membership::bounds_initiatives(Some(&initiatives)));
+    assert!(membership::contains_initiatives(Some(&Expr::is_not(
+        initiatives
+    ))));
+    assert!(!membership::contains_initiatives(None));
+}
+
 #[sqlx::test(fixtures("membership.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn membership_preserves_access_and_returns_each_item_once(
     pool: PgPool,

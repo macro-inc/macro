@@ -75,6 +75,33 @@ pub(super) fn bounds_initiatives(expr: Option<&Expr<InitiativeLiteral>>) -> bool
     })
 }
 
+/// Membership work needs a timeout even inside a broader OR or negation.
+pub(super) fn contains_documents(expr: Option<&Expr<DocumentLiteral>>) -> bool {
+    expr.is_some_and(|expr| {
+        document_owner(expr).is_some()
+            || match expr {
+                Expr::And(left, right) | Expr::Or(left, right) => {
+                    contains_documents(Some(left)) || contains_documents(Some(right))
+                }
+                Expr::Not(inner) => contains_documents(Some(inner)),
+                Expr::Literal(_) => false,
+            }
+    })
+}
+
+pub(super) fn contains_initiatives(expr: Option<&Expr<InitiativeLiteral>>) -> bool {
+    expr.is_some_and(|expr| {
+        initiative_owner(expr).is_some()
+            || match expr {
+                Expr::And(left, right) | Expr::Or(left, right) => {
+                    contains_initiatives(Some(left)) || contains_initiatives(Some(right))
+                }
+                Expr::Not(inner) => contains_initiatives(Some(inner)),
+                Expr::Literal(_) => false,
+            }
+    })
+}
+
 fn assigned_ids(owner: &Owner, kind: Option<PropertyEntityType>) -> String {
     let principal = sql_string_literal(&owner.principal_id());
     let entity_type = kind

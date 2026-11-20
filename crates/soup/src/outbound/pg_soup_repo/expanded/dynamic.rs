@@ -3069,6 +3069,10 @@ async fn begin_dynamic_query(
         sqlx::query!("SET LOCAL enable_seqscan = off")
             .execute(&mut *transaction)
             .await?;
+    }
+    if membership::contains_documents(filter.document_filter.as_deref())
+        || membership::contains_initiatives(filter.initiative_filter.as_deref())
+    {
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *transaction)
             .await?;
