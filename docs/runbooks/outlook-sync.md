@@ -45,7 +45,10 @@ later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
 fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
-Messages backed off after their own failures don't count. With the live pass
+Messages backed off after their own failures don't count. Importing folders
+are claimed ahead of finished folders' polls that came due less than five
+minutes earlier, so a walk reads its next page soon after its import has
+room; a poll due longer than that goes first again. With the live pass
 on, the folder's new mail does not wait for its walk
 ([New mail during an import](#new-mail-during-an-import)).
 
