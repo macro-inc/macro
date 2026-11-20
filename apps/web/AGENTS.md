@@ -1451,6 +1451,30 @@ the startup bundle, Lexical nodes, and translated menu labels.
 - `src/features/block-channel`
 - `src/features/block-pdf`
 
+## Whole-page restyle cost
+
+A custom property written on `<html>`, a theme switch, or a root attribute
+restyles every element, so CSS every element must be tested against multiplies
+each of them. The build fails on such selectors (`scripts/costly-selectors.ts`,
+checked in `vite.base.ts`):
+
+- Set `::selection` on the element that defines its colors
+  (`:root::selection`, `.onboarding-flow::selection`); Chrome's highlight
+  inheritance carries it to descendants, and `no-highlight-inheritance` on
+  `<html>` turns on the per-element fallback elsewhere
+  (`core/util/highlightInheritance.ts`). A subtree whose `--color-ink` varies
+  by element (`currentColor`) takes the `selection-root` utility.
+- Give a `… *` walk an ancestor class outside a list: `.x *` or
+  `:where(.x) *`, never `:where(.x *)`, `:where(.a, .b) *`, or Tailwind's
+  `**:` (use `[&_*]:`). One class per `:where()` keeps zero specificity.
+
+To measure, write `--probe` on `document.documentElement.style` in a
+`requestAnimationFrame` and time `document.body.offsetHeight` right after;
+on a 1,800-element channel this was 27 ms before these rules were rescoped and
+10 ms after (dev build, Chrome). In a Performance trace the same restyle is
+one `UpdateLayoutTree` whose `elementCount` doubles when a `::selection`
+rule matches every element.
+
 ## PDF markup
 
 Keep the signature canvas backing bitmap aligned with its CSS size and device
