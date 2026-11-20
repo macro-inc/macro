@@ -353,6 +353,7 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
     let (s, _, a, team, company) = fixture(&pool).await;
     let idle = create(&s, team, PipelineRecordType::Company).await;
     let busy = create(&s, team, PipelineRecordType::Company).await;
+    let contended = create(&s, team, PipelineRecordType::Company).await;
     let generic = s
         .create(
             team_receipt(team, OWNER),
@@ -384,6 +385,7 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
         .cloned();
     forget_declined(&pool, &idle).await;
     forget_declined(&pool, &busy).await;
+    forget_declined(&pool, &contended).await;
     let (labels, stale) = outcome_options(&s, &a, &idle).await;
     assert_eq!(labels, ["Open", "Won", "Lost"]);
     let generic_version = s
@@ -393,7 +395,9 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
         .table
         .version;
 
-    // A pipeline read holds its row, so the migration passes it by.
+    // A pipeline read holds its row, so the migration passes it by. Another
+    // holds its Outcome's definition, so adding the option would wait: the
+    // migration gives up on that pipeline after its lock timeout and goes on.
     let mut reader = pool.begin().await.unwrap();
     sqlx::query!(
         "SELECT id FROM crm_pipeline_entities WHERE id = $1 FOR SHARE",
@@ -402,8 +406,18 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
     .fetch_one(&mut *reader)
     .await
     .unwrap();
+    let mut holder = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT d.id FROM property_definitions d JOIN database_columns c ON c.property_definition_id = d.id
+         WHERE c.id = $1 FOR UPDATE OF d",
+        contended.commercial_fields.outcome.unwrap().into_uuid(),
+    )
+    .fetch_one(&mut *holder)
+    .await
+    .unwrap();
     run_declined_migration(&pool).await;
     reader.rollback().await.unwrap();
+    holder.rollback().await.unwrap();
 
     let (labels, version) = outcome_options(&s, &a, &idle).await;
     assert_eq!(labels, ["Open", "Won", "Lost", "Declined"]);
@@ -429,10 +443,12 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
         .await
         .unwrap();
     assert_eq!(entry[0].cells.get(&outcome).cloned(), won);
-    assert_eq!(
-        outcome_options(&s, &a, &busy).await.0,
-        ["Open", "Won", "Lost"]
-    );
+    for skipped in [&busy, &contended] {
+        assert_eq!(
+            outcome_options(&s, &a, skipped).await.0,
+            ["Open", "Won", "Lost"]
+        );
+    }
     assert_eq!(
         s.table(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
             .await
@@ -442,12 +458,14 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
         generic_version
     );
 
-    // A rerun reaches the pipeline it passed by and leaves the others alone.
+    // A rerun reaches the pipelines it passed by and leaves the others alone.
     run_declined_migration(&pool).await;
-    assert_eq!(
-        outcome_options(&s, &a, &busy).await.0,
-        ["Open", "Won", "Lost", "Declined"]
-    );
+    for skipped in [&busy, &contended] {
+        assert_eq!(
+            outcome_options(&s, &a, skipped).await.0,
+            ["Open", "Won", "Lost", "Declined"]
+        );
+    }
     assert_eq!(
         outcome_options(&s, &a, &idle).await,
         (
