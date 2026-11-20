@@ -433,7 +433,7 @@ fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<Stri
             service,
             id: call,
             ..
-        } if call == id => Some(format!("mcp__{service}__{name}")),
+        } if call == id => Some(mcp_toolset::mangle(service, name)),
         _ => None,
     })
 }
