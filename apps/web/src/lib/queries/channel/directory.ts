@@ -75,6 +75,7 @@ import {
   returnedChannelIds,
 } from './directory-reconcile';
 import { channelKeys } from './keys';
+import { isLaterView, stampCachedChannelView } from './viewed-at';
 
 // The server answers a by-id read of at most this many channels in one page.
 const BY_ID_BATCH = 100;
@@ -128,6 +129,9 @@ export type ChannelDirectory = {
    * network's pages failed too. */
   failed: Accessor<boolean>;
   retry: () => void;
+  /** Shows a view the viewer just recorded on the channel from now on. No
+   * soup update carries it, and a read older than it never moves it back. */
+  recordView: (channelId: string, viewedAt: string) => void;
 };
 
 export const EMPTY_CHANNEL_DIRECTORY_STATE: ChannelDirectoryState = {
@@ -204,6 +208,73 @@ export function channelDirectoryState(
   const incomplete: Record<string, true> = {};
   for (const id of incompleteIds) incomplete[id] = true;
   return { records, joined, incomplete, complete };
+}
+
+/**
+ * The views the viewer recorded while the directory ran, laid over every
+ * record it reads: the cache's, a by-id read's or a network page's, which may
+ * have been read before the view. A record with a later view shows its own.
+ */
+function createViewStamps() {
+  const [stamps, setStamps] = createSignal<Readonly<Record<string, string>>>(
+    {}
+  );
+  // One copy per record read, so a state recomputed over the same records
+  // keeps its channels' identity.
+  const copies = new WeakMap<DirectoryChannel, DirectoryChannel>();
+  const stamped = (channel: DirectoryChannel, viewedAt: string) => {
+    const copy = copies.get(channel);
+    if (copy?.viewedAt === viewedAt) return copy;
+    const next = { ...channel, viewedAt };
+    copies.set(channel, next);
+    return next;
+  };
+  const later = (
+    channel: DirectoryChannel,
+    current: Readonly<Record<string, string>>
+  ) => {
+    const viewedAt = current[channel.id];
+    return viewedAt !== undefined && isLaterView(channel.viewedAt, viewedAt)
+      ? stamped(channel, viewedAt)
+      : channel;
+  };
+  return {
+    stamps,
+    /** False when the directory already shows a view as late. */
+    record(channelId: string, viewedAt: string) {
+      const current = untrack(stamps)[channelId];
+      if (current !== undefined && !isLaterView(current, viewedAt))
+        return false;
+      setStamps((previous) => ({ ...previous, [channelId]: viewedAt }));
+      return true;
+    },
+    apply(state: ChannelDirectoryState): ChannelDirectoryState {
+      const current = stamps();
+      let records: Record<string, DirectoryChannel> | undefined;
+      for (const id of Object.keys(current)) {
+        const channel = state.records[id];
+        if (!channel) continue;
+        const next = later(channel, current);
+        if (next === channel) continue;
+        records ??= { ...state.records };
+        records[id] = next;
+      }
+      if (!records) return state;
+      const stampedRecords = records;
+      return {
+        ...state,
+        records: stampedRecords,
+        joined: state.joined.map(
+          (channel) => stampedRecords[channel.id] ?? channel
+        ),
+      };
+    },
+    applyList(channels: readonly DirectoryChannel[]) {
+      const current = untrack(stamps);
+      if (Object.keys(current).length === 0) return channels;
+      return channels.map((channel) => later(channel, current));
+    },
+  };
 }
 
 function sameState(a: ChannelDirectoryState, b: ChannelDirectoryState) {
@@ -528,6 +599,8 @@ type CachedDirectoryDeps = {
   fetchAll: () => Promise<readonly DirectoryChannel[]>;
   /** Every joined channel, paged from the network now, for the fallback. */
   pageAll: (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>;
+  /** Writes a recorded view onto the channel's cached record. */
+  stampView: (channelId: string, viewedAt: string) => Promise<boolean>;
 };
 
 /** The joined channels paged from the network once the channel lane gave
@@ -611,6 +684,11 @@ export function createCachedChannelDirectory(
   const { host, userId } = deps;
   const index = createChannelDirectoryIndex(host);
   const [state, setState] = createSignal(EMPTY_CHANNEL_DIRECTORY_STATE);
+  const views = createViewStamps();
+  const view = createMemo(() => views.apply(state()));
+  // Cached records older than a recorded view that the view was written
+  // over again: a soup page read before the view can overwrite it.
+  const restamped = new WeakSet<DirectoryChannel>();
   const [fallback, setFallback] = createSignal<LaneFallback>({
     status: 'idle',
   });
@@ -689,9 +767,28 @@ export function createCachedChannelDirectory(
     setFallback({ status: 'idle' });
   };
 
+  const stampView = (channelId: string, viewedAt: string) =>
+    fireAndForget(deps.stampView(channelId, viewedAt), 'channel-view-stamp');
+
+  /** Writes each recorded view again over a cached record older than it,
+   * once per record read. */
+  const restampOlderRecords = (read: ChannelDirectoryRead) => {
+    const stamps = Object.entries(untrack(views.stamps));
+    if (stamps.length === 0) return;
+    const records = recordsById(read);
+    for (const [id, viewedAt] of stamps) {
+      const record = records.get(id);
+      if (!record || !isLaterView(record.viewedAt, viewedAt)) continue;
+      if (restamped.has(record)) continue;
+      restamped.add(record);
+      stampView(id, viewedAt);
+    }
+  };
+
   const publish = (read: ChannelDirectoryRead) => {
     lastRead = read;
     observe(read);
+    restampOlderRecords(read);
     // A finished pass reconciled the cache: it answers alone again.
     if (lane.complete) stopFallback();
     const network = untrack(fallback);
@@ -858,23 +955,26 @@ export function createCachedChannelDirectory(
   refreshNow();
 
   return {
-    channels: () => state().joined,
-    complete: () => state().complete,
+    channels: () => view().joined,
+    complete: () => view().complete,
     lookup(channelId) {
-      const result = lookupChannel(state(), reader.outcomes(), channelId);
+      const result = lookupChannel(view(), reader.outcomes(), channelId);
       if (result.status === 'pending') reader.request(channelId);
       return result;
     },
     async readComplete() {
-      const current = untrack(state);
+      const current = untrack(view);
       if (current.complete) return current.joined;
-      return deps.fetchAll();
+      return views.applyList(await deps.fetchAll());
     },
     failed: () => !state().complete && fallback().status === 'failed',
     retry() {
       if (untrack(fallback).status !== 'failed') return;
       setFallback({ status: 'idle' });
       startFallback();
+    },
+    recordView(channelId, viewedAt) {
+      if (views.record(channelId, viewedAt)) stampView(channelId, viewedAt);
     },
   };
 }
@@ -908,13 +1008,15 @@ export function createMemoryChannelDirectory(
     return { returned: new Set(channels.map(({ id }) => id)) };
   });
 
-  const state = createMemo((): ChannelDirectoryState => {
+  const views = createViewStamps();
+  const read = createMemo((): ChannelDirectoryState => {
     // Raw rows: walking them through the store creates a signal per field.
     if (queryReadyGate(pages))
       return channelDirectoryState(unwrap(pages.data), [], true);
     // The channels read by id stand in until every page has loaded.
     return channelDirectoryState(Object.values(overlay()), [], false);
   });
+  const state = createMemo(() => views.apply(read()));
 
   return {
     channels: () => state().joined,
@@ -926,10 +1028,15 @@ export function createMemoryChannelDirectory(
     },
     async readComplete() {
       const channels = await deps.queryClient.fetchQuery(options());
-      return channels.filter(({ isParticipant }) => isParticipant);
+      return views.applyList(
+        channels.filter(({ isParticipant }) => isParticipant)
+      );
     },
     failed: () => pages.isError && !pages.isFetching,
     retry: () => fireAndForget(pages.refetch(), 'channel-directory'),
+    recordView(channelId, viewedAt) {
+      views.record(channelId, viewedAt);
+    },
   };
 }
 
@@ -941,6 +1048,7 @@ export const EMPTY_CHANNEL_DIRECTORY: ChannelDirectory = {
   readComplete: async () => [],
   failed: () => false,
   retry: () => {},
+  recordView: () => {},
 };
 
 /** A complete directory of `channels`, which may change, for tests and
@@ -956,6 +1064,7 @@ export function staticChannelDirectory(
     readComplete: async () => untrack(state).joined,
     failed: () => false,
     retry: () => {},
+    recordView: () => {},
   };
 }
 
@@ -1009,6 +1118,8 @@ export function createAppChannelDirectory(): ChannelDirectory {
         );
         return channels.filter(({ isParticipant }) => isParticipant);
       },
+      stampView: (channelId, viewedAt) =>
+        stampCachedChannelView(cache, channelId, viewedAt),
     });
   });
   return {
@@ -1018,5 +1129,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
     readComplete: () => untrack(directory).readComplete(),
     failed: () => directory().failed(),
     retry: () => untrack(directory).retry(),
+    recordView: (channelId, viewedAt) =>
+      untrack(directory).recordView(channelId, viewedAt),
   };
 }

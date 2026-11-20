@@ -26,6 +26,7 @@ vi.mock('@core/context/channels', async (importOriginal) => ({
     readComplete: mocks.readComplete,
     failed: () => false,
     retry: () => {},
+    recordView: () => {},
   }),
 }));
 vi.mock('@core/context/user', () => ({

@@ -47,6 +47,7 @@ function fillingDirectory() {
     readComplete: async () => state().joined,
     failed: () => false,
     retry: () => {},
+    recordView: () => {},
   };
   return {
     directory,

@@ -44,9 +44,15 @@ import type { DirectoryChannel } from './directory-core';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
 import { directoryChannel } from './tests/directory-channel';
 import { channelRecord, fakeChannelCache } from './tests/directory-fixtures';
+import { stampCachedChannelView } from './viewed-at';
 
 const VIEWER = 'macro|viewer@example.com';
 const PAGE_SIZE = 2;
+// Views, in order.
+const VIEWED_0 = '2026-11-20T10:00:00Z';
+const VIEWED_1 = '2026-11-20T11:00:00Z';
+const VIEWED_2 = '2026-11-20T12:00:00Z';
+const VIEWED_3 = '2026-11-20T13:00:00Z';
 
 const disposers: (() => void)[] = [];
 beforeEach(() => {
@@ -140,6 +146,12 @@ function fakeClient(
 
 const ids = (channels: readonly DirectoryChannel[]) =>
   channels.map(({ id }) => id);
+
+/** The view a lookup shows, or its status when it found nothing. */
+function viewedAt(directory: ChannelDirectory, channelId: string) {
+  const lookup = directory.lookup(channelId);
+  return lookup.status === 'loaded' ? lookup.channel.viewedAt : lookup.status;
+}
 
 describe('lookupChannel', () => {
   const joined = directoryChannel('joined');
@@ -315,6 +327,46 @@ describe('in-memory channel directory', () => {
 
     expect(ids(await directory.readComplete())).toEqual(['a', 'b', 'c']);
   });
+
+  it('shows a recorded view over the by-id read and the pages read before it', async () => {
+    const network = fakeNetwork([channelRecord('a', { viewedAt: VIEWED_0 })], {
+      holdPages: true,
+    });
+    const directory = mountMemoryDirectory(network);
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
+
+    directory.recordView('a', VIEWED_2);
+    expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
+
+    network.release();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
+    expect((await directory.readComplete())[0]?.viewedAt).toBe(VIEWED_2);
+
+    directory.recordView('a', VIEWED_1);
+    expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
+  });
+
+  it('keeps a recorded view through a refetch that read an older one', async () => {
+    const channels = [channelRecord('a', { viewedAt: VIEWED_0 })];
+    const network = fakeNetwork(channels);
+    const directory = mountMemoryDirectory(network);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    directory.recordView('a', VIEWED_2);
+
+    const before = network.inputs.length;
+    directory.retry();
+    await vi.waitFor(() =>
+      expect(network.inputs.length).toBeGreaterThan(before)
+    );
+    await new Promise((done) => setTimeout(done, 20));
+    expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
+
+    // A later view from elsewhere shows as the server returns it.
+    channels[0] = channelRecord('a', { viewedAt: VIEWED_3 });
+    directory.retry();
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_3));
+  });
 });
 
 type CachedDirectoryOptions = {
@@ -326,6 +378,8 @@ type CachedDirectoryOptions = {
   /** Ids a by-id read returns without a readable record. */
   unreadable?: readonly string[];
 };
+
+const CACHE_SESSION = 'session-1';
 
 /** Mounts the cached directory over a fake cache whose by-id reads land the
  * named records from `server`. The viewer and storage generation it reports
@@ -379,6 +433,9 @@ function mountCachedDirectory(
   );
   const fetchAll = vi.fn(options.fetchAll ?? (async () => []));
   const pageAll = vi.fn(options.pageAll ?? (async () => []));
+  const stampView = vi.fn((channelId: string, viewedAt: string) =>
+    stampCachedChannelView(host, channelId, viewedAt, CACHE_SESSION)
+  );
   const directory = createRoot((dispose) => {
     disposers.push(dispose);
     return createCachedChannelDirectory({
@@ -387,6 +444,7 @@ function mountCachedDirectory(
       hydrate,
       fetchAll,
       pageAll,
+      stampView,
     });
   });
   return {
@@ -396,6 +454,13 @@ function mountCachedDirectory(
     hydrate,
     fetchAll,
     pageAll,
+    stampView,
+    /** The view the cached record holds. */
+    cachedViewedAt(channelId: string) {
+      return (
+        cache.records.get(`GraphqlSoupChannel:${channelId}`)?.record ?? {}
+      ).viewedAt;
+    },
     /** Holds every listing's answer until the returned release is called. */
     holdListings() {
       let release!: () => void;
@@ -724,6 +789,57 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(directory.failed()).toBe(false);
     expect(ids(directory.channels())).toEqual(['a']);
+  });
+
+  it('shows a recorded view at once and writes it onto the cached record', async () => {
+    const { cache, cachedViewedAt, directory } = mountCachedDirectory([]);
+    cache.put(channelRecord('a', { viewedAt: VIEWED_0 }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
+
+    directory.recordView('a', VIEWED_2);
+    expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
+    await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));
+    expect(ids(await directory.readComplete())).toEqual(['a']);
+    expect((await directory.readComplete())[0]?.viewedAt).toBe(VIEWED_2);
+  });
+
+  it('writes a recorded view again over an older record that replaced it', async () => {
+    const { cache, cachedViewedAt, directory, reopen, stampView } =
+      mountCachedDirectory([]);
+    cache.put(channelRecord('a', { viewedAt: VIEWED_0 }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
+    directory.recordView('a', VIEWED_2);
+    await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));
+
+    // A soup page read before the view lands after it.
+    cache.put(channelRecord('a', { viewedAt: VIEWED_0, name: 'renamed' }), {
+      sourceHash: 'a-older',
+    });
+    reopen();
+    await vi.waitFor(() =>
+      expect(directory.lookup('a')).toMatchObject({
+        channel: { name: 'renamed', viewedAt: VIEWED_2 },
+      })
+    );
+    await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));
+
+    // Once over each older record: the write it made reads back later.
+    const writes = stampView.mock.calls.length;
+    reopen();
+    await new Promise((done) => setTimeout(done, 50));
+    expect(stampView).toHaveBeenCalledTimes(writes);
+  });
+
+  it('shows and writes a view recorded before the channel was cached', async () => {
+    const server = [channelRecord('a', { viewedAt: VIEWED_0 })];
+    const { cachedViewedAt, directory } = mountCachedDirectory(server);
+
+    directory.recordView('a', VIEWED_2);
+    // The lane has not reached it; its by-id read lands the older record.
+    await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_2));
+    await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));
   });
 
   it("answers nothing from another viewer's cache", async () => {

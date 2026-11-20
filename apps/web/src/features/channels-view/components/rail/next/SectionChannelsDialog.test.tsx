@@ -39,6 +39,7 @@ function coldDirectory(channels: readonly DirectoryChannel[]) {
     readComplete: () => new Promise(() => {}),
     failed: () => false,
     retry: () => {},
+    recordView: () => {},
   };
   return { directory, setListed };
 }

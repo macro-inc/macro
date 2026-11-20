@@ -4,7 +4,6 @@ import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { recordChannelActivity } from '@service-storage/graphql-channel-activity';
-import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { scheduleIdle } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -15,8 +14,8 @@ import {
   type QueryAccount,
 } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
+import type { ChannelDirectory } from './directory';
 import { channelKeys } from './keys';
-import { stampCachedChannelView, stampMemoryChannelView } from './viewed-at';
 
 export function channelActivityQueryOptions(
   account: QueryAccount | undefined,
@@ -53,7 +52,15 @@ function upsertChannelActivity(
   return list.map((row, i) => (i === index ? activity : row));
 }
 
-async function recordChannelView(channelId: string, account: QueryAccount) {
+type PendingChannelView = {
+  account: QueryAccount;
+  directory: Pick<ChannelDirectory, 'recordView'>;
+};
+
+async function recordChannelView(
+  channelId: string,
+  { account, directory }: PendingChannelView
+) {
   if (!isCurrentQueryAccount(account)) return;
   const activity = await recordChannelActivity({
     channelId,
@@ -65,24 +72,19 @@ async function recordChannelView(channelId: string, account: QueryAccount) {
     channelKeys.activity(account.userId).queryKey,
     (list) => list && upsertChannelActivity(list, activity)
   );
-  const viewedAt = activity.viewed_at;
-  if (!viewedAt) return;
   // The directory reads views from the channel record, which no soup update
   // carries for the viewer's own view.
-  stampMemoryChannelView(queryClient, account.userId, channelId, viewedAt);
-  const host = getGraphqlSoupCacheHost();
-  if (host && !host.disabled)
-    await stampCachedChannelView(host, channelId, viewedAt);
+  if (activity.viewed_at) directory.recordView(channelId, activity.viewed_at);
 }
 
 /** Idle callbacks wait at most this long behind a busy main thread. */
 const CHANNEL_VIEW_MAX_WAIT_MS = 2_000;
-const pendingChannelViews = new Map<string, QueryAccount>();
+const pendingChannelViews = new Map<string, PendingChannelView>();
 // Module scope, so a view recorded as its channel unmounts still lands.
 const flushChannelViews = scheduleIdle(() => {
-  for (const [channelId, account] of pendingChannelViews) {
+  for (const [channelId, pending] of pendingChannelViews) {
     fireAndForget(
-      recordChannelView(channelId, account),
+      recordChannelView(channelId, pending),
       'channel-view-activity'
     );
   }
@@ -94,11 +96,14 @@ const flushChannelViews = scheduleIdle(() => {
  * makes the normalized cache refetch every GraphQL read still in flight, and a
  * channel switch starts the next channel's detail read, so a write sent with
  * the open costs that read twice. Views of one channel that are still pending
- * share a request.
+ * share a request. The recorded view shows on the channel in `directory`.
  */
-export function recordChannelViewWhenIdle(channelId: string) {
+export function recordChannelViewWhenIdle(
+  channelId: string,
+  directory: Pick<ChannelDirectory, 'recordView'>
+) {
   const account = currentQueryAccount();
   if (!account) return;
-  pendingChannelViews.set(channelId, account);
+  pendingChannelViews.set(channelId, { account, directory });
   flushChannelViews();
 }

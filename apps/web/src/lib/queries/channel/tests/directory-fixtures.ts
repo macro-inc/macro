@@ -75,6 +75,10 @@ export function restChannel(
   } as ApiChannelWithLatest;
 }
 
+type SoupUpdateWrite = {
+  soupUpdates?: { item?: { __typename?: string; id?: string } }[];
+};
+
 type StoredRecord = {
   record: ChannelDirectoryFieldsFragment | Record<string, unknown>;
   sourceHash: string;
@@ -89,6 +93,7 @@ type StoredRecord = {
  */
 export function fakeChannelCache() {
   const records = new Map<string, StoredRecord>();
+  let writes = 0;
   const host = {
     search: vi.fn(async (args: SearchCacheArgs): Promise<SearchCachePage> => {
       const sorted = [...records]
@@ -134,6 +139,28 @@ export function fakeChannelCache() {
         }),
       })
     ),
+    /** Merges each soup update's fields into the record it names, as the
+     * engine's normalized write does, under a new source hash. */
+    writeQuery: vi.fn<CacheHost['writeQuery']>(async ({ data }) => {
+      for (const { item } of (data as SoupUpdateWrite).soupUpdates ?? []) {
+        const recordKey = `${item?.__typename}:${item?.id}`;
+        const stored = records.get(recordKey);
+        if (!item || !stored) continue;
+        writes += 1;
+        records.set(recordKey, {
+          ...stored,
+          record: { ...stored.record, ...item },
+          sourceHash: `${stored.sourceHash}+w${writes}`,
+        });
+      }
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
+    }),
   };
 
   return {

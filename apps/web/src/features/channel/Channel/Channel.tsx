@@ -46,6 +46,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
+  useChannelDirectory,
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
@@ -330,6 +331,7 @@ export function Channel(props: ChannelProps) {
   }));
 
   const channel = useChannel(props.channelId);
+  const directory = useChannelDirectory();
 
   // One view on entry, after the first page and away from the open's own
   // requests, and one on leaving. The channel remounts per id, so cleanup
@@ -342,12 +344,12 @@ export function Channel(props: ChannelProps) {
         // The panel hides what's new in the channel, so it hasn't been seen.
         if (callPanel || !loaded || entryViewRecorded) return;
         entryViewRecorded = true;
-        recordChannelViewWhenIdle(props.channelId);
+        recordChannelViewWhenIdle(props.channelId, directory);
       }
     )
   );
   onCleanup(() => {
-    if (!callPanel) recordChannelViewWhenIdle(props.channelId);
+    if (!callPanel) recordChannelViewWhenIdle(props.channelId, directory);
   });
 
   // Rows newer than the call are the channel's, not the call's.

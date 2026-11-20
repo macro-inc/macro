@@ -1389,9 +1389,14 @@ finishes later makes the cache answer alone again. `failed()` says the
 directory is not complete and that read failed; `retry()` reads again. Channel writes outside the cache's soup updates (join
 links, renames, new DMs) call `refreshChannelDirectory`, which rereads the
 in-memory directory, reading again after a first read that was already in
-flight. The viewer's own views reach no soup update, so a recorded view stamps
-the channel's `viewedAt` on its cached record and the in-memory directory
-(`queries/channel/viewed-at.ts`), never moving it back. A channel mention in
+flight. The viewer's own views reach no soup update, so the channel view
+hands each recorded view to the directory (`recordView`). The directory lays
+it over every record it reads for the rest of its life, so a page, a by-id read
+or a refetch read before the view never shows an older one. The cached
+directory also writes it onto the channel's cached record
+(`queries/channel/viewed-at.ts`, one stamp of a channel at a time, never
+moving it back), once the record exists, and again over a later record that
+holds an older view. A channel mention in
 rendered Markdown waits up to five seconds for a pending lookup.
 
 ## Authoritative Mail membership repair
