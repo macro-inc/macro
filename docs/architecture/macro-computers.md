@@ -580,7 +580,7 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   it overlaps the next waits), `computer.setup.create` (conversion → guest
   booting, including outbox and capacity waits), `computer.setup.boot` (→ first macrod connection) and the total
   `computer.setup`; for an agent teammate also `computer.setup.agent_handoff`
-  (→ the agent handed over) and `computer.setup.agent_start` (→ the agent
+  (→ macrod took the agent, `Event::AgentDelivered` from the finished hand-off) and `computer.setup.agent_start` (→ the agent
   online). Work parents under the purchase for the whole first start
   (`ComputerState::first_start`), so the hand-off joins the setup trace. They carry `computer_id`, `team_id`, `size`, `host_id`,
   `generation`, `billing_kind` and `capacity_waited`. A rolled-back

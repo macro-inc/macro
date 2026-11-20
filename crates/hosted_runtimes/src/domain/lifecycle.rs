@@ -705,6 +705,9 @@ pub fn transition(
             next.awaiting_agent = false;
         }
 
+        // Only timed: see `SetupTimeline::advance_agent`.
+        Event::AgentDelivered => {}
+
         Event::AgentRedeliver => {
             if state.awaiting_agent
                 && state.macrod_connected

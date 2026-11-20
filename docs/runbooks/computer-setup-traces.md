@@ -23,7 +23,7 @@ an agent teammate lasts until the agent reports online ([Macro computers: Observ
 | `computer.macrod.connected` | agent_harness_service | The first connection being recorded. |
 | `computer.setup` | agent_harness_service | Total, reservation until macrod first connected. |
 | `run_enroll`, `macrod.enroll.claim` | macrod | Guest-side detail, exported to the enrollment's telemetry intake (`Deployment.telemetry_url`). |
-| `computer.setup.agent_handoff` | agent_harness_service | Agent teammate: macrod connected until the agent is handed over (waits for the charge to settle). |
+| `computer.setup.agent_handoff` | agent_harness_service | Agent teammate: macrod connected until macrod took the agent (the queued hand-off ran; waits for the charge to settle). |
 | `computer.agent.deliver` → `computers.agent_enrollment.issue` | agent_harness_service, authentication_service | The hand-off: the agent's environment issued and sent down macrod's socket. |
 | `macrod.agent.apply` | macrod | macrod staging the environment (and the setup `traceparent`) for the guest. |
 | `computer.setup.agent_start` | agent_harness_service | Hand-off until the agent reports online: guest install, `start-agent` (clone, lock check), the runtime's start. |

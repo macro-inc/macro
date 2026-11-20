@@ -144,9 +144,7 @@ impl PgComputerRepo {
         }
         let agent = crate::domain::setup::AgentProgress {
             reported_online: matches!(event, Event::AgentOnline),
-            delivering: effects
-                .iter()
-                .any(|effect| matches!(effect, Effect::DeliverAgent)),
+            delivered: matches!(event, Event::AgentDelivered),
         };
         Self::store_effects(tx, computer_id, effects, now).await?;
 
