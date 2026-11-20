@@ -161,6 +161,16 @@
                         | select(.key | test("^(password|master_password|secret_string|secret_binary|value_wo)$")) | .key ]
                     | if length == 0 then true else error("secret-bearing config: \(.)") end
                   ' ${configs.${name}} >/dev/null
+                  # EC2 accepts only these characters in security group and rule
+                  # descriptions, and says so only at apply.
+                  jq -e '
+                    [ .resource // {} | to_entries[]
+                      | select(.key | test("^aws_(security_group|vpc_security_group_(ingress|egress)_rule|security_group_rule)$"))
+                      | .value | to_entries[]
+                      | select((.value.description // "") | test("\\A[a-zA-Z0-9. _:/()#,@\\[\\]+=&;{}!$*-]{0,255}\\z") | not)
+                      | .key ]
+                    | if length == 0 then true else error("security group descriptions EC2 rejects: \(.)") end
+                  ' ${configs.${name}} >/dev/null
                   mkdir ${name}
                   cp ${configs.${name}} ${name}/config.tf.json
                   tofu -chdir=${name} init -backend=false -input=false -no-color >/dev/null
