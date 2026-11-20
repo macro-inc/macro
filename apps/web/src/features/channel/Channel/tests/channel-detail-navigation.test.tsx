@@ -39,6 +39,7 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   openChatWithAgent: vi.fn(),
+  AskMacroButton: () => null,
 }));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({
   ChannelAttachmentsTab: () => null,

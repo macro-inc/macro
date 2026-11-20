@@ -243,7 +243,10 @@ moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
 
-Company and contact headers group `Copy link` separately from the side-panel toggle.
+Company and contact headers group `Ask Macro` and `Copy link` separately from the
+side-panel toggle, in Customers and in a standalone company or contact split.
+`Ask Macro` appears once the record has loaded and opens an agent chat with the
+company or contact mentioned.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its

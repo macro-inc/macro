@@ -227,12 +227,11 @@ export function TopBar(props: {
               size="sm"
               class="gap-1.5 touch:px-2 touch:text-xs"
               disabled={props.openingChat}
-              aria-label="Database AI"
               aria-busy={props.openingChat}
               onClick={props.onOpenChat}
             >
               <SparkleIcon class="size-4" />
-              <span>AI</span>
+              <span>{t('entityActions.askMacro')}</span>
             </ButtonGroup.Button>
           </HeaderActionGroup>
         </SplitHeaderRight>

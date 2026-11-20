@@ -4,7 +4,10 @@ import {
   CompanyTabs,
   CompanyVisibilityButton,
 } from '@app/features/crm/crm-company';
-import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
+import {
+  CrmAskMacroButton,
+  CrmCopyLinkButton,
+} from '@app/features/crm/crm-link';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -63,6 +66,7 @@ export function CompanyBlockAdapter() {
         <SplitHeaderRight>
           <HeaderIsland class="p-0">
             <HeaderActionGroup label="Company actions">
+              <CrmAskMacroButton grouped type="company" id={companyId} />
               <CrmCopyLinkButton grouped type="company" id={companyId} />
               <CompanyVisibilityButton grouped companyId={companyId} />
             </HeaderActionGroup>

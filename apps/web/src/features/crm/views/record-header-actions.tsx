@@ -5,6 +5,7 @@ import type { CrmRecordRef } from '../core/record';
 import { CompanyVisibilityButton } from './company-visibility-button';
 import { ContactVisibilityButton } from './contact-visibility-button';
 import { CrmCopyLinkButton } from './copy-link-button';
+import { RecordAskMacroButton } from './record-ask-macro-button';
 
 export function RecordHeaderActions(props: { record: CrmRecordRef }) {
   return (
@@ -16,6 +17,7 @@ export function RecordHeaderActions(props: { record: CrmRecordRef }) {
             : 'Company actions'
         }
       >
+        <RecordAskMacroButton grouped record={props.record} />
         <CrmCopyLinkButton
           grouped
           type={props.record.type}

@@ -31,7 +31,11 @@ import type {
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { PipelineEntryRecord } from '../core/pipeline-entry';
-import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
+import type {
+  CrmRecordRef,
+  CrmRecordScope,
+  CrmTaskRecord,
+} from '../core/record';
 import type {
   BlockedDomainsSource,
   CompanyContactsFilter,
@@ -108,6 +112,8 @@ export type CrmContext = {
     type: 'company' | 'contact';
     id: string;
   }): Promise<boolean>;
+  /** Starts an agent chat with the record mentioned. */
+  askMacro(record: CrmRecordRef): void;
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(

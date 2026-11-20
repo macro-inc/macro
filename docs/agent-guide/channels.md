@@ -1839,9 +1839,10 @@ cancellation, and focus restoration before sending invites.
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
 `Invite` and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. `Ask Macro` lives in the channel
-title menu (the `...` after the name, or the split title's menu) on every
-platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
+live-phone-call exceptions described above. On desktop, `Ask Macro` is a
+button in the channel top bar's action group, before `Call`; on touch it lives
+in the channel title menu. Both platforms also offer it in the title menu (the
+`...` after the name, or the split title's menu). On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists

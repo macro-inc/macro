@@ -32,8 +32,9 @@ export function FigHeader(props: FigHeaderProps) {
         <SplitPermissionsBadge />
       </SplitHeaderRight>
       <BlockToolbar
+        tools={[actions.askMacro]}
         trailing={<ShareTrigger onClick={props.openShare} />}
-        menuTools={[actions.share]}
+        menuTools={[actions.askMacro, actions.share]}
         ops={ops}
         id={documentId}
         itemType="document"

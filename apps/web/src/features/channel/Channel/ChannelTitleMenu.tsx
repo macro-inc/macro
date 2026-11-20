@@ -67,8 +67,8 @@ const DEFAULT_TRIGGER_PROPS = {
  * The conversation's entity actions behind the same ellipsis a document's
  * title menu uses. The actions match the channel's row in the rail, so
  * favoriting, muting or renaming a conversation does not depend on finding
- * that row. It also offers Ask Macro, which would otherwise take a top bar
- * button.
+ * that row. It also offers Ask Macro, which the touch top bar has no room
+ * for as a button.
  *
  * Owned by the channel top bar rather than by each of its hosts: the menu
  * resolves the conversation from its id, so a surface that opens a channel

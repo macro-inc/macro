@@ -3,6 +3,7 @@ import { openAgentComposer } from '@app/features/agents-view/primitives/open-com
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { BlockTool } from '@components/app/block-tool';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import {
@@ -32,6 +33,8 @@ type ChatWithAgentEntity =
   | { type: 'project'; id: string; name: string }
   | { type: 'chat'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType }
+  | { type: 'company'; id: string; name: string }
+  | { type: 'contact'; id: string; name: string }
   | { type: 'pr'; id: string; url: string };
 
 type ChatWithAgentAttachment = Exclude<ChatWithAgentEntity, { type: 'pr' }>;
@@ -233,4 +236,16 @@ export function AskMacroButton(props: {
       }
     />
   );
+}
+
+/** Ask Macro as a block header tool: a toolbar button and a title menu row. */
+export function askMacroTool(entity: () => ChatWithAgentEntity): BlockTool {
+  return {
+    label: () => t('entityActions.askMacro'),
+    icon: AgentIcon,
+    action: () => fireAndForget(openChatWithAgent(entity()), 'ask-macro-tool'),
+    buttonComponent: (control) => (
+      <AskMacroButton grouped={control.grouped} entity={entity()} />
+    ),
+  };
 }
