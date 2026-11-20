@@ -18,6 +18,8 @@ struct FakeAccessExpander {
     fail: bool,
     calls: Arc<AtomicUsize>,
     entities: Arc<Mutex<Vec<Entity<'static>>>>,
+    /// Channels whose members were read now, in call order.
+    member_reads: Arc<Mutex<Vec<String>>>,
 }
 
 impl UserAccessExpander for FakeAccessExpander {
@@ -37,6 +39,21 @@ impl UserAccessExpander for FakeAccessExpander {
                 entities: entities.to_vec(),
                 users: self.users.clone(),
             }])
+        }
+    }
+
+    async fn current_channel_members(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.member_reads
+            .lock()
+            .expect("member reads lock")
+            .push(channel_id.to_string());
+        if self.fail {
+            Err(rootcause::report!("members unavailable"))
+        } else {
+            Ok(self.users.clone())
         }
     }
 }
@@ -62,6 +79,17 @@ impl UserAccessExpander for PerEntityAccessExpander {
                 })
             })
             .collect())
+    }
+
+    async fn current_channel_members(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(self
+            .users_by_entity
+            .get(&channel(channel_id))
+            .cloned()
+            .unwrap_or_default())
     }
 }
 
@@ -130,6 +158,7 @@ fn gated_service() -> GatedHarness {
             fail: false,
             calls: Arc::new(AtomicUsize::new(0)),
             entities: Arc::new(Mutex::new(Vec::new())),
+            member_reads: Arc::new(Mutex::new(Vec::new())),
         },
         GatedPublisher {
             messages: messages.clone(),
@@ -229,6 +258,7 @@ struct Harness {
     service: SoupRealtimeServiceImpl,
     access_calls: Arc<AtomicUsize>,
     access_entities: Arc<Mutex<Vec<Entity<'static>>>>,
+    member_reads: Arc<Mutex<Vec<String>>>,
     messages: Arc<Mutex<Vec<SoupRealtimeMessage>>>,
 }
 
@@ -250,6 +280,10 @@ fn document(id: &str) -> Entity<'static> {
     EntityType::Document.with_entity_string(id.to_string())
 }
 
+fn channel(id: &str) -> Entity<'static> {
+    EntityType::Channel.with_entity_string(id.to_string())
+}
+
 fn updated_document() -> Patch<Entity<'static>> {
     Patch::Updated(document(DOCUMENT_ID))
 }
@@ -261,6 +295,7 @@ fn harness(
 ) -> Harness {
     let access_calls = Arc::new(AtomicUsize::new(0));
     let access_entities = Arc::new(Mutex::new(Vec::new()));
+    let member_reads = Arc::new(Mutex::new(Vec::new()));
     let messages = Arc::new(Mutex::new(Vec::new()));
     let service = SoupRealtimeServiceImpl::new(
         FakeAccessExpander {
@@ -268,6 +303,7 @@ fn harness(
             fail: access_fails,
             calls: access_calls.clone(),
             entities: access_entities.clone(),
+            member_reads: member_reads.clone(),
         },
         FakePublisher {
             messages: messages.clone(),
@@ -278,6 +314,7 @@ fn harness(
         service,
         access_calls,
         access_entities,
+        member_reads,
         messages,
     }
 }
@@ -435,18 +472,18 @@ async fn a_patch_only_for_named_users_skips_current_accessors() {
 }
 
 #[tokio::test]
-async fn a_former_accessor_added_back_hears_only_the_members_patch() {
+async fn a_former_member_added_back_hears_only_the_members_patch() {
     // "back" was removed and added again before the removal was consumed;
-    // "gone" is still removed.
+    // "gone" is still removed. The roster read now lists "back" again.
     let harness = harness(vec![user("member"), user("back")], false, HashSet::new());
-    let for_members = Patch::Updated(document(DOCUMENT_ID));
-    let for_removed = Patch::Deleted(document(DOCUMENT_ID));
+    let for_members = Patch::Updated(channel(DOCUMENT_ID));
+    let for_removed = Patch::Deleted(channel(DOCUMENT_ID));
 
     let delivery = harness
         .service
         .notify_users(vec![
             SoupRealtimePatch::for_entity(for_members.clone()),
-            SoupRealtimePatch::only_for_former_accessors(
+            SoupRealtimePatch::only_for_former_members(
                 for_removed.clone(),
                 vec![user("back"), user("gone")],
             ),
@@ -464,15 +501,79 @@ async fn a_former_accessor_added_back_hears_only_the_members_patch() {
         ]
     );
     assert_eq!(delivery.publish_count, 3);
-    // The removal's entity is the members' access source: one lookup serves both.
+    // One roster read now serves both patches; the cached lookup is not used.
+    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        *harness.member_reads.lock().expect("member reads lock"),
+        vec![DOCUMENT_ID.to_string()]
+    );
+}
+
+#[tokio::test]
+async fn a_channel_named_by_several_removals_is_read_once_and_other_sources_use_the_lookup() {
+    let harness = harness(vec![user("member")], false, HashSet::new());
+
+    harness
+        .service
+        .notify_users(vec![
+            SoupRealtimePatch::only_for_former_members(
+                Patch::Deleted(channel(DOCUMENT_ID)),
+                vec![user("one")],
+            ),
+            SoupRealtimePatch::only_for_former_members(
+                Patch::Deleted(channel(DOCUMENT_ID)),
+                vec![user("two")],
+            ),
+            SoupRealtimePatch::for_entity(Patch::Updated(document(OTHER_DOCUMENT_ID))),
+        ])
+        .await
+        .expect("patches are published");
+
+    assert_eq!(
+        *harness.member_reads.lock().expect("member reads lock"),
+        vec![DOCUMENT_ID.to_string()]
+    );
     assert_eq!(harness.access_calls.load(Ordering::SeqCst), 1);
     assert_eq!(
         *harness
             .access_entities
             .lock()
             .expect("access entities lock"),
-        vec![document(DOCUMENT_ID)]
+        vec![document(OTHER_DOCUMENT_ID)]
     );
+}
+
+#[tokio::test]
+async fn a_failed_roster_read_fails_the_batch_before_publishing() {
+    let harness = harness(vec![user("member")], true, HashSet::new());
+
+    let result = harness
+        .service
+        .notify_users(vec![SoupRealtimePatch::only_for_former_members(
+            Patch::Deleted(channel(DOCUMENT_ID)),
+            vec![user("gone")],
+        )])
+        .await;
+
+    assert!(result.is_err());
+    assert!(harness.messages.lock().expect("messages lock").is_empty());
+}
+
+#[tokio::test]
+async fn a_patch_that_reaches_no_one_adds_no_recipient_set() {
+    let harness = harness(vec![user("back")], false, HashSet::new());
+
+    let delivery = harness
+        .service
+        .notify_users(vec![SoupRealtimePatch::only_for_former_members(
+            Patch::Deleted(channel(DOCUMENT_ID)),
+            vec![user("back")],
+        )])
+        .await
+        .expect("nothing to publish");
+
+    assert_eq!(delivery.publish_count, 0);
+    assert!(delivery.recipient_sets.is_empty());
 }
 
 #[tokio::test]

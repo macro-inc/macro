@@ -11,7 +11,8 @@ tasks itself.
 ## Start here
 
 - `src/domain/service.rs`: resolves the current accessors of a batch of patches
-  in one access lookup and publishes one `Patch` per recipient to `macro.soup`.
+  in one access lookup (plus an uncached roster read per channel a membership
+  removal changed) and publishes one `Patch` per recipient to `macro.soup`.
 - `src/domain/models.rs` + `src/domain/ports.rs`: the `Patch<Entity>` shape
   and the ports the service depends on.
 - `src/inbound/kafka_consumer.rs`: maps each source Kafka event to
@@ -68,14 +69,20 @@ tasks itself.
   names the members it had (`participant_user_ids`), and its `Deleted` patch
   goes to them as well (`SoupRealtimePatch::with_named_recipients`); events
   from before that field reach only current accessors.
-- `channel.participant_removed` updates the channel for its remaining members
+- The audience lookup answers channels from entity access's roster cache,
+  up to ten seconds old, so a membership event is not routed by it alone.
+  `channel.participant_added` names the added users as recipients.
+  `channel.participant_removed` updates the channel for its remaining members
   and sends the removed members their own patch
-  (`SoupRealtimePatch::only_for_former_accessors`): `Updated` for a team or
+  (`SoupRealtimePatch::only_for_former_members`): `Updated` for a team or
   public channel, which they can still open unjoined, `Deleted` for a private
-  channel or DM. A removed member who is a current accessor again when the
-  event is consumed (added back meanwhile) gets only the members' update; the
-  members' lookup of the channel answers that, so it costs no extra lookup. Every channel settings patch raises `channel.updated`, so
-  conversions and auto-join changes reach members too.
+  channel or DM. That patch has the channel's roster read now, uncached
+  (`UserAccessExpander::current_channel_members`), once per channel in a
+  batch, and the members' update uses the same read: a removed member added
+  back before the event is consumed gets only the members' update. Channel
+  events are keyed by channel id, so a removal and a re-add arrive in order.
+  Every channel settings patch raises `channel.updated`, so conversions and
+  auto-join changes reach members too.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.

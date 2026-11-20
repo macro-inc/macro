@@ -389,8 +389,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
-    /// Get all active participant user IDs in a channel.
+    /// Get all active participant user IDs in a channel. Implementations may
+    /// answer from a cache a few seconds old.
     fn get_channel_users(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
+
+    /// Get all active participant user IDs in a channel, read now rather than
+    /// from any cache [`Self::get_channel_users`] keeps.
+    fn get_current_channel_users(
         &self,
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
@@ -933,4 +941,12 @@ pub trait EntityAudienceLookup: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         entity_ids: &[&str],
     ) -> impl Future<Output = Result<Vec<EntityAudience>, AccessError>> + Send;
+
+    /// Returns the active members of the channel `channel_id`, read now: the
+    /// audiences above may come from a cache a few seconds old, which misses a
+    /// membership change the caller is reacting to.
+    fn get_current_channel_users(
+        &self,
+        channel_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }

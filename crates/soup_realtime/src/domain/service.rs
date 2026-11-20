@@ -148,7 +148,9 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
     }
 
     /// Resolves the recipients of every patch in one lookup, then publishes the
-    /// patches in order, each to all of its recipients at once.
+    /// patches in order, each to all of its recipients at once. A channel whose
+    /// membership the batch's events changed has its roster read now instead,
+    /// once, for every patch that names it.
     #[tracing::instrument(
         err,
         skip_all,
@@ -159,15 +161,32 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         )
     )]
     async fn process_batch(&self, patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
+        // The audience lookup may answer from before the change these patches
+        // report, so these rosters are read now.
+        let mut current_rosters: HashMap<&Entity<'static>, Vec<MacroUserIdStr<'static>>> =
+            HashMap::new();
+        for channel in patches
+            .iter()
+            .filter_map(|patch| patch.named_unless_member_of.as_ref())
+        {
+            if current_rosters.contains_key(channel) {
+                continue;
+            }
+            let mut users = self
+                .access_expander
+                .current_channel_members(channel.entity_id.as_ref())
+                .await
+                .context("failed to read current channel members")?;
+            users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
+            users.dedup();
+            current_rosters.insert(channel, users);
+        }
+
         let mut seen = HashSet::with_capacity(patches.len());
         let access_sources = patches
             .iter()
-            .flat_map(|patch| {
-                patch
-                    .access_source
-                    .iter()
-                    .chain(patch.named_unless_accessor_of.iter())
-            })
+            .filter_map(|patch| patch.access_source.as_ref())
+            .filter(|source| !current_rosters.contains_key(source))
             .filter(|source| seen.insert(*source))
             .cloned()
             .collect::<Vec<_>>();
@@ -188,9 +207,6 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
             let mut users = access.users;
             users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
             users.dedup();
-            if !users.is_empty() {
-                recipient_sets.insert(users.clone());
-            }
             for entity in access.entities {
                 recipient_list_by_source.insert(entity, recipient_lists.len());
             }
@@ -200,30 +216,42 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         let mut publish_count = 0;
         let accessors_of = |source: Option<&Entity<'static>>| {
             source
-                .and_then(|source| recipient_list_by_source.get(source))
-                .and_then(|&index| recipient_lists.get(index))
+                .and_then(|source| {
+                    current_rosters.get(source).or_else(|| {
+                        recipient_list_by_source
+                            .get(source)
+                            .and_then(|&index| recipient_lists.get(index))
+                    })
+                })
                 .map(Vec::as_slice)
                 .unwrap_or_default()
         };
-        for patch in patches {
+        for patch in &patches {
             let current_users = accessors_of(patch.access_source.as_ref());
             let users = if patch.named_recipients.is_empty() {
                 Cow::Borrowed(current_users)
             } else {
-                let regained = accessors_of(patch.named_unless_accessor_of.as_ref());
+                // Sorted, so each named user is found by binary search.
+                let members = accessors_of(patch.named_unless_member_of.as_ref());
                 let mut users = current_users.to_vec();
                 users.extend(
                     patch
                         .named_recipients
                         .iter()
-                        .filter(|user| !regained.contains(user))
+                        .filter(|user| {
+                            members
+                                .binary_search_by(|member| member.as_ref().cmp(user.as_ref()))
+                                .is_err()
+                        })
                         .cloned(),
                 );
                 users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
                 users.dedup();
-                recipient_sets.insert(users.clone());
                 Cow::Owned(users)
             };
+            if !users.is_empty() {
+                recipient_sets.insert(users.to_vec());
+            }
             let messages = users
                 .iter()
                 .map(|user_id| SoupRealtimeMessage::new(user_id.clone(), patch.patch.clone()))

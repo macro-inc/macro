@@ -394,15 +394,20 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
+        // The added are named: the members' roster may be read from before
+        // they joined.
         ChannelTopicEvent::ParticipantAdded(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
+            vec![
+                update(EntityType::Channel, metadata.channel_id)
+                    .with_named_recipients(metadata.added_user_ids.clone()),
+            ]
         }
         // The remaining members see the roster change. The removed are no
         // longer current accessors, so they are named: a team or public
         // channel stays readable to them (as one they have not joined), any
         // other channel is gone from what they can see. One added back before
-        // the event is consumed is a current accessor again and hears only the
-        // members' update.
+        // the event is consumed is a member again and hears only the members'
+        // update; both read the roster as it is when they are delivered.
         ChannelTopicEvent::ParticipantRemoved(metadata) => {
             let channel = entity(EntityType::Channel, metadata.channel_id);
             let for_removed = match metadata.channel_type {
@@ -411,7 +416,7 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
             };
             vec![
                 update(EntityType::Channel, metadata.channel_id),
-                SoupRealtimePatch::only_for_former_accessors(
+                SoupRealtimePatch::only_for_former_members(
                     for_removed,
                     metadata.removed_user_ids.clone(),
                 ),
