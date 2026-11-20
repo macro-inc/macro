@@ -44,7 +44,7 @@ export function lines(runs: RunFile[]): string[] {
     if (s.goodDrafts !== undefined) {
       const aimed = s.aimed !== undefined ? `; work streams some suggestion acts on ${s.aimed.toFixed(2)} of ${s.workStreams!.toFixed(1)}` : '';
       // A held-out list score shows only over two people's read lists or more, like the row above.
-      if (s.finding && 'withheld' in s.finding) out.push(`${run.section} (${run.label}): ${s.finding.withheld} held-out people's work lists read and judged, fewer than ${MIN_HELDOUT_PEOPLE}: not shown`);
+      if (s.finding && 'withheld' in s.finding) out.push(`${run.section} (${run.label}): ${s.finding.withheld} held-out people's work lists read and judged, fewer than ${MIN_HELDOUT_PEOPLE}: not shown${s.finding.errors ? ` (${s.finding.errors} not judged)` : ''}`);
       else if (s.finding && !s.finding.lists) out.push(`${run.section} (${run.label}): no work list could be judged (${s.finding.errors} failed)`);
       else if (s.finding) {
         const errors = s.finding.errors ? ` (${s.finding.errors} more not judged)` : '';

@@ -292,7 +292,7 @@ export function summary(attempts: Attempt[]) {
             found: total((list) => list.found) / Math.max(1, total((list) => list.work)),
             unreal: total((list) => list.unreal) / lists.length,
             listed: total((list) => list.listed) / lists.length,
-          } : { withheld: new Set(done.filter((a) => a.heldout && a.finding && !a.finding.unread).map((a) => a.persona)).size },
+          } : { withheld: new Set(done.filter((a) => a.heldout && a.finding && !a.finding.unread).map((a) => a.persona)).size, errors: listErrors },
         }
       : {}),
     firstMedianMs: quantile(first, 0.5),

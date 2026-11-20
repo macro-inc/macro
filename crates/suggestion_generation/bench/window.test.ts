@@ -405,7 +405,7 @@ describe('the finding score of a run', () => {
     expect(beside).not.toContain('entries naming none');
     // No read list at all is fewer than two too.
     const none = lines([{ ...run, attempts: [heldout('p1', { finding: unread }), heldout('p2', { findingError: 'judge' })] }]).join('\n');
-    expect(none).toContain("0 held-out people's work lists read and judged, fewer than 2: not shown");
+    expect(none).toContain("0 held-out people's work lists read and judged, fewer than 2: not shown (1 not judged)");
     expect(none).not.toContain('entries naming none');
     const two = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: list })] }]).join('\n');
     expect(two).toContain('named 100%');
