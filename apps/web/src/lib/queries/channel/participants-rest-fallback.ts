@@ -36,6 +36,10 @@ export function channelParticipantsRestFallbackOptions(
   return queryOptions({
     ...channelKeys.participantsFallback(channelId),
     enabled,
+    // A failed channel read asks REST after the soup record may have moved on
+    // without it; rows cached before then are no answer.
+    // (Spread: an undefined staleTime would override the client's default.)
+    ...(reason === 'channel read failed' ? { staleTime: 0 } : {}),
     queryFn: () => readParticipantsFromRest(channelId, reason),
   });
 }
