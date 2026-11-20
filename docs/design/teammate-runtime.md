@@ -244,32 +244,40 @@ network namespace, never in the host's firewall:
    the install's bridge network.
 2. **Guard.** A one-shot container from the same image joins the holder's
    namespace with `NET_ADMIN` only (uid 0, every other capability dropped).
-   It loads one nftables ruleset, reads it back, checks it, and exits.
+   It mounts nothing, loads the ruleset macrod passes on stdin, and exits.
 3. **Teammate.** It joins the holder's namespace (`--network
    container:<holder>`) with no `NET_ADMIN` or `NET_RAW`, so it can't change
    the rules. A restart reuses the holder. If the holder dies, the teammate
    has no network: it fails closed.
 
-The teammate starts only after the guard has verified the rules. If they
-can't be applied, the start is refused with `failed:
+Before every teammate start, including after adopting a running container,
+macrod reads the ruleset back (`nft -j list ruleset`, normalized) and compares
+it with the one it rendered. If the rules are missing, changed or can't be
+applied, the start is refused with `failed:
 networkIsolationUnavailable`; it never falls back to an open network. A
 dockerd, firewalld or host iptables reload doesn't touch rules inside a
-container's namespace. A stop removes the holder and the network with the
+container's namespace. A holder that exits counts as a teammate crash, and recovery runs holder,
+guard, then teammate. A stop removes the holder and the network with the
 install.
 
 The ruleset filters each connection by its destination, after DNS, for TCP,
 UDP and ICMP alike:
 
-- **Allowed:** the container's own loopback, replies, DNS to the engine's
-  resolver only, and every public address.
-- **Dropped:** the host's own addresses (enumerated at each apply) and its
-  gateway; IPv4 0/8, 10/8, 100.64/10 (CGNAT and tailnets), 127/8 off
+- **Allowed:** the container's own loopback, replies, DNS (port 53) to the
+  engine's resolver and the exact upstream resolvers it forwards to, and
+  every public address.
+- **Dropped:** the host's own addresses, its on-link prefixes (IPv4 and
+  IPv6, so a LAN on public or global addresses is covered) and its gateway,
+  read from the host's interfaces and routes at every teammate start (an
+  interface that comes up later is covered from the next start); IPv4 0/8, 10/8, 100.64/10 (CGNAT and tailnets), 127/8 off
   loopback, 169.254/16 (link-local and metadata), 172.16/12, 192.0.0/24,
   192.168/16, 198.18/15, multicast and reserved; IPv6 `::1` off loopback,
   `::ffff:0:0/96` (v4-mapped), the NAT64 prefixes, `fc00::/7` (ULA,
   including `fd00:ec2::254`), `fe80::/10` and multicast.
 - **Exceptions:** only the owner's explicit `[teammates] allow` entries in
-  macrod's config, each a CIDR and its TCP ports. There are no wildcards.
+  macrod's config, each a CIDR and its TCP ports. macrod rejects `/0`,
+  loopback, anything overlapping the metadata ranges, and an entry without
+  ports.
 
 Because the filter sees the connection, not the lookup, DNS rebinding, a
 redirect, a proxy `CONNECT` to a private target and odd IP spellings all end
@@ -283,7 +291,8 @@ so the Invite form shows it disabled with that reason.
 
 On a local stack only, macrod's `[macro] teammate_network` names the stack's
 Docker network (`macro-<instance>_services`), which the holder also joins,
-and allows that network's subnet, so the agent reaches the stack's services
+and allows only the service address and port pairs the install was given
+(never the subnet, which other teammates share), so the agent reaches the stack's services
 by their in-network names; the service gives a local install those
 addresses, as it gives a local Macro computer. Production never sets it.
 
