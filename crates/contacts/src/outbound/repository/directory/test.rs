@@ -172,7 +172,10 @@ async fn an_empty_lookup_reads_nothing(pool: PgPool) {
             .unwrap(),
         []
     );
-    assert_eq!(repository.contact_lists(mid(VIEWER), &empty).await.unwrap(), []);
+    assert_eq!(
+        repository.contact_lists(mid(VIEWER), &empty).await.unwrap(),
+        []
+    );
 }
 
 #[sqlx::test(
