@@ -516,6 +516,18 @@ export {
   type DocumentMarkdownWritten,
   type SetContentOptions,
 } from './entities/documents/markdown';
+export {
+  type ApplyEditsOptions,
+  type BlockPosition,
+  type BlockReference,
+  type DocumentBlock,
+  type DocumentBlockChange,
+  type DocumentBlocks,
+  type DocumentEdit,
+  DocumentEditsRefusedError,
+  type DocumentEditsResult,
+  type EditCandidate,
+} from './entities/documents/markdown-edits';
 export type { FileContent } from './entities/documents/namespace';
 export {
   CommentQuoteNotPlacedError,

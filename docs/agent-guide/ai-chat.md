@@ -1446,7 +1446,11 @@ These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
 `await document.content()` fetches a document as Macro's internal Markdown, with
 chips, tables and other rich content as `<m-*>` tags. To write text back, the
-agent reads it with `contentWithRevision()` and keeps the tags intact. Use the
+agent reads it with `contentWithRevision()` and keeps the tags intact; for exact
+changes it reads `document.blocks()` and calls `document.applyEdits([...], { base })`,
+which applies `replace`/`insert`/`remove`/`move` edits with no AI and keeps
+edited blocks' ids and comments (the `EditDocument` tool's `edits` field is the
+same engine). Use the
 direct `ListEntities` tool
 for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON

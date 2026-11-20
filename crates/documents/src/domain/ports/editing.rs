@@ -81,6 +81,19 @@ pub enum MarkdownWrite {
     Conflict,
 }
 
+/// What became of a batch of direct markdown edits.
+#[cfg(feature = "ai_tools")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MarkdownEditOutcome {
+    /// Applied, unchanged, or a dry run.
+    Applied(crate::domain::markdown_edits::MarkdownEdited),
+    /// Refused before anything was written.
+    Refused(crate::domain::markdown_edits::MarkdownEditRefusal),
+    /// An edit's matched text is gone since the base revision; nothing was
+    /// written. The message is the worker's, for the caller.
+    Conflict(String),
+}
+
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
@@ -154,6 +167,24 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         expected_revision: &str,
         markdown: &str,
     ) -> impl Future<Output = anyhow::Result<MarkdownWrite>> + Send;
+
+    /// Read a markdown document's top-level blocks, as direct edits address
+    /// them, with the revision they were read at.
+    #[cfg(feature = "ai_tools")]
+    fn markdown_blocks(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::markdown_edits::DocumentMarkdownBlocks>> + Send;
+
+    /// Apply a batch of direct markdown edits, with no model.
+    #[cfg(feature = "ai_tools")]
+    fn edit_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &crate::domain::markdown_edits::MarkdownEditRequest,
+    ) -> impl Future<Output = anyhow::Result<MarkdownEditOutcome>> + Send;
 
     /// Wrap the `occurrence`th (1-based) appearance of `text` in `document_id`
     /// in comment mark `mark_id`, merged into the live collaborative document.

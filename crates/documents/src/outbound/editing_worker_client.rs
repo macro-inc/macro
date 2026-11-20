@@ -1,10 +1,10 @@
 //! Outbound adapter for the AI editing worker.
 
-#[cfg(feature = "ai_tools")]
-use crate::domain::ports::editing::MarkdownWrite;
 use crate::domain::ports::editing::{
     EditMode, EditResult, EditUsage, EditingWorkerService, EditorName,
 };
+#[cfg(feature = "ai_tools")]
+use crate::domain::ports::editing::{MarkdownEditOutcome, MarkdownWrite};
 use anyhow::Context;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
@@ -117,6 +117,13 @@ impl ReqwestEditingWorkerClient {
             .send()
             .await?)
     }
+}
+
+/// The worker's 422 body for a refused direct-edit batch.
+#[cfg(feature = "ai_tools")]
+#[derive(serde::Deserialize)]
+struct WorkerRefusal {
+    refusal: crate::domain::markdown_edits::MarkdownEditRefusal,
 }
 
 /// The worker's `error` message, or a generic one when its body has none.
@@ -410,6 +417,58 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             worker_error(response).await
         );
         Ok(MarkdownWrite::Written(response.json().await?))
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn markdown_blocks(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_edits::DocumentMarkdownBlocks> {
+        let response = self
+            .markdown(
+                document_id,
+                document_token,
+                serde_json::json!({ "action": "blocks" }),
+            )
+            .await?;
+        let status = response.status();
+        anyhow::ensure!(
+            status.is_success(),
+            "{} (HTTP {status})",
+            worker_error(response).await
+        );
+        Ok(response.json().await?)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id, edits = request.edits.len()), err)]
+    async fn edit_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &crate::domain::markdown_edits::MarkdownEditRequest,
+    ) -> anyhow::Result<MarkdownEditOutcome> {
+        let mut body = serde_json::to_value(request)?;
+        if let Some(fields) = body.as_object_mut() {
+            fields.insert("action".to_owned(), serde_json::json!("edit"));
+        }
+        let response = self.markdown(document_id, document_token, body).await?;
+        let status = response.status();
+        if status == reqwest::StatusCode::CONFLICT {
+            return Ok(MarkdownEditOutcome::Conflict(worker_error(response).await));
+        }
+        if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+            let body: WorkerRefusal = response.json().await?;
+            return Ok(MarkdownEditOutcome::Refused(body.refusal));
+        }
+        anyhow::ensure!(
+            status.is_success(),
+            "{} (HTTP {status})",
+            worker_error(response).await
+        );
+        Ok(MarkdownEditOutcome::Applied(response.json().await?))
     }
 
     #[cfg(feature = "ai_tools")]
