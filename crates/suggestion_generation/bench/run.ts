@@ -197,7 +197,7 @@ function* strings(value: unknown): Generator<string> {
   else if (value && typeof value === 'object') for (const item of Object.values(value)) yield* strings(item);
 }
 
-type TranscriptRow = { direction?: string; created_at?: string; content?: { method?: unknown; params?: unknown } };
+type TranscriptRow = { session?: string; direction?: string; created_at?: string; content?: { method?: unknown; params?: unknown } };
 
 /** Whether `value` has the shape of a work list (`finding.ts` `WORK_LIST`). */
 function isWorkList(value: unknown): value is WorkList {
@@ -215,27 +215,53 @@ function isWorkList(value: unknown): value is WorkList {
   );
 }
 
-/** The work list a drafting session's brief carried, from its transcript rows: in the earliest prompt the harness sent a runtime that holds one, so a retried session reads its first brief's. */
+/** The work list one brief carried, if it carried one. */
+function listIn(row: TranscriptRow): WorkList | undefined {
+  for (const text of strings(row.content?.params)) {
+    const at = text.indexOf(WORK_LIST_MARK);
+    if (at < 0) continue;
+    const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
+    if (!block) continue;
+    try {
+      const list: unknown = JSON.parse(block[1]);
+      if (isWorkList(list)) return list;
+    } catch {
+      // Not the list: read on.
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The work list a generation's drafting sessions were briefed with, from
+ * their transcript rows. Each session reads its share of the streams in the
+ * earliest prompt the harness sent its runtime; the shares put together, in
+ * the order the sessions started, are the list (a retried session reads the
+ * same share again, which counts once).
+ */
 export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
   const prompts = [...rows]
     .map((row) => row as TranscriptRow)
     .filter((row) => row.direction === 'to_runtime' && row.content?.method === 'session/prompt')
     .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+  const shares = new Map<string | undefined, WorkList>();
   for (const row of prompts) {
-    for (const text of strings(row.content?.params)) {
-      const at = text.indexOf(WORK_LIST_MARK);
-      if (at < 0) continue;
-      const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
-      if (!block) continue;
-      try {
-        const list: unknown = JSON.parse(block[1]);
-        if (isWorkList(list)) return list;
-      } catch {
-        // Not the list: read on.
-      }
-    }
+    if (shares.has(row.session)) continue;
+    const list = listIn(row);
+    if (list) shares.set(row.session, list);
   }
-  return undefined;
+  const lists = [...shares.values()];
+  if (!lists.length) return undefined;
+  const seen = new Set<string>();
+  const streams = lists
+    .flatMap((list) => list.streams)
+    .filter((stream) => {
+      const key = JSON.stringify(stream);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return { person: lists[0].person, streams };
 }
 
 async function capture(db: SQL, generation: string, seen: Map<string, unknown>) {

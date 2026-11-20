@@ -220,6 +220,19 @@ describe('workListOf', () => {
     expect(workListOf([prompt(retried, '2026-11-20 10:05:00+00'), prompt(list, '2026-11-20 10:00:00+00')])).toEqual(list);
   });
 
+  test('puts together the shares each drafting session read, a retried share once', () => {
+    const stream = (name: string) => ({ ...list.streams[0], name });
+    const share = (...names: string[]) => ({ person: 'Runs a bakery', streams: names.map(stream) });
+    const inSession = (session: string, value: unknown, at: string) => ({ ...prompt(value, at), session });
+    expect(
+      workListOf([
+        inSession('b', share('Invoices'), '2026-11-20 10:00:02+00'),
+        inSession('a', share('Orders', 'Quotes'), '2026-11-20 10:00:01+00'),
+        inSession('c', share('Invoices'), '2026-11-20 10:04:00+00'),
+      ]),
+    ).toEqual(share('Orders', 'Quotes', 'Invoices'));
+  });
+
   test('reads only what the harness sent a runtime, in the shape of a list', () => {
     expect(workListOf([prompt(list, '2026-11-20 10:00:00+00', 'to_server')])).toBeUndefined();
     expect(workListOf([prompt({})])).toBeUndefined();
