@@ -710,3 +710,50 @@ async fn a_transfer_runs_beside_a_population_and_gives_up_behind_a_worker(db: Pg
     assert!(matches!(prepared, Ok(TransferPreparation::Pending(_))));
     assert_eq!(transfers().await, 1);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_transfer_waiting_on_a_schedule_sees_it_and_refuses(db: PgPool) {
+    let (repo, request) = fixture(&db).await;
+    // Scheduling shares the link lock too, so the transfer waits on the
+    // draft's row while the schedule commits.
+    let mut schedule = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        request.source_id
+    )
+    .fetch_one(&mut *schedule)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now()+interval '1 hour',$3)",request.source_link_id,request.source_id,ACTOR)
+        .execute(&mut *schedule)
+        .await
+        .unwrap();
+    let transfer = tokio::spawn({
+        let repo = repo.clone();
+        let request = request.clone();
+        async move { repo.begin_transfer(ACTOR, &request).await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(4), async {
+        while sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+            == 0
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the transfer never waited on the draft");
+    schedule.commit().await.unwrap();
+
+    let refused = transfer.await.unwrap();
+    assert!(matches!(refused, Err(EmailErr::InvalidDraft(_))));
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_draft_transfers"#)
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        0
+    );
+}

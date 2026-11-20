@@ -552,3 +552,55 @@ async fn an_attachment_change_runs_beside_a_population_and_gives_up_behind_a_wor
     population.rollback().await.unwrap();
     assert_eq!(revisions().await, 1);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_attachment_waiting_on_a_discard_sees_it_and_refuses(db: PgPool) {
+    let (repo, link, draft) = fixture(&db).await;
+    // A discard shares the link lock too, so the attachment change waits on
+    // the draft's row while the discard commits.
+    let mut discard = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        draft
+    )
+    .fetch_one(&mut *discard)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_mailbox_drafts (message_id,link_id,generation,actor_id,desired_content,delete_requested) VALUES ($1,$2,0,$3,'{}'::jsonb,true)",draft,link,ACTOR)
+        .execute(&mut *discard)
+        .await
+        .unwrap();
+    let file = upload(draft, 123);
+    let change = tokio::spawn({
+        let repo = repo.clone();
+        async move {
+            repo.commit_attachment_change(ACTOR, link, draft, AttachmentChange::Upload(file), 0)
+                .await
+        }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(4), async {
+        while sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+            == 0
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the attachment change never waited on the draft");
+    discard.commit().await.unwrap();
+
+    assert!(change.await.unwrap().is_err());
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_attachments_drafts WHERE draft_id = $1"#,
+            draft
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        0
+    );
+}

@@ -80,6 +80,18 @@ async fn source_facts(
     ),
     EmailErr,
 > {
+    // Other user writes share the link lock, so the draft's own row is what
+    // orders a transfer after them. Its facts are read in the next statement,
+    // which sees everything committed while this one waited.
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id=$1 AND link_id=$2 FOR UPDATE",
+        request.source_id,
+        request.source_link_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db)?
+    .ok_or(EmailErr::MessageNotFound(request.source_id))?;
     let row=sqlx::query!(r#"SELECT m.updated_at,m.provider_id,m.thread_id,
         CASE WHEN l.provider='OUTLOOK' THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,
         m.is_draft,m.is_sent,
@@ -98,7 +110,7 @@ async fn source_facts(
             jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='CC') AS cc_addresses,
             jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='BCC') AS bcc_addresses
             FROM email_message_recipients r JOIN email_contacts c ON c.id=r.contact_id WHERE r.message_id=m.id) recipients
-        WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE OF m"#,request.source_id,request.source_link_id,request.draft_generation).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
+        WHERE m.id=$1 AND m.link_id=$2"#,request.source_id,request.source_link_id,request.draft_generation).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
     validate_transfer(TransferEligibility {
         authorized: true,
         draft: row.is_draft && !row.is_sent,

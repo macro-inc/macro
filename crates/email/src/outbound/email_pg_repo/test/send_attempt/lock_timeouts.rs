@@ -139,10 +139,7 @@ async fn concurrent_admissions_of_one_draft_still_send_it_once(
     outlook(&pool).await?;
     // Both admissions queue behind a worker, so they take their share locks
     // together when it commits and meet only at the draft's own row.
-    let mut held = worker(&pool).await?;
-    let holder = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
-        .fetch_one(&mut *held)
-        .await?;
+    let held = worker(&pool).await?;
     let admit = |pool: Pool<Postgres>| {
         tokio::spawn(async move {
             EmailPgRepo::new(pool)
@@ -157,7 +154,7 @@ async fn concurrent_admissions_of_one_draft_still_send_it_once(
     };
     let first = admit(pool.clone());
     let second = admit(pool.clone());
-    wait_for_blocked_transactions(&pool, holder, 2).await?;
+    wait_for_lock_waiters(&pool, 2).await?;
     held.commit().await?;
 
     let (first, second) = (bounded(first).await?, bounded(second).await?);
@@ -175,17 +172,13 @@ async fn concurrent_admissions_of_one_draft_still_send_it_once(
     Ok(())
 }
 
-async fn wait_for_blocked_transactions(
-    pool: &Pool<Postgres>,
-    blocker: i32,
-    count: i64,
-) -> anyhow::Result<()> {
+/// Waits until `count` sessions in this test's database wait on a lock.
+async fn wait_for_lock_waiters(pool: &Pool<Postgres>, count: i64) -> anyhow::Result<()> {
     tokio::time::timeout(Duration::from_secs(4), async {
         loop {
             let waiting = sqlx::query_scalar!(
                 r#"SELECT count(*) AS "count!" FROM pg_stat_activity
-                    WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))"#,
-                blocker
+                    WHERE datname = current_database() AND wait_event_type = 'Lock'"#
             )
             .fetch_one(pool)
             .await?;
