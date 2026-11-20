@@ -6,10 +6,14 @@ import { queryOptions } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
 import type { ChannelParticipant } from './types';
 
-/** Why a reader asks REST: its by-id read left the channel out, or failed. */
+/**
+ * Why a reader asks REST: its by-id read left the channel out, failed, or has
+ * not answered for a while.
+ */
 export type ParticipantsFallbackReason =
   | 'channel not in soup'
-  | 'channel read failed';
+  | 'channel read failed'
+  | 'channel read slow';
 
 /**
  * Counted as the Soup list reads that fall back to REST count theirs: a
@@ -37,10 +41,10 @@ export function channelParticipantsRestFallbackOptions(
   return queryOptions({
     ...channelKeys.participantsFallback(channelId),
     enabled,
-    // A failed channel read asks REST after the soup record may have moved on
-    // without it; rows cached before then are no answer.
+    // A failed or slow channel read asks REST after the soup record may have
+    // moved on without it; rows cached before then are no answer.
     // (Spread: an undefined staleTime would override the client's default.)
-    ...(reason === 'channel read failed' ? { staleTime: 0 } : {}),
+    ...(reason === 'channel not in soup' ? {} : { staleTime: 0 }),
     queryFn: () => readParticipantsFromRest(channelId, reason),
   });
 }

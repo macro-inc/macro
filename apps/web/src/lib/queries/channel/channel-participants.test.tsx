@@ -672,6 +672,29 @@ describe('useChannelParticipantsQuery', () => {
     expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
   });
 
+  it('reads REST when the first GraphQL read is slow, then follows the record', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+    );
+    const { query, ids } = mount();
+
+    await vi.advanceTimersByTimeAsync(2_900);
+    expect(query.isPending).toBe(true);
+    expect(storage.getChannelParticipants).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(200);
+    await vi.waitFor(() => expect(ids()).toEqual(['owner']));
+    expect(query.isSuccess).toBe(true);
+    expect(query.isPending).toBe(false);
+
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+    expect(ids()).toEqual(['owner', 'member']);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1);
+  });
+
   it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
     setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
     storage.addParticipantsToChannel.mockResolvedValue(ok({}));

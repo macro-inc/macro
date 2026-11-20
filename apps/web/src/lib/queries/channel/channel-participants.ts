@@ -22,6 +22,7 @@ import {
 } from './participants';
 import {
   channelParticipantsRestFallbackOptions,
+  type ParticipantsFallbackReason,
   readParticipantsOnServer,
 } from './participants-rest-fallback';
 import type { ChannelParticipant } from './types';
@@ -161,6 +162,17 @@ function laterChangeTouches(
       later.channelId === change.channelId &&
       later.userIds.some((userId) => userIds.has(userId))
   );
+}
+
+/** How long a channel's first by-id read may go unanswered before its reader asks REST too. */
+export const CHANNEL_READ_SLOW_MS = 3_000;
+
+function fallbackReason(
+  failed: boolean,
+  slow: boolean
+): ParticipantsFallbackReason {
+  if (failed) return 'channel read failed';
+  return slow ? 'channel read slow' : 'channel not in soup';
 }
 
 /** Asks the server who is in the channel, once a change's time to show ran out at `expires`. */
@@ -331,22 +343,36 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   // failed before it ever answered, since nothing retries it; REST checks
   // access itself, as it did when it was the only reader. A failed refresh of
   // a channel the read returned keeps its roster (see `confirmed`).
+  // A first read still unanswered after a while asks REST too, as main's
+  // reader did on every open: the channel's by-id read can wait behind a busy
+  // cache or connection long after REST would have answered.
+  const [slowChannel, setSlowChannel] = createSignal<string>();
+  createEffect(
+    on([channelId, () => query.isPending], ([id, pending]) => {
+      setSlowChannel(undefined);
+      if (!id || !pending) return;
+      const timer = setTimeout(() => setSlowChannel(id), CHANNEL_READ_SLOW_MS);
+      onCleanup(() => clearTimeout(timer));
+    })
+  );
+  const readSlow = () => query.isPending && slowChannel() === channelId();
   const missesChannel = () => {
-    if (!channelId() || query.isPending) return false;
+    if (!channelId()) return false;
+    if (query.isPending) return readSlow();
     return answered()?.hasChannel !== true;
   };
   const fallback = useQuery(() =>
     channelParticipantsRestFallbackOptions(
       channelId(),
       missesChannel(),
-      query.error ? 'channel read failed' : 'channel not in soup'
+      fallbackReason(!!query.error, readSlow())
     )
   );
   const confirmed = createMemo<
     | { channelId: string; participants: ChannelParticipant[] | undefined }
     | undefined
   >((previous) => {
-    if (query.isPending) return undefined;
+    if (query.isPending && !readSlow()) return undefined;
     const id = channelId();
     if (missesChannel()) {
       // A failed REST refetch keeps its last participants. Rows still from the
@@ -409,14 +435,20 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   const data = () => overlay().data;
   return {
     get isPending() {
-      return query.isPending || (missesChannel() && fallback.isPending);
+      return (
+        (query.isPending && !readSlow()) ||
+        (missesChannel() && fallback.isPending)
+      );
     },
     get isLoading() {
-      return query.isLoading || (missesChannel() && fallback.isLoading);
+      return (
+        (query.isLoading && !readSlow()) ||
+        (missesChannel() && fallback.isLoading)
+      );
     },
     /** The channel's record arrived; a channel the viewer can't read has none. */
     get isSuccess() {
-      return !query.isPending && data() !== undefined;
+      return (!query.isPending || readSlow()) && data() !== undefined;
     },
     get data() {
       return data();
