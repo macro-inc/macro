@@ -65,6 +65,11 @@ pub enum EngineUnavailable {
 #[error("{0}")]
 pub struct EngineError(pub String);
 
+/// A credentials path a `--mount` option list can't carry.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("the credentials path {} has a ',' or '=', which a --mount can't carry", .0.display())]
+pub struct UnsafeMountPath(pub PathBuf);
+
 /// A container as the engine last saw it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerState {
@@ -212,7 +217,15 @@ pub trait Engine: Send + Sync + 'static {
 /// host's home, an engine socket, `--privileged`, devices, published ports
 /// or the host's namespaces. `--restart no`: macrod alone starts it again.
 /// The only environment is `TEAMMATE_PREVIOUS_EXIT`, never a credential.
-pub fn run_arguments(spec: &RunSpec) -> Vec<OsString> {
+///
+/// `--mount` is a comma-separated `key=value` list, so a credentials path
+/// with `,` or `=` (a home directory named so) could add or change mount
+/// options: it is refused.
+pub fn run_arguments(spec: &RunSpec) -> Result<Vec<OsString>, UnsafeMountPath> {
+    let path = spec.credentials_file.as_os_str().as_encoded_bytes();
+    if path.iter().any(|byte| matches!(byte, b',' | b'=')) {
+        return Err(UnsafeMountPath(spec.credentials_file.clone()));
+    }
     let name = spec.container();
     let volume = volume_name(&spec.install_id);
     let provider = provider_volume_name(&spec.install_id);
@@ -282,5 +295,5 @@ pub fn run_arguments(spec: &RunSpec) -> Vec<OsString> {
         .into_iter()
         .map(OsString::from),
     );
-    arguments
+    Ok(arguments)
 }

@@ -489,8 +489,11 @@ macrod (always running; systemd only keeps macrod alive)
    uses `on_exit`, which fixes 79. The Docker contract test runs again.
 3. **Image replacement and rollback** in the container backend, through
    the fake engine and real Docker. This includes swapping the image during
-   an active session: macrod's runtime socket redials, and the session
-   re-attaches.
+   an active session: only the container is replaced, so macrod's runtime
+   connection and the sessions' agent on it stay up (no redial, nothing to
+   re-attach), and the teammate in the new container dials Macro itself. A
+   redial that does happen (macrod restarting) re-attaches its sessions
+   through the harness (`agent_harness` reattach).
 4. **Hosted computers**: the unit gets `Restart=no` and
    `ExecStart=teammate-boot`, and `ExecStopPost` and the path unit go.
    macrod drives the unit through `Backend::HostedUnit`, and `ApplyAgent` and

@@ -314,9 +314,8 @@ impl Engine for CliEngine {
     }
 
     async fn run(&self, spec: &RunSpec) -> Result<(), EngineError> {
-        self.succeed(run_arguments(spec), QUICK_COMMAND)
-            .await
-            .map(drop)
+        let arguments = run_arguments(spec).map_err(|error| EngineError(error.to_string()))?;
+        self.succeed(arguments, QUICK_COMMAND).await.map(drop)
     }
 
     async fn stop(&self, name: &str, grace: Duration) -> Result<(), EngineError> {

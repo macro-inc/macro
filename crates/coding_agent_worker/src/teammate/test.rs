@@ -490,6 +490,7 @@ fn the_container_runs_with_exactly_the_specified_flags() {
     };
 
     let arguments: Vec<String> = run_arguments(&spec)
+        .unwrap()
         .into_iter()
         .map(|argument| argument.into_string().unwrap())
         .collect();
@@ -1803,4 +1804,46 @@ pub(crate) fn fake_install() -> TeammateInstall {
 /// Its environment.
 pub(crate) fn fake_environment() -> AgentEnvironment {
     environment()
+}
+
+#[test]
+fn a_credentials_path_a_mount_option_list_cant_carry_is_refused() {
+    for path in [
+        "/home/a,readonly=false/.macrod/teammates/h/install-1/agent.env",
+        "/home/a=b/.macrod/teammates/h/install-1/agent.env",
+    ] {
+        let spec = RunSpec {
+            install_id: TeammateInstallId::new("install-1").unwrap(),
+            delivery: Delivery {
+                generation: 1,
+                delivery: 1,
+            },
+            image_id: IMAGE_ID.to_owned(),
+            credentials_file: path.into(),
+            seccomp_profile: SECCOMP.into(),
+            previous_exit: PreviousExit::Unknown,
+        };
+        assert_eq!(
+            run_arguments(&spec),
+            Err(super::engine::UnsafeMountPath(path.into())),
+            "{path}"
+        );
+    }
+}
+
+/// Put a second image in [`fake_hosting`]'s registry; it.
+pub(crate) fn offer_other_image(engine: &FakeEngine) -> TeammateImage {
+    engine
+        .state()
+        .registry
+        .insert(OTHER_TAGGED.to_owned(), OTHER_IMAGE_ID.to_owned());
+    image(OTHER_IMAGE_ID)
+}
+
+/// The images the fake engine ran, in order.
+pub(crate) fn run_images(engine: &FakeEngine) -> Vec<String> {
+    run_images_and_exits(engine)
+        .into_iter()
+        .map(|(image_id, _)| image_id)
+        .collect()
 }
