@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The OFFSET 0 fence keeps this shape: look each id up on its own, through the\n-- live-document index, in the order given (sorted, so the lookups walk the\n-- index in order). The work is bounded by the ids, never by the Document table.\nSELECT checked.id AS \"id!\", d.owner AS \"owner!\"\nFROM unnest($1::uuid[]) AS checked(id)\nCROSS JOIN LATERAL (\n    SELECT d.owner\n    FROM \"Document\" d\n    WHERE d.id = checked.id::text\n        AND d.\"deletedAt\" IS NULL\n    OFFSET 0\n) d\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "38afd22876227713d8eb732aec15639f84301bf4f6b91534c1d542b0339dc3f8"
+}
