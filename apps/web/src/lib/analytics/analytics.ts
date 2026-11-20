@@ -3,6 +3,7 @@ import {
   type GoogleConversionAction,
   googleConversionSendTo,
 } from '@app/lib/analytics/googleConversions';
+import { isProductionMetaHost } from '@app/lib/analytics/metaHost';
 import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
@@ -253,7 +254,10 @@ const createAnalytics = () => {
   const disabled = import.meta.env.DEV === true;
   // Meta can submit events through hidden frames. Native navigation handlers
   // can mistake those loads for external links and open the system browser.
-  const metaPixelEnabled = !isTauri();
+  // The production pixel stays off dev, preview, and staging hosts even when
+  // this bundle was built for production.
+  const metaPixelEnabled =
+    !isTauri() && isProductionMetaHost(window.location.hostname);
 
   const initializeProviders = () => {
     if (disabled) return;

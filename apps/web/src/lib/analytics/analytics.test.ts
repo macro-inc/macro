@@ -17,6 +17,12 @@ const mocks = vi.hoisted(() => ({
   setPersonPropertiesForFlags: vi.fn(),
   gtag: vi.fn(),
   fbq: vi.fn(),
+  metaHost: 'localhost',
+}));
+
+vi.mock('./metaHost', () => ({
+  isProductionMetaHost: () =>
+    mocks.metaHost === 'macro.com' || mocks.metaHost === 'www.macro.com',
 }));
 
 vi.mock('@core/util/platform', () => ({
@@ -61,6 +67,7 @@ beforeEach(() => {
   mocks.distinctId = 'anon-id';
   mocks.identified = false;
   localStorage.clear();
+  mocks.metaHost = 'localhost';
   mocks.identify.mockImplementation((id: string) => {
     // PostHog drops identify() when this browser is already identified as
     // someone else. Callers have to merge instead of switching.
@@ -127,6 +134,7 @@ describe('Meta pixel platform support', () => {
     'keeps Meta initialization and tracking on web (touch: %s)',
     async (touch) => {
       mocks.touch = touch;
+      mocks.metaHost = 'macro.com';
       const { analytics } = await import('./analytics');
       expect(hasMetaPixel()).toBe(true);
 
@@ -161,6 +169,24 @@ describe('Meta pixel platform support', () => {
       );
     }
   );
+
+  it.each([
+    'dev.macro.com',
+    'staging.macro.com',
+    'branch-abc-preview.macro.com',
+    'macro-dev.zeta.health',
+    'localhost',
+  ])('does not load or call the production pixel on %s', async (hostname) => {
+    mocks.metaHost = hostname;
+    const { analytics } = await import('./analytics');
+
+    expect(hasMetaPixel()).toBe(false);
+    analytics.trackMeta('CompleteRegistration', {}, { eventID: 'signup:1' });
+    analytics.pageView('Inbox');
+    analytics.identify('user', { email: 'user@example.com' });
+
+    expect(mocks.fbq).not.toHaveBeenCalled();
+  });
 });
 
 describe('PostHog flag environment', () => {

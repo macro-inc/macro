@@ -46,7 +46,10 @@
     <link rel="preconnect" href="https://www.googletagmanager.com" />
     <link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E"/>
     <script>
-      if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      // Production pixel only. Keep in sync with isProductionMetaHost in
+      // src/app/utils/metaHost.ts. dev.macro.com, previews, and staging must
+      // not send events to the production pixel.
+      if (location.hostname === 'macro.com' || location.hostname === 'www.macro.com') {
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
         n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -62,7 +65,6 @@
     </script>
   </head>
   <body>
-    <noscript><img alt="" height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=639142540393286&ev=PageView&noscript=1"/></noscript>
     <!-- For AI agents reading the DOM: hidden from sight, kept in page text and
          the accessibility tree. The link leaves the tab order so keyboard users
          don't land on something invisible. -->

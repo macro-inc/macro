@@ -159,7 +159,7 @@ it('reports a demo booked in the dialog to Meta, and only from its own frame', a
 
   booked(frame.contentWindow);
   expect(analytics.trackMeta).toHaveBeenCalledExactlyOnceWith(
-    'CompleteRegistration',
+    'Lead',
     {
       content_name: 'demo_meeting',
       content_category: 'cal_booking',
