@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM user_last_seen\n                WHERE user_id = $1 AND seen_at >= $2\n            ) OR COALESCE((\n                SELECT occurred_at >= $2 FROM activity_events\n                WHERE actor_id = $1\n                  AND agent_correlation_id IS NULL\n                  AND actor_id LIKE 'macro|%'\n                  AND action NOT IN ('opened', 'appearance_changed')\n                ORDER BY occurred_at DESC\n                LIMIT 1\n            ), false) AS \"active!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ec572fbfe80b182c8e69b2eccd1e1a791f4ecc31d138f7c7e43b724884ad8cb0"
+}

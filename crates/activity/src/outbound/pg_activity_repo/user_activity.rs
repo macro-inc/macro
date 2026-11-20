@@ -5,10 +5,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::PgActivityRepo;
-use crate::domain::{
-    models::NON_TOUCH_ACTION_TAGS,
-    ports::{SeenLog, UserActivity},
-};
+use crate::domain::ports::{SeenLog, UserActivity};
 
 /// Ids written per statement. Past a few thousand ids the planner can hash
 /// every row of "User" for the existence check instead of probing its key.
@@ -18,11 +15,15 @@ impl UserActivity for PgActivityRepo {
     type Err = sqlx::Error;
 
     // The seen time is one primary-key read and is asked first: once it
-    // answers, the activity read is never run. The activity read is a range
-    // of idx_activity_events_own over the person's window, which holds only
-    // rows a user made without a code-mode run, so it stops at their first
-    // change; it repeats the index's predicate (`LIKE 'macro|%'`, always true
-    // of a user id) so the planner can prove the index covers it.
+    // answers, the activity read is never run. The activity read takes the
+    // person's newest entry in idx_activity_events_own, which holds only the
+    // changes a user made without a code-mode run, and compares its time: one
+    // entry however much else they or their agents did. Ordered and limited,
+    // so no plan can gather the whole window first. It repeats the index's
+    // predicate word for word (`LIKE 'macro|%'` is always true of a user id,
+    // the actions are NON_TOUCH_ACTION_TAGS) so the planner can prove the
+    // index covers it; `non_touch_actions_are_the_ones_the_index_leaves_out`
+    // fails when the tags change without them.
     #[tracing::instrument(
         name = "activity.is_active",
         skip_all,
@@ -34,27 +35,23 @@ impl UserActivity for PgActivityRepo {
         user: &MacroUserIdStr<'_>,
         since: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {
-        let skipped: Vec<String> = NON_TOUCH_ACTION_TAGS
-            .iter()
-            .map(|tag| (*tag).to_owned())
-            .collect();
         let active = sqlx::query_scalar!(
             r#"
             SELECT EXISTS (
                 SELECT 1 FROM user_last_seen
                 WHERE user_id = $1 AND seen_at >= $2
-            ) OR EXISTS (
-                SELECT 1 FROM activity_events
+            ) OR COALESCE((
+                SELECT occurred_at >= $2 FROM activity_events
                 WHERE actor_id = $1
-                  AND actor_id LIKE 'macro|%'
                   AND agent_correlation_id IS NULL
-                  AND occurred_at >= $2
-                  AND action <> ALL($3)
-            ) AS "active!"
+                  AND actor_id LIKE 'macro|%'
+                  AND action NOT IN ('opened', 'appearance_changed')
+                ORDER BY occurred_at DESC
+                LIMIT 1
+            ), false) AS "active!"
             "#,
             user.as_ref(),
             since,
-            &skipped,
         )
         .fetch_one(&self.pool)
         .await?;

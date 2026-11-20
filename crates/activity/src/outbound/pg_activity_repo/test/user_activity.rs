@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration};
 
 use super::teammate_feed::insert_user;
 use super::*;
-use crate::domain::models::AppearanceChange;
+use crate::domain::models::{AppearanceChange, NON_TOUCH_ACTION_TAGS};
 use crate::domain::ports::{SeenLog, UserActivity};
 
 const ADA: &str = "macro|ada@example.com";
@@ -182,6 +182,12 @@ async fn views_and_appearance_changes_do_not_make_a_person_active(pool: PgPool) 
     .unwrap();
 
     assert!(!repo.is_active(&user(ADA), week_ago()).await.unwrap());
+    // Her newest change is what counts, not her newest row: views since an
+    // edit before the week leave her away.
+    repo.insert_activities(&[ada_edits(3, Utc::now() - Duration::days(8))])
+        .await
+        .unwrap();
+    assert!(!repo.is_active(&user(ADA), week_ago()).await.unwrap());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -220,4 +226,36 @@ async fn a_list_longer_than_one_statement_takes_is_recorded_whole(pool: PgPool) 
         .await
         .unwrap();
     assert_eq!(seen, i64::try_from(ids.len()).unwrap());
+}
+
+/// The check's SQL and `idx_activity_events_own` spell out the actions that
+/// are not changes, so the planner can match the query to the index. A tag
+/// added here without them would count as a change in neither, or leave the
+/// check reading a table the index no longer covers.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn non_touch_actions_are_the_ones_the_index_leaves_out(pool: PgPool) {
+    assert_eq!(
+        NON_TOUCH_ACTION_TAGS,
+        ["opened", "appearance_changed"],
+        "change the activity check's SQL and idx_activity_events_own with the tags"
+    );
+    let predicate = sqlx::query_scalar!(
+        r#"
+        SELECT pg_get_expr(indpred, indrelid) AS "predicate!"
+        FROM pg_index
+        WHERE indexrelid = 'idx_activity_events_own'::regclass
+        "#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tags = NON_TOUCH_ACTION_TAGS
+        .iter()
+        .map(|tag| format!("'{tag}'::text"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    assert!(
+        predicate.contains(&format!("action <> ALL (ARRAY[{tags}])")),
+        "{predicate}"
+    );
 }
