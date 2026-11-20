@@ -19,7 +19,9 @@ before changing ingestion or delivery behavior.
 - `src/domain/stream.rs` / `src/inbound/stream_router.rs`: the live SSE
   stream. `StreamFeed` keeps two minutes of events (shared `Arc`s) for
   clients that ask `resume=true` with a `Last-Event-ID` (`StreamCursor`);
-  without `resume=true` the stream is live-only, as before. See README's
+  without `resume=true` the stream is live-only, as before. Heartbeats flow
+  while the stream's Kafka consumer progresses (`kafka_stream_consumer.rs`,
+  `kafka_util::progress`); a lagging subscriber's stream ends. See README's
   "Live event stream and resuming".
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.

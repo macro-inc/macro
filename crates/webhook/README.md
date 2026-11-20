@@ -215,6 +215,24 @@ listed in the OpenAPI spec, and without `resume=true` it is ignored: a browser
 `EventSource` reconnecting or an SDK listener gets exactly the live stream it
 always got.
 
+The `: keep-alive` comments every 20 s come from the HTTP layer's timer and say
+nothing about the event source. So the response also carries
+`x-macro-stream-heartbeat: 20`, and every 20 s the stream sends `event:
+heartbeat` with data `{}` and no `id`, but only while the process's Kafka
+consumer is making progress by its librdkafka statistics
+(`kafka_util::progress`): a sample from the last 30 s (samples arrive only while
+the consumer is polled), every assigned partition's broker connected, and each
+partition caught up or advancing. A heartbeat reaches every open stream
+whatever its filters, after the events already queued for it, and is never
+replayed. A client that hears neither an event nor a heartbeat for three
+intervals can reconnect and resume; macrod does, and only when the header is
+present, so it never reconnects in a loop to an older server. SDK listeners
+skip the heartbeat, which has no `event_type`.
+
+A stream that falls more than 1,024 events behind its process's feed ends,
+rather than skipping what it missed: a client that resumes replays it from the
+retained events.
+
 ## Queue contract, deduplication, and ordering
 
 The versioned SQS message contains a webhook ID and a normalized event. The

@@ -14,7 +14,9 @@
 //! broker consumer is making progress. A client that hears neither an event
 //! nor a heartbeat for several intervals can reconnect and resume. The
 //! `: keep-alive` comments only keep idle proxies from closing the connection;
-//! they come from a timer here and say nothing about the event source.
+//! they come from a timer here and say nothing about the event source. Like
+//! `Last-Event-ID`, the header and the heartbeat event are left out of the
+//! OpenAPI spec while macrod is their one client.
 
 #[cfg(test)]
 mod test;
@@ -155,8 +157,7 @@ const LAST_EVENT_ID_HEADER: &str = "last-event-id";
     path = "/webhook/events/stream",
     params(StreamEventsQuery),
     responses(
-        (status = 200, description = "Server-Sent Events stream of matching broker events, and `heartbeat` events while the server's event source is making progress", content_type = "text/event-stream", body = String,
-            headers(("x-macro-stream-heartbeat" = u64, description = "Seconds between heartbeat events"))),
+        (status = 200, description = "Server-Sent Events stream of matching broker events", content_type = "text/event-stream", body = String),
         (status = 400, description = "Bad request", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
