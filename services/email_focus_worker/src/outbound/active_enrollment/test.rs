@@ -15,12 +15,15 @@ fn person(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
 }
 
+/// Who was asked about, and from when.
+type Asked = Vec<(String, DateTime<Utc>)>;
+
 /// Answers from a table of who is active, recording each question; a person
 /// missing from the table can't be read.
 #[derive(Clone, Default)]
 struct FakeActivity {
     active: Arc<Mutex<HashMap<String, bool>>>,
-    asked: Arc<Mutex<Vec<(String, DateTime<Utc>)>>>,
+    asked: Arc<Mutex<Asked>>,
 }
 
 impl FakeActivity {
