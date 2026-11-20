@@ -34,6 +34,7 @@ vi.mock(
         withFloatingFormatMenu: () => config,
         use: () => config,
         onChange: () => config,
+        onTab: () => config,
         withFilePaste: () => config,
         buildHandle: () => ({ lexical: createEmailEditor('Sounds good') }),
       };

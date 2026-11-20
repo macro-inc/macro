@@ -49,6 +49,7 @@ vi.mock(
           fixture.onChange = handler;
           return config;
         },
+        onTab: () => config,
         withFilePaste: () => config,
         buildHandle: () => ({ lexical: createEmailEditor(fixture.text) }),
       };

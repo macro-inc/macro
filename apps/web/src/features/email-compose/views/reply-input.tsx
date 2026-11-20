@@ -6,6 +6,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { keyboardShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/keyboard-shortcuts';
+import { $canOutdentSelection } from '@core/component/LexicalMarkdown/plugins/tab-indentation';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -309,6 +310,9 @@ function LoadedReplyInputView(
     .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
     .use(registerToggleAppendedThread)
     .onChange(state.onContentChange)
+    // Shift+Tab outdents while there is something to outdent, and otherwise
+    // keeps its default so focus moves back to the recipients.
+    .onTab((e) => e.shiftKey && !$canOutdentSelection())
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         if (editingDisabled()) return;
