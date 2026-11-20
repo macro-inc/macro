@@ -243,3 +243,9 @@ fn updates_are_on_unless_the_config_turns_them_off() {
         toml::from_str(&format!("{EXAMPLE}\n[update]\nauto = false\n")).expect("opt-out parses");
     assert!(!opted_out.update.auto);
 }
+
+#[test]
+fn native_sessions_open_in_the_background_by_default() {
+    let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
+    assert!(!config.herdr.focus);
+}

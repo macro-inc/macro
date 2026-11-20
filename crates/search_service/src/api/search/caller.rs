@@ -42,3 +42,11 @@ pub(in crate::api::search) fn search_caller(user: &MacroUserAuthentication) -> S
     };
     SearchCaller::new(&user.user_context.user_id, actor)
 }
+
+/// Whether a search draws on its account's search allowance. Only a user API
+/// key does, so all of one account's keys share one allowance, and app
+/// sessions, agents, routines, services and account managers keep the lanes
+/// alone.
+pub(in crate::api::search) fn draws_api_key_allowance(user: &MacroUserAuthentication) -> bool {
+    user.origin == CredentialOrigin::UserApiKey
+}

@@ -7,6 +7,8 @@ use model::item::UserAccessibleItem;
 use single_flight::{DatabaseKey, SingleFlight};
 use sqlx::{PgConnection, Pool, Postgres};
 
+mod checked_documents;
+
 type AccessibleItemsKey = (DatabaseKey, String, Option<String>, bool);
 type AccessibleItems = Result<Arc<Vec<UserAccessibleItem>>, Arc<sqlx::Error>>;
 
@@ -19,7 +21,9 @@ static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItem
 ///
 /// Callers that miss the cache at the same time for the same database, user and
 /// filters share one run of the queries. A failure reaches all of them as an
-/// `Arc<sqlx::Error>`.
+/// `Arc<sqlx::Error>`. A run whose callers all go away (searches cancelled as
+/// the user keeps typing) still finishes, so the document checks it reads are
+/// there for the next search, and a caller arriving meanwhile joins it.
 pub async fn get_user_accessible_items(
     db: &Pool<Postgres>,
     user_id: &str,
@@ -81,7 +85,7 @@ async fn shared_accessible_items(
     // Boxed so the lookup adds one pointer, not its whole state machine, to
     // the future of every caller up the stack: services near rustc's layout
     // depth limit stop compiling otherwise.
-    Ok(Box::pin(RUNNING_LOOKUPS.run(key, lookup)).await?)
+    Ok(Box::pin(RUNNING_LOOKUPS.run_to_completion(key, lookup)).await?)
 }
 
 async fn query_accessible_items(
@@ -160,12 +164,19 @@ const DOCUMENT_GRANTS_LOOKED_UP_BY_ID: i64 = 50_000;
 /// caller with a few hundred sources (every direct message is one) looks like
 /// a holder of hundreds of thousands of grants and gets a hash join over a scan
 /// of every live document: seconds of work that grows with the table, for a
-/// caller holding a few thousand grants. Counting the grants first, up to the
+/// caller holding a few thousand grants. Reading the grants first, up to the
 /// limit, replaces that estimate with a fact.
 #[tracing::instrument(
     skip_all,
     err,
-    fields(looked_up_by_grant = tracing::field::Empty)
+    fields(
+        looked_up_by_grant = tracing::field::Empty,
+        grants = tracing::field::Empty,
+        document_checks = tracing::field::Empty,
+        documents_checked = tracing::field::Empty,
+        documents_reused = tracing::field::Empty,
+        documents_listed = tracing::field::Empty,
+    )
 )]
 async fn accessible_documents(
     db: &Pool<Postgres>,
@@ -173,43 +184,47 @@ async fn accessible_documents(
     source_ids: &[String],
     exclude_owned: bool,
 ) -> sqlx::Result<Vec<UserAccessibleItem>> {
-    // One connection for the count and the lookup: a second checkout would
-    // double this lookup's share of the pool.
+    // One connection for the grants and the documents: a second checkout
+    // would double this lookup's share of the pool.
     let mut connection = db.acquire().await?;
 
-    let grants_counted = sqlx::query_scalar!(
+    let granted = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(*) AS "count!"
-        FROM (
-            SELECT 1
-            FROM entity_access ea
-            WHERE ea.source_id = ANY($1)
-                AND ea.entity_type = 'document'
-            LIMIT $2
-        ) held
+        SELECT ea.entity_id
+        FROM entity_access ea
+        WHERE ea.source_id = ANY($1)
+            AND ea.entity_type = 'document'
+        LIMIT $2
         "#,
         source_ids,
         DOCUMENT_GRANTS_LOOKED_UP_BY_ID + 1
     )
     .persistent(false)
-    .fetch_one(&mut *connection)
+    .fetch_all(&mut *connection)
     .await?;
-    let looked_up_by_grant = grants_counted <= DOCUMENT_GRANTS_LOOKED_UP_BY_ID;
-    tracing::Span::current().record("looked_up_by_grant", looked_up_by_grant);
+    let span = tracing::Span::current();
+    let looked_up_by_grant =
+        i64::try_from(granted.len()).is_ok_and(|grants| grants <= DOCUMENT_GRANTS_LOOKED_UP_BY_ID);
+    span.record("looked_up_by_grant", looked_up_by_grant);
+    span.record("grants", granted.len());
 
     let ids = if looked_up_by_grant {
-        sqlx::query_file_scalar!(
-            "src/item_access/get_accessible_items/documents_by_grant.sql",
+        let (ids, counts) = checked_documents::accessible_document_ids(
+            &mut connection,
+            DatabaseKey::of(db),
             user_id,
-            source_ids,
-            exclude_owned
+            granted,
+            exclude_owned,
         )
-        .persistent(false)
-        .fetch_all(&mut *connection)
-        .await?
+        .await?;
+        span.record("document_checks", counts.outcome());
+        span.record("documents_checked", counts.checked);
+        span.record("documents_reused", counts.reused);
+        ids
     } else {
         documents_by_planner_choice(&mut connection, user_id, source_ids, exclude_owned).await?
     };
+    span.record("documents_listed", ids.len());
 
     Ok(to_items(ids, "document"))
 }

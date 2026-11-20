@@ -1,26 +1,26 @@
-//! Session workspaces: the repository store refreshes Git; herdr (git itself under herdr-core) creates worktrees.
+//! Session workspaces: the repository store refreshes Git, and each session
+//! gets a plain `git worktree` of it. Not a herdr worktree: herdr 0.9 groups
+//! those under the operator's repository workspace, and each session opens
+//! in its own workspace instead.
 
-use super::cli::HerdrCli;
-use crate::outbound::git::{GitRepositories, git, primary_worktree};
+use crate::outbound::git::{GitRepositories, git};
 use crate::repository::{Repository, prepare};
 use std::path::{Path, PathBuf};
 
 /// Serializes repository preparation within one macrod instance.
 pub(crate) struct Workspaces {
     git: GitRepositories,
-    herdr: HerdrCli,
     root: PathBuf,
     preparing: tokio::sync::Mutex<()>,
 }
 
 impl Workspaces {
-    pub(crate) fn new(search: PathBuf, root: PathBuf, herdr: HerdrCli) -> Self {
+    pub(crate) fn new(search: PathBuf, root: PathBuf) -> Self {
         Self {
             git: GitRepositories {
                 search,
                 cache: root.join("repos"),
             },
-            herdr,
             root,
             preparing: tokio::sync::Mutex::new(()),
         }
@@ -39,11 +39,19 @@ impl Workspaces {
             return Ok(path);
         }
         let clone = prepare(&self.git, &repository).await?;
-        let source = primary_worktree(&clone).await?;
         std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?;
-        self.herdr
-            .create_worktree(&source, &path, &format!("macro/{session}"))
-            .await?;
+        git(
+            &clone,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                &format!("macro/{session}"),
+                &path.to_string_lossy(),
+                "origin/main",
+            ],
+        )
+        .await?;
         Ok(path)
     }
 }

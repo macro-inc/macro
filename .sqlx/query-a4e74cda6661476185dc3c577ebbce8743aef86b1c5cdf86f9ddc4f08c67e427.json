@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Each id is looked up on its own behind an OFFSET 0 fence through the\n-- trashed-document index, which holds only trashed rows: a live document's\n-- lookup reads none of the Document table or its live-document index.\nSELECT checked.id AS \"id!\"\nFROM unnest($1::uuid[]) AS checked(id)\nCROSS JOIN LATERAL (\n    SELECT 1\n    FROM \"Document\" d\n    WHERE d.id = checked.id::text\n        AND d.\"deletedAt\" IS NOT NULL\n    OFFSET 0\n) trashed\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a4e74cda6661476185dc3c577ebbce8743aef86b1c5cdf86f9ddc4f08c67e427"
+}
