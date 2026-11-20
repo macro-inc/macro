@@ -171,3 +171,171 @@ fn an_agent_environment_travels_by_name_and_debug_shows_no_value() {
     assert!(debug.contains("MACRO_API_KEY"));
     assert!(!debug.contains("mak_secret"));
 }
+
+#[test]
+fn a_teammate_run_carries_its_install_image_and_environment() {
+    let message = ToRuntimeMessage::RunTeammate {
+        install: TeammateInstall {
+            install_id: TeammateInstallId::new("3f2a-install").unwrap(),
+            generation: 4,
+            delivery: 2,
+        },
+        image: TeammateImage {
+            repository: "ghcr.io/macro-inc/teammate-runtime".to_owned(),
+            image_id: format!("sha256:{}", "a".repeat(64)),
+        },
+        environment: AgentEnvironment(
+            [("MACRO_API_KEY".to_owned(), "mak_secret".to_owned())]
+                .into_iter()
+                .collect(),
+        ),
+        traceparent: Some("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".to_owned()),
+    };
+
+    let wire = serde_json::to_value(&message).unwrap();
+    assert_eq!(
+        wire,
+        json!({
+            "type": "runTeammate",
+            "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+            "install": { "installId": "3f2a-install", "generation": 4, "delivery": 2 },
+            "image": {
+                "repository": "ghcr.io/macro-inc/teammate-runtime",
+                "imageId": format!("sha256:{}", "a".repeat(64)),
+            },
+            "environment": { "MACRO_API_KEY": "mak_secret" },
+        })
+    );
+    let read: ToRuntimeMessage = serde_json::from_value(wire).unwrap();
+    assert!(
+        matches!(read, ToRuntimeMessage::RunTeammate { install, .. } if install.generation == 4)
+    );
+}
+
+#[test]
+fn a_teammate_stop_names_its_install() {
+    let message = ToRuntimeMessage::StopTeammate {
+        install: TeammateInstall {
+            install_id: TeammateInstallId::new("3f2a-install").unwrap(),
+            generation: 4,
+            delivery: 0,
+        },
+        traceparent: None,
+    };
+
+    assert_eq!(
+        serde_json::to_value(&message).unwrap(),
+        json!({
+            "type": "stopTeammate",
+            "install": { "installId": "3f2a-install", "generation": 4, "delivery": 0 },
+        })
+    );
+}
+
+#[test]
+fn an_install_id_that_could_escape_a_container_name_is_refused() {
+    for bad in ["", "../etc", "a b", "x;rm", &"a".repeat(65)] {
+        assert!(TeammateInstallId::new(bad).is_err(), "{bad:?} was accepted");
+        assert!(serde_json::from_value::<TeammateInstallId>(json!(bad)).is_err());
+    }
+    assert!(TeammateInstallId::new("Ab-09").is_ok());
+}
+
+#[test]
+fn a_host_report_says_which_engine_or_why_not() {
+    let ready = ToServerMessage::TeammateHost {
+        report: TeammateHostReport {
+            engine: Some(ContainerEngine {
+                kind: ContainerEngineKind::Podman,
+                version: "5.2.0".to_owned(),
+                rootless: true,
+            }),
+            os: HostOs::Linux,
+            arch: HostArch::Amd64,
+            cpus: 8,
+            memory_mib: 16_384,
+            disk_free_mib: Some(100_000),
+            problem: None,
+            installs: vec![TeammateInstall {
+                install_id: TeammateInstallId::new("i-1").unwrap(),
+                generation: 3,
+                delivery: 0,
+            }],
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(&ready).unwrap(),
+        json!({
+            "type": "teammateHost",
+            "report": {
+                "engine": { "kind": "podman", "version": "5.2.0", "rootless": true },
+                "os": "linux",
+                "arch": "amd64",
+                "cpus": 8,
+                "memoryMib": 16384,
+                "diskFreeMib": 100000,
+                "problem": null,
+                "installs": [{ "installId": "i-1", "generation": 3, "delivery": 0 }],
+            },
+        })
+    );
+
+    let short = TeammateHostProblem::BelowFloor {
+        resource: HostResource::Memory,
+    };
+    assert_eq!(
+        serde_json::to_value(&short).unwrap(),
+        json!({ "kind": "belowFloor", "resource": "memory" })
+    );
+}
+
+#[test]
+fn a_teammate_status_reports_a_failure_with_its_reason() {
+    let status = ToServerMessage::TeammateStatus {
+        install: TeammateInstall {
+            install_id: TeammateInstallId::new("i-1").unwrap(),
+            generation: 2,
+            delivery: 0,
+        },
+        state: TeammateRunState::Failed {
+            reason: TeammateRunFailure::ImageMismatch,
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(&status).unwrap(),
+        json!({
+            "type": "teammateStatus",
+            "install": { "installId": "i-1", "generation": 2, "delivery": 0 },
+            "state": { "state": "failed", "reason": "imageMismatch" },
+        })
+    );
+}
+
+#[test]
+fn an_install_from_an_older_runtime_reads_as_its_first_delivery() {
+    let install: TeammateInstall =
+        serde_json::from_value(json!({ "installId": "i-1", "generation": 2 })).unwrap();
+    assert_eq!(install.delivery, 0);
+}
+
+#[test]
+fn a_rollback_names_why_the_new_image_was_abandoned() {
+    let status = ToServerMessage::TeammateStatus {
+        install: TeammateInstall {
+            install_id: TeammateInstallId::new("i-1").unwrap(),
+            generation: 3,
+            delivery: 1,
+        },
+        state: TeammateRunState::RolledBack {
+            reason: TeammateRunFailure::IncompatibleRuntime,
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(&status).unwrap(),
+        json!({
+            "type": "teammateStatus",
+            "install": { "installId": "i-1", "generation": 3, "delivery": 1 },
+            "state": { "state": "rolledBack", "reason": "incompatibleRuntime" },
+        })
+    );
+}
