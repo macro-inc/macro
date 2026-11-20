@@ -16,8 +16,13 @@ built from `packages/sdk` when this crate compiles and are never committed.
 - `CODE_MODE_ASSETS_DIR` set (Nix builds and Rust CI): that directory, built by
   the `code-mode-assets` flake package from the Nix `node_modules`. Rust CI
   restores it from Namespace's remote cache, keyed by its store path, and builds
-  it only on a miss (`steps::code_mode_assets`). A build
-  restores node_modules the same way, under its own store path.
+  it only on a miss (`steps::code_mode_assets`). A build restores node_modules
+  the same way, under its own store path, and runs while cargo compiles the rest
+  of the workspace: with `CODE_MODE_ASSETS_READY` set, `build.rs` waits for that
+  file, which holds `ok` or the end of the failed build's log, and fails a
+  build that hangs after ten minutes. Only a job that compiles this crate sees a
+  failed build. When the kept target already ran `build.rs` with that store
+  path, cargo would not run it again to wait, so the step builds before cargo.
 - Unset (local cargo): it runs `packages/code-mode-sdk/scripts/generate.ts` with
   `bun` into `OUT_DIR`, rerunning when SDK, generator or lockfile sources change.
 

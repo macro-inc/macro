@@ -128,7 +128,7 @@ its source filter. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
 `node_modules`, and every crane build of `crates/code_mode_assets` reads it
 through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
-restoring the output from Namespace's remote cache when another job already built it. On a miss, node_modules comes from the same cache, keyed by its own store path.
+restoring the output from Namespace's remote cache when another job already built it. On a miss it builds the assets while cargo compiles the rest of the workspace, with node_modules from the same cache under its own store path, and the crate's build script waits for them through `CODE_MODE_ASSETS_READY`; it builds before cargo when the kept target already ran that build script with the same store path.
 Run it locally with `nix build --no-link .#code-mode-assets`.
 
 ## Other resources
