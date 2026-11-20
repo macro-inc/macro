@@ -257,3 +257,13 @@ async fn typed_refusals_keep_the_legacy_payload_status_and_body() {
         );
     }
 }
+
+#[tokio::test]
+async fn a_busy_inbox_is_a_503_never_a_sharing_conflict() {
+    // The web client reads every 409 from this route as a sharing conflict.
+    let response = InitError::from(ConnectionError::MailboxInitialization(
+        InitializationError::Contended,
+    ))
+    .into_response();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}

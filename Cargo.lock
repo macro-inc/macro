@@ -3934,7 +3934,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.54"
+version = "0.6.55"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -7906,6 +7906,7 @@ dependencies = [
  "model_notifications",
  "models_email",
  "models_properties",
+ "nom 8.0.0",
  "notification",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -7943,6 +7944,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -8011,6 +8013,7 @@ dependencies = [
  "ammonia",
  "ego-tree",
  "html2text",
+ "html5ever 0.26.0",
  "lazy_static",
  "regex",
  "scraper",
@@ -9492,6 +9495,7 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "tokio",
  "tracing",
  "wiremock",
@@ -18676,6 +18680,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "calendar_events",
  "channels",
  "chrono",
@@ -18687,6 +18692,7 @@ dependencies = [
  "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
+ "macro_auth",
  "macro_authorization",
  "macro_db_client",
  "macro_user_id",
@@ -19868,7 +19874,9 @@ dependencies = [
  "serde",
  "serde_json",
  "soup-filter-projection",
+ "tempfile",
  "thiserror 2.0.18",
+ "tracing",
  "uuid",
 ]
 
@@ -20433,6 +20441,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "wiremock",
  "workspace-hack",
 ]
 

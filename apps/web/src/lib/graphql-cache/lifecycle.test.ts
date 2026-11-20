@@ -311,7 +311,11 @@ it('holds the physical owner through auth retirement and a rejected logout callb
       await held.promise;
       stored.add('GraphqlSoupCrmContact:old-contact');
       order.push('write');
-      return createNoopCacheHost().writeQuery({ query: '', data: {} });
+      return createNoopCacheHost().writeQuery({
+        query: '',
+        data: {},
+        generation: '00000000-0000-4000-8000-000000000098',
+      });
     },
     clear: async () => {
       stored.clear();
@@ -326,7 +330,11 @@ it('holds the physical owner through auth retirement and a rejected logout callb
   const unregister = registerCacheHost(owner);
   const writing = captureCacheWriteSession().run(async () => {
     recordSessionCacheWrite(owner, 'GraphqlSoupCrmContact:old-contact');
-    await owner.writeQuery({ query: '', data: {} });
+    await owner.writeQuery({
+      query: '',
+      data: {},
+      generation: '00000000-0000-4000-8000-000000000098',
+    });
   });
   await started.promise;
   const ending = clearRegisteredCaches(async () => {

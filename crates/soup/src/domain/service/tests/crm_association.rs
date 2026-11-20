@@ -573,11 +573,11 @@ fn document_ids(expr: &Expr<DocumentLiteral>) -> Vec<Uuid> {
 async fn company_scope_matches_properties_and_references_of_its_contacts() {
     let comms = ReferencingComms::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert_eq!(companies, [COMPANY]);
             assert_eq!(contacts, [CONTACT, SIBLING_CONTACT]);
+            assert!(custom_task_properties);
             // A contact-only task: Contacts property without Companies.
             Box::pin(async {
                 Ok(vec![
@@ -591,7 +591,8 @@ async fn company_scope_matches_properties_and_references_of_its_contacts() {
                     },
                 ])
             })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|request| {
@@ -648,13 +649,14 @@ async fn company_scope_matches_properties_and_references_of_its_contacts() {
 async fn contact_scope_excludes_company_only_and_sibling_items() {
     let comms = ReferencingComms::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert!(companies.is_empty());
             assert_eq!(contacts, [CONTACT]);
+            assert!(custom_task_properties);
             Box::pin(async { Ok(Vec::new()) })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|request| {
@@ -867,12 +869,14 @@ async fn activity_with_database_rows_takes_the_record_path() {
     )));
     let crm = FakeCrm::default();
     let mut repo = MockSoupRepo::new();
-    repo.expect_crm_property_edges()
-        .times(1)
-        .returning(|companies, contacts| {
+    repo.expect_crm_property_edges().times(1).returning(
+        |companies, contacts, custom_task_properties| {
             assert!(companies.is_empty() && contacts.is_empty());
+            // The activity scope matches the built-in properties only.
+            assert!(!custom_task_properties);
             Box::pin(async { Ok(Vec::new()) })
-        });
+        },
+    );
     repo.expect_expanded_generic_cursor_soup()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Vec::new()) }));

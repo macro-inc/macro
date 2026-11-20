@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type AnyVariables,
   type Client,
@@ -310,12 +311,20 @@ describe('createUrqlQuery reactive state', () => {
     const firstOperation = makeOperation(
       'query',
       createRequest<Data, Variables>(firstDocument, { input: 'first' }),
-      { url: 'https://localhost/graphql', requestPolicy: 'cache-first' }
+      {
+        url: 'https://localhost/graphql',
+        requestPolicy: 'cache-first',
+        cacheAuthorizationEpoch: cacheSessionGeneration.capture(),
+      }
     );
     const secondOperation = makeOperation(
       'query',
       createRequest<Data, Variables>(secondDocument, { input: 'first' }),
-      { url: 'https://localhost/graphql', requestPolicy: 'network-only' }
+      {
+        url: 'https://localhost/graphql',
+        requestPolicy: 'network-only',
+        cacheAuthorizationEpoch: cacheSessionGeneration.capture(),
+      }
     );
     const fake = makeFakeClient();
     const [document, setDocument] = createSignal(firstDocument);
@@ -580,13 +589,17 @@ describe('createUrqlQuery reactive state', () => {
     const [observerDependency, setObserverDependency] = createSignal(0);
     let executions = 0;
     const client = {
-      executeQuery: () => {
+      executeQuery: (
+        request: GraphQLRequest<Data, Variables>,
+        context: Partial<OperationContext>
+      ) => {
         executions += 1;
         return fromValue({
-          operation: { kind: 'query', context: {} } as Operation<
-            Data,
-            Variables
-          >,
+          operation: makeOperation('query', request, {
+            url: 'https://localhost/graphql',
+            requestPolicy: 'cache-first',
+            ...context,
+          }),
           data: { value: 'synchronous' },
           stale: false,
           hasNext: false,
@@ -609,6 +622,38 @@ describe('createUrqlQuery reactive state', () => {
 });
 
 describe('createUrqlQuery refetch', () => {
+  it('keeps the refetch context when recovering a replay from a retired generation', async () => {
+    const fake = makeFakeClient();
+    const query = setup(() => ({
+      ...activeOptions(fake.client),
+      context: { fetchOptions: { headers: { base: 'yes' } } },
+    }));
+    fake.executions[0].next({ data: { value: 'initial' } });
+    const refreshed = query.refetch({
+      requestPolicy: 'cache-first',
+      context: { fetchOptions: { headers: { refresh: 'yes' } } },
+    });
+    fake.executions[1].next({
+      data: { value: 'retired' },
+      operation: makeOperation(
+        'query',
+        createRequest(DOCUMENT, { input: 'one' }),
+        {
+          url: 'https://localhost/graphql',
+          requestPolicy: 'cache-first',
+          cacheAuthorizationEpoch: 'retired',
+        }
+      ),
+    });
+    await Promise.resolve();
+    expect(fake.executions).toHaveLength(3);
+    expect(fake.executions[2].context.fetchOptions).toEqual({
+      headers: { refresh: 'yes' },
+    });
+    fake.executions[2].next({ data: { value: 'fresh' } });
+    expect((await refreshed).data).toEqual({ value: 'fresh' });
+  });
+
   it('applies overrides and resolves only after the final fresh result', async () => {
     const fake = makeFakeClient();
     const query = setup(() => ({
@@ -741,12 +786,16 @@ describe('createUrqlQuery refetch', () => {
 
   it('settles refetches from synchronously completing sources', async () => {
     const client = {
-      executeQuery: () =>
+      executeQuery: (
+        request: GraphQLRequest<Data, Variables>,
+        context: Partial<OperationContext>
+      ) =>
         fromValue({
-          operation: { kind: 'query', context: {} } as Operation<
-            Data,
-            Variables
-          >,
+          operation: makeOperation('query', request, {
+            url: 'https://localhost/graphql',
+            requestPolicy: 'cache-first',
+            ...context,
+          }),
           data: { value: 'synchronous' },
           stale: false,
           hasNext: false,

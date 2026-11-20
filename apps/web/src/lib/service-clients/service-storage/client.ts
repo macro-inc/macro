@@ -732,11 +732,13 @@ export const storageServiceClient = {
       ? `?cursor=${args.params.cursor}`
       : '';
 
-    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
+    const body = JSON.stringify(args.body);
+    const result = await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
-      body: JSON.stringify(args.body),
+      body,
       signal: args.signal,
     });
+    return result;
   },
 
   async getGroupedSoupAstItems(args: {
@@ -3006,6 +3008,7 @@ export const storageServiceClient = {
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
+      cache: 'no-store',
     });
   },
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {

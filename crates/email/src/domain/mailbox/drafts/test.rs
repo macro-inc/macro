@@ -1,9 +1,7 @@
 use super::*;
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
 use crate::domain::{
-    mailbox::{
-        AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure, LOCK_NOT_AVAILABLE,
-        MailboxKey,
-    },
+    mailbox::{AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure, MailboxKey},
     models::ResolvedDraftInput,
 };
 use std::sync::{Arc, Mutex};
