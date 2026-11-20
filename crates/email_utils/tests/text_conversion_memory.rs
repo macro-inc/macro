@@ -146,8 +146,14 @@ fn deep_nesting_is_refused_cheaply() {
         "<ol start=999999999><li>".repeat(128),
         "x<br>".repeat(40_000)
     );
+    // Only 64 levels, but each numbers its lines with 19 digits.
+    let numbers = format!(
+        "{}{}",
+        "<ol start=9223372036854775807><li>".repeat(64),
+        "x<br>".repeat(40_000)
+    );
 
-    for html in [quotes, lists] {
+    for html in [quotes, lists, numbers] {
         let mut text = Some(String::new());
 
         let peak = peak_bytes_during(|| text = html_to_plaintext(&html));

@@ -14,11 +14,13 @@ const TEXT_WIDTH: usize = 4 * MAX_HTML_BYTES;
 /// costs that product in memory. A body past it gets no text.
 const MAX_TABLE_CELLS: usize = 1_000_000;
 
-/// The deepest a body may nest quotes, lists, definitions and headings. Each
-/// level prefixes every line inside it, so html2text's output, and the copy
-/// it makes of the lines at every level, grow with lines times depth. A body
+/// The most columns of prefix the quotes, lists, definitions and headings
+/// around a line may give it: 64 levels of a two-column quote or bullet.
+/// html2text prefixes every line inside each of them and copies the lines at
+/// every level, so its output grows with lines times prefix width, and an
+/// ordered list starting at a 19-digit number prefixes 21 columns. A body
 /// past it gets no text.
-const MAX_NESTING: usize = 64;
+const MAX_INDENT: usize = 128;
 
 /// The most HTML a conversion reads; a longer body's text stops there.
 /// html2text's document tree takes up to about 500 bytes per byte of HTML,
@@ -120,11 +122,11 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let dom = config.parse_html(html.as_bytes())?;
         let layout = strip_spans_and_measure(&dom.document);
-        if layout.table_cells > MAX_TABLE_CELLS || layout.nesting > MAX_NESTING {
+        if layout.table_cells > MAX_TABLE_CELLS || layout.indent > MAX_INDENT {
             tracing::warn!(
                 html_len = html.len(),
                 table_cells = layout.table_cells,
-                nesting = layout.nesting,
+                indent = layout.indent,
                 "email body is too large to lay out as text"
             );
             return Ok(None);
@@ -156,33 +158,61 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
 struct Layout {
     /// Each table's rows times its widest row, summed over the document.
     table_cells: usize,
-    /// The most quotes, lists, definitions and headings any node is inside.
-    nesting: usize,
+    /// The widest prefix the quotes, lists, definitions and headings around
+    /// any node give its lines, in columns.
+    indent: usize,
 }
 
 /// Drops every cell's `rowspan` and `colspan`, and measures the document's
 /// [`Layout`]. Raw mode stacks the cells, so a span changes no text, but
 /// html2text still adds a filler cell to every row a rowspan covers and
 /// widens a spanning cell; without spans, rows times widest row is the column
-/// widths html2text copies into rows. Nesting counts the elements html2text
-/// prefixes the lines of: `blockquote`, each list, `dd`, and headings. The walk
-/// keeps a stack rather than recursing, because nesting depth is the sender's
-/// choice; each node waits with the table its rows belong to and its depth.
+/// widths html2text copies into rows. The indent adds up the prefixes
+/// html2text gives the lines inside `blockquote` ("> "), `ul` ("* "), `dd`
+/// (two spaces), headings (one `#` per level and a space) and `ol` (its
+/// widest number and ". "). The walk keeps a stack rather than recursing,
+/// because nesting depth is the sender's choice; each node waits with the
+/// table its rows belong to and the indent around it.
 fn strip_spans_and_measure(document: &Handle) -> Layout {
     let mut tables: Vec<(usize, usize)> = Vec::new();
-    let mut nesting = 0;
+    let mut widest_indent = 0;
     let mut pending: Vec<(Handle, Option<usize>, usize)> = vec![(document.clone(), None, 0)];
-    while let Some((node, table, depth)) = pending.pop() {
+    while let Some((node, table, indent)) = pending.pop() {
         let mut children_table = table;
-        let mut children_depth = depth;
+        let mut children_indent = indent;
         if let Element { name, attrs, .. } = &node.data {
-            if matches!(
-                &*name.local,
-                "blockquote" | "ul" | "ol" | "dd" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
-            ) {
-                children_depth += 1;
-                nesting = nesting.max(children_depth);
-            }
+            let prefix = match &*name.local {
+                "blockquote" | "ul" | "dd" | "h1" => 2,
+                "h2" => 3,
+                "h3" => 4,
+                "h4" => 5,
+                "h5" => 6,
+                "h6" => 7,
+                "ol" => {
+                    let start = attrs
+                        .borrow()
+                        .iter()
+                        .find(|attr| &*attr.name.local == "start")
+                        .and_then(|attr| attr.value.parse::<i64>().ok())
+                        .unwrap_or(1);
+                    let items = node
+                        .children
+                        .borrow()
+                        .iter()
+                        .filter(|child| match &child.data {
+                            Element { name, .. } => &*name.local == "li",
+                            _ => false,
+                        })
+                        .count();
+                    let last = start
+                        .saturating_add(i64::try_from(items).unwrap_or(i64::MAX))
+                        .saturating_sub(1);
+                    start.to_string().len().max(last.to_string().len()) + 2
+                }
+                _ => 0,
+            };
+            children_indent = indent.saturating_add(prefix);
+            widest_indent = widest_indent.max(children_indent);
             match &*name.local {
                 "table" => {
                     children_table = Some(tables.len());
@@ -210,14 +240,14 @@ fn strip_spans_and_measure(document: &Handle) -> Layout {
             }
         }
         for child in node.children.borrow().iter() {
-            pending.push((child.clone(), children_table, children_depth));
+            pending.push((child.clone(), children_table, children_indent));
         }
     }
     Layout {
         table_cells: tables.iter().fold(0, |total, (rows, widest)| {
             total.saturating_add(rows.saturating_mul(*widest))
         }),
-        nesting,
+        indent: widest_indent,
     }
 }
 
