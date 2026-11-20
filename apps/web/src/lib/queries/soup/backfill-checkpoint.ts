@@ -39,6 +39,17 @@ function checkpointKey(userId: string, checkpointId: string): string {
   return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${checkpointId}`;
 }
 
+// Holds the storage generation in which the lane last gave up.
+function failureKey(checkpointKey: string): string {
+  return `${checkpointKey}:failed`;
+}
+
+function notifySaved(key: string) {
+  window.dispatchEvent(
+    new CustomEvent<string>(CHECKPOINT_SAVED_EVENT, { detail: key })
+  );
+}
+
 export function initialSoupBackfillCheckpoint(
   userId: string,
   storageGeneration: string | null = null
@@ -112,18 +123,53 @@ export function saveSoupBackfillCheckpoint(
   const key = checkpointKey(checkpoint.userId, checkpointId);
   try {
     localStorage.setItem(key, JSON.stringify(checkpoint));
+    // A saved page means the lane runs again.
+    localStorage.removeItem(failureKey(key));
   } catch {
     // A failed checkpoint write only causes already-cached pages to be fetched
     // again after restart.
     return;
   }
-  window.dispatchEvent(
-    new CustomEvent<string>(CHECKPOINT_SAVED_EVENT, { detail: key })
-  );
+  notifySaved(key);
 }
 
-/** Calls `onSave` whenever a lane's checkpoint is saved, in this tab or
- * another. Returns the unsubscribe. */
+/** Records that the lane gave up after its retries in `storageGeneration`.
+ * Its next saved checkpoint clears the mark. Watchers of the lane hear it as
+ * a save. */
+export function markSoupBackfillLaneFailed(
+  userId: string,
+  checkpointId: string,
+  storageGeneration: string
+): void {
+  const key = checkpointKey(userId, checkpointId);
+  try {
+    localStorage.setItem(failureKey(key), storageGeneration);
+  } catch {
+    // Readers then keep waiting for the lane, as they did without the mark.
+    return;
+  }
+  notifySaved(key);
+}
+
+/** Whether the lane gave up in the cache's current storage generation and
+ * has not saved a page since. */
+export function soupBackfillLaneFailed(
+  userId: string,
+  checkpointId: string,
+  storageGeneration: string
+): boolean {
+  try {
+    return (
+      localStorage.getItem(failureKey(checkpointKey(userId, checkpointId))) ===
+      storageGeneration
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Calls `onSave` whenever a lane's checkpoint is saved or the lane gives
+ * up, in this tab or another. Returns the unsubscribe. */
 export function watchSoupBackfillCheckpoint(
   userId: string,
   checkpointId: string,
@@ -137,8 +183,10 @@ export function watchSoupBackfillCheckpoint(
       if ((event as CustomEvent<string>).detail === key) onSave();
     }
   );
+  const failure = failureKey(key);
   const stopOther = makeEventListener(window, 'storage', (event) => {
-    if (event.key === key || event.key === null) onSave();
+    if (event.key === key || event.key === failure || event.key === null)
+      onSave();
   });
   return () => {
     stopLocal();

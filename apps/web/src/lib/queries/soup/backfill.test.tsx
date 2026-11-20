@@ -18,6 +18,7 @@ import {
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
+import { soupBackfillLaneFailed } from './backfill-checkpoint';
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
@@ -733,6 +734,13 @@ describe('runSoupBackfills', () => {
     );
     expect(loadSoupBackfillCheckpoint('user-1', 'later-lane').completed).toBe(
       true
+    );
+    // Readers waiting on the failed lane learn that it gave up.
+    expect(soupBackfillLaneFailed('user-1', 'failed-lane', 'storage-1')).toBe(
+      true
+    );
+    expect(soupBackfillLaneFailed('user-1', 'later-lane', 'storage-1')).toBe(
+      false
     );
     expect(warn).toHaveBeenCalledWith(
       '[graphql-soup-backfill] lane failed after retries',

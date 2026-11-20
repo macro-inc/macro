@@ -33,6 +33,7 @@ import {
   BACKFILL_VERSION,
   initialSoupBackfillCheckpoint,
   loadSoupBackfillCheckpoint as loadCheckpoint,
+  markSoupBackfillLaneFailed,
   type SoupBackfillCheckpoint,
   saveSoupBackfillCheckpoint,
 } from './backfill-checkpoint';
@@ -595,6 +596,13 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
                   state: 'failed',
                   totalPagesFetched: checkpoint.pagesFetched,
                 });
+                // Readers waiting for the lane to finish stop waiting.
+                if (checkpoint.storageGeneration !== null)
+                  markSoupBackfillLaneFailed(
+                    userId,
+                    lane.checkpointId,
+                    checkpoint.storageGeneration
+                  );
                 console.warn(
                   '[graphql-soup-backfill] lane failed after retries',
                   { checkpointId: lane.checkpointId, error }
