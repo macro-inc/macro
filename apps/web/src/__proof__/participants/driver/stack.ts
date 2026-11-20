@@ -60,9 +60,13 @@ export function clearSignUpCounter() {
     execFileSync('docker', ['exec', REDIS, 'redis-cli', 'DEL', ...keys]);
 }
 
-/** Harness calls that change nothing in the page, so a lost one can be made again. */
+/**
+ * Harness calls a lost one of which can be made again: they change nothing, or
+ * (mount) start by undoing what they did before.
+ */
 const REPEATABLE = new Set([
   'install',
+  'mount',
   'snapshot',
   'settle',
   'unmount',
@@ -103,7 +107,9 @@ async function pxOnce<T>(
 ): Promise<T> {
   return (await page.evaluate(
     async ({ path, method, args }) => {
-      await import(/* @vite-ignore */ path);
+      // Import once per page load, so a call awaits nothing but the method.
+      const loaded = (window as unknown as { __px?: unknown }).__px;
+      if (!loaded) await import(/* @vite-ignore */ path);
       const api = (
         window as unknown as {
           __px: Record<string, (...a: unknown[]) => unknown>;

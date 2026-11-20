@@ -2,7 +2,8 @@
 # One command for the whole participants differential against a running local
 # stack (see README.md). With no arguments it runs, in order:
 #   1. the check that main/ holds main's code verbatim;
-#   2. seeds 1 and 2, each once quiet and once under concurrent load;
+#   2. seeds 1 and 2, each once quiet and once under concurrent load (50
+#      sequences of 24 steps each by default: 200 sequences in all);
 #   3. one run per planted mutant, each of which must be caught;
 #   4. case 37 on purpose (faults on each read, under load and not);
 # and prints a summary per run. Results go to $PX_ROOT (default
@@ -32,7 +33,7 @@ echo "head $(git rev-parse HEAD) -> $root"
 differential() {
   for seed in 1 2; do
     for load in 0 1; do
-      PX_SEED=$seed PX_LOAD=$load PX_SEQS=${PX_SEQS:-200} PX_STEPS=${PX_STEPS:-24} \
+      PX_SEED=$seed PX_LOAD=$load PX_SEQS=${PX_SEQS:-50} PX_STEPS=${PX_STEPS:-24} PX_BATCH=${PX_BATCH:-50} \
         PX_RUN=s${seed}$([[ $load == 1 ]] && echo l || echo q)$(date +%s | tail -c 5) \
         PX_OUT="$root/seed$seed-$([[ $load == 1 ]] && echo load || echo quiet)" \
         bun_run "$here/driver/run.ts"

@@ -53,6 +53,8 @@ type RunReport = {
   reload: unknown;
   tieOrders: unknown;
   selfNavigations: number;
+  requestFailed: unknown;
+  lostCalls: unknown;
   verdict: string;
 };
 
@@ -124,6 +126,8 @@ for (const name of readdirSync(root).sort()) {
     },
     tieOrders: summary.tieOrders,
     selfNavigations: summary.selfNavigations,
+    requestFailed: summary.requestFailed,
+    lostCalls: summary.lostCalls,
     verdict: mutant
       ? caught
         ? `CAUGHT (${caught} reads)`
@@ -155,7 +159,10 @@ for (const report of reports) {
     `   live ${JSON.stringify(report.live)} reload ${JSON.stringify(report.reload)}`
   );
   console.log(
-    `   forms ${JSON.stringify(report.forms)} ties ${JSON.stringify(report.tieOrders)} self-navigations ${report.selfNavigations}`
+    `   forms ${JSON.stringify(report.forms)} ties ${JSON.stringify(report.tieOrders)} setup reloads ${report.selfNavigations}`
+  );
+  console.log(
+    `   failed requests ${JSON.stringify(report.requestFailed)} lost harness calls ${JSON.stringify(report.lostCalls)}`
   );
 }
 if (existsSync(`${root}/case37/case37.json`)) {

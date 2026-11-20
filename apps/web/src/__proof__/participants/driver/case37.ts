@@ -236,6 +236,11 @@ try {
     if (frame === member.mainFrame())
       log(`member page navigated to ${frame.url()}`);
   });
+  const requestFailed: Record<string, number> = {};
+  member.on('requestfailed', (request) => {
+    const key = `${request.method()} ${new URL(request.url()).pathname.replace(/[0-9a-f-]{36}/g, ':id')} ${request.failure()?.errorText ?? 'unknown'}`;
+    requestFailed[key] = (requestFailed[key] ?? 0) + 1;
+  });
   member.on('console', (message) => {
     if (/reload|stall|unauthor|version/i.test(message.text()))
       log(`member console: ${message.text().slice(0, 300)}`);

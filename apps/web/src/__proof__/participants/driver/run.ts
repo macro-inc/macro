@@ -64,7 +64,10 @@ const userId = (u: number) => `macro|${email(u)}`;
 type Viewer = { u: U; context: BrowserContext; page: Page | undefined };
 
 async function openViewer(viewer: Viewer, channels: Channel[]) {
-  if (!viewer.page) viewer.page = await viewer.context.newPage();
+  if (!viewer.page) {
+    viewer.page = await viewer.context.newPage();
+    watchRequests(viewer.page);
+  }
   const page = viewer.page;
   if (page.url().includes('/app/')) await page.reload({ timeout: 90_000 });
   else await page.goto(`${ORIGIN}/app/home`, { timeout: 90_000 });
@@ -80,16 +83,35 @@ async function openViewer(viewer: Viewer, channels: Channel[]) {
       );
       return;
     } catch (error) {
-      // The page reloaded under the harness (Vite reloads open pages when a
-      // watched file changes or it re-optimizes dependencies): start again.
+      // The page reloaded under the harness, or a module request failed while
+      // it loaded (Chromium aborts requests with ERR_NETWORK_CHANGED when
+      // Docker bridges come and go, and keeps a failed module import failed
+      // for the rest of the document): load the page again.
       if (attempt >= 8) throw error;
       counts.selfNavigations += 1;
       log(
-        `u${viewer.u} page navigated during setup (${page.url()}): ${String(error).split('\n')[0]}`
+        `u${viewer.u} setup failed, reloading (${page.url()}): ${String(error).split('\n')[0]}`
       );
       await sleep(1000);
+      await page.reload({ timeout: 90_000 }).catch(() => undefined);
     }
   }
+}
+
+/** Counts every failed request by its error, so network faults during a run are on record. */
+function watchRequests(page: Page) {
+  page.on('requestfailed', (request) => {
+    const error = request.failure()?.errorText ?? 'unknown';
+    const kind = /graphql/.test(request.url())
+      ? 'graphql'
+      : /\/dss\//.test(request.url())
+        ? 'rest'
+        : 'other';
+    bump(
+      slot(counts.requestFailed, kind, () => ({})),
+      error
+    );
+  });
 }
 
 // ---------------------------------------------------------------- state
@@ -145,6 +167,8 @@ const counts = {
   selfNavigations: 0,
   /** Harness calls Chromium dropped and the driver made again (driver/stack.ts px). */
   lostCalls,
+  /** Failed requests in the viewers' pages, by kind and error. */
+  requestFailed: {} as Record<string, Record<string, number>>,
   /** Per channel and set of rows with tied join times: how many distinct orders each side showed across reads. */
   tieOrders: {
     rowSets: 0,
