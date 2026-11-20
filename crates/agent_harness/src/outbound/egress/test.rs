@@ -703,3 +703,39 @@ async fn connect_grants_are_not_offered_where_connect_is_not_configured() {
 
     assert_eq!(advertised_slugs(&provisioner).await, ["notion"]);
 }
+
+/// With Connect configured but no rollout, nobody is on Connect alone, so
+/// Pipedream grants stay offered.
+#[tokio::test]
+async fn without_a_rollout_pipedream_grants_are_offered() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("notion", true),
+            connect_connection("linear"),
+        ])),
+        Arc::new(FixedServers(vec![])),
+        "https://egress.macro.com",
+    )
+    .with_macro_connect(true, None);
+
+    assert_eq!(advertised_slugs(&provisioner).await, ["notion", "linear"]);
+}
+
+/// The rollout can wait on PostHog, so an owner holding only Connect grants
+/// never asks it.
+#[tokio::test]
+async fn the_rollout_is_not_asked_without_a_pipedream_grant() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![connect_connection("linear")])),
+        Arc::new(FixedServers(vec![])),
+        "https://egress.macro.com",
+    )
+    .with_macro_connect(
+        true,
+        Some(Arc::new(|_user| {
+            Box::pin(async { panic!("the rollout was asked without a Pipedream grant") })
+        })),
+    );
+
+    assert_eq!(advertised_slugs(&provisioner).await, ["linear"]);
+}
