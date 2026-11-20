@@ -4,9 +4,10 @@
  * a URL's consent, and the refusal of a request this client cannot display.
  *
  * Fields and decisions are separate components over one draft so a surface
- * can place them apart - the chip crops the fields in its area and keeps the
- * decisions on the row beneath - while `LiveQuestionCard` stacks them for
- * the session. A Macro user tool under review opens in the tool's own
+ * can place them apart: `QuestionCard` puts them in an `ElicitationCard`'s
+ * body and footer for the session and a channel reply's live tail, and
+ * `LiveQuestionCard` stacks them on a plain row (agent updates, and a
+ * composer's fallback). A Macro user tool under review opens in the tool's own
  * composer (`UserToolComposer`); a draft the tool's schema rejects falls
  * back to the flat form the agent also sent, through these.
  */
@@ -44,6 +45,7 @@ import {
   validate,
 } from '../state/elicitation-form';
 import { createElicitationReviewSink } from '../state/elicitation-review-sink';
+import { ElicitationCard, type ElicitationHeader } from './ElicitationCard';
 import { ElicitationForm } from './ElicitationForm';
 
 export type RespondToElicitation = (
@@ -182,8 +184,10 @@ export function QuestionFields(props: {
 }
 
 /**
- * The decisions, as buttons for the caller's row: the question's own
- * (Submit, Open) then Decline and, unless the row is short of room, Cancel.
+ * The decisions, as buttons: the question's own (Submit, Open) then Decline
+ * and, unless the row is short of room, Cancel. On a card they follow the
+ * session's other cards (`ToolApprovalCard`): the refusals quiet on the left,
+ * the question's own action on the right, and nothing primary.
  *
  * URL mode never opens anything on its own: only after the user presses Open
  * does it send the consent and open a new tab - never an iframe, never a
@@ -196,8 +200,8 @@ export function QuestionActions(props: {
   onRespond: RespondToElicitation;
   /** Whether Cancel joins Decline; default yes. */
   cancel?: boolean;
-  /** Decline before the question's own button, as the chip's row reads. */
-  declineFirst?: boolean;
+  /** Lay the buttons out for a card's footer rather than a plain row. */
+  card?: boolean;
 }) {
   const respond = (answer: ElicitationAnswer) => {
     if (props.locked) return;
@@ -213,14 +217,15 @@ export function QuestionActions(props: {
     if (!accepted) return;
     window.open(target, '_blank', 'noopener,noreferrer');
   };
+  const size = () => (props.card ? 'md' : 'xs');
 
   const primary = (
     <Switch>
       <Match when={form(props.question)}>
         {(question) => (
           <Button
-            variant="primary"
-            size="xs"
+            variant={props.card ? 'secondary' : 'primary'}
+            size={size()}
             disabled={props.locked}
             onClick={() => submit(question().draft)}
           >
@@ -231,8 +236,8 @@ export function QuestionActions(props: {
       <Match when={url(props.question)}>
         {(question) => (
           <Button
-            variant="primary"
-            size="xs"
+            variant={props.card ? 'secondary' : 'primary'}
+            size={size()}
             disabled={props.locked}
             onClick={() =>
               fireAndForget(open(question().url), 'agent-interactions')
@@ -244,25 +249,20 @@ export function QuestionActions(props: {
       </Match>
     </Switch>
   );
-  const decline = (
-    <Button
-      variant="secondary"
-      size="xs"
-      disabled={props.locked}
-      onClick={() => respond({ action: 'decline' })}
-    >
-      Decline
-    </Button>
-  );
-
-  return (
+  const refusals = (
     <>
-      {props.declineFirst ? decline : primary}
-      {props.declineFirst ? primary : decline}
+      <Button
+        variant={props.card ? 'ghost' : 'secondary'}
+        size={size()}
+        disabled={props.locked}
+        onClick={() => respond({ action: 'decline' })}
+      >
+        Decline
+      </Button>
       <Show when={props.cancel ?? true}>
         <Button
           variant="ghost"
-          size="xs"
+          size={size()}
           disabled={props.locked}
           onClick={() => respond({ action: 'cancel' })}
         >
@@ -271,9 +271,56 @@ export function QuestionActions(props: {
       </Show>
     </>
   );
+
+  return (
+    <Show
+      when={props.card}
+      fallback={
+        <>
+          {primary}
+          {refusals}
+        </>
+      }
+    >
+      <div class="flex items-center gap-1">{refusals}</div>
+      <div class="ml-auto flex items-center gap-2">{primary}</div>
+    </Show>
+  );
 }
 
-/** The fields over the decisions, as the session's card lays them out. */
+/**
+ * A form, URL or unrecognized request on its own card: the fields in the
+ * body, the decisions in the footer.
+ */
+export function QuestionCard(props: {
+  header: ElicitationHeader;
+  /** Placement on the card root, such as a height cap. */
+  class?: string;
+  request: LiveQuestionRequest;
+  locked: boolean;
+  onRespond: RespondToElicitation;
+}) {
+  // A request never changes for its card, so its state is made once.
+  const question = createLiveQuestion(props.request);
+  return (
+    <ElicitationCard
+      header={props.header}
+      class={props.class}
+      actions={
+        <QuestionActions
+          question={question}
+          locked={props.locked}
+          onRespond={props.onRespond}
+          card
+        />
+      }
+    >
+      <QuestionFields question={question} locked={props.locked} />
+    </ElicitationCard>
+  );
+}
+
+/** The fields over the decisions, on a plain row with no card around them. */
 export function LiveQuestionCard(props: {
   request: LiveQuestionRequest;
   locked: boolean;

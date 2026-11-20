@@ -12,7 +12,7 @@ import type {
   PendingElicitation,
 } from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
-import { fireEvent, render } from '@solidjs/testing-library';
+import { fireEvent, render, within } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -224,6 +224,26 @@ describe('ElicitationPart', () => {
     expect(queryByTestId('form')).not.toBeNull();
     expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
     expect(getByTestId('trailing').textContent).toBe('Waiting for you');
+  });
+
+  it('shows a live question as a card: who asks, the question, its fields and decisions', () => {
+    pending = live();
+    const { getByRole, queryByTestId } = render(() => (
+      <ElicitationPart turn={0} part={part()} />
+    ));
+    const card = getByRole('region', { name: 'Agent question' });
+    expect(card.dataset.slot).toBe('card');
+    expect(queryByTestId('tool-card')).toBeNull();
+    const inCard = within(card);
+    expect(inCard.getByText('Macro Coder is asking')).toBeTruthy();
+    expect(inCard.getByText('Waiting for you')).toBeTruthy();
+    expect(inCard.getByText('What is the best colour?')).toBeTruthy();
+    expect(inCard.getByTestId('form')).toBeTruthy();
+    const footer = card.querySelector('[data-slot="card-footer"]');
+    expect(footer).not.toBeNull();
+    for (const label of ['Submit', 'Decline', 'Cancel']) {
+      expect(within(footer as HTMLElement).getByText(label)).toBeTruthy();
+    }
   });
 
   it('a viewer without edit access sees the question locked', () => {

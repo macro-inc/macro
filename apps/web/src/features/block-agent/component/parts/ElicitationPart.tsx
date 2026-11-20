@@ -6,16 +6,23 @@
  * connection, reads as "not answered" rather than offering a form the agent
  * is no longer waiting on. Resolved parts read back what was chosen.
  *
- * Editors can answer; viewers see the same live card with inert controls.
+ * A live question is a card (`ElicitationCard`), like the session's tool
+ * approvals; a resolved one folds back into a transcript row. Editors can
+ * answer; viewers see the same live card with inert controls.
  *
  * The form, URL consent, and unrecognized-request controls are the
- * `LiveElicitation` ones the channel's Magic Chip shares; a Macro user tool
- * under review opens the tool's own composer here.
+ * `LiveElicitation` ones a channel reply's live tail shares; a Macro user
+ * tool under review opens the tool's own composer in the card.
  */
 
 import {
+  ElicitationCard,
+  type ElicitationHeader,
+} from '@app/features/agent-interactions/components/ElicitationCard';
+import {
   LiveQuestionCard,
   parseDraftedTool,
+  QuestionCard,
   type RespondToElicitation,
   UserToolComposer,
   type UserToolRequest,
@@ -81,43 +88,36 @@ export function ElicitationPart(props: {
   const waitingFor = () =>
     interactions.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
+  const header = (): ElicitationHeader => ({
+    title: `${agentName()} is asking`,
+    status: waitingFor(),
+    message: props.part.message,
+    notice: interactions.canAnswer()
+      ? undefined
+      : 'Only people who can edit this session can answer.',
+  });
+
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
-      <ToolCard
-        title={`${agentName()} is asking`}
-        status="running"
-        defaultOpen
-        trailing={<span class="text-ink-muted">{waitingFor()}</span>}
-      >
-        <div class="flex flex-col gap-3 py-1">
-          <div class="text-sm text-ink">{props.part.message}</div>
-          <Show when={!interactions.canAnswer()}>
-            <div class="text-xs text-ink-extra-muted">
-              Only people who can edit this session can answer.
-            </div>
-          </Show>
-          {match(props.part.request)
-            .with({ kind: 'user_tool' }, (request) => (
-              <LiveUserTool
-                request={request}
-                toolCall={props.part.toolCall ?? String(props.part.requestId)}
-                locked={locked()}
-                onRespond={respond}
-              />
-            ))
-            .with(
-              { kind: P.union('form', 'url', 'unrecognized') },
-              (request) => (
-                <LiveQuestionCard
-                  request={request}
-                  locked={locked()}
-                  onRespond={respond}
-                />
-              )
-            )
-            .exhaustive()}
-        </div>
-      </ToolCard>
+      {match(props.part.request)
+        .with({ kind: 'user_tool' }, (request) => (
+          <LiveUserTool
+            header={header()}
+            request={request}
+            toolCall={props.part.toolCall ?? String(props.part.requestId)}
+            locked={locked()}
+            onRespond={respond}
+          />
+        ))
+        .with({ kind: P.union('form', 'url', 'unrecognized') }, (request) => (
+          <QuestionCard
+            header={header()}
+            request={request}
+            locked={locked()}
+            onRespond={respond}
+          />
+        ))
+        .exhaustive()}
     </Show>
   );
 }
@@ -130,6 +130,7 @@ export function ElicitationPart(props: {
  * chip, or by stopping it.
  */
 function LiveUserTool(props: {
+  header: ElicitationHeader;
   request: UserToolRequest;
   toolCall: string;
   locked: boolean;
@@ -140,7 +141,8 @@ function LiveUserTool(props: {
     parseDraftedTool(props.request, props.toolCall)
   );
   const fallback = (
-    <LiveQuestionCard
+    <QuestionCard
+      header={props.header}
       request={{ kind: 'form', schema: props.request.schema }}
       locked={props.locked}
       onRespond={props.onRespond}
@@ -149,16 +151,24 @@ function LiveUserTool(props: {
   return (
     <Show when={drafted()} fallback={fallback}>
       {(tool) => (
-        <UserToolComposer
-          tool={tool()}
-          toolCall={props.toolCall}
-          cancel
-          fallback={fallback}
-          review={{
-            canAnswer: () => interactions.canAnswer() && !props.locked,
-            respond: props.onRespond,
-          }}
-        />
+        <ElicitationCard header={props.header}>
+          <UserToolComposer
+            tool={tool()}
+            toolCall={props.toolCall}
+            cancel
+            fallback={
+              <LiveQuestionCard
+                request={{ kind: 'form', schema: props.request.schema }}
+                locked={props.locked}
+                onRespond={props.onRespond}
+              />
+            }
+            review={{
+              canAnswer: () => interactions.canAnswer() && !props.locked,
+              respond: props.onRespond,
+            }}
+          />
+        </ElicitationCard>
       )}
     </Show>
   );
