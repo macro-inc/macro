@@ -28,7 +28,10 @@ export function stackLabel(stack: ChannelStack, senderName: SenderName) {
             notification.notification_metadata.tag === 'channel_mention'
         )?.sender_id;
         return t('channelNotificationStacks.mentionedInThread', {
-          name: (mentioner && senderName(mentioner)) || first,
+          // Never another sender's name for the mention.
+          name: mentioner
+            ? senderName(mentioner) || t('channelNotificationStacks.someone')
+            : first,
         });
       }
       if (names.length <= 1) {
