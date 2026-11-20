@@ -46,4 +46,26 @@ impl Capture {
         self.provider.force_flush().unwrap();
         self.exporter.get_finished_spans().unwrap()
     }
+
+    /// Asserts no finished span or event recorded anything naming
+    /// `email_domain`, which also catches an email that was URL-encoded.
+    pub(crate) fn assert_no_email(&self, email_domain: &str) {
+        let spans = self.finished();
+        for span in &spans {
+            let events = span
+                .events
+                .events
+                .iter()
+                .flat_map(|event| &event.attributes);
+            for attribute in span.attributes.iter().chain(events) {
+                let value = attribute.value.as_str();
+                assert!(
+                    !value.contains(email_domain),
+                    "{} recorded {} = {value:?}",
+                    span.name,
+                    attribute.key
+                );
+            }
+        }
+    }
 }

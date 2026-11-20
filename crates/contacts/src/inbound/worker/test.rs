@@ -154,8 +154,8 @@ fn traced_sqs_message(body: &str) -> aws_sdk_sqs::types::Message {
 #[cfg(feature = "outbound")]
 #[tokio::test]
 async fn each_message_is_a_finished_round_in_the_senders_trace_without_emails() {
+    use opentelemetry::Value;
     use opentelemetry::trace::TraceContextExt as _;
-    use opentelemetry::{KeyValue, Value};
     use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
     let capture = crate::trace_context::capture::Capture::start();
@@ -163,7 +163,10 @@ async fn each_message_is_a_finished_round_in_the_senders_trace_without_emails() 
     expect_delete(&server).await;
     let worker = worker(&server);
     let body = include_str!("../../../tests/fixtures/add_connection.json");
-    assert!(body.contains('@'), "the fixture must name users by email");
+    assert!(
+        body.contains("@test.com"),
+        "the fixture must name users by email"
+    );
 
     let send = tracing::info_span!(parent: None, "contacts.send");
     let sent_from = send.context().span().span_context().clone();
@@ -202,22 +205,6 @@ async fn each_message_is_a_finished_round_in_the_senders_trace_without_emails() 
     assert_eq!(field("users"), Some(Value::I64(3)));
     assert_eq!(field("connections"), Some(Value::I64(3)));
 
-    let recorded = |attributes: &[KeyValue]| {
-        attributes
-            .iter()
-            .map(|attribute| attribute.value.as_str().into_owned())
-            .collect::<Vec<_>>()
-    };
-    for span in &spans {
-        let values = recorded(&span.attributes).into_iter().chain(
-            span.events
-                .events
-                .iter()
-                .flat_map(|event| recorded(&event.attributes)),
-        );
-        for value in values {
-            assert!(!value.contains('@'), "{} recorded {value:?}", span.name);
-        }
-    }
+    capture.assert_no_email("test.com");
     server.verify().await;
 }

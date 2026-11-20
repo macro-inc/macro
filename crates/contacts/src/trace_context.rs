@@ -1,7 +1,7 @@
 //! W3C trace context carried on contacts queue messages, so the worker round
 //! that applies a message joins the trace of the request that sent it.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "outbound"))]
 pub(crate) mod capture;
 
 use opentelemetry::trace::TraceContextExt as _;
