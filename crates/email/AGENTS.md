@@ -38,6 +38,14 @@ tools — hexagonal, heavily feature-gated.
   delivery disposition.
 - `src/domain/crm_cleanup.rs` (feature `mailbox`): nightly cleanup job lifecycle,
   candidate pruning and dispatch, teardown guards, and delivery disposition.
+- `src/domain/crm_population.rs` (feature `mailbox`): CRM contact population on
+  its own queue. Producers record requests through `CrmPopulationRequests`,
+  which merges hints per mailbox, address and `live_mail` and sends one queued
+  message per correspondent; `CrmPopulationService` admits a population
+  through its team's slots without waiting, runs it or a policy history page,
+  and chooses the message's disposition (done, hidden for a back-off, or left
+  for redelivery). Backfill and inbox sync ask through their queue ports'
+  `request_crm_population`; they never populate.
 - `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
   push-token rotation retry and notification intake; lifecycle also owns ordered
   deletion requests for a deleted user's inboxes.

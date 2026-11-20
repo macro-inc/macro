@@ -39,7 +39,7 @@ the gateway `/email` prefix.
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
   `scheduled` (scheduled sends),
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
-  `crm_cleanup`, `worker_lifecycle`.
+  `crm_cleanup`, `crm_population`, `worker_lifecycle`.
   Each worker's `worker::context` builds a service plus its SQS receive/ack handle.
   Backfill and inbox sync have separate outbound effect dependencies; there is
   no shared `PubSubContext`. Scheduled delivery and its forwarded-attachment
@@ -227,13 +227,15 @@ the gateway `/email` prefix.
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
   to skip. Each message has its own savepoint: one whose data can never be
   stored ([`database_error::is_unstorable`](src/outbound/backfill_jobs/worker/database_error.rs))
-  is skipped and logged, and the rest of the thread commits. The CRM fan-out is
-  enqueued after the write slot is taken and before the write: after the commit
-  nothing in the handler may request a
+  is skipped and logged, and the rest of the thread commits. The CRM population
+  requests are made after the write slot is taken and before the write: after the
+  commit nothing in the handler may request a
   retry, because a retry would find the thread and skip it, and an operation
-  deferred for a busy slot must not repeat the fan-out. Invitation and attachment fan-outs only log their
-  failures, and the metadata step is enqueued last. BackfillMessage only drains
-  operations enqueued before thread writes.
+  deferred for a busy slot must not repeat them. The commit asks again, logging
+  a failure: a population that ran before the commit found none of the thread's
+  mail, and the pending request usually absorbs the second one. Invitation and
+  attachment fan-outs only log their failures, and the metadata step is enqueued
+  last. BackfillMessage only drains operations enqueued before thread writes.
 - Backfill keeps a message hidden while its operation runs
   (`process::keep_invisible`, a 20 s heartbeat restoring the queue's 60 s
   visibility timeout). Without it, a slow thread is delivered to a second
@@ -247,10 +249,33 @@ the gateway `/email` prefix.
   `BackfillWriteSlot::hold`, which renews the 120 s lease while the write runs,
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
-- Each CRM contact population holds one of four per-team Redis slots
-  (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
-  database connection per worker. A refused slot, or a population that timed
-  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
+- CRM contact population runs on its own workers (`pubsub::crm_population`,
+  `CRM_POPULATION_QUEUE_WORKERS` per task, 2 by default), its own database pool
+  (one connection per worker, `application_name=email-crm-population`) and its
+  own FIFO queue (`EmailCrmPopulationQueue`), whose message group is the mailbox,
+  so SQS hands out one population per mailbox at a time. Producers (inbox sync,
+  backfill, the Outlook projection, the legacy history fan-out) never populate:
+  they record a request per mailbox, address and `live_mail` in Redis
+  (`util/redis/crm_population.rs`) and send a message only when none is queued
+  for it, so a correspondent named by a thousand messages is one population.
+  The hints merge (earliest and latest message, sent wins, newest name); they
+  only feed the CRM's "changes nothing" shortcut, and a message whose entry is
+  gone runs on its own hints with that shortcut off for a known contact. Policy history pages (`PopulateCrmPolicy`) go to the
+  same queue from the backfill outbox. A backfill worker forwards any
+  `PopulateCrmContact` or `PopulateCrmPolicy` an older release left on the
+  backfill queue, without a database read or slot.
+- A population worker takes one of six fleet-wide slots
+  (`try_acquire_crm_population_fleet_slot`) before it receives a message, so a
+  busy fleet leaves messages queued instead of spending their deliveries. Each
+  population then takes one of its team's four slots
+  (`try_acquire_crm_population_slot`, the `email:backfill:crm_population_slots`
+  key) without waiting: a refused one is hidden on the queue with a growing
+  back-off, which also holds back that mailbox's other populations. Filling a
+  team's slot set by hand pauses its populations, and nothing else. A failed
+  population (`CrmError::Contended`, a lock or statement timeout, any storage
+  error) is hidden for 30 s doubling to 15 minutes and given up after six
+  attempts with one ERROR; the next mail asks again. See
+  `email::domain::crm_population`.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure
