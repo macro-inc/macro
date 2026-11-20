@@ -61,11 +61,11 @@ import {
   writeMarkdown,
 } from './markdown';
 import {
-  type ApplyEditsOptions,
   applyEdits,
   type DocumentBlocks,
-  type DocumentEdit,
-  type DocumentEditsResult,
+  type MarkdownEditOperation,
+  type MarkdownEditOptions,
+  type MarkdownEditResult,
   readBlocks,
 } from './markdown-edits';
 import type {
@@ -538,7 +538,7 @@ export class Document
    * Replace a markdown document's or task body's text with `markdown`, only
    * if the document is still at `expectedRevision`, the revision from
    * `contentWithRevision()`. Use it when you already have the whole new
-   * Markdown; for a few exact changes use `applyEdits`, and to describe a
+   * Markdown; for a few exact changes use `applyMarkdownEdits`, and to describe a
    * change in words, `edit`.
    *
    * Nobody's edits are overwritten: if anyone changed the document since your
@@ -581,11 +581,11 @@ export class Document
   /**
    * A markdown document's or task body's top-level blocks, each with its id,
    * type and internal markdown, and the revision they were read at: what
-   * `applyEdits` matches against. Pass the whole read as `base`.
+   * `applyMarkdownEdits` matches against. Pass the whole read as `base`.
    *
    * @readonly
    */
-  blocks(): Promise<DocumentBlocks> {
+  markdownBlocks(): Promise<DocumentBlocks> {
     return readBlocks(this.client, this);
   }
 
@@ -597,7 +597,7 @@ export class Document
    *
    * Edits, applied in order:
    * - `{ replace, with, in?, all? }` replaces exact internal markdown, copied
-   *   from `blocks()` or `content()` with its `**`, list markers and `<m-*>`
+   *   from `markdownBlocks()` or `content()` with its `**`, list markers and `<m-*>`
    *   tags. It must occur exactly once in the document, or in block `in`,
    *   unless `all` is set; it may span adjacent blocks joined by one blank line.
    * - `{ insert, after }` / `{ insert, before }` adds new blocks of markdown at
@@ -605,11 +605,13 @@ export class Document
    * - `{ remove: block }` deletes a block; `{ move: block, after | before }`
    *   moves one.
    *
-   * Blocks are objects from `blocks()` or from a result's `changes`. Edited
-   * blocks keep their ids, comments and formatting. Pass the read as `base`
-   * and edits people made since merge with yours.
+   * Blocks are `DocumentBlock` handles from `markdownBlocks()`, a result's
+   * `changes` or a refusal's `candidates`. Edited blocks keep their ids,
+   * comments and formatting. Pass the read as `base`: edits people made since
+   * merge with yours, and a retry of a batch that committed is not applied
+   * twice.
    *
-   * Throws `DocumentEditsRefusedError` (nothing written) with `code`, the
+   * Throws `MarkdownEditsRefusedError` (nothing written) with `code`, the
    * 1-based `edit` and, for `no_match` and `ambiguous_match`, the `candidates`
    * it may have meant; `DocumentChangedError` when text an edit matched was
    * changed since `base` (read again and redo it); and
@@ -617,9 +619,9 @@ export class Document
    *
    * @example Fix a date and add a step after the intro.
    * ```js
-   * const read = await document.blocks();
-   * const intro = read.blocks.find((block) => block.markdown.startsWith('Intro'));
-   * const { changes } = await document.applyEdits(
+   * const read = await document.markdownBlocks();
+   * const intro = read.blocks.find((block) => block.markdown?.startsWith('Intro'));
+   * const { changes } = await document.applyMarkdownEdits(
    *   [
    *     { replace: 'ships in Q3', with: 'ships in Q4' },
    *     { insert: '- Review the launch checklist.', after: intro },
@@ -632,19 +634,19 @@ export class Document
    * @example Recover from an ambiguous match.
    * ```js
    * try {
-   *   await document.applyEdits([{ replace: 'TBD', with: 'Friday' }]);
+   *   await document.applyMarkdownEdits([{ replace: 'TBD', with: 'Friday' }]);
    * } catch (error) {
-   *   if (error.name !== 'DocumentEditsRefusedError') throw error;
+   *   if (error.name !== 'MarkdownEditsRefusedError') throw error;
    *   return { data: { code: error.code, candidates: error.candidates } };
    * }
    * ```
    *
    * @write
    */
-  async applyEdits(
-    edits: DocumentEdit[],
-    options: ApplyEditsOptions = {},
-  ): Promise<DocumentEditsResult> {
+  async applyMarkdownEdits(
+    edits: MarkdownEditOperation[],
+    options: MarkdownEditOptions = {},
+  ): Promise<MarkdownEditResult> {
     const result = await applyEdits(this.client, this, edits, options);
     this.detail.clear();
     return { ...result, webUrl: this.webUrl() };
@@ -697,7 +699,7 @@ export class Document
   /**
    * Change a markdown document's or task body's text in place: pass
    * natural-language instructions and an AI editor applies them, merging with
-   * concurrent edits. When you know the exact change, `applyEdits` does it
+   * concurrent edits. When you know the exact change, `applyMarkdownEdits` does it
    * without AI, faster and unbilled.
    *
    * Write instructions like a precise request to a careful editor:

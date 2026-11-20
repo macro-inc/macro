@@ -1194,3 +1194,15 @@ async fn a_dry_run_says_nothing_was_written() {
     );
     assert!(editing.markdown_edits.lock().unwrap()[0].0.dry_run);
 }
+
+#[tokio::test]
+async fn an_instructions_call_with_dry_run_reaches_no_editor() {
+    let editing = FakeEditingWorker::default();
+    let mut tool = direct_tool(serde_json::json!([]), "replace Q3 with Q4");
+    tool.dry_run = true;
+    let context = tool_context(FakeDocumentService::new("md"), editing.clone());
+
+    assert!(tool.call(context, request_context()).await.is_err());
+    assert!(editing.edit_calls.lock().unwrap().is_empty());
+    assert!(editing.markdown_edits.lock().unwrap().is_empty());
+}

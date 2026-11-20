@@ -80,7 +80,8 @@ word docs, Illustrator/Photoshop files).
   body with sync-service's revision and commits a write only at the revision
   the caller read (409 `revision_conflict` otherwise). No model, no billing.
 - `src/domain/markdown_edits.rs`: direct edits with no model, the
-  `EditDocument` tool's `edits` and the SDK's `blocks`/`applyEdits`
+  `EditDocument` tool's `edits` and the SDK's
+  `markdownBlocks`/`applyMarkdownEdits`
   (`GET /{id}/markdown/blocks`, `POST /{id}/markdown/edits`). The worker's
   `/markdown` `edit` action applies the batch at `baseRevision` and merges it;
   422 `edit_refused` carries the typed refusal, 409 `revision_conflict` means

@@ -1447,7 +1447,8 @@ handles; for example, `macro.documents.search(...)` is an async iterator and
 `await document.content()` fetches a document as Macro's internal Markdown, with
 chips, tables and other rich content as `<m-*>` tags. To write text back, the
 agent reads it with `contentWithRevision()` and keeps the tags intact; for exact
-changes it reads `document.blocks()` and calls `document.applyEdits([...], { base })`,
+changes it reads `document.markdownBlocks()` and calls
+`document.applyMarkdownEdits([...], { base })`,
 which applies `replace`/`insert`/`remove`/`move` edits with no AI and keeps
 edited blocks' ids and comments (the `EditDocument` tool's `edits` field is the
 same engine). Use the

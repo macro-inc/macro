@@ -517,16 +517,15 @@ export {
   type SetContentOptions,
 } from './entities/documents/markdown';
 export {
-  type ApplyEditsOptions,
   type BlockPosition,
-  type BlockReference,
-  type DocumentBlock,
+  DocumentBlock,
   type DocumentBlockChange,
   type DocumentBlocks,
-  type DocumentEdit,
-  DocumentEditsRefusedError,
-  type DocumentEditsResult,
-  type EditCandidate,
+  type MarkdownEditCandidate,
+  type MarkdownEditOperation,
+  type MarkdownEditOptions,
+  type MarkdownEditResult,
+  MarkdownEditsRefusedError,
 } from './entities/documents/markdown-edits';
 export type { FileContent } from './entities/documents/namespace';
 export {
