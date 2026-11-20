@@ -373,7 +373,8 @@ pkgs.testers.runNixOSTest {
           agent.succeed("runuser -u macro -- sh -c 'umask 077 && cat ${goodAgentEnvironment} > /run/macro-agent-inbox/agent.env'")
           agent.wait_until_succeeds("grep -Fx 'MACRO_AGENT_NAME=\"Ada\"' /var/lib/macrod/agent.env")
           agent.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
-          agent.succeed("test ! -s /run/macro-agent-inbox/agent.env")
+          # Emptied just after the install.
+          agent.wait_until_succeeds("test ! -s /run/macro-agent-inbox/agent.env")
           agent.wait_until_succeeds("journalctl -u macro-agent.service | grep -F 'starting the runtime at'")
           agent.wait_until_succeeds("pgrep -u macro -f 'bun /home/macro/agent/workspace/cli.ts run'")
           agent.succeed("[ $(systemctl show macro-agent.service --property=User --value) = macro ]")

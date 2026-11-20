@@ -103,7 +103,7 @@ eventually agent grep -Fx 'MACRO_AGENT_NAME="Applied"' /var/lib/macrod/agent.env
   || fail "the agent's computer never installed agent.env"
 [ "$(agent stat -c '%U %a' /var/lib/macrod/agent.env)" = "macro 600" ] || fail "agent.env is not macro's, 0600"
 [ "$(agent stat -c '%U %G %a' /run/macro-agent-inbox)" = "macro macro 700" ] || fail "the inbox is not macro's, 0700"
-agent test ! -s /run/macro-agent-inbox/agent.env || fail "the inbox was not emptied"
+eventually agent test ! -s /run/macro-agent-inbox/agent.env || fail "the inbox was not emptied"
 eventually journal "$run-agent" macro-agent.service 'Started Macro agent teammate' \
   || fail "macro-agent.service never started"
 
