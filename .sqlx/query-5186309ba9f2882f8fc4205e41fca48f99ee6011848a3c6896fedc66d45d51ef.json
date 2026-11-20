@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE",
+  "query": "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR SHARE",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "f942ff57aa734a1a01e1323e0e886b3128f1a00405b4dc675b5fa0fa3a2713e4"
+  "hash": "5186309ba9f2882f8fc4205e41fca48f99ee6011848a3c6896fedc66d45d51ef"
 }

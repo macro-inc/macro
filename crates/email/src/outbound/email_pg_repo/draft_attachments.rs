@@ -6,8 +6,12 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-fn db_error(_: sqlx::Error) -> AttachmentError {
-    AttachmentError::Infrastructure
+fn db_error(error: sqlx::Error) -> AttachmentError {
+    if super::is_lock_timeout(&error) {
+        AttachmentError::Contended
+    } else {
+        AttachmentError::Infrastructure
+    }
 }
 
 impl DraftAttachmentRepository for EmailPgRepo {
@@ -57,12 +61,12 @@ impl DraftAttachmentRepository for EmailPgRepo {
 
         expected_generation: i32,
     ) -> Result<(), AttachmentError> {
-        let mut tx = self.pool.begin().await.map_err(db_error)?;
+        let mut tx = super::begin(&self.pool).await.map_err(db_error)?;
         // Serialize attachment edits without blocking the schedule foreign key's
         // key-share lock while its transaction holds the message lock.
         let mailbox=sqlx::query!(r#"SELECT provider::text AS "provider!",sync_generation,
             (macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $2)) AS "authorized!"
-            FROM email_links l WHERE id = $1 FOR NO KEY UPDATE"#,link,actor).fetch_optional(&mut *tx).await.map_err(db_error)?.ok_or(AttachmentError::NotFound)?;
+            FROM email_links l WHERE id = $1 FOR SHARE"#,link,actor).fetch_optional(&mut *tx).await.map_err(db_error)?.ok_or(AttachmentError::NotFound)?;
         let message=sqlx::query!(r#"SELECT thread_id,draft_generation,is_draft,is_sent,
             (EXISTS (SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id = m.id AND d.delete_requested) OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS "deleted!"
             FROM email_messages m WHERE id = $1 AND link_id = $2 FOR UPDATE"#,draft,link).fetch_optional(&mut *tx).await.map_err(db_error)?.ok_or(AttachmentError::NotFound)?;
