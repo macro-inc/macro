@@ -380,3 +380,45 @@ async fn a_draft_save_recomputes_its_thread_after_another_write_to_it(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("email_draft"))
+)]
+async fn new_drafts_saved_together_in_one_thread_both_commit(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    outlook(&pool).await?;
+    // Another writer holds the thread, so both saves insert their message,
+    // which key-share-locks the thread, before either reaches the recompute.
+    let mut held = pool.begin().await?;
+    sqlx::query!(
+        "SELECT id FROM email_threads WHERE id = $1 FOR NO KEY UPDATE",
+        thread()
+    )
+    .fetch_one(&mut *held)
+    .await?;
+    let save = |pool: Pool<Postgres>| {
+        tokio::spawn(async move {
+            let mut draft = prepared();
+            draft.message.db_id = macro_uuid::generate_uuid_v7();
+            draft.message.send_time = None;
+            EmailPgRepo::new(pool)
+                .insert_message(&draft.message, &draft.contacts, link(), None, true)
+                .await
+                .map(|_| ())
+        })
+    };
+    let (first, second) = (save(pool.clone()), save(pool.clone()));
+    wait_for_lock_waiters(&pool, 2).await?;
+    held.commit().await?;
+
+    let (first, second) = (bounded(first).await?, bounded(second).await?);
+    assert!(
+        first.is_ok() && second.is_ok(),
+        "{:?} {:?}",
+        first.err(),
+        second.err()
+    );
+    Ok(())
+}

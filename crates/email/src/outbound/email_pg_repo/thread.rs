@@ -427,7 +427,7 @@ pub(super) async fn update_thread_metadata(
     // Taking the thread row first makes the later recompute read what the
     // earlier one committed, not the snapshot from before it waited.
     sqlx::query!(
-        "SELECT id FROM email_threads WHERE id = $1 FOR UPDATE",
+        "SELECT id FROM email_threads WHERE id = $1 FOR NO KEY UPDATE",
         thread_id
     )
     .fetch_optional(&mut **tx)
