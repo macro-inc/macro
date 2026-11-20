@@ -173,11 +173,12 @@ function crossBlockMatch(list: Entry[], old: string, edit: number) {
   let first = 0;
   while (
     first < list.length - 1 &&
-    offsets[first] + list[first].markdown.length <= at
+    offsets[first] + list[first].markdown.length < at
   )
     first++;
   let last = list.length - 1;
-  while (last > 0 && offsets[last] >= end) last--;
+  // A match that starts or ends in a separator takes the block beside it.
+  while (last > 0 && offsets[last] > end) last--;
   const merged = joined.slice(
     offsets[first],
     offsets[last] + list[last].markdown.length
@@ -186,8 +187,8 @@ function crossBlockMatch(list: Entry[], old: string, edit: number) {
     first,
     last,
     merged,
-    start: Math.max(0, at - offsets[first]),
-    end: Math.min(merged.length, end - offsets[first]),
+    start: at - offsets[first],
+    end: end - offsets[first],
   };
 }
 

@@ -541,3 +541,143 @@ describe('embedded images', () => {
     expect((error as EditRefusal).code).toBe('frozen_media');
   });
 });
+
+describe('review regressions', () => {
+  it('bolding exactly the commented word keeps its comment', async () => {
+    const snapshot = await buildSnapshot('Hello world', [
+      { text: 'world', id: 'c1' },
+    ]);
+    const synced = new SyncedDocument(snapshot);
+    await runDirectEdit(
+      DOC,
+      { edits: [{ old: 'world', new: '**world**' }] },
+      synced,
+      signal(),
+      NOOP_SPAN
+    );
+    const after = await readDocument(DOC, synced.snapshot());
+    expect(after.blocks[0].markdown).toBe('Hello **world**');
+    expect(after.blocks[0].commentIds).toEqual(['c1']);
+  });
+
+  it('an edit that would drop a comment from a kept block is refused comment_loss', async () => {
+    const snapshot = await buildSnapshot('Hello world', [
+      { text: 'world', id: 'c1' },
+    ]);
+    for (const edit of [
+      { old: 'Hello world', new: '# Hello world' },
+      { old: ' world', new: '' },
+    ]) {
+      const synced = new SyncedDocument(snapshot);
+      const error = await runDirectEdit(
+        DOC,
+        { edits: [edit] },
+        synced,
+        signal(),
+        NOOP_SPAN
+      ).catch((e: unknown) => e);
+      expect((error as EditRefusal).code).toBe('comment_loss');
+      expect(synced.commits).toBe(0);
+    }
+    const allowed = new SyncedDocument(snapshot);
+    await runDirectEdit(
+      DOC,
+      {
+        edits: [{ old: 'Hello world', new: '# Hello world' }],
+        allowDeletingContent: true,
+      },
+      allowed,
+      signal(),
+      NOOP_SPAN
+    );
+    expect(allowed.commits).toBe(1);
+  });
+
+  it('an old text that starts or ends in a block separator joins the blocks', async () => {
+    const snapshot = await buildSnapshot('A\n\nB');
+    const cases: [old: string, replacement: string, expected: string[]][] = [
+      ['\n\nB', 'X', ['AX']],
+      ['A\n\n', 'X', ['XB']],
+      ['\n\n', 'XYZ', ['AXYZB']],
+      ['\n\n', '', ['AB']],
+    ];
+    for (const [old, replacement, expected] of cases) {
+      const synced = new SyncedDocument(snapshot);
+      await runDirectEdit(
+        DOC,
+        { edits: [{ old, new: replacement }] },
+        synced,
+        signal(),
+        NOOP_SPAN
+      );
+      const after = await readDocument(DOC, synced.snapshot());
+      expect(after.blocks.map((b) => b.markdown)).toEqual(expected);
+    }
+  });
+
+  it('repeating a committed request with the same base writes nothing again', async () => {
+    const snapshot = await buildSnapshot('Hello');
+    const synced = new SyncedDocument(snapshot);
+    const request = {
+      baseRevision: synced.revision(),
+      edits: [{ insert_after: 'end', markdown: 'Added' }],
+    };
+
+    const first = await runDirectEdit(
+      DOC,
+      request,
+      synced,
+      signal(),
+      NOOP_SPAN
+    );
+    const retry = await runDirectEdit(
+      DOC,
+      request,
+      synced,
+      signal(),
+      NOOP_SPAN
+    );
+
+    expect(first.outcome).toBe('committed');
+    expect(retry).toEqual({
+      outcome: 'already_applied',
+      revision: synced.revision(),
+      changes: [],
+      merge: 'base',
+    });
+    expect(synced.commits).toBe(1);
+    const after = await readDocument(DOC, synced.snapshot());
+    expect(after.blocks.map((b) => b.markdown)).toEqual(['Hello', 'Added']);
+  });
+
+  it('a retry after a lost acknowledgement is recognised too', async () => {
+    const snapshot = await buildSnapshot('Hello');
+    const synced = new SyncedDocument(snapshot);
+    const request = {
+      baseRevision: synced.revision(),
+      edits: [{ insert_after: 'end', markdown: 'Added' }],
+    };
+    const lost = {
+      load: () => synced.load(),
+      commit: async (revision: string, update: Uint8Array) => {
+        await synced.commit(revision, update);
+        throw new Error('connection reset');
+      },
+    };
+
+    await expect(
+      runDirectEdit(DOC, request, lost, signal(), NOOP_SPAN)
+    ).rejects.toThrow('connection reset');
+    const retry = await runDirectEdit(
+      DOC,
+      request,
+      synced,
+      signal(),
+      NOOP_SPAN
+    );
+
+    expect(retry.outcome).toBe('already_applied');
+    const after = await readDocument(DOC, synced.snapshot());
+    expect(after.blocks.map((b) => b.markdown)).toEqual(['Hello', 'Added']);
+  });
+});
