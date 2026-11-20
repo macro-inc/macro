@@ -7,13 +7,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
-import {
-  createSignal,
-  For,
-  type JSX,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ToolCard, type ToolStatus } from '../../ui';
 
@@ -90,7 +84,9 @@ export function BackgroundJobCard(props: {
           : jobOutcome(props.job.status)}
       </span>
       <Show when={running() && props.onCancel}>
-        {(cancel) => <CancelControl onCancel={cancel()} busy={props.cancelling} />}
+        {(cancel) => (
+          <CancelControl onCancel={cancel()} busy={props.cancelling} />
+        )}
       </Show>
     </span>
   );

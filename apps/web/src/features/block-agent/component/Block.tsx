@@ -42,12 +42,12 @@ import { AgentSessionHeader } from '../views/agent-session-header';
 import { MobileAgentSessionHeader } from '../views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentComposer } from './AgentComposer';
 import { AgentComposerRegion } from './AgentComposerRegion';
-import { BackgroundJobsChip } from './BackgroundJobsChip';
 import { AgentConnections } from './AgentConnections';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { useAgentSessionHeader } from './agent-session-header';
+import { BackgroundJobsChip } from './BackgroundJobsChip';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 

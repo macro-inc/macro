@@ -1,18 +1,18 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   refetchBackgroundJob,
   useCancelBackgroundJobMutation,
 } from '@queries/agent-session/code-execution';
-import { isSessionArchived } from '@service-agent-harness/session-archive';
-import { useQueryClient } from '@tanstack/solid-query';
-import { createEffect, on, Show, Suspense } from 'solid-js';
-import { BackgroundJobCard } from '../component/parts/BackgroundJobCard';
-import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
-import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   ExecutionActivity,
   ExecutionRecord,
   ExecutionStatus,
 } from '@service-agent-harness/generated/schemas';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
+import { useQueryClient } from '@tanstack/solid-query';
+import { createEffect, on, Show, Suspense } from 'solid-js';
+import { BackgroundJobCard } from '../component/parts/BackgroundJobCard';
+import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
 import type {
   ToolCallCommon,
   ToolCallContext,
@@ -100,8 +100,7 @@ export function CodeExecutionPart(props: {
           error={error()}
           loading={Boolean(executionId()) && query.isPending}
           unavailable={
-            query.isError ||
-            (query.isSuccess && query.data.source !== source())
+            query.isError || (query.isSuccess && query.data.source !== source())
           }
         />
       }
@@ -138,9 +137,8 @@ function BackgroundJob(props: {
   const cancel = useCancelBackgroundJobMutation();
   const announced = () =>
     session?.sessionId() === props.sessionId
-      ? session
-          .metadata()
-          ?.jobs.find((job) => job.jobId === props.executionId)?.status
+      ? session.metadata()?.jobs.find((job) => job.jobId === props.executionId)
+          ?.status
       : undefined;
   createEffect(
     on(announced, (status) => {
