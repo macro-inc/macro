@@ -12,7 +12,6 @@ import { createStore } from 'solid-js/store';
 
 /** Use the same property flow as the side panel, with writes owned by the draft. */
 export function TaskComposerPropertyEditor(props: {
-  name: string;
   definitions: PropertyDefinitionDomain[];
   properties: Property[];
   onAdd: (id: string, created?: PropertyDefinitionWithOptions) => Promise<void>;
@@ -58,7 +57,6 @@ export function TaskComposerPropertyEditor(props: {
           }
           availableProperties={props.definitions}
           properties={props.properties}
-          name={props.name || 'New task'}
         />
       </Show>
     </>

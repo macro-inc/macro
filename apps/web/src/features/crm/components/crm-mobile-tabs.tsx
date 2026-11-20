@@ -9,13 +9,18 @@ import {
 
 export function CrmMobileTabs(props: {
   active: string;
+  /** Keep destinations visible until access is proven denied. */
+  canAccess: boolean;
   pipelines: readonly { id: string; name: string }[];
   lists: readonly { id: string; name: string }[];
   leading?: JSX.Element;
   onNavigate(id: string): void;
 }) {
   const items = (): PillTabItem[] => [
-    ...[...CRM_RECORDS, ...CRM_ACTIVITY_TABS].map((record) => ({
+    ...[
+      ...(props.canAccess ? CRM_RECORDS : []),
+      ...(props.canAccess ? CRM_ACTIVITY_TABS : []),
+    ].map((record) => ({
       value: record.id,
       label: record.label,
     })),
@@ -23,7 +28,7 @@ export function CrmMobileTabs(props: {
       value: pipelineTab(pipeline.id),
       label: pipeline.name,
     })),
-    ...props.lists.map((list) => ({
+    ...(props.canAccess ? props.lists : []).map((list) => ({
       value: `list:${list.id}`,
       label: list.name,
     })),

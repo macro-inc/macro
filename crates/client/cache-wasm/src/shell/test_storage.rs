@@ -66,6 +66,23 @@ impl BrowserStorage {
 
 impl Storage for BrowserStorage {
     type Error = TursoStorageError;
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.record_keys(typename, after_id, limit).await
+    }
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.projection_keys(typename, after_id, limit).await
+    }
 
     async fn scan_contact_records(
         &self,
@@ -174,6 +191,20 @@ impl Storage for BrowserStorage {
     ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
         self.take(TestStorageFault::LoadOptimisticProjections)?;
         self.inner.load_optimistic_projections(keys).await
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(
+            cache_core::queue::MutationId,
+            cache_core::queue::PersistedOptimisticLayer,
+        )],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .replace_optimistic_layers(layers, affected_projection_keys, projections)
+            .await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
