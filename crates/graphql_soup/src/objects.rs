@@ -448,9 +448,10 @@ pub struct GraphqlEntityMetadata {
         desc = "The newest activity on this entity, newest first."
     )
 )]
-// A page holds a few hundred entities at most, resolved and dropped per request;
-// boxing the channel variant would save little.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a page holds a few hundred entities, resolved and dropped per request; boxing the channel variant would save little"
+)]
 pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     /// Document entity.
     Document(GraphqlSoupDocument<E>),
