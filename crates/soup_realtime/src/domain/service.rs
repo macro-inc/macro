@@ -162,7 +162,12 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         let mut seen = HashSet::with_capacity(patches.len());
         let access_sources = patches
             .iter()
-            .filter_map(|patch| patch.access_source.as_ref())
+            .flat_map(|patch| {
+                patch
+                    .access_source
+                    .iter()
+                    .chain(patch.named_unless_accessor_of.iter())
+            })
             .filter(|source| seen.insert(*source))
             .cloned()
             .collect::<Vec<_>>();
@@ -193,19 +198,27 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         }
 
         let mut publish_count = 0;
-        for patch in patches {
-            let current_users = patch
-                .access_source
-                .as_ref()
+        let accessors_of = |source: Option<&Entity<'static>>| {
+            source
                 .and_then(|source| recipient_list_by_source.get(source))
                 .and_then(|&index| recipient_lists.get(index))
                 .map(Vec::as_slice)
-                .unwrap_or_default();
+                .unwrap_or_default()
+        };
+        for patch in patches {
+            let current_users = accessors_of(patch.access_source.as_ref());
             let users = if patch.named_recipients.is_empty() {
                 Cow::Borrowed(current_users)
             } else {
+                let regained = accessors_of(patch.named_unless_accessor_of.as_ref());
                 let mut users = current_users.to_vec();
-                users.extend(patch.named_recipients.iter().cloned());
+                users.extend(
+                    patch
+                        .named_recipients
+                        .iter()
+                        .filter(|user| !regained.contains(user))
+                        .cloned(),
+                );
                 users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
                 users.dedup();
                 recipient_sets.insert(users.clone());

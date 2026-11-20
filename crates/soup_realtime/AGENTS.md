@@ -70,9 +70,11 @@ tasks itself.
   from before that field reach only current accessors.
 - `channel.participant_removed` updates the channel for its remaining members
   and sends the removed members their own patch
-  (`SoupRealtimePatch::only_for`, no access lookup): `Updated` for a team or
+  (`SoupRealtimePatch::only_for_former_accessors`): `Updated` for a team or
   public channel, which they can still open unjoined, `Deleted` for a private
-  channel or DM. Every channel settings patch raises `channel.updated`, so
+  channel or DM. A removed member who is a current accessor again when the
+  event is consumed (added back meanwhile) gets only the members' update; the
+  members' lookup of the channel answers that, so it costs no extra lookup. Every channel settings patch raises `channel.updated`, so
   conversions and auto-join changes reach members too.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
