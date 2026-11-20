@@ -17,6 +17,8 @@ const AUTHOR_MODEL = 'anthropic/claude-opus-5-5';
 const AUTHOR = 'author@suggestions-bench.example';
 /** Uses of a set per section before its numbers stop being held-out: a baseline and one candidate. */
 const USES = 2;
+/** How many people of a set are written at once. */
+const WRITERS = 3;
 
 const ledgerPath = (set: string) => join(HELDOUT_DIR, set, 'ledger.jsonl');
 
@@ -237,15 +239,20 @@ export async function makeHeldout(at: Stack, name: string, count: number) {
     renameSync(`${sketches}.partial`, sketches);
   }
   const failed: string[] = [];
-  for (const person of people) {
-    if (written(person.slug)) continue;
-    try {
-      await writePersona(at, name, root, person);
-    } catch (error) {
-      failed.push(person.slug);
-      console.error(`${person.slug}: ${String(error).slice(0, 300)}`);
+  // People are written WRITERS at a time: each is its own chain of model
+  // calls, so a set of nine takes about as long as a set of three.
+  const queue = people.filter((person) => !written(person.slug));
+  const writer = async () => {
+    for (let person = queue.shift(); person; person = queue.shift()) {
+      try {
+        await writePersona(at, name, root, person);
+      } catch (error) {
+        failed.push(person.slug);
+        console.error(`${person.slug}: ${String(error).slice(0, 300)}`);
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: WRITERS }, writer));
   if (failed.length) throw new Error(`held-out set ${name}: ${failed.join(', ')} not written; run heldout make ${name} again to finish it`);
   console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
 }
