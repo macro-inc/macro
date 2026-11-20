@@ -58,6 +58,14 @@ pub trait ChannelListRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
 
+    /// Fetch the user's activity on each of `channels`, for the channels a
+    /// list page returns.
+    fn get_channel_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channels: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
+
     /// Fetch top-level channel messages for Soup thread rendering.
     fn get_thread_messages(
         &self,

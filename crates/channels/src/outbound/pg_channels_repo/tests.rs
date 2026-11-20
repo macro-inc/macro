@@ -3157,3 +3157,108 @@ async fn home_unread_thread_feed_matches_unseen_participant_threads(
     );
     Ok(())
 }
+
+/// Frecency is not requested by the walk below.
+struct NoFrecency;
+
+impl frecency::domain::ports::AggregateFrecencyStorage for NoFrecency {
+    type Err = anyhow::Error;
+
+    async fn get_top_entities(
+        &self,
+        _req: frecency::domain::models::FrecencyPageRequest<'_>,
+    ) -> Result<Vec<frecency::domain::models::AggregateFrecency>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn set_aggregate(
+        &self,
+        _frecency: frecency::domain::models::AggregateFrecency,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn get_aggregate_for_user_entities<'a>(
+        &self,
+        _user_id: MacroUserIdStr<'a>,
+        _entities: &'a [model_entity::Entity<'a>],
+    ) -> Result<Vec<frecency::domain::models::AggregateFrecency>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
+/// The id and viewed time `channel_list_activity_walk.sql` gives its `i`th
+/// channel.
+fn walk_channel(i: u32) -> (Uuid, DateTime<Utc>) {
+    let viewed_at: DateTime<Utc> = "2026-01-01T00:00:00Z".parse().unwrap();
+    (
+        Uuid::from_u128(0xd000 + u128::from(i)),
+        viewed_at + chrono::Duration::minutes(i64::from(i)),
+    )
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_activity_walk")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_viewed_updated_walk_returns_every_channel_with_its_own_activity(pool: Pool<Postgres>) {
+    use crate::domain::list_service::ChannelListServiceImpl;
+    use crate::domain::models::ChannelWithLatest;
+    use crate::domain::ports::ChannelListService;
+    use models_pagination::SortOn;
+
+    let service = ChannelListServiceImpl::new(repo(pool.clone()), repo(pool.clone()), NoFrecency);
+    let request = |limit: u32, query| GetChannelsRequest {
+        macro_id: macro_user_id(USER_A),
+        limit: Some(limit),
+        include_frecency: false,
+        query,
+    };
+    let sort = SimpleSortMethod::ViewedUpdated;
+    let everything = service
+        .get_channels(request(500, Query::Sort(sort, None)))
+        .await
+        .unwrap();
+    assert!(everything.len() > 130, "the fixture adds 130 channels");
+
+    // Page as Soup and REST do: each cursor comes from the last channel's
+    // sort value as the service filled it in.
+    let mut walked: Vec<ChannelWithLatest> = Vec::new();
+    let mut query = Query::Sort(sort, None);
+    loop {
+        let page = service.get_channels(request(10, query)).await.unwrap();
+        let Some(last) = page.last() else {
+            break;
+        };
+        query = Query::Cursor(Cursor {
+            id: last.channel.channel.id,
+            limit: 10,
+            val: ChannelWithLatest::sort_on(sort)(last),
+            filter: None,
+        });
+        walked.extend(page);
+        assert!(
+            walked.len() <= everything.len(),
+            "the walk repeated a channel"
+        );
+    }
+
+    let ids = |channels: &[ChannelWithLatest]| {
+        channels
+            .iter()
+            .map(|channel| channel.channel.channel.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ids(&walked), ids(&everything));
+    let viewed: HashMap<Uuid, Option<DateTime<Utc>>> = walked
+        .iter()
+        .map(|channel| (channel.channel.channel.id, channel.viewed_at))
+        .collect();
+    for i in 1..=130 {
+        let (id, viewed_at) = walk_channel(i);
+        assert_eq!(viewed[&id], Some(viewed_at), "channel {i}'s viewed time");
+    }
+}

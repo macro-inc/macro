@@ -1984,6 +1984,53 @@ impl ChannelListRepo for PgChannelsRepo {
         .await?)
     }
 
+    async fn get_channel_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channels: &[Uuid],
+    ) -> Result<Vec<Activity>, rootcause::Report> {
+        // One `(user_id, channel_id)` probe per listed channel. A plain
+        // `channel_id = ANY($2)` beside `user_id = $1` gets a generic plan
+        // that reads every activity row the user has and tests each against
+        // the whole array (120 ms at 4,000 ids for a user in 15,000
+        // channels); the fenced lateral keeps it to the ids passed in.
+        Ok(sqlx::query!(
+            r#"
+        SELECT
+            a.id as "id!: Uuid",
+            a.user_id as "user_id!: String",
+            a.channel_id as "channel_id!: Uuid",
+            a.viewed_at as "viewed_at?: DateTime<Utc>",
+            a.interacted_at as "interacted_at?: DateTime<Utc>",
+            a.created_at as "created_at!: DateTime<Utc>",
+            a.updated_at as "updated_at!: DateTime<Utc>"
+        FROM unnest($2::uuid[]) AS listed(channel_id)
+        CROSS JOIN LATERAL (
+            SELECT
+                a.id, a.user_id, a.channel_id, a.viewed_at, a.interacted_at,
+                a.created_at, a.updated_at
+            FROM comms_activity a
+            WHERE a.user_id = $1
+              AND a.channel_id = listed.channel_id
+            OFFSET 0
+        ) a
+        "#,
+            user_id.as_ref(),
+            channels,
+        )
+        .map(|row| Activity {
+            id: row.id,
+            user_id: row.user_id,
+            channel_id: row.channel_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            viewed_at: row.viewed_at,
+            interacted_at: row.interacted_at,
+        })
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
     async fn get_thread_messages(
         &self,
         params: GetThreadReplyRowsParams,
