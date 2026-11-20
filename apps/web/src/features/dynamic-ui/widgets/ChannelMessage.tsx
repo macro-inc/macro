@@ -39,7 +39,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Item.Content>
           <Item.Actions>
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => open(props.messageId)}
             >

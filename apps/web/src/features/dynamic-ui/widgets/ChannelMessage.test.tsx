@@ -99,6 +99,11 @@ describe('ChannelMessage', () => {
     ));
     view.getByText('Channel');
     fireEvent.click(view.getByRole('button', { name: 'Open in channel' }));
-    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith(
+      orchestrator,
+      'channel-2',
+      'message-1',
+      undefined
+    );
   });
 });
