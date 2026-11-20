@@ -59,6 +59,7 @@ import type { ChannelType } from '@service-storage/generated/schemas/channelType
 import type { SoupItemWithCalendarInvite } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { differenceInMilliseconds } from 'date-fns';
+import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { mapChannelToEntity } from '../channel/list-entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
@@ -345,11 +346,12 @@ export const channelSearchMetadata = (
 
 export const useSearchResponseItemMapper = () => {
   const { channels } = useChannelDirectory();
+  // Projected once per directory change, not once per result.
+  const mapper = createMemo(() =>
+    createSearchResponseItemMapper(channelSearchMetadata(channels()))
+  );
   return (result: UnifiedSearchResponseItem, searchQuery: string) =>
-    createSearchResponseItemMapper(channelSearchMetadata(channels()))(
-      result,
-      searchQuery
-    );
+    mapper()(result, searchQuery);
 };
 
 export const createSearchResponseItemMapper = (
