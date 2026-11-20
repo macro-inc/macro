@@ -152,8 +152,8 @@ impl AdapterInstall {
     }
 }
 
-/// Lines of npm's error output a user needs to act on, at most this many.
-const SUMMARY_LINES: usize = 3;
+/// Paragraphs of npm's error output a user needs to act on, at most this many.
+const SUMMARY_PARAGRAPHS: usize = 3;
 
 /// npm's closing line, naming its debug log. It is always last, so showing
 /// only the last line hid the actual error.
@@ -163,16 +163,31 @@ const NPM_LOG_LINE: &str = "A complete log of this run can be found in:";
 /// less than it does.
 const METADATA_KEYS: [&str; 5] = ["code ", "syscall ", "errno ", "path ", "dest "];
 
-/// The reason npm gave for failing, on one line: its first few error lines
-/// without the `npm error` prefix (metadata last), then the path of its full log.
+/// Prefixes of npm lines that are not about the failure, such as the
+/// update notice npm prints between its error paragraphs.
+const UNRELATED_PREFIXES: [&str; 3] = ["npm notice", "npm warn", "npm WARN"];
+
+/// The reason npm gave for failing, on one line: its first few error
+/// paragraphs without the `npm error` prefix (metadata last), then the path of
+/// its full log. npm wraps a paragraph over several lines and separates
+/// paragraphs with a bare `npm error`, so a fix it suggests (such as the
+/// `sudo chown` for a root-owned cache) stays whole.
 pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) -> String {
     let mut log = None;
     let mut awaiting_log_path = false;
-    let mut reasons = Vec::new();
+    let mut paragraphs: Vec<String> = Vec::new();
+    let mut paragraph_open = false;
     let mut metadata = Vec::new();
-    for line in stderr.lines() {
-        let line = line
-            .trim()
+    for raw in stderr.lines() {
+        let raw = raw.trim();
+        if UNRELATED_PREFIXES
+            .iter()
+            .any(|prefix| raw.starts_with(prefix))
+        {
+            paragraph_open = false;
+            continue;
+        }
+        let line = raw
             .trim_start_matches("npm error")
             .trim_start_matches("npm ERR!")
             .trim();
@@ -186,20 +201,40 @@ pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) ->
             log = Some(line);
             awaiting_log_path = false;
         } else if METADATA_KEYS.iter().any(|key| line.starts_with(key)) {
-            metadata.push(line);
-        } else if !line.is_empty() {
-            reasons.push(line);
+            metadata.push(line.to_owned());
+        } else if line.is_empty() {
+            paragraph_open = false;
+        } else if let (true, Some(paragraph)) = (paragraph_open, paragraphs.last_mut()) {
+            let continuation = without_repeated_title(paragraph_title(paragraph), line);
+            paragraph.push(' ');
+            paragraph.push_str(continuation);
+        } else {
+            paragraphs.push(line.to_owned());
+            paragraph_open = true;
         }
     }
-    reasons.extend(metadata);
-    reasons.truncate(SUMMARY_LINES);
-    let summary = if reasons.is_empty() {
+    paragraphs.extend(metadata);
+    paragraphs.truncate(SUMMARY_PARAGRAPHS);
+    let summary = if paragraphs.is_empty() {
         format!("npm exited with {status} and no error output")
     } else {
-        reasons.join("; ")
+        paragraphs.join("; ")
     };
     match log {
         Some(log) => format!("{summary} (npm log: {log})"),
         None => summary,
+    }
+}
+
+/// The first word of a paragraph: npm repeats a title such as `notarget` on
+/// every line of its paragraph.
+fn paragraph_title(paragraph: &str) -> &str {
+    paragraph.split_whitespace().next().unwrap_or_default()
+}
+
+fn without_repeated_title<'line>(title: &str, line: &'line str) -> &'line str {
+    match line.strip_prefix(title) {
+        Some(rest) if rest.starts_with(' ') && !title.is_empty() => rest.trim_start(),
+        _ => line,
     }
 }
