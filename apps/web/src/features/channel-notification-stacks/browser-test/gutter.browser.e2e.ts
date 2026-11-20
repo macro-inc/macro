@@ -365,3 +365,15 @@ for (const { name, pane } of [
     );
   });
 }
+
+test('a label that fits shows no tooltip', async ({ page }) => {
+  await open(page, 1600);
+  await list(page)
+    .getByRole('listitem')
+    .filter({ hasText: 'mentioned you' })
+    .getByText('Leo mentioned you')
+    .hover();
+  // Past the tooltip's open delay.
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+});
