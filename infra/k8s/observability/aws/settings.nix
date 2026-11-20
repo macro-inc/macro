@@ -172,14 +172,14 @@ rec {
   # The switch (README "The switch"). True adds a listener rule per host and
   # the target-group alarms. The Pulumi stack's rule (priority 1) still wins
   # until it drops these hostnames, so applying this alone moves no traffic.
-  switched = false;
+  switched = true;
 
   # The host copies its Prometheus blocks straight into Mimir's bucket: once
   # with one old block while the cluster is tested, then everything at the
   # switch (../cluster/README.md). `enable` lets the host's role list and
   # write `prefix` there, nothing else; turn it off once the copy is done.
   mimirBackfill = {
-    enable = false;
+    enable = true;
     # Mimir's `blocks_storage.storage_prefix`, then the tenant (`anonymous`
     # with multitenancy off). Change it with ../cluster's
     # modules/backends/mimir.nix.
