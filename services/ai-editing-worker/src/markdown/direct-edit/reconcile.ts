@@ -7,6 +7,7 @@
  * Ported from the ai-edit harness's mdpatch v1 committer.
  */
 import {
+  $createTextNode,
   $isElementNode,
   $isTextNode,
   $parseSerializedNode,
@@ -429,7 +430,16 @@ function reconcileChildren(
       }
     } else {
       current = $parseSerializedNode(news[j]);
-      if (previous) previous.insertAfter(current);
+      const mark = previous?.getParent();
+      if (
+        previous &&
+        mark?.getType() === 'comment-mark' &&
+        mark.getLastChild() === previous
+      )
+        // A new run after a mark's last run goes beside the mark: the
+        // comment never grows to cover text its author did not quote.
+        mark.insertAfter(current);
+      else if (previous) previous.insertAfter(current);
       else {
         const firstOld = olds.find(
           (item, k) => usedOld.has(k) && item.node.isAttached()
@@ -454,7 +464,8 @@ const inMark = (node: LexicalNode) =>
  * prefix and suffix by character and format) and put the new middle into one
  * existing run of its format. Inserted text joins the left run unless that run
  * is inside a comment mark and the right one is not, so new text joins a mark
- * only from inside it. False (the caller falls back) when the new middle mixes
+ * only from inside it; text inserted just before a mark from outside it gets a
+ * run of its own before the mark. False (the caller falls back) when the new middle mixes
  * formats or no run has its format.
  */
 function spliceRuns(
@@ -511,12 +522,72 @@ function spliceRuns(
       const cut = oldChars
         .slice(prefix, oldChars.length - suffix)
         .find((ch) => ch.format === format);
-      if (!cut) return false;
-      host = cut.run;
+      if (cut) host = cut.run;
+      // A pure insertion in a format no run has (new bold text): a run of its
+      // own, placed below.
+      else if (prefix + suffix !== oldChars.length || format === 'code')
+        return false;
     }
   }
-  const texts = oldGap.map(() => '');
   const inserted = insert.map((ch) => ch.c).join('');
+  // Text inserted at a comment mark's start from outside it must not extend
+  // the mark: it goes into a run of its own just before the mark.
+  let standalone: { place: () => void } | null = null;
+  if (insert.length && host < 0) {
+    const text = $createTextNode(inserted);
+    text.setFormat(Number(format));
+    const leftNode = left >= 0 ? oldGap[left].node : null;
+    const rightNode = right >= 0 ? oldGap[right].node : null;
+    const sameParent =
+      leftNode && rightNode && leftNode.getParent() === rightNode.getParent();
+    standalone = {
+      place: () => {
+        if (leftNode) {
+          const mark = leftNode.getParent();
+          if (
+            inMark(leftNode) &&
+            !sameParent &&
+            mark?.getLastChild() === leftNode
+          )
+            mark.insertAfter(text);
+          else leftNode.insertAfter(text);
+        } else if (rightNode) {
+          const mark = rightNode.getParent();
+          if (inMark(rightNode) && mark?.getFirstChild() === rightNode)
+            mark.insertBefore(text);
+          else rightNode.insertBefore(text);
+        }
+      },
+    };
+    if (!leftNode && !rightNode) return false;
+  }
+  if (
+    host >= 0 &&
+    host === right &&
+    host !== left &&
+    inMark(oldGap[right].node) &&
+    (left < 0 ||
+      oldGap[left].node.getParent() !== oldGap[right].node.getParent()) &&
+    // Replacing marked text keeps the replacement in the mark.
+    !oldChars
+      .slice(prefix, oldChars.length - suffix)
+      .some(
+        (ch) =>
+          oldGap[ch.run].node.getParent() === oldGap[right].node.getParent()
+      )
+  ) {
+    const anchor = oldGap[right].node;
+    const mark = anchor.getParent();
+    if (!$isTextNode(anchor) || anchor.getType() !== 'text' || !mark)
+      return false;
+    if (mark.getFirstChild() !== anchor) return false;
+    const text = $createTextNode(inserted);
+    text.setFormat(anchor.getFormat());
+    text.setStyle(anchor.getStyle());
+    standalone = { place: () => mark.insertBefore(text) };
+    host = -1;
+  }
+  const texts = oldGap.map(() => '');
   let placed = false;
   for (let k = 0; k <= oldChars.length; k++) {
     if (k === prefix && !placed && host >= 0) {
@@ -528,6 +599,10 @@ function spliceRuns(
     texts[oldChars[k].run] += oldChars[k].c;
   }
   if (host >= 0 && !placed) texts[host] += inserted;
+  if (standalone) {
+    standalone.place();
+    counters.textEdits++;
+  }
   oldGap.forEach((item, run) => {
     if (texts[run] === item.serialized.text) return;
     const text = item.node as TextNode;

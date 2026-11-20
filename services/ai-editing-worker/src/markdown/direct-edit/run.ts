@@ -39,6 +39,7 @@ import {
   nextAiPeerId,
 } from '../../ai-editing/awareness/ai-peer';
 import {
+  MAX_SNAPSHOT_BYTES,
   SyncDocumentError,
   type SyncDocumentStorage,
 } from '../../sync-document';
@@ -403,13 +404,22 @@ async function planAttempt(context: DirectEditRun): Promise<Planned> {
       const update = baseResult.update;
       const merged = await span.span('edit.direct.merge', async (child) => {
         const after = applyUpdate(snapshot, update);
+        if (after.byteLength > MAX_SNAPSHOT_BYTES)
+          throw new EditRefusal(
+            'too_large',
+            'the edited document exceeds the 4 MiB size limit'
+          );
         const afterView = await readDocument(
           documentId,
           after,
           options.opacity
         );
         try {
-          verifyResult(requestedMarkdown(current, expected), afterView);
+          verifyResult(
+            requestedMarkdown(current, expected),
+            afterView,
+            current
+          );
           checkCommentsKept(
             current,
             afterView,
