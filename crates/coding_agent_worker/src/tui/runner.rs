@@ -114,13 +114,17 @@ async fn run_quickstart(
     existing_config: Option<&Config>,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
 ) -> rootcause::Result<bool> {
+    let colors = ui::ColorSupport::detect();
     let mut quickstart = match existing_config {
         Some(config) => Quickstart::from_config(config),
         None => Quickstart::new()?,
     };
     loop {
         terminal
-            .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+            .draw(|frame| {
+                ui::render_quickstart(frame, &quickstart, config_path);
+                colors.fit_buffer(frame.buffer_mut());
+            })
             .context("failed to draw Quickstart")?;
         let Some(event) = input.recv().await else {
             return Ok(false);
@@ -157,7 +161,10 @@ async fn run_quickstart(
                     // returns.
                     quickstart.status = Some((format!("Installing {}...", install.package), false));
                     terminal
-                        .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+                        .draw(|frame| {
+                            ui::render_quickstart(frame, &quickstart, config_path);
+                            colors.fit_buffer(frame.buffer_mut());
+                        })
                         .context("failed to draw Quickstart")?;
                     if let Err(error) = install.run().await {
                         quickstart.status = Some((error, true));
@@ -196,6 +203,7 @@ async fn run_loop(
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
 ) -> rootcause::Result<Option<Restart>> {
+    let colors = ui::ColorSupport::detect();
     let mut tick = tokio::time::interval(TICK);
     let mut poller = update::start_poller(app.config.update.auto);
     let mut staged: Option<StagedUpdate> = None;
@@ -211,7 +219,10 @@ async fn run_loop(
 
     loop {
         terminal
-            .draw(|frame| ui::render(frame, app))
+            .draw(|frame| {
+                ui::render(frame, app);
+                colors.fit_buffer(frame.buffer_mut());
+            })
             .context("failed to draw the terminal UI")?;
 
         tokio::select! {
