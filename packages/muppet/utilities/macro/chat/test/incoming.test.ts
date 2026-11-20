@@ -8,6 +8,8 @@ type Posted = {
   readonly text: string;
   /** The root it replies to; a root has none. */
   readonly thread?: string;
+  /** Reading it back from history fails. */
+  readonly unreadable?: boolean;
 };
 
 /**
@@ -32,7 +34,10 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     id: posted.id,
     mentions: [],
     content: async () => posted.text,
-    createdAt: async () => posted.at,
+    createdAt: async () => {
+      if (posted.unreadable) throw new Error(`cannot read ${posted.id}`);
+      return posted.at;
+    },
     author: async () => ({
       id: 'macro|ada@example.com',
       name: async () => 'Ada',
@@ -352,4 +357,50 @@ test('a catch-up the backend refuses is tried again, and says so', async () => {
     { kind: 'retrying', error: 'backend restarting', retryInMs: 1_000 },
     { kind: 'retrying', error: 'backend restarting', retryInMs: 2_000 },
   ]);
+});
+
+test('a message posted just before the newest one delivered, whose event never came, is caught up', async () => {
+  const backend = fakeMacro();
+  const next = listening(backend);
+
+  const first = next();
+  await Bun.sleep(10);
+  await backend.live({ id: 'late', at: '2026-11-18T17:44:00Z', text: 'two' });
+  expect((await first).id).toBe('late');
+  // Committed a moment earlier, but its event was lost with the stream.
+  backend.post({ id: 'early', at: '2026-11-18T17:43:59Z', text: 'one' });
+
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.reconnect(new Date('2026-11-18T17:45:02Z'));
+  expect(
+    (await within(next(), 5_000, 'the earlier message never arrived')).id
+  ).toBe('early');
+  expect(await nothingWithin(next(), 500)).toBe('nothing');
+});
+
+test('a message that cannot be read is skipped and reported, and the rest of its channel is still caught up', async () => {
+  const backend = fakeMacro();
+  const reports: CatchUpReport[] = [];
+  const next = listening(backend, (report) => reports.push(report));
+
+  const pending = next();
+  await Bun.sleep(10);
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.post({ id: 'ok', at: '2026-11-18T17:45:10Z', text: 'hello' });
+  backend.post({
+    id: 'bad',
+    at: '2026-11-18T17:45:20Z',
+    text: 'broken',
+    unreadable: true,
+  });
+  backend.reconnect(new Date('2026-11-18T17:46:00Z'));
+
+  expect((await within(pending, 5_000, 'nothing was caught up')).id).toBe('ok');
+  expect(reports).toContainEqual({
+    kind: 'skipped',
+    channelId: 'dm1',
+    root: 'bad',
+    message: 'bad',
+    error: 'cannot read bad',
+  });
 });

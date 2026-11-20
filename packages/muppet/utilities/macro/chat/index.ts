@@ -144,7 +144,7 @@ export const pushed = <Item>(
 const recent = 20;
 /** How many delivered message ids are remembered to keep catch-ups from repeating one. */
 const rememberedIds = 1_000;
-/** With nothing delivered yet, a catch-up starts this long before the drop. */
+/** A catch-up starts this long before the newest message delivered, or the drop. */
 const catchUpMarginMs = 60_000;
 const directMessage = 'direct_message';
 
@@ -163,11 +163,12 @@ export type CatchUpReport =
       readonly channels: number;
       readonly messages: number;
     }
-  /** One channel's or thread's history couldn't be read: skipped, the rest still caught up. */
+  /** One channel's, thread's or message's history couldn't be read: skipped, the rest still caught up. */
   | {
       readonly kind: 'skipped';
       readonly channelId: string;
       readonly root?: string;
+      readonly message?: string;
       readonly error: string;
     }
   /** The whole pass failed (the backend still coming back): tried again after `retryInMs`. */
@@ -177,14 +178,19 @@ export type CatchUpReport =
       readonly retryInMs: number;
     };
 
+const warnUnlessCaughtUp = (report: CatchUpReport): void => {
+  if (report.kind !== 'caught-up')
+    console.warn(`chat catch-up: ${JSON.stringify(report)}`);
+};
+
 /** Chat over Macro's SDK, as the account the client is signed in as. */
 export const sdkChat = ({
   macro: connect,
-  report = () => undefined,
+  report = warnUnlessCaughtUp,
   sleep = (ms) => Bun.sleep(ms),
 }: {
   readonly macro: () => Promise<Macro>;
-  /** Told what each catch-up after a dropped stream did. Must not throw. */
+  /** Told what each catch-up after a dropped stream did. Must not throw. By default, what was skipped or retried goes to stderr. */
   readonly report?: (report: CatchUpReport) => void;
   /** Waits between catch-up attempts. */
   readonly sleep?: (ms: number) => Promise<void>;
@@ -428,9 +434,21 @@ export const sdkChat = ({
               }
               for (const message of [root, ...replies]) {
                 if (delivered.has(message.id)) continue;
-                const at = await message.createdAt();
-                if (Date.parse(at) < since) continue;
-                missed.push(await fromHistory(channel, message, at));
+                // One message that can't be read is skipped, not the rest
+                // of its channel.
+                try {
+                  const at = await message.createdAt();
+                  if (Date.parse(at) < since) continue;
+                  missed.push(await fromHistory(channel, message, at));
+                } catch (error) {
+                  report({
+                    kind: 'skipped',
+                    channelId: channel.id,
+                    root: root.id,
+                    message: message.id,
+                    error: failureOf(error),
+                  });
+                }
               }
             }
           } catch (error) {
@@ -484,9 +502,16 @@ export const sdkChat = ({
       await macro.events.listen({
         onDrop: (droppedAt) => {
           open = false;
-          const from =
-            newest ??
-            new Date(droppedAt.getTime() - catchUpMarginMs).toISOString();
+          // A margin before the newest message delivered too: one posted
+          // just before it whose event hadn't arrived yet (commits out of
+          // order, another channel's event lagging) is read; the ids
+          // delivered drop the overlap.
+          const from = new Date(
+            Math.min(
+              newest === undefined ? droppedAt.getTime() : Date.parse(newest),
+              droppedAt.getTime()
+            ) - catchUpMarginMs
+          ).toISOString();
           if (pending === undefined || Date.parse(from) < Date.parse(pending))
             pending = from;
         },

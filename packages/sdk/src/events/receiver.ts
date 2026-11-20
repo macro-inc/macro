@@ -225,11 +225,8 @@ export class MacroEvents {
       const from = opts.resume.lastEventId;
       if (!headers.has('Last-Event-ID') && from !== undefined)
         headers.set('Last-Event-ID', from);
-      return new Request(url, {
-        headers,
-        method: request.method,
-        signal: request.signal,
-      });
+      // Everything else (credentials, signal, ...) is kept from the original.
+      return new Request(url, new Request(request, { headers }));
     };
     const { stream } = await this.client.storage.streamEvents({
       query: {
