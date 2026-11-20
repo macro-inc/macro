@@ -1,0 +1,21 @@
+apps/web/src/features/block-agent/primitives/create-connector-continuation.ts
+  s_778a35fb352331::t_3ff3fa97bb190c 32,44,58
+apps/web/src/lib/core/component/LexicalMarkdown/version.ts
+  s_778a35fb352331::t_5237047263c17b 43,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d94d173dfa98e47d680cab3f40cf378e4bd1ae6b",
+  "prompts": {},
+  "sessions": {
+    "s_778a35fb352331": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa6765a9-10bd-46c9-8814-4b0c87b4e29a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
