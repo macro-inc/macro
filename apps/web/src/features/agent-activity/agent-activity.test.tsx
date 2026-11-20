@@ -138,12 +138,12 @@ it('counts a step repeated back to back once, as one row with its count', () => 
       turn={2}
       segment={1}
       rows={[
-        { id: 't1', label: 'Get Contacts', detail: null, status: 'completed' },
-        { id: 't2', label: 'Get Thread', detail: null, status: 'completed' },
-        { id: 't3', label: 'Get Thread', detail: null, status: 'completed' },
-        { id: 't4', label: 'Get Thread', detail: null, status: 'completed' },
-        { id: 't5', label: 'Get Thread', detail: null, status: 'failed' },
-        { id: 't6', label: 'Get Thread', detail: null, status: 'failed' },
+        { id: 't1', label: 'Get Contacts', status: 'completed' },
+        { id: 't2', label: 'Get Thread', status: 'completed' },
+        { id: 't3', label: 'Get Thread', status: 'completed' },
+        { id: 't4', label: 'Get Thread', status: 'completed' },
+        { id: 't5', label: 'Get Thread', status: 'failed' },
+        { id: 't6', label: 'Get Thread', status: 'failed' },
       ]}
       sealed
     />
@@ -275,7 +275,7 @@ it('replaces a live code step with observed SDK operations and preserves uncerta
     </QueryClientProvider>
   ));
   const message = reply([
-    { id: 'code-1', label: 'Execute code', detail: null, status: 'running' },
+    { id: 'code-1', label: 'Execute code', status: 'running' },
   ]);
   message.parts = [
     { kind: 'text', text: 'Checking' },
