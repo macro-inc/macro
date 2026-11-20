@@ -65,6 +65,18 @@ describe('connector continuation', () => {
     }
   );
 
+  it('reports a connection that worked even when continuing failed', async () => {
+    const { deps, flow, finish, dispose } = setup();
+    deps.resume = vi.fn(async () => {
+      throw new Error('continuation failed');
+    });
+    const pending = flow.connect(app);
+    finish('connected');
+    expect(await pending).toBe(true);
+    expect(deps.notify).toHaveBeenCalledOnce();
+    dispose();
+  });
+
   it('reports registration failure without sending a continuation', async () => {
     const { deps, flow, dispose } = setup();
     deps.connect = vi.fn(async () => {

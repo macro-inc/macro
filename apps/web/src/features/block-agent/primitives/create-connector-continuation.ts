@@ -29,6 +29,7 @@ export function createConnectorContinuation(deps: {
     if (disposed || disabled()) return false;
     const revision = deps.revision();
     setPending(true);
+    let connected = false;
     try {
       const outcome = await deps.connect({
         appSlug: app.appSlug,
@@ -40,6 +41,7 @@ export function createConnectorContinuation(deps: {
         return false;
       }
       if (outcome !== 'connected') return false;
+      connected = true;
       if (deps.disabled() || revision !== deps.revision()) {
         deps.notify(
           `${app.name} connected. Send a message when you are ready to continue.`
@@ -53,7 +55,7 @@ export function createConnectorContinuation(deps: {
         deps.notify(
           `Could not connect ${app.name} and continue. Please try again.`
         );
-      return false;
+      return connected;
     } finally {
       setPending(false);
     }
