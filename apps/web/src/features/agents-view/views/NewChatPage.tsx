@@ -488,9 +488,11 @@ export function NewChatPage(props: {
 
   // An @mentioned agent becomes the active one, switching to its mode, as
   // mentioning it in a channel starts it; the mention stays in the prompt.
+  // An unavailable one is selected too, so the send is blocked with its
+  // reason instead of going to another agent. The last agent picked wins.
   const selectMentionedAgent = (mentionedId: string) => {
     const agent = rosterAgentForMention(props.roster, mentionedId);
-    if (!agent || agent.unavailableReason) return;
+    if (!agent) return;
 
     const agentMode = modeForKind(agent.kind);
     if (mode() !== agentMode) setMode(agentMode);

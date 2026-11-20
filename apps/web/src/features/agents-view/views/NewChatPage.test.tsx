@@ -692,7 +692,7 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
     );
   });
-  it('makes an @mentioned agent the active agent, switching to its mode', async () => {
+  it('makes an @mentioned agent the active agent, switching to its mode', () => {
     const send = page();
     fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
       target: { value: `bot|${CURSOR_BOT_ID}` },
@@ -716,13 +716,44 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ prompt: 'Prompt', botId: undefined })
     );
   });
-  it('leaves the active agent alone when the mention is a person or an unavailable agent', () => {
+  it('selects an @mentioned agent from Auto, showing its selector', () => {
+    startInChat = false;
+    const send = page();
+    expect(
+      screen.queryByRole('button', { name: 'Choose an agent or model' })
+    ).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+        .textContent
+    ).toContain('Cursor');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mocks.chooseAgentMode).not.toHaveBeenCalled();
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
+  });
+  it('blocks the send on an @mentioned unavailable agent instead of sending it elsewhere', () => {
     const send = page(false);
-    for (const mentioned of [`bot|${CURSOR_BOT_ID}`, 'macro|person']) {
-      fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
-        target: { value: mentioned },
-      });
-    }
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).not.toHaveBeenCalled();
+  });
+  it('leaves the active agent alone when a person is mentioned', () => {
+    const send = page();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: 'macro|person@example.com' },
+    });
     expect(
       (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
     ).toBe(true);

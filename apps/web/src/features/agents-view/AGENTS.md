@@ -58,6 +58,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 From `apps/web`:
 
 - `bun run test --project app src/features/agents-view`
+- New-conversation composer in a browser, backend-free (real `NewChatPage` and @ menu, mocked catalogs): `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bunx playwright test --config src/features/agents-view/browser-test/playwright.config.ts`. Mention chips render empty there; the started-prompt log shows the mention markup.
 - `bun run test --project app src/lib/i18n`
 - `bun run type-check`
 
