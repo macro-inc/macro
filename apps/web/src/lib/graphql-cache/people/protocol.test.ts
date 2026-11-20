@@ -112,7 +112,9 @@ describe('person transport admission', () => {
       kind: 'ready',
       epoch: UPDATE.epoch,
     });
-    await expect(cache.update(UPDATE)).resolves.toBe('3');
+    await expect(
+      cache.update(UPDATE, '00000000-0000-4000-8000-000000000003')
+    ).resolves.toBe('3');
     await expect(cache.search({ ...SEARCH, limit: 501 })).rejects.toThrow(
       'Invalid contact search request'
     );

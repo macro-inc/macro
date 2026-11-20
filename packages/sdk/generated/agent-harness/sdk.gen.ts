@@ -339,7 +339,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Read activity using the same visibility capability as the session transcript.
+     * Read session-visible activity after filtering CRM rows for the requester.
      */
     public getAgentSessionActivity<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionActivityData, ThrowOnError>): RequestResult<GetAgentSessionActivityResponses, GetAgentSessionActivityErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionActivityResponses, GetAgentSessionActivityErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/activity', ...options });

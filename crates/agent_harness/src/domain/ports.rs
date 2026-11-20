@@ -153,29 +153,7 @@ pub trait CodingAgentSource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
 }
 
-/// One dial of a harness's runtime; a redial is a new connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RuntimeConnectionId(macro_uuid::Uuid);
-
-impl RuntimeConnectionId {
-    /// Mint the identity of a new dial.
-    #[must_use]
-    pub fn generate() -> Self {
-        Self(macro_uuid::generate_uuid_v7())
-    }
-
-    /// The raw uuid, for persistence.
-    #[must_use]
-    pub fn as_uuid(self) -> macro_uuid::Uuid {
-        self.0
-    }
-}
-
-impl std::fmt::Display for RuntimeConnectionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
+pub use agent_session::domain::connection::RuntimeConnectionId;
 
 /// What recording a runtime's connection did to the agents bound to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -487,6 +465,9 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 
     /// Whether this process currently holds `harness`'s physical runtime socket.
     fn is_connected(&self, harness: HarnessId) -> bool;
+
+    /// The dial `harness`'s runtime is connected on in this process, if any.
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId>;
 
     /// The sessions a runtime dialing in for `harness` reported as live, as
     /// [`HarnessBindings::sessions_on_harness`] resolves them.

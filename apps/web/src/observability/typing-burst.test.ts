@@ -133,6 +133,9 @@ it('reads one content-free cursor window per burst without frame sampling', () =
   const span = vi.mocked(Telemetry.span).mock.results[0].value;
   expect(span.end).not.toHaveBeenCalled();
   vi.advanceTimersByTime(750);
+  expect(span.end).not.toHaveBeenCalled();
+  // Browser timing is read once late long-frame entries have arrived.
+  vi.advanceTimersByTime(150);
   expect(span.end).toHaveBeenCalledOnce();
   expect(spanAttributes()).toMatchObject({
     'typing.input_count': 200,
@@ -171,6 +174,7 @@ it('reports retained interactions and dropped timings when the shared buffer ove
     'typing.event_timing_dropped_timings': 800,
     'typing.event_timing_coverage': 'buffer_truncated',
   });
+  vi.advanceTimersByTime(150);
   expect(vi.getTimerCount()).toBe(0);
 });
 
@@ -315,6 +319,7 @@ it('finishes the previous field before starting another owner', () => {
   expect(Telemetry.span).toHaveBeenCalledTimes(2);
   const first = vi.mocked(Telemetry.span).mock.results[0].value;
   const second = vi.mocked(Telemetry.span).mock.results[1].value;
+  vi.advanceTimersByTime(150);
   expect(first.end).toHaveBeenCalledOnce();
   expect(second.end).not.toHaveBeenCalled();
 });

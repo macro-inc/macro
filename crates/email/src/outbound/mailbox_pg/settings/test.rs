@@ -354,3 +354,59 @@ async fn pending_settings_status_tracks_confirmation_and_current_grant(db: PgPoo
         .is_err()
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_settings_change_behind_a_share_locked_link_fails_fast_then_applies(db: PgPool) {
+    let (repo, link) = super::super::test::fixture(&db).await;
+    let label = category(&db, link).await;
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+
+    // The access pre-check reads without the lock; the write behind it waits.
+    let checked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.accessible(&actor(), link),
+    )
+    .await;
+    assert!(matches!(checked, Ok(Ok(_))));
+    let deleted = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.delete_label(&actor(), link, label),
+    )
+    .await;
+    assert!(
+        matches!(
+            &deleted,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{deleted:?}"
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM email_mailbox_settings_work WHERE link_id=$1",
+            link
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+
+    population.rollback().await.unwrap();
+    repo.delete_label(&actor(), link, label).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label'",
+            link
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(1)
+    );
+}

@@ -122,10 +122,16 @@ word docs, Illustrator/Photoshop files).
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
   outbound capability.
+- Create tasks with explicit title pins by passing property definition IDs through `MarkdownSubtype::Task`; `MarkdownInitializationOptions` carries optional pins across the domain ports, leaving omitted pins implicit and preserving explicit empty lists.
+- Persist explicitly pinned empty fields as task-owned null assignments so every authorized task viewer can resolve them.
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
   and returns the Macro markdown that mention tracking reads.
+- Set creation-time link access with the canonical
+  `models_permissions::share_permission::InitialLinkShare` (re-exported from
+  `domain::models`); `NewDocumentMetadata::builder(..).initial_link_share(Off)`
+  selects `Exact(Off)` before the document row is inserted.
 - Create a document with its source's dates (an import): set
   `NewDocumentMetadata::builder(..).created_at(..).updated_at(..)`. Its folder
   and every folder above it then widen to those dates (`extend_project_dates`)

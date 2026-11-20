@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type Client,
   CombinedError,
@@ -148,6 +149,7 @@ describe('favorites GraphQL mutations', () => {
         { entity: { type: 'DOCUMENT', id: 'document-1' }, favorite },
         {
           normalizedCacheOptimistic: {
+            authorizationEpoch: cacheSessionGeneration.capture(),
             uuid: expect.any(String),
             optimisticResponse: {
               setFavorite: {
@@ -226,6 +228,7 @@ describe('favorites GraphQL mutations', () => {
       },
       {
         normalizedCacheOptimistic: {
+          authorizationEpoch: cacheSessionGeneration.capture(),
           uuid: '86cc4bfe-c45a-4e28-880a-6ba5ca921d35',
           optimisticResponse: reorderData,
           linkPatches: [],
