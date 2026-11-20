@@ -19,7 +19,7 @@ import {
 } from '../../context/telemetry.ts';
 import { findChallenge, type Outcome, solveOnPage } from './solve.ts';
 import { ownerDriving, readOrMissing } from '../browser/driver.ts';
-import { withCurrentPage } from './page.ts';
+import { withCurrentPage, withTargetPage } from './page.ts';
 
 /** What the server is started with. */
 export const mcpVariables = {
@@ -90,6 +90,10 @@ export const startServer = async (): Promise<void> => {
   const ownerDrivingNow = async () => ownerDriving(await readOrMissing(screenDriver));
   const withPage = <Value>(use: Parameters<typeof withCurrentPage<Value>>[1]) =>
     withCurrentPage(endpoint, use);
+  const withTarget = <Value>(
+    targetId: string,
+    use: Parameters<typeof withCurrentPage<Value>>[1]
+  ) => withTargetPage(endpoint, targetId, use);
   let attempts = 0;
   await startTelemetryAs({
     environment: process.env,
@@ -126,6 +130,7 @@ export const startServer = async (): Promise<void> => {
         const outcome = await solveOnPage(
           {
             withPage,
+            withTarget,
             relay,
             fetch: (request) => fetch(request),
             trace,

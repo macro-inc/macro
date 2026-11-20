@@ -27,7 +27,9 @@ export type SolveCaptchaResult =
   /** Another solve holds your browser. */
   | { readonly outcome: 'busy' }
   /** The solver ran but never solved (it stopped, or ran out of time). */
-  | { readonly outcome: 'solverFailed'; readonly exitCode: number };
+  | { readonly outcome: 'solverFailed'; readonly exitCode: number }
+  /** Your browser has no window or tab to look at. */
+  | { readonly outcome: 'browserUnavailable' };
 
 /** What to do next, for each outcome, with your owner's screen link when it's theirs to do. */
 export type Answer = SolveCaptchaResult & {
@@ -59,6 +61,8 @@ const nextStep = (result: SolveCaptchaResult): string => {
   if (outcome === 'ownerDriving')
     return 'Your owner is driving your screen. Wait until they hand it back.';
   if (outcome === 'busy') return 'Another solve is running. Wait for it.';
+  if (outcome === 'browserUnavailable')
+    return 'Your browser has no window or tab open: open the page in it, then try again.';
   if (outcome === 'pageChanged')
     return 'The tab moved on during the solve. Look at the page and try again if the check is still there.';
   if (result.outcome === 'budgetExceeded')
@@ -82,20 +86,15 @@ const recorded = (text: string | undefined): readonly Recorded[] =>
       }
     });
 
-/** Most useful first: a solved or injected attempt stands even if a later one got less. */
-const rank = (outcome: Outcome): number => {
-  if (outcome.outcome === 'solved') return 0;
-  if (outcome.outcome === 'injected') return 1;
-  return 2;
-};
-
-/** The attempt to report: the best one, the latest among equals. */
-const bestOutcome = (attempts: readonly Recorded[]): Outcome | undefined =>
-  attempts.reduce<Outcome | undefined>(
-    (best, { outcome }) =>
-      best === undefined || rank(outcome) <= rank(best) ? outcome : best,
-    undefined
-  );
+/**
+ * The attempt to report: a solved one stands (a later attempt can only find
+ * the check gone); otherwise the last one, which says what the page is like
+ * now (an earlier `injected` is stale once the owner took over or the page
+ * moved on).
+ */
+export const bestOutcome = (attempts: readonly Recorded[]): Outcome | undefined =>
+  attempts.find(({ outcome }) => outcome.outcome === 'solved')?.outcome ??
+  attempts.at(-1)?.outcome;
 
 /** One OpenCode run under the harness's solver run, its files in a directory of its own that is removed after. */
 const runSolver = (needs: Needs, runId: string): Promise<SolveCaptchaResult> =>
@@ -171,9 +170,14 @@ export const solveCaptcha = (
     if (driver.kind === 'solver') return answer({ outcome: 'busy' });
 
     // Nothing to solve, or nothing the solver takes: say so without starting it.
-    const found = await needs.trace('captcha.find', () =>
-      needs.captcha.withPage(findChallenge)
-    );
+    let found: Awaited<ReturnType<typeof findChallenge>>;
+    try {
+      found = await needs.trace('captcha.find', () =>
+        needs.captcha.withPage(findChallenge)
+      );
+    } catch {
+      return answer({ outcome: 'browserUnavailable' });
+    }
     if (!('challenge' in found)) return answer(found);
     span.set('captcha.kind', found.challenge.kind);
 
@@ -207,7 +211,7 @@ export const captchaModule = module({
 
 Use it only for what your owner asked of you. Never to make accounts in bulk, buy tickets automatically, or collect data that isn't public.
 
-Outcomes: solved (carry on); injected (submit the form); noChallenge; unsupported, unsolvable, timeout, vendorError, budgetExceeded, notConfigured, refused, solverFailed, stillChallenged (ask your owner to clear it on your screen: send them \`screen\` when it is there); ownerDriving and busy (wait).`,
+Outcomes: solved (carry on); injected (submit the form); noChallenge; unsupported, unsolvable, timeout, vendorError, budgetExceeded, notConfigured, refused, solverFailed, stillChallenged (ask your owner to clear it on your screen: send them \`screen\` when it is there); ownerDriving and busy (wait); browserUnavailable (open the page first).`,
   file: import.meta.path,
   functions: { solveCaptcha },
 });

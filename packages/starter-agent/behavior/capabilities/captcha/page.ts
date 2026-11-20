@@ -48,6 +48,37 @@ export const withCurrentPage = async <Value>(
   }
 };
 
+/** The tab's DevTools target id: stable for the tab's life, across connections. */
+export const targetIdOf = async (page: Page): Promise<string> => {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const { targetInfo } = await session.send('Target.getTargetInfo');
+    return targetInfo.targetId;
+  } finally {
+    await session.detach();
+  }
+};
+
+/**
+ * Runs `use` on the tab with DevTools target `targetId`, or answers
+ * undefined when that tab is gone, then disconnects.
+ */
+export const withTargetPage = async <Value>(
+  endpoint: string,
+  targetId: string,
+  use: (page: Page) => Promise<Value>
+): Promise<Value | undefined> => {
+  const browser = await chromium.connectOverCDP(endpoint);
+  try {
+    for (const context of browser.contexts())
+      for (const page of context.pages())
+        if ((await targetIdOf(page)) === targetId) return await use(page);
+    return undefined;
+  } finally {
+    await browser.close();
+  }
+};
+
 /** Ids and classes `detect` treats as a challenge page's own. */
 const markerNames = [
   'challenge-form',
@@ -181,9 +212,21 @@ export const injectToken = (
       if (v3) {
         const grecaptcha = scope.grecaptcha as Grecaptcha | undefined;
         if (grecaptcha !== undefined) {
-          grecaptcha.execute = () => Promise.resolve(token);
+          // Answers once with the token, then puts the page's own back: a
+          // token is single-use, and a later call needs a fresh one.
+          const once = (
+            owner: { execute?: () => Promise<string> },
+            original: (() => Promise<string>) | undefined
+          ) => {
+            owner.execute = () => {
+              if (original === undefined) delete owner.execute;
+              else owner.execute = original;
+              return Promise.resolve(token);
+            };
+          };
+          once(grecaptcha, grecaptcha.execute);
           if (grecaptcha.enterprise !== undefined)
-            grecaptcha.enterprise.execute = () => Promise.resolve(token);
+            once(grecaptcha.enterprise, grecaptcha.enterprise.execute);
           executeAnswered = true;
         }
       }

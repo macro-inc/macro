@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Running } from '@macro-inc/muppet/utilities/browser';
 import { passthrough } from '../../../agent/claude.ts';
-import { withCurrentPage } from '../page.ts';
+import { targetIdOf, withCurrentPage, withTargetPage } from '../page.ts';
 import { solveOnPage } from '../solve.ts';
 import { recaptchaTestKey, startFixture, turnstileTestKey } from './fixture.ts';
 
@@ -50,6 +50,10 @@ const open = (path: string) =>
 const needs = {
   withPage: <Value>(use: Parameters<typeof withCurrentPage<Value>>[1]) =>
     withCurrentPage(endpoint, use),
+  withTarget: <Value>(
+    targetId: string,
+    use: Parameters<typeof withCurrentPage<Value>>[1]
+  ) => withTargetPage(endpoint, targetId, use),
   relay: { url: fixture.origin, token: 'relay-capability' },
   fetch: (request: Request) => fetch(request),
   trace: passthrough,
@@ -179,5 +183,87 @@ test.skipIf(!available)(
       duringSolve = () => Promise.resolve();
       ownerHasTakenOver = false;
     }
+  }
+);
+
+type PageScope = {
+  document: {
+    querySelector: (selector: string) => { value: string; setAttribute: (name: string, value: string) => void } | null;
+  };
+  grecaptcha: { execute: () => Promise<string> };
+};
+
+test.skipIf(!available)(
+  'a widget swapped during the solve is left alone: the token is for the old one',
+  async () => {
+    await open('/turnstile');
+    duringSolve = () =>
+      withCurrentPage(endpoint, async (page) => {
+        await page.evaluate(() => {
+          const { document } = globalThis as unknown as PageScope;
+          document.querySelector('.cf-turnstile')?.setAttribute('data-sitekey', '0x4AAAAAAAnewKey');
+        });
+      });
+    try {
+      expect(await solveOnPage(needs, { solveId: 'solve-swap', runId: 'run-1' })).toEqual({
+        outcome: 'pageChanged',
+      });
+    } finally {
+      duringSolve = () => Promise.resolve();
+    }
+  }
+);
+
+test.skipIf(!available)(
+  'a tab opened on the same page during the solve gets nothing: the token goes to the original tab',
+  async () => {
+    await open('/recaptcha');
+    const original = await withCurrentPage(endpoint, targetIdOf);
+    duringSolve = async () => {
+      const { chromium: playwright } = await import('playwright-core');
+      const browser = await playwright.connectOverCDP(endpoint);
+      const [context] = browser.contexts();
+      const second = await context?.newPage();
+      await second?.goto(`${fixture.origin}/recaptcha`);
+      await browser.close();
+    };
+    try {
+      expect(await solveOnPage(needs, { solveId: 'solve-tabs', runId: 'run-1' })).toEqual({
+        outcome: 'injected',
+      });
+      const { chromium: playwright } = await import('playwright-core');
+      const browser = await playwright.connectOverCDP(endpoint);
+      const filled: Record<string, string | undefined> = {};
+      for (const page of browser.contexts()[0]?.pages() ?? []) {
+        if (!page.url().includes('/recaptcha')) continue;
+        const id = await targetIdOf(page);
+        filled[id === original ? 'original' : 'second'] = await page.evaluate(() => {
+          const { document } = globalThis as unknown as PageScope;
+          return document.querySelector('[name="g-recaptcha-response"]')?.value;
+        });
+        if (id !== original) await page.close();
+      }
+      await browser.close();
+      expect(filled).toEqual({ original: token, second: '' });
+    } finally {
+      duringSolve = () => Promise.resolve();
+    }
+  }
+);
+
+test.skipIf(!available)(
+  "reCAPTCHA v3: execute answers the token once, then the page's own again",
+  async () => {
+    await open('/recaptcha-v3');
+    expect(await solveOnPage(needs, { solveId: 'solve-v3', runId: 'run-1' })).toEqual({
+      outcome: 'injected',
+    });
+    const answers = await withCurrentPage(endpoint, (page) =>
+      page.evaluate(async () => {
+        const { grecaptcha } = globalThis as unknown as PageScope;
+        return [await grecaptcha.execute(), await grecaptcha.execute()];
+      })
+    );
+    expect(answers).toEqual([token, 'page-own']);
   }
 );

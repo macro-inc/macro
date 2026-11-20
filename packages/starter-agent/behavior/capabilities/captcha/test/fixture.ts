@@ -35,6 +35,11 @@ export const fixturePage = (path: string): Response => {
         <div class="g-recaptcha" data-sitekey="${recaptchaTestKey}"></div>
         <textarea name="g-recaptcha-response" style="display:none"></textarea>
       </form>`);
+  if (path === '/recaptcha-v3')
+    return html(`
+      <script type="text/plain" src="https://www.google.com/recaptcha/api.js?render=${recaptchaTestKey}"></script>
+      <input type="hidden" name="g-recaptcha-response">
+      <script>window.grecaptcha = { execute: () => Promise.resolve('page-own') };</script>`);
   if (path === '/interstitial')
     return html('<form id="challenge-form"></form>', 'Just a moment...');
   if (path === '/sent') return html('<p>Sent</p>', 'Sent');

@@ -13,7 +13,7 @@ import {
   solvePageUrl,
   type UnsupportedProvider,
 } from './detect.ts';
-import { injectToken, type Page, readFacts, settle } from './page.ts';
+import { injectToken, type Page, readFacts, settle, targetIdOf } from './page.ts';
 
 /**
  * How the page shows a token took: it moved to another page, or the
@@ -43,6 +43,11 @@ export type Outcome =
 export type SolveNeeds = {
   /** Runs `use` on the agent's current tab. */
   readonly withPage: <Value>(use: (page: Page) => Promise<Value>) => Promise<Value>;
+  /** Runs `use` on the tab with this DevTools target id; undefined when it is gone. */
+  readonly withTarget: <Value>(
+    targetId: string,
+    use: (page: Page) => Promise<Value>
+  ) => Promise<Value | undefined>;
   readonly relay: { readonly url: string; readonly token: string };
   readonly fetch: (request: Request) => Promise<Response>;
   readonly trace: Trace;
@@ -51,6 +56,8 @@ export type SolveNeeds = {
 };
 
 type Found = {
+  /** The tab the challenge is on: the token goes to it, not to whichever tab is newest by then. */
+  readonly targetId: string;
   readonly url: string;
   readonly pageUrl: string;
   readonly challenge: Challenge;
@@ -73,6 +80,7 @@ export const findChallenge = async (
   const pageUrl = solvePageUrl(page.url());
   if (pageUrl === undefined) return { outcome: 'noChallenge' };
   return {
+    targetId: await targetIdOf(page),
     url: page.url(),
     pageUrl,
     challenge: detection.challenge,
@@ -94,10 +102,15 @@ const contextDestroyed = (error: unknown): boolean =>
 const apply = async (
   page: Page,
   found: Found,
-  token: string
+  token: string,
+  ownerDriving: () => Promise<boolean>
 ): Promise<Outcome> => {
   const before = page.url();
   if (solvePageUrl(before) !== found.pageUrl) return { outcome: 'pageChanged' };
+  // The page may have swapped its widget while the harness solved: the token is for the old one.
+  if (!sameChallenge(detect(await readFacts(page)), found)) return { outcome: 'pageChanged' };
+  // Checked again on the tab itself: the owner may have taken over while we attached.
+  if (await ownerDriving()) return { outcome: 'ownerDriving' };
   const moved = () => solvePageUrl(page.url()) !== found.pageUrl;
 
   let injected: Awaited<ReturnType<typeof injectToken>> | undefined;
@@ -180,9 +193,12 @@ export const solveOnPage = (
       span.set('captcha.outcome', 'ownerDriving');
       return { outcome: 'ownerDriving' };
     }
-    const outcome = await needs.trace('captcha.apply', () =>
-      needs.withPage((page) => apply(page, found, solved.token))
-    );
+    const outcome =
+      (await needs.trace('captcha.apply', () =>
+        needs.withTarget(found.targetId, (page) =>
+          apply(page, found, solved.token, needs.ownerDriving)
+        )
+      )) ?? ({ outcome: 'pageChanged' } as const);
     span.set('captcha.outcome', outcome.outcome);
     if (outcome.outcome === 'solved') span.set('captcha.evidence', outcome.evidence);
     return outcome;
