@@ -120,6 +120,14 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `teammate.rollback`, `teammate.engine_check`; opaque install ids only. `macrod teammate
   list|logs|sign-in` is `command.rs`; sign-in runs `claude setup-token` in a
   separate container with only the provider volume, read-write.
+  `hosted_unit.rs` is the hosted backend: on an agent's Macro computer
+  (`Computer` starts it when the agent inbox exists) it drives exactly
+  `macro-agent.service` and `macro-agent-apply.service` through typed
+  `systemctl` argv with the same policy, writes `/run/macro-agent/previous-exit`
+  before each start, adopts an active unit, keeps its state in
+  `~/.macrod/hosted-agent.json`, and installs + restarts on `ApplyAgent`. It
+  controls only a unit with `Restart=no` (the controller image's); older
+  images keep their own restarts.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks

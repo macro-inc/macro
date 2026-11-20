@@ -54,20 +54,20 @@ pub struct Supervision {
 
 /// Wall-clock time that follows tokio's clock from when it was made, so the
 /// policy's timestamps and the waits agree (and paused tests stay exact).
-struct Clock {
+pub(crate) struct Clock {
     wall: DateTime<Utc>,
     instant: tokio::time::Instant,
 }
 
 impl Clock {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             wall: Utc::now(),
             instant: tokio::time::Instant::now(),
         }
     }
 
-    fn now(&self) -> DateTime<Utc> {
+    pub(crate) fn now(&self) -> DateTime<Utc> {
         let elapsed = chrono::TimeDelta::from_std(self.instant.elapsed()).unwrap_or_default();
         self.wall + elapsed
     }

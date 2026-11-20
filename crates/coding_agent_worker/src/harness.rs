@@ -311,7 +311,14 @@ async fn relay(
                         // Read by the guest's agent units; outside a Macro
                         // computer nothing installs it, so it does nothing.
                         match apply_agent(&environment.0) {
-                            Ok(staged) => tracing::info!(?staged, "handled the agent teammate's environment"),
+                            Ok(staged) => {
+                                tracing::info!(?staged, "handled the agent teammate's environment");
+                                // macrod starts the agent on it, when it controls the unit.
+                                #[cfg(unix)]
+                                if staged == crate::agent_env::Staged::Written && let Some(computer) = computer {
+                                    computer.agent_delivered();
+                                }
+                            }
                             Err(error) => tracing::error!(error = ?error, "could not stage the agent teammate's environment"),
                         }
                     }

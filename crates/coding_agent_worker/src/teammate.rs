@@ -12,6 +12,7 @@ pub mod cli;
 pub mod command;
 pub mod engine;
 pub mod host;
+pub mod hosted_unit;
 pub mod ingest;
 pub mod store;
 pub mod supervisor;
