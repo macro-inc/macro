@@ -11,9 +11,7 @@ const CAPS: JobCaps = JobCaps {
 };
 
 fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::parse_from_str("macro|owner@example.com")
-        .unwrap()
-        .into_owned()
+    MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()
 }
 
 fn job(deadline: chrono::DateTime<chrono::Utc>) -> ExecutionRecord {
@@ -103,9 +101,7 @@ async fn launches_stop_at_the_session_and_account_caps(pool: PgPool) {
     ));
     let taken = job(deadline);
     let (other_owner, other) = (
-        MacroUserIdStr::parse_from_str("macro|other@example.com")
-            .unwrap()
-            .into_owned(),
+        MacroUserIdStr::try_from("macro|other@example.com".to_owned()).unwrap(),
         session(2),
     );
     store

@@ -78,7 +78,7 @@ pub(super) struct Jobs {
 /// What a launch did.
 pub(super) enum Launch {
     /// The job runs; this is its receipt.
-    Started(ExecutionReceipt),
+    Started(Box<ExecutionReceipt>),
     /// It may not run in the background; run it in the foreground.
     Foreground(String),
 }
@@ -192,7 +192,7 @@ impl Jobs {
                             && existing.turn_id == Some(identity.turn) =>
                     {
                         span.record("outcome", "existing");
-                        return Ok(Launch::Started(receipt(&existing)));
+                        return Ok(Launch::Started(Box::new(receipt(&existing))));
                     }
                     Ok(_) | Err(CodeModeError::NotFound) => {
                         let fresh = ExecutionId::mint();
@@ -220,7 +220,7 @@ impl Jobs {
             (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
             store.settle(identity.session, &record, None).await?;
             span.record("outcome", "check_failed");
-            return Ok(Launch::Started(receipt(&record)));
+            return Ok(Launch::Started(Box::new(receipt(&record))));
         }
         let issued = match service
             .inner
@@ -244,7 +244,7 @@ impl Jobs {
             record.error = Some("Execution cancelled before it started.".into());
             store.settle(identity.session, &record, None).await?;
             span.record("outcome", "cancelled");
-            return Ok(Launch::Started(receipt(&record)));
+            return Ok(Launch::Started(Box::new(receipt(&record))));
         }
         let stop = self.shutdown.child_token();
         if let Ok(mut local) = self.local.lock() {
@@ -288,7 +288,7 @@ impl Jobs {
             .instrument(run_span),
         );
         span.record("outcome", "started");
-        Ok(Launch::Started(started))
+        Ok(Launch::Started(Box::new(started)))
     }
 
     /// Ask a job to stop: at once when it runs here, and through its row

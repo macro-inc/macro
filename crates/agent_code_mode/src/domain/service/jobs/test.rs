@@ -1,4 +1,5 @@
 use super::*;
+use agent_runtime_protocol::domain::job::JobStatus;
 use agent_session::testing::test_agent_session;
 use serde_json::json;
 use tokio::sync::Notify;

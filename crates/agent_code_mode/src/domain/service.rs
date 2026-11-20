@@ -577,7 +577,7 @@ impl SessionCodeMode for CodeModeService {
                     .launch(self, identity, &request, background, cancel.clone())
                     .await?
                 {
-                    jobs::Launch::Started(receipt) => return Ok(receipt),
+                    jobs::Launch::Started(receipt) => return Ok(*receipt),
                     jobs::Launch::Foreground(reason) => ran_in_foreground = Some(reason),
                 },
                 None => {
