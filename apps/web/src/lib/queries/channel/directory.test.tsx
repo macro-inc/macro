@@ -962,6 +962,25 @@ describe('cached channel directory', () => {
     expect(ids(await directory.readComplete())).toEqual(['a']);
   });
 
+  it('does not take a pass an earlier build recorded as one that reconciled the cache', async () => {
+    const { cache, directory } = mountCachedDirectory([]);
+    cache.put(channelRecord('a'));
+    // That build recorded a pass complete even when it removed nothing.
+    saveSoupBackfillCheckpoint(
+      {
+        ...initialSoupBackfillCheckpoint(VIEWER, 'g1'),
+        completed: true,
+        completedAt: '2026-11-19T00:00:00Z',
+      },
+      'channel-directory'
+    );
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    expect(directory.complete()).toBe(false);
+
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+  });
+
   it('answers from the cache alone once the lane finishes a pass', async () => {
     const { cache, directory } = mountCachedDirectory([], {
       // By-id reads would write the listed channels into the cache.

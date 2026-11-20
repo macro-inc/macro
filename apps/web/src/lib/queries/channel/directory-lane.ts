@@ -2,10 +2,12 @@ import type { GraphqlSoupInitialInput } from '@service-storage/graphql-soup';
 
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
-/** The channel backfill lane's checkpoint. Renamed from 'channels' when the
- * channel selection gained the directory's fields: a pass completed before
- * then wrote records the directory omits. */
-export const CHANNEL_DIRECTORY_CHECKPOINT_ID = 'channel-directory';
+/** The channel backfill lane's checkpoint. A completed pass means the cache
+ * holds exactly the viewer's channels, so the id changes whenever an earlier
+ * build could have recorded a pass complete that does not prove it:
+ * 'channels' wrote records without the directory's fields, and
+ * 'channel-directory' completed passes that removed nothing. */
+export const CHANNEL_DIRECTORY_CHECKPOINT_ID = 'channel-directory-reconciled';
 
 /** Every channel the viewer has joined, 100 to a page. The channel backfill
  * lane pages it into the cache; without the cache the directory pages it

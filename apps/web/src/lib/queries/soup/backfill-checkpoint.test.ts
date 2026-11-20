@@ -14,7 +14,7 @@ import {
 } from './backfill-checkpoint';
 
 const USER = 'macro|viewer@example.com';
-const LANE = 'channel-directory';
+const LANE = 'channel-directory-reconciled';
 
 const stops: (() => void)[] = [];
 beforeEach(() => localStorage.clear());

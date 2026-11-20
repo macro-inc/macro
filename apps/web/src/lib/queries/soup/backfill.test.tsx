@@ -338,7 +338,7 @@ describe('runSoupBackfills', () => {
     expect(
       DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
     ).toEqual([
-      'channel-directory',
+      'channel-directory-reconciled',
       'core-entities',
       'initiatives',
       'email-signal-filter-metadata',
@@ -917,7 +917,7 @@ describe('runSoupBackfills', () => {
   it('starts an interrupted channel pass again at its first page', async () => {
     const completedAt = '2026-09-01T00:00:00.000Z';
     localStorage.setItem(
-      'graphql-soup-backfill:v19:user-1:channel-directory',
+      'graphql-soup-backfill:v19:user-1:channel-directory-reconciled',
       JSON.stringify({
         userId: 'user-1',
         storageGeneration: 'storage-1',
@@ -942,7 +942,7 @@ describe('runSoupBackfills', () => {
       });
       // The finished pass before it still answers for the directory.
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+        loadSoupBackfillCheckpoint('user-1', 'channel-directory-reconciled')
       ).toMatchObject({ nextCursor: null, pagesFetched: 0, completedAt });
     } finally {
       rendered.unmount();
@@ -953,7 +953,10 @@ describe('runSoupBackfills', () => {
     'resumes completed lane watermarks only for %s storage',
     async (storage) => {
       const watermark = '2026-09-01T00:00:00.000Z';
-      for (const checkpointId of ['channel-directory', 'email-thread-pages']) {
+      for (const checkpointId of [
+        'channel-directory-reconciled',
+        'email-thread-pages',
+      ]) {
         localStorage.setItem(
           `graphql-soup-backfill:v19:user-1:${checkpointId}`,
           JSON.stringify({
@@ -1105,7 +1108,8 @@ describe('runSoupBackfills', () => {
       expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
     );
     expect(
-      loadSoupBackfillCheckpoint('user-1', 'channel-directory').scanStartedAt
+      loadSoupBackfillCheckpoint('user-1', 'channel-directory-reconciled')
+        .scanStartedAt
     ).not.toBeNull();
 
     setUserId('user-2');
@@ -1116,7 +1120,8 @@ describe('runSoupBackfills', () => {
     expect(fetchSignals[0]?.aborted).toBe(true);
     expect(fetchSignals[1]?.aborted).toBe(false);
     expect(
-      loadSoupBackfillCheckpoint('user-2', 'channel-directory').scanStartedAt
+      loadSoupBackfillCheckpoint('user-2', 'channel-directory-reconciled')
+        .scanStartedAt
     ).not.toBeNull();
 
     rendered.unmount();

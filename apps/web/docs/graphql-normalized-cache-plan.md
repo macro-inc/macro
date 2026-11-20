@@ -1329,7 +1329,7 @@ visible contacts because the contact filter has no updated-at watermark.
 
 ## Channel directory lane
 
-The channel lane (`CHANNEL_SOUP_BACKFILL_LANE`, checkpoint `channel-directory`)
+The channel lane (`CHANNEL_SOUP_BACKFILL_LANE`, checkpoint `channel-directory-reconciled`)
 caches every channel the viewer joined with the fields a channel list needs
 (`ChannelDirectoryFields` in `channel-directory.graphql`): members, bots in
 `botParticipants`, team, agent DM and latest messages. The channel filter has no
