@@ -225,7 +225,7 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
             continue;
           }
           const [a, b] = [results[0].value, results[1].value];
-          const diffs = compareSnapshots(a, b, { pageSize: Number(c.spec.params.limit) }).map(classify);
+          const diffs = compareSnapshots(a, b, { pageSize: Number(c.spec.params?.limit) }).map(classify);
           tallyInto(classes, diffs, 'reads');
           const ref = results[2].status === 'fulfilled' ? results[2].value : null;
           refTransports[ref?.transport ?? 'failed'] = (refTransports[ref?.transport ?? 'failed'] ?? 0) + 1;
@@ -267,8 +267,27 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
 }
 
 
+/** Home never showed its list: which side, where it was, and a screenshot. */
+class DomTimeout extends Error {
+  constructor(readonly side: string, readonly detail: string) {
+    super(`Home did not show on ${side}: ${detail}`);
+  }
+}
+
+let domTimeouts = 0;
+
 async function settledDom(lane: Lane): Promise<DomRow[]> {
-  await lane.page.getByRole('grid', { name: 'Home' }).waitFor({ timeout: 180_000 });
+  try {
+    await lane.page.getByRole('grid', { name: 'Home' }).waitFor({ timeout: 180_000 });
+  } catch (error) {
+    domTimeouts += 1;
+    const shot = join(out, `dom-timeout-${domTimeouts}-${lane.side}.png`);
+    await lane.page.screenshot({ path: shot }).catch(() => undefined);
+    const text = await lane.page.evaluate(() => document.body?.innerText.slice(0, 300) ?? '').catch(() => '<no page>');
+    const detail = `${lane.page.url()} | ${text.replace(/\s+/g, ' ')} | ${shot} | ${String(error).slice(0, 120)}`;
+    log(`dom timeout: ${lane.side} ${detail}`);
+    throw new DomTimeout(lane.side, detail);
+  }
   let previous = '';
   let rows: DomRow[] = [];
   for (let i = 0; i < 6; i++) {
@@ -304,9 +323,19 @@ async function domPhase(pair: Pair, userFor: (key: string) => User) {
   const work = async () => {
     for (let job = jobs.shift(); job; job = jobs.shift()) {
       const user = userFor(job.viewer);
+      const attempt = (job as { attempt?: number }).attempt ?? 0;
       const [oldLane, newLane] = await pair(user, { touch: job.touch, facets: job.facets, path: `/app/home?s0.home.tab=${job.tab}` });
       try {
-        const [a, b] = await Promise.all([settledDom(oldLane), settledDom(newLane)]);
+        const settled = await Promise.allSettled([settledDom(oldLane), settledDom(newLane)]);
+        const timedOut = settled.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []));
+        if (timedOut.length) {
+          if (timedOut.some((e) => !(e instanceof DomTimeout))) throw timedOut[0];
+          // Once more on fresh tabs; a second miss is a difference of its own.
+          if (attempt === 0) jobs.push({ ...job, attempt: 1 } as typeof job);
+          else tallyInto(classes, timedOut.map((e: DomTimeout) => classify({ signature: `dom:timeout:${e.side}`, kind: 'dom', detail: e.detail })), 'dom');
+          continue;
+        }
+        const [a, b] = settled.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
         const diffs = (await compareHomeDom(stack, user, a, b, `home ${job.touch ? 'touch' : 'desktop'} ${job.tab}`)).map(classify);
         tallyInto(classes, diffs, 'dom');
         const dims = {
@@ -467,7 +496,14 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             let diffs: Classified[] = [];
             let rows: [DomRow[], DomRow[]] = [[], []];
             do {
-              rows = (await Promise.all(lanes.dom.map((lane) => settledDom(lane)))) as [DomRow[], DomRow[]];
+              const settled = await Promise.allSettled(lanes.dom.map((lane) => settledDom(lane)));
+              const timedOut = settled.flatMap((r) => (r.status === 'rejected' ? [r.reason] : []));
+              if (timedOut.length) {
+                if (timedOut.some((e) => !(e instanceof DomTimeout))) throw timedOut[0];
+                diffs = timedOut.map((e: DomTimeout) => classify({ signature: `seq home touch ${domTab} dom:timeout:${e.side}`, kind: 'dom', detail: e.detail }));
+                break;
+              }
+              rows = settled.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value) as [DomRow[], DomRow[]];
               diffs = (await compareHomeDom(stack, user, rows[0], rows[1], `seq home touch ${domTab}`)).map(classify);
               if (diffs.every((d) => closureOf(d.cls))) break;
             } while (Date.now() < deadline);
