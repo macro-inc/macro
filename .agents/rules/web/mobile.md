@@ -159,11 +159,13 @@ read their code, and follow that pattern rather than inventing a new one.
   an in-flow header consumes the inset, reset it to `0px` on its content subtree
   so nested lists/editors do not reserve it again. Otherwise pad the scroller
   with the top and bottom content insets so content scrolls under the chrome.
-- Top edge fades (`MobileTopEdgeFade`) size from `--mobile-content-inset-top`
-  and draw nothing when it is 0, so panes without a top safe area or floating
-  chrome (the iPhone Duo) get no fade; place them where that inset is set.
-  They draw only on touch devices: desktop split panes set the inset to their
-  in-flow header's height, which would paint a band under the header.
+- End top edge fades (`MobileTopEdgeFade`) at `--mobile-content-inset-top`,
+  never below the space content reserves; a falloff below it fades the first
+  row before scrolling. A zero inset draws nothing. Place the scrim in the
+  pane that owns floating chrome; reset the inset after an in-flow header.
+  Keep scrims touch-only because desktop split headers stay in flow.
+  Desktop `createScrollTopFade` masks only after user input actually changes
+  the scroll offset, not on mount, restoration, or automatic positioning.
 - Safe areas come from the `--safe-*` CSS variables (e.g.
   `bottom-[var(--safe-bottom,0px)]`); `getSafeAreaInset` only when JS needs
   the number. Never measure insets yourself.

@@ -22,6 +22,20 @@ it('draws the top fade on a touch device outside the native iOS app', () => {
   expect(container.querySelector('[data-mobile-top-edge-fade]')).not.toBeNull();
 });
 
+it('ends the touch scrim at the reserved content boundary, not below the first row', () => {
+  device.touch = true;
+  const { container } = render(() => (
+    <div style={{ '--mobile-content-inset-top': '64px' }}>
+      <MobileTopEdgeFade />
+    </div>
+  ));
+  const fade = container.querySelector<HTMLElement>(
+    '[data-mobile-top-edge-fade]'
+  );
+
+  expect(fade?.style.height).toBe('var(--mobile-content-inset-top, 0px)');
+});
+
 it('draws no top fade on desktop, where split panes set the top inset to their header', () => {
   device.touch = false;
   const { container } = render(() => <MobileTopEdgeFade />);

@@ -142,10 +142,11 @@ header of a standalone view. Wrap its title in `ViewShell.TopBarTitle`, its
 trailing actions in `ViewShell.TopBarActions`, and a lone leading control such
 as Back in `ViewShell.TopBarIsland`;
 each becomes an island on touch and renders inline on desktop. The pane reserves
-the bar's measured height as `--mobile-content-inset-top` and fades content
-beneath it. A bar nested in a hosted detail stacks below the bars before it.
-Content under a bar that does not float (no enclosing pane) keeps resetting the
-inset; check with `useTouchTopBarsFloat`.
+the bar's measured height as `--mobile-content-inset-top`. The touch scrim ends
+exactly at that inset: it dissolves content beneath the chrome without fading
+the first row before scrolling. A bar nested in a hosted detail stacks below
+the bars before it. Content under a bar that does not float (no enclosing pane)
+keeps resetting the inset; check with `useTouchTopBarsFloat`.
 
 A detail whose standalone view has a split header shows that same header in a
 touch preview. The host wraps the pane in `SplitHeaderScope.Root` and renders
@@ -188,6 +189,14 @@ Reserve its
 `touchInset`). Nested activity controls add their height to the parent inset;
 desktop headers stay in flow. Keep workspace metadata composable on touch when
 its chrome is local, so the legacy split-wide fade does not cover the sidebar.
+
+Desktop split headers remain in flow and never draw `MobileTopEdgeFade`, even
+though their inherited content inset contains the header height. Desktop
+scrollers using `createScrollTopFade` stay clear on mount and during restored or
+automatic positioning. Wheel, scrollbar, or non-editing keyboard input must
+actually change their vertical offset before the compact top mask activates;
+returning to the top clears it. Touch scrollers use their pane's chrome scrim
+instead of this mask.
 
 Docked touch sidebars above the layout breakpoint use 1.57421875 times the base width
 and bounds (403px initially), and preserve that width while space permits.

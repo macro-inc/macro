@@ -3,16 +3,13 @@ import { Layer } from '@ui';
 import { Show } from 'solid-js';
 
 /**
- * Edge scrims for full-frame mobile: content dissolves into the page surface
- * as it scrolls beneath the floating chrome at the top and bottom. The top
- * scrim follows `--mobile-content-inset-top`, so a pane with no top safe area
- * and no floating chrome above it draws none. Desktop split panes set that
- * inset to their in-flow header's height, so the top scrim draws only on
- * touch devices.
+ * Edge scrims for full-frame touch views: content dissolves into the page
+ * surface beneath floating chrome. The top scrim ends at the reserved content
+ * inset, leaving the first row clear before scrolling. A zero inset draws
+ * nothing. Desktop headers stay in flow, so desktop panes never draw it.
  */
 
-/** Extra distance the gradients bleed past the chrome they cover. */
-const TOP_FALLOFF = '32px';
+/** Extra distance the bottom gradient bleeds above its chrome. */
 const BOTTOM_FALLOFF = '32px';
 
 export function MobileTopEdgeFade() {
@@ -23,9 +20,8 @@ export function MobileTopEdgeFade() {
           data-mobile-top-edge-fade
           class="pointer-events-none absolute inset-x-0 top-0 z-1"
           style={{
-            // No top chrome or safe area means nothing to dissolve under:
-            // the falloff shrinks to 0 with the inset.
-            height: `calc(var(--mobile-content-inset-top, 0px) + min(var(--mobile-content-inset-top, 0px) * 100, ${TOP_FALLOFF}))`,
+            // Never bleed below the space reserved for floating top chrome.
+            height: 'var(--mobile-content-inset-top, 0px)',
             background:
               'linear-gradient(to bottom, var(--color-surface) 10%, 70%, transparent)',
           }}

@@ -1,7 +1,18 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
+import { createScrollIntentTracker } from './scroll-intent';
 
-/** A compact linear top-edge falloff that leaves content clear at rest. */
+const SCROLL_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  ' ',
+]);
+
+/** Keep restored content clear; fade the edge after deliberate desktop scrolling. */
 export function createScrollTopFade(
   scrollRef: Accessor<HTMLElement | undefined>
 ) {
@@ -10,18 +21,89 @@ export function createScrollTopFade(
     if (!element || isTouchDevice()) return;
 
     const previousMask = element.style.maskImage;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const intent = createScrollIntentTracker();
+    // Custom scrollbars are siblings, and list keyboard focus can sit on an
+    // ancestor grid. Observe those inputs without treating restoration as input.
+    const inputRoot = element.parentElement ?? element;
+    const document = element.ownerDocument;
+    let pointerDown = false;
+    let activated = false;
+    let previousTop = element.scrollTop;
+
+    const markIntent = () => intent.markUserIntent('down');
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY !== 0 && !event.ctrlKey) markIntent();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!SCROLL_KEYS.has(event.key) || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!inputRoot.contains(target) && !target.contains(element)) return;
+      if (
+        target.closest(
+          'input, textarea, select, button, [role="button"], [role="combobox"], [role="slider"], [role="listbox"], [role="menu"], [contenteditable]:not([contenteditable="false"])'
+        )
+      ) {
+        return;
+      }
+      markIntent();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      const target = event.target;
+      // Focusing an editor can scroll it into view without a scroll gesture.
+      if (
+        target instanceof Element &&
+        target.closest('input, textarea, [contenteditable]')
+      ) {
+        return;
+      }
+      markIntent();
+      pointerDown = true;
+    };
+    const onPointerMove = () => {
+      if (pointerDown) markIntent();
+    };
+    const endPointer = () => {
+      pointerDown = false;
+    };
     const update = () => {
-      const height = Math.min(32, Math.max(0, element.scrollTop));
+      if (element.scrollTop !== previousTop && intent.isUserInteracting()) {
+        activated = true;
+      }
+      previousTop = element.scrollTop;
+      const height = activated
+        ? Math.min(32, Math.max(0, element.scrollTop))
+        : 0;
       element.style.maskImage =
         height > 0
           ? `linear-gradient(to bottom, transparent, black ${height}px)`
           : previousMask;
     };
-
-    element.addEventListener('scroll', update, { passive: true });
-    update();
+    inputRoot.addEventListener('wheel', onWheel, { passive: true, signal });
+    inputRoot.addEventListener('pointerdown', onPointerDown, {
+      capture: true,
+      signal,
+    });
+    document.addEventListener('keydown', onKeyDown, { capture: true, signal });
+    document.addEventListener('pointermove', onPointerMove, {
+      capture: true,
+      signal,
+    });
+    document.addEventListener('pointerup', endPointer, {
+      capture: true,
+      signal,
+    });
+    document.addEventListener('pointercancel', endPointer, {
+      capture: true,
+      signal,
+    });
+    document.defaultView?.addEventListener('blur', endPointer, { signal });
+    element.addEventListener('scroll', update, { passive: true, signal });
     onCleanup(() => {
-      element.removeEventListener('scroll', update);
+      controller.abort();
       element.style.maskImage = previousMask;
     });
   });
