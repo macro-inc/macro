@@ -90,6 +90,20 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Creating a property
+
+`CreatePropertyModal` names the built-in property when the typed name duplicates
+one that links CRM records (`utils/builtInSuggestion.ts`: Contact(s) for
+Contacts; Company, Companies and Customer(s) for Companies), and for every type
+but Any Entity adds that the type can't link to CRM records. Its **Use …**
+button calls `onUseBuiltIn(propertyDefinitionId)`. `PropertyEditorDialog`
+answers by selecting that property as if it had been picked from the list, so a
+host that keeps the property out of its list (the task composer, which edits
+Companies and Contacts through its Customer / Contact pill) still receives the
+value through `onSave`. The note never disables **Create**. Add a name there
+only for a built-in property whose look-alike breaks something a person would
+expect, not for every system property.
+
 ## Assignee selection
 
 The system Assignees property uses the existing selected-first ordering at opening
