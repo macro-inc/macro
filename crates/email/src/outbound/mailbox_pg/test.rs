@@ -3,6 +3,7 @@ use crate::domain::mailbox::live_pass::StreamKind;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod claim_order;
 mod crm_cleanup;
 mod imap;
 mod import_pacing;
@@ -10,9 +11,11 @@ mod import_reads;
 mod live_pass;
 mod lock_timeouts;
 mod no_mailbox;
+mod notified_reads;
 mod outlook_import;
 mod outlook_subscriptions;
 mod projection_retries;
+mod provider_routing;
 mod retries;
 mod unstorable_values;
 

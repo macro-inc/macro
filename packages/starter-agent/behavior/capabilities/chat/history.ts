@@ -12,8 +12,13 @@ export type History = {
     count: number
   ) => Promise<readonly Entry[]>;
   readonly record: (channelId: string, entry: Entry) => Promise<void>;
-  /** Keeps a message that is waiting for a reply, so a restart doesn't lose it. */
-  readonly wait: (message: Queued) => Promise<void>;
+  /** Whether the message was recorded: one read again from history after a restart was already judged. */
+  readonly recorded: (channelId: string, id: string) => Promise<boolean>;
+  /**
+   * Keeps a message that is waiting for a reply, so a restart doesn't lose
+   * it. False when it was already waiting: a restart queued it again.
+   */
+  readonly wait: (message: Queued) => Promise<boolean>;
   /** Forgets the waiting messages with these ids: they were answered. */
   readonly answered: (
     channelId: string,
@@ -43,12 +48,36 @@ export const history = ({
   const queued = (channelId: string) => join(queue, `${channelId}${extension}`);
   const read = async (path: string) =>
     parseLines(Queued, await disk.read(path));
+  // Each channel's recorded ids, read from its file once, so checking a
+  // message doesn't parse the whole history each time.
+  const ids = new Map<string, Promise<Set<string>>>();
+  const recordedIds = (channelId: string) => {
+    let known = ids.get(channelId);
+    if (known === undefined) {
+      known = disk
+        .read(file(channelId))
+        .then((text) => new Set(parseLines(Entry, text).map(({ id }) => id)));
+      // A failed read is read again next time, not kept.
+      known.catch(() => ids.delete(channelId));
+      ids.set(channelId, known);
+    }
+    return known;
+  };
   return {
     recent: async (channelId, count) =>
       parseLines(Entry, await disk.read(file(channelId))).slice(-count),
-    record: (channelId, entry) => disk.append(file(channelId), jsonLine(entry)),
-    wait: (message) =>
-      disk.append(queued(message.channel_id), jsonLine(message)),
+    record: async (channelId, entry) => {
+      const known = await recordedIds(channelId);
+      await disk.append(file(channelId), jsonLine(entry));
+      known.add(entry.id);
+    },
+    recorded: async (channelId, id) => (await recordedIds(channelId)).has(id),
+    wait: async (message) => {
+      const path = queued(message.channel_id);
+      if ((await read(path)).some(({ id }) => id === message.id)) return false;
+      await disk.append(path, jsonLine(message));
+      return true;
+    },
     answered: async (channelId, ids) => {
       const left = (await read(queued(channelId))).filter(
         ({ id }) => !ids.includes(id)

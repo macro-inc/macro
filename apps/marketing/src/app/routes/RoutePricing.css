@@ -50,7 +50,7 @@ main.feature-page:has(.pricing-page)::before { display: none; }
 .pricing-customer-video video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .pricing-customer-video button { display: flex; align-items: center; gap: 10px; position: absolute; bottom: 20px; left: 20px; border: 1px solid #ffffff28; border-radius: 999px; padding: 10px 16px; background: #111e; color: #eee; font-size: 13px; }
 .pricing-customer-video button svg { width: 17px; height: 17px; }
-.pricing-open-source { width: min(100% - 48px, 640px); margin: 0 auto 64px !important; color: #777780; text-align: center; font-size: 13px; line-height: 1.6; }
+.pricing-open-source { width: min(100% - 48px, 640px); margin: 0 auto !important; padding-top: 20px; color: #777780; text-align: center; font-size: 13px; line-height: 1.6; }
 .pricing-open-source a { color: #b7b7c0; text-decoration: underline; text-underline-offset: 3px; }
 .pricing-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 1100px) {

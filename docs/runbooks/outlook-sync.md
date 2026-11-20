@@ -45,7 +45,10 @@ later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
 fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
-Messages backed off after their own failures don't count. With the live pass
+Messages backed off after their own failures don't count. Importing folders
+are claimed ahead of finished folders' polls that came due less than five
+minutes earlier, so a walk reads its next page soon after its import has
+room; a poll due longer than that goes first again. With the live pass
 on, the folder's new mail does not wait for its walk
 ([New mail during an import](#new-mail-during-an-import)).
 
@@ -127,10 +130,36 @@ folder's import round ends. Its enumerate spans read `@outlook.stream_kind:mail_
   (`round_started_at`); a round that began before that column existed is
   covered only from that page, until a resync or re-import restarts it.
 - Turn it off in PostHog: the workers read it every minute
-  (`outlook.live_import_pass.refresh` spans), stop claiming live passes and
-  start new import rounds unordered. Open passes are deleted as their rounds
-  end; nothing needs cleaning up. A worker that cannot read the flag treats it
-  as off and logs "could not read the Outlook import live pass flag".
+  (`outlook.feature_flag.refresh` spans with
+  `@feature_flag.key:enable-outlook-import-live-pass`), stop claiming live
+  passes and start new import rounds unordered. Open passes are deleted as
+  their rounds end; nothing needs cleaning up. A worker that cannot read the
+  flag treats it as off and logs "could not read the outlook import live pass
+  flag".
+
+## Reading notified messages
+
+A Graph change notification makes every folder of its mailbox due, and a
+folder waits its turn behind every other mailbox's due folders before it is
+read. With the PostHog flag `enable-outlook-notified-message-reads` on, the
+webhook also queues the message the notification names as live work, which
+the sync loops read before any import work, so new mail is stored on the next
+message read. Folder polls stay as the fallback for missed notifications.
+
+- The flag is evaluated by the email-service API for the service context
+  `outlook-mailbox-sync`. Turn it on for dev with a release condition on the
+  person property `environment = dev`; widen it to production after a dev
+  round trip (send the Outlook test inbox mail, see it in the app within
+  seconds). Turn it off in PostHog; the API reads it every minute
+  (`outlook.feature_flag.refresh` spans), and rows already queued are read as
+  usual.
+- Nothing is queued for a mailbox whose folders are still importing, or that
+  already has 50 live messages due; its folder pages list the rest.
+- Watch: `outlook.subscription.notify` spans count `@outlook.messages_queued`;
+  `outlook.sync.reconcile` spans with `@outlook.from_notification:true` carry
+  `@outlook.notification_lag_ms`, notification to stored. `@outlook.outcome:unsynced`
+  marks a notified message in a folder the catalog does not list, settled
+  without storing it.
 
 ## Stalled mailbox
 

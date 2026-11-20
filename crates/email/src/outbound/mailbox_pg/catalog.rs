@@ -6,18 +6,129 @@ impl PgMailboxSync {
         &self,
         lease_id: Uuid,
     ) -> Result<Option<CatalogLease>, MailboxError> {
-        let row = sqlx::query!(r#"
+        let mut tx = self.begin_claim().await?;
+        let row = sqlx::query!(
+            r#"
             WITH candidate AS (
-                SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = $2::text::email_user_provider_enum AND s.generation = l.sync_generation
-                    AND s.kind = 'folder_catalog' AND s.next_run_at <= now()
-                    AND (s.lease_until IS NULL OR s.lease_until < now())
-                ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
+                SELECT
+                    s.id
+                FROM
+                    email_sync_streams s
+                    JOIN email_links l ON l.id = s.link_id
+                WHERE
+                    l.is_sync_active
+                    AND NOT l.needs_reauth
+                    AND l.provider = $2::text::email_user_provider_enum
+                    AND s.provider = $2::text::email_user_provider_enum
+                    AND s.generation = l.sync_generation
+                    AND s.kind = 'folder_catalog'
+                    AND s.next_run_at <= now()
+                    AND (s.next_run_at,
+                        s.id) >= (
+                        SELECT
+                            COALESCE(h.due, raw.due),
+                            COALESCE(h.id, raw.id)
+                        FROM (
+                            SELECT
+                                r.next_run_at AS due,
+                                r.id,
+                                r.link_id,
+                                r.generation,
+                                r.lease_until
+                            FROM
+                                email_sync_streams r
+                            WHERE
+                                r.provider = $2::text::email_user_provider_enum
+                                AND r.kind = 'folder_catalog'
+                                AND r.next_run_at <= now()
+                            ORDER BY
+                                r.next_run_at,
+                                r.id
+                            LIMIT 1) raw
+                    LEFT JOIN email_links ok ON ok.id = raw.link_id
+                        AND ok.sync_generation = raw.generation
+                        AND ok.provider = $2::text::email_user_provider_enum
+                        AND ok.is_sync_active
+                        AND NOT ok.needs_reauth
+                        AND (raw.lease_until IS NULL
+                            OR raw.lease_until < now())
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            first.due,
+                            first.id
+                        FROM
+                            email_links l
+                            CROSS JOIN LATERAL (
+                                SELECT
+                                    scoped.due,
+                                    scoped.id
+                                FROM (
+                                    SELECT
+                                        r.next_run_at AS due,
+                                        r.id
+                                    FROM
+                                        email_sync_streams r
+                                    WHERE
+                                        r.link_id = l.id
+                                        AND r.generation = l.sync_generation
+                                        AND r.kind = 'folder_catalog'
+                                        AND r.next_run_at <= now()
+                                        AND (r.lease_until IS NULL
+                                            OR r.lease_until < now())
+                                        OFFSET 0) scoped
+                                ORDER BY
+                                    scoped.due,
+                                    scoped.id
+                                LIMIT 1)
+                            first
+                        WHERE
+                            ok.id IS NULL
+                            AND l.provider = $2::text::email_user_provider_enum
+                            AND l.is_sync_active
+                            AND NOT l.needs_reauth
+                        ORDER BY
+                            first.due,
+                            first.id
+                        LIMIT 1) h ON true
+                WHERE
+                    ok.id IS NOT NULL
+                    OR h.id IS NOT NULL)
+                AND (s.lease_until IS NULL
+                    OR s.lease_until < now())
+            ORDER BY
+                s.next_run_at,
+                s.id
+            LIMIT 1
+            FOR UPDATE
+                OF s SKIP LOCKED
             )
-            UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1
-            FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
-            RETURNING s.id,s.link_id,s.generation,l.grant_generation,s.fence
-        "#,lease_id, self.provider.as_str()).fetch_optional(&self.db).await.map_err(db_error)?;
+            UPDATE
+                email_sync_streams s
+            SET
+                lease_id = $1,
+                lease_until = now() + interval '3 minutes',
+            lease_started_at = clock_timestamp(),
+            fence = fence + 1
+            FROM
+                candidate c,
+                email_links l
+            WHERE
+                s.id = c.id
+                AND l.id = s.link_id
+            RETURNING
+                s.id,
+                s.link_id,
+                s.generation,
+                l.grant_generation,
+                s.fence
+        "#,
+            lease_id,
+            self.provider.as_str()
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
         Ok(row.map(|row| CatalogLease {
             id: row.id,
             mailbox: MailboxKey {
