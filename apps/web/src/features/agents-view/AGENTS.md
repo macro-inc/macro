@@ -9,7 +9,8 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 ## Start here
 
 - `views/AgentsView.tsx`: production query, selection, draft, and navigation ownership.
-- `phone-list.tsx`: phone list, archive, header menu, favorites, bubbles, and existing entity actions.
+- `phone-list.tsx`: phone list, archive, sticky collection heading, favorites, bubbles, and existing entity actions.
+- `phone-sidebar.tsx` and `views/mobile/agents-navigation.tsx`: shell-owned phone drawer and shared routine list data.
 - `core/phone-list.ts`: waiting/favorite partition and startable agent selection.
 - `primitives/mobile-agent-request.ts`: selection handoff to the mounted accessory composer.
 - `views/agents-sidebar/agents-sidebar.tsx`: redesigned desktop list composition.
@@ -33,20 +34,25 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Preserve Home row geometry and activity rendering when extracting shared behavior.
 - Reuse Soup entity actions and session archive mutations; do not add another action or cache path.
 - Fetch PR metadata only for an open preview, never eagerly for every conversation row.
-- Keep unsupported remote metadata absent; archived counts describe loaded pages.
+- Show phone conversation and archive totals only after the shared query is exhausted; never present a loaded-page count as a total.
 - Keep the `connections` page routable even though the redesigned navigation omits it.
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
+- Persist phone Archived filters separately from Conversations so an active unread filter cannot hide archived history on entry.
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
 - Keep archive code/date cells pointer-transparent except their actual controls; show an empty archive only after pagination is exhausted, with loading feedback while pages can still supply matches.
-- Render desktop row ages in the interface locale as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
+- Render desktop row ages in the interface locale on a state-matched trailing fill with a 24px left fade; retain hover/focus visibility and title truncation.
 - Use the shared soup touch highlight and full-width square phone rows; clear it on drawer open/close and cancellation, and keep button press fills off the title-only hit target.
 - Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; separate model-menu groups with labels and spacing, never divider lines, and keep phone choices on MobileDrawer parts.
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups. Reuse catalog search focus ownership on desktop; let ArrowDown/ArrowUp enter filtered models and ArrowLeft return to the parent menu.
-- Use shared grouped Tabs for Agents modes and preserve Home's original track tabs and below-composer settings drawer; keep the Auto gate and host mode state unchanged.
-- Keep session model controls inside the composer; place only + on the left and model, dictation, then Send/Stop on the right, with Agents desktop mode/repository controls in the right group, Home settings below, and phone controls in their upper drawer.
+- Use shared grouped Tabs for the compact phone accessory and Home's track tabs for full new-session views; keep the Auto gate and host mode state unchanged.
+- Keep session model controls inside the composer, with only + on the left and model, dictation, then Send/Stop on the right; full new-session views share Home's mode/repository row below the composer on desktop and phone, while the compact phone accessory retains its upper drawer.
 - Use `MobileHeader.Title` with its shared padding and `MobileHeader.Back` with the shell's history action and caret; do not hand-build title or back islands.
 - Push phone subpages into split history and derive their restored state without navigating again; let nested agent editors consume Back before leaving their list.
 - Suppress the mobile navigation dock only in active session hosts with an empty `FloatRegion` contribution; retain header/gesture Back and the shared accessory host's safe-area padding, and restore navigation on list and management pages.
+- Use Email's collection-layout NavigationSheet and ViewSidebar sections for phone destinations; Conversations and Archived keep the hamburger, never a title-menu sheet or Archived Back button.
+- Mark drawer destinations with the existing `referredFrom: 'agents'` origin and read current router-entry metadata for management-page navigation; drawer entries show the hamburger, external entries and details keep Back.
+- Put phone conversation headings after the agent bubbles and before pinned sections; use MobileListLayout as the sole island-inset owner, and share its offset between scroll padding and the sticky heading without extra top padding or a hosted split header.
+- Reuse EmptyStatePanel for exhausted empty phone lists regardless of retained filters; omit search/filter actions and focus the existing accessory composer from Start a conversation.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.

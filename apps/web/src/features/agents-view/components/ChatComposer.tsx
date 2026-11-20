@@ -72,7 +72,7 @@ export function ChatComposer(props: {
   onAttachFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   drawer?: JSX.Element;
-  /** Home retains its settings drawer below the desktop composer. */
+  /** Full new-session views share Home's settings row below the composer. */
   settingsPlacement?: 'inside' | 'below';
   drawerOpen?: boolean;
   placeholder?: string;
@@ -320,7 +320,11 @@ export function ChatComposer(props: {
     <Show when={props.drawer}>
       <div
         class="composer-drawer"
-        data-placement={isTouchDevice() ? 'top' : 'bottom'}
+        data-placement={
+          isTouchDevice() && props.settingsPlacement !== 'below'
+            ? 'top'
+            : 'bottom'
+        }
         data-open={drawerOpen() ? '' : undefined}
         aria-hidden={!drawerOpen()}
         inert={!drawerOpen()}
@@ -456,7 +460,11 @@ export function ChatComposer(props: {
           when={props.phoneLayout}
           fallback={
             <>
-              <Show when={isTouchDevice()}>{repositoryDrawer()}</Show>
+              <Show
+                when={isTouchDevice() && props.settingsPlacement !== 'below'}
+              >
+                {repositoryDrawer()}
+              </Show>
               <ComposerSurface
                 as="div"
                 data-agent-composer="chat"
@@ -557,9 +565,7 @@ export function ChatComposer(props: {
                 </Input.DropZone>
                 <DictationPanel dictation={dictation} />
               </ComposerSurface>
-              <Show
-                when={!isTouchDevice() && props.settingsPlacement === 'below'}
-              >
+              <Show when={props.settingsPlacement === 'below'}>
                 {repositoryDrawer()}
               </Show>
             </>

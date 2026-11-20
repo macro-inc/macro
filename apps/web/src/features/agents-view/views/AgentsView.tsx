@@ -1,4 +1,4 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { ViewShell } from '@app/components/view-shell';
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
@@ -13,7 +13,6 @@ import {
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
-import { runSplitBack } from '@components/app/split-layout/back-interceptor';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -40,7 +39,10 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { routineContent } from '../../routines/routine-navigation';
+import {
+  routineContent,
+  routineIdFromContent,
+} from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
 
@@ -79,8 +81,10 @@ import {
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { PhoneAgentsList } from '../phone-list';
+import { PhoneAgentsSidebar } from '../phone-sidebar';
 import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
+import { useWorkspaceDrawerEntry } from '../primitives/drawer-navigation';
 import { mobileAgentRequest } from '../primitives/mobile-agent-request';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
@@ -115,21 +119,19 @@ function LoadingComposer() {
 }
 
 function AgentsMobileList(props: { children: JSX.Element }) {
-  const shell = useViewShell();
   return (
-    <Show when={!shell.aside.isOverlay()}>
-      <div
-        class="size-full min-h-0 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)]"
-        style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
-      >
-        {props.children}
-      </div>
-    </Show>
+    <div
+      class="size-full min-h-0"
+      style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
+    >
+      {props.children}
+    </div>
   );
 }
 
 function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const panel = useSplitPanelOrThrow();
+  const fromWorkspaceDrawer = useWorkspaceDrawerEntry();
   const inlinePreviewLayout = useInlinePreviewLayout();
   const mobileLayout = () => !inlinePreviewLayout();
   const layout = useSplitLayout();
@@ -144,6 +146,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // A coding agent another surface asked the composer to start with.
   const [requestedAgent, setRequestedAgent] = createSignal<AgentRequest>();
   const listView = createConversationListView(userId());
+  const archivedListView = createConversationListView(
+    userId(),
+    'agents-archived-list-view-v1'
+  );
+  const phoneListView = () =>
+    page() === 'archived' ? archivedListView : listView;
   const conversationSort = () =>
     isTouchDevice() ? ('updated' as const) : listView.sort();
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
@@ -313,7 +321,11 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       }
     )
   );
-  const openPage = (next: AgentsPage, createKind?: AgentKind) => {
+  const openPage = (
+    next: AgentsPage,
+    createKind?: AgentKind,
+    navigationSource?: 'agents'
+  ) => {
     setCreatingKind(createKind);
     setMobileList(false);
     if (next === 'routines') {
@@ -321,11 +333,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         handle: panel.handle,
         activate: true,
         search: {},
+        referredFrom: navigationSource,
       });
       return;
     }
     if (mobileLayout()) {
       panel.handle.replace({
+        referredFrom: navigationSource,
         next: {
           type: 'component',
           id: 'agents',
@@ -334,6 +348,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
             agentPage: next,
             agentPageRequest: crypto.randomUUID(),
             createAgentKind: createKind,
+            // A drawer destination replaces a one-shot composer intent, not its draft store.
+            focusComposer: undefined,
+            composerAgentId: undefined,
+            draft: undefined,
           },
         },
       });
@@ -607,6 +625,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       actions={actions}
     />
   );
+
   const sidebar = () => (
     <AgentsSidebar
       filters={listView.filters()}
@@ -663,18 +682,49 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         data-session={selected() ? '1' : undefined}
       >
         <ViewShell.Root
+          contentLayout="collection"
           asidePreferenceKey="agents"
           class="bg-panel"
           resizable
-          aside={
-            isTouchDevice() && mobileLayout()
-              ? false
-              : { min: 224, max: 380, preserveDuringResize: false }
-          }
+          aside={{ min: 224, max: 380, preserveDuringResize: false }}
           main={{ min: 280, preferredWidth: 640 }}
         >
           <ViewShell.Aside>
             <Switch>
+              <Match when={isTouchDevice() && mobileLayout()}>
+                <PhoneAgentsSidebar
+                  activePage={page()}
+                  activeRoutineId={routineIdFromContent(panel.handle.content())}
+                  archivedCount={
+                    !query.hasNextPage && !query.isPending && !query.error
+                      ? allArchived().length
+                      : undefined
+                  }
+                  onOpenPage={(next) => {
+                    const interaction = beginInteraction('agents.page.open');
+                    try {
+                      openPage(next, undefined, 'agents');
+                    } finally {
+                      interaction.end();
+                    }
+                  }}
+                  onCreateAgent={() => openPage('agents', 'agent', 'agents')}
+                  onCreateRoutine={() =>
+                    layout.popoverSplit({
+                      type: 'component',
+                      id: 'routine-compose',
+                    })
+                  }
+                  onOpenRoutine={(id) =>
+                    layout.openWithSplit(routineContent(id), {
+                      handle: panel.handle,
+                      activate: true,
+                      search: {},
+                      referredFrom: 'agents',
+                    })
+                  }
+                />
+              </Match>
               <Match when={mobileLayout()}>{null}</Match>
               <Match when={isTouchDevice()}>{sidebar()}</Match>
               <Match when={true}>{desktopSidebar()}</Match>
@@ -707,12 +757,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                       <Topbar
                         title={pageTitle()}
                         onBack={
-                          mobileLayout()
-                            ? () =>
-                                runSplitBack({
-                                  canGoBack: () => true,
-                                  goBack: backToPreviousPage,
-                                })
+                          mobileLayout() &&
+                          !(page() === 'agents' && fromWorkspaceDrawer())
+                            ? backToPreviousPage
                             : undefined
                         }
                       />
@@ -871,15 +918,20 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     'updated'
                   )}
                   archivedTotalCount={allArchived().length}
+                  conversationTotalCount={
+                    partitionArchived(allConversations()).conversations.length
+                  }
                   roster={rosterSource.roster()}
                   rosterLoading={rosterSource.loading()}
                   search={page() === 'archived' ? archivedSearch() : search()}
                   onSearchChange={
                     page() === 'archived' ? setArchivedSearch : setSearch
                   }
-                  filters={listView.filters()}
-                  onFilterChange={listView.setSelected}
-                  onClearFilters={listView.clear}
+                  filters={phoneListView().filters()}
+                  onFilterChange={(category, value, selected) =>
+                    phoneListView().setSelected(category, value, selected)
+                  }
+                  onClearFilters={() => phoneListView().clear()}
                   showUnlistedRuns={showUnlistedRuns()}
                   onShowUnlistedRunsChange={setShowUnlistedRuns}
                   modeForConversation={modeForConversation}
@@ -898,18 +950,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                       'agents-view'
                     )
                   }
-                  onOpenPage={(next) =>
-                    next === 'new' ? setMobileList(true) : openSidebarPage(next)
-                  }
-                  onBack={() => {
-                    backToPreviousPage();
-                    setArchivedSearch('');
-                  }}
                   onOpenConversation={openListedConversation}
                   onSelectAgent={(agent) =>
                     mobileAgentRequest.select(userId(), agent.id, agent.kind)
                   }
                   onCreateAgent={() => openPage('agents', 'agent')}
+                  onFocusComposer={() => mobileAgentRequest.focus(userId())}
                   actions={actions}
                 />
               </AgentsMobileList>
