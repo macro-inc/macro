@@ -12,6 +12,8 @@ export type History = {
     count: number
   ) => Promise<readonly Entry[]>;
   readonly record: (channelId: string, entry: Entry) => Promise<void>;
+  /** Whether the message was recorded: one read again from history after a restart was already judged. */
+  readonly recorded: (channelId: string, id: string) => Promise<boolean>;
   /** Keeps a message that is waiting for a reply, so a restart doesn't lose it. */
   readonly wait: (message: Queued) => Promise<void>;
   /** Forgets the waiting messages with these ids: they were answered. */
@@ -47,6 +49,10 @@ export const history = ({
     recent: async (channelId, count) =>
       parseLines(Entry, await disk.read(file(channelId))).slice(-count),
     record: (channelId, entry) => disk.append(file(channelId), jsonLine(entry)),
+    recorded: async (channelId, id) =>
+      parseLines(Entry, await disk.read(file(channelId))).some(
+        (entry) => entry.id === id
+      ),
     wait: (message) =>
       disk.append(queued(message.channel_id), jsonLine(message)),
     answered: async (channelId, ids) => {

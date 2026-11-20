@@ -86,3 +86,14 @@ test('typing stops once, with one stop, when the agent answers', async () => {
   await indicator.stop('c1');
   expect(sent).toEqual(['c1:start:root1', 'c1:stop:root1']);
 });
+
+test('history says whether a message was recorded, so one caught up after a restart is judged once', async () => {
+  const disk = memoryDisk();
+  const make = () =>
+    history({ directory: 'private/history', queue: 'run/queue', join, disk });
+  await make().record('c1', queued('m1'));
+
+  expect(await make().recorded('c1', 'm1')).toBe(true);
+  expect(await make().recorded('c1', 'm2')).toBe(false);
+  expect(await make().recorded('c2', 'm1')).toBe(false);
+});

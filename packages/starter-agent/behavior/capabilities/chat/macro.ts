@@ -4,6 +4,7 @@
  * Macro's SDK.
  */
 import type { Macro } from '@macro-inc/sdk';
+import { passthrough, type Trace } from '../../agent/claude.ts';
 import { pushed } from '../../context/stream.ts';
 import type { Attachment, Incoming } from './entry.ts';
 import type { Probabilities } from './listen.ts';
@@ -74,12 +75,44 @@ export type Chat = {
     input: unknown,
     questions: Readonly<Record<string, string>>
   ) => Promise<Probabilities>;
-  /** Every message posted in a channel the agent is in, its own included, from when it is first read. */
+  /**
+   * Every message posted in a channel the agent is in, its own included, from
+   * when it is first read; after a restart or a dropped stream, also what was
+   * posted while it wasn't listening (see {@link StreamCursor}).
+   */
   readonly incoming: AsyncIterable<Incoming>;
+  /** Resolves once `incoming`'s stream is open and a round trip to Macro worked. */
+  readonly listening: () => Promise<void>;
+};
+
+/**
+ * Where the incoming stream left off, kept across restarts: the last event
+ * handled, which the events service replays after for a short while, and
+ * when, which history is read after since a longer gap isn't replayed.
+ */
+export type StreamCursor = { readonly eventId?: string; readonly at: string };
+
+export type CursorStore = {
+  readonly read: () => Promise<StreamCursor | undefined>;
+  readonly write: (cursor: StreamCursor) => Promise<void>;
+};
+
+const noCursor: CursorStore = {
+  read: async () => undefined,
+  write: async () => undefined,
 };
 
 const recent = 20;
 const directMessage = 'direct_message';
+/** How far back a catch-up reads at most: an agent down longer has lost the context anyway. */
+const catchUpWindowMs = 24 * 60 * 60_000;
+/** Read from this much before the cursor: events minted near it may land after it. */
+const catchUpMarginMs = 60_000;
+/** Bounds on one catch-up: channels read, and messages read per channel. */
+const catchUpChannels = 50;
+const catchUpMessages = 200;
+/** Ids remembered to drop a message both replayed and caught up. */
+const rememberedIds = 1_000;
 
 /** What a message carries besides its text. Absent when there's nothing. */
 export const attachmentsOf = (
@@ -101,11 +134,19 @@ export const nameFromId = (id: string): string =>
 export const sdkChat = ({
   macro: connect,
   myName,
+  cursor = noCursor,
+  trace = passthrough,
+  now = () => new Date(),
 }: {
   readonly macro: () => Promise<Macro>;
   /** What the agent's own messages are recorded as from. */
   readonly myName: string;
+  /** Where the incoming stream resumes after a restart. */
+  readonly cursor?: CursorStore;
+  readonly trace?: Trace;
+  readonly now?: () => Date;
 }): Chat => {
+  const listening = Promise.withResolvers<void>();
   let me: Promise<string> | undefined;
   const myId = () => {
     me ??= connect()
@@ -222,36 +263,61 @@ export const sdkChat = ({
       return (await macro.ai.decide({ input, questions: { ...questions } }))
         .probabilities;
     },
+    listening: () => listening.promise,
     incoming: pushed<Incoming>(async (emit) => {
       const macro = await connect();
       const mine = await myId();
       const channelNames = new Map<string, string>();
       const senderNames = new Map<string, string>([[mine, myName]]);
+      type Channel = ReturnType<Macro['channels']['byId']>;
+      const channelFacts = async (channel: Channel) => {
+        const name =
+          channelNames.get(channel.id) ??
+          (await channel.name().catch(() => channel.id)).trim();
+        channelNames.set(channel.id, name);
+        const type = await channel.type().catch(() => undefined);
+        return { name, dm: type === directMessage };
+      };
+      const senderName = async (
+        sender: string,
+        name: () => Promise<string | undefined>
+      ) => {
+        const known =
+          senderNames.get(sender) ??
+          (await name().catch(() => undefined)) ??
+          nameFromId(sender);
+        senderNames.set(sender, known);
+        return known;
+      };
+      // A message the server replays and history also returns reaches the
+      // agent once.
+      const seen = new Set<string>();
+      const deliver = (incoming: Incoming): void => {
+        if (seen.has(incoming.entry.id)) return;
+        seen.add(incoming.entry.id);
+        if (seen.size > rememberedIds) {
+          const [oldest] = seen;
+          if (oldest !== undefined) seen.delete(oldest);
+        }
+        emit(incoming);
+      };
+
       macro.events.on('message.posted', async (event) => {
         if (event.target.type !== 'channel') return;
         const { channel } = event.target;
         const { metadata } = event;
-        const channelName =
-          channelNames.get(channel.id) ??
-          (await channel.name().catch(() => channel.id)).trim();
-        channelNames.set(channel.id, channelName);
+        const facts = await channelFacts(channel);
         const sender = metadata.sender;
-        const senderName =
-          senderNames.get(sender) ??
-          (await event.sender?.name().catch(() => undefined)) ??
-          nameFromId(sender);
-        senderNames.set(sender, senderName);
-        const type = await channel.type().catch(() => undefined);
-        emit({
+        deliver({
           channelId: channel.id,
-          channel: channelName,
+          channel: facts.name,
           mentions: metadata.mentions.map(({ entity_id }) => entity_id),
           entry: {
             id: metadata.message_id,
             root: metadata.root_id,
             thread: metadata.thread_id ?? null,
-            dm: type === directMessage,
-            from: senderName,
+            dm: facts.dm,
+            from: await senderName(sender, async () => event.sender?.name()),
             sender_id: sender,
             at: metadata.created_at,
             text: metadata.content,
@@ -259,7 +325,145 @@ export const sdkChat = ({
           },
         });
       });
-      await macro.events.listen();
+
+      type Posted = ReturnType<Channel['message']>;
+      const fromHistory = async (
+        channel: Channel,
+        message: Posted,
+        at: string
+      ): Promise<Incoming> => {
+        const facts = await channelFacts(channel);
+        const author = await message.author();
+        // History carries the record: its thread and attachments are read
+        // from it, the rest through the handle.
+        const record = message.toJSON().detail;
+        const thread = record?.thread_id ?? null;
+        return {
+          channelId: channel.id,
+          channel: facts.name,
+          mentions: message.mentions.map(({ entity_id }) => entity_id),
+          entry: {
+            id: message.id,
+            root: thread ?? message.id,
+            thread,
+            dm: facts.dm,
+            from: await senderName(author.id, () => author.name()),
+            sender_id: author.id,
+            at,
+            text: await message.content(),
+            ...attachmentsOf(record?.attachments ?? []),
+          },
+        };
+      };
+      // What was posted after `after` in the channels active since: each
+      // root posted or replied to since, and its replies. Bounded, and
+      // counted on the span.
+      const catchUpFrom = (after: string) =>
+        trace('agent.chat.catch_up', async (span) => {
+          const since = Date.parse(after);
+          let channels = 0;
+          let messages = 0;
+          span.set('chat.catch_up.after', after);
+          for await (const channel of macro.channels.activeSince(after)) {
+            if (channels >= catchUpChannels) {
+              span.set('chat.catch_up.capped', true);
+              break;
+            }
+            channels += 1;
+            const missed: Incoming[] = [];
+            for await (const root of channel.messagesAfter(after, {
+              maxItems: catchUpMessages,
+            }))
+              for (const message of [
+                root,
+                ...(await root.thread().replies()),
+              ]) {
+                if (seen.has(message.id)) continue;
+                const at = await message.createdAt();
+                if (Date.parse(at) < since) continue;
+                missed.push(await fromHistory(channel, message, at));
+              }
+            missed.sort(
+              (a, b) => Date.parse(a.entry.at) - Date.parse(b.entry.at)
+            );
+            messages += missed.length;
+            for (const incoming of missed) deliver(incoming);
+          }
+          span.set('chat.catch_up.channels', channels);
+          span.set('chat.catch_up.messages', messages);
+        });
+
+      const stored = await cursor.read().catch(() => undefined);
+      // Where a catch-up starts from an instant: a margin before it, but no
+      // further back than the window.
+      const from = (at: Date): string =>
+        new Date(
+          Math.max(
+            at.getTime() - catchUpMarginMs,
+            now().getTime() - catchUpWindowMs
+          )
+        ).toISOString();
+      // The earliest gap not caught up yet. It is read once the stream is
+      // open, since a message posted between a read and the reopen would
+      // reach neither; a drop during a catch-up leaves it set for another
+      // pass.
+      let pending =
+        stored === undefined ? undefined : from(new Date(stored.at));
+      let lastHandled: Date | undefined;
+      let open = false;
+      let catchingUp = false;
+      const catchUp = async (): Promise<void> => {
+        if (catchingUp) return;
+        catchingUp = true;
+        try {
+          while (open && pending !== undefined) {
+            const after = pending;
+            pending = undefined;
+            for (let attempt = 0; ; attempt += 1) {
+              try {
+                await catchUpFrom(after);
+                break;
+              } catch {
+                // The backend is still coming back: try again.
+                await Bun.sleep(Math.min(1_000 * 2 ** attempt, 30_000));
+              }
+            }
+          }
+        } finally {
+          catchingUp = false;
+        }
+      };
+      let opened = false;
+      await macro.events.listen({
+        resume: { lastEventId: stored?.eventId },
+        onEventId: (eventId) => {
+          lastHandled = now();
+          cursor
+            .write({ eventId, at: lastHandled.toISOString() })
+            .catch(() => undefined);
+        },
+        onDrop: (droppedAt) => {
+          open = false;
+          const gap = from(lastHandled ?? droppedAt);
+          if (pending === undefined || Date.parse(gap) < Date.parse(pending))
+            pending = gap;
+        },
+        onOpen: () => {
+          open = true;
+          if (!opened) {
+            opened = true;
+            // A first start has no cursor: one now covers a crash from here.
+            if (stored === undefined)
+              cursor.write({ at: now().toISOString() }).catch(() => undefined);
+            // Open, and Macro answers: the agent can hear and reply.
+            macro.users
+              .me()
+              .then(() => listening.resolve())
+              .catch(() => undefined);
+          }
+          catchUp().catch(() => undefined);
+        },
+      });
     }),
   };
 };

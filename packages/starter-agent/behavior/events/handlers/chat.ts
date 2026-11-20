@@ -23,6 +23,8 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
         { chat, history, waiting, log, relevanceScreen, config }
       ) => {
         const { channelId, channel, entry } = incoming;
+        // A replayed or caught-up message the agent already judged.
+        if (await history.recorded(channelId, entry.id)) return;
         const recent = await history.recent(channelId, screenHistory);
         const verdict = await judge(incoming, {
           me: await chat.me(),

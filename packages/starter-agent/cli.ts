@@ -68,6 +68,8 @@ const loadedAt = Date.now();
 const usage =
   'usage: bin/agent <run|list|describe|exec|guard|function> [input]';
 const presenceLog = 'presence';
+/** How long a boot may take to hear Macro before it counts as failed. */
+const listeningDeadlineMs = 3 * 60_000;
 const openState = 1;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -167,14 +169,17 @@ const run = async (): Promise<void> => {
           const started = outsideStart.run(() =>
             assistant.run(parallel({ systemPrompt, ...scripts }))
           );
-          // Built, credentials read, presence open and sources started: a healthy
-          // boot, so the launcher's rollback starts from this HEAD.
+          // Built, credentials read, presence open, sources started and chat
+          // hearing Macro: a healthy boot, so the launcher's rollback starts
+          // from this HEAD. One that can't hear in time exits, as a failed boot.
           await phase('agent.start.healthy', () =>
             markHealthy({
               git: (args) =>
                 base.shell.run(gitCommand('git', base.config.root, args)),
               disk: base.disk,
               file: files.lastGood,
+              listening: assistant.decorations.chat.listening,
+              deadline: () => Bun.sleep(listeningDeadlineMs),
             })
           );
           // Wrapped, so the start's span ends here instead of awaiting the loop.

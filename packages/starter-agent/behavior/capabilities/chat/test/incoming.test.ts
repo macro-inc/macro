@@ -1,0 +1,255 @@
+import { expect, test } from 'bun:test';
+import type { Macro } from '@macro-inc/sdk';
+import type { Incoming } from '../entry.ts';
+import { type StreamCursor, sdkChat } from '../macro.ts';
+
+type Posted = {
+  readonly id: string;
+  readonly at: string;
+  readonly text: string;
+  /** The root it replies to; a root has none. */
+  readonly thread?: string;
+};
+
+type ListenOptions = {
+  readonly resume?: { readonly lastEventId?: string };
+  readonly onEventId?: (id: string) => void;
+  readonly onDrop?: (at: Date) => void;
+  readonly onOpen?: (at: Date) => void;
+};
+
+const now = new Date('2026-11-19T12:00:00Z');
+
+/**
+ * The slice of Macro the incoming stream uses: one DM, its live events and
+ * its history, and the stream's options so a test can open, drop and reopen
+ * it, and hand it event ids.
+ */
+const fakeMacro = () => {
+  const posted: Posted[] = [];
+  const activeSince: string[] = [];
+  let meCalls = 0;
+  let handler: ((event: unknown) => Promise<void>) | undefined;
+  let options: ListenOptions | undefined;
+  const handle = (message: Posted) => ({
+    id: message.id,
+    mentions: [],
+    content: async () => message.text,
+    createdAt: async () => message.at,
+    author: async () => ({
+      id: 'macro|ada@example.com',
+      name: async () => 'Ada',
+    }),
+    toJSON: () => ({
+      id: message.id,
+      detail: { thread_id: message.thread ?? null, attachments: [] },
+    }),
+    thread: () => ({
+      replies: async () =>
+        posted
+          .filter((reply) => reply.thread === message.id)
+          .map((reply) => handle(reply)),
+    }),
+  });
+  const channel = {
+    id: 'dm1',
+    name: async () => 'Ada',
+    type: async () => 'direct_message',
+    // Roots posted or replied to after `after`, newest first, as the SDK
+    // gives them.
+    messagesAfter: async function* (after: string) {
+      const active = (root: Posted) =>
+        root.at > after ||
+        posted.some((reply) => reply.thread === root.id && reply.at > after);
+      for (const root of [...posted].reverse())
+        if (root.thread === undefined && active(root)) yield handle(root);
+    },
+  };
+  const macro = {
+    users: {
+      me: async () => {
+        meCalls += 1;
+        return { id: 'macro|agent@example.com' };
+      },
+    },
+    events: {
+      on: (_name: string, on: (event: unknown) => Promise<void>) => {
+        handler = on;
+      },
+      listen: async (given: ListenOptions) => {
+        options = given;
+        return () => undefined;
+      },
+    },
+    channels: {
+      activeSince: async function* (after: string | Date) {
+        activeSince.push(new Date(after).toISOString());
+        yield channel;
+      },
+      byId: () => channel,
+    },
+  };
+  return {
+    macro: macro as unknown as Macro,
+    activeSince,
+    meCalls: () => meCalls,
+    options: () => options,
+    post: (message: Posted) => posted.push(message),
+    live: async (message: Posted) => {
+      posted.push(message);
+      await handler?.({
+        target: { type: 'channel', channel },
+        metadata: {
+          message_id: message.id,
+          root_id: message.thread ?? message.id,
+          thread_id: message.thread ?? null,
+          sender: 'macro|ada@example.com',
+          created_at: message.at,
+          content: message.text,
+          mentions: [],
+          attachments: [],
+        },
+        sender: { name: async () => 'Ada' },
+      });
+    },
+  };
+};
+
+const listening = (
+  backend: ReturnType<typeof fakeMacro>,
+  stored: StreamCursor | undefined
+) => {
+  const written: StreamCursor[] = [];
+  const chat = sdkChat({
+    macro: async () => backend.macro,
+    myName: 'Pip',
+    cursor: {
+      read: async () => stored,
+      write: async (cursor) => {
+        written.push(cursor);
+      },
+    },
+    now: () => now,
+  });
+  const incoming = chat.incoming[Symbol.asyncIterator]();
+  return {
+    chat,
+    written,
+    next: async (): Promise<Incoming> => (await incoming.next()).value,
+  };
+};
+
+const within = <Value>(wait: Promise<Value>, what: string): Promise<Value> =>
+  Promise.race([
+    wait,
+    Bun.sleep(3_000).then(() => {
+      throw new Error(what);
+    }),
+  ]);
+
+const nothingWithin = async (next: Promise<Incoming>): Promise<string> =>
+  Promise.race([
+    next.then((incoming) => incoming.entry.id),
+    Bun.sleep(500).then(() => 'nothing'),
+  ]);
+
+test('after a restart the stream resumes from the stored id and the gap is caught up once it is open', async () => {
+  const backend = fakeMacro();
+  // Posted while the agent restarted: after the stored cursor.
+  backend.post({ id: 'gap', at: '2026-11-19T11:59:30Z', text: 'you there?' });
+  const { chat, next } = listening(backend, {
+    eventId: 'e9',
+    at: '2026-11-19T11:59:20Z',
+  });
+
+  const caught = next();
+  await Bun.sleep(10);
+  expect(backend.options()?.resume).toEqual({ lastEventId: 'e9' });
+  // Nothing is read before the stream is open.
+  expect(backend.activeSince).toEqual([]);
+
+  backend.options()?.onOpen?.(now);
+  expect(
+    (await within(caught, 'the gap was never caught up')).entry
+  ).toMatchObject({
+    id: 'gap',
+    dm: true,
+    text: 'you there?',
+  });
+  await within(chat.listening(), 'not listening after the stream opened');
+});
+
+test('a stored cursor older than a day catches up only the last day', async () => {
+  const backend = fakeMacro();
+  const { next } = listening(backend, { at: '2026-11-10T00:00:00Z' });
+
+  const pending = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  await Bun.sleep(50);
+
+  expect(backend.activeSince).toEqual(['2026-11-18T12:00:00.000Z']);
+  expect(await nothingWithin(pending)).toBe('nothing');
+});
+
+test('each handled event moves the cursor, and a first start records one when the stream opens', async () => {
+  const backend = fakeMacro();
+  const { next, written } = listening(backend, undefined);
+
+  const first = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  await Bun.sleep(10);
+  // No cursor yet: nothing to catch up, but a crash from here has one.
+  expect(backend.activeSince).toEqual([]);
+  expect(written).toEqual([{ at: now.toISOString() }]);
+
+  await backend.live({ id: 'm1', at: '2026-11-19T12:00:01Z', text: 'hi' });
+  expect((await first).entry.id).toBe('m1');
+  backend.options()?.onEventId?.('e10');
+  expect(written.at(-1)).toEqual({ eventId: 'e10', at: now.toISOString() });
+});
+
+test('a message both replayed and caught up reaches the agent once, and a reply in a thread is caught up', async () => {
+  const backend = fakeMacro();
+  const { next } = listening(backend, { at: '2026-11-19T11:00:00Z' });
+
+  const first = next();
+  await Bun.sleep(10);
+  await backend.live({ id: 'r1', at: '2026-11-19T11:30:00Z', text: 'plan?' });
+  expect((await first).entry.id).toBe('r1');
+  backend.post({
+    id: 'r1-reply',
+    at: '2026-11-19T11:40:00Z',
+    text: 'news?',
+    thread: 'r1',
+  });
+
+  backend.options()?.onOpen?.(now);
+  expect(
+    (await within(next(), 'the reply was never caught up')).entry
+  ).toMatchObject({
+    id: 'r1-reply',
+    root: 'r1',
+    thread: 'r1',
+  });
+  expect(await nothingWithin(next())).toBe('nothing');
+});
+
+test('the agent is listening only once the stream is open and a round trip worked', async () => {
+  const backend = fakeMacro();
+  const { chat, next } = listening(backend, undefined);
+  void next();
+  await Bun.sleep(10);
+
+  const state = await Promise.race([
+    chat.listening().then(() => 'listening'),
+    Bun.sleep(100).then(() => 'not yet'),
+  ]);
+  expect(state).toBe('not yet');
+
+  const before = backend.meCalls();
+  backend.options()?.onOpen?.(now);
+  await within(chat.listening(), 'never listening');
+  expect(backend.meCalls()).toBeGreaterThan(before);
+});
