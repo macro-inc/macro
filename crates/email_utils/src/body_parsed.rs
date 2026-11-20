@@ -1,13 +1,22 @@
 use html2text::config::Config;
 use html2text::render::PlainDecorator;
+use html2text::{Element, Handle};
 
-/// The line width html2text lays a body out at. html2text pads every table
-/// row to the width of its columns, and without a limit a column is as wide
-/// as its longest cell, so one long cell over many rows turned kilobytes of
-/// HTML into gigabytes of padding. Longer paragraphs wrap onto new lines;
-/// content that cannot fit, such as deeply nested quotes, overflows the width
-/// instead of failing the conversion.
+/// The line width html2text lays a body out at. Longer paragraphs wrap onto
+/// new lines; content that cannot fit, such as deeply nested quotes,
+/// overflows the width instead of failing the conversion.
 const TEXT_WIDTH: usize = 1_000;
+
+/// The most table cells a body may lay out, counted as each table's rows
+/// times its widest row. html2text gives every row its own copy of its
+/// table's column widths, so a table of many rows below one very wide row
+/// costs that product in memory.
+const MAX_TABLE_CELLS: usize = 1_000_000;
+
+/// The most HTML a conversion reads; a longer body's text stops there.
+/// html2text's document tree takes up to a few hundred bytes per byte of
+/// HTML, so this caps a conversion near a few hundred megabytes.
+const MAX_HTML_BYTES: usize = 1 << 20;
 
 /// Convert `body_replyless` into plaintext with link footnotes.
 ///
@@ -22,7 +31,8 @@ pub fn compute_body_parsed(has_html: bool, body_replyless: &Option<String>) -> O
 
     let config = html2text::config::plain()
         .no_table_borders()
-        .link_footnotes(true);
+        .link_footnotes(true)
+        .no_link_wrapping();
 
     parse_html_to_text(text, config)
 }
@@ -52,9 +62,10 @@ pub fn compute_body_parsed_linkless(
     })
 }
 
-/// Convert an HTML fragment to block-aware plaintext: block elements are
-/// separated by newlines, but inline runs (`<strong>`, `<em>`, `<a>`, …) stay
-/// on one line. Returns `None` if conversion fails. Suitable for building a
+/// Convert an HTML fragment to block-aware plaintext: block elements and table
+/// cells are separated by newlines, but inline runs (`<strong>`, `<em>`, `<a>`,
+/// …) stay on one line up to 1,000 characters. Returns `None` if conversion
+/// fails. Suitable for building a
 /// `text/plain` MIME alternative from a small HTML snippet (e.g. a signature).
 pub fn html_to_plaintext(html: &str) -> Option<String> {
     let config = html2text::config::plain()
@@ -82,14 +93,29 @@ pub fn html_to_undecorated_text(html: &str) -> Option<String> {
 }
 
 fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<String> {
+    // Raw mode stacks a table's cells in reading order instead of laying them
+    // out in columns. Laid out, a column was as wide as its longest cell and
+    // every row was padded to it, so one long cell over many rows took
+    // gigabytes, and wrapped cells interleaved their lines.
+    let config = config.raw_mode(true).allow_width_overflow();
+    let html = &html[..html.floor_char_boundary(MAX_HTML_BYTES)];
     // html2text panics on some malformed-but-real email HTML (e.g. a table
-    // rowspan overhanging past the last row, or rowspan="0"). A panic here
+    // rowspan overhanging past the last row). A panic here
     // takes down the whole message-processing worker, so contain it and treat
     // the body as unparseable instead.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        config
-            .allow_width_overflow()
-            .string_from_read(html.as_bytes(), TEXT_WIDTH)
+        let dom = config.parse_html(html.as_bytes())?;
+        let table_cells = table_cells(&dom.document);
+        if table_cells > MAX_TABLE_CELLS {
+            tracing::warn!(
+                html_len = html.len(),
+                table_cells,
+                "email body has too many table cells to convert to text"
+            );
+            return Ok(None);
+        }
+        let tree = config.dom_to_render_tree(&dom)?;
+        config.render_to_string(tree, TEXT_WIDTH).map(Some)
     }))
     .inspect_err(|_| {
         tracing::warn!(
@@ -98,7 +124,7 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
         );
     });
     match result {
-        Ok(Ok(text)) => {
+        Ok(Ok(Some(text))) => {
             let trimmed = text
                 .lines()
                 .map(|line| line.trim())
@@ -107,8 +133,49 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
                 .join("\n");
             Some(trimmed)
         }
-        Ok(Err(_)) | Err(_) => None,
+        Ok(Ok(None) | Err(_)) | Err(_) => None,
     }
+}
+
+/// Each table's rows times its widest row, summed over the document. The walk
+/// keeps a stack rather than recursing, because nesting depth is the sender's
+/// choice; each node waits with the table its rows belong to.
+fn table_cells(document: &Handle) -> usize {
+    let mut tables: Vec<(usize, usize)> = Vec::new();
+    let mut pending: Vec<(Handle, Option<usize>)> = vec![(document.clone(), None)];
+    while let Some((node, table)) = pending.pop() {
+        let mut children_table = table;
+        if let Element { name, .. } = &node.data {
+            match &*name.local {
+                "table" => {
+                    children_table = Some(tables.len());
+                    tables.push((0, 0));
+                }
+                "tr" => {
+                    let cells = node
+                        .children
+                        .borrow()
+                        .iter()
+                        .filter(|child| match &child.data {
+                            Element { name, .. } => matches!(&*name.local, "td" | "th"),
+                            _ => false,
+                        })
+                        .count();
+                    if let Some((rows, widest)) = table.and_then(|index| tables.get_mut(index)) {
+                        *rows += 1;
+                        *widest = (*widest).max(cells);
+                    }
+                }
+                _ => {}
+            }
+        }
+        for child in node.children.borrow().iter() {
+            pending.push((child.clone(), children_table));
+        }
+    }
+    tables.iter().fold(0, |total, (rows, widest)| {
+        total.saturating_add(rows.saturating_mul(*widest))
+    })
 }
 
 #[cfg(test)]

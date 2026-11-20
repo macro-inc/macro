@@ -1,6 +1,7 @@
 //! Converting an HTML body to text must cost memory in proportion to the
-//! HTML. html2text pads every table row to its columns' width, so a table
-//! whose one long cell sets that width once held gigabytes per message.
+//! HTML, or refuse. Laid out in columns, html2text padded every table row to
+//! the width of its longest cell, and it copies a table's column widths into
+//! every row, so a few kilobytes of tables once held gigabytes per message.
 
 use email_utils::body_parsed::{compute_body_parsed, html_to_plaintext};
 use email_utils::body_replyless::reply_snippet;
@@ -72,8 +73,8 @@ fn a_table_with_one_long_cell_converts_in_bounded_memory() {
             assert!(reply_snippet(None, Some(&html), None).is_some());
         });
 
-        // About 80 KB of HTML; before the width was bounded each conversion
-        // peaked above 140 MB.
+        // About 80 KB of HTML; laid out in columns, each conversion peaked
+        // above 140 MB.
         for peak in [plaintext, parsed, snippet] {
             assert!(
                 peak < 32 << 20,
@@ -82,4 +83,26 @@ fn a_table_with_one_long_cell_converts_in_bounded_memory() {
             );
         }
     }
+}
+
+#[test]
+fn a_table_with_one_very_wide_row_over_many_rows_is_refused_cheaply() {
+    // Every row holds a copy of the widest row's column widths: 4,000 rows
+    // below a row of 4,000 cells.
+    let html = format!(
+        "<table><tr>{}{}</table>",
+        "<td>x".repeat(4_000),
+        "<tr>".repeat(4_000)
+    );
+    let mut text = Some(String::new());
+
+    let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
+
+    // About 36 KB of HTML that peaked above 130 MB when laid out.
+    assert_eq!(text, None);
+    assert!(
+        peak < 32 << 20,
+        "{peak} bytes to refuse {} bytes of HTML",
+        html.len()
+    );
 }

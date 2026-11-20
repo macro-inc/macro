@@ -64,11 +64,13 @@ sender/generic-address checks.
   result: `scraper` leaves `<` and `>` unescaped inside attribute values. The
   same goes for removing text from a `<style>` element: what is left must not
   be able to form `</style>`.
-- HTML-to-text conversion (`body_parsed.rs`) renders at `TEXT_WIDTH` and lets
-  content that cannot fit overflow it. Never pass html2text an unbounded width:
-  it pads every table row to its columns' width, so one long cell over many
-  rows costs gigabytes and ran the email workers out of memory.
-  `tests/text_conversion_memory.rs` measures the peak.
+- HTML-to-text conversion (`body_parsed.rs`) is bounded on every axis, because
+  one message that exhausted it ran the email workers out of memory: it reads
+  at most `MAX_HTML_BYTES`, renders at `TEXT_WIDTH` in raw mode (table cells
+  stacked in reading order, never laid out in padded columns), and refuses a
+  body whose tables exceed `MAX_TABLE_CELLS` (rows times widest row, since
+  html2text copies a table's column widths into every row). Keep all three
+  when changing it; `tests/text_conversion_memory.rs` measures the peak.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
   sender's choice, and a deep enough message overflows the stack.
 

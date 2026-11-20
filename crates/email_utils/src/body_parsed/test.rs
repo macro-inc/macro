@@ -96,12 +96,12 @@ fn test_rowspan_overhang_does_not_panic() {
 
 #[test]
 fn test_rowspan_zero_does_not_panic() {
-    // html2text panics with a divide-by-zero on rowspan="0" (still
-    // unfixed upstream as of 0.16.5). The catch_unwind wrapper must
-    // contain it and treat the body as unparseable.
+    // html2text's column layout divides by zero on rowspan="0" (still
+    // unfixed upstream as of 0.16.5). Raw mode stacks the cells instead of
+    // laying them out, so the cell's text survives.
     let body = Some("<table><td rowspan=\"0\">x".to_string());
     let result = compute_body_parsed_linkless(true, &body);
-    assert_eq!(result, None);
+    assert_eq!(result, Some("x".to_string()));
 }
 
 #[test]
@@ -133,4 +133,45 @@ fn deeply_nested_quotes_overflow_the_width_instead_of_failing() {
     let text = html_to_plaintext(&html);
 
     assert!(text.is_some_and(|text| text.ends_with('t')));
+}
+
+#[test]
+fn side_by_side_cells_keep_their_text_together() {
+    let html = format!(
+        "<table><tr><td>{}</td><td>{}</td></tr></table>",
+        "alpha ".repeat(200),
+        "bravo ".repeat(200)
+    );
+
+    let text = html_to_plaintext(&html).expect("the table converts");
+
+    assert!(
+        text.lines()
+            .all(|line| !(line.contains("alpha") && line.contains("bravo")))
+    );
+    assert!(text.contains(&"alpha ".repeat(100)));
+    assert!(text.contains(&"bravo ".repeat(100)));
+}
+
+#[test]
+fn a_footnoted_link_longer_than_the_width_stays_on_one_line() {
+    let url = format!("https://example.com/{}", "a".repeat(1_500));
+    let body = Some(format!("<p><a href=\"{url}\">the report</a></p>"));
+
+    let text = compute_body_parsed(true, &body).expect("the body converts");
+
+    assert!(text.lines().any(|line| line.ends_with(&url)));
+}
+
+#[test]
+fn a_body_past_the_size_limit_converts_its_first_megabyte() {
+    let html = format!(
+        "<p>opening line</p><p>{}</p><p>closing line</p>",
+        "word ".repeat(250_000)
+    );
+
+    let text = html_to_plaintext(&html).expect("the body converts");
+
+    assert!(text.starts_with("opening line"));
+    assert!(!text.contains("closing line"));
 }
