@@ -11,7 +11,7 @@
 //! partition order; unrelated events process in parallel. An event that only
 //! rereads its entity is committed without a handoff while a reread for that
 //! entity is already queued, so one busy entity cannot fill its worker's
-//! channel and stall every topic. Malformed records are committed without a
+//! channel and stall every topic in its lane. Malformed records are committed without a
 //! handoff so they cannot wedge a partition.
 //! Processing is retried in-process, longer while OpenSearch refuses writes
 //! ([`attempts`]); an event whose attempts fail is queued on the search event
@@ -83,7 +83,11 @@ use rdkafka::{
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio::{sync::mpsc, task::JoinHandle, time::MissedTickBehavior};
+use tokio::{
+    sync::{mpsc, watch},
+    task::JoinHandle,
+    time::MissedTickBehavior,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument as _, field};
 use uuid::Uuid;
@@ -185,6 +189,30 @@ impl Lane for LiveLaneEvent {
     const NAME: &'static str = "live";
 }
 
+/// Holds each lane's member in the group until every lane has committed back
+/// what it queued, so a stopping task leaves the group once.
+///
+/// A member leaving first rebalances the group while the other lane still
+/// drains, and every task's members then wait for that drain, since a member
+/// that is not polling cannot rejoin.
+#[derive(Clone, Debug)]
+pub(crate) struct LeaveTogether(Arc<watch::Sender<usize>>);
+
+impl LeaveTogether {
+    /// For `lanes` members, one per lane.
+    pub(crate) fn new(lanes: usize) -> Self {
+        Self(Arc::new(watch::channel(lanes).0))
+    }
+
+    /// Marks one lane's rewind done, then waits until every lane's is, or
+    /// until `deadline` for a lane that is not running.
+    async fn rewound(&self, deadline: tokio::time::Instant) {
+        self.0.send_modify(|left| *left = left.saturating_sub(1));
+        let mut left = self.0.subscribe();
+        let _ = tokio::time::timeout_at(deadline, left.wait_for(|left| *left == 0)).await;
+    }
+}
+
 impl From<EmailLaneEvent> for DeclaredMacroEvent {
     fn from(event: EmailLaneEvent) -> Self {
         match event {
@@ -232,6 +260,12 @@ const SHUTDOWN_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// How long aborted workers get to stop, so their last start and finish
 /// reports reach the ledger before it decides what to rewind.
 const ABORT_GRACE: Duration = Duration::from_millis(500);
+/// How long after its graceful stop begins a lane waits for the other lanes to
+/// commit back before leaving the group: their drain and abort, plus a second
+/// for the commit.
+const LEAVE_TOGETHER_DEADLINE: Duration = SHUTDOWN_DRAIN_DEADLINE
+    .saturating_add(ABORT_GRACE)
+    .saturating_add(Duration::from_secs(1));
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -1281,10 +1315,11 @@ async fn drain_workers(
 /// worker had started and did not finish are logged as lost, never rewound to.
 /// After an error exit the workers drain fully, as before, and nothing is
 /// rewound.
-#[tracing::instrument(skip(context, shutdown), fields(brokers), err)]
+#[tracing::instrument(skip(context, leave, shutdown), fields(brokers, lane = L::NAME), err)]
 pub(crate) async fn run_event_consumer<L: Lane>(
     brokers: &str,
     context: KafkaProcessingContext,
+    leave: LeaveTogether,
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), Report> {
     let consumer = KafkaEventConsumer::<SearchProcessingConsumerGroup>::from_env(brokers)?;
@@ -1293,7 +1328,6 @@ pub(crate) async fn run_event_consumer<L: Lane>(
         .context("failed to subscribe to search processing event topics")?;
     let consumer = LaneConsumer::<L>::new(consumer);
     tracing::info!(
-        lane = L::NAME,
         topics = ?L::topics(),
         group = SearchProcessingConsumerGroup::GROUP_NAME,
         "search processing event consumer listening"
@@ -1311,6 +1345,7 @@ pub(crate) async fn run_event_consumer<L: Lane>(
         result: poll_result,
         uncommitted,
     } = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
+    let stop_began = tokio::time::Instant::now();
     // A worker waiting to retry queues its event for a replay instead. After
     // a graceful stop it also starts no more records, which the rewind
     // redelivers; after an error nothing is rewound, so it drains them.
@@ -1331,6 +1366,7 @@ pub(crate) async fn run_event_consumer<L: Lane>(
         rewound_partitions = field::Empty,
         not_rewound = field::Empty,
         unconfirmed = field::Empty,
+        leave_wait_ms = field::Empty,
     );
     let drained = async {
         let drain_started = std::time::Instant::now();
@@ -1392,6 +1428,14 @@ pub(crate) async fn run_event_consumer<L: Lane>(
                     "the consumer stopped after an error with queued events; those committed at handoff are not redelivered"
                 );
             }
+        }
+        if graceful {
+            let waiting = std::time::Instant::now();
+            leave.rewound(stop_began + LEAVE_TOGETHER_DEADLINE).await;
+            span.record(
+                "leave_wait_ms",
+                u64::try_from(waiting.elapsed().as_millis()).unwrap_or(u64::MAX),
+            );
         }
         drained
     }

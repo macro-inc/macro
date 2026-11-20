@@ -164,13 +164,15 @@ permissions instead.
 
 ## No readings
 
-No indexer task has reported a backlog reading for 10 minutes. Either the
+No indexer task has reported a backlog reading for one lane, the live topics
+or `macro.email`, for 10 minutes. Each task reads the two lanes on separate
+consumers, so one lane can stop while the other runs. Either that lane's
 consumer is down, or its metrics do not reach Datadog. In both cases its lag is
 unknown, not zero.
 
 - Check `aws.ecs.service.running` and the task stop reasons.
 - Check for the consumer supervisor's "event consumer failed" or
-  "panicked" logs.
+  "panicked" logs, whose `lane` field names the lane.
 - If the tasks run and process events (APM still shows `process_event` spans),
   the metrics export is broken: check the Datadog agent sidecar.
 

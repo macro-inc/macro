@@ -53,7 +53,9 @@ OpenSearch, and exposes backfill HTTP routes for each.
   be retried on every stop.
 - Each lane (`email`, `live`) is its own group member with its own poll loop
   and workers (README "Kafka Delivery Contract"); a topic added to
-  `DeclaredMacroEvent` must join one lane's `declare_topics!` too. A poll loop
+  `DeclaredMacroEvent` must join one lane's `declare_topics!` too. A stopping
+  task's members leave the group together (`LeaveTogether`); one that left
+  early would rebalance every task while the other lane drains. A poll loop
   blocks on a full worker channel, so one slow, busy key stalls every topic
   in its lane. `coalescible_reread_key` skips agent-session events while a
   reread for that session is queued; only add an event kind there if handling

@@ -1462,6 +1462,51 @@ fn email_has_a_lane_of_its_own_and_the_live_lane_reads_every_other_topic() {
 }
 
 #[test]
+fn backlog_metrics_split_lanes_as_the_consumers_do() {
+    use super::entity_type::EntityType as IndexedType;
+
+    for topic in EmailLaneEvent::topics() {
+        assert_eq!(IndexedType::from_topic(topic), Some(IndexedType::Email));
+    }
+    for topic in LiveLaneEvent::topics() {
+        assert_ne!(
+            IndexedType::from_topic(topic),
+            Some(IndexedType::Email),
+            "{topic}"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lane_leaves_the_group_once_every_lane_has_rewound() {
+    let leave = LeaveTogether::new(2);
+    let deadline = tokio::time::Instant::now() + LEAVE_TOGETHER_DEADLINE;
+    let first = tokio::spawn({
+        let leave = leave.clone();
+        async move { leave.rewound(deadline).await }
+    });
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert!(
+        !first.is_finished(),
+        "a lane must wait for the other lane's rewind"
+    );
+
+    leave.rewound(deadline).await;
+    first.await.expect("first lane");
+    assert!(tokio::time::Instant::now() < deadline);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lane_waits_no_longer_than_the_deadline_for_a_lane_that_is_not_running() {
+    let leave = LeaveTogether::new(2);
+    let deadline = tokio::time::Instant::now() + LEAVE_TOGETHER_DEADLINE;
+
+    leave.rewound(deadline).await;
+
+    assert_eq!(tokio::time::Instant::now(), deadline);
+}
+
+#[test]
 fn a_lane_decodes_its_records_as_the_declared_topics_do() {
     use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 

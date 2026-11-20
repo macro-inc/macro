@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
 use crate::inbound::kafka_consumer::{
-    EmailLaneEvent, IndexMetrics, KafkaProcessingContext, Lane, LiveLaneEvent,
+    EmailLaneEvent, IndexMetrics, KafkaProcessingContext, Lane, LeaveTogether, LiveLaneEvent,
     publish_lane_backlog, run_event_consumer,
 };
 use crate::{
@@ -122,11 +122,13 @@ const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 async fn supervise_event_consumer<L: Lane>(
     brokers: String,
     context: KafkaProcessingContext,
+    leave: LeaveTogether,
     shutdown_token: CancellationToken,
 ) {
     let _ = Retry::start(FixedInterval::new(CONSUMER_RESTART_DELAY), || {
         let consumer_brokers = brokers.clone();
         let consumer_context = context.clone();
+        let consumer_leave = leave.clone();
         let consumer_shutdown_token = shutdown_token.clone();
 
         async move {
@@ -139,6 +141,7 @@ async fn supervise_event_consumer<L: Lane>(
                 run_event_consumer::<L>(
                     &consumer_brokers,
                     consumer_context,
+                    consumer_leave,
                     task_shutdown_token.cancelled_owned(),
                 )
                 .await
@@ -401,14 +404,17 @@ async fn main() -> anyhow::Result<()> {
             shutdown_token.clone(),
         ));
         let brokers = config.kafka_brokers.as_ref().to_owned();
+        let leave = LeaveTogether::new(2);
         let email = tokio::spawn(supervise_event_consumer::<EmailLaneEvent>(
             brokers.clone(),
             kafka_processing_context.clone(),
+            leave.clone(),
             shutdown_token.clone(),
         ));
         let live = tokio::spawn(supervise_event_consumer::<LiveLaneEvent>(
             brokers,
             kafka_processing_context,
+            leave,
             shutdown_token.clone(),
         ));
         async move {
