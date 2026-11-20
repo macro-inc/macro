@@ -29,9 +29,9 @@ export function stackLabel(stack: ChannelStack, senderName: SenderName) {
         )?.sender_id;
         return t('channelNotificationStacks.mentionedInThread', {
           // Never another sender's name for the mention.
-          name: mentioner
-            ? senderName(mentioner) || t('channelNotificationStacks.someone')
-            : first,
+          name:
+            (mentioner && senderName(mentioner)) ||
+            t('channelNotificationStacks.someone'),
         });
       }
       if (names.length <= 1) {

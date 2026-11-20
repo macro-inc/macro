@@ -55,11 +55,15 @@ export function NotificationList(props: {
   // Only a channel with something left to mark done shows the toggle, so
   // nothing shows while that is loading. A failed read keeps it, to retry.
   const shown = () =>
-    props.status('not_done') === 'failed' || props.notDone().length > 0;
-  // The last stack marked done takes the popover with it; it stays closed
-  // when a new one arrives.
+    props.status('not_done') === 'failed' ||
+    props.status('not_done') === 'retrying' ||
+    props.notDone().length > 0;
+  // Whenever the popover's toggle goes (the last stack marked done, or the
+  // gutter docking or hiding it), the popover closes and stays closed.
   createEffect(() => {
-    if (!shown()) setPopoverOpen(false);
+    if (!shown() || docked() || props.gutterWidth() < TOGGLE_MIN_GUTTER) {
+      setPopoverOpen(false);
+    }
   });
   const stacks = () =>
     props.view() === 'not_done' ? props.notDone() : props.unread();

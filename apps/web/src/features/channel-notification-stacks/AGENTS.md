@@ -47,8 +47,9 @@ covers all of it.
   the not-done read failed, to offer Retry): never while that read loads, and
   not on the Unread tab once everything is done. Unseen stacks carry the
   inbox's unread dot (`UnreadIndicator`), and the toggle shows the same dot
-  after its count while any not-done stack is unseen; both come from the
-  not-done read.
+  after its count while any not-done stack is unseen. The toggle's dot and
+  the Not done rows use the not-done read; Unread rows use the channel's
+  unread read.
 - Marking uses the global notification source's bulk done/seen, which applies
   local overrides at once. Apply `withLocalOverrides` to every read here, or
   marked stacks stay on screen until the refetch.

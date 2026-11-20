@@ -58,5 +58,18 @@ describe('stackLabel', () => {
     expect(stackLabel(thread, (id) => (id === 'leo' ? 'Leo' : undefined))).toBe(
       'Someone mentioned you in a thread'
     );
+
+    // A mention without a sender is never credited to the reply's sender.
+    const anonymous = {
+      ...thread,
+      notifications: thread.notifications.map((notification) =>
+        notification.notification_metadata.tag === 'channel_mention'
+          ? { ...notification, sender_id: null }
+          : notification
+      ),
+    };
+    expect(
+      stackLabel(anonymous, (id) => (id === 'leo' ? 'Leo' : undefined))
+    ).toBe('Someone mentioned you in a thread');
   });
 });

@@ -242,7 +242,11 @@ function Fixture() {
         status={(listView) =>
           listView === 'not_done' ? notDoneStatus() : 'ready'
         }
-        onRetry={() => setNotDoneStatus('ready')}
+        onRetry={() => {
+          // The retry's answer arrives a moment later.
+          setNotDoneStatus('retrying');
+          setTimeout(() => setNotDoneStatus('ready'), 300);
+        }}
         senderName={(id) => NAMES[id]}
         onOpenStack={(stack) =>
           window.opened.push(

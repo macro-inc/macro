@@ -29,7 +29,7 @@ function senderName(userId: string) {
 }
 
 /**
- * The channel gutter's notification stacks, behind their flags: a Mark done
+ * The channel gutter's notification stacks, behind one flag: a Mark done
  * check beside each not-done stack, and a toggleable list of not-done or
  * unread stacks. The not-done notifications load only once the channel is
  * on screen, so they never compete with the channel's own load.
@@ -87,7 +87,9 @@ export function createChannelNotificationGutter(options: {
   // Cached stacks stay listed while a refresh fails.
   const notDoneStatus = (): StackListStatus => {
     if (activeQuery.data !== undefined) return 'ready';
-    return activeQuery.isError ? 'failed' : 'loading';
+    if (!activeQuery.isError) return 'loading';
+    // A retry keeps the earlier error until its answer arrives.
+    return activeQuery.isFetching ? 'retrying' : 'failed';
   };
   const status = {
     not_done: notDoneStatus,

@@ -144,6 +144,8 @@ test('a failed read offers Retry instead of an empty list', async ({
   await expect(list(page).getByRole('listitem')).toHaveCount(0);
 
   await list(page).getByRole('button', { name: 'Retry' }).click();
+  // The list stays up and says it is loading until the retry answers.
+  await expect(list(page)).toContainText('Loading…');
   await expect(list(page).getByRole('listitem')).toHaveCount(3);
 });
 
@@ -245,6 +247,21 @@ test('marking the last stacks done closes the popover', async ({ page }) => {
   await page.evaluate(() => window.notify('n9', 'm2'));
   await expect(toggle(page)).toBeVisible();
   await expect(popover).toHaveCount(0);
+});
+
+test('the popover stays closed when its toggle comes back', async ({
+  page,
+}) => {
+  await open(page, 1200);
+  await toggle(page).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+
+  // Docked, then narrow again: the popover does not reopen by itself.
+  await page.evaluate(() => window.resizeGutterPane(1600));
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.evaluate(() => window.resizeGutterPane(1200));
+  await expect(toggle(page)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 // A narrow split (140px of gutter): the list opens in a popover, and opening

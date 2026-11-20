@@ -23,9 +23,10 @@ export type StackAnchor = { messageId: string; threadId?: string };
 
 /**
  * Whether a list's notifications are known: still loading, failed with nothing
- * to show, or read (possibly from cache while a refresh fails).
+ * to show, trying again after that failure, or read (possibly from cache while
+ * a refresh fails).
  */
-export type StackListStatus = 'loading' | 'failed' | 'ready';
+export type StackListStatus = 'loading' | 'failed' | 'retrying' | 'ready';
 
 /** The notifications a channel shows as one row of the inbox. */
 export type ChannelStack = {

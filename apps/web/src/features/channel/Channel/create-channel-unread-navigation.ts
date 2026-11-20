@@ -45,11 +45,15 @@ export function createChannelUnreadNavigation(options: {
       !!error && !isTransientRequestError(error) && !isGraphqlServerFault(error)
     );
   };
-  const notificationsStatus = (): 'loading' | 'failed' | 'ready' => {
+  const notificationsStatus = ():
+    | 'loading'
+    | 'failed'
+    | 'retrying'
+    | 'ready' => {
     if (channelNotifications.isPending) return 'loading';
-    return failed() || channelNotifications.data === undefined
-      ? 'failed'
-      : 'ready';
+    if (!failed() && channelNotifications.data !== undefined) return 'ready';
+    // A retry keeps the earlier error until its answer arrives.
+    return channelNotifications.isFetching ? 'retrying' : 'failed';
   };
   const notifications = createMemo(() => {
     if (channelNotifications.isPending) return [];

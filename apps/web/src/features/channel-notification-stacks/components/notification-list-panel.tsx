@@ -44,7 +44,7 @@ export function NotificationListPanel(props: {
         onChange={props.onViewChange}
       />
       <Switch>
-        <Match when={props.status === 'loading'}>
+        <Match when={props.status === 'loading' || props.status === 'retrying'}>
           <p class="px-2 py-1.5 text-[13px] leading-[18px] text-ink-extra-muted">
             {t('common.loading')}
           </p>
