@@ -2933,7 +2933,7 @@ async fn a_settled_session_never_holds_the_reread_its_next_turn_needs() {
             action_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(3))).unwrap(),
             actor: None,
             announcement_message_id: None,
-            stop_reason: "end_turn".into(),
+            stop_reason: ::agent_session::domain::events::AgentTurnStopReason::EndTurn,
             queued_remaining: 0,
         })
     });

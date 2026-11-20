@@ -2196,7 +2196,7 @@ type GraphqlAgentSessionSettledMetadata {
 	"""
 	ACP stop reason, or `error`, in ACP's spelling.
 	"""
-	stopReason: String! @deprecated(reason: "Use turnStopReason. Remove after 2026-12-17.")
+	stopReason: String! @deprecated(reason: "Use turnStopReason. Remove after 2026-12-21.")
 	"""
 	Why the turn stopped.
 	"""

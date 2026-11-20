@@ -1419,7 +1419,7 @@ impl GraphqlAgentSessionSettledMetadata {
     }
 
     /// ACP stop reason, or `error`, in ACP's spelling.
-    #[graphql(deprecation = "Use turnStopReason. Remove after 2026-12-17.")]
+    #[graphql(deprecation = "Use turnStopReason. Remove after 2026-12-21.")]
     async fn stop_reason(&self) -> &'static str {
         match self.0.stop_reason {
             AgentTurnStopReason::EndTurn => "end_turn",
