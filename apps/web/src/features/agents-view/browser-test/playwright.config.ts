@@ -25,11 +25,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
   },
-  projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    {
-      name: 'mobile',
-      use: { ...devices['iPhone 13'], browserName: 'chromium' },
-    },
-  ],
+  // The fixture mounts the desktop composer; the phone composer is not covered.
+  projects: [{ name: 'desktop', use: { ...devices['Desktop Chrome'] } }],
 });
