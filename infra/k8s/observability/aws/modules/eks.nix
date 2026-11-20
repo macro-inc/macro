@@ -79,10 +79,13 @@ in
         name = "observability-k8s-node";
         assume_role_policy = builtins.toJSON (iam.trust "ec2.amazonaws.com" [ "sts:AssumeRole" ]);
       };
-      # Cluster admin for identities tagged `settings.cluster.adminTag`. It has
-      # no IAM policies: its only power is the access entry below.
+      # Cluster admin for IAM users tagged `settings.cluster.adminTag`. Only
+      # users: a role session's tags can come from whoever assumed it, a
+      # user's only from IAM admins. Its one IAM permission is reading this
+      # cluster (aws_iam_role_policy.admin); its power is the access entry.
       admin = {
         name = cluster.adminRole;
+        max_session_duration = 3600;
         assume_role_policy = builtins.toJSON (
           let
             assumedBy = value: condition: {
@@ -90,7 +93,10 @@ in
               Principal.AWS = "arn:aws:iam::${settings.accountId}:root";
               Action = "sts:AssumeRole";
               Condition = {
-                StringEquals."aws:PrincipalTag/${cluster.adminTag}" = value;
+                StringEquals = {
+                  "aws:PrincipalTag/${cluster.adminTag}" = value;
+                  "aws:PrincipalType" = "User";
+                };
               }
               // condition;
             };
@@ -101,6 +107,21 @@ in
           ]
         );
       };
+    };
+
+    # `update-kubeconfig` from a profile that assumes the admin role.
+    aws_iam_role_policy.admin = {
+      name = "describe-cluster";
+      role = ref "aws_iam_role.admin.id";
+      policy = builtins.toJSON (
+        iam.policy [
+          {
+            Effect = "Allow";
+            Action = "eks:DescribeCluster";
+            Resource = ref "aws_eks_cluster.observability.arn";
+          }
+        ]
+      );
     };
 
     # Nodes get what the kubelet, the VPC CNI, image pulls and SSM need, and no

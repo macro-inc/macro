@@ -142,7 +142,7 @@ Multi-AZ database up to 20.
    ```sh
    export TF_VAR_public_access_cidrs='["<your public IP>/32"]'
    ```
-4. Plan and review. Expect only additions (70) and no change or
+4. Plan and review. Expect only additions (71) and no change or
    destroy:
    ```sh
    nix run .#tofu -- main init
@@ -152,11 +152,10 @@ Multi-AZ database up to 20.
    ```sh
    nix run .#tofu -- main apply tfplan
    ```
-6. Check, from `nix develop` (it has `kubectl`), with your identity tagged as
-   "Cluster access" says:
+6. Check, from `nix develop` (it has `kubectl`), once your IAM user is tagged
+   and set up as "Cluster access" says:
    ```sh
-   aws eks update-kubeconfig --region us-east-2 --name observability --alias observability \
-     --role-arn arn:aws:iam::569036502058:role/observability-eks-admin
+   # kubeconfig as "Cluster access" says (people: --profile; automation: --role-arn)
    kubectl get nodes -L topology.kubernetes.io/zone   # 3 Ready, one per zone
    kubectl get pods -n kube-system                     # aws-node, kube-proxy, coredns, ebs-csi, pod identity agent Running
    nix run .#tofu -- main output
@@ -171,9 +170,9 @@ at a time.
 
 ## Cluster access
 
-Cluster admin is one IAM role, `observability-eks-admin`, which has no AWS
-permissions of its own: its only power is its EKS access entry. Who may
-assume it is an IAM tag on their user or role, so no person is named in this
+Cluster admin is one IAM role, `observability-eks-admin`. Its only AWS
+permission is reading this cluster; its power is its EKS access entry. Who
+may assume it is an IAM tag on their IAM user, so no person is named in this
 repository (`settings.cluster.adminRole`, `adminTag`):
 
 | Tag `observability-eks` | For | Assuming needs |
@@ -181,19 +180,40 @@ repository (`settings.cluster.adminRole`, `adminTag`):
 | `admin` | people | an MFA session |
 | `automation` | agents and scripts | nothing more |
 
-An IAM admin grants and revokes access by tagging:
+Only IAM users qualify, not roles or federated sessions: a role session can
+carry tags set by whoever assumed it, while a user's tags change only through
+`iam:TagUser`, which only IAM admins have. An IAM admin grants and revokes
+access by tagging:
 
 ```sh
 aws iam tag-user --user-name <user> --tags Key=observability-eks,Value=admin
 aws iam untag-user --user-name <user> --tag-keys observability-eks
 ```
 
-The identity's own IAM policy must also allow `sts:AssumeRole` on the role
-(`AdministratorAccess` does). Its address must be in `public_access_cidrs`.
-Then `update-kubeconfig --role-arn` (First apply, step 6) makes `kubectl`
-assume the role on every call. People need MFA for that: put the role in an
-AWS CLI profile with `role_arn` and `mfa_serial`, and pass `--profile <it>`
-to `update-kubeconfig` instead of `--role-arn`.
+Untagging stops new sessions; one already open lasts up to its hour. To end
+those at once, use "Revoke active sessions" on the role in the IAM console.
+
+The user's own IAM policy must also allow `sts:AssumeRole` on the role
+(`AdministratorAccess` does), and its address must be in
+`public_access_cidrs`. Then:
+
+- **Automation**: `aws eks update-kubeconfig --region us-east-2 --name
+  observability --alias observability --role-arn <the role's ARN>` (the user
+  also needs `eks:DescribeCluster`, which `ReadOnlyAccess` has).
+  `kubectl` assumes the role on every call.
+- **People**: a profile in `~/.aws/config` that assumes the role with MFA,
+  and `update-kubeconfig` with that profile instead of `--role-arn`. The CLI
+  asks for the code when its cached session runs out:
+  ```ini
+  [profile observability-eks]
+  source_profile = <your profile>
+  role_arn = arn:aws:iam::569036502058:role/observability-eks-admin
+  mfa_serial = arn:aws:iam::569036502058:mfa/<your MFA device>
+  ```
+  ```sh
+  aws eks update-kubeconfig --region us-east-2 --name observability \
+    --alias observability --profile observability-eks
+  ```
 
 ## The switch
 

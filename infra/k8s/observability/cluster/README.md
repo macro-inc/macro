@@ -53,8 +53,7 @@ cluster and its Pod Identity associations, and this directory is on `main`, run
 this from a clean checkout of `main` (the script refuses anything else):
 
 ```sh
-aws eks update-kubeconfig --name observability --region us-east-2 --alias observability \
-  --role-arn arn:aws:iam::569036502058:role/observability-eks-admin   # ../aws/README.md "Cluster access"
+# kubeconfig with context `observability`: ../aws/README.md "Cluster access"
 nix run .#bootstrap -- --context observability
 ```
 
