@@ -94,6 +94,11 @@ Google Workspace and enabled Outlook connections offer provider consent.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields full-screen.
+Keep the inbox open after connecting a test account with existing mail: it
+shows **Syncing your inbox**, then imported rows without a reload. After the
+import finishes, deliver another test message and verify it appears in the
+unchanged open inbox without navigating or reloading. Repeat with signal
+notifications disabled.
 
 Open **Settings → Email** to check import progress, reconnect or disconnect.
 On an owned IMAP inbox, **Server settings** shows the hosts, ports, encryption

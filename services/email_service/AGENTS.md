@@ -380,3 +380,6 @@ the gateway `/email` prefix.
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
 
 - Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.
+
+- Durable mailbox refresh effects propagate gateway handoff failures for outbox
+  retry; import completion uses the existing backfill-complete refresh event.

@@ -48,6 +48,7 @@ import {
 import { buildEmailDateRows } from './email-results';
 import { buildEmailSearchRequest, facetsLeftToClient } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
+import { useEmailListRefresh } from './use-email-list-refresh';
 import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
 import { useScheduledEmailSource } from './use-scheduled-email-source';
@@ -721,7 +722,7 @@ export function useEmailDataSource(
   const items = createSoupRowStore(() => shownRows().items);
   const isLoading = () => awaitsRows() && !shownRows().previous;
 
-  return {
+  const dataSource = {
     positions: {
       hold: (entityIds) => positions.hold(listEntities(), entityIds),
     },
@@ -830,4 +831,13 @@ export function useEmailDataSource(
       }
     },
   } satisfies EmailDataSource;
+  useEmailListRefresh({
+    enabled: () => sourceEnabled() && state.inboxIds?.length !== 0,
+    scope,
+    matchesLink: (linkId) =>
+      (state.inboxIds === undefined || state.inboxIds.includes(linkId)) &&
+      (!state.aliasFilter || state.aliasFilter.inboxId === linkId),
+    refresh: () => dataSource.refresh(),
+  });
+  return dataSource;
 }

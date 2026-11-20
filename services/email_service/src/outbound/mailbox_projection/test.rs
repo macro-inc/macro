@@ -601,3 +601,50 @@ async fn a_failure_that_cannot_be_recorded_still_names_its_attachment(db: PgPool
         "{logged}"
     );
 }
+
+#[cfg(feature = "connection_gateway")]
+#[tokio::test]
+async fn durable_refresh_retries_a_refused_gateway_handoff() {
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let gateway = MockServer::start().await;
+    let client = connection_gateway_client::client::ConnectionGatewayClient::new(
+        "test".to_owned(),
+        gateway.uri(),
+    );
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(503).set_body_json(serde_json::json!({"error": "unavailable"})),
+        )
+        .mount(&gateway)
+        .await;
+    assert!(matches!(
+        refresh_email_durable(
+            &client,
+            "viewer",
+            RefreshEmailEvent::Backfill {
+                link_id: Uuid::from_u128(1),
+                status: models_email::api::refresh::BackfillStatus::Complete,
+            }
+        )
+        .await,
+        Err(MailboxError::Effect(EffectFailure::Downstream))
+    ));
+    gateway.reset().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"receipts": []})))
+        .expect(1)
+        .mount(&gateway)
+        .await;
+    refresh_email_durable(
+        &client,
+        "viewer",
+        RefreshEmailEvent::Backfill {
+            link_id: Uuid::from_u128(1),
+            status: models_email::api::refresh::BackfillStatus::Complete,
+        },
+    )
+    .await
+    .unwrap();
+}

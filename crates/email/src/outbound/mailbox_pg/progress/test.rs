@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
+use crate::domain::mailbox::projection::{MailboxProjectionRepository, ProjectionEvent};
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
     EmailApiError, GateLimit, MailFolderCatalog, MailboxMessage, RateLimitOrigin, RoundStart,
@@ -144,6 +145,20 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
     assert_eq!(reconciled[0]["outlook.is_import"], "true");
     assert_eq!(reconciled[0]["outlook.attempts"], "1");
     assert_eq!(reconciled[0]["outlook.graph_calls"], "2");
+    let completion = repo
+        .claim_projection(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .expect("completion survives the ingestion transaction");
+    assert!(matches!(completion.event, ProjectionEvent::ImportCompleted));
+    assert_eq!(completion.mailbox.link_id, link);
+    assert!(completion.from_current_generation);
+    assert!(
+        repo.claim_projection(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -160,6 +175,58 @@ async fn workers_finishing_the_last_rows_together_report_one_completion(db: PgPo
 
     assert!(a.unwrap() && b.unwrap());
     assert_eq!(telemetry.events("outlook import completed").len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_empty_import_persists_one_completion_and_rolls_it_back_with_the_import(db: PgPool) {
+    let (repo, link) = enumerated_mailbox(&db).await;
+    let mailbox = MailboxKey {
+        link_id: link,
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    let mut tx = db.begin().await.unwrap();
+    assert!(
+        PgMailboxSync::settle_import(&mut tx, mailbox)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    tx.rollback().await.unwrap();
+    assert!(
+        repo.claim_projection(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let mut tx = db.begin().await.unwrap();
+    assert!(
+        PgMailboxSync::settle_import(&mut tx, mailbox)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        PgMailboxSync::settle_import(&mut tx, mailbox)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    tx.commit().await.unwrap();
+    let completion = repo
+        .claim_projection(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(completion.event, ProjectionEvent::ImportCompleted));
+    assert_eq!(completion.mailbox.link_id, link);
+    assert!(
+        repo.claim_projection(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -346,6 +413,13 @@ async fn persistence_errors_name_their_sqlstate(db: PgPool) {
 struct PendingUpload(Uuid);
 
 impl crate::domain::mailbox::projection::MailboxProjectionEffects for PendingUpload {
+    async fn import_completed(
+        &self,
+        link: Uuid,
+        viewers: &std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        self.refresh(link, viewers).await
+    }
     async fn publish(&self, _: crate::domain::events::EmailMacroEvent) -> Result<(), MailboxError> {
         Ok(())
     }

@@ -6,9 +6,9 @@ import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
-import { useInboxSuggestion } from '@queries/email/link';
+import { useEmailLinksQuery, useInboxSuggestion } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
-import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
+import { EmptyStatePanel, FilteredHiddenBanner, Spinner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab } from '../constants';
@@ -86,6 +86,17 @@ export function EmailEmptyState() {
   const { state, setInboxIds, setTab, filtersChanged, clearFilters } =
     useEmailView();
   const emailActive = useEmailLinksStatus();
+  const links = useEmailLinksQuery();
+  const syncing = () =>
+    queryReadyGate(links) &&
+    links.data.links.some(
+      (link) =>
+        link.is_sync_active &&
+        !link.needs_reauth &&
+        link.sync_status === 'SYNCING' &&
+        (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
+        (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
+    );
   const startAddInbox = useAddInboxFlow();
   const suggestion = useInboxSuggestion(() => !emailActive());
   const offer = () => {
@@ -161,6 +172,21 @@ export function EmailEmptyState() {
             onClick: () => setInboxIds(undefined),
           }}
         />
+      </Match>
+
+      <Match when={syncing()}>
+        <div class="h-full w-full" role="status" aria-live="polite">
+          <EmptyStatePanel
+            centered
+            graphic={EmptyStateInboxTrayGraphic}
+            title="Syncing your inbox"
+            description="Your existing mail will appear here as it syncs. You can keep using Macro while it finishes."
+          >
+            <div class="mt-3 flex justify-center">
+              <Spinner decorative />
+            </div>
+          </EmptyStatePanel>
+        </div>
       </Match>
 
       <Match when={searchText()}>

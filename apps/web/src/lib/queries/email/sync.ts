@@ -40,17 +40,16 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 }
 
 /**
- * Handles `refresh_email` websocket events. Steady-state mutations
- * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
- * through the notification-driven path. Spam/Trash use isolated REST previews,
- * so refresh those lists explicitly without refetching cache-maintained views.
+ * Handles global `refresh_email` effects. Mounted mail readers independently
+ * refresh their matching links, including when notifications are suppressed.
+ * Spam/Trash also use isolated REST previews and need explicit invalidation.
  *
  * Backfill produces no notifications, so these are its only refresh signals.
  * `backfill_progress` carries live progress: it refetches soup (throttled,
  * because the backend emits one event per batch of threads) and on `complete`
  * refetches the links list so the inbox's `sync_status` settles out of
- * `SYNCING`, with a toast. The legacy `backfill` event now only signals
- * failure. `photo_synced` refetches the links list so the inbox's derived
+ * `SYNCING`, with a toast. The `backfill` event carries completion without
+ * thread counts, or legacy failure. `photo_synced` refetches links so the inbox's derived
  * `photo_url` lands once its self-contact photo finishes uploading.
  * `focus_updated` belongs to the mounted Focus list (see `useEmailFocusQuery`).
  */
@@ -87,9 +86,14 @@ export function handleRefreshEmail(payload: unknown): void {
     return;
   }
 
-  // Backfill failed — settle the links row out of `SYNCING` and surface it.
-  // Progress and completion now arrive as `backfill_progress` instead.
+  // Folder imports have no thread counts, but still send completion. Legacy
+  // jobs also use this event for failure; counted jobs use backfill_progress.
   if (event.event === 'backfill') {
+    if (event.status === BackfillStatus.complete) {
+      clearBackfillProgress(event.link_id);
+      invalidateEmailLinks();
+      return;
+    }
     if (event.status === BackfillStatus.failed) {
       clearBackfillProgress(event.link_id);
       invalidateEmailLinks();

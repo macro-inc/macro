@@ -661,6 +661,31 @@ impl PgMailboxSync {
             (SELECT count(*) FROM email_messages WHERE link_id=$1 AND provider_id IS NOT NULL) AS "messages!",
             (SELECT count(*) FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='mail_folder') AS "folders!"
         "#,mailbox.link_id,mailbox.sync_generation).fetch_one(&mut *tx).await.map_err(db_error)?;
+        let dedupe_key = format!(
+            "import-completed/{}/{}",
+            mailbox.link_id, mailbox.sync_generation
+        );
+        let payload = serde_json::to_value(
+            crate::domain::mailbox::projection::ProjectionEvent::ImportCompleted,
+        )
+        .map_err(|_| MailboxError::Persistence)?;
+        sqlx::query!(
+            r#"
+            INSERT INTO email_projection_outbox (
+                id, link_id, generation, payload, dedupe_key
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (dedupe_key) DO NOTHING
+            "#,
+            macro_uuid::generate_uuid_v7(),
+            mailbox.link_id,
+            mailbox.sync_generation,
+            payload,
+            dedupe_key,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         Ok(Some(ImportCompleted {
             mailbox,
             started_at: run.import_started_at,

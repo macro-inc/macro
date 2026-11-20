@@ -751,3 +751,8 @@ tools — hexagonal, heavily feature-gated.
 Keep paused folders in the complete role catalog with `sync_enabled = false`.
 Pause or remove only their folder streams: treating an exclusion as deletion
 reclassifies retained Trash descendants and schedules unwanted body downloads.
+
+- Persist `ImportCompleted` in the projection outbox in the same transaction as
+  `import_completed_at`, once per link/generation, including empty imports.
+  Refresh mounted readers before slower message projection effects and retry
+  failed gateway handoffs independently of new-message notification policy.

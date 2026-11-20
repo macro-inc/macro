@@ -32,6 +32,13 @@ impl FailingRefresh {
 }
 
 impl MailboxProjectionEffects for FailingRefresh {
+    async fn import_completed(
+        &self,
+        link: Uuid,
+        viewers: &HashSet<MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        self.refresh(link, viewers).await
+    }
     async fn publish(&self, _: EmailMacroEvent) -> Result<(), MailboxError> {
         Ok(())
     }

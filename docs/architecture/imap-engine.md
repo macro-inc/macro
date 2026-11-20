@@ -94,3 +94,9 @@ protocol behavior; `email_e2e` exercises public authorization, durable workers,
 projection and submission. The browser IMAP profile exercises the existing Email
 and settings UI against the local engine. Generated internal API contracts are
 updated with `bash crates/imap_service_client/regen.sh`; `--check` detects drift.
+
+Mailbox projection refreshes mounted readers independently of notification
+policy, before slower contact and indexing effects. Import completion is queued
+once per generation with its durable completion marker, including empty
+imports. Gateway failures retry the projection; clients coalesce refreshes and
+catch up on reconnect.

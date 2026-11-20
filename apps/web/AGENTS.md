@@ -2054,3 +2054,8 @@ legacy header does not reserve an empty band. The responsive vault fixture is ex
 per-file worker (`lib/core/password-import`); the parsed export lives only in
 the import primitive's closure while the dialog is open, and sessionStorage
 holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
+
+- Refresh mounted email list readers from matching `refresh_email` events through
+  their data source, for both GraphQL and REST. Coalesce bursts, fence deferred
+  work by account/session/scope, and catch up on reconnect/visibility. Show
+  first-sync progress instead of an empty-inbox claim while selected links sync.

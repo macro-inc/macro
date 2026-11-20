@@ -6,7 +6,7 @@ const REFRESH_EMAIL: &str = "refresh_email";
 
 impl ConnectionGatewayClient {
     /// Trigger refresh of the user's emails
-    #[tracing::instrument(skip(self, event))]
+    #[tracing::instrument(skip_all)]
     pub async fn refresh_email(
         &self,
         user_id: &str,
