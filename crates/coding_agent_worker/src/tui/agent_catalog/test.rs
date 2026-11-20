@@ -228,9 +228,9 @@ npm error A complete log of this run can be found in: /home/test/.npm/_logs/debu
 ";
     assert_eq!(
         npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
-        "notarget No matching version found for @agentclientprotocol/codex-acp@0.0.0.; \
-         notarget In most cases you or one of your dependencies are requesting; \
-         notarget a package version that doesn't exist. \
+        "notarget No matching version found for @agentclientprotocol/codex-acp@0.0.0. \
+         In most cases you or one of your dependencies are requesting \
+         a package version that doesn't exist.; code ETARGET \
          (npm log: /home/test/.npm/_logs/debug-0.log)"
     );
 }
@@ -253,5 +253,42 @@ fn a_log_path_on_the_next_line_is_kept() {
     assert_eq!(
         npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
         "boom (npm log: /x/debug.log)"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_root_owned_npm_cache_reports_the_fix_npm_suggests() {
+    use std::os::unix::process::ExitStatusExt as _;
+    // npm 11's output in macOS 14 with a cache it cannot write, as captured
+    // on a Mac: the fix is the chown line, after two prose paragraphs and
+    // npm's update notice.
+    let stderr = r#"npm error code EACCES
+npm error syscall mkdir
+npm error path /Users/test/.npm/_cacache
+npm error errno EACCES
+npm error
+npm error Your cache folder contains root-owned files, due to a bug in
+npm error previous versions of npm which has since been addressed.
+npm error
+npm error To permanently fix this problem, please run:
+npm error   sudo chown -R 501:20 "/Users/test/.npm"
+npm notice
+npm notice New minor version of npm available! 11.6.2 -> 11.21.3
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.21.3
+npm notice To update run: npm install -g npm@11.21.3
+npm notice
+npm error Log files were not written due to an error writing to the directory: /Users/test/.npm/_logs
+npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal
+"#;
+    assert_eq!(
+        npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
+        "Your cache folder contains root-owned files, due to a bug in \
+         previous versions of npm which has since been addressed.; \
+         To permanently fix this problem, please run: \
+         sudo chown -R 501:20 \"/Users/test/.npm\"; \
+         Log files were not written due to an error writing to the directory: \
+         /Users/test/.npm/_logs You can rerun the command with \
+         `--loglevel=verbose` to see the logs in your terminal"
     );
 }
