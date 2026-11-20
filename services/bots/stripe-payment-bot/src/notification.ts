@@ -1,4 +1,4 @@
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 
 export type PaymentNotification = {
   kind: 'payment';
@@ -8,6 +8,7 @@ export type PaymentNotification = {
   eventId: string;
   livemode: boolean;
   subscriptionId?: string;
+  invoice?: { id: string; reason: string };
 };
 
 export type CancellationNotification = {
@@ -23,7 +24,18 @@ export type CancellationNotification = {
   comment?: string;
 };
 
-export type StripeNotification = PaymentNotification | CancellationNotification;
+type TrialNotification = {
+  kind: 'trial';
+  customer: string;
+  eventId: string;
+  livemode: boolean;
+  subscriptionId: string;
+};
+
+export type StripeNotification =
+  | PaymentNotification
+  | CancellationNotification
+  | TrialNotification;
 
 function customerId(
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null
@@ -71,20 +83,13 @@ function humanize(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
-function checkoutPayment(
+async function checkoutNotification(
+  stripe: Stripe,
   event:
     | Stripe.CheckoutSessionCompletedEvent
     | Stripe.CheckoutSessionAsyncPaymentSucceededEvent
-): PaymentNotification | undefined {
+): Promise<PaymentNotification | TrialNotification | undefined> {
   const session = event.data.object;
-  if (
-    session.payment_status !== 'paid' ||
-    session.amount_total === null ||
-    session.currency === null
-  ) {
-    return undefined;
-  }
-
   const expandedCustomer =
     typeof session.customer === 'object' &&
     session.customer !== null &&
@@ -97,21 +102,47 @@ function checkoutPayment(
     expandedCustomer?.email;
   const name = session.customer_details?.name ?? expandedCustomer?.name;
 
+  const customer = customerLabel(name, email, customerId(session.customer));
+  const common = { customer, eventId: event.id, livemode: event.livemode };
+
+  if (session.mode === 'subscription') {
+    if (
+      event.type !== 'checkout.session.completed' ||
+      session.amount_total !== 0 ||
+      !session.subscription
+    )
+      return undefined;
+    const subscription =
+      typeof session.subscription === 'string'
+        ? await stripe.subscriptions.retrieve(session.subscription)
+        : session.subscription;
+    if (
+      subscription.trial_start == null ||
+      subscription.trial_end == null ||
+      event.created < subscription.trial_start ||
+      event.created >= subscription.trial_end
+    )
+      return undefined;
+    return { kind: 'trial', ...common, subscriptionId: subscription.id };
+  }
+  if (
+    session.mode !== 'payment' ||
+    session.payment_status !== 'paid' ||
+    session.amount_total === null ||
+    session.currency === null
+  )
+    return undefined;
   return {
     kind: 'payment',
+    ...common,
     amount: session.amount_total,
     currency: session.currency,
-    customer: customerLabel(name, email, customerId(session.customer)),
-    eventId: event.id,
-    livemode: event.livemode,
-    subscriptionId: subscriptionId(session.subscription),
   };
 }
 
-async function postTrialPayment(
-  stripe: Stripe,
+function subscriptionPayment(
   event: Stripe.InvoicePaidEvent
-): Promise<PaymentNotification | undefined> {
+): PaymentNotification | undefined {
   const invoice = event.data.object;
   if (invoice.status !== 'paid' || invoice.amount_paid <= 0) return undefined;
 
@@ -123,19 +154,21 @@ async function postTrialPayment(
     legacyInvoice.subscription;
   if (!subscriptionRef) return undefined;
 
-  const subscription =
-    typeof subscriptionRef === 'string'
-      ? await stripe.subscriptions.retrieve(subscriptionRef)
-      : subscriptionRef;
-  const trialEnd = subscription.trial_end;
-  const fiveMinutes = 5 * 60;
-  if (
-    trialEnd === null ||
-    trialEnd < invoice.period_start - fiveMinutes ||
-    trialEnd > invoice.period_end + fiveMinutes
-  ) {
-    return undefined;
-  }
+  const labels: Partial<Record<Stripe.Invoice.BillingReason, string>> = {
+    subscription_create: 'New subscription',
+    subscription_cycle: 'Subscription renewal',
+    subscription_update: 'Subscription change',
+  };
+  let reason = invoice.billing_reason
+    ? (labels[invoice.billing_reason] ?? humanize(invoice.billing_reason))
+    : 'Subscription invoice';
+  const prorated = invoice.lines.data.some(
+    (line) =>
+      line.parent?.subscription_item_details?.proration ||
+      line.parent?.invoice_item_details?.proration ||
+      ('proration' in line && line.proration === true)
+  );
+  if (prorated) reason += ' (prorated)';
 
   return {
     kind: 'payment',
@@ -148,7 +181,8 @@ async function postTrialPayment(
     ),
     eventId: event.id,
     livemode: event.livemode,
-    subscriptionId: subscription.id,
+    subscriptionId: subscriptionId(subscriptionRef),
+    invoice: { id: invoice.id, reason },
   };
 }
 
@@ -202,9 +236,9 @@ export async function notificationFromEvent(
   switch (event.type) {
     case 'checkout.session.completed':
     case 'checkout.session.async_payment_succeeded':
-      return checkoutPayment(event);
+      return checkoutNotification(stripe, event);
     case 'invoice.paid':
-      return postTrialPayment(stripe, event);
+      return subscriptionPayment(event);
     case 'customer.subscription.deleted':
       return cancellationFromSubscription(stripe, event, 'ended');
     case 'customer.subscription.updated':
@@ -221,7 +255,11 @@ function formatAmount(amount: number, currency: string): string {
     style: 'currency',
     currency: code,
   });
-  const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+  // Stripe represents these zero-decimal currencies in hundredths for billing.
+  const fractionDigits =
+    code === 'ISK' || code === 'UGX'
+      ? 2
+      : (formatter.resolvedOptions().maximumFractionDigits ?? 2);
   return `${formatter.format(amount / 10 ** fractionDigits)} ${code}`;
 }
 
@@ -240,6 +278,7 @@ function formatPayment(payment: PaymentNotification): string {
     `Customer: ${payment.customer}`,
     `Amount: ${formatAmount(payment.amount, payment.currency)}`,
   ];
+  if (payment.invoice) lines.push(`Reason: ${payment.invoice.reason}`);
   if (payment.subscriptionId) {
     lines.push(`Subscription: ${payment.subscriptionId}`);
   }
@@ -272,6 +311,13 @@ function formatCancellation(cancellation: CancellationNotification): string {
 
 export function formatNotification(notification: StripeNotification): string {
   switch (notification.kind) {
+    case 'trial':
+      return [
+        '🎉 Stripe subscription trial started',
+        `Customer: ${notification.customer}`,
+        `Subscription: ${notification.subscriptionId}`,
+        dashboardEventUrl(notification.livemode, notification.eventId),
+      ].join('\n');
     case 'payment':
       return formatPayment(notification);
     case 'cancellation':

@@ -4,10 +4,10 @@ Posts to every Macro channel containing the bot when Stripe reports a new
 payment or a subscription cancellation. It can be deployed from any Cloudflare
 account; it has no dependency on a Macro-owned Worker or domain.
 
-The bot handles paid Checkout sessions, delayed payment methods, the first
-successful invoice after a free trial, `customer.subscription.deleted`, and
-`customer.subscription.updated` when `cancel_at_period_end` flips from false to
-true. Unpaid sessions and unrelated Stripe events are acknowledged and ignored.
+A positive `invoice.paid` for a subscription posts the amount Stripe collected
+(`amount_paid`) and its billing reason. Checkout announces one-off payments
+(including delayed methods) and free trial starts. Cancellation events announce
+scheduled and ended subscriptions.
 
 ## How it works
 
@@ -17,7 +17,7 @@ Stripe webhook ──POST /webhook──> Cloudflare Worker
                                    │ map the event to a payment or cancellation
                                    ▼
                   Macro SDK → list the bot's channel memberships
-                            → POST each channel's bot webhook
+                            → deliver to each channel
 ```
 
 The destinations do not come from the Stripe event or Worker configuration.
@@ -57,8 +57,8 @@ printf '%s' 'https://your-storage-api.example.com' | \
 ```
 
 `STRIPE_API_KEY` can be a restricted key with read access to subscriptions and
-customers. The Worker uses it to confirm that a paid invoice is the first one
-after a trial, and to resolve customer name and email on cancellation events.
+customers. The Worker reads subscription trial dates for free Checkout sessions
+and customer details for cancellation events.
 
 Wrangler prints the URL assigned to the Worker in the deploying Cloudflare
 account. In Stripe Workbench, create a webhook destination pointing to:
@@ -98,9 +98,10 @@ stripe listen \
 Use the `whsec_...` printed by `stripe listen` as
 `STRIPE_WEBHOOK_SECRET`.
 
-Stripe can occasionally deliver the same event more than once. This bot
-intentionally accepts the small risk of duplicate channel notifications rather
-than adding a database solely for deduplication.
+Wrangler provisions the SQLite-backed `INVOICE_DELIVERIES` Durable Object
+binding with the Worker. Each invoice/channel pair stores its Macro message ID
+before posting through the team bot's channel message API. A retry skips a
+confirmed delivery and checks for the recorded message after an ambiguous failure.
 
 ## Checks
 

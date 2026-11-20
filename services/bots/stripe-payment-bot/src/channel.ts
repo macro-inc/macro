@@ -11,47 +11,68 @@ export type ChannelConfig = {
   storageUrl?: string;
 };
 
-/** Delivers a formatted message to every channel containing the bot. */
-export type ChannelBroadcaster = (content: string) => Promise<void>;
+export type InvoiceDeliveries = {
+  getByName(name: string): { fetch(request: Request): Promise<Response> };
+};
 
-/** Create a broadcaster backed by Macro's bot and channel webhook SDK methods. */
-export function createChannelBroadcaster(
-  config: ChannelConfig
-): ChannelBroadcaster {
-  const macro = new Macro({
+export type ChannelBroadcaster = (
+  content: string,
+  invoiceId?: string
+) => Promise<void>;
+
+export function channelClient(config: ChannelConfig) {
+  return new Macro({
     env: config.env,
     auth: { type: 'bot', token: config.botToken, scope: 'team' },
     hosts: config.storageUrl ? { storage: config.storageUrl } : undefined,
   });
+}
 
-  return async (content) => {
+export function createChannelBroadcaster(
+  config: ChannelConfig,
+  receipts: InvoiceDeliveries
+): ChannelBroadcaster {
+  const macro = channelClient(config);
+  return async (content, invoiceId) => {
     const channels = await macro.bots.channels();
     const deliveries = await Promise.allSettled(
       channels.map(async (channel) => {
-        const { message_id } = unwrap(
+        if (invoiceId) {
+          const id = JSON.stringify([invoiceId, channel.channel_id]);
+          const result = await receipts.getByName(id).fetch(
+            new Request('https://delivery.internal/', {
+              method: 'POST',
+              body: JSON.stringify({ channelId: channel.channel_id, content }),
+            })
+          );
+          if (!result.ok)
+            throw new Error(`Delivery returned HTTP ${result.status}`);
+          return;
+        }
+        unwrap(
           await macro._client.storage.postChannelBotWebhook({
             path: { channel_id: channel.channel_id },
             body: { content },
           })
         );
-        return { channelId: channel.channel_id, messageId: message_id };
       })
     );
 
-    const failures = deliveries.filter(
-      (delivery): delivery is PromiseRejectedResult =>
-        delivery.status === 'rejected'
-    );
-    if (failures.length > 0) {
-      failures.forEach((failure) => {
+    let failed = 0;
+    deliveries.forEach((delivery, index) => {
+      if (delivery.status === 'rejected') {
+        failed++;
         console.error('Failed to post Stripe notification to a Macro channel', {
-          error: failure.reason,
+          invoiceId,
+          channelId: channels[index].channel_id,
+          error: delivery.reason,
         });
-      });
+      }
+    });
+    if (failed)
       throw new Error(
-        `Failed to post to ${failures.length} of ${channels.length} Macro channels`
+        `Failed to post to ${failed} of ${channels.length} Macro channels`
       );
-    }
 
     console.log('Posted Stripe notification', {
       channelCount: channels.length,

@@ -4,6 +4,10 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "INVOICE_DELIVERIES", "class_name": "InvoiceDelivery" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InvoiceDelivery"] }],
   "observability": {
     "enabled": true
   }
