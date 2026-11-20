@@ -17,10 +17,11 @@
 // Raw readers (the old REST queryFn and the new GraphQL reader) back the
 // read-after-write and read-case checks.
 
+import { createAppDealStages } from '@app/features/crm/stage-adapter';
+import { createTagOptions } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
+import { projectDefinitionProperties } from '@app/features/projects/queries/project-properties';
 import { UserContextProvider, useIsAuthenticated } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
-import { createAppDealStages } from '@app/features/crm/stage-adapter';
-import { projectDefinitionProperties } from '@app/features/projects/queries/project-properties';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import {
   TagSetsQueryProvider,
@@ -37,13 +38,13 @@ import {
   useDeletePropertyDefinitionMutation,
   useListPropertiesQuery,
 } from '@queries/properties/definitions';
+import { propertiesKeys } from '@queries/properties/keys';
 import {
   useAddPropertyOptionMutation,
   useDeletePropertyOptionMutation,
   usePropertyOptionsQuery,
   useUpdatePropertyOptionMutation,
 } from '@queries/properties/options';
-import { propertiesKeys } from '@queries/properties/keys';
 import { usablePropertyOptions } from '@queries/properties/options-data';
 import {
   useCreateTagMutation,
@@ -61,7 +62,6 @@ import {
   listPropertyOptions,
   listTagSets,
 } from '@service-storage/property-catalog';
-import { createTagOptions } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -75,7 +75,12 @@ import {
 import { render } from 'solid-js/web';
 
 type Key =
-  | { k: 'defs'; scope: string; includeOptions: boolean; forEntityType?: string }
+  | {
+      k: 'defs';
+      scope: string;
+      includeOptions: boolean;
+      forEntityType?: string;
+    }
   | { k: 'opts'; id: string }
   | { k: 'tags' };
 
@@ -103,7 +108,13 @@ function plain(value: unknown): unknown {
 
 function errorShape(error: unknown) {
   if (!error) return null;
-  const e = error as { constructor?: { name?: string }; errors?: { code?: string }[]; response?: { status?: number }; graphQLErrors?: unknown[]; networkError?: unknown };
+  const e = error as {
+    constructor?: { name?: string };
+    errors?: { code?: string }[];
+    response?: { status?: number };
+    graphQLErrors?: unknown[];
+    networkError?: unknown;
+  };
   return {
     class: e.constructor?.name ?? typeof error,
     codes: Array.isArray(e.errors) ? e.errors.map((x) => x.code ?? null) : null,
@@ -252,49 +263,56 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
         )
       ),
     })),
-    taskBoard: safe(() => plain(
-      new Map(
-        (system.isSuccess ? system.data : []).map((item) => {
-          const definition = 'definition' in item ? item.definition : item;
-          const options =
-            'property_options' in item ? item.property_options : [];
-          return [definition.id, toPropertyDefinitionDomain(definition, options)];
-        })
+    taskBoard: safe(() =>
+      plain(
+        new Map(
+          (system.isSuccess ? system.data : []).map((item) => {
+            const definition = 'definition' in item ? item.definition : item;
+            const options =
+              'property_options' in item ? item.property_options : [];
+            return [
+              definition.id,
+              toPropertyDefinitionDomain(definition, options),
+            ];
+          })
+        )
       )
-    )),
+    ),
     projects: safe(() => ({
       loading: system.isPending,
       properties: plain(
         system.isPending ? [] : projectDefinitionProperties(system.data ?? [])
       ),
     })),
-    selectEditors: safe(() => props.optionIds().map((id) => {
-      const q = props.registry.get(keyId({ k: 'opts', id }));
-      const state = q?.() as ReturnType<typeof observe> | undefined;
-      const fallbackEntry = (all.data ?? []).find(
-        (d) => ('definition' in d ? d.definition.id : d.id) === id
-      );
-      const fallback =
-        fallbackEntry && 'property_options' in fallbackEntry
-          ? fallbackEntry.property_options
-          : [];
-      if (!state) return { id, mounted: false };
-      const usable = usablePropertyOptions(
-        {
-          data: state.data as never,
-          isError: state.isError,
-          isPlaceholderData: state.isPlaceholderData,
-        },
-        fallback
-      );
-      return {
-        id,
-        shown: plain(
-          selectablePropertyOptions({ options: fallback } as never, usable)
-        ),
-        loading: state.isPending,
-      };
-    })),
+    selectEditors: safe(() =>
+      props.optionIds().map((id) => {
+        const q = props.registry.get(keyId({ k: 'opts', id }));
+        const state = q?.() as ReturnType<typeof observe> | undefined;
+        const fallbackEntry = (all.data ?? []).find(
+          (d) => ('definition' in d ? d.definition.id : d.id) === id
+        );
+        const fallback =
+          fallbackEntry && 'property_options' in fallbackEntry
+            ? fallbackEntry.property_options
+            : [];
+        if (!state) return { id, mounted: false };
+        const usable = usablePropertyOptions(
+          {
+            data: state.data as never,
+            isError: state.isError,
+            isPlaceholderData: state.isPlaceholderData,
+          },
+          fallback
+        );
+        return {
+          id,
+          shown: plain(
+            selectablePropertyOptions({ options: fallback } as never, usable)
+          ),
+          loading: state.isPending,
+        };
+      })
+    ),
   });
 
   props.registry.set('callers', read);
@@ -325,7 +343,8 @@ function Mutations(props: { out: (m: Record<string, Wrapped>) => void }) {
     mergeTag: useMergeTagMutation(),
   } as Record<string, { mutateAsync: Wrapped }>;
   const out: Record<string, Wrapped> = {};
-  for (const [name, hook] of Object.entries(hooks)) out[name] = (vars) => hook.mutateAsync(vars as never);
+  for (const [name, hook] of Object.entries(hooks))
+    out[name] = (vars) => hook.mutateAsync(vars as never);
   props.out(out);
   return null;
 }
@@ -349,10 +368,17 @@ const optionIdsOpen = createRoot(() =>
   )
 );
 
-function Tree(props: { registry: Registry; keys: Accessor<Key[]>; optionIds: Accessor<string[]>; withMutations: boolean }): JSX.Element {
+function Tree(props: {
+  registry: Registry;
+  keys: Accessor<Key[]>;
+  optionIds: Accessor<string[]>;
+  withMutations: boolean;
+}): JSX.Element {
   return (
     <UserContextProvider>
-      <For each={props.keys()}>{(spec) => <Reader spec={spec} registry={props.registry} />}</For>
+      <For each={props.keys()}>
+        {(spec) => <Reader spec={spec} registry={props.registry} />}
+      </For>
       <Callers registry={props.registry} optionIds={props.optionIds} />
       {props.withMutations ? <Mutations out={(m) => (mutations = m)} /> : null}
       {props.withMutations ? <AuthProbe /> : null}
@@ -365,7 +391,12 @@ if (!root) throw new Error('no #root');
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <Tree registry={registry} keys={openKeys} optionIds={optionIdsOpen} withMutations />
+      <Tree
+        registry={registry}
+        keys={openKeys}
+        optionIds={optionIdsOpen}
+        withMutations
+      />
     </QueryClientProvider>
   ),
   root
@@ -390,7 +421,8 @@ async function settle(client: QueryClient, reg: Registry, boundMs: number) {
     if (!busy(client, reg)) {
       if (quietSince < 0) quietSince = performance.now();
       // two quiet frames in a row: no follow-up fetch was scheduled
-      if (performance.now() - quietSince >= 60) return { ms: Math.round(quietSince - start), timedOut: false };
+      if (performance.now() - quietSince >= 60)
+        return { ms: Math.round(quietSince - start), timedOut: false };
     } else quietSince = -1;
     await sleep(15);
   }
@@ -407,14 +439,20 @@ async function result<T>(f: () => Promise<T>) {
   try {
     return { ok: true as const, value: plain(await f()) };
   } catch (e) {
-    return { ok: false as const, error: errorShape(e), message: String((e as Error)?.message ?? e).slice(0, 300) };
+    return {
+      ok: false as const,
+      error: errorShape(e),
+      message: String((e as Error)?.message ?? e).slice(0, 300),
+    };
   }
 }
 
 // A cold load: a new, empty QueryClient with the app's defaults, the same
 // readers and callers, mounted, settled, read, and torn down.
 async function fresh(keys: Key[], boundMs: number) {
-  const client = new QueryClient({ defaultOptions: queryClient.getDefaultOptions() });
+  const client = new QueryClient({
+    defaultOptions: queryClient.getDefaultOptions(),
+  });
   const reg: Registry = new Map();
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -422,7 +460,12 @@ async function fresh(keys: Key[], boundMs: number) {
   const dispose = render(
     () => (
       <QueryClientProvider client={client}>
-        <Tree registry={reg} keys={() => keys} optionIds={() => ids} withMutations={false} />
+        <Tree
+          registry={reg}
+          keys={() => keys}
+          optionIds={() => ids}
+          withMutations={false}
+        />
       </QueryClientProvider>
     ),
     host
@@ -454,30 +497,42 @@ window.__h = {
   fresh,
   mutate: (name: string, vars: unknown) => {
     const m = mutations[name];
-    if (!m) return Promise.resolve({ ok: false, error: { class: 'harness', codes: [`no mutation ${name}`] } });
+    if (!m)
+      return Promise.resolve({
+        ok: false,
+        error: { class: 'harness', codes: [`no mutation ${name}`] },
+      });
     return result(() => m(vars));
   },
   // Mutant hooks: break the new path on purpose to show the comparison sees it.
   authenticated: () => authenticated(),
   mutant: {
     skipLiveUpdate() {
-      queryClient.invalidateQueries = (() => Promise.resolve()) as typeof queryClient.invalidateQueries;
+      queryClient.invalidateQueries = (() =>
+        Promise.resolve()) as typeof queryClient.invalidateQueries;
     },
     // Stale cache: remember every property query's data before a write and
     // put it back after the page settles, as a cache that missed the write.
     takeCache() {
-      staleCache = queryClient.getQueriesData({ queryKey: propertiesKeys._def });
+      staleCache = queryClient.getQueriesData({
+        queryKey: propertiesKeys._def,
+      });
     },
     restoreCache() {
       const restored = staleCache.length;
-      for (const [key, data] of staleCache) if (data !== undefined) queryClient.setQueryData(key, data);
+      for (const [key, data] of staleCache)
+        if (data !== undefined) queryClient.setQueryData(key, data);
       staleCache = [];
       return restored;
     },
   },
   raw: {
     old: {
-      list: (a: { scope: string; includeOptions: boolean; forEntityType?: string }) =>
+      list: (a: {
+        scope: string;
+        includeOptions: boolean;
+        forEntityType?: string;
+      }) =>
         result(() =>
           throwOnErr(() =>
             propertiesServiceClient.listProperties({
@@ -488,11 +543,20 @@ window.__h = {
           )
         ),
       options: (id: string) =>
-        result(() => throwOnErr(() => propertiesServiceClient.getPropertyOptions({ definition_id: id }))),
-      tags: () => result(() => throwOnErr(() => propertiesServiceClient.listTags())),
+        result(() =>
+          throwOnErr(() =>
+            propertiesServiceClient.getPropertyOptions({ definition_id: id })
+          )
+        ),
+      tags: () =>
+        result(() => throwOnErr(() => propertiesServiceClient.listTags())),
     },
     neu: {
-      list: (a: { scope: string; includeOptions: boolean; forEntityType?: string }) =>
+      list: (a: {
+        scope: string;
+        includeOptions: boolean;
+        forEntityType?: string;
+      }) =>
         result(() =>
           listPropertyDefinitions({
             scope: a.scope as 'all',
@@ -507,9 +571,27 @@ window.__h = {
   // Setup-only writes (accounts, teams); never compared.
   setup: {
     rest: (op: string, args: unknown) =>
-      result(() => throwOnErr(() => (propertiesServiceClient as unknown as Record<string, (a: unknown) => Promise<never>>)[op](args))),
+      result(() =>
+        throwOnErr(() =>
+          (
+            propertiesServiceClient as unknown as Record<
+              string,
+              (a: unknown) => Promise<never>
+            >
+          )[op](args)
+        )
+      ),
     auth: (op: string, ...args: unknown[]) =>
-      result(() => throwOnErr(() => (authServiceClient as unknown as Record<string, (...a: unknown[]) => Promise<never>>)[op](...args))),
+      result(() =>
+        throwOnErr(() =>
+          (
+            authServiceClient as unknown as Record<
+              string,
+              (...a: unknown[]) => Promise<never>
+            >
+          )[op](...args)
+        )
+      ),
   },
 };
 window.__harnessReady = true;
