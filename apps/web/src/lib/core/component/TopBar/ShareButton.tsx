@@ -8,10 +8,7 @@ import {
 } from '@app/features/access-requests/access-requests';
 import type { SharingSource } from '@app/features/access-requests/context/contracts';
 import { shareEntity } from '@app/features/access-requests/core/types';
-import {
-  ShareRequestIcon,
-  useShareRequestTrigger,
-} from '@app/features/access-requests/share-request-trigger';
+import { useShareRequestTrigger } from '@app/features/access-requests/share-request-trigger';
 import { DirectAccessInvite } from '@app/features/access-requests/views/DirectAccessInvite';
 import {
   updatePipelineSharePermissions,
@@ -1890,6 +1887,12 @@ export function ShareModal(props: ShareModalProps) {
   );
 }
 
+function pendingRequestsLabel(count: number) {
+  return count === 1
+    ? '1 pending permission request'
+    : `${count} pending permission requests`;
+}
+
 export function ShareTrigger(props: {
   onClick: () => void;
   id?: string;
@@ -2022,6 +2025,20 @@ export function ShareTrigger(props: {
   const iconSize = () =>
     isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
 
+  const tooltip = () => {
+    const share =
+      shareStatus()?.tooltip ??
+      (blockType() === 'agent'
+        ? 'Share agent session'
+        : blockType() === 'initiative'
+          ? 'Share project'
+          : inBlock
+            ? 'This item has been shared with you.'
+            : `Share ${blockType()}`);
+    if (requests.count() === 0) return share;
+    return `${share} · ${pendingRequestsLabel(requests.count())}`;
+  };
+
   return (
     <HeaderActionGroup label="Sharing" size={props.size}>
       <div
@@ -2034,21 +2051,10 @@ export function ShareTrigger(props: {
           grouped
           size={isTouchDevice() ? undefined : props.size}
           label="Share"
-          tooltip={
-            shareStatus()?.tooltip ??
-            (blockType() === 'agent'
-              ? 'Share agent session'
-              : blockType() === 'initiative'
-                ? 'Share project'
-                : inBlock
-                  ? 'This item has been shared with you.'
-                  : `Share ${blockType()}`)
-          }
-          icon={
-            <ShareRequestIcon count={requests.count()}>
-              <IconShared class="size-4" />
-            </ShareRequestIcon>
-          }
+          tooltip={tooltip()}
+          count={requests.count()}
+          countLabel={pendingRequestsLabel(requests.count())}
+          icon={<IconShared class="size-4" />}
           onClick={() => {
             if (!isAuthenticated()) {
               openLoginModal();

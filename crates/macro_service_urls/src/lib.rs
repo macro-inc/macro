@@ -593,6 +593,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness-egress",
             prod: "https://gateway.macro.com/agent-harness-egress",
         },
+        /// OTLP/HTTP intake base for telemetry from outside Macro's network
+        /// (Macro computers, desktop): the analytics proxy, which adds the
+        /// Datadog key. Append `/v1/traces`. Locally, the OTLP collector.
+        pub TelemetryIntakeUrl {
+            local: "http://localhost:4318",
+            dev: "https://macro-prox-dev.macroverse.workers.dev/i/otlp",
+            prod: "https://macro-prox-prod.macroverse.workers.dev/i/otlp",
+        },
         /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
         pub McpServiceUrl {
             local: "http://localhost:8101",

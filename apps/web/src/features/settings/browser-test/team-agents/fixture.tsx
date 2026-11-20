@@ -118,6 +118,7 @@ window.teamAgentsFixture = {
   openDm: setDmWith,
 };
 setGlobalSplitManager({
+  activeSplitId: () => undefined,
   openWithSplit(content: SplitContent) {
     window.teamAgentsFixture.opened.push(content);
     return { status: 'unavailable' };

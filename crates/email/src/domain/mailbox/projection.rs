@@ -1,10 +1,11 @@
 //! Durable downstream projection and live-mail notification policy.
 
+use super::retry::message_retry;
 use super::telemetry::{
     claim_failed, elapsed_ms, record_deferred, record_done, record_failed,
     record_projection_abandoned, span_int,
 };
-use super::{MailboxError, MailboxKey, MessageRetry, UNFINISHED_CLAIM_LIMIT, message_retry};
+use super::{MailboxError, MailboxKey, MessageRetry, UNFINISHED_CLAIM_LIMIT};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
 use email_api_client::domain::models::{CalendarPart, EmailApiError};

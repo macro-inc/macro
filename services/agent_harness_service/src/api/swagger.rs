@@ -221,6 +221,8 @@ impl Modify for SecurityAddon {
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
         crate::computers::claude::ClaudeSignInStarted,
+        crate::computers::claude::ClaudeSignInError,
+        crate::computers::claude::SignInRecoveryCode,
         crate::computers::claude::ClaudeSignInComplete,
         crate::computers::claude::ClaudeSignedIn,
         crate::computers::claude::ClaudeModeResponse,
