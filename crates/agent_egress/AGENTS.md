@@ -45,14 +45,17 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   a call, is `EgressError::NeedsReconnect`: Macro Connect's gateway answers
   it for every request on a connection whose grant needs reauthorization,
   before calling the vendor. rmcp types only 429 and 5xx statuses, so
-  `TracedClient` gives a 409 its typed status back. A `tools/call` (sandbox
-  or `exchange_as`) answers `reconnect_text` as an `isError` result, with an
-  `m-connect-app` chip marked `"reconnect": true`; a listing returns the
-  error (the sandbox proxy answers HTTP 409, and code mode's `tools()` turns
-  it into the same text). Any other server's 409 is an
-  `EgressError::Upstream` (`traced_exchange`). A sandbox's owner call and
-  its `initialize` are forwarded raw, so their 409 still passes through
-  untouched.
+  `TracedClient` gives a 409 its typed status back, and the transport drops
+  that upstream session so the call after a reconnect handshakes again. A
+  `tools/call` (sandbox or `exchange_as`) answers `reconnect_text` as an
+  `isError` result, with an `m-connect-app` chip marked `"reconnect": true`;
+  so does a sandbox owner's forwarded call, held or not, when the upstream
+  answers it 409 (`ReconnectAnswer` in `domain/service.rs`). A listing
+  returns the error (the sandbox proxy answers HTTP 409, and code mode's
+  `tools()` turns it into `owner_reconnect_text`). Any other server's 409 is
+  an `EgressError::Upstream` (`traced_exchange`), and a forwarded one passes
+  through. A sandbox's `initialize` is forwarded raw, so a session started
+  after the grant expired gets its 409 and never lists the app.
 
 ## Scope
 
