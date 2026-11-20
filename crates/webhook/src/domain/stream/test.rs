@@ -54,15 +54,17 @@ fn workspace_candidate(event_name: &str, workspace_id: &str) -> StreamCandidateE
 #[tokio::test]
 async fn private_call_event_streams_only_to_the_recipient() {
     let (service, feed) = service(FakeAccessService::allowing(&[]));
-    let stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["call.invited"]),
-            None,
-        )
-        .await
-        .unwrap();
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["call.invited"]),
+                None,
+            )
+            .await
+            .unwrap(),
+    );
     feed.publish(StreamCandidateEvent {
         event: normalized("call.invited", DOCUMENT_ID),
         audience: StreamAudience::User {
@@ -364,15 +366,17 @@ async fn open_stream_delivers_only_matching_accessible_events() {
     ];
     let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
 
-    let stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::Team,
-            filter(&["document.updated"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     for candidate in candidates {
         feed.publish(candidate);
     }
@@ -415,15 +419,17 @@ async fn open_stream_checks_access_for_each_matching_event() {
     let call_count = access.users_by_entity_calls.clone();
     let (service, feed) = service(access);
 
-    let stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::Team,
-            filter(&["document.updated"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     for candidate in candidates {
         feed.publish(candidate);
     }
@@ -463,7 +469,7 @@ async fn open_stream_rejects_empty_or_degenerate_filters() {
 }
 
 #[tokio::test]
-async fn lagged_stream_skips_missed_events_and_continues() {
+async fn a_lagging_stream_ends_so_the_subscriber_resumes_and_replays() {
     let feed = StreamFeed::new(2, WEBHOOK_STREAM_REPLAY_CAPACITY);
     let service = WebhookEventStreamServiceImpl::new(
         feed.clone(),
@@ -471,32 +477,54 @@ async fn lagged_stream_skips_missed_events_and_continues() {
         FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
         FakeContactChecker::default(),
     );
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::Team,
-            filter(&["document.updated"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let since = cursor_at(Utc::now() - chrono::Duration::seconds(1));
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
 
-    feed.publish(document_candidate("document.updated", DOCUMENT_ID));
-    feed.publish(document_candidate("document.updated", DOCUMENT_ID));
-    let latest = document_candidate("document.updated", DOCUMENT_ID);
-    let latest_id = latest.event.event_id.clone();
-    feed.publish(latest);
+    let candidates: Vec<StreamCandidateEvent> = (0..3)
+        .map(|_| document_candidate("document.updated", DOCUMENT_ID))
+        .collect();
+    let published: Vec<String> = candidates
+        .iter()
+        .map(|candidate| candidate.event.event_id.clone())
+        .collect();
+    for candidate in candidates {
+        feed.publish(candidate);
+    }
 
-    let delivered = stream.next().await.expect("stream continues after lag");
-    assert_ne!(delivered.event_id, latest_id);
-    assert_eq!(stream.next().await.unwrap().event_id, latest_id);
+    assert!(
+        stream.next().await.is_none(),
+        "a subscriber that missed events must not silently continue"
+    );
+    let mut resumed = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                Some(since),
+            )
+            .await
+            .expect("stream reopens"),
+    );
+    for id in published {
+        assert_eq!(next_within(&mut resumed).await.event_id, id);
+    }
 }
 
 #[tokio::test]
-async fn open_stream_does_not_deliver_link_share_only_entities() {
-    let (service, feed) = service(FakeAccessService::link_share_only(&[DOCUMENT_ID]));
-
-    let stream = service
+async fn a_heartbeat_reaches_every_subscriber_whatever_its_filters() {
+    let (service, feed) = service(FakeAccessService::allowing(&[]));
+    let mut documents = service
         .open_stream(
             subscriber(),
             WebhookScope::User,
@@ -505,6 +533,112 @@ async fn open_stream_does_not_deliver_link_share_only_entities() {
         )
         .await
         .expect("stream opens");
+    let mut calls = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["call.invited"]),
+            None,
+        )
+        .await
+        .expect("stream opens");
+
+    // Inaccessible, so nothing but the heartbeat reaches either stream.
+    feed.publish(document_candidate("document.updated", DOCUMENT_ID));
+    feed.heartbeat();
+
+    for stream in [&mut documents, &mut calls] {
+        let item = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
+            .await
+            .expect("heartbeat in time")
+            .expect("stream open");
+        assert!(matches!(item, StreamItem::Heartbeat), "{item:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_heartbeat_arrives_after_the_events_queued_before_it() {
+    let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
+    let mut stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            None,
+        )
+        .await
+        .expect("stream opens");
+    let candidate = document_candidate("document.updated", DOCUMENT_ID);
+    let id = candidate.event.event_id.clone();
+
+    feed.publish(candidate);
+    feed.heartbeat();
+
+    match stream.next().await {
+        Some(StreamItem::Event(event)) => assert_eq!(event.event_id, id),
+        other => panic!("expected the event first, got {other:?}"),
+    }
+    assert!(matches!(stream.next().await, Some(StreamItem::Heartbeat)));
+}
+
+#[tokio::test]
+async fn a_heartbeat_is_never_replayed_to_a_resuming_subscriber() {
+    let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
+    let since = cursor_at(Utc::now() - chrono::Duration::seconds(1));
+    feed.heartbeat();
+    let candidate = document_candidate("document.updated", DOCUMENT_ID);
+    let id = candidate.event.event_id.clone();
+    feed.publish(candidate);
+
+    let mut stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+            Some(since),
+        )
+        .await
+        .expect("stream opens");
+
+    match stream.next().await {
+        Some(StreamItem::Event(event)) => assert_eq!(event.event_id, id),
+        other => panic!("expected the retained event, got {other:?}"),
+    }
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), stream.next())
+            .await
+            .is_err(),
+        "nothing else was retained"
+    );
+}
+
+/// Only the events of a stream, without its heartbeats.
+fn events(stream: BoxStream<'static, StreamItem>) -> BoxStream<'static, NormalizedWebhookEvent> {
+    stream
+        .filter_map(|item| {
+            futures::future::ready(match item {
+                StreamItem::Event(event) => Some(event),
+                StreamItem::Heartbeat => None,
+            })
+        })
+        .boxed()
+}
+
+#[tokio::test]
+async fn open_stream_does_not_deliver_link_share_only_entities() {
+    let (service, feed) = service(FakeAccessService::link_share_only(&[DOCUMENT_ID]));
+
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     feed.publish(document_candidate("document.updated", DOCUMENT_ID));
     feed.publish(workspace_candidate("document.updated", SUBSCRIBER_ID));
 
@@ -526,15 +660,17 @@ async fn team_scope_uses_highest_role_team_not_first_resolved_workspace() {
         Some(FOREIGN_WORKSPACE_ID.to_string()),
     );
 
-    let stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::Team,
-            filter(&["webhook.created"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["webhook.created"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     feed.publish(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID));
     feed.publish(workspace_candidate("webhook.created", FOREIGN_WORKSPACE_ID));
 
@@ -552,15 +688,17 @@ async fn team_membership_revocation_ends_the_stream() {
         resolver.clone(),
         FakeContactChecker::default(),
     );
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::Team,
-            filter(&["webhook.created"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["webhook.created"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
 
     *resolver.team_workspace_id.lock().unwrap() = None;
     feed.publish(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID));
@@ -575,15 +713,17 @@ async fn agent_session_events_fall_back_to_access_level() {
     let access_level_calls = access.access_level_calls.clone();
     let (service, feed) = service(access);
 
-    let stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["agent_trigger.existing"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["agent_trigger.existing"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     feed.publish(StreamCandidateEvent {
         event: normalized("agent_trigger.existing", SESSION_ID),
         audience: StreamAudience::Entity {
@@ -600,10 +740,12 @@ async fn agent_session_events_fall_back_to_access_level() {
 #[tokio::test]
 async fn wildcard_stream_delivers_future_event_types_only_with_current_access() {
     let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
-    let stream = service
-        .open_stream(subscriber(), WebhookScope::Team, filter(&["*"]), None)
-        .await
-        .expect("wildcard stream opens");
+    let stream = events(
+        service
+            .open_stream(subscriber(), WebhookScope::Team, filter(&["*"]), None)
+            .await
+            .expect("wildcard stream opens"),
+    );
     feed.publish(document_candidate("future.event", OTHER_DOCUMENT_ID));
     feed.publish(workspace_candidate("future.event", FOREIGN_WORKSPACE_ID));
     feed.publish(document_candidate("future.event", DOCUMENT_ID));
@@ -620,18 +762,20 @@ async fn wildcard_stream_preserves_entity_id_filters() {
         DOCUMENT_ID,
         OTHER_DOCUMENT_ID,
     ]));
-    let stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            vec![WebhookFilter {
-                events: vec!["*".to_string()],
-                ids: Some(vec![DOCUMENT_ID.to_string()]),
-            }],
-            None,
-        )
-        .await
-        .expect("wildcard stream opens");
+    let stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                vec![WebhookFilter {
+                    events: vec!["*".to_string()],
+                    ids: Some(vec![DOCUMENT_ID.to_string()]),
+                }],
+                None,
+            )
+            .await
+            .expect("wildcard stream opens"),
+    );
     feed.publish(document_candidate("document.updated", OTHER_DOCUMENT_ID));
     feed.publish(document_candidate("future.event", DOCUMENT_ID));
     let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
@@ -670,10 +814,12 @@ async fn picture_reaches(
         FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
         contacts,
     );
-    let mut stream = service
-        .open_stream(subscriber, scope, filter(&["user.picture_changed"]), None)
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(subscriber, scope, filter(&["user.picture_changed"]), None)
+            .await
+            .expect("stream opens"),
+    );
     feed.publish(candidate);
     // Sentinel the stream always delivers, so a skipped event ends the wait.
     let sentinel_workspace = match scope {
@@ -820,15 +966,17 @@ async fn first_after(
     requested: StreamCandidateEvent,
 ) -> NormalizedWebhookEvent {
     let (service, feed) = service(FakeAccessService::allowing(&[]));
-    let mut stream = service
-        .open_stream(
-            MacroUserIdStr::try_from(subscriber_id.to_owned()).expect("valid user id"),
-            scope,
-            filter(&[requested.event.event_name.as_str(), "webhook.created"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                MacroUserIdStr::try_from(subscriber_id.to_owned()).expect("valid user id"),
+                scope,
+                filter(&[requested.event.event_name.as_str(), "webhook.created"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     feed.publish(requested);
     feed.publish(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID));
     tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
@@ -916,15 +1064,17 @@ async fn a_request_published_before_the_runtime_streams_reaches_it_when_it_resum
     let requested_name = requested.event.event_name.clone();
     feed.publish(requested);
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&[requested_name.as_str(), "webhook.created"]),
-            Some(cursor),
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&[requested_name.as_str(), "webhook.created"]),
+                Some(cursor),
+            )
+            .await
+            .expect("stream opens"),
+    );
 
     assert_eq!(next_within(&mut stream).await.event_id, requested_id);
 }
@@ -942,15 +1092,17 @@ async fn a_resumed_stream_replays_around_its_cursor_but_never_the_cursor_itself(
     feed.publish(seen);
     feed.publish(missed);
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["document.updated"]),
-            Some(cursor),
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                Some(cursor),
+            )
+            .await
+            .expect("stream opens"),
+    );
     let live = document_candidate("document.updated", DOCUMENT_ID);
     let live_id = live.event.event_id.clone();
     feed.publish(live);
@@ -976,15 +1128,17 @@ async fn a_cursor_from_another_replicas_order_still_replays_what_followed_it() {
     feed.publish(next);
     feed.publish(seen);
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["document.updated"]),
-            Some(cursor),
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                Some(cursor),
+            )
+            .await
+            .expect("stream opens"),
+    );
 
     assert_eq!(next_within(&mut stream).await.event_id, next_id);
 }
@@ -999,15 +1153,17 @@ async fn replayed_events_pass_the_same_filters_and_access_checks() {
     let allowed_id = allowed.event.event_id.clone();
     feed.publish(allowed);
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["document.updated"]),
-            Some(since),
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                Some(since),
+            )
+            .await
+            .expect("stream opens"),
+    );
 
     assert_eq!(next_within(&mut stream).await.event_id, allowed_id);
 }
@@ -1020,15 +1176,17 @@ async fn a_cursor_this_process_never_saw_resumes_at_the_time_it_encodes() {
     feed.publish(before);
     let future = cursor_at(Utc::now() + chrono::Duration::seconds(60));
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["document.updated"]),
-            Some(future),
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                Some(future),
+            )
+            .await
+            .expect("stream opens"),
+    );
     let live = document_candidate("document.updated", DOCUMENT_ID);
     let live_id = live.event.event_id.clone();
     feed.publish(live);
@@ -1046,15 +1204,17 @@ async fn a_stream_without_a_cursor_starts_live() {
     let (service, feed) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
     feed.publish(document_candidate("document.updated", DOCUMENT_ID));
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["document.updated"]),
-            None,
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                None,
+            )
+            .await
+            .expect("stream opens"),
+    );
     let live = document_candidate("document.updated", DOCUMENT_ID);
     let live_id = live.event.event_id.clone();
     feed.publish(live);
@@ -1083,15 +1243,17 @@ async fn the_feed_keeps_only_its_newest_events_for_replay() {
         feed.publish(candidate);
     }
 
-    let mut stream = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::User,
-            filter(&["document.updated"]),
-            Some(since),
-        )
-        .await
-        .expect("stream opens");
+    let mut stream = events(
+        service
+            .open_stream(
+                subscriber(),
+                WebhookScope::User,
+                filter(&["document.updated"]),
+                Some(since),
+            )
+            .await
+            .expect("stream opens"),
+    );
 
     assert_eq!(next_within(&mut stream).await.event_id, kept[0]);
     assert_eq!(next_within(&mut stream).await.event_id, kept[1]);
