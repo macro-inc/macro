@@ -34,7 +34,7 @@ data:
     validate_id_token = true
     [database]
     ca_cert_path = /etc/grafana/rds/ca.pem
-    host = :5432
+    host = observability-grafana.c7laebw90i5d.us-east-2.rds.amazonaws.com:5432
     name = grafana
     password = $__file{/etc/grafana/database/password}
     ssl_mode = verify-full
