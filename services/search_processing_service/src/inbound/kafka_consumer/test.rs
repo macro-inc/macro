@@ -2598,7 +2598,8 @@ async fn reindex_request_for_several_threads_is_never_coalesced() {
         HandoffOutcome::HandedOff
     ));
 
-    // Nor does it claim its first thread's reread.
+    // Handing it off released the first request's claim on its thread, so a
+    // later request queues behind it.
     assert!(matches!(
         pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
             vec![EMAIL_THREAD_ID],
