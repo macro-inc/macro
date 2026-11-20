@@ -413,8 +413,42 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
 
   afterEach(() => dispose?.());
 
+  it('never reports a save that throws before it is queued as accepted', async () => {
+    const mutation = vi.fn();
+    graphqlClientState.current = { mutation } as unknown as Client;
+    const save = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+    const onAccepted = vi.fn();
+
+    await expect(
+      save.mutateAsync({
+        properties: [
+          {
+            entityId: 'event',
+            entityType: 'CALENDAR_EVENT',
+            property: {
+              propertyId: 'assignment',
+              propertyDefinitionId: 'priority',
+              displayName: 'Priority',
+              valueType: 'SELECT_STRING',
+              isMultiSelect: false,
+            } as Property,
+            apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+          },
+        ],
+        onAccepted,
+      })
+    ).rejects.toThrow('calendar events do not support properties');
+
+    expect(mutation).not.toHaveBeenCalled();
+    expect(onAccepted).not.toHaveBeenCalled();
+  });
+
   it('installs every bulk layer before the first HTTP result, while retaining enqueue order', async () => {
     const onCommitted = vi.fn();
+    const onAccepted = vi.fn();
     const acknowledgements: Array<() => void> = [];
     const responses: Array<() => void> = [];
     const mutation = vi.fn(
@@ -458,6 +492,7 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
         property,
         apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
       })),
+      onAccepted,
     });
     await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
     // Preparing the next relation recipe must wait for cache installation.
@@ -465,7 +500,10 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
     acknowledgements[0]();
     await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
     expect(onCommitted).not.toHaveBeenCalled();
+    expect(onAccepted).not.toHaveBeenCalled();
     acknowledgements[1]();
+    // Accepted once every save is installed, before any HTTP result.
+    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledOnce());
     expect(save.isPending).toBe(true);
     responses[1]();
     await vi.waitFor(() => expect(onCommitted).toHaveBeenCalledTimes(1));

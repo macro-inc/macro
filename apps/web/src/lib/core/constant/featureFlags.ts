@@ -682,6 +682,16 @@ export const enableChatSidebarSections = defineFlag({
   default: onInDev,
 });
 
+// Channel and Chat section Notification Settings (All messages, Messages
+// involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
+// development; deployed environments defer to PostHog. Override with
+// VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS.
+export const enableChannelNotificationSettings = defineFlag({
+  key: 'enable-channel-notification-settings',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
 // Opt-in vertical resizing for desktop Chat sections. Keep it off in development
 // too so sections use their natural height unless PostHog or a local override enables it.
 export const enableChatSidebarSectionResize = defineFlag({

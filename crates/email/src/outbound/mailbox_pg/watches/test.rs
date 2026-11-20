@@ -353,3 +353,72 @@ async fn a_change_notification_makes_a_folders_live_pass_due(db: PgPool) {
     assert_eq!(pass.folder.as_str(), "folder");
     assert!(pass.notification.is_some());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subscription_writes_behind_a_share_locked_link_fail_fast(db: PgPool) {
+    let (repo, link, lease, id) = setup(&db).await;
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at=now()+interval '1 hour' WHERE link_id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+
+    let bound = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.bind_watch(
+            &lease,
+            id,
+            &MailboxSubscription {
+                id: ProviderId::new("sub").unwrap(),
+                expires_at: Utc::now() + chrono::Duration::days(2),
+            },
+        ),
+    )
+    .await;
+    assert!(
+        matches!(
+            &bound,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{bound:?}"
+    );
+    let notified = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        MailboxWatchNotifications(repo.clone())
+            .receive(id, vec![notification("secret", "sub", WatchHint::Changed)]),
+    )
+    .await;
+    assert!(
+        matches!(
+            &notified,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{notified:?}"
+    );
+    population.rollback().await.unwrap();
+
+    let row = sqlx::query!(
+        "SELECT provider_id FROM email_provider_subscriptions WHERE id=$1",
+        id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(row.provider_id.is_none());
+    assert!(
+        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_none(),
+        "a notification that failed must not wake the mailbox"
+    );
+}

@@ -13,6 +13,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
+import { NotificationSettingsMenu } from '@notifications/components/NotificationSettingsMenu';
 import { Key } from '@solid-primitives/keyed';
 import {
   type Component,
@@ -102,54 +103,66 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
               {(action) => {
                 return (
                   <Show
-                    when={action().menuItem}
+                    when={action().notificationSettingsMenu}
                     fallback={
                       <Show
-                        when={action().muteMenu}
+                        when={action().menuItem}
                         fallback={
                           <Show
-                            when={action().copy}
+                            when={action().muteMenu}
                             fallback={
-                              <Item
-                                text={action().label}
-                                icon={action().icon}
-                                hotkeyToken={action().hotkeyToken}
-                                shortcut={action().shortcut}
-                                disabled={action().disabled}
-                                onClick={() =>
-                                  fireAndForget(
-                                    runAction(action().onClick),
-                                    'entity-actions'
-                                  )
+                              <Show
+                                when={action().copy}
+                                fallback={
+                                  <Item
+                                    text={action().label}
+                                    icon={action().icon}
+                                    hotkeyToken={action().hotkeyToken}
+                                    shortcut={action().shortcut}
+                                    disabled={action().disabled}
+                                    onClick={() =>
+                                      fireAndForget(
+                                        runAction(action().onClick),
+                                        'entity-actions'
+                                      )
+                                    }
+                                    class={
+                                      action().destructive
+                                        ? 'text-failure-ink'
+                                        : undefined
+                                    }
+                                  />
                                 }
-                                class={
-                                  action().destructive
-                                    ? 'text-failure-ink'
-                                    : undefined
-                                }
-                              />
+                              >
+                                <CopyItem
+                                  text={action().label}
+                                  icon={action().icon}
+                                  hotkeyToken={action().hotkeyToken}
+                                  shortcut={action().shortcut}
+                                  disabled={action().disabled}
+                                  onCopy={async () =>
+                                    (await action().onClick()) !== false
+                                  }
+                                />
+                              </Show>
                             }
                           >
-                            <CopyItem
-                              text={action().label}
-                              icon={action().icon}
-                              hotkeyToken={action().hotkeyToken}
-                              shortcut={action().shortcut}
-                              disabled={action().disabled}
-                              onCopy={async () =>
-                                (await action().onClick()) !== false
-                              }
-                            />
+                            <NotificationMuteMenu {...action().muteMenu!} />
                           </Show>
                         }
                       >
-                        <NotificationMuteMenu {...action().muteMenu!} />
+                        {(component) => (
+                          <Dynamic
+                            component={component()}
+                            onActionComplete={props.onActionComplete}
+                          />
+                        )}
                       </Show>
                     }
                   >
-                    {(component) => (
-                      <Dynamic
-                        component={component()}
+                    {(menu) => (
+                      <NotificationSettingsMenu
+                        {...menu()}
                         onActionComplete={props.onActionComplete}
                       />
                     )}

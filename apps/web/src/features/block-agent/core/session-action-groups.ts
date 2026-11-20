@@ -4,6 +4,7 @@ type Groups<T> = {
   sender: T[];
   sharing: T[];
   macro: T[];
+  notifications: T[];
   file: T[];
   delete: T[];
 };
@@ -18,6 +19,7 @@ export function sessionActionGroups<T extends Action>(
     ...groups.sender,
     ...groups.sharing,
     ...groups.macro,
+    ...groups.notifications,
     ...groups.file,
   ];
   const archive = all.find((action) => action.id === 'archive');
@@ -32,6 +34,7 @@ export function sessionActionGroups<T extends Action>(
     sender: [],
     sharing: [],
     macro: [],
+    notifications: [],
     file: [],
     delete: [
       ...(archive ? [archive] : []),

@@ -100,6 +100,13 @@ export function useCrmContactMentionSource(
     isLoading: () => query.isLoading || aliases.loading(),
     isLoadingMore: () => query.isFetchingNextPage || aliases.isLoadingMore(),
     loadMore: aliases.loadMore,
+    error: () => query.error ?? undefined,
+    // A failed later page is the next one to read; a failed first page is
+    // read from the start.
+    retry: async () => {
+      if (query.isFetchNextPageError) await query.fetchNextPage();
+      else await query.refetch();
+    },
   };
 }
 

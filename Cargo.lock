@@ -15204,6 +15204,7 @@ dependencies = [
  "tokio-retry",
  "tokio-rustls",
  "tracing",
+ "unicode-segmentation",
  "uuid",
  "workspace-hack",
 ]
