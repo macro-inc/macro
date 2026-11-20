@@ -78,8 +78,37 @@ sender/generic-address checks.
   but html2text turns into filler cells and columns. Keep all of it when
   changing the conversion; `tests/text_conversion_memory.rs` measures the
   peak.
+- Parse email HTML with `bounded_html`, never `Html::parse_document` or
+  `parse_fragment` on a body as received. html5ever's memory follows the nodes
+  and attributes it builds, not the bytes it reads: it rebuilds every
+  still-active formatting element (`<b>`, `<font>`) inside each new
+  paragraph, attributes included, so 13 KB once built a million nodes. Most
+  tags scan its stack of open elements, and each new formatting element is
+  compared with every open one of the same name, so deep nesting costs time
+  squared. A byte or tag count bounds none of this. `bounded_html` wraps
+  scraper's tree sink, feeds the body a tag at a time and stops at the first
+  limit a change would pass: `MAX_HTML_NODES` (attributes count a quarter
+  node each, a text node only when it is new), `MAX_HTML_TEXT_BYTES` (text,
+  attributes and comments as a serialization writes them, escapes and each
+  rebuilt element's attributes included),
+  `MAX_ELEMENT_ATTRIBUTES`, `MAX_FORMATTING_DEPTH` (at most three copies of
+  an identical tag count, as html5ever keeps no more) and `MAX_HTML_DEPTH`,
+  reporting `clipped`. Each limit has a case in
+  `tests/text_conversion_memory.rs`. `sanitize_email_html` then cleans what
+  was parsed and ends it with `CLIPPED_NOTICE` (English only), since the
+  reader shows only sanitized HTML and the `.eml` download keeps the whole
+  message. Ammonia parses that serialization again: the byte limit bounds
+  its size, and the formatting limit its comparisons. `extract_reply_html`
+  keeps a clipped body whole, as it does one with no reply separator. Code
+  that parses a body as received again (rather than the sanitized HTML) goes
+  through `bounded_html` too. html5ever also checks each attribute name in a
+  tag against every earlier one before anything reaches the tree; a tag with
+  150,000 attributes takes about 20 s, which is accepted.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
-  sender's choice, and a deep enough message overflows the stack.
+  sender's choice, and a deep enough message overflows the stack. Reply
+  stripping still recurses once per level (`get_previous_html_recursively`),
+  so its own depth check must run before it: moving a node (misnested
+  formatting) can nest it deeper than the parse inserted it.
 
 ## Related
 
