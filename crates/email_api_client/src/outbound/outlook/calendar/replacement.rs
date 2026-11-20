@@ -157,14 +157,20 @@ fn join_url(event: &Value) -> Option<&str> {
 /// Fields an occurrence copy takes from the edited series when it still holds
 /// the saved series' value; an occurrence changed on its own keeps its own.
 /// Guests are carried as the series' additions, removals and type changes
-/// instead. The extended properties hold Macro's reminder settings.
-const INHERITED_FIELDS: [&str; 9] = [
+/// instead.
+const INHERITED_FIELDS: [&str; 6] = [
     "subject",
     "body",
     "location",
     "locations",
     "sensitivity",
     "showAs",
+];
+
+/// Outlook's reminder and the Macro reminder settings kept beside it, which
+/// read together: an occurrence takes the series' edit of them only all at
+/// once, when it still holds all of the saved series' values.
+const REMINDER_FIELDS: [&str; 3] = [
     "isReminderOn",
     "reminderMinutesBeforeStart",
     "singleValueExtendedProperties",
@@ -188,20 +194,27 @@ fn same_time(first: &EventTime, second: &EventTime) -> bool {
     }
 }
 
-/// Whether `changes` move the source's schedule: its time or repeat rule.
-fn moves_schedule(
+/// `changes` without a time or repeat rule that names the saved schedule, so
+/// an unchanged schedule (in any zone) neither moves the series' rule nor
+/// drops its copied occurrences.
+fn schedule_changes(
     source: &Value,
     changes: &CalendarEventPatch,
-) -> Result<bool, CalendarProviderError> {
-    let time_moves = match &changes.time {
-        Some(time) => !same_time(time, &normalize::event_time(source)?),
-        None => false,
-    };
-    let rule_moves = match &changes.recurrence_lines {
-        Some(lines) => recurrence::from_graph(source).map_or(true, |saved| &saved != lines),
-        None => false,
-    };
-    Ok(time_moves || rule_moves)
+) -> Result<CalendarEventPatch, CalendarProviderError> {
+    let mut changes = changes.clone();
+    if changes.time.as_ref().is_some_and(|time| {
+        normalize::event_time(source).is_ok_and(|saved| same_time(time, &saved))
+    }) {
+        changes.time = None;
+    }
+    if changes
+        .recurrence_lines
+        .as_ref()
+        .is_some_and(|lines| recurrence::from_graph(source).is_ok_and(|saved| &saved == lines))
+    {
+        changes.recurrence_lines = None;
+    }
+    Ok(changes)
 }
 
 /// Lay the editor's unsaved changes over a copy of `source`, built as an
@@ -303,7 +316,17 @@ fn inherit_changes(occurrence: &mut Value, saved: &Value, edited: &Value) {
             }
         }
     }
-    for field in INHERITED_FIELDS {
+    let reminders_unchanged = REMINDER_FIELDS
+        .iter()
+        .all(|field| saved.get(*field) == edited.get(*field));
+    let own_reminders = REMINDER_FIELDS
+        .iter()
+        .any(|field| occurrence.get(*field) != saved.get(*field));
+    let mut fields = INHERITED_FIELDS.to_vec();
+    if !reminders_unchanged && !own_reminders {
+        fields.extend(REMINDER_FIELDS);
+    }
+    for field in fields {
         if saved.get(field) == edited.get(field) || occurrence.get(field) != saved.get(field) {
             continue;
         }
@@ -480,7 +503,9 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
         let is_series = recurrence_id.is_none() && source["type"].as_str() == Some("seriesMaster");
         // Outlook drops a series' changed and cancelled occurrences when its
         // schedule changes, and their dates no longer follow it.
-        let keeps_occurrences = is_series && !moves_schedule(&source, changes)?;
+        let changes = &schedule_changes(&source, changes)?;
+        let keeps_occurrences =
+            is_series && changes.time.is_none() && changes.recurrence_lines.is_none();
         let mut body = copy_body(&source, remove_conference)?;
         if !is_series {
             body.as_object_mut()

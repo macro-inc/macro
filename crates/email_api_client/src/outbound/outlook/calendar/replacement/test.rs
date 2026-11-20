@@ -770,4 +770,41 @@ async fn a_time_that_names_the_saved_schedule_keeps_the_copied_occurrences() {
 
     assert_eq!(snapshot.occurrences.len(), 1);
     assert_eq!(snapshot.occurrences[0]["cancelled"], true);
+    // The saved rule and zone stay, so no occurrence moves.
+    let body = &snapshot.payload["body"];
+    assert_eq!(
+        body["start"],
+        copy_body(&series("master"), true).unwrap()["start"]
+    );
+    assert_eq!(body["recurrence"], series("master")["recurrence"]);
+}
+
+#[test]
+fn an_occurrence_with_its_own_reminders_keeps_them_whole_when_the_series_reminder_changes() {
+    let reminders = |minutes: &[u32]| {
+        json!([{"id":PREFERENCES_ID,"value":json!({
+            "reminders":{"useDefault":false,"overrides":minutes.iter().map(|m| json!({"method":"popup","minutes":m})).collect::<Vec<_>>()},
+            "nativeReminderMinutes":minutes[0],
+        }).to_string()}])
+    };
+    let saved = json!({
+        "isReminderOn":true, "reminderMinutesBeforeStart":10,
+        "singleValueExtendedProperties":reminders(&[10]),
+    });
+    let edited = json!({
+        "isReminderOn":true, "reminderMinutesBeforeStart":30,
+        "singleValueExtendedProperties":reminders(&[30]),
+    });
+    let own = json!({
+        "isReminderOn":true, "reminderMinutesBeforeStart":10,
+        "singleValueExtendedProperties":reminders(&[10, 60]),
+    });
+    let mut occurrence = own.clone();
+    let mut like_series = saved.clone();
+
+    inherit_changes(&mut occurrence, &saved, &edited);
+    inherit_changes(&mut like_series, &saved, &edited);
+
+    assert_eq!(occurrence, own);
+    assert_eq!(like_series, edited);
 }
