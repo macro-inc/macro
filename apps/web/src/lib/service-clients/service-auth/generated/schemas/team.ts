@@ -7,6 +7,7 @@
 import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
 import type { TeamDefaultLinkShare } from './teamDefaultLinkShare';
 import type { TeamLanguage } from './teamLanguage';
+import type { TeamLogoFileId } from './teamLogoFileId';
 
 /**
  * The Team struct
@@ -28,6 +29,9 @@ bookkeeping (no seat counts, no subscription backfill, no paying check). */
   enterprise: boolean;
   id: string;
   language?: TeamLanguage;
+  /** The static file id of the team's logo, an image every member sees in
+place of the app rail's create button. `None` when the team has none. */
+  logo_file_id?: TeamLogoFileId;
   name: string;
   owner_id: string;
   slug: string;
