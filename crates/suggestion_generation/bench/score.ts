@@ -52,6 +52,8 @@ export type Attempt = {
   /** The work list its drafting session read, matched to the persona's streams key. */
   findingMarks?: EntryMark[];
   finding?: ListScore;
+  /** Its work list couldn't be judged; its routines are scored all the same. */
+  findingError?: string;
   judgeUsd: number;
   /** The bench failed, not the build (seeding, the stack or the judge), or the attempt waits to be judged. Left out of scores. */
   benchError?: string;
@@ -253,9 +255,18 @@ export function summary(attempts: Attempt[]) {
       ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
       : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
-    // Generations whose drafting session read a work list: what share of the key's work streams the lists named, and how many entries named none.
+    // Generations run to find the work: how many drafting sessions read a list, what share of the key's work streams the lists named (none where no list was read), and how many entries named none.
     ...(lists.length
-      ? { finding: { lists: lists.length, found: total((list) => list.found) / Math.max(1, total((list) => list.work)), unreal: total((list) => list.unreal) / lists.length, listed: total((list) => list.listed) / lists.length } }
+      ? {
+          finding: {
+            lists: lists.length,
+            read: lists.filter((list) => !list.unread).length,
+            errors: done.filter((a) => a.findingError).length,
+            found: total((list) => list.found) / Math.max(1, total((list) => list.work)),
+            unreal: total((list) => list.unreal) / lists.length,
+            listed: total((list) => list.listed) / lists.length,
+          },
+        }
       : {}),
     firstMedianMs: quantile(first, 0.5),
     firstP90Ms: quantile(first, 0.9),

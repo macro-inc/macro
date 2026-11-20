@@ -8,14 +8,18 @@
 //   and accepts and drops analytics.
 // - `:8081` answers `/internal/recent_messages/macro|{email}` with the
 //   persona's newest mail from `inbox/{email}.json`, and the same route
-//   asked for a window of days (`?days=`) with its month from
-//   `window/{email}.json`: the routines brief reads mail from Gmail or
-//   Outlook, which seeded mail never reaches. Every other request, and a
-//   person with no file, goes to the real email_service.
+//   asked for the month (`?days=30&limit=500&texts=100&snippet_chars=500`,
+//   the read the finding step makes) with it from `window/{email}.json`, and
+//   refuses any other window for that person, since the file holds that month
+//   alone: the routines brief reads mail from Gmail or Outlook, which seeded
+//   mail never reaches. Every other request, and a person with no file, goes
+//   to the real email_service.
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+
+import { WINDOW_DAYS, WINDOW_MESSAGES, WINDOW_SNIPPET_CHARS, WINDOW_TEXTS } from './personas';
 
 const ALIAS = 'suggestions-bench-stub';
 const IMAGE = 'caddy:2-alpine';
@@ -42,13 +46,20 @@ const CADDYFILE = `{
 	handle @recent {
 		root * /srv
 		@window {
-			query days=*
+			query days=${WINDOW_DAYS} limit=${WINDOW_MESSAGES} texts=${WINDOW_TEXTS} snippet_chars=${WINDOW_SNIPPET_CHARS}
 			file /window/{re.user.1}.json
 		}
 		handle @window {
 			rewrite * /window/{re.user.1}.json
 			header Content-Type application/json
 			file_server
+		}
+		@otherWindow {
+			query days=*
+			file /window/{re.user.1}.json
+		}
+		handle @otherWindow {
+			respond "the bench's stand-in serves only days=${WINDOW_DAYS}&limit=${WINDOW_MESSAGES}&texts=${WINDOW_TEXTS}&snippet_chars=${WINDOW_SNIPPET_CHARS}" 400
 		}
 		@inbox {
 			not query days=*

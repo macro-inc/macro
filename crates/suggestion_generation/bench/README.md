@@ -174,6 +174,12 @@ bun $B/bench.ts run routines --label main-a && bun $B/bench.ts run routines --la
 bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
+`MARGINS` were measured on week sets (100 messages a person) with the
+judge from before judges were recorded, so on a month set, or for runs with
+a recorded judge, `compare` marks its verdict UNCALIBRATED. Two runs of main
+on the same kind of set give measured ones, which `--margins
+score,found,bad` passes in place of `MARGINS`.
+
 A side of `compare`, `noise` or `report` may be several runs of one section
 and set, judged by one recorded judge on personas read the same way, joined by
 commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
@@ -211,9 +217,14 @@ drafted routines are within reach, and a streams key (`streams-truth.json`)
 that spells out every stream in the mail: its senders, count, cadence, what
 each message asks and what the person does with it, as `work` (mail they act
 on), `noise` (mail they read or ignore) or `thread` (a one-off
-conversation). Writing one took $4.50 to $4.91 a person (three at once in
-about ten minutes). The stand-in serves the month to the 30-day read
-(`?days=`) and the newest 100 to the old one.
+conversation). The writer refuses a person whose month keeps fewer than 250
+messages or whose key has fewer than five needs a drafted routine can meet.
+Writing one took $4.50 to $4.91 a person (three at once in about ten
+minutes). The stand-in serves the month to the read the finding step makes
+(`?days=30&limit=500&texts=100&snippet_chars=500`), refuses any other
+window, and serves the newest 100 to the old read; both hold the inbox
+alone, as Gmail and Outlook are read, cut at the exact start of the window
+and with texts cut by characters, as the service cuts them.
 
 On a month set a routines run also reports good suggestions: a drafted
 routine or a catalog pick that meets a need of the key with nothing wrong
@@ -223,10 +234,17 @@ verdict.
 
 `find` measures the finding step on its own: one model call reads a month
 person's mail as the service reads it (`mailText`, the lines
-`suggestions/work.rs` writes) with `find.md`, and the judge matches each
-listed stream to the streams key. A list scores the key's work streams it
-names (*found*) and the entries that name none (*unreal*: noise, a one-off
-thread, or nothing in the mail):
+`suggestions/work.rs` writes) with `find.md`, the list is bounded as the
+service bounds it before a session reads it (`boundedList`), and the judge
+matches each listed stream to the streams key, with the addresses of every
+seat and copy read as the key writes them (`asWritten`). A judge whose marks
+leave an entry unmarked, mark one twice or name a stream the key doesn't have
+is asked again, twice at most. A list scores the key's work streams it names,
+as the stream an entry mostly covers or one it covers in full (*found*), and
+the entries that name none (*unreal*: noise, a one-off thread, or nothing in
+the mail). It runs on a set whose every person has a streams key, times each
+list from just before its call, and prints per-person results only for
+people who aren't held out:
 
 ```sh
 bun $B/bench.ts find --set m1 --label flash --model google/gemini-3.8-flash --thinking low --reps 2
@@ -234,10 +252,13 @@ bun $B/bench.ts find --set m1 --label flash --model google/gemini-3.8-flash --th
 
 A candidate behind a flag runs with it on: `--flags
 routine-suggestions-find-work` (comma-separated) adds flags to the
-section's. Where a generation's drafting session read a work list, the run
-scores that list the same way (`workListOf` reads it from the session's
-brief in the transcript), and reports time to the last suggestion beside
-the first.
+section's. With `routine-suggestions-find-work` on, the run scores the work
+list each generation's drafting session read the same way (`workListOf`
+reads it from the earliest `session/prompt` the harness sent a runtime that
+holds one), a generation whose session read none as finding nothing, and a
+list the judge couldn't mark apart from the routines, which are scored all
+the same. `rescore` scores the lists again from their marks. The run reports
+time to the last suggestion beside the first.
 
 The seed CLI refuses an address whose local part isn't ASCII, so as a
 persona is loaded, each such address in its mail, workspace and answer keys
@@ -386,8 +407,8 @@ cost nothing beyond the model calls.
   under the name `stack.env` points at: PostHog's `/flags` answers with the
   section's flags, and email_service's `/internal/recent_messages/{user}`
   answers with the persona's mailbox (the routines brief reads it from Gmail
-  or Outlook, which seeded mail never reaches); everything else goes to
-  email_service. The suggestions service trusts a flag for a minute, so the
+  or Outlook, which seeded mail never reaches): the newest 100, or the month
+  for exactly the month read; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
   bench waits a minute after changing them.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up

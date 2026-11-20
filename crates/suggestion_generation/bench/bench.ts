@@ -81,7 +81,10 @@ export const SECTIONS: Record<Section, SectionSpec> = {
  * How far two runs of main land apart on each part, at the default size
  * (3 personas × 3 seats × 3 reps): the far end of the 95% interval of their
  * difference, from `noise` (README, Noise). A smaller move is noise; a run
- * of another size needs margins of its own.
+ * of another size needs margins of its own. Measured on week sets (100
+ * messages a person) with the judge from before judges were recorded: on a
+ * month set or with a recorded judge they are not calibrated, and `compare`
+ * says so unless `--margins` gives measured ones.
  */
 export const MARGINS: Record<Section, Margins> = {
   routines: { score: 11.5, found: 0.47, bad: 0.53 },
@@ -106,6 +109,7 @@ const OPTIONS = {
   thinking: { type: 'string' },
   /** Flags to turn on besides the section's, comma-separated: a candidate behind a flag. */
   flags: { type: 'string' },
+  margins: { type: 'string' },
 } as const;
 
 const commitOf = (dir: string) =>
@@ -159,19 +163,26 @@ async function indexAll(at: Stack, people: Persona[], variant: Variant, now: num
   }
 }
 
-/** Judge and score one attempt as a grader no other judgement is using, so its cost is read from the grader's spend meanwhile. */
-const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: Attempt) =>
+/** The flag that has onboarding find the work in a person's mail before drafting. */
+const FIND_WORK_FLAG = 'routine-suggestions-find-work';
+
+/** Judge and score one attempt as a grader no other judgement is using, so its cost is read from the grader's spend meanwhile; `findsWork` where its run had the finding step on. */
+const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: Attempt, findsWork: boolean) =>
   asGrader(async (grader) => {
     const started = new Date();
     try {
       if (section === 'routines') {
         attempt.routineMarks = await judgeRoutines(at, grader, persona, attempt.generation);
         attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
-        // The work list the drafting session read, scored as `find` scores one on its own.
-        const list = attempt.generation.workList;
-        if (list && persona.streamsTruth) {
-          attempt.findingMarks = await judgeList(at, persona, list, attempt.generation.now);
-          attempt.finding = scoreList(persona, list, attempt.findingMarks);
+        // The work list the drafting session read, scored as `find` scores one on its own; a session that read none found nothing.
+        if (findsWork && persona.streamsTruth) {
+          const list = attempt.generation.workList ?? { person: '', streams: [] };
+          try {
+            attempt.findingMarks = await judgeList(at, persona, list, attempt.generation.now);
+            attempt.finding = { ...scoreList(persona, list, attempt.findingMarks), ...(attempt.generation.workList ? {} : { unread: true }) };
+          } catch (error) {
+            attempt.findingError = String(error).slice(0, 300);
+          }
         }
       } else {
         attempt.feedMarks = await judgeFeed(at, grader, persona, attempt.generation);
@@ -272,6 +283,8 @@ async function runSection(section: Section, values: Record<string, string | unde
         };
         const log = () => {
           const s = attempt.score;
+          // A held-out person's scores stay unread (README, Held-out personas).
+          if (slot.heldout) return console.log(`${section} held-out generation #${rep}: ${generation.buildFailed ? 'build failed' : attempt.benchError ? 'bench error' : 'scored'}`);
           console.log(
             `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, ${generation.cost.usd.toFixed(3)}`}`,
           );
@@ -286,7 +299,7 @@ async function runSection(section: Section, values: Record<string, string | unde
           return void unjudged.push({ slot, attempt, log });
         } else
           return void judged.push(
-            judgeAndScore(at, section, slot, attempt).then(() => {
+            judgeAndScore(at, section, slot, attempt, !!flags[FIND_WORK_FLAG]).then(() => {
               record();
               log();
             }),
@@ -295,7 +308,7 @@ async function runSection(section: Section, values: Record<string, string | unde
         log();
       });
     }
-    judged.push(...judgeWaiting(unjudged, (slot, attempt) => judgeAndScore(at, section, slot, attempt), save));
+    judged.push(...judgeWaiting(unjudged, (slot, attempt) => judgeAndScore(at, section, slot, attempt, !!flags[FIND_WORK_FLAG]), save));
     await Promise.all(judged);
   });
   save();
@@ -364,7 +377,7 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
       run.attempts.map(async (attempt) => {
         if (attempt.generation.error) return; // a build failure keeps its 0
         attempt.benchError = undefined;
-        await judgeAndScore(at, run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), attempt);
+        await judgeAndScore(at, run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), attempt, !!run.flags?.[FIND_WORK_FLAG]);
       }),
     );
   });
@@ -406,6 +419,10 @@ function rescore(path: string) {
     const persona = people.get(attempt.persona)!;
     if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
     else if (attempt.feedMarks) attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
+    if (attempt.findingMarks && persona.streamsTruth) {
+      const list = attempt.generation.workList ?? { person: '', streams: [] };
+      attempt.finding = { ...scoreList(persona, list, attempt.findingMarks), ...(attempt.generation.workList ? {} : { unread: true }) };
+    }
   }
   writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
   console.log(reportLines([run]).join('\n'));
@@ -434,10 +451,18 @@ async function main() {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('compare two runs of the same section');
       comparable(a, b);
-      const margins = { ...MARGINS[a.section], ...(values.margin ? { score: Number(values.margin) } : {}) };
+      // Margins `noise` measured on these runs' kind of set and judge: score,found,bad.
+      const measured = values.margins?.split(',').map(Number);
+      if (measured && (measured.length !== 3 || measured.some((m) => !(m > 0)))) throw new Error('--margins takes score,found,bad');
+      const month = personas(a.set).some((persona) => persona.streamsTruth);
+      const uncalibrated = !measured && (month || !!a.judge);
+      const margins = measured
+        ? { score: measured[0], found: measured[1], bad: measured[2] }
+        : { ...MARGINS[a.section], ...(values.margin ? { score: Number(values.margin) } : {}) };
       const v = verdict(a.attempts, b.attempts, margins);
       const s = v.parts.score;
-      console.log(`${a.section}: ${a.label} → ${b.label}, ${s.attempts[0]} and ${s.attempts[1]} attempts over ${s.people} personas\n\n**${v.verdict.toUpperCase()}**: ${v.why}.`);
+      console.log(`${a.section}: ${a.label} → ${b.label}, ${s.attempts[0]} and ${s.attempts[1]} attempts over ${s.people} personas\n\n**${v.verdict.toUpperCase()}${uncalibrated ? ' (UNCALIBRATED)' : ''}**: ${v.why}.`);
+      if (uncalibrated) console.log(`The margins were measured on week sets with the judge from before judges were recorded; these runs are ${month ? 'on a month set' : ''}${month && a.judge ? ' and ' : ''}${a.judge ? `judged by ${a.judge}` : ''}. Measure them with \`noise\` on two runs of main and pass --margins score,found,bad.`);
       for (const part of Object.keys(PARTS) as (keyof typeof PARTS)[]) {
         const c = v.parts[part];
         const digits = part === 'score' ? 1 : 2;
@@ -479,9 +504,11 @@ async function main() {
       else startStub(values.instance!);
       break;
     case 'find': {
-      let people = personas(values.set!).filter((persona) => persona.streamsTruth);
+      let people = personas(values.set!);
+      const keyless = people.filter((persona) => !persona.streamsTruth).length;
+      if (keyless) throw new Error(`${keyless} of ${people.length} people in set ${values.set} have no streams key: find runs on a month set`);
       if (values.personas) people = people.filter((persona) => values.personas!.split(',').includes(persona.name));
-      if (!people.length) throw new Error(`no persona in set ${values.set} has a streams key`);
+      if (!people.length) throw new Error(`no persona in set ${values.set} is named ${values.personas}`);
       if (people.some((persona) => persona.heldout)) spend(values.set!, 'find', values.label!);
       await runFinding(stack(values.instance!, values.tempo!), people, {
         model: values.model!,

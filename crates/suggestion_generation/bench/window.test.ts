@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { RoutineMark } from './judge';
-import { type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, windowMessages } from './personas';
+import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, windowMessages } from './personas';
 import { type Generation, type RoutineRow, workListOf } from './run';
-import { mailText } from './finding';
+import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, type WorkList } from './finding';
 import { type Attempt, scoreRoutines, summary } from './score';
 import { ANCHOR } from './clock';
 
@@ -44,6 +44,26 @@ describe('windowMessages', () => {
     const { messages } = windowMessages(persona(700, 1), 'signup', ANCHOR);
     expect(messages).toHaveLength(500);
     expect(messages[499].subject).toBe('Message 500');
+  });
+
+  test('cuts the window at its exact start, whatever order the mail was written in', () => {
+    const ana = persona(3, 1);
+    const DAY = 24 * HOUR;
+    ana.inbox.messages = [
+      { ...ana.inbox.messages[0], subject: 'Just outside', date: new Date(ANCHOR - 30 * DAY - 1000).toISOString() },
+      { ...ana.inbox.messages[1], subject: 'Newest', date: new Date(ANCHOR - HOUR).toISOString() },
+      { ...ana.inbox.messages[2], subject: 'Just inside', date: new Date(ANCHOR - 30 * DAY + 1000).toISOString() },
+    ];
+    expect(windowMessages(ana, 'signup', ANCHOR).messages.map((m) => m.subject)).toEqual(['Newest', 'Just inside']);
+  });
+
+  test('reads the inbox alone, and cuts text by characters', () => {
+    const ana = persona(2, 1);
+    ana.inbox.messages[0] = { ...ana.inbox.messages[0], labels: ['SENT'] };
+    ana.inbox.messages[1] = { ...ana.inbox.messages[1], snippet: '📦'.repeat(600) };
+    const { messages } = windowMessages(ana, 'signup', ANCHOR);
+    expect(messages.map((m) => m.subject)).toEqual(['Message 2']);
+    expect([...messages[0].snippet!]).toHaveLength(500);
   });
 
   test('moves with the persona clock, as the newest-messages read does', () => {
@@ -183,17 +203,87 @@ describe('mailText', () => {
 
 describe('workListOf', () => {
   const list = { person: 'Runs a bakery', streams: [{ name: 'Supplier orders', senders: [], count: 9, cadence: '', what: '', action: '', handled_by: '', labels: [], keeps: '', examples: [] }] };
-  const brief = `Draft routines.\n<untrusted>\nmail\n</untrusted>\n\nThe streams of work a step found in the user's last 30 days of mail, those they would most regret missing first:\n<untrusted>\n${JSON.stringify(list)}\n</untrusted>`;
+  const briefOf = (value: unknown) =>
+    `Draft routines.\n<untrusted>\nmail\n</untrusted>\n\nThe streams of work a step found in the user's last 30 days of mail, those they would most regret missing first:\n<untrusted>\n${JSON.stringify(value)}\n</untrusted>`;
+  const prompt = (value: unknown, created_at = '2026-11-20 10:00:00+00', direction = 'to_runtime') => ({
+    direction,
+    created_at,
+    content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(value) }] } },
+  });
 
   test('reads the list a drafting session was briefed with', () => {
-    const rows = [
-      { content: { type: 'event', event: 'acp_ready' } },
-      { content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: brief }] } } },
-    ];
-    expect(workListOf(rows)).toEqual(list);
+    expect(workListOf([{ direction: 'to_server', content: { type: 'event', event: 'acp_ready' } }, prompt(list)])).toEqual(list);
+  });
+
+  test('reads the earliest brief, whatever order the rows came in', () => {
+    const retried = { ...list, person: 'Retried' };
+    expect(workListOf([prompt(retried, '2026-11-20 10:05:00+00'), prompt(list, '2026-11-20 10:00:00+00')])).toEqual(list);
+  });
+
+  test('reads only what the harness sent a runtime, in the shape of a list', () => {
+    expect(workListOf([prompt(list, '2026-11-20 10:00:00+00', 'to_server')])).toBeUndefined();
+    expect(workListOf([prompt({})])).toBeUndefined();
+    expect(workListOf([prompt({ person: 'x', streams: [{ name: 'y' }] })])).toBeUndefined();
   });
 
   test('finds none where no session read a list', () => {
-    expect(workListOf([{ content: { type: 'acp', params: { prompt: [{ type: 'text', text: 'Draft routines.\n<untrusted>\nmail\n</untrusted>' }] } } }])).toBeUndefined();
+    expect(workListOf([{ direction: 'to_runtime', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: 'Draft routines.\n<untrusted>\nmail\n</untrusted>' }] } } }])).toBeUndefined();
+  });
+});
+
+const found = (name: string, count = 4): FoundStream => ({ name, senders: [{ name: 'Bo', email: 'bo@acme.example' }], count, cadence: 'weekly', what: '', action: '', handled_by: '', labels: [], keeps: '', examples: [] });
+const listOf = (...names: string[]): WorkList => ({ person: 'Ana', streams: names.map((name) => found(name)) });
+const entry = (n: number, stream: string, also: string[] = []): EntryMark => ({ n, stream, also, why: '' });
+const keyed = (): Persona => ({ ...persona(1, 1), streamsTruth: streams });
+
+describe('scoreList', () => {
+  test('counts what an entry covers in full, even when it mostly covers noise', () => {
+    const score = scoreList(keyed(), listOf('a', 'b'), [entry(1, 's3', ['s2']), entry(2, '')]);
+    expect(score).toMatchObject({ work: 2, found: 1, unreal: 1, duplicates: 0, missed: ['s1'] });
+  });
+
+  test('counts a work stream listed twice once, and the second entry a duplicate', () => {
+    const score = scoreList(keyed(), listOf('a', 'b'), [entry(1, 's1'), entry(2, 's1', ['s1'])]);
+    expect(score).toMatchObject({ found: 1, unreal: 0, duplicates: 1 });
+  });
+});
+
+describe('marksProblem', () => {
+  const key = streams.streams;
+  const list = listOf('a', 'b');
+  test('takes marks that fit the list and the key', () => {
+    expect(marksProblem(list, key, [entry(1, 's1'), entry(2, '', ['s2'])])).toBeUndefined();
+  });
+  test('refuses an entry unmarked, marked twice, off the list, or naming a stream the key lacks', () => {
+    expect(marksProblem(list, key, [entry(1, 's1')])).toContain('unmarked');
+    expect(marksProblem(list, key, [entry(1, 's1'), entry(1, 's2'), entry(2, '')])).toContain('twice');
+    expect(marksProblem(list, key, [entry(1, 's1'), entry(3, '')])).toContain('not on the list');
+    expect(marksProblem(list, key, [entry(1, 's9'), entry(2, '')])).toContain('s9');
+    expect(marksProblem(list, key, [entry(1, 's1', ['s9']), entry(2, '')])).toContain('s9');
+  });
+});
+
+describe('boundedList', () => {
+  test('passes on what the service does: named streams, the first 20, cut texts', () => {
+    const list = listOf('  ', ...Array.from({ length: 25 }, (_, i) => `Stream ${i}`));
+    list.streams[1].what = '<b>'.repeat(300);
+    const bounded = boundedList(list);
+    expect(bounded.streams).toHaveLength(20);
+    expect(bounded.streams[0].name).toBe('Stream 0');
+    expect(bounded.streams[0].what).toHaveLength(400);
+    expect(bounded.streams[0].what).not.toContain('<');
+  });
+  test('refuses a count the service would', () => {
+    expect(() => boundedList({ person: 'Ana', streams: [found('a', 2.5)] })).toThrow('u32');
+    expect(() => boundedList({ person: 'Ana', streams: [found('a', -1)] })).toThrow('u32');
+  });
+});
+
+describe('asWritten', () => {
+  test('reads every seat and copy of an address as written', () => {
+    const ana = persona(1, 1);
+    expect(asWritten(ana, 'bo@acme-s2-signup.example, cy@acme-signup.example, di@acme-s3.example, ed@acmex.example')).toBe(
+      'bo@acme.example, cy@acme.example, di@acme.example, ed@acmex.example',
+    );
   });
 });

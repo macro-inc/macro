@@ -242,6 +242,14 @@ function variantOf(persona: Persona, variant: Variant): Persona {
   return { ...persona, inbox: rename(persona.inbox), workspace: rename(persona.workspace) };
 }
 
+/** `text` with every seat's and copy's addresses as the persona was written: its answer keys name those. */
+export function asWritten(persona: Persona, text: string): string {
+  const domain = domainOf(persona.inbox.owner.email);
+  // A domain is letters, digits, hyphens and dots: only a dot is special in a pattern.
+  const name = domain.replace(/\.example$/, '').replaceAll('.', '\\.');
+  return text.replace(new RegExp(`@${name}(?:-s\\d+)?(?:-signup)?\\.example`, 'g'), `@${domain}`);
+}
+
 /** The scenario name the seed CLI marks a variant's rows with. */
 export const scenarioName = (persona: Persona, variant: Variant) =>
   `sugbench-${persona.heldout ? 'h-' : ''}${persona.name}${seatTag(persona)}${variant === 'signup' ? '-signup' : ''}`;
@@ -356,8 +364,15 @@ export const RECENT_MESSAGES = 100;
 export const WINDOW_DAYS = 30;
 export const WINDOW_MESSAGES = 500;
 export const WINDOW_TEXTS = 100;
+/** The longest text the month read asks for (`SNIPPET_CHARS` in agent_harness_service's routine suggestions). */
+export const WINDOW_SNIPPET_CHARS = 500;
 
-/** The owner's mail at `now` as email_service answers it, newest first, before any limit. */
+/** `text`'s first `max` characters, as Rust counts them. */
+const chars = (text: string, max: number) => [...text].slice(0, max).join('');
+/** How long before the anchor `message` came, to the millisecond and at least a minute. */
+const msBefore = (message: InboxMessage) => Math.max(60_000, ANCHOR - Date.parse(message.date));
+
+/** The owner's inbox at `now` as email_service answers it, newest first, before any limit: Gmail and Outlook are read from the inbox alone. */
 function served(persona: Persona, variant: Variant, now: number) {
   const copy = variantOf(persona, variant);
   const inbox = shiftAll(copy.inbox, shiftDays(now));
@@ -367,11 +382,12 @@ function served(persona: Persona, variant: Variant, now: number) {
       from: { email: message.from.email, name: message.from.name },
       to: message.to,
       cc: message.cc,
-      subject: message.subject.slice(0, 200),
-      snippet: message.snippet.slice(0, 500) as string | null,
-      received_at: new Date(now - minutesBefore(persona.inbox.messages[index]) * 60_000).toISOString(),
+      subject: chars(message.subject, 200),
+      snippet: chars(message.snippet, WINDOW_SNIPPET_CHARS) as string | null,
+      received_at: new Date(now - msBefore(persona.inbox.messages[index])).toISOString(),
       labels: message.labels,
     }))
+    .filter((message) => message.labels.includes('INBOX'))
     .sort((a, b) => b.received_at.localeCompare(a.received_at));
 }
 

@@ -59,7 +59,7 @@ let authorSeeded: Promise<void> | undefined;
 let authorToken: Promise<string> | undefined;
 
 /** The author's token, seeding the author once per process. */
-async function author(at: Stack): Promise<string> {
+export async function author(at: Stack): Promise<string> {
   authorSeeded ??= (async () => {
     const account = {
       name: 'author',

@@ -188,7 +188,6 @@ export async function assertClean(db: SQL, user: string) {
 const SESSIONS = `SELECT s.session_id::text, s.kind, s.surfaces, s.ending, s.opened_at::text, s.ended_at::text
   FROM suggestion_generation_session s WHERE s.generation_id = $1 ORDER BY s.opened_at`;
 
-/** Keeps every log line of the generation's sessions while they exist. */
 /** What a drafting session's brief says before the work streams it was given. */
 const WORK_LIST_MARK = 'The streams of work a step found';
 
@@ -198,16 +197,39 @@ function* strings(value: unknown): Generator<string> {
   else if (value && typeof value === 'object') for (const item of Object.values(value)) yield* strings(item);
 }
 
-/** The work list a drafting session's brief carried, from its transcript rows; the first brief's where a session was retried. */
+type TranscriptRow = { direction?: string; created_at?: string; content?: { method?: unknown; params?: unknown } };
+
+/** Whether `value` has the shape of a work list (`finding.ts` `WORK_LIST`). */
+function isWorkList(value: unknown): value is WorkList {
+  const list = value as WorkList | null;
+  if (!list || typeof list !== 'object' || typeof list.person !== 'string' || !Array.isArray(list.streams)) return false;
+  return list.streams.every(
+    (stream) =>
+      stream &&
+      typeof stream === 'object' &&
+      (['name', 'cadence', 'what', 'action', 'handled_by', 'keeps'] as const).every((field) => typeof stream[field] === 'string') &&
+      Number.isInteger(stream.count) &&
+      Array.isArray(stream.senders) &&
+      Array.isArray(stream.labels) &&
+      Array.isArray(stream.examples),
+  );
+}
+
+/** The work list a drafting session's brief carried, from its transcript rows: in the earliest prompt the harness sent a runtime that holds one, so a retried session reads its first brief's. */
 export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
-  for (const row of rows) {
-    for (const text of strings((row as { content?: unknown }).content)) {
+  const prompts = [...rows]
+    .map((row) => row as TranscriptRow)
+    .filter((row) => row.direction === 'to_runtime' && row.content?.method === 'session/prompt')
+    .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+  for (const row of prompts) {
+    for (const text of strings(row.content?.params)) {
       const at = text.indexOf(WORK_LIST_MARK);
       if (at < 0) continue;
       const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
       if (!block) continue;
       try {
-        return JSON.parse(block[1]) as WorkList;
+        const list: unknown = JSON.parse(block[1]);
+        if (isWorkList(list)) return list;
       } catch {
         // Not the list: read on.
       }
@@ -221,7 +243,8 @@ async function capture(db: SQL, generation: string, seen: Map<string, unknown>) 
     `SELECT l.id::text, l.agent_session_id::text AS session, l.direction, l.content, l.created_at::text
        FROM agent_session_log l
        JOIN suggestion_generation_session s ON s.session_id = l.agent_session_id
-      WHERE s.generation_id = $1`,
+      WHERE s.generation_id = $1
+      ORDER BY l.created_at, l.id`,
     [generation],
   );
   for (const row of rows) seen.set(row.id, row);

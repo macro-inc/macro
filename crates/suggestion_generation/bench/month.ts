@@ -90,6 +90,10 @@ const HEADERS_PER_CALL = 25;
 const TEXTS_PER_CALL = 10;
 /** Model calls in flight per person. */
 const CALLS = 4;
+/** The fewest messages a month keeps in the window: half the read, or it is not a month of real work. */
+const MIN_MONTH_MESSAGES = WINDOW_MESSAGES / 2;
+/** The fewest needs a drafted routine can meet, so five good drafts are within reach. */
+const MIN_DRAFTED_NEEDS = 5;
 
 const DAY_MS = 24 * 60 * 60_000;
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -182,7 +186,7 @@ ${planText}`,
     .filter((m) => Number.isFinite(m.at) && m.at > windowStart && m.at < ANCHOR)
     .sort((a, b) => b.at - a.at)
     .slice(0, WINDOW_MESSAGES);
-  if (kept.length < WINDOW_TEXTS) throw new Error(`${sketch.slug}: only ${kept.length} of ${headers.length} messages were dated in the window`);
+  if (kept.length < MIN_MONTH_MESSAGES) throw new Error(`${sketch.slug}: only ${kept.length} of ${headers.length} messages were dated in the window, fewer than ${MIN_MONTH_MESSAGES}`);
 
   // The text of the newest WINDOW_TEXTS, ten at a time.
   const byId = new Map(plan.map((s) => [s.id, s]));
@@ -264,6 +268,9 @@ ${context}`,
     streams: ((need as { streams?: string[] }).streams ?? []).filter((id) => ids.has(id)),
     drafted: need.drafted || undefined,
   }));
+  // Five good drafted routines must be within reach.
+  const draftable = placed.needs.filter((need) => need.drafted).length;
+  if (draftable < MIN_DRAFTED_NEEDS) throw new Error(`${sketch.slug}: ${draftable} of ${placed.needs.length} needs can be met by a drafted routine, fewer than ${MIN_DRAFTED_NEEDS}`);
   writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(placed, null, 1)}\n`);
 
   const users = Object.fromEntries([

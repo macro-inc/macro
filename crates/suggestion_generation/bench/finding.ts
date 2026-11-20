@@ -10,9 +10,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Stack } from '../../scheduled_action/bench/stack';
-import { type MailStream, type Persona, WINDOW_DAYS, truthAt, windowMessages } from './personas';
-import { obj, str, strs, write } from './heldout';
+import { type MailStream, type Persona, WINDOW_DAYS, asWritten, truthAt, windowMessages } from './personas';
+import { author, obj, str, strs, write } from './heldout';
 import { CACHE, type Cost, costOf, userId } from './run';
+import { quantile } from './score';
 
 const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
 const AUTHOR = 'author@suggestions-bench.example';
@@ -54,6 +55,40 @@ export const WORK_LIST = obj({
     }),
   },
 });
+
+/** Most streams a list keeps (`work.rs` `MAX_STREAMS`). */
+const MAX_STREAMS = 20;
+
+/**
+ * `list` as a drafting session reads it (`work.rs` `WorkList::from_answer`):
+ * streams without a name dropped, the first `MAX_STREAMS` kept, every text
+ * cut as the service cuts it. Throws where the service refuses the answer: a
+ * count that isn't a whole number from 0 to 2^32 - 1.
+ */
+export function boundedList(list: WorkList): WorkList {
+  for (const stream of list.streams) {
+    if (!Number.isInteger(stream.count) || stream.count < 0 || stream.count > 0xffff_ffff) throw new Error(`a stream's count ${stream.count} is not a u32`);
+  }
+  const items = (texts: string[]) => texts.slice(0, 5).map((text) => cut(text, 200));
+  return {
+    person: cut(list.person, 400),
+    streams: list.streams
+      .filter((stream) => stream.name.trim())
+      .slice(0, MAX_STREAMS)
+      .map((stream) => ({
+        name: cut(stream.name, 80),
+        senders: stream.senders.slice(0, 5).map((sender) => ({ name: cut(sender.name, 120), email: cut(sender.email, 120) })),
+        count: stream.count,
+        cadence: cut(stream.cadence, 120),
+        what: cut(stream.what, 400),
+        action: cut(stream.action, 400),
+        handled_by: cut(stream.handled_by, 120),
+        labels: items(stream.labels),
+        keeps: cut(stream.keeps, 400),
+        examples: items(stream.examples),
+      })),
+  };
+}
 
 /** Labels every message in an inbox carries, which the finding call leaves out. */
 const HIDDEN_LABELS = new Set(['INBOX', 'UNREAD']);
@@ -99,8 +134,25 @@ const listText = (list: WorkList) =>
     .map((s, i) => `${i + 1}. ${s.name}: from ${s.senders.map((x) => x.email).join(', ')}; ${s.count} messages, ${s.cadence}. ${s.what} They: ${s.action}. Examples: ${s.examples.join(' | ')}`)
     .join('\n');
 
-/** Match each listed stream to the key. */
+/** Why `marks` can't score `list` against `key`: an entry unmarked, off the list or marked twice, or a stream the key doesn't have; undefined when they can. */
+export function marksProblem(list: WorkList, key: MailStream[], marks: EntryMark[]): string | undefined {
+  const ids = new Set(key.map((stream) => stream.id));
+  const marked = new Set<number>();
+  for (const mark of marks) {
+    if (!Number.isInteger(mark.n) || mark.n < 1 || mark.n > list.streams.length) return `entry ${mark.n} is not on the list`;
+    if (marked.has(mark.n)) return `entry ${mark.n} is marked twice`;
+    marked.add(mark.n);
+    if (mark.stream && !ids.has(mark.stream)) return `entry ${mark.n} names ${mark.stream}, which the key doesn't have`;
+    const unknown = mark.also.find((id) => !ids.has(id));
+    if (unknown !== undefined) return `entry ${mark.n} also names ${unknown}, which the key doesn't have`;
+  }
+  if (marked.size < list.streams.length) return `${list.streams.length - marked.size} of ${list.streams.length} entries are unmarked`;
+  return undefined;
+}
+
+/** Match each listed stream to the key; a judge whose marks don't fit the list is asked again, twice at most. */
 export async function judgeList(at: Stack, persona: Persona, list: WorkList, now: number): Promise<EntryMark[]> {
+  if (!list.streams.length) return [];
   const key = truthAt(persona.streamsTruth!, now).streams;
   const prompt = `You check a list of work streams that a step found in one person's mail against the answer key: every stream of that mail, as it was written. Each key stream has an id and a kind: "work" is mail they act on, "noise" mail they read or ignore, "thread" a one-off conversation about one matter.
 
@@ -111,13 +163,20 @@ ${keyText(key)}
 </key>
 
 <list>
-${listText(list)}
+${asWritten(persona, listText(list))}
 </list>`;
-  const marks = await write<{ entries: EntryMark[] }>(at, prompt, MARKS, JUDGE_MODEL);
-  return marks.entries;
+  let problem = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { entries } = await write<{ entries: EntryMark[] }>(at, prompt, MARKS, JUDGE_MODEL);
+    const wrong = marksProblem(list, key, entries);
+    if (!wrong) return entries;
+    problem = wrong;
+  }
+  throw new Error(`the list judge's marks don't fit the list: ${problem}`);
 }
 
-export type ListScore = { work: number; found: number; unreal: number; duplicates: number; listed: number; missed: string[] };
+/** A list matched to the key; `unread` where the drafting session read no list, scored as an empty one. */
+export type ListScore = { work: number; found: number; unreal: number; duplicates: number; listed: number; missed: string[]; unread?: boolean };
 
 export function scoreList(persona: Persona, list: WorkList, marks: EntryMark[]): ListScore {
   const streams = persona.streamsTruth!.streams;
@@ -127,13 +186,14 @@ export function scoreList(persona: Persona, list: WorkList, marks: EntryMark[]):
   let duplicates = 0;
   list.streams.forEach((_, i) => {
     const mark = marks.find((m) => m.n === i + 1);
-    if (!mark || !work.has(mark.stream)) {
+    // An entry names the work streams it mostly covers and covers in full; one that names none is unreal.
+    const named = mark ? [mark.stream, ...mark.also].filter((id) => work.has(id)) : [];
+    if (!named.length) {
       unreal++;
       return;
     }
-    if (found.has(mark.stream)) duplicates++;
-    found.add(mark.stream);
-    for (const id of mark.also) if (work.has(id)) found.add(id);
+    if (work.has(mark!.stream) && found.has(mark!.stream)) duplicates++;
+    for (const id of named) found.add(id);
   });
   return { work: work.size, found: found.size, unreal, duplicates, listed: list.streams.length, missed: [...work].filter((id) => !found.has(id)) };
 }
@@ -143,6 +203,8 @@ type FindAttempt = { persona: string; rep: number; list?: WorkList; ms?: number;
 /** Run the finding step `reps` times on each persona, then judge every list; the step's cost is the author's usage while it ran. */
 export async function runFinding(at: Stack, people: Persona[], opts: { model: string; thinking?: 'low'; reps: number; label: string; set: string; prompt?: string; concurrency: number }) {
   const instructions = readFileSync(opts.prompt ?? FIND_PROMPT, 'utf8');
+  // Signed in before any clock starts, so no list's time holds the author's setup.
+  await author(at);
   const now = Date.now();
   const jobs = people.flatMap((persona) => Array.from({ length: opts.reps }, (_, rep) => ({ persona, rep: rep + 1 })));
   const attempts: FindAttempt[] = [];
@@ -154,8 +216,9 @@ export async function runFinding(at: Stack, people: Persona[], opts: { model: st
         const attempt: FindAttempt = { persona: job.persona.name, rep: job.rep };
         const t0 = Date.now();
         try {
-          attempt.list = await write<WorkList>(at, findPrompt(instructions, job.persona, now), WORK_LIST, opts.model, opts.thinking);
+          const answer = await write<WorkList>(at, findPrompt(instructions, job.persona, now), WORK_LIST, opts.model, opts.thinking);
           attempt.ms = Date.now() - t0;
+          attempt.list = boundedList(answer);
         } catch (error) {
           attempt.error = String(error).slice(0, 300);
         }
@@ -191,16 +254,19 @@ function report(attempts: FindAttempt[], cost: Cost, people: Persona[], model: s
   const scored = attempts.filter((a) => a.score);
   const sum = (f: (s: ListScore) => number) => scored.reduce((t, a) => t + f(a.score!), 0);
   for (const persona of people) {
+    // A held-out person's results stay unread (README, Held-out personas).
+    if (persona.heldout) continue;
     const mine = scored.filter((a) => a.persona === persona.name);
     if (!mine.length) continue;
     const parts = mine.map((a) => `${a.score!.found}/${a.score!.work} found, ${a.score!.unreal} unreal of ${a.score!.listed}`);
     console.log(`- ${persona.name}: ${parts.join('; ')}`);
   }
-  const ms = scored.map((a) => a.ms ?? 0).sort((a, b) => a - b);
+  // Every list the model answered, judged or not.
+  const ms = attempts.flatMap((a) => (a.ms === undefined ? [] : [a.ms]));
   console.log(
     `found ${sum((s) => s.found)} of ${sum((s) => s.work)} work streams (${((100 * sum((s) => s.found)) / Math.max(1, sum((s) => s.work))).toFixed(0)}%), unreal ${(sum((s) => s.unreal) / Math.max(1, scored.length)).toFixed(1)} a list, duplicates ${sum((s) => s.duplicates)}; ${scored.length} of ${attempts.length} lists scored`,
   );
   // The author account may be writing a set at the same time: count only the finding model's spend.
   const usd = cost.models[model.replace(/^[^/]*\//, "")] ?? 0;
-  console.log(`cost ${(usd / Math.max(1, attempts.length)).toFixed(3)} a list on ${model}; median ${((ms[Math.floor(ms.length / 2)] ?? 0) / 1000).toFixed(0)} s`);
+  console.log(`cost ${(usd / Math.max(1, attempts.length)).toFixed(3)} a list on ${model}; median ${((quantile(ms, 0.5) || 0) / 1000).toFixed(0)} s of ${ms.length} lists`);
 }

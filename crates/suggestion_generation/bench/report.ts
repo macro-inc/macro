@@ -25,7 +25,10 @@ export function lines(runs: RunFile[]): string[] {
     out.push('', `${run.section} (${run.label}): wrong per generation: ${wrong || 'none'}; generations not ready: ${s.failedGenerations}; bench errors: ${s.benchErrors}`);
     if (s.goodDrafts !== undefined) {
       const aimed = s.aimed !== undefined ? `; work streams some suggestion acts on ${s.aimed.toFixed(2)} of ${s.workStreams!.toFixed(1)}` : '';
-      if (s.finding) out.push(`${run.section} (${run.label}): work lists read in ${s.finding.lists} of ${s.scored} generations; they named ${(100 * s.finding.found).toFixed(0)}% of the key's work streams, with ${s.finding.unreal.toFixed(1)} of ${s.finding.listed.toFixed(1)} entries naming none`);
+      if (s.finding) {
+        const errors = s.finding.errors ? ` (${s.finding.errors} more not judged)` : '';
+        out.push(`${run.section} (${run.label}): work lists read in ${s.finding.read} of ${s.finding.lists} generations${errors}; they named ${(100 * s.finding.found).toFixed(0)}% of the key's work streams, with ${s.finding.unreal.toFixed(1)} of ${s.finding.listed.toFixed(1)} entries naming none`);
+      }
       out.push(`${run.section} (${run.label}): good drafts per generation ${s.goodDrafts.toFixed(2)} of ${s.drafts!.toFixed(2)} drafted, 5 or more in ${s.fiveGoodDrafts} of ${s.scored}; good catalog picks ${s.goodPicks!.toFixed(2)}${aimed}`);
     }
     for (const attempt of run.attempts.filter((a) => a.benchError)) out.push(`- ${attempt.persona}${(attempt.seat ?? 1) > 1 ? `/s${attempt.seat}` : ''} #${attempt.rep}: ${attempt.benchError}`);
