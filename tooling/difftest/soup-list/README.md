@@ -1,0 +1,35 @@
+# Soup list differential (#11219)
+
+Runs main's web app and the branch's side by side on the same synthetic data
+and compares what every moved reader returns, field by field and as its caller
+shows it. Not part of any workspace or CI; run it by hand against a local stack.
+
+```sh
+just run_local --instance gqlsoup        # once
+tooling/difftest/soup-list/run.sh        # everything; results/ and results/summary.json
+```
+
+`run.sh` checks that the two checkouts' `apps/` and `packages/` are exactly the
+commits it names (`NEW_REF`, and its second parent as `OLD_REF`), serves each
+from its own Vite with `probe/` copied in, and runs three passes: quiet (seed
+`A1`, with mutants), under concurrent load (`B1`), and with the browser cache off
+(`C1`). Environment variables override the defaults at the top of the script.
+
+## Pieces
+
+| File | Does |
+| --- | --- |
+| `run.ts` | One pass: builds worlds, runs the lanes through a bounded pool, writes one JSON. |
+| `lib/world.ts` | Seeded synthetic worlds: users (owner, member, outsider, empty, page-boundary), a team, documents of every kind, projects, chats, sessions, initiatives, CRM companies, PRs, shares, history, odd names. |
+| `lib/suite-fuzz.ts`, `lib/ast-gen.ts` | Translator fuzz: random Soup ASTs over the whole grammar; each case is REST's rows on both sides, or a traced `soup.rest_fallback` with the expected reason. |
+| `lib/suite-callers.ts` | Every former caller and one-shot, mounted on both apps with generated params. |
+| `lib/suite-seq.ts` | Stateful sequences: writes in the app and from other users, then reload, live and read-after-write comparisons against a truth page. |
+| `lib/mutants.ts` | Mutants planted in the branch's read path; a pass with them must fail. |
+| `lib/load.ts` | Concurrent REST/GraphQL reads and writes from a separate world. |
+| `lib/compare.ts` | Field-by-field comparison and the named rules for differences callers can't see. |
+| `probe/` | Mounts the real callers inside each app and exposes their output. |
+| `summarize.ts` | Folds result files into one summary. |
+
+Only synthetic data: every user is under `*.difftest.dev`. The auth service
+allows 50 new users per address per hour, so `run.sh` resets that counter in the
+local stack's Redis before each pass.
