@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   connectedSlugs: new Set<string>(),
   connectedServers: new Set<string>(),
+  listedServers: new Set<string>(),
   connectPipedreamApp: vi.fn(),
   connectMcpServer: vi.fn(),
   toastSuccess: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock('@queries/pipedream-connectors', () => ({
   useMcpServerConnected: (url: () => string) => ({
     ready: () => true,
     connected: () => mocks.connectedServers.has(url()),
+    listed: () => mocks.listedServers.has(url()),
   }),
   connectPipedreamApp: mocks.connectPipedreamApp,
   connectMcpServer: mocks.connectMcpServer,
@@ -49,6 +51,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.connectedSlugs.clear();
   mocks.connectedServers.clear();
+  mocks.listedServers.clear();
 });
 
 describe('connect card', () => {
@@ -134,5 +137,43 @@ describe('connect card', () => {
     const dialog = screen.getByTestId('add-mcp-dialog');
     expect(dialog.dataset.name).toBe('Acme');
     expect(dialog.dataset.url).toBe('https://mcp.acme.example/mcp');
+  });
+
+  it('disables Connect without showing a sign-in when the session cannot connect', () => {
+    render(() => (
+      <AppConnectionContext.Provider
+        value={{ connect: vi.fn(async () => {}), disabled: () => true }}
+      >
+        <ConnectCard
+          name="Linear"
+          target={{ kind: 'app', appSlug: 'linear' }}
+        />
+      </AppConnectionContext.Provider>
+    ));
+
+    const button = screen.getByRole('button', { name: 'Connect Linear' });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBeNull();
+    expect(button.textContent).toBe('Connect');
+  });
+
+  it('asks to try again, without the add-server dialog, for a server already added', async () => {
+    mocks.listedServers.add('https://mcp.acme.example/mcp');
+    mocks.connectMcpServer.mockRejectedValue(new Error('network'));
+    render(() => (
+      <ConnectCard
+        name="Acme"
+        target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
+
+    await waitFor(() =>
+      expect(mocks.toastAlert).toHaveBeenCalledWith(
+        'Could not start the sign-in for Acme. Please try again.'
+      )
+    );
+    expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
   });
 });

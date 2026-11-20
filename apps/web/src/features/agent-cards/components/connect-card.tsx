@@ -34,7 +34,10 @@ export function ConnectCardView(props: {
   icon: JSX.Element;
   connected: boolean;
   onConnect: () => void;
+  /** A sign-in is under way. */
   busy?: boolean;
+  /** Connecting is not available here, e.g. to a viewer of the session. */
+  disabled?: boolean;
 }) {
   return (
     <Card width="compact" data-agent-card="connect">
@@ -55,10 +58,11 @@ export function ConnectCardView(props: {
               size="sm"
               variant="primary"
               aria-label={`Connect ${props.name}`}
-              disabled={props.busy}
+              loading={props.busy ?? false}
+              disabled={props.disabled}
               onClick={props.onConnect}
             >
-              {props.busy ? 'Connecting…' : 'Connect'}
+              Connect
             </Button>
           </Show>
         }
@@ -93,11 +97,12 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
   const [busy, setBusy] = createSignal(false);
 
   async function connect() {
+    setBusy(true);
     if (session) {
       await session.connect({ appSlug: props.appSlug, name: props.name });
+      setBusy(false);
       return;
     }
-    setBusy(true);
     const outcome = await ResultAsync.fromPromise(
       connectPipedreamApp({ appSlug: props.appSlug, serverName: props.name }),
       () => ({ kind: 'failed' as const })
@@ -116,7 +121,8 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
       kind="App"
       icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-5" />}
       connected={connections.ready() && connections.slugs().has(props.appSlug)}
-      busy={busy() || (session?.disabled() ?? false)}
+      busy={busy()}
+      disabled={session?.disabled() ?? false}
       onConnect={() => fireAndForget(connect(), 'connect-card')}
     />
   );
@@ -134,9 +140,16 @@ function ConnectServerCard(props: { name: string; url: string }) {
       () => ({ kind: 'no-sign-in' as const })
     );
     setBusy(false);
-    // A server whose sign-in cannot start is added by hand, filled in.
     if (outcome.isErr()) {
-      setAdding(true);
+      // A server the user has not added yet, whose sign-in cannot start, is
+      // added by hand, filled in; one they already have needs another try.
+      if (server.listed()) {
+        toast.alert(
+          `Could not start the sign-in for ${props.name}. Please try again.`
+        );
+      } else {
+        setAdding(true);
+      }
       return;
     }
     announce(props.name, outcome.value);

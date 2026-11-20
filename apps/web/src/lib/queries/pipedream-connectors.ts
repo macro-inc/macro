@@ -149,18 +149,22 @@ export function mcpServerConnected(
 
 /**
  * Whether the current user has an authorized connection to the MCP server
- * at `url`, plus whether the answer is known yet (see
- * `usePipedreamConnectedSlugs`).
+ * at `url`, whether they have added it at all (`listed`), and whether the
+ * answer is known yet (see `usePipedreamConnectedSlugs`).
  */
 export function useMcpServerConnected(url: Accessor<string>): {
   connected: Accessor<boolean>;
+  listed: Accessor<boolean>;
   ready: Accessor<boolean>;
 } {
   const servers = useMcpServersQuery({ neverSuspend: true });
   const connected = () =>
     queryReadyGate(servers) && mcpServerConnected(servers.data, url());
+  const listed = () =>
+    queryReadyGate(servers) &&
+    servers.data.some((server) => sameEndpoint(server.url, url()));
   const ready = () => !servers.isPlaceholderData && queryReadyGate(servers);
-  return { connected, ready };
+  return { connected, listed, ready };
 }
 
 /**
@@ -482,6 +486,7 @@ export async function connectMcpServer(server: {
       return outcome;
     } catch (error) {
       popup?.close();
+      span.setAttr('connector.outcome', 'failed');
       span.error('MCP server authorization failed');
       throw error;
     }
