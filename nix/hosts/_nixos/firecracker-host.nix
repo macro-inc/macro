@@ -401,6 +401,13 @@ in
         description = "Path of the Datadog API key (root 0400, outside the Nix store).";
       };
     };
+    otlpEndpoint = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = if cfg.datadog.enable then "http://127.0.0.1:4317" else null;
+      defaultText = lib.literalExpression ''if datadog.enable then "http://127.0.0.1:4317" else null'';
+      example = "http://10.0.0.5:4317";
+      description = "Where the host agent sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null sends none.";
+    };
     alloy = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -705,10 +712,11 @@ in
           DD_ENV = cfg.environment;
           RUST_LOG = "info";
         }
-        # Spans and metrics go to the local Datadog agent; host.name joins
-        # them to the host's own metrics and to the fleet's host rows.
-        // lib.optionalAttrs cfg.datadog.enable {
-          OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
+        # Spans and metrics go to the local Datadog agent, or the collector
+        # `otlpEndpoint` names; host.name joins them to the host's own
+        # metrics and to the fleet's host rows.
+        // lib.optionalAttrs (cfg.otlpEndpoint != null) {
+          OTEL_EXPORTER_OTLP_ENDPOINT = cfg.otlpEndpoint;
           OTEL_RESOURCE_ATTRIBUTES = "host.name=${config.networking.hostName}";
         };
         serviceConfig = {

@@ -312,8 +312,10 @@ link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
-expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy or unreachable). The harness
+expired, code rejected, including the CLI's own "Invalid code", or the
+computer's sign-in timed out), **Try again** (couldn't get a link), or send
+the code again (malformed code, computer busy or unreachable, or the service
+timed out waiting for the computer, which may still have finished). The harness
 tells its two 403s apart: `rollout_disabled` reads "Computers aren't
 available for this account yet." with **Try again** before a link exists;
 after a code was sent the sign-in still waits, so the field stays open to

@@ -206,6 +206,7 @@ enforced by the ordinary backend APIs.
 
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
+- `notifications.send` pings people about an entity: it takes a required `body` (at most 280 characters; a ping has no title), a `NotificationLink` handle and `User` handles (`to` omitted pings the caller) and returns `{ notified, skipped }`, never raw ids; a recipient without access or whose inbox would not list the link is skipped with its reason, never shared with.
 - Keep additive `/channel-sections` endpoints app-only; the public channel-label API retains its legacy membership semantics.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the

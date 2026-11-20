@@ -270,6 +270,9 @@ export function ComposeLayout(props: {
           setShowBcc={setShowBcc}
           onToRowFocusIn={collapseCcBccIfEmpty}
           actions={
+            // Tab runs To, Cc and Bcc when shown, Subject, then the body; the
+            // reveal buttons stay out of it, reached by click or by
+            // Cmd+Shift+C and Cmd+Shift+B.
             <Show when={!ctx.isMobile()}>
               <div class="flex shrink-0 items-center">
                 <Show when={!isCcVisible()}>
@@ -278,6 +281,7 @@ export function ComposeLayout(props: {
                     size="sm"
                     onClick={() => revealRecipientField(ccField)}
                     disabled={ctx.disabled()}
+                    tabIndex={-1}
                   >
                     Cc
                   </Button>
@@ -288,6 +292,7 @@ export function ComposeLayout(props: {
                     size="sm"
                     onClick={() => revealRecipientField(bccField)}
                     disabled={ctx.disabled()}
+                    tabIndex={-1}
                   >
                     Bcc
                   </Button>
