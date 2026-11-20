@@ -225,7 +225,7 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
             continue;
           }
           const [a, b] = [results[0].value, results[1].value];
-          const diffs = compareSnapshots(a, b).map(classify);
+          const diffs = compareSnapshots(a, b, { pageSize: Number(c.spec.params.limit) }).map(classify);
           tallyInto(classes, diffs, 'reads');
           const ref = results[2].status === 'fulfilled' ? results[2].value : null;
           refTransports[ref?.transport ?? 'failed'] = (refTransports[ref?.transport ?? 'failed'] ?? 0) + 1;

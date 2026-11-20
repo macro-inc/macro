@@ -71,6 +71,25 @@ describe('comparison', () => {
     expect(open(base, structuredClone(base))).toEqual([]);
   });
 
+  it('compares only the shared prefix when main kept pages from an earlier read, and still catches faults in it', () => {
+    const paged = (entities: Record<string, unknown>[], pages: number): Snapshot => ({ ...snap(entities), pages, hasNextPage: true });
+    const rows = [...base, doc('e', '2026-11-20T06:00:00.000Z'), doc('f', '2026-11-20T05:00:00.000Z')];
+    const openPaged = (newRows: Record<string, unknown>[], pages = 2) =>
+      compareSnapshots(paged(rows, 2), paged(newRows, pages), { pageSize: 2 })
+        .map(classify)
+        .filter((d) => !closureOf(d.cls))
+        .map((d) => d.cls);
+    expect(openPaged(rows.slice(0, 4))).toEqual([]);
+    expect(compareSnapshots(paged(rows, 2), paged(rows.slice(0, 4), 2), { pageSize: 2 }).map((d) => d.signature)).toEqual(['paging:retained-pages']);
+    // The last row dropped: no longer full pages.
+    expect(openPaged(rows.slice(0, 3))).toContain('membership:missing-in-new:document');
+    // A row dropped inside: the prefix breaks.
+    expect(openPaged([rows[0], rows[1], rows[2], rows[4]])).toContain('membership:missing-in-new:document');
+    expect(openPaged([rows[1], rows[0], rows[2], rows[3]])).toContain('order');
+    const altered = rows.slice(0, 4).map((d, i) => (i === 3 ? { ...d, notifiedAt: '2026-11-20T08:59:00.000Z' } : d));
+    expect(openPaged(altered)).toEqual(['field:document.notifiedAt']);
+  });
+
   it('catches a dropped row, a swapped pair and an altered notification time', () => {
     expect(open(base, base.filter((_, i) => i !== 2))).toEqual(['membership:missing-in-new:document']);
     expect(open(base, [base[1], base[0], ...base.slice(2)])).toEqual(['order']);

@@ -114,6 +114,15 @@ export const CLOSURES: Closure[] = [
     outcome: "Visible, intended: in a grouped notified view the inbox shows and buckets these rows by their reminder time instead of their update time (features/next-soup/soup-view/soup-view.tsx:1286-1293, soup-view-context.tsx:1354-1361), which is what the fallback's comment asks for and what main with the flag off (GraphQL) already does (the reference read agrees on every one). Flat notified lists are unchanged: the server stamps them on both sides.",
     needsRefAgreement: true,
   },
+  {
+    id: 'P1',
+    match: /(^|\s)paging:retained-pages$/,
+    title: "A second read of the same list starts with the pages main's REST reader kept",
+    cause:
+      "Main's REST reader is a TanStack infinite query with no page limit (lib/queries/soup/items.ts:242-336, mounted at :344) and the client keeps inactive queries for ten minutes (lib/queries/client.ts:19). A reader that mounts a key another reader already paged gets every cached page back, refetched, and its first fetchNextPage asks for the page after them. The GraphQL reader owns its pages per mount (lib/queries/soup/graphql/create-soup-live-query.ts:122, :215) and starts at the first page. Repro: dbg-retained.ts reads the same list twice in one tab: main's REST reader 15 then 30 rows, the branch 15 and 15, main's GraphQL reader (update-time sort) 15 and 15. Seen in seed 1701 case 1765, which reads the list case 1259 read in the same tab (old 595 rows, new 300).",
+    outcome:
+      "Every row the branch reads is the row main shows at that position (the comparison checks the prefix row by row, and every field of it); main only shows rows further down sooner on a revisit, which the branch loads as the list scrolls. That is how every GraphQL Soup list main serves already behaves, and what users without the flag get.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

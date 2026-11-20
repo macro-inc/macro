@@ -82,7 +82,7 @@ const erase = (path: string) => path.replace(/\[\d+\]/g, '[]');
 export function compareSnapshots(
   oldSnap: Snapshot,
   newSnap: Snapshot,
-  options: { label?: string } = {}
+  options: { label?: string; pageSize?: number } = {}
 ): Difference[] {
   const diffs: Difference[] = [];
   const label = options.label ? `${options.label} ` : '';
@@ -102,6 +102,28 @@ export function compareSnapshots(
     });
   }
 
+  // Main's REST reader keeps every page a reader with the same key loaded
+  // (TanStack infinite query), so a second read of a list starts with those
+  // pages and then reads up to the page limit on top of them. When both
+  // reads stopped at the limit, the branch read full pages and its rows are
+  // exactly the first rows of main's, that tail is the only difference;
+  // compare the shared prefix. A dropped, moved or altered row still breaks
+  // the prefix or the full-page count.
+  const retained =
+    options.pageSize !== undefined &&
+    oldSnap.hasNextPage &&
+    newSnap.hasNextPage &&
+    oldSnap.entities.length > newSnap.entities.length &&
+    newSnap.entities.length === options.pageSize * newSnap.pages &&
+    newSnap.entities.every((e, i) => entityKey(e) === entityKey(oldSnap.entities[i]));
+  if (retained) {
+    diffs.push({
+      signature: `${label}paging:retained-pages`,
+      kind: 'paging',
+      detail: `old ${oldSnap.entities.length} rows, new ${newSnap.entities.length}; new is old's prefix`,
+    });
+    oldSnap = { ...oldSnap, entities: oldSnap.entities.slice(0, newSnap.entities.length) };
+  }
   const oldKeys = oldSnap.entities.map(entityKey);
   const newKeys = newSnap.entities.map(entityKey);
   const oldSet = new Set(oldKeys);
