@@ -42,12 +42,19 @@ function sameEntityReference(left: EntityReference, right: EntityReference) {
   );
 }
 
+export type CollectionSaveOutcome = 'saved' | 'failed';
+
 export function EntityCollectionProperty(props: {
   entityId: string;
   loading?: boolean;
-  onRefresh: () => Promise<unknown>;
+  onRefresh: (outcome: CollectionSaveOutcome) => Promise<unknown>;
   property: Property;
-  onSave: (property: Property, values: PropertyApiValues) => Promise<void>;
+  /** `onAccepted` runs once the save is accepted locally, before it commits. */
+  onSave: (
+    property: Property,
+    values: PropertyApiValues,
+    onAccepted: () => void
+  ) => Promise<void>;
   saving: Signal<boolean>;
   /** Row actions shown before the add button; the trash goes here. */
   actionsBeforeAdd: JSX.Element;
@@ -89,15 +96,18 @@ export function EntityCollectionProperty(props: {
   const [pendingRemovals, setPendingRemovals] = createSignal<EntityReference[]>(
     []
   );
-  const saveProperty = async (
+  let latestSave = 0;
+  const saveProperty = (
     property: Property,
     values: PropertyApiValues,
     displayName?: string
-  ) => {
+  ): Promise<void> => {
     if (!ctx.canEdit || property.isMetadata || props.loading || isSaving())
-      return;
+      return Promise.resolve();
     const currentRefs = getEntityValues(property);
     const nextRefs = values.valueType === 'ENTITY' ? (values.refs ?? []) : [];
+    latestSave += 1;
+    const save = latestSave;
     batch(() => {
       setPendingReferences(
         nextRefs
@@ -117,17 +127,54 @@ export function EntityCollectionProperty(props: {
       );
       setIsSaving(true);
     });
-    try {
-      await props.onSave(property, values);
-      setConfirmedReferences(nextRefs);
-      await props.onRefresh();
-    } finally {
-      batch(() => {
-        setPendingReferences([]);
-        setPendingRemovals([]);
-        setIsSaving(false);
-      });
-    }
+
+    // The server commit can wait minutes behind older queued writes, so the
+    // row shows the new values and unlocks as soon as the save is accepted
+    // locally, and the returned promise settles then too: an open picker
+    // closes and drops its own copy of the values. The commit finishes in the
+    // background. A later save of this row then owns its state.
+    return new Promise<void>((resolve, reject) => {
+      let accepted = false;
+      const accept = () => {
+        if (accepted) return;
+        accepted = true;
+        if (save === latestSave) {
+          batch(() => {
+            setConfirmedReferences(nextRefs);
+            setPendingReferences([]);
+            setPendingRemovals([]);
+            setIsSaving(false);
+          });
+        }
+        resolve();
+      };
+
+      const commit = async () => {
+        try {
+          await props.onSave(property, values, accept);
+        } catch (error) {
+          // The save's own error handling has told the user. An accepted row
+          // is already unlocked and may be mid-removal: only its values go
+          // back to what is stored.
+          if (save === latestSave) {
+            batch(() => {
+              setConfirmedReferences(undefined);
+              if (accepted) return;
+              setPendingReferences([]);
+              setPendingRemovals([]);
+              setIsSaving(false);
+            });
+          }
+          reject(error);
+          await props.onRefresh('failed');
+          return;
+        }
+        accept();
+        await props.onRefresh('saved');
+      };
+
+      fireAndForget(commit(), 'property-collection-save');
+    });
   };
 
   return (
