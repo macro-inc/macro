@@ -20,7 +20,13 @@ use channels::{
     },
 };
 use connection_gateway_client::ConnectionGatewayClient;
-use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
+use contacts::{
+    domain::{
+        list_writes::{ContactListWrites, ListWritesGate},
+        service::SqsContactsIngress,
+    },
+    outbound::ingress::SqsContactsQueue,
+};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::{EntityRegistryServiceImpl, PgEntityRegistryRepository};
@@ -444,7 +450,18 @@ async fn run_server() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress.clone());
+    // Team membership and account deletion send list-aware directory changes,
+    // which wait for `contacts-list-writes`; their legacy messages do not.
+    let gated_contacts_ingress = Arc::new(ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: ContactListWrites::new(config.environment, feature_flags.clone()),
+    });
+    let contacts_enqueuer = ContactsIngressEnqueuer::new(gated_contacts_ingress.clone());
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
     let event_broker_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
@@ -891,6 +908,7 @@ async fn run_server() -> anyhow::Result<()> {
             document_storage_service_client.clone(),
             teams_service.clone(),
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
+            gated_contacts_ingress,
             stripe_client.clone(),
             internal_key,
             harness_url,
