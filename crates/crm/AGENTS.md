@@ -194,10 +194,26 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Manual companies require a name and accept an optional domain; explicit
   contact creation accepts any valid email, including personal providers.
-  Email population still infers companies by domain. Do not apply manual
+  A contact created without naming a company (`create_team_contact`: New
+  contact, `POST /crm/contacts`, the SDK, the CreateContact tool) is filed by
+  its email domain as population files one: under the team's company for the
+  domain, created when missing (no name of its own, not `manually_created`,
+  directory entry ensured first). It stays without a company for a personal
+  or generic provider, a blocked domain or a hidden company, and records no
+  mailbox source. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
-- Contact setters add or remove an address, choose the primary, link/switch
-  company for a personal-provider primary, or unlink a company; the rules live
+- Contacts created before that rule are filed only by an operator:
+  `POST /internal/crm/teams/{team_id}/file-unfiled-contacts`
+  (`domain/contact_filing.rs`, internal credentials, mounted by storage) files
+  one batch of a team's `manually_created` contacts without a company (a
+  contact sync left without one is counted and skipped) by the
+  same rule, under a contact edit's locks, paging by address along
+  `crm_contacts_unfiled_email_idx`, and returns counts per outcome.
+  It defaults to a dry run and is safe to repeat. Never call it from a worker
+  or a migration: one import can hold thousands of domains.
+- Contact setters add or remove an address, choose the primary, link a first
+  company for any contact without one, switch company for a personal-provider
+  primary, or unlink a company; the rules live
   in `src/domain/contact_update.rs`. Validate under the contact lock and reject
   same-team duplicates without disclosing restricted matches. A new address
   must be free across the team; a link, switch or unlink re-checks every
