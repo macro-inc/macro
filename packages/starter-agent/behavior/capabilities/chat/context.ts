@@ -40,8 +40,9 @@ export const chatContext = (
       read: async () => {
         const text = await disk.read(cursorFile);
         if (text === undefined) return undefined;
-        const parsed = StreamCursor.safeParse(JSON.parse(text));
-        return parsed.success ? parsed.data : undefined;
+        // A file that isn't a cursor throws: the catch-up then reads the
+        // whole window, not nothing.
+        return StreamCursor.parse(JSON.parse(text));
       },
       write: (cursor) => disk.write(cursorFile, JSON.stringify(cursor)),
     },

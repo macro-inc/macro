@@ -45,14 +45,28 @@ export const history = ({
   const queued = (channelId: string) => join(queue, `${channelId}${extension}`);
   const read = async (path: string) =>
     parseLines(Queued, await disk.read(path));
+  // Each channel's recorded ids, read from its file once, so checking a
+  // message doesn't parse the whole history each time.
+  const ids = new Map<string, Promise<Set<string>>>();
+  const recordedIds = (channelId: string) => {
+    let known = ids.get(channelId);
+    if (known === undefined) {
+      known = disk
+        .read(file(channelId))
+        .then((text) => new Set(parseLines(Entry, text).map(({ id }) => id)));
+      ids.set(channelId, known);
+    }
+    return known;
+  };
   return {
     recent: async (channelId, count) =>
       parseLines(Entry, await disk.read(file(channelId))).slice(-count),
-    record: (channelId, entry) => disk.append(file(channelId), jsonLine(entry)),
-    recorded: async (channelId, id) =>
-      parseLines(Entry, await disk.read(file(channelId))).some(
-        (entry) => entry.id === id
-      ),
+    record: async (channelId, entry) => {
+      const known = await recordedIds(channelId);
+      await disk.append(file(channelId), jsonLine(entry));
+      known.add(entry.id);
+    },
+    recorded: async (channelId, id) => (await recordedIds(channelId)).has(id),
     wait: (message) =>
       disk.append(queued(message.channel_id), jsonLine(message)),
     answered: async (channelId, ids) => {

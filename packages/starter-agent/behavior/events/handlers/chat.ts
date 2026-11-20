@@ -24,7 +24,8 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
       ) => {
         const { channelId, channel, entry } = incoming;
         // A replayed or caught-up message the agent already judged.
-        if (await history.recorded(channelId, entry.id)) return;
+        if (await history.recorded(channelId, entry.id))
+          return chat.handled(entry.id);
         const recent = await history.recent(channelId, screenHistory);
         const verdict = await judge(incoming, {
           me: await chat.me(),
@@ -40,6 +41,8 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
             }),
         });
         await history.record(channelId, entry);
+        // Recorded: a restart from here needn't read it again.
+        chat.handled(entry.id);
         if (verdict.kind === 'ignored') return;
         await log.event(listenLog, {
           channel,

@@ -69,7 +69,7 @@ describe('ChannelNamespace', () => {
     ]);
   });
 
-  test('activeSince lists the channels with a message or reply since then', async () => {
+  test('activeSince lists the channels with a message or reply since then, the most recent first', async () => {
     const latest = (created_at: string) => ({
       message_id: 'm',
       content: '',
@@ -86,10 +86,14 @@ describe('ChannelNamespace', () => {
       ...channel('old', 'Old'),
       latest_message: latest('2026-11-19T09:00:00Z'),
     };
+    const newest = {
+      ...channel('newest', 'Newest'),
+      latest_message: latest('2026-11-19T11:00:00Z'),
+    };
     const client = {
       storage: {
         getChannels: async () => ({
-          data: { items: [quiet, replied, old], next_cursor: null },
+          data: { items: [quiet, replied, old, newest], next_cursor: null },
         }),
       },
     } as unknown as MacroClient;
@@ -100,7 +104,7 @@ describe('ChannelNamespace', () => {
     ))
       ids.push(active.id);
 
-    expect(ids).toEqual(['replied']);
+    expect(ids).toEqual(['newest', 'replied']);
   });
 
   test('name search asks the server for channel names in one request', async () => {

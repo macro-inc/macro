@@ -29,6 +29,7 @@ const fakeMacro = () => {
   const posted: Posted[] = [];
   const activeSince: string[] = [];
   let meCalls = 0;
+  let meFailures = 0;
   let unreadable = false;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let options: ListenOptions | undefined;
@@ -71,6 +72,10 @@ const fakeMacro = () => {
     users: {
       me: async () => {
         meCalls += 1;
+        if (meFailures > 0) {
+          meFailures -= 1;
+          throw new Error('Macro is restarting');
+        }
         return { id: 'macro|agent@example.com' };
       },
     },
@@ -95,6 +100,10 @@ const fakeMacro = () => {
     macro: macro as unknown as Macro,
     activeSince,
     meCalls: () => meCalls,
+    /** The next `times` round trips fail. */
+    failMe: (times: number) => {
+      meFailures = times;
+    },
     options: () => options,
     post: (message: Posted) => posted.push(message),
     /** The DM's history can't be read, as one the agent lost access to. */
@@ -123,14 +132,28 @@ const fakeMacro = () => {
 
 const listening = (
   backend: ReturnType<typeof fakeMacro>,
-  stored: StreamCursor | undefined
+  stored: StreamCursor | undefined | 'unreadable',
+  spans: Record<string, unknown>[] = []
 ) => {
   const written: StreamCursor[] = [];
   const chat = sdkChat({
     macro: async () => backend.macro,
     myName: 'Pip',
+    trace: async (_name, run) => {
+      const attributes: Record<string, unknown> = {};
+      spans.push(attributes);
+      return run({
+        set: (key, value) => {
+          attributes[key] = value;
+        },
+        traceparent: () => undefined,
+      });
+    },
     cursor: {
-      read: async () => stored,
+      read: async () => {
+        if (stored === 'unreadable') throw new Error('not a cursor');
+        return stored;
+      },
       write: async (cursor) => {
         written.push(cursor);
       },
@@ -213,6 +236,7 @@ test('each handled event moves the cursor, and a first start records one when th
   await backend.live({ id: 'm1', at: '2026-11-19T12:00:01Z', text: 'hi' });
   expect((await first).entry.id).toBe('m1');
   backend.options()?.onEventId?.('e10');
+  await Bun.sleep(10);
   expect(written.at(-1)).toEqual({ eventId: 'e10', at: now.toISOString() });
 });
 
@@ -277,4 +301,69 @@ test('a channel that cannot be read is skipped, and a later catch-up still runs'
   expect((await within(pending, 'the later catch-up never ran')).entry.id).toBe(
     'later'
   );
+});
+
+test('the cursor stays at the oldest message not handled yet, so a restart reads it again', async () => {
+  const backend = fakeMacro();
+  const { chat, next, written } = listening(backend, {
+    at: '2026-11-19T11:00:00Z',
+  });
+
+  const first = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  // Received, and its event id handed back, but the agent hasn't recorded
+  // it: an exit now must not move the cursor past it.
+  await backend.live({ id: 'q1', at: '2026-11-19T11:50:00Z', text: 'one' });
+  await backend.live({ id: 'q2', at: '2026-11-19T11:55:00Z', text: 'two' });
+  backend.options()?.onEventId?.('e2');
+  await Bun.sleep(10);
+  expect(written.at(-1)).toEqual({
+    eventId: 'e2',
+    at: '2026-11-19T11:50:00.000Z',
+  });
+
+  expect((await first).entry.id).toBe('q1');
+  chat.handled('q1');
+  await Bun.sleep(10);
+  expect(written.at(-1)?.at).toBe('2026-11-19T11:55:00.000Z');
+  chat.handled('q2');
+  await Bun.sleep(10);
+  expect(written.at(-1)?.at).toBe(now.toISOString());
+
+  // A restart from the middle cursor reads q2 again.
+  const restarted = fakeMacro();
+  restarted.post({ id: 'q2', at: '2026-11-19T11:55:00Z', text: 'two' });
+  const again = listening(restarted, { at: '2026-11-19T11:55:00.000Z' });
+  const replayed = again.next();
+  await Bun.sleep(10);
+  restarted.options()?.onOpen?.(now);
+  expect((await within(replayed, 'q2 was not read again')).entry.id).toBe('q2');
+});
+
+test('a round trip that fails at first is tried again, so a good boot still becomes healthy', async () => {
+  const backend = fakeMacro();
+  const { chat, next } = listening(backend, undefined);
+  void next();
+  await Bun.sleep(10);
+  const before = backend.meCalls();
+  backend.failMe(1);
+
+  backend.options()?.onOpen?.(now);
+  await within(chat.listening(), 'one failed round trip failed the boot');
+  expect(backend.meCalls()).toBe(before + 2);
+});
+
+test('a cursor that cannot be read catches up the whole window, and says so', async () => {
+  const backend = fakeMacro();
+  backend.post({ id: 'old', at: '2026-11-19T01:00:00Z', text: 'earlier' });
+  const spans: Record<string, unknown>[] = [];
+  const { next } = listening(backend, 'unreadable', spans);
+
+  const caught = next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  expect((await within(caught, 'nothing was caught up')).entry.id).toBe('old');
+  expect(backend.activeSince).toEqual(['2026-11-18T12:00:00.000Z']);
+  expect(spans.at(-1)).toMatchObject({ 'chat.cursor.unreadable': true });
 });
