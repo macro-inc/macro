@@ -1403,6 +1403,25 @@ External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
 
+### Background jobs
+
+With PostHog `enable-background-code-jobs` on for the session owner, the agent
+can pass `ExecuteCode` `background: {title}` in a turn the owner prompted. The
+call returns at once, the agent says it will report back and ends its turn,
+and the composer is free. Where the call was, the transcript shows a job card:
+the title, a live elapsed time, the program's steps and **Cancel** (on touch,
+Cancel is in the card's `…` menu). While any job runs, an **N running** chip
+above the composer scrolls to the oldest running card. When the job ends the
+card shows Done, Failed, Cancelled, Timed out or Interrupted, a one-line
+system row ("Checking routine finished") appears, and the agent replies in a
+system turn, or within the next turn when the person already queued a prompt.
+Stop ends only the current turn; jobs keep running. Archiving or deleting the
+session cancels them. A job runs at most 10 minutes; 3 run per session and 10
+per account. In a turn someone else prompted, a system turn, or with the flag
+off, the program runs in the foreground as before. To try it: ask for a
+routine (its check runs in the background), then send another message while
+the card runs.
+
 CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the
 `crmEmailPrivacy` code-mode category. The agent reads `get()`,
 validates selectors with `validateRules`, then directly activates an intended
