@@ -1,0 +1,631 @@
+use super::*;
+use crate::domain::mcp::filter::{
+    McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
+};
+use crate::domain::mcp::models::{
+    McpEndpointFailure, McpEventSubscription, McpSecretCiphertext, McpSubscriptionId,
+    McpTtlRequest,
+};
+use chrono::{DateTime, Utc};
+use std::sync::{Arc, Mutex};
+use webhook_signature::standard::SigningSecret;
+
+const ME: &str = "macro|me@example.com";
+const OTHER: &str = "macro|other@example.com";
+const URL: &str = "https://hooks.example.com/mcp";
+const SECRET: &str = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+
+#[derive(Debug, thiserror::Error)]
+#[error("fake failure")]
+struct FakeError;
+
+#[derive(Clone, Default)]
+struct FakeRepo {
+    rows: Arc<Mutex<Vec<McpEventSubscription>>>,
+}
+
+impl FakeRepo {
+    fn rows(&self) -> Vec<McpEventSubscription> {
+        self.rows.lock().expect("lock").clone()
+    }
+
+    fn expire_all(&self) {
+        for row in self.rows.lock().expect("lock").iter_mut() {
+            row.expires_at = Utc::now() - chrono::Duration::seconds(1);
+        }
+    }
+}
+
+impl McpSubscriptionRepo for FakeRepo {
+    type Err = FakeError;
+
+    async fn get(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        subscription_id: &McpSubscriptionId,
+    ) -> Result<Option<McpEventSubscription>, FakeError> {
+        Ok(self
+            .rows()
+            .into_iter()
+            .find(|row| &row.user_id == user_id && &row.subscription_id == subscription_id))
+    }
+
+    async fn get_live(&self, id: Uuid) -> Result<Option<McpEventSubscription>, FakeError> {
+        Ok(self
+            .rows()
+            .into_iter()
+            .find(|row| row.id == id && row.is_live(Utc::now())))
+    }
+
+    async fn upsert(
+        &self,
+        upsert: McpSubscriptionUpsert,
+    ) -> Result<McpEventSubscription, FakeError> {
+        let mut rows = self.rows.lock().expect("lock");
+        if let Some(row) = rows.iter_mut().find(|row| {
+            row.user_id == upsert.key.user_id && row.subscription_id == upsert.subscription_id
+        }) {
+            row.filter = upsert.filter;
+            row.secret = upsert.secret;
+            row.expires_at = upsert.expires_at;
+            return Ok(row.clone());
+        }
+        let row = McpEventSubscription {
+            id: upsert.id,
+            user_id: upsert.key.user_id,
+            subscription_id: upsert.subscription_id,
+            event_type: upsert.key.event_type,
+            arguments: upsert.key.arguments,
+            filter: upsert.filter,
+            endpoint_url: upsert.key.endpoint_url,
+            secret: upsert.secret,
+            expires_at: upsert.expires_at,
+        };
+        rows.push(row.clone());
+        Ok(row)
+    }
+
+    async fn delete(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        subscription_id: &McpSubscriptionId,
+    ) -> Result<bool, FakeError> {
+        let mut rows = self.rows.lock().expect("lock");
+        let before = rows.len();
+        rows.retain(|row| !(&row.user_id == user_id && &row.subscription_id == subscription_id));
+        Ok(rows.len() != before)
+    }
+
+    async fn delete_expired(&self, user_id: &MacroUserIdStr<'static>) -> Result<u64, FakeError> {
+        let mut rows = self.rows.lock().expect("lock");
+        let before = rows.len();
+        let now = Utc::now();
+        rows.retain(|row| &row.user_id != user_id || row.is_live(now));
+        Ok((before - rows.len()) as u64)
+    }
+
+    async fn count_live(&self, user_id: &MacroUserIdStr<'static>) -> Result<u32, FakeError> {
+        let now = Utc::now();
+        Ok(self
+            .rows()
+            .iter()
+            .filter(|row| &row.user_id == user_id && row.is_live(now))
+            .count() as u32)
+    }
+
+    async fn has_live_endpoint(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        endpoint_url: &str,
+    ) -> Result<bool, FakeError> {
+        let now = Utc::now();
+        Ok(self.rows().iter().any(|row| {
+            &row.user_id == user_id && row.endpoint_url == endpoint_url && row.is_live(now)
+        }))
+    }
+
+    async fn list_live_matching(
+        &self,
+        user_ids: Vec<String>,
+        event_name: &str,
+    ) -> Result<Vec<McpEventSubscription>, FakeError> {
+        let now = Utc::now();
+        Ok(self
+            .rows()
+            .into_iter()
+            .filter(|row| {
+                user_ids.iter().any(|id| id == row.user_id.as_ref())
+                    && row.filter.event_names().iter().any(|name| name == event_name)
+                    && row.is_live(now)
+            })
+            .collect())
+    }
+}
+
+#[derive(Clone)]
+struct FakeEndpoint {
+    verify: Result<(), McpEndpointVerifyError>,
+    deliver: McpDeliveryOutcome,
+    verified: Arc<Mutex<Vec<String>>>,
+    delivered: Arc<Mutex<Vec<(String, String, Vec<u8>)>>>,
+}
+
+impl FakeEndpoint {
+    fn accepting() -> Self {
+        Self {
+            verify: Ok(()),
+            deliver: McpDeliveryOutcome::Delivered,
+            verified: Arc::default(),
+            delivered: Arc::default(),
+        }
+    }
+
+    fn verify_count(&self) -> usize {
+        self.verified.lock().expect("lock").len()
+    }
+}
+
+impl McpEndpointClient for FakeEndpoint {
+    async fn verify(
+        &self,
+        endpoint_url: &str,
+        _secret: &SigningSecret,
+        _subscription_id: &McpSubscriptionId,
+    ) -> Result<(), McpEndpointVerifyError> {
+        self.verified
+            .lock()
+            .expect("lock")
+            .push(endpoint_url.to_owned());
+        self.verify
+    }
+
+    async fn deliver(
+        &self,
+        _endpoint_url: &str,
+        _secret: &SigningSecret,
+        subscription_id: &McpSubscriptionId,
+        message_id: &str,
+        body: Vec<u8>,
+    ) -> McpDeliveryOutcome {
+        self.delivered.lock().expect("lock").push((
+            subscription_id.to_string(),
+            message_id.to_owned(),
+            body,
+        ));
+        self.deliver
+    }
+}
+
+#[derive(Clone)]
+struct FakeCipher {
+    fail: bool,
+}
+
+impl McpSecretCipher for FakeCipher {
+    type Err = FakeError;
+
+    async fn encrypt(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _secret: &SigningSecret,
+    ) -> Result<McpSecretCiphertext, FakeError> {
+        Ok(ciphertext())
+    }
+
+    async fn decrypt(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _ciphertext: &McpSecretCiphertext,
+    ) -> Result<SigningSecret, FakeError> {
+        if self.fail {
+            return Err(FakeError);
+        }
+        Ok(secret())
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakeQueue {
+    messages: Arc<Mutex<Vec<McpEventQueueMessage>>>,
+}
+
+impl McpEventEnqueuer for FakeQueue {
+    type Err = FakeError;
+
+    async fn enqueue_mcp(&self, message: McpEventQueueMessage) -> Result<(), FakeError> {
+        self.messages.lock().expect("lock").push(message);
+        Ok(())
+    }
+}
+
+fn user(id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(id.to_owned()).expect("valid user id")
+}
+
+fn secret() -> SigningSecret {
+    SigningSecret::parse(SECRET).expect("valid secret")
+}
+
+fn ciphertext() -> McpSecretCiphertext {
+    McpSecretCiphertext {
+        ciphertext: vec![1, 2, 3],
+        kms_key_id: "alias/test".to_owned(),
+        encryption_version: 1,
+    }
+}
+
+fn mentions_of_me_in_channels() -> McpEventFilter {
+    McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: vec!["message.mentioned".to_owned()],
+            ids: None,
+            all_of: vec![
+                McpFieldCondition {
+                    field: McpFilterField::ParentType,
+                    one_of: vec![McpFilterValue::Literal {
+                        value: "channel".to_owned(),
+                    }],
+                },
+                McpFieldCondition {
+                    field: McpFilterField::MentionedId,
+                    one_of: vec![McpFilterValue::Me],
+                },
+            ],
+        }],
+    }
+}
+
+fn request(query: &str, filter: Option<McpEventFilter>) -> McpSubscribeRequest {
+    McpSubscribeRequest {
+        event_type: "macro.events".to_owned(),
+        arguments: serde_json::json!({ "query": query }),
+        endpoint_url: URL.to_owned(),
+        filter,
+        secret: secret(),
+        secret_ciphertext: ciphertext(),
+        ttl: McpTtlRequest::Default,
+    }
+}
+
+fn service(
+    repo: &FakeRepo,
+    endpoint: &FakeEndpoint,
+) -> McpEventSubscriptionServiceImpl<FakeRepo, FakeEndpoint> {
+    McpEventSubscriptionServiceImpl::new(repo.clone(), endpoint.clone())
+}
+
+#[tokio::test]
+async fn subscribe_verifies_once_and_refresh_keeps_the_filter() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+
+    let first = service
+        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .await
+        .expect("subscribed");
+    assert!(first.refresh_before > Utc::now());
+    assert_eq!(endpoint.verify_count(), 1);
+
+    // A refresh sends no filter, so nothing is compiled again, and the
+    // endpoint is not challenged again.
+    let refreshed = service
+        .subscribe(user(ME), request("mentions", None))
+        .await
+        .expect("refreshed");
+    assert_eq!(refreshed.id, first.id);
+    assert_eq!(refreshed.filter, mentions_of_me_in_channels());
+    assert_eq!(endpoint.verify_count(), 1);
+    assert_eq!(repo.rows().len(), 1);
+}
+
+#[tokio::test]
+async fn a_new_subscription_needs_a_filter() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let result = service(&repo, &endpoint)
+        .subscribe(user(ME), request("mentions", None))
+        .await;
+    assert!(matches!(result, Err(McpSubscriptionError::FilterRequired)));
+    assert_eq!(endpoint.verify_count(), 0);
+}
+
+#[tokio::test]
+async fn an_invalid_filter_is_refused_before_the_endpoint_is_called() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let filter = McpEventFilter::for_events(vec!["email.received".to_owned()], None);
+    let result = service(&repo, &endpoint)
+        .subscribe(user(ME), request("email", Some(filter)))
+        .await;
+    assert!(matches!(result, Err(McpSubscriptionError::InvalidParams(_))));
+    assert_eq!(endpoint.verify_count(), 0);
+}
+
+#[tokio::test]
+async fn a_failed_challenge_stores_nothing() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint {
+        verify: Err(McpEndpointVerifyError::Failed(
+            McpEndpointFailure::ChallengeFailed,
+        )),
+        ..FakeEndpoint::accepting()
+    };
+    let result = service(&repo, &endpoint)
+        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .await;
+    assert!(matches!(
+        result,
+        Err(McpSubscriptionError::CallbackEndpoint(
+            McpEndpointFailure::ChallengeFailed
+        ))
+    ));
+    assert!(repo.rows().is_empty());
+}
+
+#[tokio::test]
+async fn verification_is_per_user() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+    let filter = Some(mentions_of_me_in_channels());
+    service
+        .subscribe(user(ME), request("mentions", filter.clone()))
+        .await
+        .expect("subscribed");
+    service
+        .subscribe(user(OTHER), request("mentions", filter))
+        .await
+        .expect("subscribed");
+    assert_eq!(endpoint.verify_count(), 2);
+    assert_eq!(repo.rows().len(), 2);
+}
+
+#[tokio::test]
+async fn the_quota_counts_live_subscriptions_only() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+    let filter = Some(mentions_of_me_in_channels());
+    for index in 0..MAX_SUBSCRIPTIONS_PER_USER {
+        service
+            .subscribe(user(ME), request(&format!("q{index}"), filter.clone()))
+            .await
+            .expect("under the quota");
+    }
+    let over = service
+        .subscribe(user(ME), request("one more", filter.clone()))
+        .await;
+    assert!(matches!(
+        over,
+        Err(McpSubscriptionError::ResourceExhausted { max: 50 })
+    ));
+    // Refreshing one already held is not a new subscription.
+    service
+        .subscribe(user(ME), request("q0", None))
+        .await
+        .expect("refresh at the quota");
+
+    repo.expire_all();
+    service
+        .subscribe(user(ME), request("one more", filter))
+        .await
+        .expect("expired ones no longer count");
+    assert_eq!(repo.rows().len(), 1);
+}
+
+#[tokio::test]
+async fn unsubscribe_removes_by_key() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+    let made = service
+        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .await
+        .expect("subscribed");
+    let key = McpSubscriptionKey {
+        user_id: user(ME),
+        endpoint_url: URL.to_owned(),
+        event_type: "macro.events".to_owned(),
+        arguments: serde_json::json!({ "query": "mentions" }),
+    };
+    assert_eq!(key.id(), made.id);
+
+    let mut someone_else = key.clone();
+    someone_else.user_id = user(OTHER);
+    assert!(matches!(
+        service.unsubscribe(someone_else).await,
+        Err(McpSubscriptionError::NotFound)
+    ));
+
+    service.unsubscribe(key.clone()).await.expect("removed");
+    assert!(repo.rows().is_empty());
+    assert!(matches!(
+        service.unsubscribe(key).await,
+        Err(McpSubscriptionError::NotFound)
+    ));
+}
+
+fn mentioned_event(parent_type: &str, mentioned_id: &str) -> NormalizedWebhookEvent {
+    NormalizedWebhookEvent {
+        event_id: Uuid::now_v7().to_string(),
+        schema_version: 1,
+        event_name: "message.mentioned".to_owned(),
+        entity_type: parent_type.to_owned(),
+        entity_id: "parent".to_owned(),
+        ordering_key: "parent".to_owned(),
+        occurred_at: DateTime::<Utc>::UNIX_EPOCH,
+        broker_envelope: serde_json::json!({
+            "event_type": "message.mentioned",
+            "metadata": {
+                "parent": { "type": parent_type, "id": "parent" },
+                "sender": OTHER,
+                "mentioned": { "entity_type": "user", "entity_id": mentioned_id }
+            }
+        }),
+    }
+}
+
+#[tokio::test]
+async fn fan_out_reaches_matching_subscribers_in_the_audience_only() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let subscriptions = service(&repo, &endpoint);
+    subscriptions
+        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .await
+        .expect("subscribed");
+    subscriptions
+        .subscribe(user(OTHER), request("mentions", Some(mentions_of_me_in_channels())))
+        .await
+        .expect("subscribed");
+    let queue = FakeQueue::default();
+    let fanout = McpEventFanoutImpl::new(repo.clone(), queue.clone());
+
+    let audience = vec![ME.to_owned(), OTHER.to_owned(), "team-1".to_owned()];
+    let queued = fanout
+        .fan_out(&mentioned_event("channel", ME), &audience)
+        .await
+        .expect("fanned out");
+    assert_eq!(queued, 1, "only the mentioned subscriber's filter matches");
+
+    // Not in the audience: no access to the parent, nothing queued.
+    let queued = fanout
+        .fan_out(&mentioned_event("channel", ME), &[OTHER.to_owned()])
+        .await
+        .expect("fanned out");
+    assert_eq!(queued, 0);
+
+    let queued = fanout
+        .fan_out(&mentioned_event("document", ME), &audience)
+        .await
+        .expect("fanned out");
+    assert_eq!(queued, 0);
+
+    let messages = queue.messages.lock().expect("lock").clone();
+    assert_eq!(messages.len(), 1);
+    let me_row = repo
+        .rows()
+        .into_iter()
+        .find(|row| row.user_id.as_ref() == ME)
+        .expect("row");
+    assert_eq!(messages[0].mcp_subscription_id, me_row.id);
+}
+
+async fn subscribed(repo: &FakeRepo) -> McpEventSubscription {
+    service(repo, &FakeEndpoint::accepting())
+        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .await
+        .expect("subscribed");
+    repo.rows().remove(0)
+}
+
+fn delivery(
+    repo: &FakeRepo,
+    endpoint: &FakeEndpoint,
+    cipher_fails: bool,
+) -> McpEventDeliveryServiceImpl<FakeRepo, FakeCipher, FakeEndpoint> {
+    McpEventDeliveryServiceImpl::new(
+        repo.clone(),
+        FakeCipher { fail: cipher_fails },
+        endpoint.clone(),
+    )
+}
+
+#[tokio::test]
+async fn delivery_posts_the_occurrence_with_the_message_id() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint::accepting();
+    let message = McpEventQueueMessage::new(row.id, mentioned_event("channel", ME));
+
+    let disposition = delivery(&repo, &endpoint, false)
+        .deliver(message.clone(), 1)
+        .await;
+    assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
+
+    let delivered = endpoint.delivered.lock().expect("lock").clone();
+    assert_eq!(delivered.len(), 1);
+    let (subscription_id, message_id, body) = &delivered[0];
+    assert_eq!(subscription_id, row.subscription_id.as_str());
+    assert_eq!(message_id, &message.webhook_message_id);
+    let body: serde_json::Value = serde_json::from_slice(body).expect("json body");
+    assert_eq!(body["eventId"], message.event.event_id.as_str());
+    assert_eq!(body["name"], "macro.events");
+    assert_eq!(body["data"], message.event.broker_envelope);
+    assert_eq!(body["cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn retryable_failures_back_off_then_give_up() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint {
+        deliver: McpDeliveryOutcome::Retryable(McpEndpointFailure::Http5xx),
+        ..FakeEndpoint::accepting()
+    };
+    let service = delivery(&repo, &endpoint, false);
+    let message = McpEventQueueMessage::new(row.id, mentioned_event("channel", ME));
+    let expected = [30, 60, 120, 300];
+    for (attempt, seconds) in (1..).zip(expected) {
+        assert_eq!(
+            service.deliver(message.clone(), attempt).await,
+            WebhookWorkerDisposition::RetryAfter(Duration::from_secs(seconds))
+        );
+    }
+    assert_eq!(
+        service.deliver(message, MAX_HTTP_ATTEMPTS).await,
+        WebhookWorkerDisposition::Acknowledge
+    );
+}
+
+#[tokio::test]
+async fn permanent_failures_are_not_retried() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint {
+        deliver: McpDeliveryOutcome::Permanent,
+        ..FakeEndpoint::accepting()
+    };
+    let disposition = delivery(&repo, &endpoint, false)
+        .deliver(
+            McpEventQueueMessage::new(row.id, mentioned_event("channel", ME)),
+            1,
+        )
+        .await;
+    assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
+}
+
+#[tokio::test]
+async fn gone_subscriptions_are_acknowledged_without_a_post() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    repo.expire_all();
+    let endpoint = FakeEndpoint::accepting();
+    let disposition = delivery(&repo, &endpoint, false)
+        .deliver(
+            McpEventQueueMessage::new(row.id, mentioned_event("channel", ME)),
+            1,
+        )
+        .await;
+    assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
+    assert!(endpoint.delivered.lock().expect("lock").is_empty());
+}
+
+#[tokio::test]
+async fn a_kms_failure_is_retried() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint::accepting();
+    let disposition = delivery(&repo, &endpoint, true)
+        .deliver(
+            McpEventQueueMessage::new(row.id, mentioned_event("channel", ME)),
+            1,
+        )
+        .await;
+    assert_eq!(
+        disposition,
+        WebhookWorkerDisposition::RetryAfter(INTERNAL_RETRY_DELAY)
+    );
+    assert!(endpoint.delivered.lock().expect("lock").is_empty());
+}

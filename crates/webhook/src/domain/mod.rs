@@ -11,6 +11,9 @@ pub mod events;
 #[cfg(feature = "ingestion")]
 /// Webhook event ingestion service.
 pub mod ingestion;
+#[cfg(feature = "ports")]
+/// MCP Events webhook subscriptions.
+pub mod mcp;
 /// Webhook domain models.
 pub mod models;
 #[cfg(test)]

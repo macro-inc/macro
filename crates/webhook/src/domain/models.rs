@@ -304,6 +304,58 @@ impl WebhookFilter {
 /// Collection of webhook filters used to decide delivery eligibility.
 pub type WebhookFilters = Vec<WebhookFilter>;
 
+/// Every event name ingestion delivers to webhooks and streams, grouped as
+/// the README's event table lists them. Keep the two in step.
+pub const WEBHOOK_EVENT_NAMES: &[&str] = &[
+    "document.created",
+    "document.updated",
+    "document.deleted",
+    "document.copied",
+    "document.interaction",
+    "channel.created",
+    "channel.updated",
+    "channel.deleted",
+    "channel.participant_added",
+    "channel.participant_removed",
+    "channel.access_requested",
+    "channel.picture_changed",
+    "message.posted",
+    "message.patched",
+    "message.deleted",
+    "message.attachment_created",
+    "message.attachment_removed",
+    "message.mentioned",
+    "webhook.created",
+    "webhook.updated",
+    "webhook.deleted",
+    "webhook.validated",
+    "agent_trigger.new",
+    "agent_trigger.existing",
+    "agent_session.opened",
+    "agent_session.turn_started",
+    "agent_session.turn_ended",
+    "agent_session.command_rejected",
+    "agent_session.settled",
+    "agent_session.waiting_for_input",
+    "agent_session.input_received",
+    "agent_session.mentioned",
+    "agent_session.stopped",
+    "agent_session.renamed",
+    "agent_session.deleted",
+    "user.picture_changed",
+    "call.started",
+    "call.ended",
+    "call.participant_joined",
+    "call.participant_left",
+    "call.recording_ready",
+    "call.summarized",
+    "call.ringing",
+    "call.answered",
+    "call.declined",
+    "call.invited",
+    "passwords.access_request.resolved",
+];
+
 /// Webhook lifecycle status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

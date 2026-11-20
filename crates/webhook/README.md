@@ -79,12 +79,12 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 `macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
 `macro.agent_session_lifecycle`, and `macro.users`. It supports these event names:
 
-- Documents: `document.created`, `document.updated`, `document.deleted`, and
-  `document.copied`.
+- Documents: `document.created`, `document.updated`, `document.deleted`,
+  `document.copied`, and `document.interaction`.
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
-  `channel.participant_added`, `channel.participant_removed`, and
-  `channel.access_requested` (someone outside a private or team channel asked
-  to join; the payload carries the request id).
+  `channel.participant_added`, `channel.participant_removed`,
+  `channel.picture_changed`, and `channel.access_requested` (someone outside a
+  private or team channel asked to join; the payload carries the request id).
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries
@@ -93,6 +93,7 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
 - Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
+  `agent_session.command_rejected`, `agent_session.mentioned`,
   `agent_session.turn_ended`, `agent_session.settled`,
   `agent_session.waiting_for_input`, `agent_session.input_received`,
   `agent_session.stopped`, `agent_session.renamed`, and
@@ -105,6 +106,7 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
+- Passwords: `passwords.access_request.resolved`, addressed to one account.
 
 Call events use `entity_type = "call"` and the call ID as the entity and
 ordering key. Public events resolve the call's current accessor set before
