@@ -39,6 +39,9 @@ AI system prompts: one module per prompt section, each exporting a
   research, MCP and structured completions (call recaps, drafts) use those and
   must stay complete. The channel bot also gets `src/tone.rs`'s formatting
   line through `BASE_PROMPT`; change the two together.
+- Product help ("can Macro do X?"): one paragraph in `src/about_macro.rs`,
+  which every host composes; `src/about_macro/test.rs` pins that each prompt
+  carries it once.
 - Guidance for one tool goes in that tool's description, and how an area of
   Macro works (databases, CRM, email, calendar, channels, tasks, routines,
   documents, search) in its SDK namespace's `@agent` TSDoc block, never here:
