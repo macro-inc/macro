@@ -133,15 +133,21 @@ export function createBaseQuery<
   };
 
   // A hidden parked pane keeps only the latest result and applies it once
-  // shown, so nothing it renders changes while hidden.
+  // shown, so nothing it renders changes while hidden. A new cache session
+  // (an authorization change) applies at once, so retired data never stays
+  // in a hidden pane.
   const paneHidden = usePaneHidden();
   let held: Result | undefined;
+  let shownSession = untrack(crmSnapshotAuthorization);
   const deliver = (next: Result): void => {
     setLatest(() => next);
-    if (untrack(paneHidden)) {
+    const session = untrack(crmSnapshotAuthorization);
+    if (untrack(paneHidden) && session === shownSession) {
       held = next;
       return;
     }
+    held = undefined;
+    shownSession = session;
     update(next);
   };
   createComputed(
@@ -151,6 +157,7 @@ export function createBaseQuery<
         if (hidden || !held) return;
         const next = held;
         held = undefined;
+        shownSession = untrack(crmSnapshotAuthorization);
         update(next);
       },
       { defer: true }
