@@ -11,3 +11,7 @@ state/log/
 
 # Helpers work in their own worktrees of this repository.
 .worktrees/
+
+# Claude Code's own files (transcripts, settings it writes) stay with the
+# machine, never in the agent's repository.
+.agent/

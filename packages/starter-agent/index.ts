@@ -27,6 +27,7 @@ import { agentClaude, capabilityServer } from './behavior/agent/claude.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { profile } from './behavior/agent/profile.ts';
 import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
+import { counted } from './behavior/capabilities/heartbeat/stop.ts';
 import { childEnvironment, claude } from './behavior/context/children.ts';
 import { base as makeBase } from './behavior/context/index.ts';
 import { timedOut } from './behavior/context/shell.ts';
@@ -243,17 +244,23 @@ const claudeAgent = agentClaude({
 });
 
 // Every wake first decides who its owner is, then is held to the owner's daily
-// cap, on a ledger that outlives restarts.
-export const agent = authorized({
-  agent: budgeted({
-    agent: claudeAgent,
-    ledger,
-    caps: base.config.budget,
-    clock: base.clock,
-    timeZone: base.config.timeZone,
-  }),
-  authority: base.authority,
-});
+// cap, on a ledger that outlives restarts. Counted, so a stop syncs only
+// when no wake is running.
+const wakes = counted(
+  authorized({
+    agent: budgeted({
+      agent: claudeAgent,
+      ledger,
+      caps: base.config.budget,
+      clock: base.clock,
+      timeZone: base.config.timeZone,
+    }),
+    authority: base.authority,
+  })
+);
+export const agent = wakes.agent;
+/** How many wakes are running now. */
+export const wakesRunning = wakes.running;
 
 // An appraisal of people runs Claude Code as a wake does, on the same ledger.
 export const assistant = makeAgent(

@@ -41,15 +41,15 @@ import {
   reportsOnline,
 } from './behavior/capabilities/chat/online.ts';
 import { stayOnline } from './behavior/capabilities/chat/presence.ts';
+import { commit } from './behavior/capabilities/heartbeat/commit.ts';
+import { limits, logs } from './behavior/capabilities/heartbeat/config.ts';
+import { repositoryOf } from './behavior/capabilities/heartbeat/live.ts';
 import { gitCommand } from './behavior/capabilities/heartbeat/repository.ts';
 import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
 import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
+import { stopper } from './behavior/capabilities/heartbeat/stop.ts';
 import { macroKey } from './behavior/context/index.ts';
-import {
-  configured,
-  exitCodes,
-  startOrExit,
-} from './behavior/context/startup.ts';
+import { configured, startOrExit } from './behavior/context/startup.ts';
 import { ensureIntroduction } from './behavior/events/handlers/identity.ts';
 import {
   assistant,
@@ -59,6 +59,7 @@ import {
   resultFlag,
   sandboxProgram,
   scripts,
+  wakesRunning,
   wiring,
 } from './index.ts';
 
@@ -93,7 +94,21 @@ const Hook = z.object({
   cwd: z.string(),
 });
 
+const stop = stopper({
+  running: wakesRunning,
+  commit: (message) =>
+    commit(repositoryOf(assistant.decorations), message, limits.commitLockWait),
+  log: (entry) => base.log.event(logs.heartbeat, entry),
+  flush: () => Telemetry.flush(),
+  exit: (code) => process.exit(code),
+  timeoutMs: limits.stopSync,
+  sleep: (ms) => Bun.sleep(ms),
+});
+
 const run = async (): Promise<void> => {
+  // A stop syncs once more when no wake is running, so a teammate moved to
+  // another machine starts from all it did here; one during the start too.
+  process.on('SIGTERM', () => void stop());
   // Everything the agent needs to run is checked before anything starts,
   // including the files it tells its launcher through (`launcherFiles`): a
   // healthy boot, or a restart onto code it landed.
@@ -116,11 +131,6 @@ const run = async (): Promise<void> => {
           const apiKey = await phase('agent.start.credentials', () =>
             configured(() => base.credentials.get(macroKey))
           );
-          process.on('SIGTERM', () => {
-            void Telemetry.flush().finally(() =>
-              process.exit(exitCodes.stopped)
-            );
-          });
           // Once presence is open, the agent tells Macro it is up: its row turns
           // Running and its inviter hears it is ready.
           const online = reportsOnline({

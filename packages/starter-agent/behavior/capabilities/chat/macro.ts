@@ -107,10 +107,17 @@ export const sdkChat = ({
   readonly myName: string;
 }): Chat => {
   let me: Promise<string> | undefined;
+  // Remembered once known; a failure (Macro unreachable) is asked again.
+  const ask = async (): Promise<string> => {
+    try {
+      return (await (await connect()).users.me()).id;
+    } catch (error) {
+      me = undefined;
+      throw error;
+    }
+  };
   const myId = () => {
-    me ??= connect()
-      .then((macro) => macro.users.me())
-      .then((user) => user.id);
+    me ??= ask();
     return me;
   };
   type Message = Awaited<
