@@ -33,7 +33,8 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
-  (domain only, no features, for its Macro call rule and label port).
+  (domain only, no features, for its Macro call rule and label port),
+  `rate_limit` (its token bucket, for the API-key search allowance).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -82,6 +83,22 @@ per-entity-type search plus a unified search across them — mounted into
   mounts. The internal mount runs under `connection_drop_prevention_handler`,
   so a service search whose caller gave up keeps its place in the service's
   lane and runs to the end.
+- Before its turn, a unified search sent with a user API key
+  (`CredentialOrigin::UserApiKey`, `search.caller = user_api_key`) draws on
+  its account's search allowance (`domain::search_allowance`): one token
+  bucket per account in Redis, shared by all its keys and every process, of
+  200 searches that refills one a second. An empty bucket answers 429
+  (`SearchError::RateLimited`, `Retry-After` in whole seconds) without
+  waiting in the lane. The lanes bound searches in flight per process; the
+  bucket bounds the rate across processes, which lanes cannot. It is a safety
+  net sized so the busiest production keys (batches of ~65-75 a minute,
+  ~22 a minute on average in Nov 2026) never reach it. A bucket that errors or
+  does not answer within 500 ms lets the search run. The span records
+  `search.rate_limit` (`allowed`, `limited`, `unavailable`) and
+  `search.rate_limit_remaining` (searches the account may still send at
+  once). App sessions, agents, routines, services, Macro API tokens and
+  account-manager credentials never draw on it, and neither does
+  `/search/channel`, which takes no lane turn either.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
