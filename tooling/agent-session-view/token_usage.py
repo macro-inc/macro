@@ -136,14 +136,20 @@ def is_cache_miss(call, tokens, warm):
     )
 
 
-def turn_of(turns, seconds, slack=0.0):
-    """The turn containing the time, else the last one it trails by at most
-    `slack`: a queued turn starting right after must keep its own rows."""
+def turn_of(turns, seconds):
     for turn in turns:
         if turn.started <= seconds <= turn.bound:
             return turn.number
-    trailed = [turn for turn in turns if turn.bound < seconds <= turn.bound + slack]
-    return trailed[-1].number if trailed else None
+    return None
+
+
+def row_turns(turns, seconds):
+    """The turns a row can belong to, most likely first: the one containing
+    it, then the last one it trails by at most `ROW_AFTER_TURN_S` (a turn's
+    rows can come after its stop frame, even once a queued turn started)."""
+    trailed = [turn.number for turn in turns if turn.bound < seconds <= turn.bound + ROW_AFTER_TURN_S]
+    containing = turn_of(turns, seconds)
+    return [number for number in [containing, *trailed[-1:]] if number is not None]
 
 
 def matching_run(spans, expected, created_ms):
@@ -207,27 +213,29 @@ def reconcile(export):
     ordered = sorted(billed, key=lambda row: timestamp_ms(row["created_at"]))
     claims = {}
 
-    def unclaimed(row):
+    def unclaimed(row, turn):
         created_ms = timestamp_ms(row["created_at"])
-        turn = turn_of(turns, created_ms / 1000, ROW_AFTER_TURN_S)
-        return turn, sorted((
+        return sorted((
             call for call in calls
             if call["row"] is None and call["tokens"] is not None and call["model"] == bare_model(row["model"])
             and call["turn"] == turn and call["end_ms"] <= created_ms + ROW_AFTER_SPAN_MS
         ), key=lambda call: call["end_ms"])
 
-    # Exact matches claim their spans first, so a row whose span is lost
-    # cannot take a later row's own span; the rest take what is left.
+    # Exact matches claim their spans first, in the containing turn and
+    # then the one the row trails, so a row whose span is lost cannot take a
+    # later row's own span; the rest take what is left in their likeliest turn.
     for row in ordered:
-        turn, spans_left = unclaimed(row)
-        run = matching_run(spans_left, row_counters(row), timestamp_ms(row["created_at"]))
-        if run:
-            claims[row["id"]] = (turn, run, "matched")
-            for call in run:
-                call["row"] = row["id"]
+        for turn in row_turns(turns, timestamp_ms(row["created_at"]) / 1000):
+            run = matching_run(unclaimed(row, turn), row_counters(row), timestamp_ms(row["created_at"]))
+            if run:
+                claims[row["id"]] = (turn, run, "matched")
+                for call in run:
+                    call["row"] = row["id"]
+                break
     for row in ordered:
         if row["id"] not in claims:
-            turn, spans_left = unclaimed(row)
+            turn = next(iter(row_turns(turns, timestamp_ms(row["created_at"]) / 1000)), None)
+            spans_left = unclaimed(row, turn)
             claims[row["id"]] = (turn, spans_left, "partial" if spans_left else "billed, no span")
             for call in spans_left:
                 call["row"] = row["id"]
