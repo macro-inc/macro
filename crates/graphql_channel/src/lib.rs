@@ -7,7 +7,7 @@ mod test;
 
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
-use async_graphql::{Context, Enum, ID, InputObject, Object};
+use async_graphql::{Context, Enum, ErrorExtensions, ID, InputObject, Object};
 use channels::domain::{
     models::{Activity, ActivityType},
     ports::{ChannelMessagesErr, ChannelMutationErr, ChannelService},
@@ -301,7 +301,15 @@ impl GraphqlChannelUserQuery {
             .reads
             .find_direct_message(self.user_id.clone(), recipient_id)
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(direct_message_lookup_failed)?;
         Ok(channel_id.map(|id| ID(id.to_string())))
     }
+}
+
+/// Logs a failed DM lookup and answers with a stable code, never the
+/// repository's error text.
+fn direct_message_lookup_failed(error: ChannelMessagesErr) -> async_graphql::Error {
+    tracing::error!(error = ?error, "direct message lookup failed");
+    async_graphql::Error::new("direct message lookup failed")
+        .extend_with(|_, extensions| extensions.set("code", "INTERNAL_SERVER_ERROR"))
 }

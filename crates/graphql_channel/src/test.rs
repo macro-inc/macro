@@ -160,7 +160,23 @@ impl ViewerRoot {
     }
 }
 
-async fn ask_direct_message(finder: Arc<FakeFinder>, user_id: &str) -> async_graphql::Response {
+/// A finder whose read fails.
+struct FailingFinder;
+
+impl DirectMessageFinder for FailingFinder {
+    async fn find_direct_message(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _recipient_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<Uuid>, ChannelMessagesErr> {
+        Err(ChannelMessagesErr::MessageNotFound(DM_ID))
+    }
+}
+
+async fn ask_direct_message<F: DirectMessageFinder>(
+    finder: Arc<F>,
+    user_id: &str,
+) -> async_graphql::Response {
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     Schema::build(
         ViewerRoot { user_id: viewer },
@@ -218,4 +234,21 @@ async fn direct_message_channel_id_rejects_a_malformed_user_id_without_reading()
         response.errors
     );
     assert!(finder.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn direct_message_channel_id_hides_a_repository_failure_behind_a_code() {
+    let response = ask_direct_message(Arc::new(FailingFinder), "macro|known@example.com").await;
+
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    let error = &response.errors[0];
+    assert_eq!(error.message, "direct message lookup failed");
+    assert_eq!(
+        error
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.get("code"))
+            .cloned(),
+        Some(async_graphql::Value::from("INTERNAL_SERVER_ERROR"))
+    );
 }
