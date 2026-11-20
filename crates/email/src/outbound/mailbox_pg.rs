@@ -397,12 +397,18 @@ impl MailboxSyncRepository for PgMailboxSync {
                     AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())
                 ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
             )
-            -- Only the first attempt joins the notification's trace.
+            -- Only the first attempt joins the notification's trace. Every
+            -- recorded outcome deletes the row or clears its lease, so a lease
+            -- still set here expired under a worker that stopped; a revision
+            -- newer than the last claim read starts the count over.
             UPDATE email_message_reconciliation q SET lease_id = $1, lease_until = now() + interval '3 minutes', attempts = attempts + 1,
+                unfinished_claims = CASE WHEN q.lease_id IS NULL OR q.revision <> q.claimed_revision THEN 0
+                    ELSE q.unfinished_claims + 1 END,
+                claimed_revision = q.revision,
                 notified_traceparent = NULL
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id
-            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.notified_at,c.notified_traceparent
+            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.unfinished_claims,q.notified_at,c.notified_traceparent
         "#,lease_id,!self.imports_paused).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(MessageLease {
@@ -416,6 +422,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 lease_id,
                 is_import: row.is_import,
                 attempts: row.attempts,
+                unfinished_claims: row.unfinished_claims,
                 notification: notification(row.notified_at, row.notified_traceparent),
             })
         })

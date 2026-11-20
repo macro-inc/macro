@@ -71,6 +71,11 @@ pub enum MailboxError {
     /// its MIME source; a later attempt imports it without calendar parts.
     #[error("the invitation's calendar parts are unavailable")]
     CalendarPartsUnavailable,
+    /// The message's last claims all ended without an outcome: each worker
+    /// reading it stopped (a read that runs the worker out of memory kills
+    /// every worker that claims it) and its lease expired.
+    #[error("the message's last {0} claims ended without an outcome")]
+    ClaimsUnfinished(i32),
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).
@@ -217,6 +222,9 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
+    /// Claims of this revision in a row before this one that ended without
+    /// recording an outcome: their worker stopped while it held the lease.
+    pub unfinished_claims: i32,
     /// The newest change notification that queued this message.
     pub notification: Option<Notification>,
 }
@@ -690,7 +698,24 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             otel.status_description = tracing::field::Empty,
         );
         adopt_notification_trace(&span, lease.notification.as_ref());
+        if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
+            return self.abandon_unfinished(&lease).instrument(span).await;
+        }
         self.reconcile(&lease).instrument(span).await
+    }
+
+    /// Gives up on a message without reading it, since the read is the likely
+    /// cause of the workers that stopped. A new change revives it as it does
+    /// any abandoned message.
+    async fn abandon_unfinished(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let error = MailboxError::ClaimsUnfinished(lease.unfinished_claims);
+        self.repo
+            .release_message(lease, MessageRetry::Abandon)
+            .await
+            .inspect_err(|release| record_failed(&span, lease.mailbox.link_id, release))?;
+        record_abandoned(&span, lease.mailbox.link_id, &error, lease.attempts);
+        Err(error)
     }
 
     async fn reconcile(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
@@ -878,6 +903,14 @@ const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
 /// its own is abandoned. With the backoff below that is about a day.
 const MESSAGE_FAILURE_ATTEMPTS: i32 = 50;
 
+/// Claims in a row that may end without an outcome before a message, or a
+/// projection event, is abandoned unread. Its next claim comes when the
+/// 3-minute lease expires, so a read that kills its worker kills five, over
+/// about 15 minutes, instead of one every few minutes forever. A deploy, or a
+/// worker stopped for another reason, leaves one such claim on whatever it
+/// was reading.
+const UNFINISHED_CLAIM_LIMIT: i32 = 5;
+
 /// The longest backoff. The `outlook-message-parked-too-long` monitor alerts
 /// above 30 minutes, which only a Graph `Retry-After` should reach.
 const MAX_BACKOFF_SECONDS: u32 = 1800;
@@ -886,7 +919,8 @@ const MAX_BACKOFF_SECONDS: u32 = 1800;
 /// without calendar parts.
 const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 
-/// How a failed reconciliation is retried. `attempts` counts this claim.
+/// How a failed reconciliation, or projection event, is retried. `attempts`
+/// counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
