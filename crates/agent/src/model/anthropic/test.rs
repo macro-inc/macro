@@ -214,3 +214,91 @@ fn max_output_tokens_is_each_models_cap() {
         assert_eq!(cap(id), 32_000, "{id}");
     }
 }
+
+/// An MCP call replays as a `tool_use` under the name the tool was advertised
+/// by, and its `tool_result` points back at that `tool_use`.
+async fn assert_replayed_mcp_tool_names(streaming: bool) {
+    use crate::types::{AssistantMessagePart as Part, ChatMessage, ChatMessageContent, Role};
+    let advertised = "mcp__macro_internal__ExecuteCode";
+    let transport = CaptureTransport::default();
+    let client = anthropic::Client::builder()
+        .api_key("test-anthropic-key")
+        .http_client(transport.clone())
+        .build()
+        .unwrap();
+    let model = AnthropicModel::new(
+        Model::try_from("anthropic/claude-opus-4-8").unwrap(),
+        Arc::new(client),
+    );
+    let parts = vec![
+        Part::McpToolCall {
+            name: "ExecuteCode".into(),
+            service: "macro_internal".into(),
+            display_name: None,
+            id: "toolu_a".into(),
+            json: json!({"code": "1"}),
+        },
+        Part::ToolCallResponseJson {
+            name: advertised.into(),
+            id: "toolu_a".into(),
+            json: json!({"result": 1}),
+        },
+    ];
+    let mut messages = vec![Message::user("Run it")];
+    messages.extend(crate::to_rig_messages(&[ChatMessage {
+        role: Role::Assistant,
+        content: ChatMessageContent::AssistantMessageParts(parts),
+        attachments: None,
+    }]));
+    messages.push(Message::user("Again"));
+    let request = CompletionRequest {
+        model: None,
+        preamble: Some("You are Macro.".into()),
+        chat_history: rig_core::OneOrMany::many(messages).unwrap(),
+        documents: vec![],
+        tools: vec![ToolDefinition {
+            name: advertised.into(),
+            description: "Run code".into(),
+            parameters: json!({"type": "object", "properties": {"code": {"type": "string"}}}),
+        }],
+        temperature: None,
+        max_tokens: Some(512),
+        tool_choice: None,
+        additional_params: None,
+        output_schema: None,
+        record_telemetry_content: false,
+    };
+    if streaming {
+        let mut response = model.completion().stream(request).await.unwrap();
+        let _ = response.next().await;
+    } else {
+        assert!(model.completion().completion(request).await.is_err());
+    }
+    let captured = transport.0.lock().unwrap();
+    let body = &captured[0];
+    let tool_use = body["messages"][1]["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|block| block["type"] == "tool_use")
+        .expect("tool_use block");
+    let tool_result = body["messages"][2]["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|block| block["type"] == "tool_result")
+        .expect("tool_result block");
+    assert_eq!(body["tools"][0]["name"], advertised);
+    assert_eq!(tool_use["name"], advertised);
+    assert_eq!(tool_result["tool_use_id"], tool_use["id"]);
+}
+
+#[tokio::test]
+async fn completion_replays_mcp_calls_under_the_advertised_name() {
+    assert_replayed_mcp_tool_names(false).await;
+}
+
+#[tokio::test]
+async fn stream_replays_mcp_calls_under_the_advertised_name() {
+    assert_replayed_mcp_tool_names(true).await;
+}

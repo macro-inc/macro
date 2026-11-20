@@ -31,6 +31,7 @@ ai_usage = { path = "../ai_usage" }
 ai_toolset = { path = "../ai_toolset" }
 attachment = { path = "../attachment" }
 genai_telemetry = { path = "../genai_telemetry" }
+mcp_toolset = { path = "../mcp_toolset" }
 macro_env_var = { path = "../macro_env_var" }
 macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }

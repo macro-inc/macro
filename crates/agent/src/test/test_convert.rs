@@ -356,7 +356,54 @@ fn mcp_tool_call_converts_like_regular_tool_call() {
     let AssistantContent::ToolCall(tc) = content.first() else {
         panic!("expected tool call");
     };
-    assert_eq!(tc.function.name, "slack_search");
+    assert_eq!(tc.function.name, "mcp__slack__slack_search");
+}
+
+/// The model must see an earlier MCP call under the name it was offered the
+/// tool by, not the bare tool name it was stored with.
+#[test]
+fn mcp_tool_call_replays_under_the_advertised_name() {
+    for (service, name, advertised) in [
+        (
+            "macro_internal",
+            "ExecuteCode",
+            "mcp__macro_internal__ExecuteCode",
+        ),
+        (
+            "Macro Internal",
+            "ExecuteCode",
+            "mcp__Macro_Internal__ExecuteCode",
+        ),
+        (
+            "Google Sheets",
+            "list.worksheets",
+            "mcp__Google_Sheets__list_worksheets",
+        ),
+    ] {
+        let msg = assistant_parts(vec![
+            AssistantMessagePart::McpToolCall {
+                name: name.to_owned(),
+                service: service.to_owned(),
+                display_name: None,
+                json: json!({}),
+                id: "call_mcp".to_owned(),
+            },
+            AssistantMessagePart::ToolCallResponseJson {
+                name: name.to_owned(),
+                json: json!({"ok": true}),
+                id: "call_mcp".to_owned(),
+            },
+        ]);
+        let messages = to_rig_messages(&[msg]);
+        let Message::Assistant { content, .. } = &messages[0] else {
+            panic!("expected assistant");
+        };
+        let AssistantContent::ToolCall(call) = content.first() else {
+            panic!("expected tool call");
+        };
+        assert_eq!(call.function.name, advertised);
+        assert_eq!(call.function.name, mcp_toolset::mangle(service, name));
+    }
 }
 
 #[test]

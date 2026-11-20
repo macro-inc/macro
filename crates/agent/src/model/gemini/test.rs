@@ -359,3 +359,79 @@ async fn structured_completion_replays_tool_names_with_no_tools() {
 async fn streaming_replays_tool_names_with_no_tools() {
     assert_replayed_tool_names(true).await;
 }
+
+/// An MCP call replays under the name the tool was advertised by, and its
+/// functionResponse carries that same name, so Gemini pairs them.
+async fn assert_replayed_mcp_tool_names(streaming: bool) {
+    use crate::types::{AssistantMessagePart as Part, ChatMessage, ChatMessageContent, Role};
+    let advertised = "mcp__macro_internal__ExecuteCode";
+    let transport = CaptureTransport::default();
+    let client = gemini::Client::builder()
+        .api_key("test-google-key")
+        .http_client(transport.clone())
+        .build()
+        .unwrap();
+    let model = GeminiModel::new(
+        Model::try_from("google/gemini-3.8-flash").unwrap(),
+        Arc::new(client),
+    );
+    let parts = vec![
+        Part::McpToolCall {
+            name: "ExecuteCode".into(),
+            service: "macro_internal".into(),
+            display_name: None,
+            id: "call-a".into(),
+            json: json!({"code": "1"}),
+        },
+        Part::ToolCallResponseJson {
+            name: advertised.into(),
+            id: "call-a".into(),
+            json: json!({"result": 1}),
+        },
+    ];
+    let mut messages = vec![Message::user("Run it")];
+    messages.extend(crate::to_rig_messages(&[ChatMessage {
+        role: Role::Assistant,
+        content: ChatMessageContent::AssistantMessageParts(parts),
+        attachments: None,
+    }]));
+    messages.push(Message::user("Again"));
+    let mut request = request();
+    request.chat_history = rig_core::OneOrMany::many(messages).unwrap();
+    request.tools = vec![ToolDefinition {
+        name: advertised.into(),
+        description: "Run code".into(),
+        parameters: json!({"type": "object", "properties": {"code": {"type": "string"}}}),
+    }];
+    request.additional_params = None;
+    request.tool_choice = None;
+    request.output_schema = None;
+    if streaming {
+        let mut stream = model.completion().stream(request).await.unwrap();
+        let _ = stream.next().await;
+    } else {
+        assert!(model.completion().completion(request).await.is_err());
+    }
+    let captured = transport.0.lock().unwrap();
+    let body = &captured[0].1;
+    let call = &body["contents"][1]["parts"][0]["functionCall"];
+    let result = &body["contents"][2]["parts"][0]["functionResponse"];
+    assert_eq!(
+        body["tools"][0]["functionDeclarations"][0]["name"],
+        advertised
+    );
+    assert_eq!(call["name"], advertised);
+    assert_eq!(result["name"], advertised);
+    assert_eq!(call["id"], "call-a");
+    assert_eq!(result["id"], "call-a");
+}
+
+#[tokio::test]
+async fn completion_replays_mcp_calls_under_the_advertised_name() {
+    assert_replayed_mcp_tool_names(false).await;
+}
+
+#[tokio::test]
+async fn streaming_replays_mcp_calls_under_the_advertised_name() {
+    assert_replayed_mcp_tool_names(true).await;
+}

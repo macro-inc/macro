@@ -123,6 +123,16 @@ impl Mangled {
     }
 }
 
+/// The name the toolset advertises `tool_name` of `server_name` under,
+/// `mcp__<server>__<tool>`, sanitized and truncated to what providers accept.
+///
+/// Mangling the segments [`unmangle`] split off returns the same name, so a
+/// call stored by its segments replays under the name the model was offered.
+#[must_use]
+pub fn mangle(server_name: &str, tool_name: &str) -> String {
+    Mangled::new(server_name, tool_name).name.0
+}
+
 /// Split a mangled `mcp__<server>__<tool>` name into its server and tool
 /// segments, as routing does; `None` for a name that is not mangled.
 #[must_use]
