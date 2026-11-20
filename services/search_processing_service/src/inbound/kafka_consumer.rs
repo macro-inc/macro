@@ -353,12 +353,12 @@ fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
             Some(agent_session::reread_key(event))
         }
+        DeclaredMacroEvent::EmailMacroEvent(event) => email::reread_key(event),
         DeclaredMacroEvent::CalendarMacroEvent(_)
         | DeclaredMacroEvent::CallMacroEvent(_)
         | DeclaredMacroEvent::ChannelMacroEvent(_)
         | DeclaredMacroEvent::ChatMacroEvent(_)
         | DeclaredMacroEvent::DocumentMacroEvent(_)
-        | DeclaredMacroEvent::EmailMacroEvent(_)
         | DeclaredMacroEvent::MessageMacroEvent(_)
         | DeclaredMacroEvent::ProjectMacroEvent(_)
         | DeclaredMacroEvent::PropertyMacroEvent(_) => None,

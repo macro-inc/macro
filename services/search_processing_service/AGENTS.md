@@ -52,9 +52,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   rewind to a started record: one that hangs or kills its worker would then
   be retried on every stop.
 - The poll loop blocks on a full worker channel, so one slow, busy key stalls
-  every topic. `coalescible_reread_key` skips agent-session events while a
-  reread for that session is queued; only add an event kind there if handling
-  it rereads the entity's whole current state.
+  every topic. `coalescible_reread_key` skips agent-session events and
+  one-thread email reindex requests while a reread for that session or thread
+  is queued; only add an event kind there if handling it rereads the entity's
+  whole current state. Never shard a thread event by its mailbox: one
+  mailbox's import then runs on one worker and stalls its partition.
 - Every topic shares librdkafka's one prefetch queue; the group's `PREFETCH`
   bound keeps other topics from waiting behind an email backlog (README "Kafka
   Delivery Contract"). Email throughput comes from the workers, not the
