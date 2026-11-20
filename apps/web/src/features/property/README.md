@@ -61,6 +61,16 @@ fixed-size child in a smaller wrapper shifts the icon below the label.
 Empty Source values use the same link glyph; unsupported references retain the
 ordinary property editor.
 
+Every other single-value entity row in the side panel splits the same way once
+it has a value: `EntityLinkPill` puts the item behind the name and the picker
+behind the caret, and `ProjectLinkPill` does it for a project value, whichever
+property holds it. A viewer who cannot edit gets the name alone. An empty
+value, a person, and a value `usePropertyEntityLink` has nothing to open for
+keep the one pill that opens the picker. Both pills take the name's click
+through `useSplitNavigationHandler`, as mention links and collection chips do:
+a press that moved focus to the name would hand activation back to its own
+split after the click brings forward another split that already shows the item.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
@@ -89,6 +99,25 @@ Tag chips, overflow chips, and inline tag pills retain their compact desktop
 height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
+
+## Creating a property
+
+`CreatePropertyModal` names the built-in property when the typed name duplicates
+one that links CRM records (`utils/builtInSuggestion.ts`: Contact(s) for
+Contacts; Company, Companies and Customer(s) for Companies), and for every type
+but Any Entity adds that the type can't link to CRM records. Its **Use …**
+button calls `onUseBuiltIn(propertyDefinitionId)`. `PropertyEditorDialog`
+answers by selecting that property as if it had been picked from the list, so a
+host that keeps the property out of its list (the task composer, which edits
+Companies and Contacts through its Customer / Contact pill) still receives the
+value through `onSave`. Such a host passes the property with its current value
+in `properties` (the composer's `draftProperties`): the picker starts from that
+value and adds to it, and without it a pick would replace what the draft
+already links. Whichever way the create dialog closes, the editor's search
+field takes focus back on desktop: left on the page, the next keys would reach
+the app's shortcuts. The note never disables **Create**. Add a name there
+only for a built-in property whose look-alike breaks something a person would
+expect, not for every system property.
 
 ## Assignee selection
 

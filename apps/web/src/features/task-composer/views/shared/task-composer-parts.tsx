@@ -328,7 +328,7 @@ function Properties(props: { class?: string }) {
           <TaskComposerPropertyEditor
             name={composer.title()}
             definitions={composer.availableProperties()}
-            properties={composer.properties()}
+            properties={composer.draftProperties()}
             onAdd={composer.addProperty}
             onSave={(id, value) => composer.setPropertyValues(id, value)}
           />

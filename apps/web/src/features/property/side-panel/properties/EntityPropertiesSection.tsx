@@ -7,6 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import Plus from '@icon/system/regular/plus.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
+import { EntityLinkPill } from '@property/component/EntityLinkPill';
 import { Modals } from '@property/component/modal';
 import { ProjectLinkPill } from '@property/component/ProjectLinkPill';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
@@ -628,11 +629,6 @@ function SidePanelPropertyRow(props: {
                   fallback={
                     <SinglePill
                       getEmptyLabel={props.getEmptyLabel}
-                      opensProject={
-                        ctx.entityType === 'TASK' &&
-                        props.property.propertyDefinitionId ===
-                          SYSTEM_PROPERTY_IDS.PROJECT
-                      }
                       property={property()}
                     />
                   }
@@ -714,9 +710,13 @@ function EmptyPropertyValue(props: {
   );
 }
 
+/**
+ * One value in a pill that opens the picker. A single referenced item other
+ * than a person splits it instead: its name opens the item and a caret opens
+ * the picker, so a viewer who cannot edit still gets the link.
+ */
 function SinglePill(props: {
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
-  opensProject?: boolean;
   property: Property;
 }) {
   const empty = () => !hasValue(props.property);
@@ -789,12 +789,24 @@ function SinglePill(props: {
             fallback={pill()}
           />
         </Match>
-        <Match when={props.opensProject}>
+        <Match when={entity()?.entity_type === 'INITIATIVE'}>
           <ProjectLinkPill
             property={props.property}
             variant="ghost"
             iconClass="touch:size-4"
             fallback={pill()}
+          />
+        </Match>
+        <Match when={entity()}>
+          <EntityLinkPill
+            property={props.property}
+            variant="ghost"
+            iconClass="touch:size-4"
+            fallback={pill()}
+            openLabel={(name) => t('entityActions.openEntityNamed', { name })}
+            changeLabel={t('entityActions.changeEntity', {
+              property: props.property.displayName,
+            })}
           />
         </Match>
       </Switch>
