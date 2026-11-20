@@ -6,10 +6,11 @@
  * Fields and decisions are separate components over one draft so a surface
  * can place them apart: `QuestionCard` puts them in an `ElicitationCard`'s
  * body and footer for the session and a channel reply's live tail, and
- * `LiveQuestionCard` stacks them on a plain row (agent updates, and a
- * composer's fallback). A Macro user tool under review opens in the tool's own
- * composer (`UserToolComposer`); a draft the tool's schema rejects falls
- * back to the flat form the agent also sent, through these.
+ * `LiveQuestionCard` stacks them on a plain row (agent updates). A Macro
+ * user tool under review opens in the tool's own composer
+ * (`UserToolComposer`); a draft the tool's schema rejects, or a tool with no
+ * composer here, falls back to the flat form the agent also sent, through
+ * these.
  */
 
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
@@ -25,7 +26,7 @@ import type {
   CreateCalendarEvent,
   SendEmail,
 } from '@service-cognition/generated/tools/types';
-import { Button } from '@ui';
+import { Button, Card } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -45,7 +46,7 @@ import {
   validate,
 } from '../state/elicitation-form';
 import { createElicitationReviewSink } from '../state/elicitation-review-sink';
-import { ElicitationCard, type ElicitationHeader } from './ElicitationCard';
+import { ElicitationCard, type ElicitationSummary } from './ElicitationCard';
 import { ElicitationForm } from './ElicitationForm';
 
 export type RespondToElicitation = (
@@ -283,7 +284,7 @@ export function QuestionActions(props: {
       }
     >
       <div class="flex items-center gap-1">{refusals}</div>
-      <div class="ml-auto flex items-center gap-2">{primary}</div>
+      <Card.Actions>{primary}</Card.Actions>
     </Show>
   );
 }
@@ -293,7 +294,7 @@ export function QuestionActions(props: {
  * body, the decisions in the footer.
  */
 export function QuestionCard(props: {
-  header: ElicitationHeader;
+  summary: ElicitationSummary;
   /** Placement on the card root, such as a height cap. */
   class?: string;
   request: LiveQuestionRequest;
@@ -304,7 +305,7 @@ export function QuestionCard(props: {
   const question = createLiveQuestion(props.request);
   return (
     <ElicitationCard
-      header={props.header}
+      summary={props.summary}
       class={props.class}
       actions={
         <QuestionActions
@@ -393,25 +394,44 @@ export function parseDraftedTool(
   return undefined;
 }
 
+const composedTools = new Set([
+  'CreateBookingLink',
+  'EditBookingLink',
+  'CreateCalendarEvent',
+  'SendEmail',
+]);
+
+/**
+ * The draft `UserToolComposer` can open, or undefined when the caller should
+ * fall back to the flat form: a draft its schema rejects, or a tool with no
+ * composer here.
+ */
+export function composableDraft(
+  request: UserToolRequest,
+  toolCall: string
+): DraftedTool | undefined {
+  const tool = parseDraftedTool(request, toolCall);
+  return tool && composedTools.has(tool.name) ? tool : undefined;
+}
+
 /**
  * A drafted Macro user tool in the tool's own composer: the calendar event
  * form for `CreateCalendarEvent`, the email compose for `SendEmail`. The
  * composer's Create/Send accepts the review with the whole edited draft; its
  * Cancel, where it has one, declines. The email composer has only Send, so
  * `cancel` adds a Cancel beneath it for a surface with no other refusal.
- * `fallback` renders a tool this client has no composer for.
+ * Callers pass only a draft from `composableDraft`.
  */
 export function UserToolComposer(props: {
   tool: DraftedTool;
   toolCall: string;
   review: ReviewInputs;
   cancel?: boolean;
-  fallback?: JSX.Element;
 }) {
   const sink = <T,>() => createElicitationReviewSink<T>(props.review);
   const locked = () => !props.review.canAnswer();
   return (
-    <Switch fallback={props.fallback}>
+    <Switch>
       <Match
         when={
           props.tool.name === 'CreateBookingLink' ||

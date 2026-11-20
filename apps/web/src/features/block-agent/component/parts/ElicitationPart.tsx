@@ -17,11 +17,10 @@
 
 import {
   ElicitationCard,
-  type ElicitationHeader,
+  type ElicitationSummary,
 } from '@app/features/agent-interactions/components/ElicitationCard';
 import {
-  LiveQuestionCard,
-  parseDraftedTool,
+  composableDraft,
   QuestionCard,
   type RespondToElicitation,
   UserToolComposer,
@@ -88,7 +87,7 @@ export function ElicitationPart(props: {
   const waitingFor = () =>
     interactions.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
-  const header = (): ElicitationHeader => ({
+  const summary = (): ElicitationSummary => ({
     title: `${agentName()} is asking`,
     status: waitingFor(),
     message: props.part.message,
@@ -102,7 +101,7 @@ export function ElicitationPart(props: {
       {match(props.part.request)
         .with({ kind: 'user_tool' }, (request) => (
           <LiveUserTool
-            header={header()}
+            summary={summary()}
             request={request}
             toolCall={props.part.toolCall ?? String(props.part.requestId)}
             locked={locked()}
@@ -111,7 +110,7 @@ export function ElicitationPart(props: {
         ))
         .with({ kind: P.union('form', 'url', 'unrecognized') }, (request) => (
           <QuestionCard
-            header={header()}
+            summary={summary()}
             request={request}
             locked={locked()}
             onRespond={respond}
@@ -130,7 +129,7 @@ export function ElicitationPart(props: {
  * chip, or by stopping it.
  */
 function LiveUserTool(props: {
-  header: ElicitationHeader;
+  summary: ElicitationSummary;
   request: UserToolRequest;
   toolCall: string;
   locked: boolean;
@@ -138,11 +137,11 @@ function LiveUserTool(props: {
 }) {
   const { interactions } = useAgentSession();
   const drafted = createMemo(() =>
-    parseDraftedTool(props.request, props.toolCall)
+    composableDraft(props.request, props.toolCall)
   );
   const fallback = (
     <QuestionCard
-      header={props.header}
+      summary={props.summary}
       request={{ kind: 'form', schema: props.request.schema }}
       locked={props.locked}
       onRespond={props.onRespond}
@@ -151,18 +150,11 @@ function LiveUserTool(props: {
   return (
     <Show when={drafted()} fallback={fallback}>
       {(tool) => (
-        <ElicitationCard header={props.header}>
+        <ElicitationCard summary={props.summary}>
           <UserToolComposer
             tool={tool()}
             toolCall={props.toolCall}
             cancel
-            fallback={
-              <LiveQuestionCard
-                request={{ kind: 'form', schema: props.request.schema }}
-                locked={props.locked}
-                onRespond={props.onRespond}
-              />
-            }
             review={{
               canAnswer: () => interactions.canAnswer() && !props.locked,
               respond: props.onRespond,

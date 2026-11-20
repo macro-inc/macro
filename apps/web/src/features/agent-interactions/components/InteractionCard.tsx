@@ -6,11 +6,10 @@ import type {
   AgentInteraction,
   InteractionController,
 } from '../context/interaction';
-import { ElicitationCard, type ElicitationHeader } from './ElicitationCard';
+import { ElicitationCard, type ElicitationSummary } from './ElicitationCard';
 import {
-  LiveQuestionCard,
+  composableDraft,
   type LiveQuestionRequest,
-  parseDraftedTool,
   QuestionCard,
   type RespondToElicitation,
   UserToolComposer,
@@ -64,8 +63,9 @@ export function InteractionCard(props: {
       // Keep the answer's typed shape intact; the controller checks liveness.
       const onRespond: RespondToElicitation = (answer) =>
         props.controller.respond({ ...request, answer });
-      const header = (): ElicitationHeader => ({
+      const summary = (): ElicitationSummary => ({
         title: `${props.agentName ?? 'The agent'} is asking`,
+        status: props.controller.canAnswer() ? 'Waiting for you' : undefined,
         message: request.message,
         notice: props.controller.canAnswer()
           ? undefined
@@ -78,14 +78,14 @@ export function InteractionCard(props: {
       const toolCall = request.toolCall ?? String(request.requestId);
       const draft =
         request.request.kind === 'user_tool'
-          ? parseDraftedTool(request.request, toolCall)
+          ? composableDraft(request.request, toolCall)
           : undefined;
       return (
         <Show
           when={draft}
           fallback={
             <QuestionCard
-              header={header()}
+              summary={summary()}
               class="max-h-80"
               request={asForm()}
               locked={locked()}
@@ -94,18 +94,11 @@ export function InteractionCard(props: {
           }
         >
           {(tool) => (
-            <ElicitationCard header={header()} class="max-h-80">
+            <ElicitationCard summary={summary()} class="max-h-80">
               <UserToolComposer
                 tool={tool()}
                 toolCall={toolCall}
                 cancel
-                fallback={
-                  <LiveQuestionCard
-                    request={asForm()}
-                    locked={locked()}
-                    onRespond={onRespond}
-                  />
-                }
                 review={{ canAnswer: () => !locked(), respond: onRespond }}
               />
             </ElicitationCard>

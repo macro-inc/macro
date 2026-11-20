@@ -230,17 +230,14 @@ describe('ElicitationPart', () => {
       <ElicitationPart turn={0} part={part()} />
     ));
     const card = getByRole('region', { name: 'Agent question' });
-    expect(card.dataset.slot).toBe('card');
     expect(queryByTestId('tool-card')).toBeNull();
     const inCard = within(card);
-    expect(inCard.getByText('Macro Coder is asking')).toBeTruthy();
-    expect(inCard.getByText('Waiting for you')).toBeTruthy();
-    expect(inCard.getByText('What is the best colour?')).toBeTruthy();
-    expect(inCard.getByTestId('form')).toBeTruthy();
-    const footer = card.querySelector('[data-slot="card-footer"]');
-    expect(footer).not.toBeNull();
-    for (const label of ['Submit', 'Decline', 'Cancel']) {
-      expect(within(footer as HTMLElement).getByText(label)).toBeTruthy();
+    inCard.getByText('Macro Coder is asking');
+    inCard.getByText('Waiting for you');
+    inCard.getByText('What is the best colour?');
+    inCard.getByTestId('form');
+    for (const name of ['Submit', 'Decline', 'Cancel']) {
+      inCard.getByRole('button', { name });
     }
   });
 
@@ -537,6 +534,30 @@ describe('ElicitationPart', () => {
       );
       fireEvent.click(getByTestId('composer-execute'));
       expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('a tool with no composer here asks with its flat form on one card', () => {
+      const request = {
+        ...review('WebSearch', { query: 'colours' }),
+        schema: colourForm.schema,
+      };
+      pending = { ...live(), request };
+      const { getByRole, getAllByRole } = render(() => (
+        <ElicitationPart turn={0} part={part({ request })} />
+      ));
+      expect(getAllByRole('region', { name: 'Agent question' })).toHaveLength(
+        1
+      );
+      const card = getByRole('region', { name: 'Agent question' });
+      within(card).getByTestId('form');
+      fireEvent.click(within(card).getByTestId('pick-red'));
+      fireEvent.click(within(card).getByRole('button', { name: 'Submit' }));
+      expect(respond).toHaveBeenCalledWith({
+        action: 'accept',
+        content: { question_0: 'Red' },
+      });
+      // A card carries no primary button (design-system rule).
+      expect(card.querySelector('[data-variant="primary"]')).toBeNull();
     });
 
     it("falls back to the flat form for a draft the tool's schema rejects", () => {
