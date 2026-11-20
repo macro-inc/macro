@@ -9,11 +9,13 @@ export type ComposerLayoutMode = 'auto' | 'expanded' | 'collapsed';
 
 /** Subpixel slack before a width comparison decides without the probe. */
 const WIDTH_TOLERANCE_PX = 1;
+/** Slack when the line holds mentions or other non-text inline boxes. */
+const INLINE_BOX_TOLERANCE_PX = 8;
 /** Characters compared to check that both layouts set the text alike. */
 const SAMPLE_LENGTH = 8;
 
-/** The compact layout's room for one line, from the last probe. */
-type CompactRoom = { containerWidth: number; width: number };
+/** The compact line's room, from the last probe, and what it depends on. */
+type CompactRoom = { containerWidth: number; font: string; width: number };
 
 /** What a probe of the compact layout found. */
 type ProbeResult = { wraps: boolean; room?: CompactRoom };
@@ -57,7 +59,11 @@ function sampleWidth(editorElement: HTMLElement, lineHeight: number) {
   return rect.height > lineHeight + 1 ? undefined : rect.width;
 }
 
-/** Width of the draft without the spaces that end it, which can hang. */
+/**
+ * Width of the draft up to its last non-space character: the spaces that end
+ * it can hang, and may sit in a text node of their own (after a mention or
+ * differently formatted text).
+ */
 function widthWithoutTrailingSpace(line: HTMLElement) {
   const walker = line.ownerDocument.createTreeWalker(
     line,
@@ -65,14 +71,20 @@ function widthWithoutTrailingSpace(line: HTMLElement) {
   );
   let last: Node | null = null;
   for (let node = walker.nextNode(); node; node = walker.nextNode())
-    last = node;
-  const text = last?.textContent ?? '';
-  const end = text.trimEnd().length;
-  if (!last || end === 0) return undefined;
+    if (node.textContent?.trim()) last = node;
+  if (!last?.textContent) return undefined;
   const range = line.ownerDocument.createRange();
   range.setStart(line, 0);
-  range.setEnd(last, end);
+  range.setEnd(last, last.textContent.trimEnd().length);
   return range.getBoundingClientRect().width;
+}
+
+/**
+ * Inline content not made of text, such as mentions: its width can follow
+ * the line's, and its margins fall outside the text's range.
+ */
+function inlineBoxes(line: HTMLElement) {
+  return line.querySelectorAll<HTMLElement>('[contenteditable="false"]');
 }
 
 /**
@@ -133,7 +145,11 @@ function probeCompactLayout(
       Math.abs(probeSample - liveSample) < 0.5;
     const room =
       sameText && line instanceof HTMLElement
-        ? { containerWidth, width: contentWidth(line) }
+        ? {
+            containerWidth,
+            font: getComputedStyle(liveEditor).font,
+            width: contentWidth(line),
+          }
         : undefined;
     return { wraps, room };
   } finally {
@@ -146,7 +162,8 @@ function probeCompactLayout(
  * The container must use data-composer-compact="true"/"false" for width styles
  * so an inert copy can measure the compact layout without changing the live one.
  * The compact layout must never give the text more inline room than the
- * expanded one, so text that wraps expanded wraps compact.
+ * expanded one (text that wraps expanded wraps compact), and both set it at
+ * the same line height.
  *
  * Most updates need no copy: caret moves are skipped, the compact layout reads
  * its own lines, and a one-line expanded draft is compared with the compact
@@ -174,9 +191,9 @@ export function createComposerLayout(
   let queued = false;
   let disposed = false;
   let resizeFrame: number | undefined;
-  // The compact line's room, keyed by the container's width. Anything else
-  // outside the draft (controls, the layout attribute, fonts) can change it
-  // too, so each of those drops it.
+  // The compact line's room, keyed by the container's width and the editor's
+  // font. Anything else outside the draft (controls, the layout attribute,
+  // loaded fonts) can change it too, so each of those drops it.
   let compactRoom: CompactRoom | undefined;
   let observer: MutationObserver | undefined;
   const noteMutations = (records: MutationRecord[]) => {
@@ -197,20 +214,31 @@ export function createComposerLayout(
    * widths alone; undefined when only a probe can tell.
    */
   const fitsCompactRoom = (element: HTMLElement, containerWidth: number) => {
-    if (compactRoom?.containerWidth !== containerWidth) return undefined;
+    if (
+      compactRoom?.containerWidth !== containerWidth ||
+      compactRoom.font !== getComputedStyle(element).font
+    )
+      return undefined;
+    const room = compactRoom.width;
     const line = element.firstElementChild;
     if (!(line instanceof HTMLElement)) return undefined;
     // The paragraph's contents, not the paragraph: its box spans the line.
     const range = element.ownerDocument.createRange();
     range.selectNodeContents(line);
     const width = range.getBoundingClientRect().width;
-    // A line that also fills the expanded layout may hold content sized by
-    // its container, such as a truncated mention.
-    if (width >= contentWidth(line) - WIDTH_TOLERANCE_PX) return undefined;
-    if (width <= compactRoom.width - WIDTH_TOLERANCE_PX) return true;
+    const boxes = inlineBoxes(line);
+    const tolerance =
+      boxes.length > 0 ? INLINE_BOX_TOLERANCE_PX : WIDTH_TOLERANCE_PX;
+    if (width <= room - tolerance) return true;
+    // A mention near the compact line's width may shrink to fit it there
+    // instead of wrapping, so only a copy can tell.
+    for (const box of boxes)
+      if (box.getBoundingClientRect().width >= room - tolerance)
+        return undefined;
     // Trailing spaces may hang past the end of the line instead of wrapping.
-    const trimmed = widthWithoutTrailingSpace(line) ?? width;
-    if (trimmed > compactRoom.width + WIDTH_TOLERANCE_PX) return false;
+    const trimmed = widthWithoutTrailingSpace(line);
+    if (trimmed === undefined) return undefined;
+    if (trimmed > room + tolerance) return false;
     return undefined;
   };
 

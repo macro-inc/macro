@@ -138,6 +138,33 @@ async function expectLayoutFitsDraft(page: Page, step: string) {
   expect(state.compact, step).toBe(state.expectedCompact);
 }
 
+async function isCompact(page: Page) {
+  return (await page.evaluate(layoutState)).compact;
+}
+
+/** Types the draft until the one-line layout no longer holds it. */
+async function typeUntilExpanded(page: Page, text: string) {
+  for (const character of text) {
+    await page.keyboard.type(character);
+    if (!(await isCompact(page))) return;
+  }
+  throw new Error('The draft never needed a second line');
+}
+
+/** How many lines the live editor's draft takes. */
+function editorLines() {
+  const editor = document.querySelector<HTMLElement>(
+    '[data-input-layout] [data-lexical-editor="true"]'
+  );
+  if (!editor) throw new Error('Composer missing');
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  return Math.round(
+    range.getBoundingClientRect().height /
+      Number.parseFloat(getComputedStyle(editor).lineHeight)
+  );
+}
+
 async function clones(page: Page) {
   return page.evaluate(
     () => (Reflect.get(window, '__composerCounts') as { clones: number }).clones
@@ -200,6 +227,22 @@ for (const device of DEVICES) {
       await paste(page, 'Short note');
       await expectLayoutFitsDraft(page, 'pasted over it a short one');
       expect((await page.evaluate(layoutState)).compact).toBe(true);
+
+      // Spaces in a text node of their own (bold, after plain text) at the
+      // end of a draft that just fits: they hang past the one-line layout's
+      // line, so a character after them expands it and deleting that
+      // character must compact it again.
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.press('Backspace');
+      await typeUntilExpanded(page, DRAFT);
+      await page.keyboard.press('Backspace');
+      await page.keyboard.press('ControlOrMeta+B');
+      await page.keyboard.type('   ');
+      await expectLayoutFitsDraft(page, 'bold trailing spaces');
+      await page.keyboard.type('x');
+      await expectLayoutFitsDraft(page, 'a character after them');
+      await page.keyboard.press('Backspace');
+      await expectLayoutFitsDraft(page, 'the character deleted again');
     } finally {
       await context.close();
     }
@@ -213,13 +256,9 @@ for (const device of DEVICES) {
       await focusEditor(page, device);
       // Type until the draft just needs a second line, then step back to
       // the last length that fits on one.
-      const isCompact = async () => (await page.evaluate(layoutState)).compact;
-      for (const character of DRAFT) {
-        await page.keyboard.type(character);
-        if (!(await isCompact())) break;
-      }
+      await typeUntilExpanded(page, DRAFT);
       await page.keyboard.press('Backspace');
-      await expect.poll(isCompact).toBe(true);
+      await expect.poll(() => isCompact(page)).toBe(true);
       const widths = [];
       for (
         let width = device.hostWidth;
@@ -231,7 +270,7 @@ for (const device of DEVICES) {
       for (const width of [...widths, ...widths.toReversed()]) {
         await setHostWidth(page, width);
         await expectLayoutFitsDraft(page, `composer ${width}px wide`);
-        seen.add(await isCompact());
+        seen.add(await isCompact(page));
       }
       expect(seen.size).toBe(2);
     } finally {
@@ -293,16 +332,18 @@ test('caret moves and one-line edits never copy the composer to measure it', asy
     await expectLayoutFitsDraft(page, 'short draft');
     expect(await clones(page)).toBe(before);
 
-    // A draft one expanded line long copies the composer once to learn the
-    // one-line layout's room, then compares each edit with it.
-    await page.keyboard.type(' that grows past the end of its line');
+    // A draft one expanded line long copies the composer to confirm the
+    // switch and to learn the one-line layout's room, then compares each
+    // edit that keeps it on one expanded line with that room.
+    await typeUntilExpanded(page, ' that grows past the end of its line');
     await expectLayoutFitsDraft(page, 'one expanded line');
     const expanded = await clones(page);
-    // Confirming the switch, then learning the room in the expanded layout.
     expect(expanded - before).toBeLessThanOrEqual(2);
-    await page.keyboard.type(' and on');
+    await page.keyboard.type('ok');
     for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('Backspace');
     await expectLayoutFitsDraft(page, 'further edits');
+    expect(await page.evaluate(editorLines)).toBe(1);
     expect(await clones(page)).toBe(expanded);
   } finally {
     await context.close();
