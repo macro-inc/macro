@@ -1,5 +1,5 @@
 import { PLANS } from '@app/features/paywall/plans';
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { match } from 'ts-pattern';
@@ -51,17 +51,23 @@ type SeatPlanOption = {
 
 /** Every paid plan a seat can be moved to, cheapest first. */
 export function seatPlanOptions(): SeatPlanOption[] {
-  return PLANS.flatMap((plan) =>
-    plan.tier === 'free'
-      ? []
-      : [
-          {
-            value: plan.tier,
-            label: plan.name,
-            description: `$${plan.price}${plan.tier === 'max' ? ' · 10× usage' : ''}`,
-          },
-        ]
-  );
+  const money = new Intl.NumberFormat(formatLocale(), {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  });
+  return PLANS.flatMap((plan) => {
+    if (plan.tier === 'free') return [];
+    const price = money.format(plan.price);
+    return [
+      {
+        value: plan.tier,
+        label: plan.name,
+        description:
+          plan.tier === 'max' ? t('teamMembers.maxPrice', { price }) : price,
+      },
+    ];
+  });
 }
 
 export function seatPlanName(plan: PaidPlan): string {

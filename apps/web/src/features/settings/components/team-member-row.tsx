@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
 import { type JSX, Show } from 'solid-js';
@@ -34,7 +35,10 @@ export function TeamMemberRow(props: {
           >
             {props.name}
             {props.isCurrentUser && (
-              <span class="font-normal text-ink-muted"> (you)</span>
+              <span class="font-normal text-ink-muted">
+                {' '}
+                {t('teamMembers.you')}
+              </span>
             )}
           </div>
           <Show when={props.isAgent}>
