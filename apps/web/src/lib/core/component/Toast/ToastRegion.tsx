@@ -59,7 +59,7 @@ export function ToastRegion() {
         sets --dock-inset-*). Persistent prompts get their own region
         capped at one visible card. Ordinary notices form an expandable three-card stack. Background imports, upload progress, then background work, sit nearest the corner.
       */}
-      <div class="fixed bottom-[calc(1.25rem+var(--dock-inset-bottom,0px))] right-[calc(1.25rem+var(--dock-inset-right,0px))] m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
+      <div class="fixed bottom-[calc(1.25rem+var(--dock-inset-bottom,0px))] right-[calc(1.25rem+var(--dock-inset-right,0px))] m-0 w-[380px] max-w-[calc(100vw-32px-var(--dock-inset-right,0px))] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
           class="macro-toast-region"
           regionId="reminder-region"

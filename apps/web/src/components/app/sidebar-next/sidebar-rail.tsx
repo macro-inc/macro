@@ -99,6 +99,8 @@ function scrollHorizontallyOnWheel(event: WheelEvent) {
   const nav = event.currentTarget;
   if (!(nav instanceof HTMLElement)) return;
   if (!isDockHorizontal()) return;
+  // Ctrl+wheel (and trackpad pinch, which arrives as one) zooms the page.
+  if (event.ctrlKey) return;
   if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
   if (nav.scrollWidth <= nav.clientWidth) return;
 
