@@ -29,15 +29,16 @@ The oldest unindexed change of a non-email entity type has been older than
 60 s for five minutes (warning: 30 s). The age is measured from the event's
 Kafka timestamp, so it includes time the event waited behind others.
 
-- **Processing has stopped** (the outcome panel is flat): the consumer is
-  stalled.
+- **Processing has stopped** (the outcome panel is flat): the live lane's
+  consumer is stalled.
   - Check `aws.ecs.service.running` for the service and the
-    `kafka.consumer_stop` spans for restarts.
+    `kafka.consumer_stop` spans (`lane:live`) for restarts.
   - Check OpenSearch health (the [OpenSearch monitors](../../infra/stacks/monitoring/monitors/opensearch.ts),
     CPU, rejected writes). A slow or failing OpenSearch holds every worker.
-- **Processing continues**: the live topics are waiting behind other work on
-  the same consumer.
-  - Look for an email backlog or a reindex running at the same time.
+- **Processing continues**: the live topics are waiting behind other work in
+  their lane. Email has a lane of its own, so an email backlog is not the
+  cause.
+  - Look for a backlog on one live topic, such as a document reindex.
   - Look for one key, such as a busy agent session or document, that fills its
     worker.
 - **Levers**:

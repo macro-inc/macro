@@ -1,5 +1,9 @@
 //! Kafka consumer for broker events that update the search index.
 //!
+//! Each task runs one group member per [`Lane`]: email, and every other
+//! topic. A member owns its poll loop, workers and offsets, so an email
+//! backlog cannot hold up the other topics.
+//!
 //! The poll loop shards each decoded event by its ordering key onto one of a
 //! fixed pool of bounded, sequential workers and commits the offset
 //! immediately after that handoff. Events sharing an ordering key — the
@@ -117,19 +121,19 @@ impl GroupName for SearchProcessingConsumerGroup {
     // `macro.messages` joined this group's subscription with no committed
     // offset; starting at its head avoids replaying the topic's retention.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
-    // Every topic reaches the poll loop through one queue, so with librdkafka's
-    // defaults a document or message waited behind up to 100,000 prefetched
-    // email records, about an hour of an email backlog at production's pace.
+    // A lane's topics reach its poll loop through one queue, so with
+    // librdkafka's defaults a record waited behind up to 100,000 prefetched
+    // records of a busier topic; before email had a lane of its own, about an
+    // hour of an email backlog at production's pace.
     const PREFETCH: Prefetch = Prefetch::Bounded {
         records: 10,
         partition_bytes: 8 * 1024,
     };
 }
 
-type SearchProcessingKafkaAdapter =
-    KafkaConsumerAdapter<SearchProcessingConsumerGroup, DeclaredMacroEvent>;
-type SearchProcessingKafkaConsumer =
-    MacroEventConsumerService<DeclaredMacroEvent, SearchProcessingKafkaAdapter>;
+/// One member of the consumer group, reading one [`Lane`]'s topics.
+type LaneConsumer<L> =
+    MacroEventConsumerService<L, KafkaConsumerAdapter<SearchProcessingConsumerGroup, L>>;
 
 macro_event_broker::declare_topics!(
     DeclaredMacroEvent:
@@ -145,10 +149,73 @@ macro_event_broker::declare_topics!(
         PropertyMacroEvent,
 );
 
-/// Number of sequential workers events are sharded across by ordering key.
+macro_event_broker::declare_topics!(EmailLaneEvent: EmailMacroEvent);
+
+macro_event_broker::declare_topics!(
+    LiveLaneEvent:
+        AgentSessionLifecycleMacroEvent,
+        CalendarMacroEvent,
+        CallMacroEvent,
+        ChannelMacroEvent,
+        ChatMacroEvent,
+        DocumentMacroEvent,
+        MessageMacroEvent,
+        ProjectMacroEvent,
+        PropertyMacroEvent,
+);
+
+/// The topics one group member reads into its own poll loop and workers, so
+/// an email backlog never holds up the other topics.
+///
+/// Each process runs one member per lane in the same group, so the group's
+/// committed offsets carry over and each topic's partitions are shared among
+/// the tasks' members for its lane.
+pub(crate) trait Lane:
+    MacroEventCollection + Into<DeclaredMacroEvent> + Send + 'static
+{
+    /// The lane's name, as the backlog metrics name it.
+    const NAME: &'static str;
+}
+
+impl Lane for EmailLaneEvent {
+    const NAME: &'static str = "email";
+}
+
+impl Lane for LiveLaneEvent {
+    const NAME: &'static str = "live";
+}
+
+impl From<EmailLaneEvent> for DeclaredMacroEvent {
+    fn from(event: EmailLaneEvent) -> Self {
+        match event {
+            EmailLaneEvent::EmailMacroEvent(event) => Self::EmailMacroEvent(event),
+        }
+    }
+}
+
+impl From<LiveLaneEvent> for DeclaredMacroEvent {
+    fn from(event: LiveLaneEvent) -> Self {
+        match event {
+            LiveLaneEvent::AgentSessionLifecycleMacroEvent(event) => {
+                Self::AgentSessionLifecycleMacroEvent(event)
+            }
+            LiveLaneEvent::CalendarMacroEvent(event) => Self::CalendarMacroEvent(event),
+            LiveLaneEvent::CallMacroEvent(event) => Self::CallMacroEvent(event),
+            LiveLaneEvent::ChannelMacroEvent(event) => Self::ChannelMacroEvent(event),
+            LiveLaneEvent::ChatMacroEvent(event) => Self::ChatMacroEvent(event),
+            LiveLaneEvent::DocumentMacroEvent(event) => Self::DocumentMacroEvent(event),
+            LiveLaneEvent::MessageMacroEvent(event) => Self::MessageMacroEvent(event),
+            LiveLaneEvent::ProjectMacroEvent(event) => Self::ProjectMacroEvent(event),
+            LiveLaneEvent::PropertyMacroEvent(event) => Self::PropertyMacroEvent(event),
+        }
+    }
+}
+
+/// Number of sequential workers each lane shards its events across by
+/// ordering key.
 ///
 /// Each in-flight event holds a database connection and an OpenSearch
-/// request, so this also bounds the consumer's downstream concurrency.
+/// request, so a task's two lanes hold at most twice this many.
 const WORKER_COUNT: usize = 10;
 /// Maximum number of decoded events waiting for each sequential worker.
 ///
@@ -864,7 +931,7 @@ async fn drain_worker_events<F, Fut>(
     }
 }
 
-fn commit_logged(consumer: &SearchProcessingKafkaConsumer, message: &BorrowedMessage<'_>) {
+fn commit_logged<L: Lane>(consumer: &LaneConsumer<L>, message: &BorrowedMessage<'_>) {
     match consumer.inner().commit_message(message, CommitMode::Async) {
         Ok(()) => tracing::trace!(
             topic = rdkafka::Message::topic(message),
@@ -931,8 +998,8 @@ struct PollEnd {
     uncommitted: Option<RecordPosition>,
 }
 
-async fn poll_events(
-    consumer: &SearchProcessingKafkaConsumer,
+async fn poll_events<L: Lane>(
+    consumer: &LaneConsumer<L>,
     workers: WorkerPool,
     ledger: &mut OffsetLedger,
     reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
@@ -972,7 +1039,8 @@ async fn poll_events(
                     }
                 };
                 let kafka_message = message.inner();
-                let (span, decoded) = receive_record(kafka_message, || message.decode_payload());
+                let (span, decoded) =
+                    receive_record(kafka_message, || message.decode_payload().map(Into::into));
                 let position = subscribed_topic(rdkafka::Message::topic(kafka_message)).map(|topic| {
                     RecordPosition {
                         topic,
@@ -1068,7 +1136,7 @@ struct Rewind {
 /// Commits each partition this consumer still owns back to its first record
 /// no worker started, so its next owner redelivers it and what followed it.
 /// Partitions it no longer owns are left to their owner.
-fn rewind_queued(consumer: &SearchProcessingKafkaConsumer, ledger: &OffsetLedger) -> Rewind {
+fn rewind_queued<L: Lane>(consumer: &LaneConsumer<L>, ledger: &OffsetLedger) -> Rewind {
     let queued = ledger.queued();
     if queued.is_empty() {
         return Rewind::default();
@@ -1214,18 +1282,19 @@ async fn drain_workers(
 /// After an error exit the workers drain fully, as before, and nothing is
 /// rewound.
 #[tracing::instrument(skip(context, shutdown), fields(brokers), err)]
-pub(crate) async fn run_event_consumer(
+pub(crate) async fn run_event_consumer<L: Lane>(
     brokers: &str,
     context: KafkaProcessingContext,
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), Report> {
     let consumer = KafkaEventConsumer::<SearchProcessingConsumerGroup>::from_env(brokers)?;
     let consumer = KafkaConsumerAdapter::<SearchProcessingConsumerGroup, ()>::new(consumer)
-        .subscribe::<DeclaredMacroEvent>()
+        .subscribe::<L>()
         .context("failed to subscribe to search processing event topics")?;
-    let consumer = SearchProcessingKafkaConsumer::new(consumer);
+    let consumer = LaneConsumer::<L>::new(consumer);
     tracing::info!(
-        topics = ?DeclaredMacroEvent::topics(),
+        lane = L::NAME,
+        topics = ?L::topics(),
         group = SearchProcessingConsumerGroup::GROUP_NAME,
         "search processing event consumer listening"
     );
@@ -1253,6 +1322,7 @@ pub(crate) async fn run_event_consumer(
     let graceful = poll_result.is_ok();
     let span = tracing::info_span!(
         "kafka.consumer_stop",
+        lane = L::NAME,
         graceful,
         drain_ms = field::Empty,
         aborted_workers = field::Empty,

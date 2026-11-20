@@ -171,6 +171,21 @@ fn received_lifecycle_event(
         ::agent_session::domain::events::SessionIdentity,
     ) -> ::agent_session::domain::events::AgentSessionLifecycleEvent,
 ) -> ReceivedEvent {
+    attach_event_coordinates(
+        DeclaredMacroEvent::decode(&lifecycle_message(session, event)),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("decodable agent-session event")
+}
+
+fn lifecycle_message(
+    session: Uuid,
+    event: impl FnOnce(
+        ::agent_session::domain::events::SessionIdentity,
+    ) -> ::agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> TestMessage {
     use ::agent_session::domain::{
         events::SessionIdentity,
         model::{AgentSessionId, SessionSource},
@@ -188,18 +203,11 @@ fn received_lifecycle_event(
         audience: vec![],
         source: SessionSource::User,
     });
-    let message = encoded_message(
+    encoded_message(
         MacroAgentSessionLifecycleTopic::TOPIC_STR,
         id,
         Event::new(event),
-    );
-    attach_event_coordinates(
-        DeclaredMacroEvent::decode(&message),
-        0,
-        offset,
-        tracing::Span::none(),
     )
-    .expect("decodable agent-session event")
 }
 
 const AGENT_SESSION_ID: Uuid = Uuid::from_u128(10);
@@ -1437,6 +1445,60 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroPropertiesTopic::TOPIC_STR));
     assert!(topics.contains(&MacroCalendarTopic::TOPIC_STR));
+}
+
+#[test]
+fn email_has_a_lane_of_its_own_and_the_live_lane_reads_every_other_topic() {
+    assert_eq!(EmailLaneEvent::topics(), [MacroEmailTopic::TOPIC_STR]);
+    let mut lanes: Vec<_> = EmailLaneEvent::topics()
+        .iter()
+        .chain(LiveLaneEvent::topics())
+        .copied()
+        .collect();
+    let mut declared = DeclaredMacroEvent::topics().to_vec();
+    lanes.sort_unstable();
+    declared.sort_unstable();
+    assert_eq!(lanes, declared);
+}
+
+#[test]
+fn a_lane_decodes_its_records_as_the_declared_topics_do() {
+    use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
+
+    let email = encoded_message(
+        MacroEmailTopic::TOPIC_STR,
+        EMAIL_LINK_ID,
+        Event::new(received_email_event(false)),
+    );
+    let session = lifecycle_message(AGENT_SESSION_ID, |identity| {
+        AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata { identity })
+    });
+    let decoded = [
+        (
+            EmailLaneEvent::decode(&email).map(DeclaredMacroEvent::from),
+            DeclaredMacroEvent::decode(&email),
+        ),
+        (
+            LiveLaneEvent::decode(&session).map(DeclaredMacroEvent::from),
+            DeclaredMacroEvent::decode(&session),
+        ),
+    ];
+    for (lane, declared) in decoded {
+        let (lane, declared) = (lane.expect("lane event"), declared.expect("declared event"));
+        assert_eq!(event_topic(&lane), event_topic(&declared));
+        assert_eq!(event_type(&lane), event_type(&declared));
+        assert_eq!(event_id(&lane), event_id(&declared));
+        assert_eq!(ordering_key(&lane), ordering_key(&declared));
+    }
+
+    assert!(matches!(
+        LiveLaneEvent::decode(&email),
+        Err(EventBrokerError::UnknownTopic(_))
+    ));
+    assert!(matches!(
+        EmailLaneEvent::decode(&session),
+        Err(EventBrokerError::UnknownTopic(_))
+    ));
 }
 
 #[test]
