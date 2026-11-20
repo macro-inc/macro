@@ -7,6 +7,7 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import QuestionIcon from '@icon/system/regular/question.svg';
 import { Dropdown } from '@ui';
 import { Show } from 'solid-js';
+import { useRailPlacement } from './use-sidebar-prefs';
 
 const DEMO_URL =
   'https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo';
@@ -15,19 +16,20 @@ const SUPPORT_EMAIL = 'support@macro.com';
 /** The rail's question-mark button: ways to reach the Macro team. */
 export function HelpMenu() {
   const support = createSupportLink();
+  const placement = useRailPlacement();
 
   return (
-    <Dropdown placement="right-end" gutter={6}>
+    <Dropdown placement={placement.aligned('end')} gutter={6}>
       <Dropdown.Trigger
         aria-label={t('nav.help')}
         variant="ghost"
         size="icon-md"
-        class="size-10 shrink-0 cursor-default rounded-xl"
-        tooltip={{ content: t('nav.help'), placement: 'right' }}
+        class="size-(--rail-button) shrink-0 cursor-default rounded-xl"
+        tooltip={{ content: t('nav.help'), placement: placement.facing() }}
         draggable={false}
         data-sidebar-next-item="help"
       >
-        <QuestionIcon class="size-6" />
+        <QuestionIcon class="size-[calc(var(--rail-glyph)*1.2)]" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-56">
         <Dropdown.Group>

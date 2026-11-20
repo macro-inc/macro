@@ -35,7 +35,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
-import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { RailFrame } from '@components/app/sidebar-next/sidebar-rail';
 import { SidebarPrefsProvider } from '@components/app/sidebar-next/use-sidebar-prefs';
 import { ViewSwitcher } from '@components/app/sidebar-next/view-switcher';
 import {
@@ -360,14 +360,13 @@ export function AppChrome(props: ParentProps) {
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>
             <ViewSwitcherContext.Provider value={ViewSwitcher}>
-              <Show when={isSidebarVisible()}>
-                <SidebarRail />
-              </Show>
-              <PageContent>
-                {/* Route loading must not detach the chrome or mobile
-                    navigation; the route draws its own loading state. */}
-                <Suspense>{props.children}</Suspense>
-              </PageContent>
+              <RailFrame showRail={isSidebarVisible()}>
+                <PageContent>
+                  {/* Route loading must not detach the chrome or mobile
+                      navigation; the route draws its own loading state. */}
+                  <Suspense>{props.children}</Suspense>
+                </PageContent>
+              </RailFrame>
             </ViewSwitcherContext.Provider>
           </SidebarPrefsProvider>
         </ItemDndProvider>

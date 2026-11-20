@@ -4,6 +4,7 @@ import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 import type { AppUpdate } from './app-update';
+import { useRailPlacement } from './use-sidebar-prefs';
 
 const DISMISSED_KEY = 'macro:app-update-dismissed';
 
@@ -40,6 +41,7 @@ function dismissUpdate(id: string): void {
  */
 export function UpdateButton(props: { update: () => AppUpdate }) {
   const [open, setOpen] = createSignal(dismissedUpdate() !== props.update().id);
+  const placement = useRailPlacement();
 
   const onOpenChange = (next: boolean) => {
     if (!next && props.update().busy) return;
@@ -51,20 +53,23 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
     <Popover
       open={open()}
       onOpenChange={onOpenChange}
-      placement="right-end"
+      placement={placement.aligned('end')}
       gutter={8}
     >
       <Popover.Trigger
         aria-label={t('nav.updateAvailable')}
-        tooltip={t('nav.updateAvailable')}
+        tooltip={{
+          content: t('nav.updateAvailable'),
+          placement: placement.facing(),
+        }}
         as={Button}
         variant="ghost"
         size="icon-md"
-        class="size-10 cursor-default rounded-xl"
+        class="size-(--rail-button) cursor-default rounded-xl"
         draggable={false}
         data-sidebar-next-item="app-update"
       >
-        <span class="pointer-events-none relative flex size-7 items-center justify-center rounded-full bg-accent-bg text-accent">
+        <span class="pointer-events-none relative flex size-7 scale-(--rail-scale) items-center justify-center rounded-full bg-accent-bg text-accent">
           <span
             aria-hidden="true"
             class="absolute -inset-px rounded-full opacity-0 animate-update-glow motion-reduce:hidden"

@@ -19,6 +19,7 @@ import { useAppUpdate } from './app-update';
 import { HelpMenu } from './help-menu';
 import { NavGlyph } from './nav-glyph';
 import { UpdateButton } from './update-button';
+import { useRailPlacement } from './use-sidebar-prefs';
 
 /**
  * Sizes the gear and punches a gap around the avatar badge (16px, centred at
@@ -47,6 +48,7 @@ const MobileAppButton = () => {
   const analytics = useAnalytics();
   const { openSettings, openSettingsInSplit, activeTabId } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
+  const placement = useRailPlacement();
 
   const isActive = () => isSettingsActive() && activeTabId() === 'Mobile App';
 
@@ -64,17 +66,20 @@ const MobileAppButton = () => {
         variant="ghost"
         size="icon-md"
         class={cn(
-          'size-10 cursor-default rounded-xl',
+          'size-(--rail-button) cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        tooltip={{ content: t('nav.getMobileApp'), placement: 'right' }}
+        tooltip={{
+          content: t('nav.getMobileApp'),
+          placement: placement.facing(),
+        }}
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item="mobile-app"
         {...pressHandlers(open)}
       >
-        <NavGlyph icon={DeviceMobileDownloadIcon} class="size-5" />
+        <NavGlyph icon={DeviceMobileDownloadIcon} class="size-(--rail-glyph)" />
       </Button>
     </Show>
   );
@@ -96,6 +101,7 @@ export const FooterActions = (props: {
   const userId = useUserId();
   const email = useEmail();
   const userName = useOwnUserName();
+  const placement = useRailPlacement();
 
   // Prefer the user's real name (first/last); fall back to their email.
   const accountName = createMemo(() => {
@@ -117,7 +123,12 @@ export const FooterActions = (props: {
   };
 
   return (
-    <div class="flex w-full shrink-0 flex-col items-center gap-1">
+    <div
+      class={cn(
+        'flex shrink-0 items-center gap-1',
+        placement.horizontal() ? 'flex-row' : 'w-full flex-col'
+      )}
+    >
       {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
       <Show when={!isTouchDevice() && update()?.id} keyed>
         {(_id) => (
@@ -135,14 +146,14 @@ export const FooterActions = (props: {
         onOpenCurrentSplit={() => openSettings(currentTab())}
         onOpenNewSplit={() => openSettingsInSplit(currentTab())}
         onOpenChange={props.onMenuOpenChange}
-        triggerClass="size-10"
+        triggerClass="size-(--rail-button)"
       >
         <Button
           aria-label={t('nav.settings')}
           variant="ghost"
           size="icon-md"
           class={cn(
-            'size-10 cursor-default rounded-xl',
+            'size-(--rail-button) cursor-default rounded-xl',
             isSettingsActive() && 'bg-hover text-ink'
           )}
           aria-description={
@@ -152,7 +163,7 @@ export const FooterActions = (props: {
           }
           tooltip={{
             content: t('nav.settings'),
-            placement: 'right',
+            placement: placement.facing(),
             hotkey: TOKENS.global.toggleSettings,
           }}
           draggable={false}
@@ -161,7 +172,7 @@ export const FooterActions = (props: {
           data-sidebar-next-item="settings"
           {...pressHandlers(open)}
         >
-          <div class="pointer-events-none relative size-6">
+          <div class="pointer-events-none relative size-6 scale-(--rail-scale)">
             <NavGlyph
               icon={GearIcon}
               iconActive={GearFillIcon}

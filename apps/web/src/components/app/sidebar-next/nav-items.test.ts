@@ -13,6 +13,8 @@ import { DEFAULT_HIDDEN_IDS, type SidebarPrefs } from './use-sidebar-prefs';
 const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
   hidden: new Set(DEFAULT_HIDDEN_IDS),
   order: [],
+  position: 'left',
+  size: 'large',
   ...overrides,
 });
 

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchRailButton } from './search-bar-button';
+import { SidebarPrefsProvider } from './use-sidebar-prefs';
 
 const mocks = vi.hoisted(() => ({
   activeView: 'home',
@@ -43,7 +44,11 @@ afterEach(cleanup);
 describe.each(['home', 'search'])('search button from %s', (activeView) => {
   it.each([false, true])('opens Search directly with Shift=%s', (shiftKey) => {
     mocks.activeView = activeView;
-    render(() => <SearchRailButton />);
+    render(() => (
+      <SidebarPrefsProvider>
+        <SearchRailButton />
+      </SidebarPrefsProvider>
+    ));
     fireEvent.click(screen.getByRole('button', { name: 'Search' }), {
       shiftKey,
     });

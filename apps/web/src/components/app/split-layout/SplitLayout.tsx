@@ -205,7 +205,12 @@ export function SplitLayout() {
         fallback={
           <div
             class="size-full"
-            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
+            // The rail's own padding is the gutter on its side, so the inset
+            // skips that side wherever `RailFrame` docks it.
+            classList={{
+              'py-1.5 pr-1.5 in-data-[rail-edge=right]:pr-0 in-data-[rail-edge=right]:pl-1.5 in-data-[rail-edge=top]:pt-0 in-data-[rail-edge=top]:pl-1.5 in-data-[rail-edge=bottom]:pb-0 in-data-[rail-edge=bottom]:pl-1.5':
+                useBentoLayout(),
+            }}
           >
             <div class="relative size-full">
               <For each={layerIds()}>
