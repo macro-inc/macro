@@ -274,9 +274,41 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     .fetch_one(&mut *tx)
                     .await
                     .map_err(report)?;
+                    let previously_verified = source_access::snapshot_is_verified(
+                        &mut tx,
+                        lease.account_id,
+                        target.calendar_id,
+                    )
+                    .await?;
+                    let stale_role = holds_stale_role(&mut tx, target.calendar_id).await?;
                     sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,last_sync_error_kind=NULL,consecutive_sync_failures=0,
                         materialized_starts_at=$2,materialized_ends_at=$3,materialized_start_date=$4,materialized_end_date=$5 WHERE id=$1"#,
                         target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
+                    // The update above withdrew the certificate (the
+                    // database trigger). As on Google, a full scan earns it
+                    // and a delta round keeps one the calendar had, but never
+                    // while an event the scan listed is missing because Macro
+                    // could not read it: Google fails such a calendar's sync,
+                    // and team availability would read the gap as free time.
+                    if (previously_verified || state.full_scan)
+                        && !has_unreadable_events(
+                            &mut tx,
+                            lease.id,
+                            lease.account_id,
+                            target.calendar_id,
+                        )
+                        .await?
+                    {
+                        source_access::verify_calendar_snapshot(
+                            &mut tx,
+                            lease.account_id,
+                            target.calendar_id,
+                        )
+                        .await?;
+                    }
+                    if stale_role {
+                        reset_cursor(&mut tx, lease.id).await?;
+                    }
                     sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status=CASE WHEN EXISTS(SELECT 1 FROM calendars c WHERE c.account_id=a.id AND NOT c.is_deleted AND c.synced_at IS NULL) THEN 'syncing' ELSE 'ready' END,
                         last_synced_at=now(),last_sync_error=NULL WHERE a.id=$1"#,lease.account_id).execute(&mut *tx).await.map_err(report)?;
                     wait = if lease.system_calendar {
@@ -476,7 +508,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         for calendar in calendars {
             observed.push(calendar.calendar.provider_calendar_id.clone());
             let system_calendar = calendar.is_system(&lease.token_identity.email_address);
-            let (c, calendar_changed) = upsert_calendar_tx(
+            let upserted = upsert_calendar_tx(
                 &mut tx,
                 &mut log,
                 lease.binding.link_id,
@@ -485,6 +517,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                 Some(CalendarProvider::Outlook),
             )
             .await?;
+            let c = upserted.row;
+            let calendar_changed = upserted.team_ooo_changed;
             change.team_ooo_changed |= calendar_changed;
             // Which meetings a calendar can add changes what its viewers can
             // do, but no out-of-office row.
@@ -512,11 +546,20 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
                 VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) WHERE calendar_id IS NOT NULL DO NOTHING"#,
                 Uuid::now_v7(),lease.account_id,c.id,lease.binding.sync_generation,lease.binding.grant_generation,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
+            if upserted.role_changed || upserted.needs_verification {
+                rescan_for_verification(&mut tx, lease.account_id, c.id, upserted.role_changed)
+                    .await?;
+            }
         }
-        let removed=sqlx::query!("UPDATE calendars SET is_deleted=true WHERE account_id=$1 AND NOT(provider_calendar_id=ANY($2::text[])) AND NOT is_deleted RETURNING id",lease.account_id,&observed).fetch_all(&mut *tx).await.map_err(report)?;
+        // A removed calendar's sources go, so its coverage and certificate go
+        // with them, as Google's do, and its scan starts over: one listed again
+        // later is a first import, not a resumed delta missing those events.
+        let removed=sqlx::query!(r#"UPDATE calendars SET is_deleted=true,synced_at=NULL,materialized_starts_at=NULL,materialized_ends_at=NULL,materialized_start_date=NULL,materialized_end_date=NULL
+            WHERE account_id=$1 AND NOT(provider_calendar_id=ANY($2::text[])) AND NOT is_deleted RETURNING id"#,lease.account_id,&observed).fetch_all(&mut *tx).await.map_err(report)?;
         change.changed |= !removed.is_empty();
         for c in removed {
             retire_sources(&mut tx, &mut log, c.id, &[]).await?;
+            rescan_for_verification(&mut tx, lease.account_id, c.id, true).await?;
         }
         sqlx::query!("UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,next_run_at=now()+interval '5 minutes',attempts=0,last_error=NULL WHERE id=$1",lease.id).execute(&mut *tx).await.map_err(report)?;
         if observed.is_empty() {
@@ -691,6 +734,93 @@ async fn remove_pending(
     .execute(&mut **tx)
     .await
     .map_err(report)?;
+    Ok(())
+}
+
+/// Whether an event the calendar's listing holds has no stored copy, which
+/// after its read means Macro could not read it
+/// (`OutlookCalendarProgress::Unreadable`): gone events leave the listing.
+async fn has_unreadable_events(
+    tx: &mut Transaction<'_, Postgres>,
+    work_id: Uuid,
+    account_id: Uuid,
+    calendar_id: Uuid,
+) -> Result<bool, Report> {
+    // The read costs one probe of the source key per listed event: about
+    // 40 ms for 20,000 events. `OFFSET 0` keeps the probe a per-event
+    // subplan, since the planner underestimates one calendar's sources and,
+    // given an anti join, compares every member with every source instead.
+    // The timeout lasts for the rest of the transaction, whose other
+    // statements each touch one calendar's rows at most.
+    sqlx::query!("SET LOCAL statement_timeout = '60s'")
+        .execute(&mut **tx)
+        .await
+        .map_err(report)?;
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM (SELECT DISTINCT m.master_id FROM calendar_outlook_members m WHERE m.work_id=$1) listed
+            WHERE NOT EXISTS(SELECT 1 FROM calendar_event_sources s
+                WHERE s.account_id=$2 AND s.calendar_id=$3 AND s.provider_event_id=listed.master_id AND s.source_kind='outlook' OFFSET 0)) AS "unreadable!""#,
+        work_id,
+        account_id,
+        calendar_id
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)
+}
+
+/// Whether a copy written since the calendar's last committed sync holds a
+/// role other than the calendar's, as an edit's echo does when it observed
+/// the role before a change. Discovery finds such a copy only until a round
+/// moves `synced_at` past it, so the round that would hide it schedules the
+/// full scan that verifies it instead. A copy stored under no role is left
+/// out: reading it again cannot verify it.
+async fn holds_stale_role(
+    tx: &mut Transaction<'_, Postgres>,
+    calendar_id: Uuid,
+) -> Result<bool, Report> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM calendar_event_sources source JOIN calendars calendar ON calendar.id=source.calendar_id
+            WHERE source.calendar_id=$1 AND source.provider_access_role<>calendar.access_role
+              AND source.last_seen_at>=COALESCE(calendar.synced_at,'-infinity')) AS "stale!""#,
+        calendar_id
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)
+}
+
+/// Schedules the full scan that certifies a calendar for team reads: every
+/// event read again under the calendar's current role. `restart` (a role
+/// change, whose earlier reads carry the old role, or the calendar's removal)
+/// discards a scan in progress. Otherwise a scan already in progress
+/// certifies the calendar when it finishes, and a calendar holding an event
+/// Macro cannot read gets none, since no scan would certify it and its
+/// discovery would start one every few minutes.
+async fn rescan_for_verification(
+    tx: &mut Transaction<'_, Postgres>,
+    account_id: Uuid,
+    calendar_id: Uuid,
+    restart: bool,
+) -> Result<(), Report> {
+    let work = sqlx::query!(
+        "SELECT id,full_scan FROM calendar_outlook_work WHERE account_id=$1 AND calendar_id=$2",
+        account_id,
+        calendar_id
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?;
+    let Some(work) = work else {
+        return Ok(());
+    };
+
+    let rescan = restart
+        || (!work.full_scan
+            && !has_unreadable_events(tx, work.id, account_id, calendar_id).await?);
+    if rescan {
+        reset_cursor(tx, work.id).await?;
+    }
     Ok(())
 }
 
