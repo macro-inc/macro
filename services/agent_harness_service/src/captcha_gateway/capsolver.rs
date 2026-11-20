@@ -266,7 +266,7 @@ impl<'a> From<&'a CaptchaTask> for WireTask<'a> {
                 page_action: None,
                 recaptcha_data_s_value: None,
                 enterprise_payload: None,
-                metadata: (action.is_some() || cdata.is_some()).then(|| TurnstileMetadata {
+                metadata: (action.is_some() || cdata.is_some()).then_some(TurnstileMetadata {
                     action: action.as_deref(),
                     cdata: cdata.as_deref(),
                 }),

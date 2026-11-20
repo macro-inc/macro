@@ -67,25 +67,31 @@ pub(crate) enum Challenge {
     },
 }
 
-/// The CapSolver task type a challenge is solved with; proxyless only.
+/// The CapSolver task type a challenge is solved with; proxyless only. Its
+/// string form is CapSolver's task type name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
 pub(crate) enum TaskType {
-    ReCaptchaV2TaskProxyLess,
-    ReCaptchaV2EnterpriseTaskProxyLess,
-    ReCaptchaV3TaskProxyLess,
-    ReCaptchaV3EnterpriseTaskProxyLess,
-    AntiTurnstileTaskProxyLess,
+    #[strum(serialize = "ReCaptchaV2TaskProxyLess")]
+    ReCaptchaV2,
+    #[strum(serialize = "ReCaptchaV2EnterpriseTaskProxyLess")]
+    ReCaptchaV2Enterprise,
+    #[strum(serialize = "ReCaptchaV3TaskProxyLess")]
+    ReCaptchaV3,
+    #[strum(serialize = "ReCaptchaV3EnterpriseTaskProxyLess")]
+    ReCaptchaV3Enterprise,
+    #[strum(serialize = "AntiTurnstileTaskProxyLess")]
+    Turnstile,
 }
 
 impl TaskType {
     /// The `ai_pricing` row a solved task is billed at.
     pub(crate) fn pricing_model(self) -> &'static str {
         match self {
-            Self::ReCaptchaV2TaskProxyLess => "capsolver-recaptcha-v2",
-            Self::ReCaptchaV2EnterpriseTaskProxyLess => "capsolver-recaptcha-v2-enterprise",
-            Self::ReCaptchaV3TaskProxyLess => "capsolver-recaptcha-v3",
-            Self::ReCaptchaV3EnterpriseTaskProxyLess => "capsolver-recaptcha-v3-enterprise",
-            Self::AntiTurnstileTaskProxyLess => "capsolver-turnstile",
+            Self::ReCaptchaV2 => "capsolver-recaptcha-v2",
+            Self::ReCaptchaV2Enterprise => "capsolver-recaptcha-v2-enterprise",
+            Self::ReCaptchaV3 => "capsolver-recaptcha-v3",
+            Self::ReCaptchaV3Enterprise => "capsolver-recaptcha-v3-enterprise",
+            Self::Turnstile => "capsolver-turnstile",
         }
     }
 }
@@ -123,9 +129,9 @@ impl CaptchaTask {
                 ..
             } => {
                 let task_type = if *enterprise {
-                    TaskType::ReCaptchaV2EnterpriseTaskProxyLess
+                    TaskType::ReCaptchaV2Enterprise
                 } else {
-                    TaskType::ReCaptchaV2TaskProxyLess
+                    TaskType::ReCaptchaV2
                 };
                 (
                     task_type,
@@ -141,9 +147,9 @@ impl CaptchaTask {
                 enterprise,
             } => {
                 let task_type = if *enterprise {
-                    TaskType::ReCaptchaV3EnterpriseTaskProxyLess
+                    TaskType::ReCaptchaV3Enterprise
                 } else {
-                    TaskType::ReCaptchaV3TaskProxyLess
+                    TaskType::ReCaptchaV3
                 };
                 (task_type, page_url, site_key, [action.as_deref(), None])
             }
@@ -153,7 +159,7 @@ impl CaptchaTask {
                 action,
                 cdata,
             } => (
-                TaskType::AntiTurnstileTaskProxyLess,
+                TaskType::Turnstile,
                 page_url,
                 site_key,
                 [action.as_deref(), cdata.as_deref()],
