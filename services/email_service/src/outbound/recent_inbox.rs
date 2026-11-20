@@ -178,8 +178,10 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
 /// gate or by Gmail's rate limit waits as long as it asks (or
 /// [`GMAIL_REFUSED_RETRY`]) and tries again; a refusal whose wait would
 /// reach the deadline, or any refusal without one, is the answer. No try
-/// starts at or after the deadline, and one still running then is cut off
-/// (waiting for the gate, a token or Gmail) and refused.
+/// starts at or after the deadline. One still running then finishes, within
+/// the client's own timeouts: cutting it off could drop the gate's admission
+/// after Redis granted it and before its permit exists, holding a slot of
+/// the mailbox until the lease runs out.
 async fn wait_out_refusals<O, F, Fut>(
     deadline: Option<Instant>,
     mut read: F,
@@ -193,14 +195,10 @@ where
         origin: RateLimitOrigin::Local,
     };
     loop {
-        let answer = match deadline {
-            Some(deadline) if Instant::now() >= deadline => return Err(refused()),
-            Some(deadline) => tokio::time::timeout_at(deadline, read())
-                .await
-                .unwrap_or_else(|_| Err(refused())),
-            None => read().await,
-        };
-        match answer {
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            return Err(refused());
+        }
+        match read().await {
             Err(EmailApiError::RateLimited {
                 retry_after,
                 origin,

@@ -304,7 +304,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
         }
         // Graph may answer a page short of `$top`, even empty, with more to
         // come: follow its pages until the limit, a page it has read already
-        // (however its link is spelled), or [`MAX_RECENT_PAGES`]. A message
+        // (its query in any order), or [`MAX_RECENT_PAGES`]. A message
         // that can't be read is left out and counted, so one bad message keeps
         // the rest, and the limit counts the messages kept. A later page that
         // fails, or a link to it that can't be followed, keeps what the
@@ -326,8 +326,10 @@ impl MailboxContentReader for OutlookApiClientRepository {
             pages += 1;
             // Each message decodes on its own, so one Graph can't describe
             // leaves the rest of its page; rows past the limit are never read.
-            let wanted = limit.saturating_sub(messages.len());
-            for message in page.value.into_iter().take(wanted) {
+            for message in page.value {
+                if messages.len() >= limit {
+                    break;
+                }
                 let read = serde_json::from_value::<wire::Message>(message)
                     .map_err(|_| invalid_response("a message that does not decode"))
                     .and_then(|message| normalize(message, Vec::new(), link_id, folders));
@@ -635,7 +637,8 @@ impl MailboxActionWriter for OutlookApiClientRepository {
 }
 
 /// What makes two links one page of a list: the same path and the same
-/// query pairs, in any order and however they are encoded.
+/// query pairs, in any order and however the pairs are encoded. A path
+/// spelled two ways reads as two pages, which [`MAX_RECENT_PAGES`] bounds.
 fn page_key(url: &url::Url) -> (String, Vec<(String, String)>) {
     let mut pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
     pairs.sort();

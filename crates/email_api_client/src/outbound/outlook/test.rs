@@ -1252,3 +1252,74 @@ async fn recent_inbox_messages_read_past_an_empty_page_and_stop_at_page_one_or_a
 
     assert_eq!(read().await, vec![Some("m1".to_owned())]);
 }
+
+#[tokio::test]
+async fn recent_inbox_messages_read_at_most_ten_pages_and_fill_the_limit_past_a_bad_row() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let link = |page: u32| {
+        format!(
+            "{}/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-{page}",
+            server.uri()
+        )
+    };
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "50"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": link(2)
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    for page in 2..=11 {
+        Mock::given(method("GET"))
+            .and(path("/v1.0/me/mailFolders/inbox/messages"))
+            .and(query_param("$skiptoken", format!("page-{page}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "value": [message(&format!("m{page}"))],
+                "@odata.nextLink": link(page + 1)
+            })))
+            .expect(u64::from(page <= 10))
+            .mount(&server)
+            .await;
+    }
+
+    let messages = api
+        .recent_inbox_messages(&token, Uuid::now_v7(), 50, None, &[])
+        .await
+        .unwrap();
+
+    assert_eq!(messages.len(), 10);
+    server.verify().await;
+
+    // With two left to read, a bad row doesn't use up a place.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [{"id": "bad", "parentFolderId": "inbox"}, message("a"), message("b")],
+            "@odata.nextLink": link(2)
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let ids: Vec<_> = api
+        .recent_inbox_messages(&token, Uuid::now_v7(), 2, None, &[])
+        .await
+        .unwrap()
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect();
+
+    assert_eq!(ids, vec![Some("a".to_owned()), Some("b".to_owned())]);
+}

@@ -87,28 +87,32 @@ async fn a_read_not_started_by_its_deadline_is_left_out_untried() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_read_still_running_at_its_deadline_is_cut_off() {
+async fn a_read_running_at_its_deadline_finishes_and_none_starts_after() {
     let tries = Cell::new(0);
     let started = Instant::now();
 
+    // Each try takes 30 s. The first is refused and retried at 31 s; the
+    // second runs past the deadline and is answered; no third starts.
     let answer = wait_out_refusals(Some(started + GMAIL_WINDOW_WAIT), || {
         tries.set(tries.get() + 1);
-        async {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-            Ok::<_, EmailApiError>(None::<MessageWithCalendarParts>)
+        let first = tries.get() == 1;
+        async move {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            if first {
+                Err(EmailApiError::RateLimited {
+                    retry_after: Some(Duration::from_secs(1)),
+                    origin: RateLimitOrigin::Local,
+                })
+            } else {
+                Ok(None::<MessageWithCalendarParts>)
+            }
         }
     })
     .await;
 
-    assert!(matches!(
-        answer,
-        Err(EmailApiError::RateLimited {
-            retry_after: None,
-            origin: RateLimitOrigin::Local
-        })
-    ));
-    assert_eq!(tries.get(), 1);
-    assert_eq!(started.elapsed(), GMAIL_WINDOW_WAIT);
+    assert!(matches!(answer, Ok(None)));
+    assert_eq!(tries.get(), 2);
+    assert_eq!(started.elapsed(), Duration::from_secs(61));
 }
 
 #[tokio::test(start_paused = true)]
