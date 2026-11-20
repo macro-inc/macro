@@ -66,11 +66,12 @@ impl McpSubscriptionRepo for FakeRepo {
     ) -> Result<McpStoreOutcome, FakeError> {
         let mut rows = self.rows.lock().expect("lock");
         let now = Utc::now();
-        rows.retain(|row| row.user_id != upsert.key.user_id || row.is_live(now));
         let others = rows
             .iter()
             .filter(|row| {
-                row.user_id == upsert.key.user_id && row.subscription_id != upsert.subscription_id
+                row.user_id == upsert.key.user_id
+                    && row.subscription_id != upsert.subscription_id
+                    && row.is_live(now)
             })
             .count();
         if others >= max as usize {
@@ -445,7 +446,8 @@ async fn the_quota_counts_live_subscriptions_only() {
         .subscribe(user(ME), request("one more", filter))
         .await
         .expect("expired ones no longer count");
-    assert_eq!(repo.rows().len(), 1);
+    let now = Utc::now();
+    assert_eq!(repo.rows().iter().filter(|row| row.is_live(now)).count(), 1);
 }
 
 #[tokio::test]

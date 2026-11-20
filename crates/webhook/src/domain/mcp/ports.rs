@@ -60,7 +60,7 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
 
     /// Insert, or refresh the secret, filter and expiry of the existing row,
     /// unless the user would then hold more than `max` live subscriptions.
-    /// Expired rows of the user are removed first. Serialized per user, so
+    /// Expired rows do not count. Serialized per user, so
     /// concurrent subscribes cannot pass the limit together.
     fn store_within_quota(
         &self,

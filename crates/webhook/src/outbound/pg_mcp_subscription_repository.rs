@@ -146,19 +146,12 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         )
         .execute(&mut *transaction)
         .await?;
-        sqlx::query!(
-            r#"
-            DELETE FROM mcp_event_subscription
-            WHERE user_id = $1 AND expires_at <= now()
-            "#,
-            user_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        // A refresh replaces its own row, so it does not count against itself.
+        // A refresh replaces its own row, so it does not count against itself;
+        // expired rows wait for the sweep and do not count either. The expiry
+        // is a FILTER, not a WHERE, so the plan reads only the user's rows.
         let others = sqlx::query_scalar!(
             r#"
-            SELECT count(*) AS "count!"
+            SELECT count(*) FILTER (WHERE expires_at > now()) AS "count!"
             FROM mcp_event_subscription
             WHERE user_id = $1 AND subscription_id <> $2
             "#,

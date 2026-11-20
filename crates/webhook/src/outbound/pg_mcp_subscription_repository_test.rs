@@ -224,12 +224,11 @@ async fn sweeping_deletes_expired_rows_in_batches(pool: PgPool) -> anyhow::Resul
         )
         .await?;
     }
-    // Storing "b" removed the user's expired "a"; "b" and "c" remain.
-    assert_eq!(index_rows(&pool).await?, 3);
+    assert_eq!(index_rows(&pool).await?, 4);
 
-    assert_eq!(repo.delete_expired_batch(1).await?, 1);
-    assert_eq!(repo.delete_expired_batch(1).await?, 1);
-    assert_eq!(repo.delete_expired_batch(1).await?, 0);
+    assert_eq!(repo.delete_expired_batch(2).await?, 2);
+    assert_eq!(repo.delete_expired_batch(2).await?, 1);
+    assert_eq!(repo.delete_expired_batch(2).await?, 0);
     assert_eq!(repo.get_live(live.id).await?, Some(live));
     assert_eq!(index_rows(&pool).await?, 1, "index rows go with their row");
     Ok(())
@@ -290,7 +289,11 @@ async fn expired_rows_free_their_quota(pool: PgPool) -> anyhow::Result<()> {
         .await?,
         McpStoreOutcome::Stored(_)
     ));
-    assert_eq!(index_rows(&pool).await?, 1, "the expired row was removed");
+    assert_eq!(
+        index_rows(&pool).await?,
+        2,
+        "the expired row waits for the sweep"
+    );
     Ok(())
 }
 
