@@ -141,11 +141,13 @@ impl ContactListReader for DbContactsRepository {
                 .lists
                 .iter()
                 .filter_map(|key| {
-                    let list = ContactList::from_key(key);
-                    if list.is_none() {
-                        tracing::warn!(list_key = %key, "skipping unknown contact list key");
-                    }
-                    list
+                    // A key this build does not know, such as a list added
+                    // later, is skipped rather than failing the read.
+                    key.parse::<ContactList>()
+                        .inspect_err(|_| {
+                            tracing::warn!(list_key = %key, "skipping unknown contact list key");
+                        })
+                        .ok()
                 })
                 .collect();
             if lists.is_empty() {

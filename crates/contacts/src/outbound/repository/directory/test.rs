@@ -207,7 +207,8 @@ async fn lists_name_each_of_the_viewers_lists_once(pool: PgPool) {
         user_id: mid(id),
         lists: lists.to_vec(),
     };
-    // The viewer is not their own teammate, and s is not in the viewer's lists.
+    // The viewer is not their own teammate, s is not in the viewer's lists,
+    // and b's unknown list key is skipped.
     assert_eq!(
         found,
         [

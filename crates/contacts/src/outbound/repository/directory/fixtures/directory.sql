@@ -37,6 +37,8 @@ INSERT INTO contact_list_members (user_id, contact_user_id, list_key) VALUES
 ('macro|v@example.com', 'macro|a@example.com', 'interacted'),
 ('macro|v@example.com', 'macro|a@example.com', 'invited'),
 ('macro|v@example.com', 'macro|b@example.com', 'interacted'),
+-- A list key a later release might write; this one skips it.
+('macro|v@example.com', 'macro|b@example.com', 'custom:01900000-0000-7000-8000-000000000001'),
 ('macro|v@example.com', 'macro|t@example.com', 'interacted'),
 ('macro|a@example.com', 'macro|v@example.com', 'interacted'),
 ('macro|s@example.com', 'macro|v@example.com', 'invited'),
