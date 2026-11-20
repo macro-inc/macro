@@ -330,6 +330,8 @@ export const useCrmContext = () => ({
     },
   }),
   copyRecordLink: async () => true,
+  askMacro: (record: { type: string; name: string }) =>
+    setMessage(`Ask Macro about ${record.type} ${record.name}`),
   contactInitials: (name: string) =>
     name
       .split(' ')

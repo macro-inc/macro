@@ -1,3 +1,4 @@
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
@@ -266,6 +267,8 @@ export function createAppCrmContext(): CrmContext {
     createNavigation: createAppCrmNavigation,
     EmailThreadMention,
     copyRecordLink: copyCrmRecordLink,
+    askMacro: (record) =>
+      fireAndForget(openChatWithAgent(record), 'crm-ask-macro'),
     copyViewLink: copyCrmViewLink,
     copyPipelineLink: copyCrmPipelineLink,
     listsEnabled() {

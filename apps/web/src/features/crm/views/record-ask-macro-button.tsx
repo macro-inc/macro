@@ -1,7 +1,25 @@
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Match, Show, Switch } from 'solid-js';
-import type { CrmRecordTarget } from '../core/record';
+import { useCrmContext } from '../context/crm-context';
+import type { CrmRecordRef, CrmRecordTarget } from '../core/record';
 import { useCompanyQuery, useContactQuery } from './use-crm';
+
+function AskMacroAction(props: { record: CrmRecordRef; grouped?: boolean }) {
+  const { askMacro } = useCrmContext();
+  return (
+    <HeaderActionButton
+      grouped={props.grouped}
+      onClick={() => askMacro(props.record)}
+      tooltip={t('entityActions.askMacro')}
+      label={t('entityActions.askMacro')}
+      icon={
+        <SparkleIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+      }
+    />
+  );
+}
 
 type ButtonProps = { id: string; grouped?: boolean };
 
@@ -10,9 +28,9 @@ function CompanyAskMacro(props: ButtonProps) {
   return (
     <Show when={company()}>
       {(current) => (
-        <AskMacroButton
+        <AskMacroAction
           grouped={props.grouped}
-          entity={{ type: 'company', id: current().id, name: current().name }}
+          record={{ type: 'company', id: current().id, name: current().name }}
         />
       )}
     </Show>
@@ -24,9 +42,9 @@ function ContactAskMacro(props: ButtonProps) {
   return (
     <Show when={query.isSuccess && query.data}>
       {(current) => (
-        <AskMacroButton
+        <AskMacroAction
           grouped={props.grouped}
-          entity={{
+          record={{
             type: 'contact',
             id: current().id,
             name: current().name || (current().email ?? ''),
