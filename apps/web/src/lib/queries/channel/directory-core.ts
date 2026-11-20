@@ -179,6 +179,19 @@ function sameInstant(
   return Date.parse(left) === Date.parse(right);
 }
 
+/** Mentions as a set: both lists name each mention once, in no promised order. */
+function sameMentions(
+  rest: ReadonlyArray<string>,
+  directory: ReadonlyArray<string>
+): boolean {
+  const left = [...rest].sort();
+  const right = [...directory].sort();
+  return (
+    left.length === right.length &&
+    left.every((mention, index) => mention === right[index])
+  );
+}
+
 function sameMessage(
   rest: ApiChannelWithLatest['latest_message'],
   directory: DirectoryMessage | null
@@ -189,8 +202,21 @@ function sameMessage(
     (rest.thread_id ?? null) === directory.threadId &&
     rest.sender_id === directory.senderId &&
     rest.content === directory.content &&
+    sameMentions(rest.mentions, directory.mentions) &&
     sameInstant(rest.updated_at, directory.updatedAt) &&
     sameInstant(rest.deleted_at, directory.deletedAt)
+  );
+}
+
+function sameAgentDm(
+  rest: ApiChannelWithLatest['agent_dm'],
+  directory: DirectoryChannel['agentDm']
+): boolean {
+  if (!rest || !directory) return !rest && !directory;
+  return (
+    rest.bot_id === directory.botId &&
+    rest.name === directory.name &&
+    (rest.avatar_url ?? null) === directory.avatarUrl
   );
 }
 
@@ -274,10 +300,7 @@ function fieldChecks(
     ['interacted_at', !sameInstant(rest.interacted_at, directory.interactedAt)],
     ['is_participant', rest.is_participant !== directory.isParticipant],
     ['participants', !sameMembers(rest, directory)],
-    [
-      'agent_dm',
-      (rest.agent_dm?.bot_id ?? null) !== (directory.agentDm?.botId ?? null),
-    ],
+    ['agent_dm', !sameAgentDm(rest.agent_dm, directory.agentDm)],
     [
       'latest_message',
       !sameMessage(rest.latest_message, directory.latestMessage),

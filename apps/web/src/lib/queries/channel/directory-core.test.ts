@@ -1,3 +1,4 @@
+import type { AgentDmProfile } from '@service-storage/generated/schemas/agentDmProfile';
 import { describe, expect, it } from 'vitest';
 import {
   compareChannelDirectory,
@@ -119,6 +120,62 @@ describe('channel directory comparison', () => {
       missing_from_directory: 1,
       extra_in_directory: 1,
     });
+  });
+
+  it('reports a latest message whose mentions differ, in any order', () => {
+    const mentioned = {
+      ...message,
+      mentions: ['USER:macro|a@example.com', 'DOCUMENT:d1'],
+    };
+    const directory = toDirectoryChannel(
+      channelRecord('a', {
+        latestMessage: mentioned,
+        latestNonThreadMessage: mentioned,
+      })
+    );
+    const rest = (mentions: string[]) =>
+      restChannel('a', {
+        latest_message: { ...restMessage, mentions },
+        latest_non_thread_message: {
+          ...restMessage,
+          mentions: ['DOCUMENT:d1', 'USER:macro|a@example.com'],
+        },
+      });
+
+    expect(
+      compareChannelDirectory(
+        [rest(['DOCUMENT:d1', 'USER:macro|a@example.com'])],
+        [directory]
+      )
+    ).toEqual([]);
+    expect(
+      compareChannelDirectory([rest(['DOCUMENT:d1'])], [directory])
+    ).toEqual([{ kind: 'latest_message', channelId: 'a' }]);
+  });
+
+  it('reports an agent DM whose persona name or avatar differs', () => {
+    const agentDm = {
+      botId: '00000000-0000-0000-0000-00000000b071',
+      name: 'Scout',
+      avatarUrl: null,
+    };
+    const directory = toDirectoryChannel(channelRecord('a', { agentDm }));
+    const persona: AgentDmProfile = {
+      bot_id: agentDm.botId,
+      name: agentDm.name,
+      avatar_url: null,
+    };
+    const kinds = (agent_dm: AgentDmProfile | undefined) =>
+      compareChannelDirectory([restChannel('a', { agent_dm })], [directory]);
+
+    expect(kinds(persona)).toEqual([]);
+    expect(kinds({ ...persona, name: 'Renamed' })).toEqual([
+      { kind: 'agent_dm', channelId: 'a' },
+    ]);
+    expect(
+      kinds({ ...persona, avatar_url: 'https://example.com/a.png' })
+    ).toEqual([{ kind: 'agent_dm', channelId: 'a' }]);
+    expect(kinds(undefined)).toEqual([{ kind: 'agent_dm', channelId: 'a' }]);
   });
 
   it('counts a left member as a difference from an active one', () => {
