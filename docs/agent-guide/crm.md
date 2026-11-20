@@ -832,10 +832,11 @@ actions, and the Customer / Contact picker retire immediately when access is rev
 Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
 In team settings, admins and owners see a **CRM** switch in each member's row,
-after the seat and role menus, only while `enable-crm-member-access-changes` is
-enabled. Owner and admin rows have no switch; one note under the list says they
-always have CRM access. Rows stay one line on desktop; on phones a member's
-controls wrap below their name.
+after the member's seat plan and role and before Remove, only while
+`enable-crm-member-access-changes` is enabled. Owner and admin rows have no
+switch; one note under the list says they always have CRM access. Rows stay one
+line where they fit; where a member's row can't keep about 140px for the name
+beside its controls (phones, narrow splits), the controls wrap below the name.
 A failed save keeps the previous state and can be retried; members do not see these controls.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,

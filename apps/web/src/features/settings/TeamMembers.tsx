@@ -187,24 +187,30 @@ function MemberRow(props: {
     const e = email();
     return e && e !== displayName();
   };
+  const showCrmAccess = () =>
+    props.canManageCrm && props.member.role === TeamRole.member;
 
   return (
     <div
       data-team-member={props.member.user_id}
       class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-4"
     >
-      {/* Once the name would get less than its 7rem basis, the controls wrap
-          below it instead (phones, with a seat menu and the CRM switch). */}
+      {/* With the CRM switch the avatar and name keep 12rem, so on phones the
+          controls wrap below the name; other rows keep one line as before. */}
       <div
         data-member-identity
-        class="flex min-w-0 grow basis-28 items-center gap-3"
+        class="flex min-w-0 grow items-center gap-3"
+        classList={{
+          'basis-48': showCrmAccess(),
+          'basis-0': !showCrmAccess(),
+        }}
       >
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 min-w-0">
-            <div class="text-sm font-medium text-ink truncate">
+            <div data-member-name class="text-sm font-medium text-ink truncate">
               {displayName()}
               {props.isCurrentUser && (
                 <span class="text-ink-muted font-normal"> (you)</span>
@@ -221,7 +227,7 @@ function MemberRow(props: {
       </div>
       <div
         data-member-controls
-        class="ml-auto flex shrink-0 items-center gap-2"
+        class="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2"
       >
         <Show when={props.showPlan}>
           <Show
@@ -251,9 +257,7 @@ function MemberRow(props: {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
-        <Show
-          when={props.canManageCrm && props.member.role === TeamRole.member}
-        >
+        <Show when={showCrmAccess()}>
           <ToggleSwitch
             size="sm"
             label={
@@ -265,7 +269,7 @@ function MemberRow(props: {
               </>
             }
             labelClass="text-xs text-ink"
-            class="touch:min-h-11 touch:min-w-11"
+            class="touch:-my-1 touch:min-h-11 touch:min-w-11"
             checked={props.crmAccess}
             disabled={props.crmPending}
             onChange={props.onCrmAccessChange}
@@ -286,6 +290,7 @@ function MemberRow(props: {
                   variant="ghost"
                   size="sm"
                   disabled
+                  aria-label={`Remove ${displayName()}`}
                   class="opacity-50 cursor-not-allowed"
                 >
                   <TrashIcon class="size-4" />
@@ -294,7 +299,12 @@ function MemberRow(props: {
             }
           >
             <Tooltip label="Remove member">
-              <Button variant="ghost" size="sm" onClick={props.onRemove}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove ${displayName()}`}
+                onClick={props.onRemove}
+              >
                 <TrashIcon class="size-4" />
               </Button>
             </Tooltip>

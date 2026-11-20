@@ -29,6 +29,7 @@ type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting';
 const OWNER = 'macro|maya@example.com';
 const MEMBER = 'macro|sam@example.com';
 const ADMIN = 'macro|lee@example.com';
+const KAI = 'macro|kai@example.com';
 const ADA = 'macro|ada@agents.macro.invalid';
 
 /** Where to also copy every screenshot, for a PR; unset keeps them in test-results. */
@@ -138,9 +139,15 @@ async function scriptAuthService(
     /** Owners and admins own an agent computer's runtime; others don't see it. */
     viewerOwnsRuntimes?: boolean;
     failedCrmSaves?: number;
-    extraMembers?: { user_id: string; role: 'admin' | 'member' }[];
+    extraMembers?: {
+      user_id: string;
+      role: 'admin' | 'member';
+      plan?: 'premium' | 'max';
+    }[];
     /** Enterprise teams bill per seat, so every row has its seat plan menu. */
     enterprise?: boolean;
+    /** Seat plans that change at renewal, by user id. */
+    scheduledSeatPlans?: Record<string, 'premium' | 'max'>;
   } = {}
 ) {
   const backend = {
@@ -174,9 +181,9 @@ async function scriptAuthService(
     { user_id: OWNER, role: 'owner', team_id: 'team-1', plan: 'premium' },
     { user_id: MEMBER, role: 'member', team_id: 'team-1', plan: 'premium' },
     ...(options.extraMembers ?? []).map((member) => ({
-      ...member,
       team_id: 'team-1',
       plan: 'premium',
+      ...member,
     })),
     // The server adds an agent's own account to the team.
     ...backend.agents.map((agent) => ({
@@ -371,7 +378,14 @@ async function scriptAuthService(
           enterprise: options.enterprise ?? false,
         },
         members: members(),
-        scheduled_seat_plans: {},
+        scheduled_seat_plans: Object.fromEntries(
+          Object.entries(options.scheduledSeatPlans ?? {}).map(
+            ([userId, plan]) => [
+              userId,
+              { plan, effectiveAt: '2026-12-01T00:00:00Z' },
+            ]
+          )
+        ),
         crm_member_access: backend.crmAccess,
       });
 
@@ -1167,94 +1181,160 @@ test('CRM access can be revoked and restored while privileged roles retain acces
 });
 
 /** Each person row's height, by user id. */
-async function memberRowHeights(page: Page) {
+async function memberRowHeights(page: Page, ids: string[]) {
   const heights: Record<string, number> = {};
-  for (const id of [OWNER, ADMIN, MEMBER]) {
+  for (const id of ids) {
     const box = await page.locator(`[data-team-member="${id}"]`).boundingBox();
     heights[id] = Math.round(box!.height);
   }
   return heights;
 }
 
-test('CRM access is one control beside the seat and role menus', async ({
+/**
+ * How a member row lays out: whether its controls share the name's line or
+ * sit below it, whether every control (Remove included) stays inside the
+ * row's padding, whether Remove ends the row, and whether the name shows in
+ * full.
+ */
+async function memberRowLayout(page: Page, id: string) {
+  return page.locator(`[data-team-member="${id}"]`).evaluate((row) => {
+    const box = row.getBoundingClientRect();
+    const style = getComputedStyle(row);
+    const left = box.left + Number.parseFloat(style.paddingLeft);
+    const right = box.right - Number.parseFloat(style.paddingRight);
+    const identity = row
+      .querySelector('[data-member-identity]')!
+      .getBoundingClientRect();
+    // Tooltips leave a hidden marker beside their trigger; skip what isn't drawn.
+    const controls = [...row.querySelector('[data-member-controls]')!.children]
+      .filter((control) => control.getClientRects().length > 0)
+      .map((control) => control.getBoundingClientRect());
+    const remove = row
+      .querySelector('[aria-label^="Remove "]')!
+      .getBoundingClientRect();
+    const name = row.querySelector<HTMLElement>('[data-member-name]')!;
+    return {
+      oneLine: controls.every(
+        (control) =>
+          control.top < identity.bottom && control.bottom > identity.top
+      ),
+      belowName: controls.every(
+        (control) => control.top >= identity.bottom - 1
+      ),
+      inside: controls.every(
+        (control) => control.left >= left - 0.5 && control.right <= right + 0.5
+      ),
+      // Rightmost, on the last line the controls wrap to.
+      removeLast: controls.every(
+        (control) =>
+          remove.right >= control.right - 0.5 &&
+          remove.top + remove.height / 2 >=
+            control.top + control.height / 2 - 0.5
+      ),
+      nameFits: name.scrollWidth <= name.clientWidth,
+    };
+  });
+}
+
+for (const seats of [true, false]) {
+  test(`CRM access is one control in the member row, ${seats ? 'with' : 'without'} seat plans`, async ({
+    page,
+  }, testInfo) => {
+    const phone = testInfo.project.name === 'phone';
+    const { width: projectWidth, height } = testInfo.project.use.viewport!;
+    // Phones, and on touch a tablet width where every row fits on one line.
+    const widths = phone ? [projectWidth, 360, 320, 820] : [projectWidth];
+    const rows = [OWNER, ADMIN, MEMBER];
+    const backend = await scriptAuthService(page, 2, {
+      enterprise: seats,
+      extraMembers: [{ user_id: ADMIN, role: 'admin' }],
+    });
+    const member = page.locator(`[data-team-member="${MEMBER}"]`);
+
+    // The roster without the switch: the row heights to keep.
+    await page.goto('/?crmAccessChanges=off');
+    await member.waitFor();
+    const before: Record<number, Record<string, number>> = {};
+    for (const width of widths) {
+      await page.setViewportSize({ width, height });
+      before[width] = await memberRowHeights(page, rows);
+    }
+
+    await page.setViewportSize({ width: projectWidth, height });
+    await page.goto('/');
+    const access = crmAccessControl(page, member);
+    await expect(access).toBeVisible();
+    const name = seats ? 'crm-access-inline' : 'crm-access-inline-no-seats';
+    await screenshot(page, testInfo, name);
+    for (const id of [OWNER, ADMIN]) {
+      const row = page.locator(`[data-team-member="${id}"]`);
+      await expect(row.getByRole('switch')).toHaveCount(0);
+      await expect(row.getByText(/always have/)).toHaveCount(0);
+    }
+    // The switch follows the seat plan and role, and Remove stays last.
+    const controls = member.locator('[data-member-controls] > :not([hidden])');
+    await expect(
+      controls.nth(seats ? 2 : 1).getByRole('switch', CRM_ACCESS)
+    ).toHaveCount(1);
+    await expect(
+      controls.last().getByRole('button', { name: /^Remove / })
+    ).toHaveCount(1);
+
+    for (const width of widths) {
+      await page.setViewportSize({ width, height });
+      const heights = await memberRowHeights(page, rows);
+      const layout = await memberRowLayout(page, MEMBER);
+      expect(layout.inside).toBe(true);
+      expect(layout.removeLast).toBe(true);
+      if (phone) {
+        const box = (await access.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+      }
+      if (width > 430) {
+        // Every row, the member's included, stays one line high.
+        expect(layout.oneLine).toBe(true);
+        expect(heights).toEqual(before[width]);
+        continue;
+      }
+      // On phones, rows without the switch keep their height, and the
+      // member's controls wrap below a name shown in full.
+      expect(heights[OWNER]).toBe(before[width]![OWNER]);
+      expect(heights[ADMIN]).toBe(before[width]![ADMIN]);
+      expect(layout.belowName).toBe(true);
+      expect(layout.nameFits).toBe(true);
+      if (width !== projectWidth)
+        await screenshot(page, testInfo, `${name}-${width}`);
+    }
+
+    await page.setViewportSize({ width: projectWidth, height });
+    await access.click();
+    await expect(access.getByRole('switch')).not.toBeChecked();
+    expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
+  });
+}
+
+test('the widest member controls stay inside the row on phones', async ({
   page,
 }, testInfo) => {
-  const phone = testInfo.project.name === 'phone';
-  const { width: projectWidth, height } = testInfo.project.use.viewport!;
-  const widths = phone ? [projectWidth, 360] : [projectWidth];
-  const backend = await scriptAuthService(page, 2, {
+  test.skip(testInfo.project.name !== 'phone', 'Phone widths');
+  await scriptAuthService(page, 2, {
     enterprise: true,
-    extraMembers: [{ user_id: ADMIN, role: 'admin' }],
+    // A Max seat that drops to Pro at renewal also offers Keep Max.
+    extraMembers: [{ user_id: KAI, role: 'member', plan: 'max' }],
+    scheduledSeatPlans: { [KAI]: 'premium' },
   });
-  const member = page.locator(`[data-team-member="${MEMBER}"]`);
-
-  // The roster without the switch: the row heights to keep.
-  await page.goto('/?crmAccessChanges=off');
-  await member.getByRole('button', { name: 'Seat plan' }).waitFor();
-  const before: Record<number, Record<string, number>> = {};
-  for (const width of widths) {
-    await page.setViewportSize({ width, height });
-    before[width] = await memberRowHeights(page);
-  }
-
-  await page.setViewportSize({ width: projectWidth, height });
   await page.goto('/');
-  const access = crmAccessControl(page, member);
-  await expect(access).toBeVisible();
-  await screenshot(page, testInfo, 'crm-access-inline');
-  for (const id of [OWNER, ADMIN]) {
-    const row = page.locator(`[data-team-member="${id}"]`);
-    await expect(row.getByRole('switch')).toHaveCount(0);
-    await expect(row.getByText(/always have/)).toHaveCount(0);
+  const kai = page.locator(`[data-team-member="${KAI}"]`);
+  await expect(kai.getByRole('button', { name: 'Keep Max' })).toBeVisible();
+  await expect(kai.getByRole('switch', CRM_ACCESS)).toHaveCount(1);
+  for (const width of [390, 360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const layout = await memberRowLayout(page, KAI);
+    expect(layout.inside).toBe(true);
+    expect(layout.removeLast).toBe(true);
+    expect(layout.nameFits).toBe(true);
   }
-  const identity = member.locator('[data-member-identity]');
-  const controls = member.locator('[data-member-controls]');
-  await expect(controls.getByRole('switch', CRM_ACCESS)).toHaveCount(1);
-  // It follows the seat and role menus, and Remove stays last.
-  const plan = (await controls
-    .getByRole('button', { name: 'Seat plan' })
-    .boundingBox())!;
-  const role = (await controls
-    .getByRole('button', { name: 'Member' })
-    .boundingBox())!;
-  const first = (await access.boundingBox())!;
-  expect(plan.x).toBeLessThan(role.x);
-  expect(role.x).toBeLessThan(first.x);
-
-  for (const width of widths) {
-    await page.setViewportSize({ width, height });
-    const heights = await memberRowHeights(page);
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth)
-    ).toBeLessThanOrEqual(width);
-    const box = (await access.boundingBox())!;
-    expect(box.x + box.width).toBeLessThanOrEqual(width);
-    if (!phone) {
-      // Every row, the member's included, stays one line high.
-      expect(heights).toEqual(before[width]);
-      const row = (await controls.boundingBox())!;
-      expect(
-        Math.abs(box.y + box.height / 2 - (row.y + row.height / 2))
-      ).toBeLessThan(2);
-      continue;
-    }
-    // Rows without the switch keep their height; the member's controls wrap
-    // below a full-width identity instead of squeezing the name, and the
-    // switch keeps a full touch target.
-    expect(heights[OWNER]).toBe(before[width]![OWNER]);
-    expect(heights[ADMIN]).toBe(before[width]![ADMIN]);
-    const name = (await identity.boundingBox())!;
-    const wrapped = (await controls.boundingBox())!;
-    expect(wrapped.y).toBeGreaterThanOrEqual(name.y + name.height - 1);
-    expect(box.width).toBeGreaterThanOrEqual(44);
-    expect(box.height).toBeGreaterThanOrEqual(44);
-    if (width !== projectWidth)
-      await screenshot(page, testInfo, `crm-access-inline-${width}`);
-  }
-
-  await access.click();
-  await expect(access.getByRole('switch')).not.toBeChecked();
-  expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
 });
 
 test('CRM access controls are hidden from ordinary members', async ({
