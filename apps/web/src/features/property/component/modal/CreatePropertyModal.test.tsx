@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     | undefined,
   builtIns: undefined as PropertyDefinition[] | undefined,
   applicableIds: [] as string[],
+  refreshFailed: false,
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -37,15 +38,19 @@ vi.mock('@queries/properties/definitions', () => ({
   },
   // Built-in definitions, narrowed to the applicable ones when a type is asked.
   // A disabled query still answers from its cache, so `enabled` is not read.
+  // A refresh that fails leaves the query in error with its last answer.
   useListPropertiesQuery: (params: () => { forEntityType?: string }) => ({
+    get isPending() {
+      return mocks.builtIns === undefined;
+    },
     get isSuccess() {
-      return mocks.builtIns !== undefined;
+      return mocks.builtIns !== undefined && !mocks.refreshFailed;
     },
     get data() {
-      const builtIns = mocks.builtIns ?? [];
+      if (mocks.builtIns === undefined) return undefined;
       return params().forEntityType
-        ? builtIns.filter((item) => mocks.applicableIds.includes(item.id))
-        : builtIns;
+        ? mocks.builtIns.filter((item) => mocks.applicableIds.includes(item.id))
+        : mocks.builtIns;
     },
   }),
 }));
@@ -85,6 +90,7 @@ beforeEach(() => {
     builtIn('revenue', 'Revenue'),
   ];
   mocks.applicableIds = ['contacts'];
+  mocks.refreshFailed = false;
 });
 afterEach(() => {
   cleanup();
@@ -152,6 +158,26 @@ it('does not offer a built-in property when the entity type is unknown', async (
   expect(screen.queryByRole('button', { name: 'Use Contacts' })).toBeNull();
 });
 
+it('keeps the note and the offer when the built-in list fails to refresh', async () => {
+  mocks.refreshFailed = true;
+  render(() => (
+    <CreatePropertyModal
+      isOpen
+      initialName="Contacts"
+      entityType="TASK"
+      onClose={() => {}}
+      onUseBuiltIn={() => {}}
+    />
+  ));
+
+  expect(await screen.findByText(NAME_REFUSED)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Use Contacts' })).toBeTruthy();
+  expect(
+    (screen.getByRole('button', { name: /^Create/ }) as HTMLButtonElement)
+      .disabled
+  ).toBe(true);
+});
+
 it('lets a name through once it no longer matches a built-in one', async () => {
   render(() => (
     <CreatePropertyModal isOpen initialName="Contacts" onClose={() => {}} />
@@ -176,13 +202,18 @@ it('says why when the server refuses a built-in name the dialog did not know', a
 
   await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
   expect(mocks.create).toHaveBeenCalledOnce();
+  // The field stays editable while the request is out.
+  await fireEvent.input(screen.getByPlaceholderText('Property name'), {
+    target: { value: 'Region' },
+  });
   mocks.createCallbacks?.onError?.(
     new ThrownResultError([
       { code: PROPERTY_NAME_RESERVED_CODE, message: 'refused' },
     ]),
-    undefined
+    mocks.create.mock.calls[0]?.[0]
   );
 
   expect(await screen.findByText(NAME_REFUSED)).toBeTruthy();
+  expect(screen.queryByText(/^Region is a built-in property/)).toBeNull();
   expect(screen.queryByText('Unable to create property')).toBeNull();
 });

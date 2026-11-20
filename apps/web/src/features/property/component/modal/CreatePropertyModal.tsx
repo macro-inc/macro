@@ -8,6 +8,7 @@ import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
+import { queryReadyGate } from '@queries/gate';
 import {
   isPropertyNameReserved,
   useCreatePropertyDefinitionMutation,
@@ -264,10 +265,10 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         props.onClose();
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       setError(
         isPropertyNameReserved(error)
-          ? builtInNameMessage(newPropertyName().trim())
+          ? builtInNameMessage(variables.body.display_name)
           : ERROR_MESSAGES.PROPERTY_CREATE
       );
     },
@@ -279,7 +280,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     () => props.isOpen
   );
   const reservedBuiltIn = createMemo(() =>
-    builtInDefinitionsQuery.isSuccess
+    queryReadyGate(builtInDefinitionsQuery)
       ? builtInPropertyNamed(
           newPropertyName(),
           builtInDefinitionsQuery.data.map(definitionOf)
@@ -301,7 +302,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   );
   const canUseBuiltIn = (propertyDefinitionId: string) =>
     offersBuiltIns() &&
-    usableBuiltInsQuery.isSuccess &&
+    queryReadyGate(usableBuiltInsQuery) &&
     usableBuiltInsQuery.data.some(
       (item) => definitionOf(item).id === propertyDefinitionId
     );
