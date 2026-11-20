@@ -536,6 +536,12 @@ agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
 `bunx playwright test --config src/features/local-runtime/browser-test/playwright.config.ts`.
 
+Connect Cursor's API-key field (`SecretInput` from `@ui`, which every secret
+field uses) has a backend-free desktop/phone regression over a scripted auth
+service: masked while typing, the reveal toggle keeping focus, excluded from
+session replay, and saving on Enter:
+`bunx playwright test --config src/features/settings/browser-test/cursor-connect/playwright.config.ts`.
+
 Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
