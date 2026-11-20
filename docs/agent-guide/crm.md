@@ -214,14 +214,14 @@ Removing an address deletes nothing; the contact's Emails tab and the email
 attachments in Files then stop covering it. Removing the primary promotes the
 oldest address left. Emails and Files cover every address of the contact.
 
+A contact without a company shows **Add company**, whatever its address.
 Contacts whose primary is a known personal-provider address, and that hold no
-address on their company's domain, can link or switch company. Their company
+address on their company's domain, can also switch company. The company
 pill opens the Tasks singleton picker; on touch, select a company then **Done**.
 Cancel keeps the original relation. **Remove company** sits in the same editor
 for every linked contact that holds no address on the company's domain; a
 contact that cannot switch gets an editor with that action alone. It asks for
-confirmation first, and says when the contact cannot be linked to a company
-again from the app (its primary is not a personal-provider address). A
+confirmation first. A
 rejected removal stays in the confirmation with its message. A contact
 with an address on its company's domain has a read-only company value, with
 the reason in its tooltip, and the one address that links it to the company

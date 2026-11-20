@@ -100,6 +100,17 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Property editor
+
+`PropertyEditorModal` is the editor that list rows and a multi-row selection,
+CRM stage, owner and revenue actions, an open item's commands, inline title
+pills and the side panel's **Add property** open; the task composer renders its
+`PropertyEditorDialog` directly. The dialog has no title row for the items it
+edits. When the modal saves a value for the selected items, a toast names only
+the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
+set on 3 items" for several). Tag assignment shows no toast, and the composer
+writes to its draft without one.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates

@@ -551,7 +551,9 @@ tools — hexagonal, heavily feature-gated.
   database steps with `database_failed` and everything else with `failed`.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
-  a cause.
+  a cause. A failed attachment download or database step is not an effect, so
+  email-service's attachment step records `outlook.attachment_id` for it
+  before returning; the span carries the field once either way.
 - `MailboxSyncService` reads through two gateways: `import_provider` for a
   folder page claimed before the folder's first round completes and for
   import reconciliation rows, `provider` for everything else, live passes
@@ -609,10 +611,29 @@ tools — hexagonal, heavily feature-gated.
   once per change: the folder catalog rechecks a folder's stored mail only
   in the discovery that sees the folder leave, or move in or out of Deleted
   Items.
+  A message whose claims keep ending with no outcome (its worker stopped
+  holding the lease) is abandoned unread on the claim after five
+  (`UNFINISHED_CLAIM_LIMIT`, `defer_reason=unfinished`): `claim_message`
+  counts `unfinished_claims` from a lease still set when it claims, since
+  every recorded outcome deletes the row or clears the lease. The first claim
+  after a recorded release, or of a revision newer than the last claim read
+  (`claimed_revision`), starts the count over, so a change that arrives
+  during an unfinished claim is read.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
+- A projection's attachment download or upload that keeps failing is counted
+  on the attachment (`email_attachments.upload_failures`), not the event, and
+  abandoned at the limit `attachment_failure_limit` in
+  `domain/mailbox/projection.rs` gives: 3 refusals or 50 other failures. A
+  transient download failure counts there, unlike a message read's, because
+  Graph can cut the same attachment's download every time. The abandoned
+  attachment keeps its upload claim and gets `upload_abandoned_at`, so no claim
+  takes it and the projection stops waiting on it; nothing revives it, and
+  opening it still downloads it on demand. email-service writes a failure only
+  while the claim is still the one its claiming statement returned, so a pass
+  that outlived the three-minute claim cannot undo the next pass's outcome.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can

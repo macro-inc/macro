@@ -168,6 +168,11 @@ the gateway `/email` prefix.
   client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
+- A presigned upload URL's query holds AWS credentials and a session token,
+  and the `UploadAttachmentError`s of every attachment upload are logged. Keep
+  them free of it: strip reqwest errors with `without_url()`, and from an S3
+  error body keep only its `<Code>` (`s3_error_code`), since a
+  `SignatureDoesNotMatch` body echoes the signed request.
 - An attachment's file type comes from a Macro file type's extension on its
   filename (`FileType::split_suffix_match`, as uploads use) unless its MIME
   type names a different Macro file type, and from the MIME type without such

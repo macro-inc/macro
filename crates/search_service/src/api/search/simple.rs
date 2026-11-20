@@ -71,7 +71,7 @@ pub enum SearchError {
     TooManyEmailProjects(usize),
     /// The caller's other searches held every slot of its lane until the wait
     /// ran out
-    #[error("too many of your searches are running at once; run searches one after another")]
+    #[error("too many of your searches are running at once; retry with fewer at once")]
     Busy,
     /// Opensearch error occurred
     #[error("unable to search")]

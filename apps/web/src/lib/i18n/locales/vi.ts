@@ -510,6 +510,9 @@ export default {
       other: 'Đã xóa {{count}} mục',
     },
     toastDeleteFailed: 'Không thể xóa',
+    toastPropertySet: {
+      other: 'Đã đặt {{property}} cho {{count}} mục',
+    },
     toastAddedToFavorites: 'Đã thêm vào mục yêu thích',
     toastAddedCountToFavorites: {
       other: 'Đã thêm {{count}} mục vào mục yêu thích',

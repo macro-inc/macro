@@ -527,6 +527,10 @@ export default {
       other: '{{count}} Elemente gelöscht',
     },
     toastDeleteFailed: 'Löschen fehlgeschlagen',
+    toastPropertySet: {
+      one: '{{property}} festgelegt',
+      other: '{{property}} für {{count}} Elemente festgelegt',
+    },
     toastAddedToFavorites: 'Zu Favoriten hinzugefügt',
     toastAddedCountToFavorites: {
       one: '{{count}} Element zu Favoriten hinzugefügt',

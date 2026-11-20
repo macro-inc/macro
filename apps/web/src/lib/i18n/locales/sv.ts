@@ -517,6 +517,10 @@ export default {
       other: '{{count}} objekt borttagna',
     },
     toastDeleteFailed: 'Det gick inte att ta bort',
+    toastPropertySet: {
+      one: '{{property}} har angetts',
+      other: '{{property}} har angetts för {{count}} objekt',
+    },
     toastAddedToFavorites: 'Tillagt i favoriter',
     toastAddedCountToFavorites: {
       one: '{{count}} objekt tillagt i favoriter',

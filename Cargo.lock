@@ -7906,6 +7906,7 @@ dependencies = [
  "model_notifications",
  "models_email",
  "models_properties",
+ "nom 8.0.0",
  "notification",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -7943,6 +7944,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -9492,6 +9494,7 @@ dependencies = [
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "tokio",
  "tracing",
  "wiremock",
@@ -20437,6 +20440,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "wiremock",
  "workspace-hack",
 ]
 

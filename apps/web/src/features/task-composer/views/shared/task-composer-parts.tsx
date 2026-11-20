@@ -326,7 +326,6 @@ function Properties(props: { class?: string }) {
             />
           </Show>
           <TaskComposerPropertyEditor
-            name={composer.title()}
             definitions={composer.availableProperties()}
             properties={composer.draftProperties()}
             onAdd={composer.addProperty}
