@@ -58,6 +58,55 @@ describe('session composer drafts', () => {
     });
   });
 
+  it('puts a refused message into the saved draft once its composer is gone', () => {
+    let sent: ReturnType<typeof createSessionComposerDraft> | undefined;
+    let sentFiles:
+      | ReturnType<typeof createSessionAttachmentTracker>
+      | undefined;
+    withRoot(() => {
+      sent = createSessionComposerDraft(() => 'session-a');
+      sentFiles = createSessionAttachmentTracker(() => 'session-a');
+    });
+    // The session reopened and the user typed before the refusal came back.
+    withRoot(() => {
+      const reopened = createSessionComposerDraft(() => 'session-a');
+      reopened.setDraft('Typed after reopening');
+    });
+
+    sent?.restore('session-a', 'Run the tests');
+    sentFiles?.restore('session-a', [note]);
+
+    expect(localStorage.getItem(agentSessionDraftKey('session-a'))).toBe(
+      JSON.stringify('Run the tests\n\nTyped after reopening')
+    );
+    expect(localStorage.getItem(agentSessionAttachmentsKey('session-a'))).toBe(
+      JSON.stringify([note])
+    );
+  });
+
+  it('puts a refused message back in the session it was sent to', () => {
+    const [sessionId, setSessionId] = createSignal<string | undefined>(
+      'session-a'
+    );
+    let draft: ReturnType<typeof createSessionComposerDraft> | undefined;
+    let dispose: () => void = () => {};
+    createRoot((done) => {
+      dispose = done;
+      draft = createSessionComposerDraft(sessionId);
+    });
+    // The composer moved on to another session while the send was out.
+    setSessionId('session-b');
+    draft?.setDraft('Question for b');
+
+    draft?.restore('session-a', 'Run the tests');
+
+    expect(draft?.draft()).toBe('Question for b');
+    expect(localStorage.getItem(agentSessionDraftKey('session-a'))).toBe(
+      JSON.stringify('Run the tests')
+    );
+    dispose();
+  });
+
   it('keeps text typed before the session id exists', () => {
     const [sessionId, setSessionId] = createSignal<string | undefined>();
     let draft: ReturnType<typeof createSessionComposerDraft> | undefined;

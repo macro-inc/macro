@@ -19,6 +19,7 @@ import {
   createEffect,
   createSignal,
   on,
+  onCleanup,
   untrack,
 } from 'solid-js';
 
@@ -134,13 +135,43 @@ export function createSessionComposerDraft(
     )
   );
 
-  return { draft: text, setDraft };
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+
+  /**
+   * Put a message the agent refused back in front of what is there now. It
+   * goes to the session it was sent to: into this composer while it still
+   * shows that session, else into that session's saved draft, so text typed
+   * in a composer opened since is kept.
+   */
+  const restore = (sentTo: string | undefined, message: string) => {
+    // Sent before the session had an id: it can only be this composer's.
+    const live = !disposed && (sentTo === undefined || sentTo === currentId);
+    const current = live ? untrack(text) : (readDraft(sentTo) ?? '');
+    const merged = [message, current]
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n');
+    if (live) setDraft(merged);
+    else writeDraft(sentTo, merged);
+  };
+
+  return { draft: text, setDraft, restore };
 }
+
+/** An attachment tracker that can give a refused message its files back. */
+export type SessionAttachmentTracker = InputAttachmentTracker & {
+  restore: (
+    sentTo: string | undefined,
+    attachments: InputAttachmentData[]
+  ) => void;
+};
 
 /** Files waiting to be sent into this session. Uploads still in flight are not kept. */
 export function createSessionAttachmentTracker(
   sessionId: Accessor<string | undefined>
-): InputAttachmentTracker {
+): SessionAttachmentTracker {
   const startingId = untrack(sessionId);
   const tracker = createInputAttachmentTracker({
     initialAttachments: readAttachments(startingId),
@@ -169,7 +200,35 @@ export function createSessionAttachmentTracker(
     )
   );
 
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+
+  /**
+   * Give a refused message's files back to the session it was sent to,
+   * beside any attached since, the same way `restore` does for its text.
+   */
+  const restore = (
+    sentTo: string | undefined,
+    attachments: InputAttachmentData[]
+  ) => {
+    const live = !disposed && (sentTo === undefined || sentTo === currentId);
+    const current = live
+      ? untrack(tracker.attachments)
+      : readAttachments(sentTo);
+    const missing = attachments.filter(
+      (attachment) => !current.some((kept) => kept.id === attachment.id)
+    );
+    if (missing.length === 0) return;
+    if (live) {
+      tracker.setAttachments([...missing, ...current]);
+      persist();
+    } else writeAttachments(sentTo, [...missing, ...current]);
+  };
+
   return {
+    restore,
     attachments: tracker.attachments,
     hasPending: tracker.hasPending,
     addAttachment: (attachment) => {

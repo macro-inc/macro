@@ -234,30 +234,17 @@ export function AgentComposer(props: {
     // The composer clears at once, as a sent message reads as sent; the
     // fold shows it pending. A failed or refused send retracts any such
     // bubble, so the message comes back here rather than vanishing.
+    const sentTo = sessionId();
     attachmentTracker.clearAttachments();
     const sent = await act(
       promptActionOf(prompt, attachments),
       'The message could not be sent'
     );
-    if (!sent) restoreUnsent(prompt, attachments);
-  };
-
-  // Put a refused message back in front of whatever was typed meanwhile, and
-  // its files back beside any attached since.
-  const restoreUnsent = (
-    prompt: string,
-    attachments: InputAttachmentData[]
-  ) => {
-    const typed = persistedDraft.draft();
-    persistedDraft.setDraft(
-      [prompt, typed].filter((part) => part.trim().length > 0).join('\n\n')
-    );
-    const current = attachmentTracker.attachments();
-    const missing = attachments.filter(
-      (attachment) => !current.some((kept) => kept.id === attachment.id)
-    );
-    if (missing.length > 0)
-      attachmentTracker.setAttachments([...missing, ...current]);
+    // Back in front of whatever was typed meanwhile, with its files, in the
+    // session it was sent to even if this composer has gone since.
+    if (sent) return;
+    persistedDraft.restore(sentTo, prompt);
+    attachmentTracker.restore(sentTo, attachments);
   };
 
   // Focus plumbing between the input and the queue list above it: Up at the
