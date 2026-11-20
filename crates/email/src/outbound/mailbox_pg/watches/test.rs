@@ -422,3 +422,42 @@ async fn subscription_writes_behind_a_share_locked_link_fail_fast(db: PgPool) {
         "a notification that failed must not wake the mailbox"
     );
 }
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_notification_keeps_a_due_folder_ahead_of_folders_due_after_it(db: PgPool) {
+    let (repo, link, _, id) = setup(&db).await;
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at=now()-interval '5 minutes' WHERE link_id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let other = macro_uuid::generate_uuid_v7();
+    sqlx::query!(r#"
+        INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider,grant_generation)
+        VALUES ($1,'macro|other@example.com','other-owner','other@example.com','OUTLOOK',1)
+    "#,other).execute(&db).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,next_run_at) VALUES ($1,$2,1,'mail_folder','folder',now()-interval '1 minute')",
+        macro_uuid::generate_uuid_v7(),
+        other
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxWatchNotifications(repo.clone())
+        .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
+        .await
+        .unwrap();
+
+    let claimed = repo
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        claimed.mailbox.link_id, link,
+        "a notified mailbox's folder, due longest, must not wait behind another mailbox's"
+    );
+}

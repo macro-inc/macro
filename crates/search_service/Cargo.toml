@@ -38,6 +38,7 @@ models_soup = { path = "../models_soup" }
 properties = { path = "../properties", default-features = false, features = [
   "outbound",
 ] }
+rate_limit = { path = "../rate_limit" }
 system_properties = { path = "../system_properties" }
 readonly_pool = { path = "../readonly_pool" }
 macro_user_id = { path = "../macro_user_id" }

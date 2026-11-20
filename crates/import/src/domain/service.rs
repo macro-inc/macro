@@ -324,6 +324,15 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
     jobs: WorkspaceJobs,
+    mirror_locks: Arc<PersonalMirrorLocks>,
+}
+
+/// Weak slots keep in-run mirror exclusion per user without retaining inactive locks.
+#[derive(Default)]
+struct PersonalMirrorLocks {
+    users: tokio::sync::Mutex<
+        std::collections::HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>,
+    >,
 }
 
 /// Where this process runs Notion workspace imports: its identity on the
@@ -360,6 +369,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             admission: self.admission.clone(),
             notifier: self.notifier.clone(),
             jobs: self.jobs.clone(),
+            mirror_locks: self.mirror_locks.clone(),
         }
     }
 }
@@ -384,6 +394,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
             jobs: WorkspaceJobs::new(),
+            mirror_locks: Arc::new(PersonalMirrorLocks::default()),
         }
     }
 }
@@ -405,6 +416,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             admission: self.admission,
             notifier: self.notifier,
             jobs: self.jobs,
+            mirror_locks: self.mirror_locks,
             slack_source: source,
         }
     }
@@ -457,6 +469,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             admission: self.admission,
             notifier: self.notifier,
             jobs: self.jobs,
+            mirror_locks: self.mirror_locks,
             slack_source: self.slack_source,
         }
     }

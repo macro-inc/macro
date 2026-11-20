@@ -1256,6 +1256,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -1361,6 +1362,7 @@ dependencies = [
  "url",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -4864,6 +4866,7 @@ dependencies = [
  "macro_uuid",
  "messages",
  "mimalloc",
+ "nom 8.0.0",
  "openssl-sys",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -18683,6 +18686,7 @@ dependencies = [
  "name_search",
  "opensearch_client",
  "properties",
+ "rate_limit",
  "readonly_pool",
  "rootcause",
  "serde",

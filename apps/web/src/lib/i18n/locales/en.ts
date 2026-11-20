@@ -44,6 +44,7 @@ import subRoutines from './en/sub-routines';
 import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
+import teamMembers from './en/team-members';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -98,6 +99,7 @@ export default {
   subRoutines,
   tabs,
   teamAgents,
+  teamMembers,
   tutorials,
   viewMenus,
 };
