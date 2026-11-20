@@ -290,6 +290,8 @@ queue	backfill:UpdateThreadMetadata	gmail	/backfillOperation/update_thread_metad
 queue	crm-cleanup:ListCandidates	both	/operation/list_candidates	crates/models_email/src/email/service/crm_cleanup.rs:24
 queue	crm-cleanup:ProcessCandidate	both	/operation/process_candidate	crates/models_email/src/email/service/crm_cleanup.rs:30
 queue	crm-cleanup:StartJob	both	/operation=start_job	crates/models_email/src/email/service/crm_cleanup.rs:20
+queue	crm-population:Contact	both	/operation=contact	crates/models_email/src/email/service/crm_population.rs:15
+queue	crm-population:PolicyPage	both	/operation=policy_page	crates/models_email/src/email/service/crm_population.rs:17
 queue	gmail-inbox-sync:DeleteMessage	gmail	/operation/delete_message	crates/models_email/src/gmail/inbox_sync.rs:67
 queue	gmail-inbox-sync:GmailMessage	gmail	/operation/gmail_message	crates/models_email/src/gmail/inbox_sync.rs:63
 queue	gmail-inbox-sync:UpdateLabels	gmail	/operation/update_labels	crates/models_email/src/gmail/inbox_sync.rs:69
@@ -307,7 +309,7 @@ queue	link-manager:Refresh	both	/operation=Refresh	crates/models_email/src/email
 queue	reminder-dispatch:Deliver	both	/operation/deliver	crates/reminders/src/domain/models.rs:87
 queue	reminder-dispatch:Sweep	both	/operation=sweep	crates/reminders/src/domain/models.rs:85
 queue	scheduled:ScheduledPubsubMessage	both	*	crates/models_email/src/email/service/pubsub.rs:107
-queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:358
+queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:409
 queue	sfs-uploader:SFSUploaderMessage	gmail	*	crates/models_email/src/email/service/pubsub.rs:114
 tool	GetThread	both		crates/email/src/inbound/toolset/get_thread.rs:109
 tool	ListInboxes	both		crates/email/src/inbound/toolset/list_inboxes.rs:55

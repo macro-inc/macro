@@ -322,8 +322,9 @@ shared with the web app's suite) and backend entry points second.
   for a known bug that passes and is not under `[[intermittent_bug]]`.
   Without `--enforce` the same list is only reported.
 - `tests/email_policy.rs` exercises `PopulateCrmPolicy` through the real outbox
-  and queue on both providers, including replaced generations and duplicate
-  delivery. It seeds private rule storage; authenticated activation and preview
+  and the CRM population queue on both providers, including replaced
+  generations and duplicate delivery; the pages it sends to the backfill queue
+  reach population through the backfill worker's forwarding. It seeds private rule storage; authenticated activation and preview
   controls are covered in the CRM crate.
 - A new route, resolver, message type or provider method therefore needs,
   in the same change, a scenario that reaches it or an entry in
