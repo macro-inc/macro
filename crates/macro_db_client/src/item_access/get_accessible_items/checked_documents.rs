@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, LazyLock, Mutex, PoisonError},
     time::{Duration, Instant},
 };
@@ -9,11 +9,13 @@ use single_flight::DatabaseKey;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-/// How long a caller's lookups reuse what an earlier one found about a
-/// document. Grants are read on every lookup, so a share that is revoked or
-/// added counts at once. A document moved to or restored from the Trash, or
-/// given to another owner, counts once this has passed.
-const CHECKS_KEPT_FOR: Duration = Duration::from_secs(600);
+/// How long a caller's lookups reuse what an earlier one found about a granted
+/// document: that it exists, and whether the caller owns it. Grants and Trash
+/// state are read on every lookup, so a share that is revoked or added, a
+/// document moved to or restored from the Trash, and a purge (which removes
+/// the grants) count at once. Only a document given to another owner counts
+/// once this has passed.
+const CHECKS_KEPT_FOR: Duration = Duration::from_secs(3600);
 
 /// Callers whose checks a process keeps, the least recently used dropped first.
 const CALLERS_KEPT: usize = 256;
@@ -23,8 +25,8 @@ const CALLERS_KEPT: usize = 256;
 enum Found {
     Owned,
     NotOwned,
-    /// In the Trash, or no longer in the table.
-    Gone,
+    /// No longer in the table.
+    Missing,
 }
 
 struct Checks {
@@ -46,13 +48,16 @@ pub(super) struct CheckCounts {
     pub(super) reused: usize,
 }
 
-/// The ids among `granted` that are documents the caller can open: live, and
-/// not their own when `exclude_owned`.
+/// The ids among `granted` that are documents the caller can open: not in the
+/// Trash, and not their own when `exclude_owned`.
 ///
-/// Each granted document costs one random read of `Document` when its pages are
-/// not cached, and for callers holding thousands of grants those pages are
-/// cold again a few minutes after their last search. So `Document` is read only
-/// for the ids this caller's lookups have not checked within `CHECKS_KEPT_FOR`.
+/// Finding a granted document's owner costs one random read of `Document` when
+/// its pages are not cached, and for callers holding thousands of grants those
+/// pages are cold again a few minutes after their last search. So owners are
+/// read only for the ids this caller's lookups have not checked within
+/// `CHECKS_KEPT_FOR`, and the Trash state of every granted document from
+/// `idx_document_trashed_id_owner`, which holds only trashed rows and stays
+/// cached.
 pub(super) async fn accessible_document_ids(
     connection: &mut PgConnection,
     database: DatabaseKey,
@@ -90,7 +95,7 @@ pub(super) async fn accessible_document_ids(
         let checked_at = earlier
             .as_ref()
             .map_or_else(Instant::now, |checks| checks.checked_at);
-        let live = live_document_owners(connection, &unchecked).await?;
+        let owners = document_owners(connection, &unchecked).await?;
 
         let found = granted
             .iter()
@@ -98,10 +103,10 @@ pub(super) async fn accessible_document_ids(
                 let earlier_found = earlier
                     .as_ref()
                     .and_then(|checks| checks.found.get(id).copied());
-                let found = earlier_found.unwrap_or_else(|| match live.get(id) {
+                let found = earlier_found.unwrap_or_else(|| match owners.get(id) {
                     Some(owner) if owner == user_id => Found::Owned,
                     Some(_) => Found::NotOwned,
-                    None => Found::Gone,
+                    None => Found::Missing,
                 });
                 (*id, found)
             })
@@ -111,13 +116,18 @@ pub(super) async fn accessible_document_ids(
         checks
     };
 
-    let ids = granted
-        .iter()
+    let listed: Vec<Uuid> = granted
+        .into_iter()
         .filter(|id| match checks.found.get(id) {
             Some(Found::NotOwned) => true,
             Some(Found::Owned) => !exclude_owned,
-            Some(Found::Gone) | None => false,
+            Some(Found::Missing) | None => false,
         })
+        .collect();
+    let trashed = trashed_documents(connection, &listed).await?;
+    let ids = listed
+        .iter()
+        .filter(|id| !trashed.contains(id))
         .map(Uuid::to_string)
         .collect();
 
@@ -136,21 +146,22 @@ fn keep_checks(key: CheckKey, checks: Arc<Checks>) {
     kept.cache_set(key, checks);
 }
 
-struct LiveDocument {
+struct DocumentOwner {
     id: Uuid,
     owner: String,
 }
 
-/// The owner of each live document among `ids`.
+/// The owner of each document among `ids` still in the table, in the Trash or
+/// not.
 ///
-/// Unlike the grant reads, this statement may run as a cached prepared
-/// statement: its fence leaves one plan, a lookup per id, generic or not.
-async fn live_document_owners(
+/// Unlike the grant reads, these statements may run as cached prepared
+/// statements: their fences leave one plan, a lookup per id, generic or not.
+async fn document_owners(
     connection: &mut PgConnection,
     ids: &[Uuid],
 ) -> sqlx::Result<HashMap<Uuid, String>> {
     let documents = sqlx::query_file_as!(
-        LiveDocument,
+        DocumentOwner,
         "src/item_access/get_accessible_items/documents_by_id.sql",
         ids
     )
@@ -161,4 +172,23 @@ async fn live_document_owners(
         .into_iter()
         .map(|document| (document.id, document.owner))
         .collect())
+}
+
+/// The ids among `ids` whose document is in the Trash.
+async fn trashed_documents(
+    connection: &mut PgConnection,
+    ids: &[Uuid],
+) -> sqlx::Result<HashSet<Uuid>> {
+    if ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let trashed = sqlx::query_file_scalar!(
+        "src/item_access/get_accessible_items/trashed_by_id.sql",
+        ids
+    )
+    .fetch_all(connection)
+    .await?;
+
+    Ok(trashed.into_iter().collect())
 }

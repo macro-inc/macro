@@ -140,12 +140,18 @@ data checks and explicit vault purge. It does not depend on a successful item.
 - Each of those lookups costs a random read per granted document whose pages
   are not cached, and for callers holding thousands of grants they are cold
   again minutes after their last search. So `checked_documents` keeps, per
-  process and caller, what the lookups found about each granted document (live,
-  and whether the caller owns it) for `CHECKS_KEPT_FOR`, and reads `Document`
-  only for granted ids not checked within it. Grants are read on every lookup:
-  a revoked or new share counts at once, while a document moved to or restored
-  from the Trash, or given to another owner, counts once its check expires.
-  The checks are on in unit tests too, keyed by database and caller.
+  process and caller, what the lookups found about each granted document (it
+  exists, and whether the caller owns it) for `CHECKS_KEPT_FOR`, and reads
+  `Document` only for granted ids not checked within it. Grants are read on
+  every lookup, and Trash state too (`trashed_by_id.sql`, through
+  `idx_document_trashed_id_owner`, which holds only trashed rows and stays
+  cached): a revoked or new share, a move to or from the Trash, and a purge
+  (which removes the grants) count at once; only a document given to another
+  owner counts once its check expires. The checks are on in unit tests too,
+  keyed by database and caller.
+- `idx_document_trashed_id_owner` (migration `20261120081501`) is built
+  concurrently. If the build is interrupted, inspect `pg_index.indisvalid` and
+  drop only the invalid index before retrying.
 - `recents::deleted` (the Trash list) pages by `("deletedAt", id)` through the
   partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
   batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must

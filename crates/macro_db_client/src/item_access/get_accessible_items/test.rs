@@ -2,6 +2,7 @@ use super::*;
 use uuid::Uuid;
 
 const DOCUMENTS_BY_ID_SQL: &str = include_str!("documents_by_id.sql");
+const TRASHED_BY_ID_SQL: &str = include_str!("trashed_by_id.sql");
 
 const TEAM: &str = "7ea30000-0000-0000-0000-000000000002";
 const TEAM_MEMBER: &str = "macro|plan-caller@example.test";
@@ -41,52 +42,84 @@ async fn team_member_documents(pool: &Pool<Postgres>) -> anyhow::Result<usize> {
 
 /// With a grant on every document, scanning the documents and hash-joining the
 /// grants is the cheapest plan on paper. It is also the plan the planner picks,
-/// wrongly, for a caller with many small sources. The statement may run as a
-/// cached prepared statement, so its generic plan must keep the shape too.
+/// wrongly, for a caller with many small sources. The statements may run as
+/// cached prepared statements, so their generic plans must keep the shape too.
 #[sqlx::test]
 async fn documents_are_looked_up_by_granted_id_not_scanned(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     seed_team_documents(&pool, DOCUMENT_GRANTS_LOOKED_UP_BY_ID).await?;
+    // Other people's documents in the Trash, as production has: with none, every
+    // index of trashed rows is empty and the planner has nothing to tell apart.
+    sqlx::raw_sql(
+        r#"
+        BEGIN;
+        SET LOCAL session_replication_role = 'replica';
+        INSERT INTO "Document" (id, name, owner, "deletedAt")
+        SELECT md5('trashed-doc' || n)::uuid::text, 'Trashed ' || n,
+               'macro|trash-owner-' || (n % 500) || '@example.test', now()
+        FROM generate_series(1, 5000) n;
+        COMMIT;
+        ANALYZE "Document";
+        "#,
+    )
+    .execute(&pool)
+    .await?;
     let granted: Vec<Uuid> =
         sqlx::query_scalar("SELECT entity_id FROM entity_access WHERE source_id = $1")
             .bind(TEAM)
             .fetch_all(&pool)
             .await?;
 
-    for plan_cache_mode in ["force_custom_plan", "force_generic_plan"] {
-        let mut connection = pool.acquire().await?;
-        sqlx::raw_sql(&format!("SET plan_cache_mode = {plan_cache_mode}"))
-            .execute(&mut *connection)
-            .await?;
-        let plan: Vec<String> =
-            sqlx::query_scalar(&format!("EXPLAIN (COSTS OFF) {DOCUMENTS_BY_ID_SQL}"))
+    for (statement, sql) in [
+        ("documents_by_id", DOCUMENTS_BY_ID_SQL),
+        ("trashed_by_id", TRASHED_BY_ID_SQL),
+    ] {
+        for plan_cache_mode in ["force_custom_plan", "force_generic_plan"] {
+            let mut connection = pool.acquire().await?;
+            sqlx::raw_sql(&format!("SET plan_cache_mode = {plan_cache_mode}"))
+                .execute(&mut *connection)
+                .await?;
+            let plan: Vec<String> = sqlx::query_scalar(&format!("EXPLAIN (COSTS OFF) {sql}"))
                 .bind(&granted)
                 .fetch_all(&mut *connection)
                 .await?;
-        let plan_text = plan.join("\n");
+            let plan_text = plan.join("\n");
+            let case = format!("{statement}, {plan_cache_mode}");
 
-        let document_nodes: Vec<&str> = plan
-            .iter()
-            .map(|line| line.trim_start().trim_start_matches("->").trim_start())
-            .filter(|line| line.contains(r#"on "Document""#))
-            .collect();
-        assert!(
-            !document_nodes.is_empty()
-                && document_nodes.iter().all(|node| node.starts_with("Index")),
-            "every read of Document goes through an index ({plan_cache_mode}):\n{plan_text}"
-        );
-        assert!(
-            plan_text.contains("Index Cond: (id = ("),
-            "Document is read one granted id at a time ({plan_cache_mode}):\n{plan_text}"
-        );
-        assert!(
-            !plan_text.contains("Hash Join")
-                && !plan_text.contains("Hash Semi Join")
-                && !plan_text.contains("Merge"),
-            "the ids drive a nested loop ({plan_cache_mode}):\n{plan_text}"
-        );
+            let document_nodes: Vec<&str> = plan
+                .iter()
+                .map(|line| line.trim_start().trim_start_matches("->").trim_start())
+                .filter(|line| line.contains(r#"on "Document""#))
+                .collect();
+            assert!(
+                !document_nodes.is_empty()
+                    && document_nodes
+                        .iter()
+                        .all(|node| node.starts_with("Index Only Scan")),
+                "every read of Document is index-only ({case}):\n{plan_text}"
+            );
+            assert!(
+                plan_text.contains("Index Cond: (id = ("),
+                "Document is read one granted id at a time ({case}):\n{plan_text}"
+            );
+            assert!(
+                !plan_text.contains("Hash") && !plan_text.contains("Merge"),
+                "the ids drive a nested loop ({case}):\n{plan_text}"
+            );
+        }
     }
+
+    let mut connection = pool.acquire().await?;
+    let plan: Vec<String> = sqlx::query_scalar(&format!("EXPLAIN (COSTS OFF) {TRASHED_BY_ID_SQL}"))
+        .bind(&granted)
+        .fetch_all(&mut *connection)
+        .await?;
+    let plan_text = plan.join("\n");
+    assert!(
+        plan_text.contains("Index Only Scan using idx_document_trashed_id_owner"),
+        "the Trash check reads only the trashed-document index, by id:\n{plan_text}"
+    );
 
     assert_eq!(
         team_member_documents(&pool).await?,
@@ -116,8 +149,8 @@ async fn caller_documents(
     Ok(ids)
 }
 
-/// Two documents shared with the caller's team (one of them theirs) and one
-/// shared with nobody yet.
+/// Three documents shared with the caller's team (one of them theirs, one in
+/// the Trash) and one shared with nobody yet.
 async fn seed_checked_documents(pool: &Pool<Postgres>) -> sqlx::Result<()> {
     sqlx::raw_sql(&format!(
         r#"
@@ -129,9 +162,12 @@ async fn seed_checked_documents(pool: &Pool<Postgres>) -> sqlx::Result<()> {
             ('c4ec0000-0000-0000-0000-000000000001', 'Shared', 'macro|check-owner@example.test'),
             ('c4ec0000-0000-0000-0000-000000000002', 'Own', '{CHECK_CALLER}'),
             ('c4ec0000-0000-0000-0000-000000000003', 'Not shared yet', 'macro|check-owner@example.test');
+        INSERT INTO "Document" (id, name, owner, "deletedAt") VALUES
+            ('c4ec0000-0000-0000-0000-000000000004', 'In the Trash', 'macro|check-owner@example.test', now());
         INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES
             ('c4ec0000-0000-0000-0000-000000000001', 'document', '{CHECK_TEAM}', 'team', 'view'),
-            ('c4ec0000-0000-0000-0000-000000000002', 'document', '{CHECK_TEAM}', 'team', 'view');
+            ('c4ec0000-0000-0000-0000-000000000002', 'document', '{CHECK_TEAM}', 'team', 'view'),
+            ('c4ec0000-0000-0000-0000-000000000004', 'document', '{CHECK_TEAM}', 'team', 'view');
         COMMIT;
         "#
     ))
@@ -227,20 +263,17 @@ async fn a_lookup_reads_only_the_documents_its_caller_has_not_had_checked(
     Ok(())
 }
 
-/// Grants are read on every lookup, so a revoked share leaves the list at
-/// once and a new one joins it. A checked document's Trash state counts only
-/// once its check expires.
+/// Grants and Trash state are read on every lookup, so a revoked share, a
+/// document moved to or restored from the Trash, and a new share count at once.
+/// Who owns a checked document counts only once its check expires.
 #[sqlx::test]
-async fn grants_count_at_once_and_document_checks_are_reused(
+async fn grants_and_the_trash_count_at_once_and_owners_are_reused(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     seed_checked_documents(&pool).await?;
     assert_eq!(
-        caller_documents(&pool, false).await?,
-        vec![
-            "c4ec0000-0000-0000-0000-000000000001",
-            "c4ec0000-0000-0000-0000-000000000002",
-        ]
+        caller_documents(&pool, true).await?,
+        vec!["c4ec0000-0000-0000-0000-000000000001"]
     );
 
     sqlx::raw_sql(&format!(
@@ -248,8 +281,8 @@ async fn grants_count_at_once_and_document_checks_are_reused(
         BEGIN;
         SET LOCAL session_replication_role = 'replica';
         UPDATE "Document" SET "deletedAt" = now() WHERE id = 'c4ec0000-0000-0000-0000-000000000001';
-        UPDATE "Document" SET "deletedAt" = now() WHERE id = 'c4ec0000-0000-0000-0000-000000000003';
-        DELETE FROM entity_access WHERE entity_id = 'c4ec0000-0000-0000-0000-000000000002';
+        UPDATE "Document" SET owner = 'macro|check-owner@example.test' WHERE id = 'c4ec0000-0000-0000-0000-000000000002';
+        UPDATE "Document" SET "deletedAt" = NULL WHERE id = 'c4ec0000-0000-0000-0000-000000000004';
         INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         VALUES ('c4ec0000-0000-0000-0000-000000000003', 'document', '{CHECK_TEAM}', 'team', 'view');
         COMMIT;
@@ -258,11 +291,24 @@ async fn grants_count_at_once_and_document_checks_are_reused(
     .execute(&pool)
     .await?;
 
-    // The revoked document is gone, the newly granted one is checked and found
-    // in the Trash, and the already checked one stays listed.
+    // The trashed document is gone, the newly shared and the restored ones are
+    // listed, and the one given away is still counted as the caller's own.
     assert_eq!(
-        caller_documents(&pool, false).await?,
-        vec!["c4ec0000-0000-0000-0000-000000000001"]
+        caller_documents(&pool, true).await?,
+        vec![
+            "c4ec0000-0000-0000-0000-000000000003",
+            "c4ec0000-0000-0000-0000-000000000004",
+        ]
+    );
+
+    sqlx::raw_sql(
+        "DELETE FROM entity_access WHERE entity_id = 'c4ec0000-0000-0000-0000-000000000003'",
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        caller_documents(&pool, true).await?,
+        vec!["c4ec0000-0000-0000-0000-000000000004"]
     );
 
     Ok(())
