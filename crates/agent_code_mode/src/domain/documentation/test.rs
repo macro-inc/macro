@@ -508,19 +508,22 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
                 .is_some_and(|index| routed.contains(index))
         })
         .count();
-    assert!(loaded >= 3, "only {loaded} entities fit beside the skill");
+    assert_eq!(loaded, 3, "only {loaded} entities fit beside the skill");
     let without_skill = routed.replacen(&format!("\n{skill}\n"), "", 1);
     assert!(without_skill.len() <= 48 * 1024 + "</macro_sdk>\n".len());
-    assert!(without_skill.len() + skill.len() > 48 * 1024);
+    assert!(
+        without_skill.len() + skill.len() > 48 * 1024,
+        "fixture no longer proves the skill is uncounted"
+    );
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
         requests: Mutex::new(vec![]),
         delay: Duration::ZERO,
         fail: false,
-        relevant: &["routines", "databases"],
+        relevant: &["routines", "channels"],
     });
     let task = documentation_for_task(
         &user(),
-        "when a row is added to Leads, email me",
+        "when a message is posted in #sales, email me",
         Some(&classifier),
         &CancellationToken::new(),
     )
@@ -542,6 +545,10 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
         })
         .sum();
     assert!(counted - skill.len() - 2 <= 32 * 1024);
+    assert!(
+        counted > 32 * 1024,
+        "fixture no longer proves the skill is uncounted"
+    );
 }
 
 #[test]

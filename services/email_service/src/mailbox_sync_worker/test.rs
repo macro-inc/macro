@@ -94,9 +94,10 @@ async fn mailbox(db: &PgPool, folder: &str, synced: bool, due: &str) -> Uuid {
 async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_a_cycle(
     db: PgPool,
 ) {
-    let importing = mailbox(&db, "importing", false, "1 minute").await;
-    // Due after the importing folder's first page and before its next one.
-    mailbox(&db, "synced", true, "1 second").await;
+    let importing = mailbox(&db, "importing", false, "7 minutes").await;
+    // Due after the importing folder's first page and before its next one,
+    // which is claimed as if due five minutes earlier than it is.
+    mailbox(&db, "synced", true, "6 minutes").await;
     // Each queued message is read once more and then recorded as gone.
     sqlx::query!(
         r#"
