@@ -89,6 +89,9 @@ pub const MAX_HTML_DEPTH: usize = 512;
 
 const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 
+#[cfg(test)]
+mod test;
+
 /// A parsed body, and whether the parse stopped at a bound, leaving out
 /// everything from there on.
 pub(crate) struct BoundedHtml {
@@ -144,6 +147,7 @@ fn feed(mut parser: Parser<BoundedSink>, html: &str) -> BoundedHtml {
 struct BoundedSink {
     html: Html,
     nodes: usize,
+    attributes: usize,
     text_bytes: usize,
     /// Each formatting element's tag, hashed without regard to attribute
     /// order, so identical tags are found without comparing attributes.
@@ -157,6 +161,7 @@ impl BoundedSink {
         Self {
             html,
             nodes: 0,
+            attributes: 0,
             text_bytes: 0,
             formatting_tags: HashMap::new(),
             hasher: RandomState::new(),
@@ -177,7 +182,11 @@ impl BoundedSink {
 
     fn count_nodes(&mut self, nodes: usize) {
         self.nodes += nodes;
-        if self.nodes > MAX_HTML_NODES {
+        self.check_node_budget();
+    }
+
+    fn check_node_budget(&mut self) {
+        if self.nodes + self.attributes / ATTRIBUTES_PER_NODE > MAX_HTML_NODES {
             self.clipped = true;
         }
     }
@@ -191,7 +200,10 @@ impl BoundedSink {
 
     /// Counts attributes added to an element that then has `total`.
     fn count_attributes(&mut self, added: &[Attribute], total: usize) {
-        self.count_nodes(added.len() / ATTRIBUTES_PER_NODE);
+        // Counted across elements, so four attributes cost a node whether
+        // or not they share one.
+        self.attributes += added.len();
+        self.check_node_budget();
         self.count_text_bytes(
             added
                 .iter()
