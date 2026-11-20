@@ -1,7 +1,10 @@
 import type { PipedreamConnectOutcome } from '@queries/pipedream-connectors';
 import { createSignal, onCleanup } from 'solid-js';
 
-/** Resume only the agent turn that initiated a successful connection. */
+/**
+ * Resume only the agent turn that initiated a successful connection.
+ * `connect` resolves whether the app ended up connected, resumed or not.
+ */
 export function createConnectorContinuation(deps: {
   disabled: () => boolean;
   revision: () => string;
@@ -19,8 +22,11 @@ export function createConnectorContinuation(deps: {
   });
   const disabled = () => pending() || deps.disabled();
 
-  async function connect(app: { appSlug: string; name: string }) {
-    if (disposed || disabled()) return;
+  async function connect(app: {
+    appSlug: string;
+    name: string;
+  }): Promise<boolean> {
+    if (disposed || disabled()) return false;
     const revision = deps.revision();
     setPending(true);
     try {
@@ -28,24 +34,26 @@ export function createConnectorContinuation(deps: {
         appSlug: app.appSlug,
         serverName: app.name,
       });
-      if (disposed) return;
+      if (disposed) return false;
       if (outcome === 'unsupported') {
         deps.notify('Connectors are not available on this deployment');
-        return;
+        return false;
       }
-      if (outcome !== 'connected') return;
+      if (outcome !== 'connected') return false;
       if (deps.disabled() || revision !== deps.revision()) {
         deps.notify(
           `${app.name} connected. Send a message when you are ready to continue.`
         );
-        return;
+        return true;
       }
       await deps.resume(app);
+      return true;
     } catch {
       if (!disposed)
         deps.notify(
           `Could not connect ${app.name} and continue. Please try again.`
         );
+      return false;
     } finally {
       setPending(false);
     }

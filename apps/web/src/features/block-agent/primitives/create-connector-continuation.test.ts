@@ -32,7 +32,7 @@ describe('connector continuation', () => {
     expect(deps.connect).toHaveBeenCalledTimes(1);
     expect(deps.resume).not.toHaveBeenCalled();
     finish('connected');
-    await pending;
+    expect(await pending).toBe(true);
     expect(deps.resume).toHaveBeenCalledExactlyOnceWith(app);
     expect(flow.disabled()).toBe(false);
     dispose();
@@ -44,7 +44,7 @@ describe('connector continuation', () => {
       const { deps, flow, finish, dispose } = setup();
       const pending = flow.connect(app);
       finish(outcome);
-      await pending;
+      expect(await pending).toBe(false);
       expect(deps.resume).not.toHaveBeenCalled();
       dispose();
     }

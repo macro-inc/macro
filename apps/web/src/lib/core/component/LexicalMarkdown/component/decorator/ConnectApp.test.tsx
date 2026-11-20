@@ -68,7 +68,7 @@ beforeEach(() => {
 
 describe('connect-app chip', () => {
   it('connects in place when an agent session owns the continuation', () => {
-    const connect = vi.fn(async () => {});
+    const connect = vi.fn(async () => true);
     render(() => (
       <AppConnectionContext.Provider value={{ connect, disabled: () => false }}>
         <ConnectApp
@@ -90,7 +90,7 @@ describe('connect-app chip', () => {
   });
 
   it('disables connection while the agent session cannot safely continue', () => {
-    const connect = vi.fn(async () => {});
+    const connect = vi.fn(async () => true);
     render(() => (
       <AppConnectionContext.Provider value={{ connect, disabled: () => true }}>
         <ConnectApp
@@ -108,6 +108,71 @@ describe('connect-app chip', () => {
         .hasAttribute('disabled')
     ).toBe(true);
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('offers to reconnect an expired app the reader still has connected, then reads as reconnected', async () => {
+    mocks.pipedreamSlugs.add('stripe');
+    const connect = vi.fn(async () => true);
+    render(() => (
+      <AppConnectionContext.Provider value={{ connect, disabled: () => false }}>
+        <ConnectApp
+          appSlug="stripe"
+          name="Stripe"
+          target="connections"
+          reconnect
+          key="node"
+          theme={{}}
+        />
+      </AppConnectionContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Stripe' }));
+    expect(connect).toHaveBeenCalledExactlyOnceWith({
+      appSlug: 'stripe',
+      name: 'Stripe',
+    });
+    const done = await screen.findByRole('button', {
+      name: 'Stripe reconnected',
+    });
+    fireEvent.click(done);
+    expect(connect).toHaveBeenCalledOnce();
+  });
+
+  it('keeps offering to reconnect when the reader closes the connect flow', async () => {
+    mocks.pipedreamSlugs.add('stripe');
+    const connect = vi.fn(async () => false);
+    render(() => (
+      <AppConnectionContext.Provider value={{ connect, disabled: () => false }}>
+        <ConnectApp
+          appSlug="stripe"
+          name="Stripe"
+          target="connections"
+          reconnect
+          key="node"
+          theme={{}}
+        />
+      </AppConnectionContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Stripe' }));
+    await Promise.resolve();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Stripe' }));
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends a reconnect chip outside a session to Connections even though the app is connected', () => {
+    mocks.pipedreamSlugs.add('stripe');
+    render(() => (
+      <ConnectApp
+        appSlug="stripe"
+        name="Stripe"
+        target="connections"
+        reconnect
+        key="node"
+        theme={{}}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect Stripe' }));
+    expect(mocks.requestConnectApp).toHaveBeenCalledWith('stripe');
+    expect(mocks.openAgentsPage).toHaveBeenCalledWith({}, 'connections');
   });
 
   it('sends a Pipedream chip to Connections with the app queued', () => {
