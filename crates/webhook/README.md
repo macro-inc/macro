@@ -358,6 +358,57 @@ endpoint can accept the HTTP request before the process records the result. A
 redelivery can then recover the interrupted attempt and call the endpoint again.
 Webhook receivers should use `X-Macro-Event-Id` as an idempotency key.
 
+## MCP Events subscriptions
+
+The Macro MCP server implements the MCP Events extension
+(`io.modelcontextprotocol/events`): an agent asks for Macro events, in
+plain words or as a webhook event name, and receives them at its own callback
+URL. This crate stores those subscriptions, matches events to them and
+delivers; the MCP server (`agent_harness_service`) compiles the filter and
+encrypts the secret before calling it.
+
+- **Storage.** `mcp_event_subscription`, one row per (user, endpoint URL,
+  event type, canonical arguments). The MCP subscription id (`sub_…`) is a
+  digest of that key, so subscribing again refreshes the row in place: a new
+  expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
+  1 min to 24 h) and are deleted outright on unsubscribe; expired rows are
+  swept on the user's next subscribe. A user holds at most 50 live rows.
+- **Filter.** `domain/mcp/filter.rs`: an OR of clauses, each exact event
+  names, optional parent ids (the webhook `ids` semantics) and an AND of
+  conditions on whitelisted message fields (`parent_type`, `parent_id`,
+  `actor`, `mentioned_type`, `mentioned_id`), where a value is literal text or
+  `me` (the subscriber). It is compiled once, at subscribe time, and evaluated
+  deterministically at delivery; a request that does not fit is refused,
+  never approximated. `events` holds every event name a filter can match, for
+  the match probe.
+- **Access.** Fan-out receives the audience ingestion already computed for
+  the event (the users who can see it, as webhook workspaces) and only rows of
+  those users can match, so a subscription never sees more than its user's
+  webhooks would. A user who loses access stops receiving at the next event.
+- **Verification.** A new endpoint must echo a signed
+  `{"type":"verification","challenge"}` within the call; a user's live
+  subscription to the same URL counts as already verified. Failures map to
+  the spec's `CallbackEndpointError` reasons.
+- **Delivery.** Fan-out queues one message per matched row on the webhook FIFO
+  queue (group `mcp:<row id>`, dedup `mcp:<row id>:<event id>`); the webhook
+  worker tells the two message kinds apart by shape. Each POST is a Standard
+  Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
+  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. Attempts follow the
+  webhook retry schedule, counted by SQS's receive count (5 attempts); `410` and
+  `413` are not retried and leave the subscription alone. Nothing is recorded
+  per delivery: a row that is gone by delivery time drops the event.
+- **Secret.** The client supplies the `whsec_` secret. The MCP server
+  encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
+  bound to the user); this service only decrypts it, per delivery.
+- **Internal calls.** `inbound/mcp_router.rs`, nested under `/internal` in
+  `document_storage_service`: `PUT /mcp/event_subscriptions` and
+  `POST /mcp/event_subscriptions/unsubscribe`, internal key plus acting user.
+  A subscribe without a filter refreshes a live row; for a new key it answers
+  `422 filter_required`, and the MCP server compiles one and retries.
+- **Rolling deploys.** A worker from before this change acknowledges an MCP
+  queue message as malformed, so deliveries queued during the rollout window
+  can be lost. Acceptable for a new feature with no subscribers before it ships.
+
 ## Operations
 
 ### Queue configuration and local setup
