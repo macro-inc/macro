@@ -218,7 +218,7 @@ function _useEntitiesNotificationsQuery(args: {
 
 async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
   if (!graphqlCacheEnabled()) {
-    await refreshActiveGraphqlSoupQueries();
+    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
   }
 }
 

@@ -35,7 +35,7 @@ export async function markEmailThreadSeen(
       getUnmaintainedGraphqlSoupRevalidations()
     );
     if (disposition === 'committed' && !graphqlCacheEnabled()) {
-      await refreshActiveGraphqlSoupQueries();
+      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     }
   } finally {
     await invalidateEmailFolderQueries();
@@ -83,7 +83,8 @@ export async function markEmailThreadUnread(
     );
     queued = disposition === 'queued';
     if (queued) return { kind: 'queued', settlement: tracked?.settlement };
-    if (!graphqlCacheEnabled()) await refreshActiveGraphqlSoupQueries();
+    if (!graphqlCacheEnabled())
+      await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
     return { kind: 'committed' };
   } finally {
     if (!queued) tracked?.stop();

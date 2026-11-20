@@ -144,7 +144,7 @@ export async function updateNotificationsForEntities(args: {
     expectedNotificationIds: args.expectedNotificationIds,
   });
   if (!graphqlCacheEnabled()) {
-    await refreshActiveGraphqlSoupQueries();
+    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
   }
   return rows.map((row) => mapGraphqlNotification(row));
 }

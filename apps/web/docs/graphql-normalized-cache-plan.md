@@ -808,7 +808,23 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. One-shot reads (exports, previews) use `fetchGraphqlSoupPage` or `fetchGraphqlSoupEntities` from `lib/queries/soup/graphql/fetch-page.ts`, not the REST soup endpoints. |
+
+Every read that falls back to REST because the translator has no GraphQL
+form for it records a `soup.rest_fallback` span (attributes
+`soup.fallback.reason`, `.shape` and `.kind`) and logs one
+`soup.rest_fallback` warning per reason and shape
+(`lib/queries/soup/graphql/rest-fallback.ts`). The shape names only the sort,
+grouping, email view and targets, never ids or values. A request made with
+`transport: 'rest'` is a choice, not a fallback, and is not recorded.
+
+Without the cache, writes read mounted Soup lists again
+(`refreshActiveGraphqlSoupQueries`). A list that never shows, filters or sorts
+by unread state (the Quick Access and menu feeds) passes
+`ignoresNotifications: true`, and notification and email read-state writes
+refresh with `notificationsOnly: true`, which skips it. Such a list also reads
+its rows with `SoupPreviewPage` (the `preview` projection), so the server does
+not look up notifications for rows it never shows.
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result

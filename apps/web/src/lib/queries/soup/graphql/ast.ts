@@ -97,8 +97,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** A Soup request with no GraphQL translation; `reason` names the part. */
+export class UnsupportedGraphqlSoupError extends Error {
+  constructor(readonly reason: string) {
+    super(`Unsupported GraphQL Soup AST: ${reason}`);
+    this.name = 'UnsupportedGraphqlSoupError';
+  }
+}
+
 function unsupported(message: string): never {
-  throw new Error(`Unsupported GraphQL Soup AST: ${message}`);
+  throw new UnsupportedGraphqlSoupError(message);
 }
 
 function compileExpr<TLiteral>(

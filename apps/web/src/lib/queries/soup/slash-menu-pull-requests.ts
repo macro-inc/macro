@@ -1,25 +1,37 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import { isGithubPrEntity } from '@entity';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryReadyGate } from '../gate';
-import { useSoupItemsQuery } from './items';
+import { type SoupAstItemsQueryArgs, useSoupAstItemsQuery } from './items';
+
+/** GitHub pull requests only, recently opened first. */
+export const SLASH_MENU_PULL_REQUESTS_ARGS: SoupAstItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'viewed_updated' },
+  body: compileToAst(
+    queryStateFrom(
+      defineQueryFilters({
+        include: { foreignEntitySource: ['github_pull_request'] },
+      })
+    )
+  ),
+};
 
 /** Accessible pull requests, using the same live feed as the PR list. */
 export function useSlashMenuPullRequests(enabled: Accessor<boolean>) {
-  const query = useSoupItemsQuery(
+  const query = useSoupAstItemsQuery(
+    () => SLASH_MENU_PULL_REQUESTS_ARGS,
     () => ({
-      params: { limit: 500, sort_method: 'viewed_updated' },
-      body: {
-        ...QUERY_FILTERS_BASE,
-        foreign_entity_filters: {
-          foreign_entity_sources: ['github_pull_request'],
-        },
-      },
-    }),
-    () => ({ enabled: enabled(), staleTime: 60_000 })
+      enabled: enabled(),
+      showSupportedForeignEntities: true,
+      ignoresNotifications: true,
+    })
   );
   const pullRequests = createMemo(() =>
-    queryReadyGate(query) ? query.data.filter(isGithubPrEntity) : []
+    queryReadyGate(query) ? query.data.entities.filter(isGithubPrEntity) : []
   );
   return { query, pullRequests };
 }

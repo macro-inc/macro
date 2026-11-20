@@ -1,11 +1,28 @@
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import type { InitiativeEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import {
+  QUICK_ACCESS_FEED_OPTIONS,
+  type SoupAstItemsQueryArgs,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
-const QUICK_ACCESS_INITIATIVES_LIMIT = 500;
-const STALE_TIME = 5 * 60 * 1000;
+/**
+ * Initiatives only, recently opened first. Initiatives are opt-in server-side
+ * and have no filter field, so the include literal is written directly.
+ */
+export const QUICK_ACCESS_INITIATIVES_ARGS: SoupAstItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'viewed_updated' },
+  body: {
+    ...compileToAst(queryStateFrom(defineQueryFilters({}))),
+    if: { l: 'inc' },
+  },
+};
 
 /**
  * Quick Access feed of the task projects (initiatives) the user can access.
@@ -13,28 +30,16 @@ const STALE_TIME = 5 * 60 * 1000;
  * Projects never appear in history, so this is the only source feeding the
  * `'initiative'` bucket — mention menus and entity pickers list them like any
  * other entity.
- *
- * Every other entity type is filtered out by extending `QUERY_FILTERS_BASE`;
- * initiatives are opt-in.
  */
 export function useQuickAccessInitiativesQuery() {
-  const query = useSoupItemsQuery(
-    () => ({
-      params: {
-        limit: QUICK_ACCESS_INITIATIVES_LIMIT,
-        sort_method: 'viewed_updated',
-      },
-      body: {
-        ...QUERY_FILTERS_BASE,
-        initiative_filters: { include: true },
-      },
-    }),
-    () => ({ staleTime: STALE_TIME })
+  const query = useSoupAstItemsQuery(
+    () => QUICK_ACCESS_INITIATIVES_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
   );
 
   const initiatives = createMemo<InitiativeEntity[]>(() =>
     queryReadyGate(query)
-      ? query.data.filter(
+      ? query.data.entities.filter(
           (entity): entity is InitiativeEntity => entity.type === 'initiative'
         )
       : []

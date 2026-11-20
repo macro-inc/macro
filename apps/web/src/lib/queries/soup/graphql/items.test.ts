@@ -2534,6 +2534,47 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('reads preview lists without notifications on every page and refresh', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor
+        ? { continuation: { cursor } }
+        : { initial: { limit: 500, sortMethod: 'UPDATED_AT' } }
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'preview' })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+      for (const entry of getActiveGraphqlSoupRevalidations()) {
+        expect(print(entry.document)).toContain('query SoupPreviewPage');
+      }
+      const refresh = query.refresh();
+      fake.executions[2].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await refresh;
+      for (const execution of fake.executions) {
+        expect(print(execution.document)).toContain('query SoupPreviewPage');
+        expect(print(execution.document)).not.toContain('notifications');
+      }
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps loaded channel pages registered for retry after a transient refresh failure', async () => {
     vi.useFakeTimers();
     const visibility = vi

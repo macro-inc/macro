@@ -121,6 +121,7 @@ import {
   type SoupBackfillResult,
   type SoupInitialInput,
   type SoupInput,
+  type SoupItemPreviewFieldsFragment,
   type SoupNotificationFieldsFragment,
   type SoupNotificationNavigationMetadataFieldsFragment,
   type SoupPropertyFieldsFragment,
@@ -1129,7 +1130,8 @@ export type GraphqlGroupedSoupPage = {
 
 export type GraphqlSoupItem =
   | SoupQuery['user']['soup']['items'][number]
-  | (ChannelListItemFieldsFragment & { notifications?: never });
+  | (ChannelListItemFieldsFragment & { notifications?: never })
+  | (SoupItemPreviewFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,

@@ -11,6 +11,7 @@ import {
 } from '@entity/utils/task-properties';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { agentSessionPullRequestKeys } from '@queries/agent-session/keys';
+import { fetchGraphqlSoupPage } from '@queries/soup/graphql/fetch-page';
 import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
@@ -90,27 +91,31 @@ const SOUP_ID_FIELDS = {
   asf: 'agentSessionId',
 } as const;
 
+/** The Soup request for exactly `ids` of one entity target. */
+export function soupEntitiesByIdArgs(
+  target: keyof typeof SOUP_ID_FIELDS,
+  ids: readonly string[]
+) {
+  const field = SOUP_ID_FIELDS[target];
+  return {
+    params: { limit: ids.length },
+    body: compileClause(
+      confine({
+        [target]: clause.or(...ids.map((id) => clause.eq(field, id))),
+      })
+    ),
+  };
+}
+
 /** Soup rows for exactly `ids` of one entity target, with their properties. */
 async function fetchSoupEntitiesById(
   target: keyof typeof SOUP_ID_FIELDS,
   ids: readonly string[]
 ): Promise<EntityData[]> {
   if (ids.length === 0) return [];
-  const field = SOUP_ID_FIELDS[target];
-  const page = await throwOnErr(() =>
-    storageServiceClient.getSoupAstItems({
-      params: {},
-      body: {
-        ...compileClause(
-          confine({
-            [target]: clause.or(...ids.map((id) => clause.eq(field, id))),
-          })
-        ),
-        limit: ids.length,
-        expand: true,
-      },
-    })
-  );
+  const page = await fetchGraphqlSoupPage(soupEntitiesByIdArgs(target, ids), {
+    requestPolicy: 'network-only',
+  });
   return page.items.filter(isDisplayableSoupItem).map(mapApiSoupItemToEntity);
 }
 

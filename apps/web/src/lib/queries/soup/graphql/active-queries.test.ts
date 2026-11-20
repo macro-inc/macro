@@ -329,6 +329,25 @@ describe('active GraphQL Soup queries', () => {
     expect(maintained).toHaveBeenCalledTimes(2);
   });
 
+  it('skips lists without unread state after a notification-only write', async () => {
+    const menuFeed = vi.fn(async () => {});
+    const inbox = vi.fn(async () => {});
+    register({
+      isEnabled: () => true,
+      refresh: menuFeed,
+      ignoresNotifications: () => true,
+    });
+    register({ isEnabled: () => true, refresh: inbox });
+
+    await refreshActiveGraphqlSoupQueries({ notificationsOnly: true });
+    expect(menuFeed).not.toHaveBeenCalled();
+    expect(inbox).toHaveBeenCalledOnce();
+
+    // Any other write still reads the feed again.
+    await refreshActiveGraphqlSoupQueries();
+    expect(menuFeed).toHaveBeenCalledOnce();
+  });
+
   it('leaves maintained pages out of the revalidations a write carries', () => {
     const document = gql`query Soup($input: SoupInput!) { soup(input: $input) { nextCursor } }`;
     const mail = { document, variables: { input: { initial: { mail: 1 } } } };

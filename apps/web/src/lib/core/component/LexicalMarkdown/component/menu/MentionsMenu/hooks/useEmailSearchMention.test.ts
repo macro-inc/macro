@@ -1,8 +1,12 @@
 import type { EntityItem } from '@core/context/quickAccess';
 import type { EmailEntity } from '@entity';
+import { soupRestFallback } from '@queries/soup/graphql/rest-fallback';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { useEmailSearchMention } from './useEmailSearchMention';
+import {
+  RECENT_EMAIL_THREADS_ARGS,
+  useEmailSearchMention,
+} from './useEmailSearchMention';
 
 const LOCAL_DRAFT: EntityItem = {
   id: 'draft-key',
@@ -146,7 +150,8 @@ vi.mock('@queries/soup/search', async () => {
 vi.mock('@queries/soup/items', async () => {
   const { createRenderEffect } = await import('solid-js');
   return {
-    useSoupItemsQuery: (
+    QUICK_ACCESS_FEED_OPTIONS: { ignoresNotifications: true },
+    useSoupAstItemsQuery: (
       _args: unknown,
       options: () => { enabled: boolean }
     ) => {
@@ -155,7 +160,7 @@ vi.mock('@queries/soup/items', async () => {
         get isPending() {
           return !options().enabled || !mocks.restSettled;
         },
-        data: [NEWER_REST_THREAD, REST_DRAFT, OLDER_REST_THREAD],
+        data: { entities: [NEWER_REST_THREAD, REST_DRAFT, OLDER_REST_THREAD] },
       };
     },
   };
@@ -165,7 +170,7 @@ vi.mock('@app/features/next-soup/filters/query-filters', () => ({
   QUERY_FILTERS_BASE: {},
 }));
 
-it('lists the newest REST threads, without drafts, when the GraphQL cache is off', () => {
+it('lists the newest Soup threads, without drafts, when the GraphQL cache is off', () => {
   const [term, setTerm] = createSignal('');
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
@@ -192,7 +197,7 @@ it('lists the newest REST threads, without drafts, when the GraphQL cache is off
   dispose();
 });
 
-it('lists Quick Access threads, not drafts, and leaves the REST list alone with the cache on', () => {
+it('lists Quick Access threads, not drafts, and leaves the Soup list alone with the cache on', () => {
   mocks.cacheServesEmails = true;
   mocks.bucketRows = [LOCAL_DRAFT, CACHED_THREAD];
   const { mention, dispose } = createRoot((dispose) => ({
@@ -227,7 +232,7 @@ it('stays on Quick Access when none of its threads match a short term', () => {
   dispose();
 });
 
-it('reports the REST threads as loading until they arrive', () => {
+it('reports the Soup threads as loading until they arrive', () => {
   mocks.restSettled = false;
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
@@ -243,7 +248,7 @@ it('reports the REST threads as loading until they arrive', () => {
   dispose();
 });
 
-it('leaves the REST list alone while the cache is still loading its threads', () => {
+it('leaves the Soup list alone while the cache is still loading its threads', () => {
   mocks.cacheServesEmails = true;
   const { mention, dispose } = createRoot((dispose) => ({
     mention: useEmailSearchMention({
@@ -268,4 +273,8 @@ it('keeps a mixed menu on search, so an empty term lists no threads', () => {
   expect(mocks.searchEnabled.at(-1)).toBe(true);
   expect(mocks.restEnabled).not.toContain(true);
   dispose();
+});
+
+it('reads the recent threads from GraphQL Soup', () => {
+  expect(soupRestFallback(RECENT_EMAIL_THREADS_ARGS)).toBeUndefined();
 });
