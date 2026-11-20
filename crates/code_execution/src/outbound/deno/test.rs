@@ -401,6 +401,7 @@ export async function main({macro}) {
         assert!(text.contains("main.ts:4:"), "{text}");
         assert!(!text.contains(scratch), "{text}");
         assert!(!text.contains("sdk.mjs"), "{text}");
+        assert!(!text.contains("bootstrap.mjs"), "{text}");
         assert!(!text.contains("file://"), "{text}");
     }
     service.shutdown().await;

@@ -29,7 +29,7 @@ const LOOP_HINT_CALLS = 50;
 const scratchUrlPath = new URL("./", import.meta.url).pathname;
 const scratchPaths = [...new Set([scratchUrlPath, decodeURIComponent(scratchUrlPath)])];
 const escapedScratch = scratchPaths.map((path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-const scratchFrame = new RegExp(`\\bat (?:[^"\\\\()]{0,200} \\()?(?:file://)?(?:${escapedScratch})(?!main\\.ts:)[^:)"\\\\]+:\\d+:\\d+\\)?`, "g");
+const scratchFrame = new RegExp(`\\bat (?:async )?(?:[^"\\\\()]{0,200} \\()?(?:file://)?(?:${escapedScratch})(?!main\\.ts:)[^:)"\\\\]+:\\d+:\\d+\\)?`, "g");
 const scratchPrefix = new RegExp(`(?:file://)?(?:${escapedScratch})`, "g");
 const repeatedSdkFrames = /at <Macro SDK>(?:\\n\s*at <Macro SDK>)+/g;
 function withoutScratchPaths(json) {
