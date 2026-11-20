@@ -77,14 +77,17 @@ pub trait RedisTokenBucketOps {
     ) -> impl std::future::Future<Output = Result<(bool, u64, u64), Report>> + Send;
 }
 
-impl RedisTokenBucketOps for redis::Client {
+/// Every take goes over the manager's one multiplexed connection, which it
+/// reconnects when it drops. A connection per take made a burst of concurrent
+/// takes open a connection each and wait hundreds of milliseconds for them.
+impl RedisTokenBucketOps for redis::aio::ConnectionManager {
     async fn take_token(
         &self,
         key: &str,
         capacity: u64,
         refill_ms: u64,
     ) -> Result<(bool, u64, u64), Report> {
-        let mut conn = self.get_multiplexed_async_connection().await?;
+        let mut conn = self.clone();
         let (taken, tokens, retry_after_ms): (i64, i64, i64) = TOKEN_BUCKET_SCRIPT
             .key(key)
             .arg(capacity)
