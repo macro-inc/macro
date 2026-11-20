@@ -293,3 +293,19 @@ export function kindForBot(
     'agent'
   );
 }
+
+/**
+ * The roster agent a mention names: mentions carry the `bot|<uuid>` principal,
+ * and Macro's mention stands for the default persona, which has no bot id.
+ */
+export function rosterAgentForMention(
+  roster: readonly RosterAgent[],
+  mentionedId: string
+): RosterAgent | undefined {
+  if (!mentionedId.startsWith('bot|')) return undefined;
+  if (isMacroAgentId(mentionedId)) {
+    return roster.find((agent) => agent.id === MACRO_PERSONA_ID);
+  }
+  const botId = mentionedId.slice('bot|'.length);
+  return roster.find((agent) => agent.botId === botId);
+}

@@ -1,5 +1,6 @@
 import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
+import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import {
   cleanup,
@@ -209,6 +210,7 @@ type ComposerProps = {
   onRemoveAttachment: (attachment: InputAttachmentData) => void;
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
+  onMentionUser?: (userId: string) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
@@ -232,6 +234,10 @@ vi.mock('../components/ChatComposer', () => ({
         aria-label="Draft"
         value={props.draft}
         onInput={(event) => props.onDraftChange(event.currentTarget.value)}
+      />
+      <input
+        aria-label="Mention"
+        onChange={(event) => props.onMentionUser?.(event.currentTarget.value)}
       />
       <button
         onClick={() =>
@@ -684,6 +690,45 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
+  });
+  it('makes an @mentioned agent the active agent, switching to its mode', async () => {
+    const send = page();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${CURSOR_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: `bot|${MACRO_AGENT_BOT_ID}` },
+    });
+    expect(
+      (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: undefined })
+    );
+  });
+  it('leaves the active agent alone when the mention is a person or an unavailable agent', () => {
+    const send = page(false);
+    for (const mentioned of [`bot|${CURSOR_BOT_ID}`, 'macro|person']) {
+      fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+        target: { value: mentioned },
+      });
+    }
+    expect(
+      (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: undefined })
     );
   });
   it('restores an unsent draft after the page remounts', () => {

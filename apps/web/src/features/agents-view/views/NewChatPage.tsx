@@ -49,14 +49,18 @@ import {
   selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
-import { type AgentKind, kindForMode } from '../core/agent-kind';
+import { type AgentKind, kindForMode, modeForKind } from '../core/agent-kind';
 import {
   type AgentsMode,
   agentsModeLabel,
   type ComposerMode,
 } from '../core/mode';
 import { defaultBranchFor, sameRepository } from '../core/repository';
-import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  MACRO_PERSONA_ID,
+  type RosterAgent,
+  rosterAgentForMention,
+} from '../core/roster';
 import { UnifiedModelSelector } from '../model-selector';
 import {
   createPersistedComposerAttachments,
@@ -482,6 +486,17 @@ export function NewChatPage(props: {
     if (selection) rememberEffort(selection);
   };
 
+  // An @mentioned agent becomes the active one, switching to its mode, as
+  // mentioning it in a channel starts it; the mention stays in the prompt.
+  const selectMentionedAgent = (mentionedId: string) => {
+    const agent = rosterAgentForMention(props.roster, mentionedId);
+    if (!agent || agent.unavailableReason) return;
+
+    const agentMode = modeForKind(agent.kind);
+    if (mode() !== agentMode) setMode(agentMode);
+    selectAgent(agent);
+  };
+
   let focusInput: (() => void) | undefined;
   const chatAboutUpdate = (sessionId: string, sessionName: string) => {
     const mention = chatAttachmentMentionToMarkdown({
@@ -676,6 +691,7 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      onMentionUser={selectMentionedAgent}
       modelName={catalogModelLabel(
         composerModelOverride(),
         selectedCatalog.models()
