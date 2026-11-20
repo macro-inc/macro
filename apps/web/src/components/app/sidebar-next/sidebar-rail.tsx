@@ -6,8 +6,21 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { cn } from '@ui';
-import { For, type JSX, Match, Suspense, Switch } from 'solid-js';
-import { type DockSize, dockSize, isDockHorizontal } from '../dock-prefs';
+import {
+  createEffect,
+  For,
+  type JSX,
+  Match,
+  onCleanup,
+  Suspense,
+  Switch,
+} from 'solid-js';
+import {
+  type DockSize,
+  dockPosition,
+  dockSize,
+  isDockHorizontal,
+} from '../dock-prefs';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -50,6 +63,49 @@ const DOCK_SIZE_VARIABLES = {
   },
 } satisfies Record<DockSize, JSX.CSSProperties>;
 
+const DOCK_INSET_SIDES = ['left', 'right', 'bottom'] as const;
+
+/**
+ * Fixed overlays that sit in a window corner (toasts, incoming calls) are
+ * portalled outside the rail, so the rail publishes its thickness on the
+ * edge it occupies as `--dock-inset-<side>` on the root for them to clear.
+ */
+function publishDockInsets() {
+  const root = document.documentElement;
+
+  createEffect(() => {
+    const thickness = DOCK_SIZE_VARIABLES[dockSize()]['--rail-thickness'];
+    for (const side of DOCK_INSET_SIDES) {
+      root.style.setProperty(
+        `--dock-inset-${side}`,
+        dockPosition() === side ? thickness : '0px'
+      );
+    }
+  });
+
+  onCleanup(() => {
+    for (const side of DOCK_INSET_SIDES) {
+      root.style.removeProperty(`--dock-inset-${side}`);
+    }
+  });
+}
+
+/**
+ * A top or bottom dock that overflows the window scrolls sideways. Scrollbars
+ * are hidden app-wide and a mouse wheel scrolls vertically, so turn vertical
+ * wheel movement into horizontal scrolling.
+ */
+function scrollHorizontallyOnWheel(event: WheelEvent) {
+  const nav = event.currentTarget;
+  if (!(nav instanceof HTMLElement)) return;
+  if (!isDockHorizontal()) return;
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+  if (nav.scrollWidth <= nav.clientWidth) return;
+
+  event.preventDefault();
+  nav.scrollLeft += event.deltaY;
+}
+
 /**
  * The app sidebar (the dock): a single always-narrow bar of icon buttons,
  * labels in tooltips. It sits against the left, right, top or bottom edge, in
@@ -68,6 +124,7 @@ export const SidebarRail = () => {
   const layout = useSplitLayout();
   const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
+  publishDockInsets();
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -98,6 +155,7 @@ export const SidebarRail = () => {
       <SearchRailButton />
 
       <nav
+        onWheel={scrollHorizontallyOnWheel}
         class={
           isDockHorizontal()
             ? 'min-w-0 overflow-x-auto pl-4'

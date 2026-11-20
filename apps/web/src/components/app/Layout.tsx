@@ -364,7 +364,10 @@ export function AppChrome(props: ParentProps) {
       </Show>
       {/* The banner already sits below the status bar on touch devices. */}
       <div
-        class={cn('min-h-0 flex-1 flex', dockFlexDirection())}
+        class={cn(
+          'min-h-0 flex-1 flex',
+          sidebarVisible() && dockFlexDirection()
+        )}
         style={{
           'padding-left': navigationInset('left'),
           'padding-right': navigationInset('right'),

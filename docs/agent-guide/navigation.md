@@ -628,8 +628,11 @@ left (default), top, right, or bottom edge of the window, and sets it **Large**
 saved per device (`macro:dock` in localStorage, read by the boot shell in
 `index.html`) and applies at once. Tooltips and rail menus open away from the
 dock's edge; on the top or bottom edge the apps run left to right, with the
-footer actions at the far end. Verify each edge and size, a rail tooltip, and
-the More menu.
+footer actions at the far end, and a mouse wheel scrolls apps that don't fit.
+The rail sets `--dock-inset-left|right|bottom` on the root to its thickness on
+its edge, so corner overlays (toasts, incoming calls) stay clear of it. Verify
+each edge and size, a rail tooltip, the More menu, and a toast with a bottom
+or right dock.
 
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
