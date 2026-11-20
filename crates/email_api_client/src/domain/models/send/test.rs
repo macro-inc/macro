@@ -71,6 +71,39 @@ fn mime_contains_recipients_threading_bodies_and_attachments() {
 }
 
 #[test]
+fn reply_headers_wrap_stored_and_bare_identifiers_exactly_once() {
+    for parent in ["<seed@example.com>", "seed@example.com"] {
+        let mut request = message(Vec::new());
+        request.parent_message_id = Some(parent.into());
+        request.references = Some(vec![
+            " <root+tag@example.com> ".into(),
+            "middle!id@example.com".into(),
+            parent.into(),
+        ]);
+        let mime = String::from_utf8(request.build_mime().unwrap()).unwrap();
+        // Unfold only RFC header continuation lines, as a receiving server does.
+        let headers = mime
+            .split_once("\r\n\r\n")
+            .unwrap()
+            .0
+            .replace("\r\n\t", " ");
+        assert_eq!(
+            headers
+                .lines()
+                .find(|line| line.starts_with("In-Reply-To:")),
+            Some("In-Reply-To: <seed@example.com>")
+        );
+        assert_eq!(
+            headers.lines().find(|line| line.starts_with("References:")),
+            Some("References: <root+tag@example.com> <middle!id@example.com> <seed@example.com>")
+        );
+        assert!(!headers.contains("<<"));
+        assert!(!headers.contains(">>"));
+        assert!(headers.contains("Message-ID: <stable-send@example.com>"));
+    }
+}
+
+#[test]
 fn stable_message_id_rejects_header_or_query_injection() {
     for id in [
         "",

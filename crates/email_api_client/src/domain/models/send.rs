@@ -1,5 +1,5 @@
 use mail_builder::MessageBuilder;
-use mail_builder::headers::address::Address;
+use mail_builder::headers::{address::Address, message_id::MessageId};
 use mail_builder::mime::{BodyPart, MimePart};
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::attachment::AttachmentToSend;
@@ -21,9 +21,9 @@ pub struct SendRequest {
     pub message: MessageToSend,
     /// Sender shown in the message's `From` header.
     pub from: ContactInfo,
-    /// Global message identifier of the direct parent message.
+    /// Global message identifier of the direct parent, bare or enclosed in angle brackets.
     pub parent_message_id: Option<String>,
-    /// Global message identifiers that describe the reply chain.
+    /// Reply-chain identifiers, each bare or enclosed in angle brackets.
     pub references: Option<Vec<String>>,
 }
 
@@ -43,10 +43,12 @@ impl SendRequest {
         }
 
         if let Some(parent_message_id) = &self.parent_message_id {
-            builder = builder.in_reply_to(parent_message_id.as_str());
+            builder = builder.in_reply_to(threading_message_id(parent_message_id));
         }
         if let Some(references) = &self.references {
-            builder = builder.references(references.clone());
+            builder = builder.references(MessageId::new_list(
+                references.iter().map(|id| threading_message_id(id)),
+            ));
         }
         if let Some(text_body) = &self.message.body_text {
             builder = builder.text_body(text_body);
@@ -96,6 +98,15 @@ impl SendRequest {
                 message: format!("failed to build MIME message: {error}"),
             })
     }
+}
+
+// Stored RFC headers retain their delimiters; mail-builder adds its own pair.
+// Normalize only that surrounding pair so the identifier itself stays unchanged.
+fn threading_message_id(id: &str) -> &str {
+    let id = id.trim();
+    id.strip_prefix('<')
+        .and_then(|id| id.strip_suffix('>'))
+        .unwrap_or(id)
 }
 
 /// Whether `attachment` is the message's calendar body rather than a file:
