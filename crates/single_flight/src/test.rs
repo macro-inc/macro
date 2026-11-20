@@ -313,3 +313,48 @@ async fn a_run_to_completion_caller_never_polls_the_work() {
     assert_eq!(caller.await, Ok(8));
     assert_eq!(runs.load(Ordering::SeqCst), 2);
 }
+
+/// A run's guard locks the registry when dropped, so it must not exist yet
+/// while the start path holds that lock and makes the work. The check runs on
+/// its own thread so that a deadlock fails the test instead of hanging it.
+#[test]
+fn a_work_factory_that_panics_leaves_the_key_to_the_next_caller() {
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let flights = SingleFlight::<&str, Output>::new();
+            let factory = |panics: bool| {
+                move || {
+                    assert!(!panics, "the work factory panics");
+                    std::future::ready(Ok(1))
+                }
+            };
+
+            let started = AssertUnwindSafe(flights.run("user-1", factory(true)))
+                .catch_unwind()
+                .await;
+            assert!(started.is_err());
+            assert_eq!(flights.run("user-1", factory(false)).await, Ok(1));
+
+            let started = AssertUnwindSafe(flights.run_to_completion("user-2", factory(true)))
+                .catch_unwind()
+                .await;
+            assert!(started.is_err());
+            assert_eq!(
+                flights.run_to_completion("user-2", factory(false)).await,
+                Ok(1)
+            );
+        });
+        done.send(()).unwrap();
+    });
+
+    assert!(
+        finished
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .is_ok(),
+        "a panicking work factory left the registry locked or failed a check"
+    );
+}

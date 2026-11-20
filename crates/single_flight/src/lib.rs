@@ -157,6 +157,9 @@ where
             return (shared, run.panicked.clone(), true);
         }
 
+        // The work is made before its run's guard exists: a guard dropped by a
+        // panic here would lock the registry this function holds.
+        let work = Box::pin(work());
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (signal_panic, panicked) = oneshot::channel();
         let panicked = panicked.shared();
@@ -165,16 +168,22 @@ where
             key: key.clone(),
             id,
         };
-        let shared = match driver {
-            Driver::Callers => SharedWork {
-                work: Box::pin(work()),
-                signal_panic: Some(signal_panic),
-                finished: Some(finished),
+        let (shared, task) = match driver {
+            Driver::Callers => {
+                let shared = SharedWork {
+                    work,
+                    signal_panic: Some(signal_panic),
+                    finished: Some(finished),
+                }
+                .in_current_span()
+                .boxed()
+                .shared();
+                (shared, None)
             }
-            .in_current_span()
-            .boxed()
-            .shared(),
-            Driver::Task => drive_with_task(Box::pin(work()), signal_panic, finished),
+            Driver::Task => {
+                let (shared, task) = drive_with_task(work, signal_panic, finished);
+                (shared, Some(task))
+            }
         };
 
         if let Some(weak) = shared.downgrade() {
@@ -187,12 +196,20 @@ where
             running.insert(key, run);
         }
 
+        // Spawned once the registry is unlocked, for the same reason: spawning
+        // panics outside a runtime, and the dropped task's guard locks it.
+        drop(running);
+        if let Some(task) = task {
+            tokio::spawn(task);
+        }
+
         (shared, panicked, false)
     }
 }
 
-/// Spawns the task that drives `work`, and returns what its callers wait on:
-/// the output the task delivers. Only the task polls the work. A caller
+/// What the callers of `work` wait on, the output the task delivers, and the
+/// task that drives `work`, for the caller to spawn. Only the task polls the
+/// work. A caller
 /// polling it too could find it poisoned by a panic on the task's thread
 /// between checking the panic signal and polling, and panic instead of running
 /// the work itself.
@@ -205,7 +222,7 @@ fn drive_with_task<K, T>(
     work: BoxFuture<'static, T>,
     signal_panic: oneshot::Sender<()>,
     finished: Finished<K, T>,
-) -> Shared<BoxFuture<'static, T>>
+) -> (Shared<BoxFuture<'static, T>>, BoxFuture<'static, ()>)
 where
     K: Eq + Hash + Send + 'static,
     T: Clone + Send + Sync + 'static,
@@ -231,15 +248,16 @@ where
     let joinable = shared.clone();
     let undelivered = SignalUnlessDelivered(Some(signal_panic));
 
-    tokio::spawn(async move {
+    let task = async move {
         let output = driven.await;
         // Fails only when no caller is waiting, which needs no output.
         let _ = deliver.send(output);
         undelivered.delivered();
         drop(joinable);
-    });
+    }
+    .boxed();
 
-    shared
+    (shared, task)
 }
 
 /// Signals the panic when dropped, unless the output was delivered first.
