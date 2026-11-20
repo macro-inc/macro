@@ -224,6 +224,13 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
 
         if refuses {
             assert_eq!(texts, (None, None));
+        } else {
+            // Only each body's text survives: its `x`s, run together.
+            let (Some(plain), Some(parsed)) = texts else {
+                panic!("no text for {} bytes in a <select>", html.len());
+            };
+            assert!(plain.chars().all(|c| c == 'x'), "{plain:.80}");
+            assert_eq!(plain, parsed);
         }
         assert!(
             peak < 32 << 20,
