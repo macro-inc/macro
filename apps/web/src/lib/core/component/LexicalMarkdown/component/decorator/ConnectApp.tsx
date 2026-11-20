@@ -30,7 +30,9 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
  *
  * A `reconnect` chip is for an app whose connection exists but expired, so
  * the app already counts as connected: it stays clickable until the reader
- * reconnects from it.
+ * reconnects from it. "Reconnected" is this chip's own state, set by an
+ * in-chat connect; a remount, or a reconnect made in Connections, reads
+ * "Reconnect" again.
  */
 export function ConnectApp(props: ConnectAppDecoratorProps) {
   return match(props.target)

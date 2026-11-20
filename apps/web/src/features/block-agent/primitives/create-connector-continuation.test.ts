@@ -73,7 +73,9 @@ describe('connector continuation', () => {
     const pending = flow.connect(app);
     finish('connected');
     expect(await pending).toBe(true);
-    expect(deps.notify).toHaveBeenCalledOnce();
+    expect(deps.notify).toHaveBeenCalledExactlyOnceWith(
+      'Linear connected. Send a message to continue.'
+    );
     dispose();
   });
 

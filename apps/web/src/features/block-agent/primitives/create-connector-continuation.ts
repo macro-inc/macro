@@ -51,10 +51,14 @@ export function createConnectorContinuation(deps: {
       await deps.resume(app);
       return true;
     } catch {
-      if (!disposed)
+      if (disposed) return connected;
+      if (connected) {
+        deps.notify(`${app.name} connected. Send a message to continue.`);
+      } else {
         deps.notify(
           `Could not connect ${app.name} and continue. Please try again.`
         );
+      }
       return connected;
     } finally {
       setPending(false);
