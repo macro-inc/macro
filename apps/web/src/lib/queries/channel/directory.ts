@@ -385,9 +385,6 @@ type DirectoryWrites = { seen: number; readFrom: Map<string, number> };
 
 const DIRECTORY_WRITES = new WeakMap<QueryClient, DirectoryWrites>();
 
-/** A read that started before a write reads again at most this often. */
-const CURRENT_READ_ATTEMPTS = 3;
-
 function directoryWrites(client: QueryClient): DirectoryWrites {
   const known = DIRECTORY_WRITES.get(client);
   if (known) return known;
@@ -423,19 +420,16 @@ export function channelDirectoryPagesQueryOptions(
  * The directory's pages, read after the latest channel write. A read that
  * started before one may hold the pages before it, and nothing reads again
  * for a caller of `fetchQuery`: an invalidation refetches only observed
- * queries, and the read's success clears it.
+ * queries, and the read's success clears it. So it reads until a read began
+ * after the latest write. The writes are this client's own, one per action
+ * the viewer takes, so the reads end once the viewer pauses.
  */
 export async function fetchCurrentDirectoryPages(
   client: QueryClient,
   options: ReturnType<typeof channelDirectoryPagesQueryOptions>
 ): Promise<readonly DirectoryChannel[]> {
   let channels = await client.fetchQuery(options);
-  for (
-    let attempt = 1;
-    attempt < CURRENT_READ_ATTEMPTS &&
-    readsBeforeWrite(client, options.queryKey);
-    attempt += 1
-  )
+  while (readsBeforeWrite(client, options.queryKey))
     channels = await client.fetchQuery({ ...options, staleTime: 0 });
   return channels;
 }
@@ -819,6 +813,9 @@ export function createCachedChannelDirectory(
   });
   const controller = new AbortController();
   onCleanup(() => controller.abort());
+  // The network walk the fallback is waiting on, aborted when it stops.
+  let walk: AbortController | undefined;
+  onCleanup(() => walk?.abort());
   let generation: string | undefined;
   // The cache the by-id reads answered for: a storage generation, null for
   // another viewer's, undefined before the first read or after a reset.
@@ -928,6 +925,8 @@ export function createCachedChannelDirectory(
 
   const stopFallback = () => {
     if (untrack(fallback).status === 'idle') return;
+    walk?.abort();
+    walk = undefined;
     fallbackRun += 1;
     observed = undefined;
     changes = undefined;
@@ -973,8 +972,11 @@ export function createCachedChannelDirectory(
     if (lane.failed) startFallback();
   };
 
-  const loadFallback = async (run: number) => {
-    const signal = controller.signal;
+  /** Pages the network once. It needs no write fence: a write during the
+   * walk reaches the cache as a soup update or the mutation's returned
+   * record, and `observe` lays every change since the walk began over the
+   * pages it returns. */
+  const loadFallback = async (run: number, signal: AbortSignal) => {
     try {
       const channels = await deps.pageAll(signal);
       if (signal.aborted || run !== fallbackRun) return;
@@ -995,8 +997,13 @@ export function createCachedChannelDirectory(
     seen = new Set(observed.keys());
     confirm.reset();
     setFallback({ status: 'loading' });
+    walk?.abort();
+    walk = new AbortController();
     // Never rejects: a failed read is reported inside.
-    fireAndForget(loadFallback(fallbackRun), 'channel-directory-fallback');
+    fireAndForget(
+      loadFallback(fallbackRun, walk.signal),
+      'channel-directory-fallback'
+    );
   };
 
   /** The cache's storage generation while it holds this viewer's records,
