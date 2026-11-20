@@ -105,6 +105,8 @@ export type CollabProviderProps = {
   span?: Span;
   /** Optional status UI (e.g. the md block's CollabStatus chrome). */
   statusChrome?: JSX.Element;
+  /** Called after the viewer's own content change is written to the session. */
+  onLocalEdit?: () => void;
 };
 
 export const FROM_LORO_TAG = 'from-loro';
@@ -476,6 +478,7 @@ export function CollabProvider(props: CollabProviderProps) {
         const changed = changedBlocks;
         changedBlocks = new Set();
         await writeEditorState(state, changed);
+        if (changed.size > 0) props.onLocalEdit?.();
       }
     }
 

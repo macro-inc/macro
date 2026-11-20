@@ -127,6 +127,21 @@ impl MailFolder {
     }
 }
 
+/// What a mailbox's folder discovery found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MailFolderCatalog {
+    /// The mailbox's folders, with their roles resolved.
+    Folders(Vec<MailFolder>),
+    /// The provider answered 404 to the mailbox's Inbox, which every mailbox
+    /// has: the account has no mailbox the provider will serve (for
+    /// Microsoft, no Exchange Online licence, an inactive mailbox, or one
+    /// hosted on premises).
+    NoMailbox {
+        /// The provider's error code for the 404, when it gave one.
+        error_code: Option<String>,
+    },
+}
+
 /// Provider-supplied attention evidence; user policy has higher precedence.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

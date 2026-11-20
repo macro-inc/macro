@@ -41,7 +41,10 @@ before touching the edit flow.
 - `src/markdown/body.ts`: `POST /markdown`, no model. Reads a markdown body with
   its revision, or replaces it at the revision the caller read (409 otherwise).
   Unchanged top-level blocks keep their ids and comment marks; changed ones are
-  replaced whole.
+  replaced whole. Writes parse the internal format plus GitHub pipe tables
+  (`E_TABLE_NODE`, limited by `isolatePipeTables` to header + delimiter
+  tables not already text in a current paragraph); add no other external
+  importer, or unchanged blocks re-import differently and lose ids.
 - `src/markdown/direct-edit/`: `/markdown` actions `blocks` and `edit`, no
   model. `edit` applies a batch of `{old,new}`, insert, delete and move edits
   to block-id'd internal markdown, reconciling edited blocks in place (ids,

@@ -48,6 +48,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   asideCollapsedPreferenceKey,
+  asideWidthPreferenceKey,
   useViewShell,
   ViewNavigationControls,
   ViewShell,
