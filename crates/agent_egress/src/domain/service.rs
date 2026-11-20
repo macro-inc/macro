@@ -471,7 +471,6 @@ where
 
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
-        let response = ReconnectAnswer::answer(reconnect, response);
 
         let status = response.status();
         tracing::Span::current().record("upstream_status", status.as_u16());
@@ -485,6 +484,8 @@ where
                 "upstream answered with a failure status"
             );
         }
+        // Recorded above as the upstream's own status.
+        let response = ReconnectAnswer::answer(reconnect, response);
 
         if event_stream {
             let identity = StreamIdentity {
