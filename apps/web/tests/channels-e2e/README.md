@@ -93,7 +93,14 @@ channel when the pushes or the nightly runs turn red, with the failed tests,
 and when they pass again
 ([what to do](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires)).
 A failed run keeps the stack's logs (`channels-e2e-stack-logs`) and its
-traces (`channels-e2e-results`).
+traces (`channels-e2e-results`). So does one that runs out of time: the
+suite's step stops after 35 minutes, short of the job's 45, so the steps
+after it still run.
+
+The stack starts with local agent sandboxes off
+(`DEV_DANGEROUS_LOCAL_CONTAINERS=false`): no test starts a sandbox, and
+building its image is uncached and can outlast the job. A test that needs a
+sandbox has to turn them back on and pay for the image.
 
 ## Writing a test
 

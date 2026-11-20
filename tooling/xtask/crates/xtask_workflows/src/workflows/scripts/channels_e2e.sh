@@ -7,6 +7,12 @@ set -euo pipefail
 # the suite makes.
 stack_env=$(mktemp)
 echo 'RUST_MIN_STACK=16777216' > "$stack_env"
+# No test starts an agent sandbox, and building the sandbox image is the one
+# stage of the bring-up nothing here caches: it clones the repository and
+# realizes its dev shell over the network, which has taken from one minute to
+# longer than the whole job. With local sandboxes off the stack skips it, and
+# the harness service starts without a sandbox provider.
+echo 'DEV_DANGEROUS_LOCAL_CONTAINERS=false' >> "$stack_env"
 
 started=$(date +%s)
 just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
