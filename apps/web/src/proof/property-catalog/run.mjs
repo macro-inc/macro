@@ -391,18 +391,37 @@ async function openSide(storageState, side, label) {
   });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => harnessError(`${label}: pageerror ${String(e.message).slice(0, 200)}`));
+  // Module loads that failed or errored, for diagnosing a page that never got ready.
+  const note = (x) => {
+    s.netlog ??= [];
+    s.netlog.push(x);
+    if (s.netlog.length > 40) s.netlog.shift();
+  };
+  page.on('requestfailed', (r) => note(`failed ${new URL(r.url()).pathname.slice(0, 90)} ${r.failure()?.errorText}`));
+  page.on('response', (r) => r.status() >= 400 && /\/(src|node_modules|@)/.test(r.url()) && note(`${r.status()} ${new URL(r.url()).pathname.slice(0, 90)}`));
+  page.on('console', (m) => m.type() === 'error' && !/Vite server|Failed to load resource/.test(m.text()) && note(`console ${m.text().slice(0, 120)}`));
   const s = { ctx, page, tap, side, label };
   await loadHarness(s);
   if (side === 'neu' && CONFIG.mutant === 'skip-live-update') await ev(s, 'mutant.skipLiveUpdate');
   return s;
 }
+// Load (or reload) the harness page. The dev server now and then leaves a
+// reload without its modules; that is retried and recorded, never compared.
 async function loadHarness(s) {
-  await s.page.goto(HARNESS, { waitUntil: 'load', timeout: 300000 });
-  try {
-    await s.page.waitForFunction(() => window.__harnessReady && window.__h.authenticated() === true, null, { timeout: Number(E.READY_MS ?? 300000) });
-  } catch (e) {
-    const st = await s.page.evaluate(() => ({ ready: !!window.__harnessReady, auth: window.__h?.authenticated?.(), url: location.href, body: document.body.innerText.slice(0, 200) })).catch((x) => String(x));
-    throw new Error(`${s.label}: harness not ready ${JSON.stringify(st)}: ${e.message.slice(0, 100)}`);
+  for (let attempt = 1; ; attempt++) {
+    s.netlog = [];
+    try {
+      await s.page.goto(HARNESS, { waitUntil: 'load', timeout: 300000 });
+      await s.page.waitForFunction(() => window.__harnessReady && window.__h.authenticated() === true, null, { timeout: Number(E.READY_MS ?? 120000) });
+      return;
+    } catch (e) {
+      const st = await s.page.evaluate(() => ({ ready: !!window.__harnessReady, auth: window.__h?.authenticated?.(), url: location.href, body: document.body.innerText.slice(0, 200) })).catch((x) => String(x));
+      const msg = `${s.label}: harness not ready (attempt ${attempt}) ${JSON.stringify(st)}: ${e.message.slice(0, 100)}; last requests: ${JSON.stringify(s.netlog.slice(-8))}`;
+      R.harnessReloadRetries = (R.harnessReloadRetries ?? 0) + 1;
+      harnessError(msg);
+      if (attempt >= 4) throw new Error(msg);
+      log(msg.slice(0, 300));
+    }
   }
 }
 function harnessError(msg) {
