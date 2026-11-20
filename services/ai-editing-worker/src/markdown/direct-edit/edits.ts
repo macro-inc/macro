@@ -183,13 +183,15 @@ function spansBlocks(list: Entry[], old: string): boolean {
     if (i) boundaries.push(offset - 2);
     offset += entry.markdown.length + 2;
   });
+  // Matches come in ascending order: walk the boundaries alongside them.
+  let next = 0;
   for (
     let at = joined.indexOf(old);
     at >= 0;
     at = joined.indexOf(old, at + 1)
   ) {
-    const end = at + old.length;
-    if (boundaries.some((boundary) => at < boundary + 2 && end > boundary))
+    while (next < boundaries.length && boundaries[next] + 2 <= at) next++;
+    if (next < boundaries.length && at + old.length > boundaries[next])
       return true;
   }
   return false;
