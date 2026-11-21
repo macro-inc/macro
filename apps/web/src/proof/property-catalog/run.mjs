@@ -1429,9 +1429,11 @@ async function step(pair, g, gen) {
       // no hook runs, so open readers stay stale on both sides alike.
       if (!cat.own.length) return null;
       const d = g.pick(cat.own);
-      const ok = sql(`UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v: gen.name(), id: d.definition.id });
+      const v = gen.name();
+      const ok = sql(`UPDATE property_definitions SET display_name = :'v', updated_at = now() WHERE id = :'id'`, { v, id: d.definition.id });
       bump(R.ops, 'sqlRename', ok ? 'ok' : 'rejected');
-      if (ok) cover('odd value', 'renamed definition');
+      // a rename to the name it already had changes nothing a reader shows
+      if (ok && v !== d.definition.display_name) cover('odd value', 'renamed definition');
       await readAfterWrite(acct.neu, op, { definitionId: d.definition.id }, null);
       return null;
     }
@@ -1441,7 +1443,7 @@ async function step(pair, g, gen) {
       const t = g.pick(tagOpts);
       const ok = sql(`UPDATE property_options SET color = NULL, updated_at = now() WHERE id = :'id'`, { id: t.id });
       bump(R.ops, 'sqlNullColor', ok ? 'ok' : 'rejected');
-      if (ok) cover('odd value', 'null color');
+      if (ok && t.color != null) cover('odd value', 'null color');
       await readAfterWrite(acct.neu, op, { propertyDefinitionId: t.propertyDefinitionId }, null);
       return null;
     }
