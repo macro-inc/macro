@@ -2870,6 +2870,12 @@ async fn the_real_engine_enforces_the_egress_policy() {
             &format!("macro-teammate-test-egress-up:{}", std::process::id()),
         ])
         .output();
+    let _ = std::process::Command::new(program)
+        .args(["rm", "--force", &peer])
+        .output();
+    let _ = std::process::Command::new(program)
+        .args(["network", "rm", &lan])
+        .output();
     drop(listener);
 }
 
