@@ -41,10 +41,20 @@ the axum route constructors that declare each handler's category.
 - `Enforcement::Observed` refusals are rollout state, not permission: keep
   every older check (internal-key extractors, scope lists, handler checks)
   until the refusal it duplicates is enforced.
-- Until a service puts a `ResolvedCaller` in request extensions, the layer
-  decides nothing (`Verdict::Unresolved`) and every request goes on. A
-  service that resolves callers must resolve one for every authenticated
-  request, before routing, so `Unresolved` never means "allowed" there.
+- A categorized route with no `ResolvedCaller` in its request's extensions is
+  refused 403 `no_caller` (`Verdict::Unresolved`), except `Category::Public`.
+  So a service puts a `ResolvedCaller` in every request before routing,
+  from signed claims, before it categorizes a route; no route does yet.
+- A route can't be forced into the table at runtime: one built with
+  `axum::routing` instead of these constructors never runs the layer. A
+  service's categorization PR adds a test that calls `undeclared_routes` over
+  the routes from its OpenAPI document and its `route_service` mounts, and
+  bans raw routing in its crates.
+- `ScopedUnknown` reads by method only (a POST is refused even on a `Read`
+  route), as `agent_correlation`'s scope holds it; `ScopedDryRun` reads by
+  declared category, so a search sent as a POST goes on. `ChannelMention`
+  is held to what `ScopedNoSend` is; never resolve a channel mention to
+  `Program`.
 - Chain methods with `merge`: `MethodRouter`'s own `.get`/`.post` add a
   handler with no category.
 - The layer can't reach the `http.request` span (other middleware opens

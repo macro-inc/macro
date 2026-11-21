@@ -12,6 +12,7 @@
     serde::Serialize,
     utoipa::ToSchema,
     strum::Display,
+    strum::EnumCount,
     strum::EnumIter,
     strum::IntoStaticStr,
 )]

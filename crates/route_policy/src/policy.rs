@@ -60,6 +60,8 @@ pub enum RefusalCode {
     OutOfScope,
     /// Only another Macro service may call this route.
     InternalOnly,
+    /// Macro couldn't tell who sent the request.
+    NoCaller,
 }
 
 impl Refusal {
@@ -68,6 +70,7 @@ impl Refusal {
         let action = self.category.action();
         match self.code {
             RefusalCode::InternalOnly => format!("Only Macro's own services can {action}."),
+            RefusalCode::NoCaller => NO_CALLER_MESSAGE.to_owned(),
             RefusalCode::OutOfScope => format!("This session can't {action}."),
             RefusalCode::SignInRequired => format!(
                 "This credential can't {action}. The person must sign in to Macro and do it there."
@@ -77,13 +80,25 @@ impl Refusal {
                     Caller::AccountManager => ("An account manager", "the account holder"),
                     Caller::Bot => ("A bot", "the person"),
                     Caller::Harness => ("An agent on a computer", "the person"),
-                    _ => ("An agent's program", "the person"),
+                    Caller::Person
+                    | Caller::ApiCredential
+                    | Caller::Program
+                    | Caller::ScopedNoSend
+                    | Caller::ScopedGeneration
+                    | Caller::ScopedDryRun
+                    | Caller::ScopedUnknown
+                    | Caller::ChannelMention
+                    | Caller::Internal => ("An agent's program", "the person"),
                 };
                 format!("{subject} can't {action}. Ask {owner} to do it themselves in Macro.")
             }
         }
     }
 }
+
+/// What a request whose caller can't be told is answered.
+pub const NO_CALLER_MESSAGE: &str =
+    "Macro couldn't tell who sent this request. Sign in and try again.";
 
 /// What only the person may do: each returns or changes something that
 /// outlives the request (a credential, a linked account, who can sign in, a
@@ -124,13 +139,13 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
                     | C::Public
             ))
             .then_some(RefusalCode::PersonOnly),
-            Caller::ScopedNoSend => {
+            Caller::ScopedNoSend | Caller::ChannelMention => {
                 (!matches!(category, C::Read | C::Suggest | C::Write | C::Public))
                     .then_some(RefusalCode::OutOfScope)
             }
             Caller::ScopedGeneration => (!matches!(category, C::Read | C::Suggest | C::Public))
                 .then_some(RefusalCode::OutOfScope),
-            Caller::ScopedUnknown => {
+            Caller::ScopedDryRun | Caller::ScopedUnknown => {
                 (!matches!(category, C::Read | C::Public)).then_some(RefusalCode::OutOfScope)
             }
         }
@@ -138,19 +153,12 @@ pub fn decide(caller: Caller, category: Category) -> Result<(), Refusal> {
     let Some(code) = code else {
         return Ok(());
     };
-    let program = matches!(
-        caller,
-        Caller::Program
-            | Caller::ScopedNoSend
-            | Caller::ScopedGeneration
-            | Caller::ScopedUnknown
-            | Caller::AccountManager
-    );
-    let enforcement = if program && (PERSON_ONLY.contains(&category) || category == C::Internal) {
-        Enforcement::Enforced
-    } else {
-        Enforcement::Observed
-    };
+    let enforcement =
+        if caller.is_program() && (PERSON_ONLY.contains(&category) || category == C::Internal) {
+            Enforcement::Enforced
+        } else {
+            Enforcement::Observed
+        };
     Err(Refusal {
         code,
         category,
@@ -172,7 +180,10 @@ pub struct ResolvedCaller {
 
 /// A set of categories.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct CategorySet(u16);
+pub struct CategorySet(u32);
+
+/// A set holds one bit per category.
+const _: () = assert!(<Category as strum::EnumCount>::COUNT <= u32::BITS as usize);
 
 impl CategorySet {
     /// The set with `category` added.
@@ -186,8 +197,8 @@ impl CategorySet {
         self.0 & Self::bit(category) != 0
     }
 
-    fn bit(category: Category) -> u16 {
-        1 << category as u16
+    fn bit(category: Category) -> u32 {
+        1 << category as u32
     }
 }
 
@@ -204,8 +215,11 @@ pub struct RouteDecision {
 /// What the route policy decided for a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verdict {
-    /// The service resolved no caller, so nothing was decided.
+    /// The service resolved no caller on a route that needs one: refused, the
+    /// handler doesn't run.
     Unresolved,
+    /// A public route, which takes no caller.
+    Public,
     /// The caller may make the request.
     Allowed(Caller),
     /// Refused; the handler doesn't run.
@@ -216,10 +230,22 @@ pub enum Verdict {
 
 impl RouteDecision {
     /// The decision for a request to a route of `category` from `resolved`,
-    /// with the rollout's enforced categories applied.
-    pub fn new(resolved: Option<ResolvedCaller>, category: Category) -> Self {
+    /// with the rollout's enforced categories applied. `safe_method` says
+    /// whether the request's method only reads (`GET`, `HEAD`, `OPTIONS`).
+    pub fn new(resolved: Option<ResolvedCaller>, category: Category, safe_method: bool) -> Self {
         let verdict = match resolved {
+            None if category == Category::Public => Verdict::Public,
             None => Verdict::Unresolved,
+            // An unknown scope reads by method only, as its scope is held in
+            // `agent_correlation`: a POST is refused even on a read route.
+            Some(resolved) if resolved.caller == Caller::ScopedUnknown && !safe_method => {
+                Verdict::Refused(Refusal {
+                    code: RefusalCode::OutOfScope,
+                    category,
+                    caller: resolved.caller,
+                    enforcement: Enforcement::Enforced,
+                })
+            }
             Some(resolved) => match decide(resolved.caller, category) {
                 Ok(()) => Verdict::Allowed(resolved.caller),
                 Err(refusal)
@@ -242,7 +268,7 @@ impl Verdict {
     /// Who called, when resolved.
     pub fn caller(self) -> Option<Caller> {
         match self {
-            Self::Unresolved => None,
+            Self::Unresolved | Self::Public => None,
             Self::Allowed(caller) => Some(caller),
             Self::Refused(refusal) | Self::Observed(refusal) => Some(refusal.caller),
         }
@@ -252,6 +278,7 @@ impl Verdict {
     pub fn name(self) -> &'static str {
         match self {
             Self::Unresolved => "unresolved",
+            Self::Public => "public",
             Self::Allowed(_) => "allowed",
             Self::Refused(_) => "refused",
             Self::Observed(_) => "observed",

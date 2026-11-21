@@ -17,7 +17,8 @@ mod policy;
 pub use caller::Caller;
 pub use category::Category;
 pub use policy::{
-    CategorySet, Enforcement, Refusal, RefusalCode, ResolvedCaller, RouteDecision, Verdict, decide,
+    CategorySet, Enforcement, NO_CALLER_MESSAGE, Refusal, RefusalCode, ResolvedCaller,
+    RouteDecision, Verdict, decide,
 };
 
 pub mod inbound;
