@@ -154,9 +154,11 @@ export class CrmNamespace {
   }
 
   /**
-   * Search the caller's current team's CRM contacts whose email or name
-   * contains `query` (case-insensitive), most recently interacted first.
-   * An empty query lists the most recent contacts.
+   * Search the team's CRM contacts by email or name, most recent first.
+   *
+   * Matches contacts whose email or name contains `query`
+   * (case-insensitive), most recently interacted first. An empty query
+   * lists the most recent contacts.
    *
    * @param opts.limit Maximum contacts to return (1-500, default 20).
    *
