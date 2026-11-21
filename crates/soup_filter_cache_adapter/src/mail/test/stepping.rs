@@ -98,3 +98,43 @@ fn storage_without_a_position_runs_every_pass_in_one_step() {
         assert_eq!(steps, 1);
     });
 }
+
+#[test]
+fn passes_that_keep_starting_over_run_whole_as_before() {
+    pollster::block_on(async {
+        let storage = cache_turso::TursoStorage::open_in_memory("write-passes-restarts").unwrap();
+        let mut engine = Engine::new(storage);
+        write(&mut engine, QUERY, &seed()).await;
+        let (vars, data) = (Map::new(), partial());
+        let response = WriteResponse::new(
+            cache_core::meta::bundled_schema_ref(),
+            QUERY,
+            None,
+            &vars,
+            &data,
+        );
+
+        // A commit after every step: each step finds the position moved.
+        let mut passes = WritePasses::new(true, Vec::new());
+        let seeds = [moved_seed(), seed(), moved_seed()];
+        let mut done = None;
+        for data in &seeds {
+            match passes.step(&mut engine, &response).await.unwrap() {
+                WritePassStep::Pending => write(&mut engine, QUERY, data).await,
+                WritePassStep::Done(projections) => {
+                    done = Some(projections);
+                    break;
+                }
+            }
+        }
+        assert!(done.is_none(), "every step so far found a commit");
+        let (steps, projections) = finish(&mut passes, &mut engine, &response).await;
+        // One step finds the last commit and starts over a second time; the
+        // next runs every pass at once.
+        assert_eq!((steps, passes.restarts()), (2, 2));
+        let fresh = write_passes(&mut engine, &response, true, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(projections, fresh);
+    });
+}
