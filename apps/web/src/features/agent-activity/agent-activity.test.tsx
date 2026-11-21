@@ -131,6 +131,31 @@ it('folds a sealed run to a summary that opens to its steps, without the session
   ]);
 });
 
+it('counts a step repeated back to back once, as one row with its count', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        { id: 't1', label: 'Get Contacts', status: 'completed' },
+        { id: 't2', label: 'Get Thread', status: 'completed' },
+        { id: 't3', label: 'Get Thread', status: 'completed' },
+        { id: 't4', label: 'Get Thread', status: 'completed' },
+        { id: 't5', label: 'Get Thread', status: 'failed' },
+        { id: 't6', label: 'Get Thread', status: 'failed' },
+      ]}
+      sealed
+    />
+  ));
+  view.getByRole('button', { name: 'Used 3 tools · 1 failed' }).click();
+  expect(steps(view)).toEqual([
+    ['Get Contacts', 'completed'],
+    ['Get Thread×3', 'completed'],
+    ['Get Thread×2Failed', 'failed'],
+  ]);
+});
+
 it('shows an open run as one line naming the step it is on, live from the session', () => {
   const view = render(() => (
     <AgentActivity

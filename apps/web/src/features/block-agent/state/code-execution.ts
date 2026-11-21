@@ -1,4 +1,5 @@
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import type { ExecutionActivity } from '@service-agent-harness/generated/schemas';
 import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
 
 // Match UUIDs accepted by Rust, including reserved versions and variants.
@@ -65,16 +66,43 @@ export function programEnded(options: {
   return Boolean(options.error && (!options.recordRunning || !options.active));
 }
 
+/** One row of a program's operations: a step, or the same step repeated. */
+export interface ActivityRun<Step> {
+  item: Step;
+  count: number;
+}
+
 /**
- * The steps a program shows: its observed operations and historical calls,
- * or one failed row when it ended without any.
+ * A program's operations as rows: back-to-back operations with the same label
+ * and outcome fold into one, so a loop over one call reads as one step with
+ * its count rather than a wall of identical rows. Every view that lists or
+ * counts the operations folds them this way, so their counts agree.
+ */
+export function activityRuns<Step extends { label: string; status: string }>(
+  activity: readonly Step[]
+): ActivityRun<Step>[] {
+  const runs: ActivityRun<Step>[] = [];
+  for (const item of activity) {
+    const last = runs.at(-1);
+    if (last?.item.label === item.label && last.item.status === item.status) {
+      last.count += 1;
+    } else {
+      runs.push({ item, count: 1 });
+    }
+  }
+  return runs;
+}
+
+/**
+ * The steps a program shows: its rows of observed operations and its
+ * historical calls, or one failed row when it ended without any.
  */
 export function programSteps(options: {
-  operations: number;
+  activity: readonly ExecutionActivity[];
   calls: number;
   ended: boolean;
 }): number {
-  const steps = options.operations + options.calls;
+  const steps = activityRuns(options.activity).length + options.calls;
   return steps === 0 && options.ended ? 1 : steps;
 }
 

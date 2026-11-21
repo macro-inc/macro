@@ -752,6 +752,25 @@ describe('Message tool runs', () => {
     ).toBe(true);
   });
 
+  it('counts a loop in a receipt as one step before its record loads', () => {
+    const view = render(() => (
+      <Message
+        message={message([program('find')], { kind: 'end_turn' }, [
+          row('find:0', 'Get Contacts'),
+          row('find:1', 'Get User Names With Email'),
+          row('find:2', 'Get User Names With Email'),
+          row('find:3', 'Get User Names With Email'),
+          row('find:4', 'Get Thread', 'failed'),
+          row('find:5', 'Get Thread', 'failed'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('3');
+    expect(group.dataset.failed).toBe('1');
+  });
+
   it("names a running program's observed operations ahead of its receipt", () => {
     programs.steps.live = 2;
     programs.activity.live = [
