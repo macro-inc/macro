@@ -18,7 +18,8 @@ pub enum ContactFieldUpdate {
     AddEmail(String),
     /// Remove an address. Removing the primary promotes the oldest one left.
     RemoveEmail(String),
-    /// Link or switch a personal-email contact to a company in its team.
+    /// Link a contact without a company to a company in its team, or switch
+    /// the company of a personal-email contact.
     Company(uuid::Uuid),
     /// Remove the company link, leaving a contact without a company.
     NoCompany,
@@ -108,9 +109,20 @@ impl ContactFieldUpdate {
                     ..unchanged
                 })
             }
-            Self::Company(_) if !current.has_personal_email() => Err(CrmError::InvalidRequest(
-                "company changes require a personal-provider email".into(),
-            )),
+            // A contact without a company may be given one whatever its
+            // address; moving between companies stays a personal-email edit.
+            // Repeating the current company changes nothing and stays allowed,
+            // so a retried link is answered like the first.
+            Self::Company(company_id)
+                if current
+                    .company_id
+                    .is_some_and(|current| current != *company_id)
+                    && !current.has_personal_email() =>
+            {
+                Err(CrmError::InvalidRequest(
+                    "company changes require a personal-provider email".into(),
+                ))
+            }
             Self::Company(company_id) => {
                 if current.is_company_domain() && current.company_id != Some(*company_id) {
                     return Err(CrmError::InvalidRequest(

@@ -12,7 +12,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_harness::domain::ports::{ConnectionRecorded, HarnessPresence, RuntimeConnectionId};
+use agent_harness::domain::ports::{
+    ConnectionRecorded, HarnessConnection, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+};
 use anyhow::Context;
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
@@ -26,9 +28,9 @@ use hosted_runtimes::domain::ports::{DefaultAgent, Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
-use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
-use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo};
-use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
+use hosted_runtimes::outbound::firecracker_fleet;
+use hosted_runtimes::outbound::host_fleets::{FirecrackerSettings, HostFleets};
+use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo, PgEffectSignals};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
@@ -42,9 +44,14 @@ pub(crate) mod claude;
 pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
+mod in_use;
+pub(crate) mod moves;
 mod presence;
-pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
+pub(crate) mod wake;
+
+#[cfg(test)]
+mod test;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -53,6 +60,11 @@ use presence::PresenceGuard;
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
+/// Memory reports, relief and wakes: well inside the reports' 30 s freshness.
+const OVERCOMMIT_TICK: Duration = Duration::from_secs(10);
+/// Each open computer move advances one step per pass; a final copy round
+/// takes seconds, so the pass is frequent.
+const MOVE_TICK: Duration = Duration::from_secs(5);
 /// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// How often every awake computer's harnessd status is read, catching a
@@ -78,10 +90,10 @@ pub type SetupNotifications =
 
 pub type Operator = ComputerOperator<
     PgComputerRepo,
-    ConfiguredFleet,
+    HostFleets,
     HostedHarnesses,
     SystemClock,
-    setup_notice::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
+    team_agents::outbound::setup_notices::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
 
 /// Build the operator from explicit config, or `None` when this deployment
@@ -93,74 +105,55 @@ pub(crate) async fn operator(
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
     notifications: Arc<SetupNotifications>,
+    runtime_bus: redis::Client,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
         return Ok(None);
     };
     let fleet = match fleet_config {
-        ComputerFleetConfig::Incus(settings) => ConfiguredFleet::Incus(
-            IncusFleet::new(IncusFleetConfig {
-                endpoint: IncusEndpoint {
-                    url: settings.computers_incus_url.clone(),
-                    timeouts: IncusTimeouts {
-                        state_change_secs: settings.computers_incus_state_change_timeout_secs,
-                        request: Duration::from_secs(settings.computers_incus_request_timeout_secs),
-                        connect: Duration::from_secs(settings.computers_incus_connect_timeout_secs),
-                        operation_wait_secs: settings.computers_incus_operation_wait_secs,
-                        operation_waits: settings.computers_incus_operation_waits,
-                    },
-                    client_cert_pem: settings.computers_incus_client_cert.clone(),
-                    client_key_pem: settings.computers_incus_client_key.clone(),
-                    server_cert_pem: settings.computers_incus_server_cert.clone(),
-                },
-                host_name: settings.computers_host_name.clone(),
-                control_plane_id: ControlPlaneId::parse(
-                    settings.computers_control_plane_id.clone(),
-                )?,
-                reserve_gb: settings.computers_host_reserve_gb,
-                oversell_factor: settings.computers_oversell_factor,
+        ComputerFleetConfig::Firecracker(settings) => HostFleets::new(
+            None,
+            Some(FirecrackerSettings {
+                control_plane_id: ControlPlaneId::try_new(&settings.computers_control_plane_id)?,
+                client_cert_pem: settings.computers_firecracker_client_cert.clone(),
+                client_key_pem: zeroize::Zeroizing::new(
+                    settings.computers_firecracker_client_key.clone(),
+                ),
+                connect_timeout: firecracker_fleet::CONNECT_TIMEOUT,
+                request_timeout: firecracker_fleet::REQUEST_TIMEOUT,
                 images: GuestImages {
-                    regular: &settings.computers_image,
-                    agent: &settings.computers_agent_image,
+                    regular: settings.computers_image.as_str(),
+                    agent: settings.computers_agent_image.as_str(),
                 }
-                .try_map(|alias| {
-                    Ok::<_, incus_client::InvalidName>(ImageSource {
-                        reference: ImageReference::Alias(incus_client::ImageAlias::try_new(alias)?),
-                        remote: None,
-                    })
-                })?,
-                profile: incus_client::ProfileName::try_new(
-                    &settings.computers_incus_profile.clone(),
-                )?,
-                storage_pool: incus_client::StoragePoolName::try_new(
-                    &settings.computers_incus_storage_pool.clone(),
-                )?,
-                shutdown_grace: Duration::from_secs(settings.computers_incus_shutdown_grace_secs),
-            })
-            .context("could not build the Incus fleet")?,
+                .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
+            }),
         ),
-        ComputerFleetConfig::Docker(settings) => ConfiguredFleet::Docker(
-            DockerFleet::new(
-                DockerFleetConfig {
-                    control_plane_id: ControlPlaneId::parse(
-                        settings.computers_control_plane_id.clone(),
-                    )?,
-                    images: GuestImages {
-                        regular: settings.computers_image.as_str(),
-                        agent: settings.computers_agent_image.as_str(),
-                    }
-                    .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
-                    network: settings.computers_docker_network.clone(),
-                    enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
-                    host_name: settings.computers_host_name.clone(),
-                    memory_gb: settings.computers_docker_memory_gb,
-                    reserve_gb: settings.computers_host_reserve_gb,
-                    oversell_factor: settings.computers_oversell_factor,
-                },
-                config.environment,
-            )
-            .context("could not build the Docker fleet")?,
+        ComputerFleetConfig::Docker(settings) => HostFleets::new(
+            Some(ConfiguredFleet::Docker(
+                DockerFleet::new(
+                    DockerFleetConfig {
+                        control_plane_id: ControlPlaneId::try_new(
+                            &settings.computers_control_plane_id,
+                        )?,
+                        images: GuestImages {
+                            regular: settings.computers_image.as_str(),
+                            agent: settings.computers_agent_image.as_str(),
+                        }
+                        .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
+                        network: settings.computers_docker_network.clone(),
+                        enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
+                        host_name: hosted_runtimes::domain::models::HostName::try_new(
+                            &settings.computers_host_name,
+                        )?,
+                        memory_gb: settings.computers_docker_memory_gb,
+                    },
+                    config.environment,
+                )
+                .context("could not build the Docker fleet")?,
+            )),
+            // A local stack drives no Firecracker hosts.
+            None,
         ),
     };
 
@@ -173,19 +166,21 @@ pub(crate) async fn operator(
         HostedHarnesses {
             service: harnesses,
             default_agents,
+            runtime_bus,
         },
-        setup_notice::IngressSetupNotices::new(notifications, PgTeamAgentsRepo::new(pool.clone())),
+        team_agents::outbound::setup_notices::IngressSetupNotices::new(
+            notifications,
+            PgTeamAgentsRepo::new(pool.clone()),
+        ),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
-    // Every computer asks: one bought for an agent teammate must never
-    // enroll without its agent.
-    // The authentication service checks its own internal key, not ours.
-    .with_agent_enrollment(Arc::new(agent_enrollment::AuthAgentEnrollment::new(
-        config.authentication_service_secret_key.as_ref(),
-    )?));
+    .with_computers_in_use(Arc::new(in_use::SessionsInUse::new(
+        PgComputerRepo::new(operator_pool(pool), config.computer_billing_policy()?),
+        pool.clone(),
+    )));
     Ok(Some(Arc::new(operator)))
 }
 
@@ -225,13 +220,33 @@ impl DeploymentSource for ServiceDeployment {
 fn resolve_deployment() -> anyhow::Result<Deployment> {
     use macro_service_urls::{
         AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
+        TelemetryIntakeUrl,
     };
     Ok(Deployment {
         agent_harness_url: AgentHarnessServiceUrl::new()?.parse_url()?,
         document_storage_url: DocumentStorageServiceUrl::new()?.parse_url()?,
         app_url: AppServiceUrl::new()?.parse_url()?,
         egress_url: AgentHarnessEgressUrl::new()?.parse_url()?,
+        telemetry_url: computer_reachable(TelemetryIntakeUrl::new()?.parse_url()?),
     })
+}
+
+/// `url`, unless it is this machine's loopback (`localhost`, a name under it,
+/// which RFC 6761 keeps on loopback, or a loopback or unspecified address,
+/// as the authentication service's `agent_addresses` judges), which a computer
+/// can't reach (a local stack whose collector isn't wired for computers): the
+/// computer then exports no spans.
+fn computer_reachable(url: macro_service_urls::Url) -> Option<macro_service_urls::Url> {
+    let loopback = url.host_str().is_some_and(|host| {
+        let host = host.to_ascii_lowercase();
+        host == "localhost"
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    });
+    (!loopback).then_some(url)
 }
 
 /// The operator's periodic passes.
@@ -241,6 +256,8 @@ enum Pass {
     Effects,
     Timers,
     Reconcile,
+    Overcommit,
+    Moves,
     ClaudeSignIns,
     ClaudeStatus,
 }
@@ -251,6 +268,8 @@ impl Pass {
             Self::Effects => EFFECT_TICK,
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
+            Self::Overcommit => OVERCOMMIT_TICK,
+            Self::Moves => MOVE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
             Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
@@ -270,10 +289,13 @@ pub struct ClaudeSignInWatch<Ingress> {
 /// [`harnessd::Harnessd`] over the harness table.
 pub type HostedHarnessd = harnessd::Harnessd<PgHarnessService>;
 
-/// Run the operator's passes until `shutdown`.
+/// Run the operator's passes until `shutdown`. The effect pass also runs as
+/// soon as `effect_signals` hears of a queued fleet effect, so a purchase
+/// does not wait out [`EFFECT_TICK`].
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: ClaudeSignInWatch<Ingress>,
+    effect_signals: PgEffectSignals,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
 ) {
@@ -282,6 +304,8 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Effects,
         Pass::Timers,
         Pass::Reconcile,
+        Pass::Overcommit,
+        Pass::Moves,
         Pass::ClaudeSignIns,
         Pass::ClaudeStatus,
     ] {
@@ -289,6 +313,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
             pass,
             Arc::clone(&operator),
             Arc::clone(&claude_sign_ins),
+            effect_signals.clone(),
             shutdown.clone(),
         ));
     }
@@ -298,6 +323,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     pass: Pass,
     operator: Arc<Operator>,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
+    effect_signals: PgEffectSignals,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -305,10 +331,24 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     // Consecutive passes skipped because the database had no connection to give.
     let mut skipped: u32 = 0;
     loop {
+        // The tick stays as the backstop for retries that come due and for
+        // notifications lost while the listener reconnected.
+        let queued = async {
+            match pass {
+                Pass::Effects => effect_signals.fleet_effect_queued().await,
+                Pass::Timers
+                | Pass::Reconcile
+                | Pass::Overcommit
+                | Pass::Moves
+                | Pass::ClaudeSignIns
+                | Pass::ClaudeStatus => std::future::pending().await,
+            }
+        };
         tokio::select! {
             biased;
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
+            () = queued => {}
         }
         let outcome: anyhow::Result<()> =
             match pass {
@@ -325,6 +365,18 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::Reconcile => shutdown
                     .run_until_cancelled(operator.reconcile())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::Overcommit => shutdown
+                    .run_until_cancelled(operator.overcommit())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::Moves => shutdown
+                    .run_until_cancelled(operator.advance_moves())
                     .await
                     .transpose()
                     .map(|_| ())
@@ -465,6 +517,8 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
 pub struct HostedHarnesses {
     service: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    /// Where agent hand-offs go to the replica holding macrod's socket.
+    runtime_bus: redis::Client,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -473,6 +527,8 @@ pub enum HostedHarnessError {
     Harness(#[from] HarnessError),
     #[error(transparent)]
     DefaultAgent(#[from] default_agent::DefaultAgentError),
+    #[error(transparent)]
+    Bus(#[from] crate::runtime_commands::RuntimeBusError),
 }
 
 impl Harnesses for HostedHarnesses {
@@ -517,6 +573,21 @@ impl Harnesses for HostedHarnesses {
                 .await?;
             tracing::info!(computer_id = %computer.id, %harness_id, deleted, "deleted the computer's agents");
         }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn deliver_agent(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+    ) -> Result<(), Self::Err> {
+        crate::runtime_commands::publish_deliver_agent(
+            &self.runtime_bus,
+            &crate::runtime_commands::DeliverAgent::new(harness_id, computer_id, generation),
+        )
+        .await?;
         Ok(())
     }
 
@@ -576,6 +647,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
+        accepts: RuntimeAccepts,
     ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             let mut guard = match PresenceGuard::lock(&self.presence_pool, harness).await {
@@ -585,7 +657,9 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                     return ConnectionRecorded::AgentsUnchanged;
                 }
             };
-            let mut recorded = Arc::clone(&self.inner).connected(harness, connection).await;
+            let mut recorded = Arc::clone(&self.inner)
+                .connected(harness, connection, accepts)
+                .await;
             match guard.is_connected().await {
                 Ok(true) => {}
                 Ok(false) => return recorded,
@@ -596,7 +670,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
             }
             if let Some(operator) = &self.operator
                 && let Ok(MacrodConnected::AgentBound) = operator
-                    .macrod_connected(harness)
+                    .macrod_connected(harness, accepts.apply_agent)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
             {
@@ -648,8 +722,8 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
     }
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
         Arc::clone(&self.inner).renew(live)
     }
 }
@@ -684,9 +758,12 @@ impl harnessd::HarnessdTransport for FleetTransport {
 
             let deadline = harnessd::answer_timeout(&request);
             let exchange = async {
-                let process = self
+                let fleet = self
                     .operator
-                    .fleet()
+                    .fleet_of(computer_id)
+                    .await
+                    .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;
+                let process = fleet
                     .exec(computer_id, &[harnessd::HARNESSD])
                     .await
                     .map_err(|error| harnessd::HarnessdError::Unreachable(error.to_string()))?;

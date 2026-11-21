@@ -1,4 +1,6 @@
 import { ThrownResultError } from '@core/util/result';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreviewItem } from '../types';
 
@@ -114,4 +116,53 @@ describe('previewDataLoader', () => {
     ).toEqual(contact);
     expect(fetchPreviewBatch).toHaveBeenCalledTimes(2);
   });
+
+  it.each(['success', 'failure'] as const)(
+    'does not join or delete a new generation batch when an old batch returns %s',
+    async (outcome) => {
+      const pending = Promise.withResolvers<{
+        previews: Map<string, PreviewItem>;
+        failed: Map<string, typeof UNAVAILABLE>;
+      }>();
+      const started = Promise.withResolvers<void>();
+      const fresh = {
+        ...contact,
+        name: 'Current contact',
+        rawName: 'Current contact',
+      };
+      fetchPreviewBatch
+        .mockImplementationOnce(() => {
+          started.resolve();
+          return pending.promise;
+        })
+        .mockResolvedValue({
+          previews: new Map([[CONTACT, fresh]]),
+          failed: new Map(),
+        });
+      const previous = previewDataLoader.load({
+        id: CONTACT,
+        type: 'crm_contact',
+      });
+      const previousOutcome = Promise.allSettled([previous]);
+      await started.promise;
+      await cacheSessionGeneration.transition(async () => {});
+      const current = previewDataLoader.load({
+        id: CONTACT,
+        type: 'crm_contact',
+      });
+      pending.resolve(
+        outcome === 'success'
+          ? { previews: new Map([[CONTACT, contact]]), failed: new Map() }
+          : { previews: new Map(), failed: new Map([[CONTACT, UNAVAILABLE]]) }
+      );
+      const [old] = await previousOutcome;
+      const next = await Promise.allSettled([current]);
+      expect(old).toMatchObject({
+        status: 'rejected',
+        reason: expect.any(StaleCacheAuthorityError),
+      });
+      expect(next).toEqual([{ status: 'fulfilled', value: fresh }]);
+      expect(fetchPreviewBatch).toHaveBeenCalledTimes(2);
+    }
+  );
 });

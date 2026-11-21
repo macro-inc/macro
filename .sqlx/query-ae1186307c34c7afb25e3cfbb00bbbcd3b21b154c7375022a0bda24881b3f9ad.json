@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO hosted_runtime_usage_sample\n                (computer_id, minute, sampled_at, cpu_usage_microseconds, memory_bytes)\n            SELECT sample.computer_id, $1, $2, sample.cpu_usage_microseconds, sample.memory_bytes\n            FROM UNNEST($3::uuid[], $4::bigint[], $5::bigint[])\n                AS sample(computer_id, cpu_usage_microseconds, memory_bytes)\n            JOIN hosted_runtime ON hosted_runtime.id = sample.computer_id\n            ON CONFLICT (computer_id, minute) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "UuidArray",
+        "Int8Array",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae1186307c34c7afb25e3cfbb00bbbcd3b21b154c7375022a0bda24881b3f9ad"
+}

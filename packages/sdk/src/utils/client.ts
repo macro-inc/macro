@@ -27,6 +27,7 @@ import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 import { observeSdk } from './activity';
+import { withSearchLimit } from './concurrency';
 
 const USER_API_KEY_HEADER = 'x-macro-user-api-key';
 
@@ -231,10 +232,12 @@ export class MacroClient {
       'properties',
       opts.onRequest,
     );
-    this.search = observeSdk(
-      new SearchSdk({ client: this.makeClient(hosts.search) }),
-      'search',
-      opts.onRequest,
+    this.search = withSearchLimit(
+      observeSdk(
+        new SearchSdk({ client: this.makeClient(hosts.search) }),
+        'search',
+        opts.onRequest,
+      ),
     );
     this.storage = observeSdk(
       new StorageSdk({ client: this.makeClient(hosts.storage) }),

@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
+use channels::domain::broker_events::ChannelDeletedMetadata;
 use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
@@ -664,6 +665,32 @@ fn posted(
         attachments: Vec::new(),
         created_at: Utc::now(),
     }
+}
+
+#[test]
+fn deleting_a_channel_reaches_the_members_it_had() {
+    let channel_id = Uuid::now_v7();
+    let members = vec![
+        user(),
+        MacroUserIdStr::try_from("macro|member@example.com".to_string()).expect("valid user id"),
+    ];
+    let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+        channel_id,
+        actor: ChannelSender::new_from_user(user()),
+        participant_user_ids: members.clone(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+
+    assert_eq!(
+        patches,
+        vec![
+            SoupRealtimePatch::for_entity(Patch::Deleted(
+                EntityType::Channel.with_entity_string(channel_id.to_string())
+            ))
+            .with_named_recipients(members)
+        ]
+    );
 }
 
 #[test]

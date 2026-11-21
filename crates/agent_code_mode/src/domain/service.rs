@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, Limits, Outcome, ProgramExecutor};
+use code_execution::domain::{ContextShape, ExecuteRequest, Limits, Outcome, ProgramExecutor};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::Semaphore;
@@ -155,6 +155,17 @@ impl CodeModeService {
             self.0.store.save(identity.session, &record).await?;
             return Ok((receipt(&record), None));
         }
+        let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
+        // A program with type errors stops here, before the owner is asked
+        // to approve it or a credential is minted for it.
+        if let Err(outcome) = executor
+            .check_program(&request, SESSION_PROGRAM, cancel.clone())
+            .await
+        {
+            (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
+            self.0.store.save(identity.session, &record).await?;
+            return Ok((receipt(&record), None));
+        }
         let IssuedRun {
             environment,
             acting_user,
@@ -179,12 +190,8 @@ impl CodeModeService {
             return Ok((receipt(&record), None));
         }
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
-        let execution = self
-            .0
-            .executor
-            .as_ref()
-            .ok_or(CodeModeError::Unavailable)?
-            .execute_program_with_progress(request, environment, cancel.clone(), progress);
+        let execution =
+            executor.execute_program_with_progress(request, environment, cancel.clone(), progress);
         tokio::pin!(execution);
         // Stateless MCP requests can outlive their HTTP caller. Check shared
         // turn state so Stop also cancels work handled by another replica.
@@ -436,6 +443,32 @@ pub(super) fn settle(
     }
 }
 
+/// What a session program's `main` receives: the session and this execution.
+const SESSION_PROGRAM: ContextShape = ContextShape {
+    session: true,
+    execution: true,
+};
+
+/// Interpret a program that stopped at its check, before anything ran.
+pub(super) fn settle_unrun(
+    outcome: Outcome,
+    reviews: Reviews,
+) -> (ExecutionStatus, Option<serde_json::Value>, Option<String>) {
+    match outcome {
+        Outcome::Cancelled => (
+            ExecutionStatus::Cancelled,
+            None,
+            Some("Execution cancelled before it started.".into()),
+        ),
+        Outcome::TimedOut => (
+            ExecutionStatus::TimedOut,
+            None,
+            Some("Execution timed out while it was type-checked; nothing ran.".into()),
+        ),
+        outcome => settle(outcome, reviews),
+    }
+}
+
 /// Reject requests the runner would refuse, before minting a credential.
 pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeError> {
     if request.source.trim().is_empty()
@@ -443,7 +476,7 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {
-        return Err(CodeModeError::Invalid("Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+        return Err(CodeModeError::Invalid("Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
     }
     Ok(())
 }

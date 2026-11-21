@@ -245,6 +245,7 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
     let text = prompt.to_string();
 
     assert!(text.starts_with(unseen::PROMPT));
+    assert!(text.contains("Never guess a method"));
     assert!(!text.contains(TOOLS));
     assert!(!text.contains(&prompt::agent_session::PROMPT.to_string()));
     assert!(!text.contains("<agent_session>"));

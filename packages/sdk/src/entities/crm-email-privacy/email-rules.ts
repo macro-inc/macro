@@ -24,7 +24,7 @@ export type CrmEmailRule =
       contact: Contact;
     }
   | {
-      /** Follow the company's current domains and visible contacts. */
+      /** Follow current company domains. Include people with contact rules. */
       kind: 'company';
       company: Company;
     };

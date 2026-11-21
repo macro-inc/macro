@@ -13,6 +13,7 @@ use model_notifications::{
 };
 use model_owner::Owner;
 use notification_hex::domain::{
+    channel_settings::ChannelNotificationKind,
     models::{
         SendNotificationRequestBuilder,
         request::{NotificationStatus, UpdateNotificationsRequest},
@@ -325,6 +326,12 @@ where
                 let secondary_notification_entity = secondary_channel_thread_entity(Some(
                     mention.thread_id.unwrap_or(mention.message_id),
                 ));
+                // A document mention reaches the same people as the message
+                // carrying it, so the same channel setting decides it.
+                let settings_kind = match mention.thread_id {
+                    Some(_) => ChannelNotificationKind::ThreadReply,
+                    None => ChannelNotificationKind::TopLevelMessage,
+                };
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
@@ -350,6 +357,7 @@ where
                             recipient_ids,
                         }
                         .into_request()
+                        .with_channel_settings_kind(settings_kind)
                         .with_apns()
                         .with_conn_gateway(),
                     )
@@ -367,6 +375,7 @@ where
                 metadata,
                 sender_profile_picture_url,
                 recipient_ids,
+                mention_fallback_ids,
             } => {
                 self.ingress
                     .send_notification(
@@ -392,6 +401,7 @@ where
                             recipient_ids,
                         }
                         .into_request()
+                        .with_mention_fallback(mention_fallback_ids)
                         .with_apns()
                         .with_conn_gateway(),
                     )
@@ -407,6 +417,7 @@ where
                 metadata,
                 sender_profile_picture_url,
                 recipient_ids,
+                mention_fallback_ids,
             } => {
                 self.ingress
                     .send_notification(
@@ -427,6 +438,7 @@ where
                             recipient_ids,
                         }
                         .into_request()
+                        .with_mention_fallback(mention_fallback_ids)
                         .with_apns()
                         .with_conn_gateway(),
                     )

@@ -20,6 +20,7 @@ import {
   wrapXml,
 } from '../../mentions';
 import {
+  iterate,
   MacroApiError,
   MacroError,
   mapConcurrently,
@@ -352,32 +353,38 @@ export class Document
     return new Document(client, documentId);
   }
 
-  /** The user's recent documents, most recent first, auto-paginated. */
+  /** The user's recent documents, most recent first, auto-paginated; `maxItems` caps the total. */
   static recent(
     client: MacroClient,
-    opts?: { pageSize?: number; fileType?: string },
+    opts?: { pageSize?: number; fileType?: string; maxItems?: number },
   ): AsyncGenerator<Document> {
     const limit = opts?.pageSize ?? 50;
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await client.storage.getUserDocumentsHandler({
-          query: {
-            limit,
-            offset: cursor ? Number(cursor) : 0,
-            ...(opts?.fileType !== undefined
-              ? { file_type: opts.fileType }
-              : {}),
-          } as GetUserDocumentsHandlerData['query'],
+    return iterate(
+      'documents.recent',
+      opts,
+      { pageSize: true, fileType: true },
+      () =>
+        paginate(async (cursor) => {
+          const page = unwrap(
+            await client.storage.getUserDocumentsHandler({
+              query: {
+                limit,
+                offset: cursor ? Number(cursor) : 0,
+                ...(opts?.fileType !== undefined
+                  ? { file_type: opts.fileType }
+                  : {}),
+              } as GetUserDocumentsHandlerData['query'],
+            }),
+          );
+          const next = page.data?.next_offset;
+          return {
+            items: (page.data?.documents ?? []).map((d) =>
+              new Document(client, d.documentId).withListed(d),
+            ),
+            nextCursor: next != null ? String(next) : null,
+          };
         }),
-      );
-      const next = page.data?.next_offset;
-      return {
-        items: (page.data?.documents ?? []).map((d) =>
-          new Document(client, d.documentId).withListed(d),
-        ),
-        nextCursor: next != null ? String(next) : null,
-      };
-    });
+    );
   }
 
   /**
@@ -396,29 +403,31 @@ export class Document
 
   /**
    * The user's trashed documents, most recently trashed first,
-   * auto-paginated. `pageSize` counts trashed chats and projects too, which
+   * auto-paginated; `maxItems` caps the total. `pageSize` counts trashed chats and projects too, which
    * are filtered out, so a page can yield fewer documents.
    */
   static trashed(
     client: MacroClient,
-    opts?: { pageSize?: number },
+    opts?: { pageSize?: number; maxItems?: number },
   ): AsyncGenerator<Document> {
-    return paginate(async (cursor) => {
-      const { data } = unwrap(
-        await client.storage.recentlyDeleted({
-          query: {
-            ...(opts?.pageSize !== undefined ? { limit: opts.pageSize } : {}),
-            ...(cursor !== undefined ? { cursor } : {}),
-          },
-        }),
-      );
-      return {
-        items: data.items
-          .filter((i) => i.type === 'document')
-          .map((d) => new Document(client, d.id)),
-        nextCursor: data.next_cursor ?? null,
-      };
-    });
+    return iterate('documents.trashed', opts, { pageSize: true }, () =>
+      paginate(async (cursor) => {
+        const { data } = unwrap(
+          await client.storage.recentlyDeleted({
+            query: {
+              ...(opts?.pageSize !== undefined ? { limit: opts.pageSize } : {}),
+              ...(cursor !== undefined ? { cursor } : {}),
+            },
+          }),
+        );
+        return {
+          items: data.items
+            .filter((i) => i.type === 'document')
+            .map((d) => new Document(client, d.id)),
+          nextCursor: data.next_cursor ?? null,
+        };
+      }),
+    );
   }
 
   /** Favorites identify documents as `document`. */
@@ -1217,7 +1226,7 @@ export class Document
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** Search documents by name and content, most relevant first, auto-paginated. */
+  /** Search documents by name and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { document_filters: {} },
     type: 'document',

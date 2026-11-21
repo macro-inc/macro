@@ -235,6 +235,44 @@ fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
     );
 }
 
+/// The checkout is dated for the kept `target` directory before anything
+/// builds (`cargo_target_reuse.ts`). Any other job on its cache tag would replace the volume with a `target` that never saw
+/// this job's build, so the tag and the mount belong to this job alone.
+#[test]
+fn generated_code_alone_keeps_a_cargo_target() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let generated = job(&yaml, "generated-code", "biome-check");
+    let position = |needle: &str| {
+        generated
+            .find(needle)
+            .unwrap_or_else(|| panic!("`{needle}` in generated-code: {generated}"))
+    };
+    assert!(position("Reuse the kept cargo target") < position("SQLX_OFFLINE=true cargo build"));
+
+    for workflow in crate::workflows::WORKFLOWS {
+        let rendered = (workflow.render_yaml)().expect("workflow renders");
+        let root: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("workflow parses");
+        for (id, job) in root["jobs"].as_mapping().expect("jobs") {
+            let id = id.as_str().unwrap_or_default();
+            let text = serde_yaml::to_string(job).expect("job serializes");
+            let owner = workflow.file_name == "web-app-check-main.yml" && id == "generated-code";
+            assert_eq!(
+                text.contains(vars::WEB_CODEGEN_CACHE_TAG),
+                owner,
+                "{} job {id}: only generated-code runs on its cache tag",
+                workflow.file_name
+            );
+            if workflow.file_name == "web-app-check-main.yml" {
+                assert_eq!(
+                    text.contains(&vars::cargo_target_volume_dir()),
+                    owner,
+                    "web job {id}: only generated-code mounts a cargo target"
+                );
+            }
+        }
+    }
+}
+
 /// Debug info only slows the throwaway generator build. Set at job level so
 /// every cargo call in the job shares the profile and reuses one build.
 #[test]
@@ -249,7 +287,7 @@ fn generated_code_builds_without_debug_info_for_every_step() {
         "the job env turns debug info off: {header}"
     );
     assert!(
-        header.contains("RUSTFLAGS: '-C link-arg=-fuse-ld=mold'"),
+        header.contains("RUSTFLAGS: -C link-arg=-fuse-ld=mold"),
         "the job links with mold like the Rust jobs: {header}"
     );
     for flag in ["CARGO_PROFILE_DEV_DEBUG", "RUSTFLAGS", "--config"] {
@@ -399,7 +437,7 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
     let vitest = test_job
-        .find("bun run test --shard=${{ matrix.shard }}/6")
+        .find(r#"bun run test --shard="${SHARD}/6""#)
         .expect("vitest step runs one shard");
     for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
         let wasm = test_job
@@ -881,7 +919,7 @@ fn path_check_fetches_no_blobs_up_front() {
     let path_check = job(&yaml, "path-check", "android-native-check");
     assert!(path_check.contains("filter: blob:none"), "{path_check}");
     assert!(
-        path_check.contains("sparse-checkout: '.github'"),
+        path_check.contains("sparse-checkout: .github"),
         "{path_check}"
     );
 }
@@ -1061,5 +1099,24 @@ fn schema_detection_reads_blobs_on_demand_and_fails_when_it_cannot() {
     assert!(
         !passed && !log.contains("codegen_changed="),
         "a failed blob fetch must fail the step: {log}"
+    );
+}
+
+#[test]
+fn cargo_target_reuse_scenarios() {
+    let output = std::process::Command::new("node")
+        .args(["--test", "cargo_target_reuse.test.ts"])
+        .current_dir(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/workflows/scripts"
+        ))
+        .env_remove("BASH_ENV")
+        .output()
+        .expect("run the cargo target reuse scenarios with Node");
+    assert!(
+        output.status.success(),
+        "cargo target reuse scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
 }

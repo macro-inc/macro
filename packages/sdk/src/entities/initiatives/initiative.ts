@@ -5,7 +5,7 @@ import type {
   InitiativeDetail,
 } from '../../../generated/storage/types.gen';
 import type { RichMessage } from '../../mentions';
-import { paginate, unwrap } from '../../utils';
+import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import {
@@ -246,7 +246,7 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   }
 
   /**
-   * This initiative's history, newest first, auto-paginated: creation, edits,
+   * This initiative's history, newest first, auto-paginated (`maxItems` caps the total): creation, edits,
    * property changes and tasks added or removed, optionally within
    * `[after, before)`.
    *
@@ -261,35 +261,45 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
    * @readonly
    */
   activity(
-    window: { after?: Date | string; before?: Date | string } = {},
+    window: {
+      after?: Date | string;
+      before?: Date | string;
+      maxItems?: number;
+    } = {},
   ): AsyncGenerator<InitiativeActivityEntry> {
     const after = timestamp(window.after);
     const before = timestamp(window.before);
-    return paginate<InitiativeActivityEntry, InitiativeActivityCursor>(
-      async (cursor) => {
-        const page = unwrap(
-          await this.client.storage.getInitiativeActivity({
-            path: { initiative_id: this.id },
-            query: {
-              after,
-              before,
-              cursorOccurredAt: cursor?.occurredAt,
-              cursorId: cursor?.id,
-            },
-          }),
-        );
-        return {
-          items: page.records.map((record) => ({
-            id: record.id,
-            actor: User.byId(this.client, record.actorId),
-            subject: User.byId(this.client, record.subjectId),
-            action: record.action,
-            payload: record.actionPayload ?? undefined,
-            occurredAt: record.occurredAt,
-          })),
-          nextCursor: page.nextCursor,
-        };
-      },
+    return iterate(
+      'initiative.activity',
+      window,
+      { after: true, before: true },
+      () =>
+        paginate<InitiativeActivityEntry, InitiativeActivityCursor>(
+          async (cursor) => {
+            const page = unwrap(
+              await this.client.storage.getInitiativeActivity({
+                path: { initiative_id: this.id },
+                query: {
+                  after,
+                  before,
+                  cursorOccurredAt: cursor?.occurredAt,
+                  cursorId: cursor?.id,
+                },
+              }),
+            );
+            return {
+              items: page.records.map((record) => ({
+                id: record.id,
+                actor: User.byId(this.client, record.actorId),
+                subject: User.byId(this.client, record.subjectId),
+                action: record.action,
+                payload: record.actionPayload ?? undefined,
+                occurredAt: record.occurredAt,
+              })),
+              nextCursor: page.nextCursor,
+            };
+          },
+        ),
     );
   }
 

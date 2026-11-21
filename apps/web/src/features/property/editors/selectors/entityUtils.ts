@@ -26,7 +26,7 @@ import type {
   ProjectEntity,
   TaskEntity,
 } from '@entity';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
@@ -68,6 +68,23 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
     .with('DATABASE_ROW', () => [] as const) // Database rows aren't in quickAccess
     .exhaustive(() => [] as const);
   return buckets;
+}
+
+/**
+ * The kinds the entity selector can search and pick: those with a source.
+ * Email threads come from their own search rather than Quick Access.
+ */
+export const PICKABLE_ENTITY_TYPES: readonly EntityType[] = Object.values(
+  EntityType
+).filter((type) => entityTypeToBuckets(type).length > 0);
+
+/** Whether a selector limited to `allowed` (unset: any kind) offers `type`. */
+export function allowsEntityType(
+  allowed: EntityType | EntityType[] | null | undefined,
+  type: EntityType
+): boolean {
+  if (!allowed) return true;
+  return Array.isArray(allowed) ? allowed.includes(type) : allowed === type;
 }
 
 /**
@@ -190,6 +207,10 @@ export function getEntitySearchText(entity: CombinedEntity): string {
   }
   if (entity.data.type === 'crm_contact') {
     return `${entity.data.name} | ${entity.data.email}`;
+  }
+  if (entity.data.type === 'crm_company') {
+    const domains = entity.data.domains.map(({ domain }) => domain).join(' ');
+    return domains ? `${entity.data.name} | ${domains}` : entity.data.name;
   }
 
   return entity.data.name ?? '';

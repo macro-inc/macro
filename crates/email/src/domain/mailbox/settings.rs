@@ -311,7 +311,7 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
             .await;
             if let Err(error) = &result {
                 let delay = match error {
-                    MailboxError::Provider(e) => super::retry_seconds(e),
+                    MailboxError::Provider(e) => super::retry::retry_seconds(e),
                     _ => 30,
                 };
                 self.repository

@@ -13,7 +13,8 @@
 //   `duration_seconds`, `messages`, `folders`, `graph_calls`.
 // - Spans: `outlook.sync.{discover,enumerate,reconcile,project}` (internal, so
 //   Datadog keeps the name as `resource_name`) with `outlook.outcome`
-//   (`imported` | `absent` | `paced` | `deferred` | `abandoned` | `failed`) and
+//   (`imported` | `absent` | `unsynced` | `paced` | `deferred` | `abandoned` |
+//   `failed`) and
 //   `outlook.defer_reason`; `outlook.notification_lag_ms` on reconcile spans
 //   (Graph change notification received to message imported); the
 //   `outlook.subscription.{maintain,notify}` spans with `outlook.outcome`;

@@ -1,15 +1,12 @@
 use super::*;
 
-fn rendered(
-    build: fn() -> Workflow,
-    patch: fn(&mut serde_yaml::Value) -> Result<()>,
-) -> serde_yaml::Value {
-    serde_yaml::from_str(&crate::workflows::render_patched(build, patch).expect("workflow yaml"))
+fn rendered(build: fn() -> Workflow) -> serde_yaml::Value {
+    serde_yaml::from_str(&crate::workflows::render_gh_workflow(build)().expect("workflow yaml"))
         .expect("parse workflow")
 }
 
 fn release() -> serde_yaml::Value {
-    rendered(release_production, patch)
+    rendered(release_production)
 }
 
 fn steps_using<'a>(job: &'a serde_yaml::Value, action: &str) -> Vec<&'a serde_yaml::Value> {
@@ -42,7 +39,7 @@ fn the_web_app_builds_through_the_shared_build_workflow() {
         "the build overlaps the backend deploy"
     );
 
-    let shared = rendered(build_web_app::build_web_app, build_web_app::patch);
+    let shared = rendered(build_web_app::build_web_app);
     let secrets: Vec<&str> = shared["on"]["workflow_call"]["secrets"]
         .as_mapping()
         .expect("secrets")

@@ -237,6 +237,12 @@ pub trait EmailPolicyAuthoringTransaction: EmailPolicyTransaction {
         &mut self,
         rules: &[EmailInclusionRule],
     ) -> impl Future<Output = Result<EmailRuleTargetFacts, CrmError>> + Send;
+    /// Admit a replacement against all active selected contributors, in this
+    /// locked transaction. Failure must roll back initialization and all effects.
+    fn admit_rule_resources(
+        &mut self,
+        rules: &[EmailInclusionRule],
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
     /// Persist JSON and all five target sets from the same validated definition.
     fn save_rule_revision(
         &mut self,
@@ -279,6 +285,15 @@ pub trait EmailPolicyAuthoringRepository: Clone + Send + Sync + 'static {
         link: Uuid,
         rules: &[EmailInclusionRule],
     ) -> impl Future<Output = Result<EmailRuleTargetFacts, CrmError>> + Send;
+    /// Read-only resource admission, replacing this member in the team's scope.
+    /// Validation is not a reservation; mutation repeats it under the team lock.
+    fn admit_email_rule_resources(
+        &self,
+        team: Uuid,
+        user: &str,
+        link: Uuid,
+        rules: &[EmailInclusionRule],
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
     /// Fetch one owner definition by its full primary key.
     fn email_rule_revision(
         &self,

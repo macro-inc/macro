@@ -62,6 +62,9 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@service-email/client', () => ({
   emailClient: { init: mocks.provision },
   ALREADY_INITIALIZED_CODE: 'ALREADY_INITIALIZED',
+  INBOX_BEING_REMOVED_CODE: 'INBOX_BEING_REMOVED',
+  INBOX_CHANGED_CODE: 'INBOX_CHANGED',
+  INBOX_IDENTITY_CONFLICT_CODE: 'INBOX_IDENTITY_CONFLICT',
   NO_GMAIL_GRANT_CODE: 'NO_GMAIL_GRANT',
   SHARED_INBOX_CONFLICT_CODE: 'SHARED_INBOX_CONFLICT',
 }));
@@ -366,6 +369,28 @@ describe('native account linking', () => {
     expect(mocks.alert).toHaveBeenCalledOnce();
     expect(mocks.success).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      'INBOX_IDENTITY_CONFLICT',
+      'This address is connected through a different Microsoft account',
+    ],
+    ['INBOX_CHANGED', 'Something changed, try again'],
+  ])(
+    'reports a %s conflict without offering to share',
+    async (code, message) => {
+      const { requestShareInboxConfirmation } = await import(
+        './share-conflict'
+      );
+      mocks.provision.mockResolvedValue(
+        err([{ code, message: 'server text' }])
+      );
+      await useAddInboxFlow()({ provider: 'OUTLOOK' });
+      expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(message);
+      expect(requestShareInboxConfirmation).not.toHaveBeenCalled();
+      expect(mocks.provision).toHaveBeenCalledOnce();
+    }
+  );
 });
 
 it('uses the provider selected from a generic connect entry point', async () => {

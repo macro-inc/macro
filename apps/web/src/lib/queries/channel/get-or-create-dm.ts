@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { type ResultError, throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -78,6 +78,22 @@ function findDirectMessage(
     if (!found || channel.created_at < found.created_at) found = channel;
   }
   return found?.id;
+}
+
+/**
+ * The DM with `recipientId`, created if there is none yet. For a recipient
+ * that writes first (an agent teammate's greeting), so the conversation shown
+ * is the real one its message lands in. Refreshes the channel list after.
+ */
+export function getOrCreateDirectMessageChannel(
+  recipientId: string
+): ResultAsync<string, ResultError[]> {
+  return new ResultAsync(
+    storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
+  ).map(({ channel_id }) => {
+    fireAndForget(invalidateListChannels(), 'channel-list');
+    return channel_id;
+  });
 }
 
 /**

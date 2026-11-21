@@ -2,6 +2,7 @@
 use super::*;
 use calendar_events::domain::replacement::*;
 use chrono::{DateTime, Duration, NaiveDate};
+use std::collections::{HashMap, HashSet};
 
 const STEP_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarReplacementStep";
@@ -124,10 +125,7 @@ fn copy_body(event: &Value, remove_conference: bool) -> Result<Value, CalendarPr
     if let Some(prefs) = marker(event, PREFERENCES_ID) {
         add_marker(&mut body, PREFERENCES_ID, &prefs);
     }
-    let old_join = event["onlineMeeting"]["joinUrl"]
-        .as_str()
-        .or(event["onlineMeetingUrl"].as_str());
-    if let Some(join) = old_join {
+    if let Some(join) = join_url(event) {
         if let Some(content) = body["body"]["content"].as_str() {
             body["body"]["content"] = json!(conference_body::split(content, join)?.0);
         }
@@ -148,6 +146,199 @@ fn copy_body(event: &Value, remove_conference: bool) -> Result<Value, CalendarPr
         body["onlineMeetingProvider"] = json!("teamsForBusiness");
     }
     Ok(body)
+}
+
+fn join_url(event: &Value) -> Option<&str> {
+    event["onlineMeeting"]["joinUrl"]
+        .as_str()
+        .or(event["onlineMeetingUrl"].as_str())
+}
+
+/// Fields an occurrence copy takes from the edited series when it still holds
+/// the saved series' value; an occurrence changed on its own keeps its own.
+/// Guests are carried as the series' additions, removals and type changes
+/// instead.
+const INHERITED_FIELDS: [&str; 6] = [
+    "subject",
+    "body",
+    "location",
+    "locations",
+    "sensitivity",
+    "showAs",
+];
+
+/// Outlook's reminder and the Macro reminder settings kept beside it, which
+/// read together: an occurrence takes the series' edit of them only all at
+/// once, when it still holds all of the saved series' values.
+const REMINDER_FIELDS: [&str; 3] = [
+    "isReminderOn",
+    "reminderMinutesBeforeStart",
+    "singleValueExtendedProperties",
+];
+
+/// Whether two times are the same schedule, whatever zone names them.
+fn same_time(first: &EventTime, second: &EventTime) -> bool {
+    match (first, second) {
+        (
+            EventTime::Timed {
+                starts_at, ends_at, ..
+            },
+            EventTime::Timed {
+                starts_at: other_start,
+                ends_at: other_end,
+                ..
+            },
+        ) => starts_at == other_start && ends_at == other_end,
+        (EventTime::AllDay { .. }, EventTime::AllDay { .. }) => first == second,
+        _ => false,
+    }
+}
+
+/// `changes` without a time or repeat rule that names the saved schedule, so
+/// an unchanged schedule (in any zone) neither moves the series' rule nor
+/// drops its copied occurrences.
+fn schedule_changes(
+    source: &Value,
+    changes: &CalendarEventPatch,
+) -> Result<CalendarEventPatch, CalendarProviderError> {
+    let mut changes = changes.clone();
+    if changes.time.as_ref().is_some_and(|time| {
+        normalize::event_time(source).is_ok_and(|saved| same_time(time, &saved))
+    }) {
+        changes.time = None;
+    }
+    if changes
+        .recurrence_lines
+        .as_ref()
+        .is_some_and(|lines| recurrence::from_graph(source).is_ok_and(|saved| &saved == lines))
+    {
+        changes.recurrence_lines = None;
+    }
+    Ok(changes)
+}
+
+/// Lay the editor's unsaved changes over a copy of `source`, built as an
+/// Outlook update of `source` builds its body, so the replacement sends no
+/// field that a copy or an update does not already send.
+fn apply_changes(
+    body: &mut Value,
+    source: &Value,
+    changes: &CalendarEventPatch,
+) -> Result<(), CalendarProviderError> {
+    // A series starts its repeat rule on its first occurrence, so a series
+    // that moves takes its saved rule again from the new start.
+    let recurrence_lines = match (&changes.recurrence_lines, &changes.time) {
+        (None, Some(_)) if !body["recurrence"].is_null() => {
+            Some(recurrence::from_graph(source).map_err(|_| invalid())?)
+        }
+        (lines, _) => lines.clone(),
+    };
+    let patch = patch_body(
+        &CalendarEventPatch {
+            description: None,
+            recurrence_lines,
+            ..changes.clone()
+        },
+        Some(source),
+    )?;
+    let fields = body.as_object_mut().ok_or_else(invalid)?;
+    // Graph keeps `location` and `locations` in step; a new location replaces both.
+    if changes.location.is_some() {
+        fields.remove("locations");
+    }
+    for (field, value) in patch.as_object().ok_or_else(invalid)? {
+        fields.insert(field.clone(), value.clone());
+    }
+    if let Some(description) = &changes.description {
+        // The old meeting's block goes with the old meeting, as it does from
+        // the copied body.
+        let content = match join_url(source) {
+            Some(join) => conference_body::without_meeting(
+                description,
+                source["body"]["content"].as_str().unwrap_or_default(),
+                join,
+            )?,
+            None => description.clone(),
+        };
+        fields.insert(
+            "body".into(),
+            json!({"contentType":"html","content":content}),
+        );
+    }
+    Ok(())
+}
+
+fn guest_address(guest: &Value) -> Option<String> {
+    guest["emailAddress"]["address"]
+        .as_str()
+        .map(str::to_lowercase)
+}
+
+/// Carry an edit of the series onto an occurrence copy: a field the copy
+/// still shows at the saved series' value takes the edit, and the series'
+/// added and removed guests are added to and removed from every copy.
+fn inherit_changes(occurrence: &mut Value, saved: &Value, edited: &Value) {
+    // Each guest's address and whether they are required or optional.
+    let guest_types = |series: &Value| -> HashMap<String, Value> {
+        series["attendees"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|guest| {
+                guest_address(guest).map(|address| (address, guest["type"].clone()))
+            })
+            .collect()
+    };
+    let (before, after) = (guest_types(saved), guest_types(edited));
+    if before != after
+        && let Some(guests) = occurrence["attendees"].as_array_mut()
+    {
+        guests.retain(|guest| {
+            guest_address(guest).is_none_or(|address| {
+                after.contains_key(&address) || !before.contains_key(&address)
+            })
+        });
+        for guest in guests.iter_mut() {
+            if let Some(address) = guest_address(guest)
+                && let (Some(was), Some(is)) = (before.get(&address), after.get(&address))
+                && was != is
+                && &guest["type"] == was
+            {
+                guest["type"] = is.clone();
+            }
+        }
+        let present: HashSet<String> = guests.iter().filter_map(guest_address).collect();
+        for guest in edited["attendees"].as_array().into_iter().flatten() {
+            if guest_address(guest).is_some_and(|address| {
+                !before.contains_key(&address) && !present.contains(&address)
+            }) {
+                guests.push(guest.clone());
+            }
+        }
+    }
+    let reminders_unchanged = REMINDER_FIELDS
+        .iter()
+        .all(|field| saved.get(*field) == edited.get(*field));
+    let own_reminders = REMINDER_FIELDS
+        .iter()
+        .any(|field| occurrence.get(*field) != saved.get(*field));
+    let mut fields = INHERITED_FIELDS.to_vec();
+    if !reminders_unchanged && !own_reminders {
+        fields.extend(REMINDER_FIELDS);
+    }
+    for field in fields {
+        if saved.get(field) == edited.get(field) || occurrence.get(field) != saved.get(field) {
+            continue;
+        }
+        match edited.get(field) {
+            Some(value) => occurrence[field] = value.clone(),
+            None => {
+                if let Some(fields) = occurrence.as_object_mut() {
+                    fields.remove(field);
+                }
+            }
+        }
+    }
 }
 
 impl OutlookApiClientRepository {
@@ -293,6 +484,7 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
         master_id: &str,
         recurrence_id: Option<&str>,
         remove_conference: bool,
+        changes: &CalendarEventPatch,
     ) -> Result<ReplacementSnapshot, CalendarProviderError> {
         let api = self.calendar_scope(target)?;
         let token = AccessToken::new(token.to_owned());
@@ -309,8 +501,21 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
         }
         string(&source, "@odata.etag")?;
         let is_series = recurrence_id.is_none() && source["type"].as_str() == Some("seriesMaster");
+        // Outlook drops a series' changed and cancelled occurrences when its
+        // schedule changes, and their dates no longer follow it.
+        let changes = &schedule_changes(&source, changes)?;
+        let keeps_occurrences =
+            is_series && changes.time.is_none() && changes.recurrence_lines.is_none();
+        let mut body = copy_body(&source, remove_conference)?;
+        if !is_series {
+            body.as_object_mut()
+                .ok_or_else(invalid)?
+                .remove("recurrence");
+        }
+        let saved = body.clone();
+        apply_changes(&mut body, &source, changes)?;
         let mut occurrences = vec![];
-        if is_series {
+        if keeps_occurrences {
             let (series, exceptions) = api
                 .replacement_exceptions(&token, target, master_id)
                 .await?;
@@ -323,9 +528,9 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
                     .await?
                     .ok_or_else(changed)?;
                 let date = occurrence_date(string(&exception, "occurrenceId")?)?;
-                occurrences.push(
-                    json!({"date":date,"source":event,"body":copy_body(&event,remove_conference)?}),
-                );
+                let mut copy = copy_body(&event, remove_conference)?;
+                inherit_changes(&mut copy, &saved, &body);
+                occurrences.push(json!({"date":date,"source":event,"body":copy}));
             }
             for cancelled in series["cancelledOccurrences"]
                 .as_array()
@@ -335,20 +540,18 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
                 occurrences.push(json!({"date":date,"cancelled":true}));
             }
         }
-        let mut body = copy_body(&source, remove_conference)?;
-        if !is_series {
-            body.as_object_mut()
-                .ok_or_else(invalid)?
-                .remove("recurrence");
-        }
         api.verify_source_version(&token, target, &source).await?;
+        let time = match &changes.time {
+            Some(time) => time.clone(),
+            None => normalize::event_time(&source)?,
+        };
         Ok(ReplacementSnapshot {
             source_id: string(&source, "id")?.into(),
             is_organizer: source["isOrganizer"].as_bool() == Some(true),
-            title: source["subject"].as_str().unwrap_or("").into(),
-            time: normalize::event_time(&source)?,
-            attendee_count: source["attendees"].as_array().map_or(0, Vec::len),
-            is_series,
+            title: body["subject"].as_str().unwrap_or("").into(),
+            time,
+            attendee_count: body["attendees"].as_array().map_or(0, Vec::len),
+            is_series: !body["recurrence"].is_null(),
             remove_conference,
             provider_url: safe_event_url(&source),
             payload: json!({"source":source,"body":body}),

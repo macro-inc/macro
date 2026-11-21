@@ -140,6 +140,9 @@ confidence-threshold = 0.8
 exceptions = [
   # JSON Schema URI parsing; the published license is MIT No Attribution.
   { allow = ["MIT-0"], crate = "borrow-or-share@0.2.4" },
+  # CBOR codec of the AWS SDK's CloudWatch client; Blue Oak is a permissive,
+  # OSI-approved license.
+  { allow = ["BlueOak-1.0.0"], crate = "minicbor" },
   # Signal's libsignal, used by whatsmeow_signal; AGPL like this repository.
   { allow = ["AGPL-3.0-only"], crate = "libsignal-core" },
   { allow = ["AGPL-3.0-only"], crate = "libsignal-debug" },
@@ -227,10 +230,12 @@ deny = [
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
     "authentication_service",    # Session-code and token redaction span tests only (dev-dependency)
+    "calendar_events",           # Calendar refresh span tests only (dev-dependency)
     "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
     "code_execution",            # Deno exit span field tests only (dev-dependency)
     "coding_agent_worker",       # Standalone daemon logging setup
+    "contacts",                  # Worker-round trace and no-email span tests only (dev-dependency)
     "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
@@ -242,6 +247,7 @@ deny = [
     "email_service",             # CRM backfill trace propagation and HTTP server span tests only (dev-dependency)
     "email_suppression_handler", # Notification TRACE field test only (dev-dependency)
     "entity_access",             # Access-check span field and user-id leak tests only (dev-dependency)
+    "firecracker_guest_agent",   # Guest-image daemon logging to journald; the guest reaches no collector, only the host over vsock
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
     "fusionauth",                # Credential log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests

@@ -258,10 +258,7 @@ async fn junk_leaves_the_inbox(provider: Provider) -> Result<(), Report> {
     stack.finish().await
 }
 
-/// Gmail keeps INBOX on a message it files as spam and hides it from every
-/// view but Spam; Macro counts the INBOX label and keeps listing it.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "known bug: gmail-junk-stays-in-inbox"]
 async fn gmail_junk_leaves_the_inbox() -> Result<(), Report> {
     junk_leaves_the_inbox(Provider::Gmail).await
 }
@@ -272,8 +269,7 @@ async fn outlook_junk_leaves_the_inbox() -> Result<(), Report> {
 }
 
 /// Report spam: the message is filed under Gmail's Spam and Macro lists the
-/// thread under Spam. What the Gmail scenario above cannot yet assert, the
-/// thread leaving Macro's inbox, is its known bug.
+/// thread under Spam, and the thread Macro answers carries the Spam label.
 ///
 /// When it fails, a thread the user called spam is not spam in Gmail, or
 /// Macro's Spam view does not show it.

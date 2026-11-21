@@ -399,7 +399,7 @@ export class DocumentNamespace {
   }
 
   /**
-   * Search documents by name and content, most relevant first, auto-paginated.
+   * Search documents by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
@@ -408,13 +408,14 @@ export class DocumentNamespace {
   }
 
   /**
-   * The user's recent documents, most recent first, auto-paginated.
+   * The user's recent documents, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
   recent(opts?: {
     pageSize?: number;
     fileType?: string;
+    maxItems?: number;
   }): AsyncGenerator<Document> {
     return Document.recent(this.client, opts);
   }
@@ -430,11 +431,14 @@ export class DocumentNamespace {
   }
 
   /**
-   * The user's trashed documents, most recently trashed first, auto-paginated.
+   * The user's trashed documents, most recently trashed first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  trashed(opts?: { pageSize?: number }): AsyncGenerator<Document> {
+  trashed(opts?: {
+    pageSize?: number;
+    maxItems?: number;
+  }): AsyncGenerator<Document> {
     return Document.trashed(this.client, opts);
   }
 }

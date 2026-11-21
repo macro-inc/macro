@@ -17,9 +17,17 @@ stacks. Process isolation belongs to
 
 ## Start here
 
-- `SKILL.md`: the agent-facing JavaScript contract and examples.
+- `SKILL.md`: the agent-facing TypeScript contract and examples. Every
+  whole-program example here, in `src/inbound/toolset/guides/` and in SDK
+  `@agent` guides and the compose-routines skill is fenced `typescript` and
+  must type-check (`every_documented_example_type_checks`, which CI runs with
+  the Deno tests). The suggestions brief's programs are checked by the
+  harness's `suggestions_brief_programs_type_check`.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+  Session and user runs type-check the program (`check_program`) before
+  credentials are issued, so a program with type errors never asks the owner
+  for approval or gets a token.
   A session program may return up to two SDK images (`images: [await
   canvas.render()]`); records keep only their static file ids, and every
   receipt (a saved retry too) loads their PNGs through the `ModelImages` port

@@ -462,3 +462,57 @@ async fn a_keyed_create_under_a_paused_parent_marks_a_sub_routine_that_was_off_b
         .unwrap();
     assert!(stored(&service, child.id.unwrap()).enabled);
 }
+
+#[tokio::test]
+async fn a_repeated_key_keeps_its_sub_routines_look_and_refuses_an_unknown_icon() {
+    use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance, macro_icon_names};
+    let look = |name: &str| EntityAppearance {
+        icon: Some(AppearanceIcon::Macro { name: name.into() }),
+        color: Some(AppearanceColor::Teal),
+    };
+    let keyed = |appearance: EntityAppearance| ActionConfiguration {
+        name: "follow up".into(),
+        appearance: Some(appearance),
+        ..configuration(false)
+    };
+    let key = || Some(SubRoutineKey::new("task-1").unwrap());
+    let service = service(false);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    let first = look(macro_icon_names()[0]);
+    let created = service
+        .create_action_from(
+            &user_principal(),
+            keyed(first.clone()),
+            from_code(&parent),
+            key(),
+        )
+        .await
+        .unwrap()
+        .into_action();
+    assert_eq!(created.appearance, first);
+
+    let refused = service
+        .create_action_from(
+            &user_principal(),
+            keyed(look("not-an-icon")),
+            from_code(&parent),
+            key(),
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("not-an-icon"), "{refused}");
+
+    let again = service
+        .create_action_from(
+            &user_principal(),
+            keyed(look(macro_icon_names()[1])),
+            from_code(&parent),
+            key(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(again, SavedAction::Updated(_)));
+    assert_eq!(stored(&service, created.id.unwrap()).appearance, first);
+}

@@ -52,6 +52,9 @@ DMs, and the shared message store other domains discuss things on.
 - `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
   `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `shareWithChannel(channel)` on every shareable handle, through `packages/sdk/src/entities/channels/share.ts`); both take `ChannelShareEntityType` from `domain/models.rs`.
 - The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
+- `EditChannelMessage` and `DeleteChannelMessage` act as the tool's bot only on
+  a message that bot posted for the caller (`Message::posted_by_bot_for`), and
+  as the caller otherwise; see the receipt rule in `crates/messages/AGENTS.md`.
 
 ## Checks
 
@@ -65,6 +68,9 @@ DMs, and the shared message store other domains discuss things on.
   channel whose `team_id` matches their membership. Membership in a channel or
   the channel creator's team never grants deletion authority on its own. Both
   REST deletion and permanent entity deletion call this policy.
+  It reads the active members before the delete removes them, and
+  `channel.deleted` carries them so `soup_realtime` can drop the channel from
+  their open lists.
 
 - `match_channel_names.sql` starts from the viewer's memberships and looks
   every channel, participant, person and bot up by key behind `OFFSET 0`
@@ -99,6 +105,19 @@ DMs, and the shared message store other domains discuss things on.
   re-checked after 5 s and 30 s in a spawned task. Creations recorded under
   another bot (`MACRO_AI_BOT_ID` for Claude/Codex/Cursor MCP tools) or the
   user (projects, chats, calls) never match, and fail safe as unshared.
+- Side effects record who "interacted on Macro" (`interactions_for_event` in
+  `domain/side_effects.rs`, `ChannelContactsDispatcher::record_interactions`):
+  creating a non-DM channel pairs everyone in it unless the Macro system bot
+  created it (the signup support channel), and an add, a join, an approved
+  request or a team auto-join pairs the newcomers with every active member.
+  A DM counts only from a person's message in it, never from its creation,
+  since Macro opens teammate and inbox DMs on its own; bot and guest posts
+  never count, and nothing else posted in a channel does. The two team
+  auto-join paths (`auto_join_by_team_id`, turning auto-join on in
+  `patch_channel`) dispatch `MembersAutoJoined`, which only feeds contacts.
+  Every host wraps the contacts ingress in `contacts::domain::list_writes::ListWritesGate`,
+  so these sends wait for the `contacts-list-writes` flag; the legacy
+  `enqueue_contacts` sync is unchanged.
 - DM invitation emails must stay distinguishable from channel invites (#7964) —
   don't collapse the two email templates.
 - Legacy document/CRM/channel message paths were removed (#6732); don't

@@ -220,6 +220,21 @@ function MobileCanvasLayout() {
   // off, so the lock does not go with it.
   onCleanup(() => state.setToolLocked(false));
 
+  // A pen that presses the canvas takes over the drawing; the view sheet then
+  // offers to give it back to fingers. Heard at the window: the Text tool
+  // stops its press before it reaches the scene.
+  let scene: HTMLDivElement | undefined;
+  const penPressed = (event: PointerEvent) => {
+    if (
+      event.pointerType === 'pen' &&
+      event.target instanceof Node &&
+      scene?.contains(event.target)
+    )
+      state.penPressed();
+  };
+  window.addEventListener('pointerdown', penPressed, true);
+  onCleanup(() => window.removeEventListener('pointerdown', penPressed, true));
+
   // The item a long press landed on, when it sits inside the group the press
   // selected. A finger has no Cmd/Ctrl-click, so the sheet offers to select it.
   const [pressedInside, setPressedInside] = createSignal<string>();
@@ -292,6 +307,7 @@ function MobileCanvasLayout() {
       {/* The browser's own long-press menu and callout have nothing to offer
           on the scene. Text being edited and an embed keep theirs. */}
       <div
+        ref={scene}
         class="absolute inset-0 select-none [-webkit-touch-callout:none]"
         onContextMenu={(event) => {
           if (state.embeds.active() || state.text.draft()) return;
@@ -299,7 +315,11 @@ function MobileCanvasLayout() {
         }}
         on:focusout={commitTextLeftByKeyboard}
       >
-        <CanvasViewParts.Surface longPress={longPress} touchHandles />
+        <CanvasViewParts.Surface
+          longPress={longPress}
+          touchHandles
+          fingerPans={state.fingersPan}
+        />
       </div>
       <CanvasViewParts.EmptyState />
       <MobileCanvasBottomBar
@@ -334,6 +354,8 @@ function MobileCanvasLayout() {
           onSnapMode: state.setSnapMode,
           toolLocked: state.toolLocked(),
           onToolLocked: state.setToolLocked,
+          penOnly: state.penSeen() ? state.penOnly() : undefined,
+          onPenOnly: state.setPenOnly,
         }}
       />
       <MobileCanvasActionsSheet

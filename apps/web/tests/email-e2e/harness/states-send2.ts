@@ -128,6 +128,36 @@ export async function holdRequests(
 }
 
 /**
+ * Lets requests to `url` through until the function given back is called,
+ * and fails them from then on, as a dropped connection does. The call waits
+ * until the requests let through are answered, so none the page sent before
+ * it is answered after it with what changed meanwhile.
+ */
+export async function failRequestsLater(
+  page: Page,
+  url: RegExp
+): Promise<() => Promise<void>> {
+  const open = new Set<Request>();
+  let failing = false;
+  const answered = (request: Request) => open.delete(request);
+  page.on('requestfinished', answered);
+  page.on('requestfailed', answered);
+  await page.route(url, (route) => {
+    if (failing) return route.abort('connectionfailed');
+    open.add(route.request());
+    return route.fallback();
+  });
+  return async () => {
+    failing = true;
+    await expect
+      .poll(() => open.size, {
+        message: 'the requests let through before failing are answered',
+      })
+      .toBe(0);
+  };
+}
+
+/**
  * Tells the page it is shown again, as switching back to its tab does: what
  * reads on focus or visibility reads again now instead of on its timer.
  */

@@ -1,0 +1,177 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    app: cert-manager
+    app.kubernetes.io/component: crds
+    app.kubernetes.io/instance: cert-manager
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: cert-manager
+    app.kubernetes.io/version: v1.21.3
+    helm.sh/chart: cert-manager-v1.21.3
+  name: certificaterequests.cert-manager.io
+spec:
+  group: cert-manager.io
+  names:
+    categories:
+      - cert-manager
+    kind: CertificateRequest
+    listKind: CertificateRequestList
+    plural: certificaterequests
+    shortNames:
+      - cr
+      - crs
+    singular: certificaterequest
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .status.conditions[?(@.type == "Approved")].status
+          name: Approved
+          type: string
+        - jsonPath: .status.conditions[?(@.type == "Denied")].status
+          name: Denied
+          type: string
+        - jsonPath: .status.conditions[?(@.type == "Ready")].status
+          name: Ready
+          type: string
+        - jsonPath: .spec.issuerRef.name
+          name: Issuer
+          type: string
+        - jsonPath: .spec.username
+          name: Requester
+          type: string
+        - jsonPath: .status.conditions[?(@.type == "Ready")].message
+          name: Status
+          priority: 1
+          type: string
+        - description: CreationTimestamp is a timestamp representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations. Clients may not set this value. It is represented in RFC3339 form and is in UTC.
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                duration:
+                  type: string
+                extra:
+                  additionalProperties:
+                    items:
+                      type: string
+                    type: array
+                  type: object
+                groups:
+                  items:
+                    type: string
+                  type: array
+                  x-kubernetes-list-type: atomic
+                isCA:
+                  type: boolean
+                issuerRef:
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                    - name
+                  type: object
+                request:
+                  format: byte
+                  type: string
+                uid:
+                  type: string
+                usages:
+                  items:
+                    enum:
+                      - signing
+                      - digital signature
+                      - content commitment
+                      - key encipherment
+                      - key agreement
+                      - data encipherment
+                      - cert sign
+                      - crl sign
+                      - encipher only
+                      - decipher only
+                      - any
+                      - server auth
+                      - client auth
+                      - code signing
+                      - email protection
+                      - s/mime
+                      - ipsec end system
+                      - ipsec tunnel
+                      - ipsec user
+                      - timestamping
+                      - ocsp signing
+                      - microsoft sgc
+                      - netscape sgc
+                    type: string
+                  type: array
+                  x-kubernetes-list-type: atomic
+                username:
+                  type: string
+              required:
+                - issuerRef
+                - request
+              type: object
+            status:
+              properties:
+                ca:
+                  format: byte
+                  type: string
+                certificate:
+                  format: byte
+                  type: string
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      reason:
+                        type: string
+                      status:
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+                failureTime:
+                  format: date-time
+                  type: string
+              type: object
+          type: object
+      selectableFields:
+        - jsonPath: .spec.issuerRef.group
+        - jsonPath: .spec.issuerRef.kind
+        - jsonPath: .spec.issuerRef.name
+      served: true
+      storage: true
+      subresources:
+        status: {}

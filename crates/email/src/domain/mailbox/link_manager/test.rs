@@ -278,3 +278,54 @@ async fn deleted_user_is_delegated_once_and_preserves_lifecycle_failures() {
         assert_eq!(fake.calls(), [Call::DeletedUser("credential-owner".into())]);
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_deletion_behind_a_locked_inbox_waits_its_turn_in_the_same_delivery() {
+    let (service, fake) = service();
+    fake.0.lock().unwrap().contended = 2;
+    let started = tokio::time::Instant::now();
+    let outcome = service
+        .process(Ok(LinkManagerMessage::DeleteLink {
+            link_id: LINK,
+            deletion_reason: DeletionReason::Unused,
+        }))
+        .await;
+    assert!(matches!(outcome, LinkManagerDisposition::DoneDelete));
+    assert_eq!(started.elapsed(), 2 * CONTENDED_RETRY_DELAY);
+    let prepared = fake
+        .calls()
+        .into_iter()
+        .filter(|call| matches!(call, Call::Prepare(..)))
+        .count();
+    assert_eq!(prepared, 3);
+    assert_eq!(
+        fake.calls().last(),
+        Some(&Call::Delete(LINK, DeletionReason::Unused.as_str().into()))
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_inbox_that_stays_locked_goes_back_to_the_queue_within_its_visibility() {
+    let (service, fake) = service();
+    fake.0.lock().unwrap().contended = u32::MAX;
+    let started = tokio::time::Instant::now();
+    let error = failure(
+        service
+            .process(Ok(LinkManagerMessage::DeleteLink {
+                link_id: LINK,
+                deletion_reason: DeletionReason::Unused,
+            }))
+            .await,
+    );
+    assert!(matches!(
+        error.downcast_ref(),
+        Some(InboxLifecycleError::Contended)
+    ));
+    let prepared = fake
+        .calls()
+        .into_iter()
+        .filter(|call| matches!(call, Call::Prepare(..)))
+        .count();
+    assert_eq!(prepared, 6);
+    assert!(started.elapsed() < Duration::from_secs(300));
+}

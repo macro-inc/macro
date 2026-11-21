@@ -19,6 +19,7 @@ export function MobileCallIsland() {
     isMobile() &&
     !!call?.isInCall() &&
     !companion.inCallView() &&
+    !companion.inChannel() &&
     !virtualKeyboardVisible();
   const record = useLiveCallRecordQuery(() =>
     visible() ? (call?.activeCallId() ?? '') : ''
@@ -52,7 +53,7 @@ export function MobileCallIsland() {
             <Button
               variant="ghost"
               size="md"
-              class="min-w-0 flex-1 justify-start"
+              class="min-w-0 flex-1 self-stretch justify-start py-2.5"
               aria-label={t('nav.returnToCall')}
               onClick={open}
             >

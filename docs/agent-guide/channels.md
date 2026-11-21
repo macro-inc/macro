@@ -37,6 +37,10 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+Phone list rows retain the channel's own image or icon during a live call.
+The trailing live-call waveform marks the call, as in the desktop rail; ringing
+calls keep their Join and Decline actions.
+
 ## Composer focus and Esc
 
 Every way of opening a conversation follows one rule
@@ -59,6 +63,14 @@ Home, or the Notifications list. A conversation that arrived from elsewhere
 split, and a collapsed Chat sidebar opens for it. Without a list, including a
 narrow split that shows the conversation alone, Esc reaches the split as before
 (clearing a selection, leaving spotlight).
+
+A click in a draft moves the caret where it lands, including a quick
+trackpad or touch tap and a click while the page is busy. The composer
+re-focuses itself only for clicks outside its text; re-focusing on a click in
+the text wrote the previous caret back over the new one. Every Lexical input
+shares this rule (`focusEditorFromClick`, used by `MarkdownShell` and
+`MarkdownTextarea`), so the email body, event descriptions and Universal Input
+drafts behave the same way.
 
 To check this, arrow through several conversations (focus stays in the list),
 press Enter (the composer takes focus), press Esc twice (back on the same row),
@@ -128,7 +140,9 @@ tab. Nothing exists on the server, so the DM is in neither person's list until
 the first message creates it and the view becomes the real conversation. Check
 that leaving without sending creates nothing, that the other person's list gains
 the DM only after the send, and that reloading a `pending-dm-` URL opens the
-Chat list on desktop and closes the pane on touch.
+Chat list on desktop and closes the pane on touch. Agent teammates are the
+exception: they write first, so their DM is created when it opens (see Agent
+teammates in [settings.md](settings.md#agent-teammates)).
 
 A person's first message in a new DM or group chat notifies its registered
 members as every later message does (an unread dot on the row, the Chat badge,
@@ -161,6 +175,16 @@ three-step flow:
 
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+**New direct message** opens a draft message whose To
+field takes either people or one existing conversation. People open their DM
+or group chat, creating it on the first message. While the field is empty it
+also suggests the channels and group chats you belong to (the same set as
+Share To; reach a one-to-one DM by picking the person). A picked channel is the
+only recipient: the field takes no typing and suggests nothing until its chip
+is removed (its X, or Backspace), and once anyone is picked channels are no
+longer suggested. Send posts into the channel and opens it at the message, as
+sending to a DM does. Phones and tablets behave the same.
 
 The channel header's Invite dialog and Participants add controls use paged personal
 suggestions, not a complete address book. Scrolling to the end (or PageDown) lists
@@ -417,7 +441,10 @@ show whatever has arrived so far.
 
 ## Inline image actions
 
-An image attached to a channel message renders inline. Hovering it, or focusing
+An image attached to a channel message renders inline. So does a document
+attachment whose file is an image (PNG, JPG, GIF, WebP, SVG), the way agents
+post the images they make; its file chip stays below it for opening, renaming
+and sharing the document. Hovering an inline image, or focusing
 it with the keyboard, reveals a small toolbar at its top right with
 `Copy image` and `Download image`, the same two actions the lightbox offers;
 it fades out when the pointer leaves and stays up while an action runs. Copy writes the full-resolution image to the
@@ -616,12 +643,20 @@ results must reflect current people and entities, and scrolling or keyboard
 navigation must still load more results. Check both mobile and desktop.
 
 In a task, project, or document Discussion the `@` menu's people come from the
-contact directory. Until they arrive, People shows Macro and loading rows where
-the people and other agents will go, and a phone lists nothing below Macro yet.
+contact directory. Until they arrive, People shows Macro (when it matches) and
+loading rows where the people and other agents will go, and a phone lists
+nothing below Macro yet. On desktop, Booking Links are a section below People,
+so their late answer never pushes People's rows down; phones pin People rows
+above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
-When the people read fails (a busy cache times it out), the menu reads it again
-once by itself and shows "Couldn't load people" with Retry only if that fails too.
+The loading rows stay blank for the first half second, so an ordinary open
+shows no loading state. When the local cache has not answered within two
+seconds (a busy cache, or one changing owner across tabs), People lists the
+server's people instead and keeps them in place for that query.
+When the people read fails, the menu reads it again once by itself and shows
+"Couldn't load people" with Retry if that fails too, or if nothing has answered
+by the time the rows stop waiting. People never disappears without a message.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
@@ -1059,6 +1094,33 @@ brings that row back into the inbox, displays the reaction and channel name, and
 opens the reacted-to message. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
+## Marking notifications done in the channel gutter
+
+Desktop only, behind `enable-channel-notification-gutter`, which is on in
+local development (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER` overrides it).
+Open a channel in a pane at least 1400px wide, so the list docks in the
+gutter, with notifications from another account: new top-level messages, a
+thread reply, and a mention. Then narrow the pane to see the popover and the
+hidden states. Check that:
+
+- A round check sits in the gutter left of each stack's newest message. For a
+  thread, it sits beside the newest notified reply, or beside the top-level
+  message while the thread is collapsed. Clicking it removes the check and
+  marks that stack's notifications done in Home.
+- A toggle with the notifications bell and a count sits at the top left of
+  the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
+  card docked in the gutter. Narrower panes open the list as a popover. Not
+  done and Unread switch which stacks it lists. Clicking a row scrolls to its
+  message, and the row's check marks it done (or read, in Unread). While a
+  list's notifications load it says so, and if the read fails it offers Retry
+  instead of an empty list.
+- Unseen stacks show an unread dot before their icon, and the toggle shows
+  one after its count while any not-done stack is unseen. Reading a stack (here, in Home, or
+  on another device) clears its dot.
+- With nothing left to mark done, the bell and the list hide (an open popover
+  closes); a new notification brings the bell back.
+- Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
+
 ## Requests to join
 
 Opening a private or team channel you are not in shows **You don't have access
@@ -1073,11 +1135,12 @@ and full account email wrap at phone widths so reviewers can identify the
 requester before answering. If the display name already is the email, it appears
 only once. Every participant
 also gets a **Requests to join** notification (turn it off under notification
-settings) that opens the channel and marks it unread. The first answer wins: the
-row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
-shows **Request withdrawn**, and the other participants' notifications are marked
-done. Approval adds the requester, who gets the usual "added you" invite
-notification, and the timeline shows the usual added row. A requester waiting on
+settings) that opens the channel and marks it unread. The first answer wins and
+the other participants' notifications are marked done. An approved row drops its
+buttons and shows no answer: approval adds the requester, who gets the usual
+"added you" invite notification, and the timeline shows the usual added row. A
+denied row shows **Denied by** for everyone, and a withdrawn request shows
+**Request withdrawn**. A requester waiting on
 the denied view is taken into the channel when the approval arrives.
 
 Verify with two accounts: ask from a non-member, approve or deny from a member
@@ -1116,9 +1179,11 @@ quickly: an earlier
 response must not switch back or mark that earlier channel read.
 
 A transient notification-fetch failure keeps the conversation and composer mounted
-while notifications are unavailable. Recovery marks top-level message notifications
+while notifications are unavailable. So does a server fault (a GraphQL error
+without an access code), which retries with backoff; without cached metadata it
+shows **Conversation unavailable** with Retry, never the access-denied page. Recovery marks top-level message notifications
 seen without moving the conversation. No notification read marking runs
-from an abbreviated list result, even if that result is empty. Access failures and server-confirmed missing channels
+from an abbreviated list result, even if that result is empty. Access failures (HTTP 401/403 or an access-coded error) and server-confirmed missing channels
 show **Conversation unavailable** and stay hidden during retry until access is
 confirmed. With GraphQL caching enabled, an empty local projection cannot hide a
 server-confirmed conversation; a stale positive row cannot undo a fresh denial or
@@ -1140,8 +1205,10 @@ Reopen it with **Show navigation** before the conversation title on desktop,
 or as the leading header pill on touch. Chat remembers the wide-layout choice
 independently of other workspaces. The rail starts at 256px on desktop and 403px
 on wide touch,
-docks above 720px. Narrow desktop panes use a navigation overlay. It remains
-collapsible with no conversation selected and while showing Threads. At 720px
+docks above 720px, including in a new split. Narrow desktop panes show the
+rail at full width until a conversation opens, which then fills the pane with
+**Back** returning to the rail; Threads open the same way. Arrow keys and
+`j`/`k` there only move along the rail; Enter opens the conversation. At 720px
 or narrower, touch shows the full-frame conversation list and
 full-screen navigation, with no sidebar, expand button, or reserved navigation
 row. Only the safe-area top inset precedes the list. Wider touch panes use the
@@ -1163,6 +1230,35 @@ locally. Both layouts wait for the flag result. When off, desktop restores
 `enable-channel-threads-preview`); phone restores its original Recent feed and
 wrapping pins. Saved desktop tabs survive switching the flag on and off.
 `enable-channel-tags` separately controls section management and reads.
+
+### Live calls above the desktop sections
+
+Both desktop sidebar layouts show **Live** below the header and above the
+conversation tree, including while searching. It lists every active channel or
+DM call the viewer can access, newest first, then active quick calls. A quick
+call appears once rather than also as its backing channel call. Conversations
+remain in their ordinary sections. With no live calls, the section is absent.
+
+Each row shows the conversation name (or **Call with …** for a quick call) and
+**Join**, or **Open** for the call already joined. Join targets that exact call
+session; Open returns to its call tab. A ringing channel call has a separate
+**Dismiss** action that stops ringing across devices without joining or ending
+the call. Its Live row remains joinable after dismissal, until the call ends.
+
+Verify with two signed-in sessions in a test-only conversation: start a call,
+check that its Live row precedes the sections, join from that row, and leave all
+participants to check that it disappears without reloading. Start two calls to
+check newest-first ordering, and dismiss a ring without joining. Repeat with
+the sidebar flag off. At 390×844, keep the existing in-row Join/Decline and live
+indicators: the standalone desktop Live section does not appear on touch.
+
+Reopening Chat or reloading with a saved channel list displays cached conversations
+while the bounded Soup pages revalidate. A settled page replaces the cached seed,
+including when the page is empty. Only a cold list without cached rows shows loading
+placeholders. Favorites do not add skeleton rows while channel metadata loads;
+Unread-only can legitimately leave the section empty. A successfully omitted channel
+favorite disappears from this rail without deleting the saved favorite, while a failed
+lookup offers Retry.
 
 ### Original sidebar (flag off)
 
@@ -1369,6 +1465,54 @@ the channel to notifying for every message. The rail row and Home row show an
 under **Mentions only** with **Notify for all**. Mute, snooze and mentions-only
 replace each other; a snooze that expires returns the channel to all messages.
 
+### Notification Settings (`enable-channel-notification-settings`)
+
+With the flag on, a channel's menu (rail row, Home row, the open channel's
+title menu) has two entries in place of the one above, in a group of their own
+between separators; section heading menus and the phone sheets group them the
+same way:
+
+- **Mute** holds the time-based choices: **Until I turn it off**, the snooze
+  presets and **Custom…**. A muted channel shows **Unmute** with why beside it
+  ("Until 3:00 PM", or "Muted by Engineering" when every section holding it is
+  muted). Unmuting a channel its sections mute keeps that one channel
+  notifying inside them. **Only @mentions** is gone from Mute.
+- **Notification settings** shows the current choice under its name and is
+  one choice: **All messages**, **Messages involving me** (thread replies,
+  @mentions, calls and join requests; no top-level messages or reactions),
+  **Custom settings…** or **Nothing**. Custom opens a dialog with six
+  checkboxes (Top-level messages, Thread replies, @mentions, Emoji reactions,
+  Calls, Join requests) under where the settings come from ("This channel" or
+  "Inherited from Engineering"); the choice shows Custom whenever the boxes
+  match no preset. A channel either inherits every kind from its sections
+  (the submenu then starts with **Inherited from Engineering**) or has its own
+  full set: any choice on an inheriting channel saves all six on the channel.
+  **Use section default**, first in the submenu with what it gives ("All
+  messages · Engineering"), hands them all back. Document mentions follow
+  top-level messages outside a thread and thread replies inside one. Nothing
+  differs from Mute: it has no duration, and Mute still silences everything.
+
+Sections (Favorites, Direct messages, the team section and custom sections,
+never All channels) have their own **Mute** and **Notification settings**,
+stored on the section, so channels added later follow them. A channel notifies
+for a kind when any section holding it allows it, its sections mute it only
+when all of them are muted, and an untouched section allows everything. A
+channel with its own settings ignores its sections' kinds. Changing a
+section's settings when some of its channels have their own different ones,
+or muting or snoozing it when some are set to keep notifying in muted
+sections, first opens **Some channels have their own settings**: the channels
+listed unchecked, **Select all**, and **Cancel**, **Override** (the checked
+channels follow the section) or **OK** (save, keep theirs). Rows show only the
+muted bell (for channel or section mute), never an indicator for notification
+settings. On a phone, the long-press sheet and the title menu drill into the
+same choices, with the current choice at the end of the Notification settings
+row, and Custom settings drills into the six kinds as toggling rows; custom
+sections' option sheets do the same, but a section's Custom page saves (and
+checks its channels) once when you leave it. Built-in sections have these
+controls on desktop only. A channel with a legacy mentions-only setting shows
+its own settings with only @mentions until its settings are next changed,
+which replaces it.
+
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove
 them. Explicit assignments remain exclusive within each scope; personal and
@@ -1428,8 +1572,9 @@ The sidebar's **New** dropdown spans its button's full width.
 **New** offers separate **New channel** and **New direct message** actions in
 both sidebar layouts. **New channel** opens the existing
 [name, visibility, and optional invitations flow](#create-a-channel).
-**New direct message** opens the existing recipient picker, including people,
-external email addresses, private groups, and available agent personas.
+**New direct message** opens the draft message's recipient picker: people,
+external email addresses, available agent personas, or one channel or group
+chat you belong to (see [Create a channel](#create-a-channel)).
 The sectioned sidebar also offers **New section** in the same menu.
 
 Check each creation action with the sidebar flag on and off; changing the layout
@@ -1567,7 +1712,9 @@ without the thread, and the count should stay.
 A backend-free cache regression runs on desktop and phone viewports:
 `bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
 It uses the production normalized exchange, query adapter, and detail state with a
-controlled transport. Confirm a channel, type a draft, then deliver repeated empty
+controlled transport. Confirm a channel, type a draft, then fail a refresh with an
+uncoded GraphQL error: the draft stays, and the background retry recovers without
+a manual refresh. Deliver repeated empty
 cache projections: the composer must remain mounted. A fresh server absence must
 hide it, a cached positive row must leave it hidden, and a fresh grant must recover
 it. See the [desktop fixture](assets/channel-access-cache-desktop.png) and
@@ -1732,10 +1879,14 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Invite` and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. `Ask Macro` lives in the channel
-title menu (the `...` after the name, or the split title's menu) on every
-platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
+`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. On desktop both the inline
+conversation header and the split header (the channel block, which the
+Notifications preview shows) show them left to right as
+`Ask Macro`, `Invite`, `Call`, after the live viewer avatars; `Ask Macro` is the
+same button a document header shows before Share. The channel title menu (the
+`...` after the name, or the split title's menu) also offers `Ask Macro` on every
+platform; phones show it only there. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
@@ -1743,14 +1894,24 @@ recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On touch, at every width, the title menu is a
-drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Clicking the radio input can time out — click the adjacent label text
-instead.
+drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Each
+choice has one leading icon; the live `Call` choice uses the same waveform as
+its desktop tab, with no second waveform inside its label. Clicking the radio
+input can time out — click the adjacent label text instead.
+
+On phones, the active call's own channel hides the bottom floating call pill.
+Its Messages tab shows the call-in-progress banner above the composer, with
+`Return to call` for a joined call and `Join` otherwise. The banner shares the
+composer's horizontal gutters and keeps its 8px gap above the composer. Its
+success tint sits on an opaque `surface` base in light and dark themes; scroll
+messages behind it to check that message content does not show through.
+Other channels and views retain the floating pill.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
-and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Invite` buttons. An ellipsis follows the name — after the breadcrumb where
+and name, the same inset tab strip, live viewer avatars, and the `Ask Macro`,
+`Invite`, and `Call` buttons. An ellipsis follows the name — after the breadcrumb where
 the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,

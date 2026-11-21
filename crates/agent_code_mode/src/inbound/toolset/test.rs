@@ -149,7 +149,12 @@ async fn task_without_jev_reports_status_and_keeps_the_catalog() {
     assert_eq!(task.status, crate::domain::SelectionStatus::Unconfigured);
     assert!(task.entities.is_empty());
     assert!(response.tools.len() > 15);
-    assert!(response.sdk_guide.unwrap().contains("main({macro})"));
+    assert!(
+        response
+            .sdk_guide
+            .unwrap()
+            .contains("main({macro}: CodeContext)")
+    );
 }
 
 #[tokio::test]
@@ -213,6 +218,7 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
     let session = toolset().tools["ExecuteCode"].description.clone();
     let user = user_toolset().tools["ExecuteCode"].description.clone();
     for shared in [
+        include_str!("shared/never_guess.md"),
         include_str!("shared/program.md"),
         include_str!("shared/runtime.md"),
     ] {
@@ -222,6 +228,24 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
     assert!(session.contains("execution.reviews.create"));
     assert!(!user.contains("execution.reviews.create"));
     assert!(user.contains("DescribeCodeTools with task"));
+}
+
+#[test]
+fn every_code_tool_forbids_guessing_the_sdk() {
+    assert!(
+        unseen_execute_code_description().contains(include_str!("shared/never_guess.md").trim())
+    );
+    let tools = toolset().tools;
+    assert!(
+        tools["DescribeCodeTools"]
+            .description
+            .contains("Never guess a method")
+    );
+    assert!(
+        tools["ReadCodeDocs"]
+            .description
+            .contains("read a result's type before using its fields")
+    );
 }
 
 #[test]
@@ -254,4 +278,115 @@ fn symbols_from_an_index_read_as_their_own_references() {
             .read()
             .is_err()
     );
+}
+
+/// Answers every run with what it would have run, so a check is all that
+/// stands between an example and success.
+struct Accepts;
+
+#[async_trait::async_trait]
+impl code_execution::domain::CodeRunner for Accepts {
+    async fn run(
+        &self,
+        _job: code_execution::domain::ExecutionJob,
+        _events: &mut code_execution::domain::EventSink,
+        _cancellation: CancellationToken,
+    ) -> code_execution::domain::Outcome {
+        code_execution::domain::Outcome::Succeeded {
+            value: serde_json::Value::Null,
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn every_documented_example_type_checks() {
+    use code_execution::domain::{
+        EventKind, ExecuteRequest, ExecutionService, Limits, Outcome, RunEnvironment,
+    };
+
+    let root = tempfile::tempdir().unwrap();
+    let binary = tokio::process::Command::new("which")
+        .arg("deno")
+        .output()
+        .await
+        .unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let checker = code_execution::outbound::deno::check::DenoChecker::new(
+        String::from_utf8(binary.stdout).unwrap().trim().into(),
+        root.path().to_owned(),
+        2,
+        8,
+        64 * 1024,
+    )
+    .await
+    .unwrap();
+    let service = ExecutionService::new(
+        std::sync::Arc::new(Accepts),
+        std::sync::Arc::new(checker),
+        Limits::default(),
+    )
+    .unwrap();
+    // The guide topics, the compose-routines skill and the SDK's own entity
+    // guides, as models read them.
+    let guides: Vec<String> = [
+        include_str!("../../../SKILL.md").to_owned(),
+        include_str!("guides/ai.md").to_owned(),
+        include_str!("guides/templates.md").to_owned(),
+        system_skills::compose_routines::CODE.to_string(),
+    ]
+    .into_iter()
+    .chain(
+        crate::domain::sdk_documentation()
+            .iter()
+            .filter_map(|entity| entity.guide.clone()),
+    )
+    .collect();
+    let mut examples = 0;
+    for guide in &guides {
+        // A whole program in any other fence would go unchecked.
+        for fence in ["```js\n", "```javascript\n", "```ts\n"] {
+            for block in guide.split(fence).skip(1) {
+                let source = block.split("```").next().unwrap();
+                assert!(
+                    !source.contains("export async function main({macro")
+                        && !source.contains("export async function main({ macro"),
+                    "a program fenced {fence:?} isn't checked:\n{source}"
+                );
+            }
+        }
+        for block in guide.split("```typescript\n").skip(1) {
+            let source = block.split("```").next().unwrap();
+            if !source.contains("export async function main") {
+                continue;
+            }
+            examples += 1;
+            let mut handle = service
+                .execute(
+                    ExecuteRequest {
+                        source: source.into(),
+                        timeout_ms: 30_000,
+                    },
+                    // Examples may use the session and the execution.
+                    RunEnvironment {
+                        session_id: Some(uuid::Uuid::now_v7()),
+                        execution_id: Some(uuid::Uuid::now_v7()),
+                        ..RunEnvironment::default()
+                    },
+                )
+                .unwrap();
+            let outcome = loop {
+                match handle.events.recv().await.unwrap().kind {
+                    EventKind::Finished { outcome } => break outcome,
+                    _ => continue,
+                }
+            };
+            assert!(
+                matches!(outcome, Outcome::Succeeded { .. }),
+                "{source}\n{outcome:?}"
+            );
+        }
+    }
+    assert_eq!(examples, 9);
+    service.shutdown().await;
 }

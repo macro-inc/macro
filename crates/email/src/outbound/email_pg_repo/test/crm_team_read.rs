@@ -11,6 +11,8 @@ use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 use crate::outbound::email_pg_repo::dynamic::TeamReadTuning;
 use macro_user_id::cowlike::CowLike;
 
+mod viewed;
+
 const TEAM_GAMMA_ID: &str = "e0000003-0000-0000-0000-000000000003";
 const TEAM_DELTA_ID: &str = "e0000004-0000-0000-0000-000000000004";
 
@@ -229,13 +231,40 @@ async fn pages(
     limit: u32,
     read: Option<TeamReadTuning>,
 ) -> anyhow::Result<Vec<Vec<ThreadPreviewCursorDbRow>>> {
+    pages_sorted(
+        pool,
+        team,
+        caller_links,
+        caller,
+        filter,
+        limit,
+        read,
+        SimpleSortMethod::UpdatedAt,
+    )
+    .await
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "parity reader inputs plus the sort under test"
+)]
+async fn pages_sorted(
+    pool: &Pool<Postgres>,
+    team: &str,
+    caller_links: &[Uuid],
+    caller: &str,
+    filter: &Expr<EmailLiteral>,
+    limit: u32,
+    read: Option<TeamReadTuning>,
+    sort: SimpleSortMethod,
+) -> anyhow::Result<Vec<Vec<ThreadPreviewCursorDbRow>>> {
     let team = Uuid::parse_str(team)?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let filter = Arc::new(filter.clone());
     let mut pages = Vec::new();
     let mut cursor = None;
     loop {
-        let query = Query::new(cursor.take(), SimpleSortMethod::UpdatedAt, filter.clone());
+        let query = Query::new(cursor.take(), sort, filter.clone());
         let page = dynamic::dynamic_email_thread_cursor_with(
             pool,
             caller_links,
@@ -251,7 +280,7 @@ async fn pages(
             id: last.id,
             limit: limit as usize,
             val: CursorVal {
-                sort_type: SimpleSortMethod::UpdatedAt,
+                sort_type: sort,
                 last_val: last.sort_ts,
             },
             filter: filter.clone(),

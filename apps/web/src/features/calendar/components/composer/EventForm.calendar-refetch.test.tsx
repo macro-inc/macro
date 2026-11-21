@@ -15,6 +15,10 @@ import { EventForm } from './EventForm';
 
 const mocks = vi.hoisted(() => ({ listCalendars: vi.fn() }));
 
+vi.mock('@queries/calendar/first-sync', () => ({
+  useCalendarFirstSync: () => () => false,
+}));
+
 vi.mock('@service-email/client', () => ({
   emailClient: { listCalendars: mocks.listCalendars },
 }));

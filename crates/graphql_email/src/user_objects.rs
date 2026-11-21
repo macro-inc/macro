@@ -115,6 +115,8 @@ pub enum GraphqlEmailSyncStatus {
     Error,
     /// The provider grant must be reauthorized.
     NeedsReauth,
+    /// The provider serves no mailbox for the account.
+    MailboxUnavailable,
     /// Synchronization is disabled.
     Inactive,
 }
@@ -126,6 +128,7 @@ impl From<EmailSyncStatus> for GraphqlEmailSyncStatus {
             EmailSyncStatus::UpToDate => Self::UpToDate,
             EmailSyncStatus::Error => Self::Error,
             EmailSyncStatus::NeedsReauth => Self::NeedsReauth,
+            EmailSyncStatus::MailboxUnavailable => Self::MailboxUnavailable,
             EmailSyncStatus::Inactive => Self::Inactive,
         }
     }

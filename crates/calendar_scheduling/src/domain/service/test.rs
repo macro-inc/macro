@@ -71,6 +71,34 @@ impl Repository for Arc<Memory> {
             .cloned()
             .collect())
     }
+    async fn daily_bookings(
+        &self,
+        profile: Uuid,
+        event_type: Uuid,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        exclude: Option<Uuid>,
+    ) -> Result<i64, Error> {
+        let on_day = |time: DateTime<Utc>| time >= start && time < end;
+        Ok(self
+            .bookings
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|r| {
+                r.profile_id == profile
+                    && Some(r.booking.id) != exclude
+                    && r.booking.event_type_id == event_type
+                    && r.booking.status != BookingStatus::Cancelled
+                    && (on_day(r.booking.starts_at)
+                        || r.booking.status == BookingStatus::Processing
+                            && r.operation.as_ref().is_some_and(|o| {
+                                o.attempt == 0
+                                    && matches!(o.kind, CalendarOperationKind::Move { original_start, .. } if on_day(original_start))
+                            }))
+            })
+            .count() as i64)
+    }
     async fn host_booking_counts(
         &self,
         profile: Uuid,
@@ -1000,46 +1028,104 @@ async fn a_refused_create_leaves_the_booking_failed_and_never_retries() {
         .await
         .unwrap();
     assert_eq!(receipt.booking.status, BookingStatus::Failed);
+    assert!(receipt.booking.abandoned_at.is_some());
     let stored = store.booking(receipt.booking.id).await.unwrap().unwrap();
     assert!(
         stored
             .operation
             .as_ref()
-            .is_some_and(|operation| operation.abandoned_at.is_some())
+            .is_some_and(|operation| operation.abandoned_at.is_some() && operation.unsent)
     );
     make_due(&store, receipt.booking.id);
     assert!(!service.recover_once().await.unwrap());
     assert_eq!(calendars.create_attempts.load(Ordering::SeqCst), 1);
-    assert_eq!(
-        service
-            .receipt(receipt.booking.id, receipt.token)
-            .await
-            .unwrap()
-            .booking
-            .status,
-        BookingStatus::Failed
-    );
-    // Nothing owns it any more, so it can be cancelled. A calendar that
-    // refuses the cancellation too keeps the reservations, as lost access
-    // always has; once it accepts, the cancellation frees the time.
+    let shown = service
+        .receipt(receipt.booking.id, receipt.token)
+        .await
+        .unwrap()
+        .booking;
+    assert_eq!(shown.status, BookingStatus::Failed);
+    assert!(shown.abandoned_at.is_some());
+    // Nothing owns it any more, so it can be cancelled. The refused create
+    // never reached the calendar, so the cancellation frees the time without
+    // asking it, even while the calendar refuses changes.
     calendars.reject_cancels.store(true, Ordering::SeqCst);
-    assert_eq!(
-        service
+    let cancelled = service
+        .cancel(receipt.booking.id, Some(receipt.token), None)
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status, BookingStatus::Cancelled);
+    assert!(cancelled.abandoned_at.is_none());
+}
+
+/// A refusal whose completion write fails returns the processing receipt
+/// storage still holds, without the unsaved abandonment.
+#[tokio::test]
+async fn an_unsaved_abandonment_stays_off_the_receipt() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar {
+        reject_creates: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    store.fail_completion.store(true, Ordering::SeqCst);
+    let receipt = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    assert_eq!(receipt.booking.status, BookingStatus::Processing);
+    assert!(receipt.booking.abandoned_at.is_none());
+}
+
+/// A create whose earlier attempt may have landed can only be cancelled
+/// through the calendar. A calendar that refuses the cancellation too keeps
+/// the reservations, as lost access always has; once it accepts, the
+/// cancellation frees the time.
+#[tokio::test]
+async fn an_abandoned_create_that_may_have_landed_cancels_through_the_calendar() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar {
+        lose_create_response: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let receipt = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    assert!(receipt.booking.abandoned_at.is_none());
+    calendars.reject_creates.store(true, Ordering::SeqCst);
+    make_due(&store, receipt.booking.id);
+    assert!(service.recover_once().await.unwrap());
+    let stored = store.booking(receipt.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.status, BookingStatus::Failed);
+    assert!(stored.booking.abandoned_at.is_some());
+    assert!(
+        stored
+            .operation
+            .as_ref()
+            .is_some_and(|operation| operation.abandoned_at.is_some() && !operation.unsent)
+    );
+    calendars.reject_cancels.store(true, Ordering::SeqCst);
+    // The second refusal follows a cancellation refused on its first
+    // attempt: only a refused create skips the calendar, so it stays held.
+    for _ in 0..2 {
+        let refused = service
             .cancel(receipt.booking.id, Some(receipt.token), None)
             .await
-            .unwrap()
-            .status,
-        BookingStatus::Failed
-    );
+            .unwrap();
+        assert_eq!(refused.status, BookingStatus::Failed);
+        assert!(refused.abandoned_at.is_some());
+    }
     calendars.reject_cancels.store(false, Ordering::SeqCst);
-    assert_eq!(
-        service
-            .cancel(receipt.booking.id, Some(receipt.token), None)
-            .await
-            .unwrap()
-            .status,
-        BookingStatus::Cancelled
-    );
+    let cancelled = service
+        .cancel(receipt.booking.id, Some(receipt.token), None)
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status, BookingStatus::Cancelled);
+    assert!(cancelled.abandoned_at.is_none());
 }
 
 /// A calendar that keeps failing in a way that may clear, such as an outage
@@ -1141,6 +1227,108 @@ async fn a_refused_move_keeps_the_booking_at_its_original_time() {
         .unwrap();
     assert_eq!(moved.booking.starts_at, next);
     assert_eq!(moved.booking.reschedule_count, 1);
+}
+
+#[tokio::test]
+async fn slots_stay_closed_on_a_full_day_while_a_move_out_of_it_awaits_the_calendar() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let mut p = profile(None);
+    p.event_types[0].daily_limit = Some(1);
+    let p = service.save("admin", None, p).await.unwrap();
+    let event = p.event_types[0].id;
+    let r = service.book(p.id, event, request()).await.unwrap();
+    let day = r.booking.starts_at.date_naive();
+    let next_day = day + Duration::days(1);
+    assert!(service.slots(p.id, event, day).await.unwrap().is_empty());
+    assert!(
+        !service
+            .slots(p.id, event, next_day)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    // The booking is moving to the next day and the calendar has not
+    // answered: a refusal would bring it back, so its first day stays full.
+    {
+        let mut data = store.bookings.lock().unwrap();
+        let moving = data.get_mut(&r.booking.id).unwrap();
+        moving.operation = Some(CalendarOperation::new(CalendarOperationKind::Move {
+            status: moving.booking.status,
+            original_start: moving.booking.starts_at,
+        }));
+        moving.booking.status = BookingStatus::Processing;
+        moving.booking.starts_at += Duration::days(1);
+        moving.booking.ends_at += Duration::days(1);
+        moving.busy_start += Duration::days(1);
+        moving.busy_end += Duration::days(1);
+    }
+    assert!(service.slots(p.id, event, day).await.unwrap().is_empty());
+    assert!(
+        service
+            .slots(p.id, event, next_day)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn reschedule_offers_no_times_on_a_day_already_at_its_limit() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let mut p = profile(None);
+    p.event_types[0].daily_limit = Some(1);
+    let p = service.save("admin", None, p).await.unwrap();
+    let event = p.event_types[0].id;
+    let first_day = request();
+    let mut later = request();
+    later.starts_at += Duration::days(1);
+    let moving = service.book(p.id, event, later).await.unwrap();
+    let full_day = first_day.starts_at.date_naive();
+    let own_day = moving.booking.starts_at.date_naive();
+    // Before anyone books it, the other day offers replacement times.
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let full = service.book(p.id, event, first_day).await.unwrap();
+    // The full day offers nothing and refuses the move; the booking's own day
+    // still offers other times, since it never takes a place from itself.
+    assert!(
+        service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        service
+            .host_replacement_slots("admin", moving.booking.id, full_day)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        service
+            .reschedule(
+                moving.booking.id,
+                moving.token,
+                full.booking.starts_at + Duration::hours(1)
+            )
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, own_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// A move whose first attempt failed without a recorded outcome may have

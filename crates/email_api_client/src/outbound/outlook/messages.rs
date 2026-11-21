@@ -6,13 +6,13 @@ use uuid::Uuid;
 
 use super::{
     OutlookApiClientRepository,
-    transport::{invalid_response, read_json},
+    transport::{GraphFailure, invalid_response, read_json},
     wire,
 };
 use crate::domain::models::{
-    AccessToken, Attention, EmailApiError, FolderRole, MailFolder, MailboxMessage, MailboxState,
-    MessageAction, MessageWithCalendarParts, MessageWriteReceipt, ProviderId, StreamToken,
-    SubmissionOutcome,
+    AccessToken, Attention, EmailApiError, FolderRole, MailFolder, MailFolderCatalog,
+    MailboxMessage, MailboxState, MessageAction, MessageWithCalendarParts, MessageWriteReceipt,
+    ProviderId, StreamToken, SubmissionOutcome,
 };
 use crate::domain::ports::{MailboxActionWriter, MailboxCalendarClient, MailboxContentReader};
 
@@ -89,10 +89,25 @@ impl MailboxContentReader for OutlookApiClientRepository {
             Err(error) => Err(error),
         }
     }
-    async fn folders(&self, token: &AccessToken) -> Result<Vec<MailFolder>, EmailApiError> {
-        let mut roles = Vec::new();
+    async fn folders(&self, token: &AccessToken) -> Result<MailFolderCatalog, EmailApiError> {
+        // Every mailbox has an Inbox. Graph answers 404 to it only when the
+        // account has no mailbox it will serve, and then to every other
+        // mailbox call too.
+        let inbox = self.endpoint(&["me", "mailFolders", "inbox"])?;
+        let inbox: wire::Folder = match self
+            .graph_request(token, Method::GET, inbox, None, None)
+            .await
+        {
+            Ok(response) => read_json(response).await?,
+            Err(GraphFailure {
+                error: EmailApiError::NotFound,
+                code,
+                ..
+            }) => return Ok(MailFolderCatalog::NoMailbox { error_code: code }),
+            Err(failure) => return Err(failure.error),
+        };
+        let mut roles = vec![(inbox.id, FolderRole::Inbox)];
         for (name, role) in [
-            ("inbox", FolderRole::Inbox),
             ("sentitems", FolderRole::Sent),
             ("drafts", FolderRole::Drafts),
             ("archive", FolderRole::Archive),
@@ -168,7 +183,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 }
             }
         }
-        Ok(result)
+        Ok(MailFolderCatalog::Folders(result))
     }
 
     async fn message(
@@ -359,8 +374,8 @@ pub(super) fn normalize(
     let folder_id = source.parent_folder_id.map(ProviderId::new).transpose()?;
     let role = MailFolder::effective_role(folders, folder_id.as_ref());
     let state = MailboxState {
-        is_read: source.is_read,
-        is_draft: source.is_draft,
+        is_read: source.is_read.unwrap_or(false),
+        is_draft: source.is_draft.unwrap_or(false),
         is_flagged: source.flag.flag_status.as_deref() == Some("flagged"),
         in_inbox: role == FolderRole::Inbox,
         in_trash: role == FolderRole::Trash,

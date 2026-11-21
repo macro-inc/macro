@@ -72,6 +72,7 @@ function fail(error: unknown) {
 button.onclick = async () => {
   try {
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query,
       operationName: 'Senders',
       variables: { input: { limit: 1, cursor: 'next' } },
@@ -86,6 +87,7 @@ button.onclick = async () => {
 
 try {
   await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
     query,
     operationName: 'Senders',
     variables,

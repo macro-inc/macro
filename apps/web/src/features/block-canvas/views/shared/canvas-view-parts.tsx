@@ -351,6 +351,8 @@ function Surface(props: {
   longPress?: () => ((point: Point) => void) | undefined;
   /** Lay the selection's handles out for fingers. */
   touchHandles?: boolean;
+  /** One finger pans instead of going to the tool. */
+  fingerPans?: () => boolean;
 }) {
   const view = useCanvasView();
   const { state, editor } = view;
@@ -499,6 +501,7 @@ function Surface(props: {
           onShapeCreated: state.shapeCreated,
           longPress: () => props.longPress?.(),
           touchHandles: props.touchHandles,
+          fingerPans: () => !!props.fingerPans?.(),
         }}
         gridColor={
           state.grid()

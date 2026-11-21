@@ -6,6 +6,7 @@ import {
   testFacets,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { DateValue } from '@core/util/date';
 import {
@@ -109,9 +110,11 @@ export function useFocusEmailSource(
 ): EmailDataSource {
   const notificationSource = useGlobalNotificationSource();
   const tabAvailability = useEmailTabAvailability();
+  const analytics = useAnalytics();
   // Never read Focus while its flags are off or still loading.
   const focus = useEmailFocusQuery(
-    () => state.tab === 'focus' && tabAvailability('focus') === 'on'
+    () => state.tab === 'focus' && tabAvailability('focus') === 'on',
+    (threads) => analytics.track('email_focus_tab_opened', { threads })
   );
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();

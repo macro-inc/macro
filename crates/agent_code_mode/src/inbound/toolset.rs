@@ -78,6 +78,8 @@ const SESSION_EXECUTE_CODE: &str = include_str!("toolset/session/execute_code.md
 const SESSION_PRESENT: &str = include_str!("toolset/session/present.md");
 /// Checking back later without waiting in a program.
 const SESSION_CHECK_BACK: &str = include_str!("toolset/session/check_back.md");
+/// Read the SDK instead of guessing it; both hosts' ExecuteCode carry it.
+const NEVER_GUESS: &str = include_str!("toolset/shared/never_guess.md");
 const PROGRAM: &str = include_str!("toolset/shared/program.md");
 const RUNTIME: &str = include_str!("toolset/shared/runtime.md");
 
@@ -90,16 +92,16 @@ const REVIEWS_RESULT: &str = " Optional reviews: [{kind: \"email\" | \"calendar\
 /// full description.
 pub fn unseen_execute_code_description() -> String {
     let running = SESSION_EXECUTE_CODE.replacen(REVIEWS_RESULT, "", 1);
-    format!("{running}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
+    format!("{running}\n{NEVER_GUESS}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
 }
 
-/// Execute a JavaScript module with the real Macro SDK.
+/// Execute a type-checked TypeScript module with the real Macro SDK.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
         SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
     )
@@ -118,9 +120,9 @@ pub struct ExecuteCode {
     /// Copy the current server-issued turn_id from the prompt's execution context.
     /// Never reuse an ID from another turn or discover a replacement for a stale call.
     pub turn_id: macro_uuid::Uuid,
-    /// A JavaScript ES module, with imports and an exported async main function.
+    /// A TypeScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
+        description = "TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}: CodeContext) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -167,7 +169,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
     }
 }
 
-/// Execute a JavaScript module with the real Macro SDK as the signed-in user.
+/// Execute a type-checked TypeScript module with the real Macro SDK as the signed-in user.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
@@ -175,15 +177,17 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
     description = concat!(
         include_str!("toolset/user/execute_code.md"),
         "\n",
+        include_str!("toolset/shared/never_guess.md"),
+        "\n",
         include_str!("toolset/shared/program.md"),
         "\n",
         include_str!("toolset/shared/runtime.md")
     )
 )]
 pub struct UserExecuteCode {
-    /// A JavaScript ES module, with imports and an exported async main function.
+    /// A TypeScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Export async function main({macro}) { return {data: ...}; }. Optional imports: {Macro} from '@macro-inc/sdk' and Handlebars from 'handlebars'. Dependencies are preinstalled; no TypeScript syntax or package downloads. Never return or log the token main receives."
+        description = "TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Export async function main({macro}: CodeContext) { return {data: ...}; }. Optional imports: {Macro} from '@macro-inc/sdk' and Handlebars from 'handlebars'. Dependencies are preinstalled; no package downloads. Never return or log the token main receives."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -230,7 +234,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "DescribeCodeTools",
-    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
+    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
 )]
 pub struct DescribeCodeTools {
     /// What the next program must do; selects relevant references.
@@ -456,7 +460,7 @@ impl DescribeCodeTools {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ReadCodeDocs",
-    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way."
+    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way."
 )]
 pub struct ReadCodeDocs {
     /// Symbols exactly as an index or reference names them.

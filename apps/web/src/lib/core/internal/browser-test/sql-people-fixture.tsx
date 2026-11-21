@@ -58,6 +58,8 @@ export function SqlPeopleFixture() {
               ),
             fetchPage: async (cache, scope, after, signal) => {
               signal.throwIfAborted();
+              if (!host.authority) throw new Error('Missing cache authority');
+              const generation = (await host.authority.current()).generation;
               const guarded = await captureContactWriteScope(
                 cache,
                 scope,
@@ -88,6 +90,7 @@ export function SqlPeopleFixture() {
               });
               const nextCursor = end === 1001 ? null : String(end);
               await cache.hydrateQuery({
+                generation,
                 query:
                   '{ user { id contacts(limit: 500) { nodes { __typename id userId name email } nextCursor } } }',
                 data: { user: { id: viewer, contacts: { nodes, nextCursor } } },

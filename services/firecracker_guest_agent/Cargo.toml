@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "firecracker_guest_agent"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "firecracker-guest-agent"
+path = "src/main.rs"
+
+[dependencies]
+firecracker_host_api = { path = "../../crates/firecracker_host_api" }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tokio-vsock = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync"] }

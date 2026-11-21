@@ -11,16 +11,16 @@ fixtures `seed_cli` and Playwright use.
 
 - `README.md`: how to run tests against a fresh or already-running stack, and
   which env vars they read (`LOCAL_E2E_DATABASE_URL`,
-  `LOCAL_E2E_DOCUMENT_STORAGE_URL`).
+  `LOCAL_E2E_DOCUMENT_STORAGE_URL`, `LOCAL_E2E_AUTHENTICATION_URL`).
 - `tests/`: one file per scenario (`bot_entity_access.rs`,
-  `channel_mutations.rs`, `channel_websocket.rs`).
+  `channel_mutations.rs`, `channel_websocket.rs`, `email_code_signup.rs`).
 - `tests/support/`: shared HTTP and websocket helpers.
 - `src/lib.rs`: thin — most logic lives under `tests/`.
 
 ## Scope
 
 - Owns: full-stack Rust integration tests that need a running local stack
-  (Postgres, DSS, gateway).
+  (Postgres, DSS, gateway, authentication service).
 - Not here: unit/integration tests scoped to one crate — those live beside
   their crate.
 

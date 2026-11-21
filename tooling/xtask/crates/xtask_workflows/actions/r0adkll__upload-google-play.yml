@@ -1,0 +1,60 @@
+name: Upload Android Release to Play Store
+description: An action to upload a signed Android release (.apk or .aab) to the Google Play Store Developer Console
+inputs:
+  serviceAccountJson:
+    description: The service account json private key file to authorize the upload request
+    required: false
+  serviceAccountJsonPlainText:
+    description: The raw json text of the service account private key to authorize the upload request
+    required: false
+  packageName:
+    description: The package name, or Application Id, of the app you are uploading
+    required: true
+  releaseFile:
+    description: The Android release file to upload (.apk or .aab)
+    required: false
+  releaseFiles:
+    description: The Android release file(s) to upload (.apk or .aab). Separated by  a ',' for multiple artifacts. Supports glob
+    required: false
+  releaseName:
+    description: The name of this release. If not set it's generated automatically from the APKs versionName
+    required: false
+  track:
+    description: The track in which you want to assign the uploaded app.
+    required: false
+  tracks:
+    description: The track(s) in which you want to assign the uploaded app.
+    required: false
+  inAppUpdatePriority:
+    description: In-app update priority of the release. All newly added APKs in the release will be considered at this priority. Can take values in the range [0, 5], with 5 the highest priority. Defaults to 0.
+    default: '0'
+    required: false
+  userFraction:
+    description: Portion of users who should get the staged version of the app. Accepts values between 0.0 and 1.0 (exclusive-exclusive).
+    required: false
+  status:
+    description: Release status. This can be set to 'draft' to complete the release at some other time.
+    required: true
+    default: completed
+  whatsNewDirectory:
+    description: The directory of localized whats new files
+    required: false
+  mappingFile:
+    description: The mapping.txt file used to de-obfuscate your stack traces from crash reports
+    required: false
+  debugSymbols:
+    description: The native-debug-symbols.zip file or folder that contains your debug symbols
+    required: false
+  changesNotSentForReview:
+    description: Indicates that the changes in this edit will not be reviewed until they are explicitly sent for review from the Google Play Console
+    default: 'false'
+    required: false
+  existingEditId:
+    description: The ID of an existing edit that has not been completed. If this is supplied, the action will append information to that rather than creating an edit
+    required: false
+  versionCodesToRetain:
+    description: Version codes to retain from previous releases. Separated by a ','.
+    required: false
+outputs:
+  internalSharingDownloadUrl:
+    description: The internal app sharing download url if track was 'internalsharing'

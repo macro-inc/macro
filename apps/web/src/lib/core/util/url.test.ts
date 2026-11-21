@@ -165,6 +165,44 @@ describe('openExternalUrl', () => {
     );
   });
 
+  it.each([
+    'javascript:alert(1)',
+    ' JavaScript:alert(1)',
+    '\u0001javascript:alert(1)',
+    'java\tscript:alert(1)',
+    'vbscript:msgbox(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'blob:https://example.com/0b7d2c52',
+    'file:///etc/passwd',
+  ])('refuses to open %j on any platform', (url) => {
+    const interceptor = vi.fn(() => false);
+    register(interceptor);
+
+    for (const [tauri, mobile] of [
+      [false, undefined],
+      [true, undefined],
+      [true, 'ios'],
+    ] as const) {
+      platform.tauri = tauri;
+      platform.mobile = mobile;
+      openExternalUrl(url);
+    }
+
+    expect(interceptor).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'tel:100',
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
+    '/app/md/2b6a1f0e',
+  ])('still opens %j', (url) => {
+    openExternalUrl(url);
+
+    expect(openSpy).toHaveBeenCalledWith(url, '_blank', 'noopener,noreferrer');
+  });
+
   it('navigates in place on mobile, where only navigation reaches native', () => {
     platform.tauri = true;
     platform.mobile = 'ios';

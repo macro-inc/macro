@@ -229,6 +229,33 @@ describe('command menu database categories', () => {
   });
 });
 
+describe('command menu agents category', () => {
+  it('lists recent agent sessions in Agents', () => {
+    const { result, setItems, setLoading, setCategory } = setup();
+    const session: QuickAccessItem = {
+      id: 'session',
+      kind: 'entity',
+      bucket: 'agent_session',
+      searchText: 'Fix the build',
+      sortTimestamp: 1,
+      timestamps: { viewedAt: '2026-11-18T00:00:00Z' },
+      data: {
+        type: 'agent_session',
+        id: 'session',
+        name: 'Fix the build',
+        ownerId: 'owner',
+        botId: 'bot',
+        status: 'idle',
+      },
+    };
+    setItems([session]);
+    setLoading(false);
+    setCategory('chats');
+    expect(mocks.requestedBuckets).toContain('agent_session');
+    expect(result.items()).toContain(session);
+  });
+});
+
 it('keeps desktop All email-free while mobile composes emails without desktop command state', () => {
   const { result, setEntityMode, setItems } = setup();
   result.items();
