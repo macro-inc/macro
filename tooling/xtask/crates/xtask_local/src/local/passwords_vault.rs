@@ -45,12 +45,17 @@ pub fn stage_config(dir: &Path) -> Result<()> {
     for (name, source) in CONFIG_FILES {
         let source = repo_root().join(source);
         let target = dir.join(name);
-        std::fs::copy(&source, &target)
-            .with_context(|| format!("copying {} to {}", source.display(), target.display()))?;
-        // `copy` keeps the source's mode on a new file and leaves an
-        // existing file's mode alone, so set it explicitly.
-        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o644))
-            .with_context(|| format!("setting the mode of {}", target.display()))?;
+        let staging = dir.join(format!("{name}.tmp"));
+
+        // `copy` gives the copy the source's private mode, so set it before
+        // renaming. The rename swaps the inode rather than rewriting the one a
+        // running container has mounted.
+        std::fs::copy(&source, &staging)
+            .with_context(|| format!("copying {} to {}", source.display(), staging.display()))?;
+        std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o644))
+            .with_context(|| format!("setting the mode of {}", staging.display()))?;
+        std::fs::rename(&staging, &target)
+            .with_context(|| format!("replacing {}", target.display()))?;
     }
 
     Ok(())
