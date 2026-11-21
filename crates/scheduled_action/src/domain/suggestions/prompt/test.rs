@@ -218,7 +218,10 @@ fn a_drafting_session_drafts_for_each_stream_found() {
     assert!(!brief.contains("A catalog routine: "));
     assert!(!brief.contains(COUNT));
     assert!(brief.contains("<routines-guide>"));
-    assert!(brief.ends_with(&format!("<untrusted>\n{}\n</untrusted>", list.to_brief())));
+    assert!(brief.ends_with(&format!(
+        "<untrusted>\n\n```json\n{}\n```\n\n</untrusted>",
+        list.to_brief()
+    )));
     // A monthly stream on the list is work too; the picker reads only the
     // newest mail, so a stream seen only before it is drafted.
     assert!(brief.contains(&format!("A routine the catalog lacks, {LISTED_STREAM}:")));

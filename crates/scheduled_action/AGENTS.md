@@ -248,7 +248,9 @@ each run.
   `SuggestionSources::inbox_window`, beside what they sent in those days, up
   to `SENT_MESSAGES` with the text of the newest `SENT_TEXTS`, through
   `SuggestionSources::sent_window`; the answer bounded by `WorkList::from_answer`
-  and passed inside `<untrusted>` tags), and drafts one routine per stream
+  and passed inside `<untrusted>` tags in a fenced `json` block, which the
+  harness's Markdown round trip leaves as written: `WorkList::to_brief`
+  writes `&` and backticks as JSON escapes), and drafts one routine per stream
   the catalog lacks, at most `MAX_DRAFTS`. The list is stored nowhere; its
   fields (senders, cadence, what each asks, what the person does with it and
   to whom, who already handles it) are

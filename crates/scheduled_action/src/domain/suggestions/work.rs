@@ -295,9 +295,15 @@ impl WorkList {
             .collect()
     }
 
-    /// The list as a session reads it: one JSON value.
+    /// The list as a session reads it: one JSON value, for a fenced block,
+    /// which the harness's Markdown round trip leaves as written. It writes
+    /// `&` as `&amp;` there, and a run of backticks would close the fence, so
+    /// both are JSON escapes (they only occur inside strings).
     pub fn to_brief(&self) -> String {
-        serde_json::to_string(self).unwrap_or_default()
+        serde_json::to_string(self)
+            .unwrap_or_default()
+            .replace('&', "\\u0026")
+            .replace('`', "\\u0060")
     }
 }
 

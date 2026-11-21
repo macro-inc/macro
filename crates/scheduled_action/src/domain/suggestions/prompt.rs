@@ -249,7 +249,11 @@ pub fn brief(data: &BriefData<'_>) -> String {
 
 The streams of work a step found in the user's last {WORK_DAYS} days of mail, those they would most regret missing first:
 <untrusted>
+
+```json
 {}
+```
+
 </untrusted>",
             list.to_brief()
         ),

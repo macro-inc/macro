@@ -105,6 +105,22 @@ fn a_word_outside_what_people_do_is_unknown() {
     assert!(list.to_brief().contains(r#""does":"unknown""#));
 }
 
+/// The harness's Markdown round trip writes `&` in a fenced block as
+/// `&amp;`, and backticks could close the fence: the brief has neither, and
+/// still reads as the same list.
+#[test]
+fn the_brief_holds_no_character_the_round_trip_changes_in_a_fence() {
+    let mut odd = stream("Orders & returns ``` fence");
+    odd["what"] = json!(r"Pay INV_7 by \& Friday, see https://pay.example/?a=1&b=2");
+    let list = WorkList::from_answer(json!({ "person": "A baker", "streams": [odd] })).unwrap();
+    let brief = list.to_brief();
+    assert!(!brief.contains('&') && !brief.contains('`'), "{brief}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&brief).unwrap(),
+        serde_json::to_value(&list).unwrap()
+    );
+}
+
 #[test]
 fn mail_cannot_close_its_tag_for_the_finding_call() {
     let prompt = prompt(
