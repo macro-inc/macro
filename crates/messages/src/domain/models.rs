@@ -461,6 +461,11 @@ pub struct Message {
     pub parent: MessageParent,
     /// Root message UUID for replies; absent on roots.
     pub thread_id: Option<Uuid>,
+    /// Historical reply position; retained internally without changing REST payloads.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[cfg_attr(feature = "json-schema", schemars(skip))]
+    pub import_order: Option<i64>,
     /// What this message is.
     #[serde(default)]
     pub kind: MessageKind,

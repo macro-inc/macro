@@ -5088,6 +5088,8 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
+ "messages",
+ "mockall",
  "model-entity",
  "model_notifications",
  "model_owner",
@@ -5112,6 +5114,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "work_feed",
  "workspace-hack",
@@ -6931,6 +6934,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_channel",
  "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
@@ -9656,13 +9660,18 @@ dependencies = [
 name = "graphql_channel"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-graphql",
  "channels",
  "chrono",
  "entity_access",
  "graphql_common",
  "macro_user_id",
+ "messages",
+ "nom 8.0.0",
+ "serde_json",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

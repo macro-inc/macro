@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\" FROM (\n    SELECT * FROM (\n        (SELECT key.id, key.import_order, key.created_at FROM (\n            SELECT m.id, m.import_order, m.created_at FROM comms_messages m\n            WHERE m.thread_id = $3 AND m.import_order IS NOT NULL\n              AND (m.import_order, m.created_at, m.id) < ($4, $5, $6)\n            ORDER BY m.import_order DESC NULLS FIRST, m.created_at DESC, m.id DESC\n            OFFSET 0\n        ) key\n        WHERE $4::bigint IS NOT NULL AND EXISTS (\n            SELECT 1 FROM comms_messages scope\n            WHERE scope.id = key.id AND scope.parent_entity_type = $1\n              AND scope.parent_entity_id = $2 AND scope.deleted_at IS NULL\n            OFFSET 0\n        )\n        ORDER BY key.import_order DESC NULLS FIRST, key.created_at DESC, key.id DESC\n        LIMIT $11)\n        UNION ALL\n        (SELECT key.id, key.import_order, key.created_at FROM (\n            SELECT m.id, m.import_order, m.created_at FROM comms_messages m\n            WHERE m.thread_id = $3 AND m.import_order IS NOT NULL\n            ORDER BY m.import_order DESC NULLS FIRST, m.created_at DESC, m.id DESC\n            OFFSET 0\n        ) key\n        WHERE $7::boolean AND EXISTS (\n            SELECT 1 FROM comms_messages scope\n            WHERE scope.id = key.id AND scope.parent_entity_type = $1\n              AND scope.parent_entity_id = $2 AND scope.deleted_at IS NULL\n            OFFSET 0\n        )\n        ORDER BY key.import_order DESC NULLS FIRST, key.created_at DESC, key.id DESC\n        LIMIT $11)\n        UNION ALL\n        (SELECT key.id, key.import_order, key.created_at FROM (\n            SELECT m.id, m.import_order, m.created_at FROM comms_messages m\n            WHERE m.thread_id = $3 AND m.import_order IS NULL\n              AND (m.created_at, m.id) < ($8, $9)\n            ORDER BY m.import_order DESC NULLS FIRST, m.created_at DESC, m.id DESC\n            OFFSET 0\n        ) key\n        WHERE $8::timestamptz IS NOT NULL AND EXISTS (\n            SELECT 1 FROM comms_messages scope\n            WHERE scope.id = key.id AND scope.parent_entity_type = $1\n              AND scope.parent_entity_id = $2 AND scope.deleted_at IS NULL\n            OFFSET 0\n        )\n        ORDER BY key.import_order DESC NULLS FIRST, key.created_at DESC, key.id DESC\n        LIMIT $11)\n        UNION ALL\n        (SELECT key.id, key.import_order, key.created_at FROM (\n            SELECT m.id, m.import_order, m.created_at FROM comms_messages m\n            WHERE m.thread_id = $3 AND m.import_order IS NULL\n            ORDER BY m.import_order DESC NULLS FIRST, m.created_at DESC, m.id DESC\n            OFFSET 0\n        ) key\n        WHERE $10::boolean AND EXISTS (\n            SELECT 1 FROM comms_messages scope\n            WHERE scope.id = key.id AND scope.parent_entity_type = $1\n              AND scope.parent_entity_id = $2 AND scope.deleted_at IS NULL\n            OFFSET 0\n        )\n        ORDER BY key.import_order DESC NULLS FIRST, key.created_at DESC, key.id DESC\n        LIMIT $11)\n    ) positions\n    ORDER BY positions.import_order DESC NULLS FIRST, positions.created_at DESC, positions.id DESC\n    LIMIT $11\n) page\nJOIN comms_messages m ON m.id = page.id\nORDER BY page.import_order DESC NULLS FIRST, page.created_at DESC, page.id DESC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5ad36c6c53b17bb8b5cd015f8c22fb4445a767b2a8970927de1751930b893aa0"
+}
