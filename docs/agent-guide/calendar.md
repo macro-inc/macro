@@ -1642,4 +1642,8 @@ events, RSVP, accept join requests, or confirm event replacements: these paths
 can email participants. Verify that a guestless confirmed create followed by
 `inviteGuests` returns 403 on the invitation and sends nothing. The same
 restriction applies to attendee patches, ordinary event patches, deletes and
-RSVPs. Calendar reads and adding a shared-event snapshot stay available.
+RSVPs. Host booking cancellation, rescheduling and approval are also refused,
+and mention programs can't obtain booking manage tokens. Ordinary host reads
+and booking insights stay available, as do calendar reads and adding a
+shared-event snapshot. Public booker cancellation and rescheduling keep their
+existing token authorization.

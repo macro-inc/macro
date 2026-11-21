@@ -4074,6 +4074,7 @@ dependencies = [
 name = "calendar_scheduling"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4094,6 +4095,7 @@ dependencies = [
  "teams",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",

@@ -925,4 +925,4 @@ fn day_bounds(
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

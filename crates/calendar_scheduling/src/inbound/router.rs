@@ -1,4 +1,6 @@
 //! Thin HTTP routes; membership, availability, and write policy live in the service.
+mod mention;
+
 use crate::domain::{
     booking_links::{BookingLink, BookingLinkDraft, BookingLinkListing, BookingLinks},
     insights::{BookingInsights, InsightQuery},
@@ -61,7 +63,6 @@ pub fn router<
             get(settings::<R, C, D, A>).put(save::<R, C, D, A>),
         )
         .route("/bookings", get(bookings::<R, C, D, A>))
-        .route("/insights", post(insights::<R, C, D, A>))
         .route(
             "/links",
             get(list_links::<R, C, D, A>).post(create_link::<R, C, D, A>),
@@ -73,6 +74,10 @@ pub fn router<
         .route("/bookings/{id}/approve", post(approve::<R, C, D, A>))
         .route("/bookings/{id}/attendance", post(attendance::<R, C, D, A>))
         .route("/bookings/{id}/cancel", post(cancel::<R, C, D, A>))
+        .route_layer(axum::middleware::from_fn(mention::refuse_host_management))
+        // Insights only read bookings. Public booker capabilities keep their
+        // own authorization and must not inherit the signed-mention guard.
+        .route("/insights", post(insights::<R, C, D, A>))
         .route("/public/{profile}", get(public_profile::<R, C, D, A>))
         .route("/public/{profile}/{event}/slots", get(slots::<R, C, D, A>))
         .route("/public/{profile}/{event}/book", post(book::<R, C, D, A>))

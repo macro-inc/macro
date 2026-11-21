@@ -7,7 +7,7 @@ use std::{
     },
 };
 #[derive(Default)]
-struct Memory {
+pub(crate) struct Memory {
     fail_completion: AtomicBool,
     reserve_barrier: Option<tokio::sync::Barrier>,
     reserve_calls: AtomicUsize,
@@ -225,7 +225,7 @@ impl Repository for Arc<Memory> {
     }
 }
 #[derive(Default)]
-struct Calendar {
+pub(crate) struct Calendar {
     creates: AtomicUsize,
     create_attempts: AtomicUsize,
     reject_creates: AtomicBool,
@@ -292,7 +292,7 @@ impl Calendars for Arc<Calendar> {
         Ok(())
     }
 }
-struct Members;
+pub(crate) struct Members;
 impl Directory for Members {
     async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
         Ok(vec![])
@@ -310,8 +310,8 @@ impl Directory for Members {
         ])
     }
 }
-type TestService = Service<Arc<Memory>, Arc<Calendar>, Members>;
-fn profile(team: Option<Uuid>) -> Profile {
+pub(crate) type TestService = Service<Arc<Memory>, Arc<Calendar>, Members>;
+pub(crate) fn profile(team: Option<Uuid>) -> Profile {
     let schedule = Schedule {
         id: Uuid::new_v4(),
         name: "Work".into(),
@@ -367,7 +367,7 @@ fn profile(team: Option<Uuid>) -> Profile {
         revision: 0,
     }
 }
-fn request() -> BookingRequest {
+pub(crate) fn request() -> BookingRequest {
     BookingRequest {
         starts_at: (Utc::now().date_naive() + Duration::days(2))
             .and_hms_opt(10, 0, 0)

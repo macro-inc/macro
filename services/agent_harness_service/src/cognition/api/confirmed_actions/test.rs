@@ -1,5 +1,3 @@
-mod channel_bot;
-
 use super::*;
 use crate::cognition::api::context::test::{authorized_request, test_api_context};
 use axum::{Router, routing::post};

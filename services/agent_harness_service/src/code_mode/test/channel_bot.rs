@@ -1,5 +1,4 @@
-use super::*;
-use crate::cognition::api::context::test::ADMISSION_TEST_USER;
+use crate::cognition::api::context::test::{ADMISSION_TEST_USER, test_api_context};
 use agent_code_mode::domain::{
     CodeModeError, ExecutionStatus, MentionCodeMode, MentionContext, UserExecutionReceipt,
 };
@@ -9,8 +8,10 @@ use channel_bots::{
     outbound::{AgentLoopResponder, code_mode::ChannelBotTools},
 };
 use code_execution::domain::ExecuteRequest;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
+use serde_json::json;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 

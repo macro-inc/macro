@@ -34,6 +34,11 @@ The web entry points are Settings → Calendar, the calendar header shortcuts,
 owners/admins can manage team scheduling; members have read access. Current
 membership is checked again when booking or approving. Booking capabilities travel
 in request headers/bodies, and scheduling responses disable caching.
+Signed channel-mention programs cannot write host settings or change bookings,
+nor obtain a booker's token through the host manage endpoint. Host reads and
+insights stay available. Public booking, cancellation and rescheduling retain
+their existing public or booker-token authorization.
+
 
 Event types start paused. Public pages show enabled types only. Team availability
 uses the selected shared weekly schedule plus every selected host's busy calendar

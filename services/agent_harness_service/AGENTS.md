@@ -226,6 +226,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   executes; an event without guests is created. Calendar mutation routes also
   refuse mention programs' existing-event updates, cancellations, RSVPs, guest
   invitations, join-request answers and replacement confirmations.
+  Composed classic-mention responder tests live in `src/code_mode/test/channel_bot.rs`.
   A scoped hidden session's or a channel-mention program's chat messages and
   structured completions take no tools
   (`tool_selection::tools_refused_to_current_session`): tools run with the

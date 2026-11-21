@@ -1,3 +1,5 @@
+mod channel_bot;
+
 use super::*;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::testing::test_agent_session;
