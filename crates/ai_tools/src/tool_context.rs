@@ -29,6 +29,7 @@ use chat::outbound::postgres::PgChatRepo;
 pub use cognition::inbound::toolset::CognitionToolContext as ToolCognitionToolContext;
 use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
+use contacts::domain::list_writes::{ContactListWrites, ListWritesGate};
 use contacts::domain::service::{ContactsDomainService, SqsContactsIngress};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -326,6 +327,11 @@ pub struct ChannelSideEffectClients {
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
     pub macro_event_broker: ToolEventBroker,
+    /// The host's environment, which turns list-aware contact changes on in
+    /// a local stack.
+    pub environment: macro_env::Environment,
+    /// Reads `contacts-list-writes` elsewhere; `None` keeps those changes off.
+    pub feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 }
 
 /// Build the channel AI tool context dispatching the same side effects as the
@@ -378,11 +384,14 @@ fn channel_event_dispatcher(
     pool: &sqlx::PgPool,
     clients: &ChannelSideEffectClients,
 ) -> ToolChannelEventDispatcher {
-    let contacts_ingress = Arc::new(SqsContactsIngress {
-        queue: SqsContactsQueue::new(
-            clients.sqs.clone(),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
+    let contacts_ingress = Arc::new(ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(
+                clients.sqs.clone(),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: ContactListWrites::new(clients.environment, clients.feature_flags.clone()),
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),

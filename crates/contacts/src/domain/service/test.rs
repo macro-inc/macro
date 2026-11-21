@@ -232,3 +232,138 @@ async fn directory_changes_beyond_one_lookup_are_sent_as_unknown() {
         }]
     );
 }
+
+#[derive(Default)]
+struct RecordingNotifier {
+    invalidations: Mutex<Vec<ContactsInvalidation>>,
+}
+
+impl ContactsNotifier for RecordingNotifier {
+    async fn invalidate_contacts_for_users(
+        &self,
+        invalidations: Vec<ContactsInvalidation>,
+    ) -> Result<(), rootcause::Report> {
+        self.invalidations.lock().unwrap().extend(invalidations);
+        Ok(())
+    }
+}
+
+/// Runs a legacy message and returns each notified user's changed contacts.
+async fn notified(message: ContactsMessage) -> Vec<(String, Option<Vec<String>>)> {
+    let service = ContactsDomainService {
+        repository: RecordingRepository::default(),
+        notifier: RecordingNotifier::default(),
+    };
+    service.process_message(message).await.unwrap();
+
+    let mut notified: Vec<_> = service
+        .notifier
+        .invalidations
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|invalidation| {
+            let changed = invalidation
+                .changed()
+                .map(|changed| changed.iter().map(|id| id.as_ref().to_owned()).collect());
+            (invalidation.user().as_ref().to_owned(), changed)
+        })
+        .collect();
+    notified.sort();
+    notified
+}
+
+#[tokio::test]
+async fn a_complete_graph_tells_each_user_about_everyone_else() {
+    let notified = notified(ContactsMessage::Nodes(ContactsNodes {
+        users: HashSet::from([
+            user("first@example.com"),
+            user("second@example.com"),
+            user("third@example.com"),
+        ]),
+    }))
+    .await;
+
+    assert_eq!(
+        notified,
+        [
+            (
+                "macro|first@example.com".to_owned(),
+                Some(vec![
+                    "macro|second@example.com".to_owned(),
+                    "macro|third@example.com".to_owned(),
+                ]),
+            ),
+            (
+                "macro|second@example.com".to_owned(),
+                Some(vec![
+                    "macro|first@example.com".to_owned(),
+                    "macro|third@example.com".to_owned(),
+                ]),
+            ),
+            (
+                "macro|third@example.com".to_owned(),
+                Some(vec![
+                    "macro|first@example.com".to_owned(),
+                    "macro|second@example.com".to_owned(),
+                ]),
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn explicit_connections_tell_each_end_only_about_the_other() {
+    let owner = user("owner@example.com");
+    let notified = notified(ContactsMessage::Connections(ContactConnections::new(vec![
+        ContactConnection::new(owner.clone(), user("second@example.com")),
+        ContactConnection::new(owner.clone(), user("first@example.com")),
+        ContactConnection::new(user("first@example.com"), owner.clone()),
+        ContactConnection::new(owner.clone(), owner),
+    ])))
+    .await;
+
+    assert_eq!(
+        notified,
+        [
+            (
+                "macro|first@example.com".to_owned(),
+                Some(vec!["macro|owner@example.com".to_owned()]),
+            ),
+            (
+                "macro|owner@example.com".to_owned(),
+                Some(vec![
+                    "macro|first@example.com".to_owned(),
+                    "macro|second@example.com".to_owned(),
+                ]),
+            ),
+            (
+                "macro|second@example.com".to_owned(),
+                Some(vec!["macro|owner@example.com".to_owned()]),
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_user_connected_to_more_than_one_lookup_is_told_the_change_is_unknown() {
+    let owner = user("owner@example.com");
+    let connections = (0..=MAX_CHANGED_CONTACTS)
+        .map(|i| ContactConnection::new(owner.clone(), user(&format!("peer{i}@example.com"))))
+        .collect();
+
+    let notified = notified(ContactsMessage::Connections(ContactConnections::new(
+        connections,
+    )))
+    .await;
+
+    let owner_changed = notified
+        .iter()
+        .find(|(user, _)| user == "macro|owner@example.com")
+        .map(|(_, changed)| changed.clone());
+    assert_eq!(owner_changed, Some(None));
+    assert!(notified.iter().all(|(user, changed)| {
+        user == "macro|owner@example.com"
+            || changed.as_deref() == Some(&["macro|owner@example.com".to_owned()][..])
+    }));
+}

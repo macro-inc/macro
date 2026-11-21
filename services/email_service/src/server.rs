@@ -120,12 +120,12 @@ async fn run_server() -> anyhow::Result<()> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
-    let contacts_ingress = std::sync::Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
-    });
+    let contacts_ingress = std::sync::Arc::new(crate::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_queues::ContactsQueue::new().to_string(),
+        config.environment,
+        crate::outlook_flags::posthog(&config)?,
+    ));
     let read_receipts = crate::composition::read_receipts(db.clone(), env)?;
     // The webhook reads the message a notification names once
     // `enable-outlook-notified-message-reads` is on; without a PostHog key

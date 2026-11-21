@@ -38,7 +38,7 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
     ContactsDomainService<R, N>
 {
     /// Queries a user's contacts from the repository.
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(name = "contacts.query", skip_all, err)]
     async fn query_contacts(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -52,12 +52,21 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
 
     /// Processes a list-aware directory change, the existing complete-graph
     /// message, or a separate explicit-relationships message.
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(
+        name = "contacts.process_message",
+        skip_all,
+        fields(
+            kind = msg.kind(),
+            users = tracing::field::Empty,
+            connections = tracing::field::Empty,
+        ),
+        err
+    )]
     pub(crate) async fn process_message(
         &self,
         msg: ContactsMessage,
     ) -> Result<(), rootcause::Report> {
-        let (users, connections) = match msg {
+        let (users, connections): (HashSet<_>, Vec<_>) = match msg {
             ContactsMessage::Change(change) => return self.process_change(change).await,
             ContactsMessage::Nodes(ContactsNodes { users }) => {
                 let graph = UndirectedGraph::new(users.iter().map(Vertex::new)).complete();
@@ -82,15 +91,15 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
             }
         };
 
+        let span = tracing::Span::current();
+        span.record("users", users.len() as i64);
+        span.record("connections", connections.len() as i64);
+
+        let invalidations = invalidations_by_user(users, &connections);
         self.repository.create_connections(connections).await?;
 
         self.notifier
-            .invalidate_contacts_for_users(
-                users
-                    .into_iter()
-                    .map(ContactsInvalidation::unknown)
-                    .collect(),
-            )
+            .invalidate_contacts_for_users(invalidations)
             .await?;
         Ok(())
     }
@@ -180,6 +189,37 @@ fn invalidations_by_owner(
     by_owner
         .into_iter()
         .map(|(owner, contacts)| ContactsInvalidation::new(owner, contacts))
+        .collect()
+}
+
+/// One invalidation per user, naming the other end of each of the user's
+/// connections. Self-connections name nobody.
+fn invalidations_by_user(
+    users: HashSet<MacroUserIdStr<'static>>,
+    connections: &[(MacroUserIdStr<'static>, MacroUserIdStr<'static>)],
+) -> Vec<ContactsInvalidation> {
+    let mut peers: HashMap<_, HashSet<_>> = HashMap::new();
+    for (first, second) in connections {
+        if first == second {
+            continue;
+        }
+
+        peers.entry(first).or_default().insert(second);
+        peers.entry(second).or_default().insert(first);
+    }
+
+    users
+        .into_iter()
+        .map(|user| {
+            let mut changed: Vec<_> = peers
+                .get(&user)
+                .into_iter()
+                .flatten()
+                .map(|&peer| peer.clone())
+                .collect();
+            changed.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+            ContactsInvalidation::new(user, changed)
+        })
         .collect()
 }
 

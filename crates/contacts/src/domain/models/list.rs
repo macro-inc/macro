@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// One list in a user's directory. A person is in the directory when they are
-/// in at least one of the owner's lists. The key (`as_ref`) is what storage and
-/// clients see.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, strum::AsRefStr)]
+/// in at least one of the owner's lists. The key (`as_ref`, parsed back with
+/// `FromStr`) is what storage and clients see.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, strum::AsRefStr, strum::EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum ContactList {
     /// The owner's current team, computed from the roster at read time; never stored.

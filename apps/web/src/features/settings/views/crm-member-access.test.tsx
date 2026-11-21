@@ -219,6 +219,18 @@ it('waits for the agent teammates, offering a retry when they cannot be read', a
   ).toBeNull();
 });
 
+it('lists everyone when the server refuses the agent teammates read, as Members does', async () => {
+  state.agentTeammates = true;
+  state.listAgents.mockResolvedValue(
+    err([{ code: 'FORBIDDEN', message: 'Forbidden' }])
+  );
+  renderSection();
+
+  await waitFor(() => expect(screen.queryAllByRole('switch')).toHaveLength(4));
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+});
+
 it.each([
   ['a member', 'macro|leo@example.com', true],
   ['an owner without the rollout', 'macro|maya@example.com', false],

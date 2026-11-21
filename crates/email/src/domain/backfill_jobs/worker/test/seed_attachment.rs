@@ -78,25 +78,23 @@ async fn each_seed_filter_preserves_valid_neighbors_and_original_recipient_order
             BackfillDisposition::DoneDelete
         ));
         let state = f.0.lock().unwrap();
-        assert_eq!(state.connections.len(), 3);
-        for (connection, recipient) in state.connections.iter().zip([
-            "first@example.com",
-            "second@example.com",
-            "third@example.com",
-        ]) {
-            assert_eq!(
-                *connection,
-                std::collections::HashSet::from([
-                    link().macro_id,
-                    macro_user_id::user_id::MacroUserIdStr::try_from_email(recipient).unwrap()
-                ])
-            );
-        }
+        assert_eq!(
+            state.connections,
+            [[
+                "first@example.com",
+                "second@example.com",
+                "third@example.com",
+            ]
+            .map(|recipient| {
+                macro_user_id::user_id::MacroUserIdStr::try_from_email(recipient).unwrap()
+            })
+            .to_vec()]
+        );
     }
 }
 
 #[tokio::test]
-async fn a_seed_enqueue_failure_is_terminal_and_stops_later_recipients() {
+async fn a_seed_enqueue_failure_is_terminal() {
     let (svc, f) = setup();
     let mut message = provider_message(LINK, Uuid::from_u128(40));
     message.to = vec![

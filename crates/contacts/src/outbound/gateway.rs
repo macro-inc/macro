@@ -32,7 +32,9 @@ impl ConnectionGatewayNotifier {
         Ok(Self { url, client })
     }
 
+    /// Errors drop their URL, which names the user.
     #[tracing::instrument(
+        name = "contacts.invalidate",
         skip_all,
         fields(changed = invalidation.changed().map(|changed| changed.len() as i64)),
         err
@@ -41,6 +43,8 @@ impl ConnectionGatewayNotifier {
         let body = InvalidationBody {
             changed: invalidation.changed(),
         };
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
             .client
             .post(format!(
@@ -48,14 +52,22 @@ impl ConnectionGatewayNotifier {
                 self.url,
                 urlencoding::encode(invalidation.user().as_ref())
             ))
+            .headers(headers)
             .json(&serde_json::json!({"message_type": "contacts_invalidation", "message": body}))
             .send()
-            .await?;
-        let status = response.error_for_status_ref().map(drop);
+            .await
+            .map_err(reqwest::Error::without_url)?;
+        let status = response
+            .error_for_status_ref()
+            .map(drop)
+            .map_err(reqwest::Error::without_url);
         // Read the body even on error statuses: h2 only refunds its small-DATA-frame
         // budget for frames that are read, and once that budget is spent the client
         // tears down its own pooled connection (GOAWAY `too_many_data_frames`).
-        response.bytes().await?;
+        response
+            .bytes()
+            .await
+            .map_err(reqwest::Error::without_url)?;
         status?;
         Ok(())
     }
@@ -69,9 +81,7 @@ impl ContactsNotifier for ConnectionGatewayNotifier {
         for invalidation in invalidations {
             self.invalidate_contacts(&invalidation)
                 .await
-                .inspect_err(|e| {
-                    tracing::error!(user_id = %invalidation.user().as_ref(), error = ?e, "Failed to invalidate contacts")
-                })
+                .inspect_err(|e| tracing::error!(error = ?e, "Failed to invalidate contacts"))
                 .ok();
         }
         Ok(())

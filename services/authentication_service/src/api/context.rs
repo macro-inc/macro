@@ -15,7 +15,10 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
-use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
+use contacts::{
+    domain::{list_writes::ListWritesGate, service::SqsContactsIngress},
+    outbound::ingress::SqsContactsQueue,
+};
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
@@ -80,7 +83,12 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<
+                ListWritesGate<
+                    SqsContactsIngress<SqsContactsQueue>,
+                    feature_flags::outbound::posthog::PostHogFeatureFlags,
+                >,
+            >,
             AuthenticationEventBroker,
         >,
     >,
