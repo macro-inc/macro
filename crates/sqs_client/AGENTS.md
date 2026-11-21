@@ -8,8 +8,10 @@ crate that produces or consumes an SQS queue.
 
 ## Start here
 
-- `src/queue.rs`: the `SQS` transport (`send_fifo_message`, `receive_messages`,
-  delete/visibility) every feature module calls into.
+- `src/queue.rs`: the `SQS` transport (`send_fifo_message`,
+  `send_fifo_message_with_string_attributes`, `receive_messages`,
+  delete/visibility) every feature module calls into. A received message
+  carries its string attributes; the webhook queue reads trace context there.
 - `src/message_attribute.rs`: typed SQS message attributes shared across queues.
 - `src/email/trace_context.rs`: optional W3C context on backfill messages and
   deferrals; consumers adopt it before dispatching work. Missing or malformed

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id\n            FROM mcp_event_subscription\n            WHERE expires_at > now()\n            ORDER BY expires_at\n            LIMIT 10001\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0519b5d4bef88c58881d3e56405c05dc5bb63436e031889ff509c028c87ce17a"
+}

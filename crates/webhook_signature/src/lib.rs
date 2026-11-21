@@ -13,6 +13,8 @@ use sha2::Sha256;
 #[cfg(test)]
 mod test;
 
+pub mod standard;
+
 type HmacSha256 = Hmac<Sha256>;
 
 /// Header carrying the signature on a delivery.

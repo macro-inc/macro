@@ -440,7 +440,7 @@ fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
     let output = SharedWriter::default();
     let subscriber = Registry::default()
         .with(tracing_subscriber::filter::filter_fn(|metadata| {
-            dependency_logs_allowed(&["russh", "rmcp"], metadata.target())
+            dependency_logs_allowed(&["russh", "rmcp"], &[], metadata)
         }))
         .with(
             tracing_subscriber::fmt::layer()
@@ -463,4 +463,130 @@ fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
         .local()
         .build();
     assert_eq!(entrypoint.suppressed_targets, &["russh"]);
+}
+
+#[test]
+fn quiet_dependencies_keep_info_and_drop_debug() {
+    let output = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::filter::filter_fn(|metadata| {
+            dependency_logs_allowed(&[], &["rmcp::service"], metadata)
+        }))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(output.clone())
+                .with_filter(EnvFilter::new("trace")),
+        );
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::debug!(target: "rmcp::service", "received request with whsec_test-only");
+        tracing::trace!(target: "rmcp::service::server", "message whsec_test-only");
+        tracing::warn!(target: "rmcp::service", "rejected peer request");
+        tracing::debug!(target: "rmcp::transport", "transport detail");
+        tracing::debug!(target: "agent_harness_service", "service debug");
+    });
+    let text = output.contents();
+    assert!(!text.contains("whsec_test-only"), "{text}");
+    assert!(text.contains("rejected peer request"), "{text}");
+    assert!(text.contains("transport detail"), "{text}");
+    assert!(text.contains("service debug"), "{text}");
+    let entrypoint = MacroEntrypoint::default()
+        .quiet_dependency_debug_logs(&["rmcp"])
+        .local()
+        .build();
+    assert_eq!(entrypoint.quiet_targets, &["rmcp"]);
+}
+
+/// Logs rmcp's drain failure and returns the statement's line.
+fn drain_failure() -> u32 {
+    let line = line!() + 1;
+    tracing::error!(target: "rmcp::service", error = %"channel closed", "failed to send pending response during drain");
+    line
+}
+
+fn rmcp_drain_rules(line: u32, file: &'static str) -> &'static [DroppedCallsite] {
+    Box::leak(Box::new([DroppedCallsite {
+        target: "rmcp::service",
+        level: tracing::Level::ERROR,
+        file,
+        line,
+    }]))
+}
+
+/// One subscriber with a strict and a lenient sink, as services run (an error
+/// sink beside an info one), behind the global dependency filter.
+fn two_sinks(
+    dropped: &'static [DroppedCallsite],
+    errors: &SharedWriter,
+    infos: &SharedWriter,
+) -> impl tracing::Subscriber + Send + Sync {
+    Registry::default()
+        .with(DependencyLogFilter {
+            suppressed: &[],
+            quiet: &[],
+            dropped,
+        })
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(errors.clone())
+                .with_filter(EnvFilter::new("error")),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(infos.clone())
+                .with_filter(EnvFilter::new("info")),
+        )
+}
+
+#[test]
+fn a_dropped_callsite_reaches_no_sink_and_hides_nothing_after_it() {
+    let line = drain_failure();
+    let dropped = rmcp_drain_rules(line, "macro_entrypoint/src/test.rs");
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
+    fn unrelated(round: u8) {
+        tracing::error!(round, "unrelated failure");
+    }
+    fn same_message_elsewhere() {
+        tracing::error!(target: "rmcp::service", error = %"broken pipe", "failed to send pending response during drain");
+    }
+    // A per-event veto left filter state behind here: a debug assertion
+    // aborted the process, and in release the next event was lost.
+    tracing::subscriber::with_default(two_sinks(dropped, &errors, &infos), || {
+        for round in 0..3 {
+            drain_failure();
+            unrelated(round);
+            same_message_elsewhere();
+        }
+    });
+    for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
+        assert!(!text.contains("channel closed"), "{sink}: {text}");
+        assert_eq!(
+            text.matches("unrelated failure").count(),
+            3,
+            "{sink}: {text}"
+        );
+        assert_eq!(text.matches("broken pipe").count(), 3, "{sink}: {text}");
+    }
+    let entrypoint = MacroEntrypoint::default()
+        .drop_dependency_callsites(dropped)
+        .local()
+        .build();
+    assert_eq!(entrypoint.dropped_callsites.len(), 1);
+}
+
+#[test]
+fn a_callsite_in_another_file_or_version_is_kept() {
+    let line = drain_failure();
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
+    let dropped = rmcp_drain_rules(line, "rmcp-3.9.0/src/service.rs");
+    tracing::subscriber::with_default(two_sinks(dropped, &errors, &infos), || {
+        drain_failure();
+    });
+    for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
+        assert!(text.contains("channel closed"), "{sink}: {text}");
+    }
 }

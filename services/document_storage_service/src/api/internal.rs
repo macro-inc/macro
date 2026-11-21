@@ -45,6 +45,9 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/crm",
             crm::inbound::axum_router::crm_internal_router(state.crm_state.clone()),
         )
+        .merge(webhook::inbound::mcp_router::mcp_subscription_router(
+            state.mcp_subscription_state.clone(),
+        ))
         // User routes
         .route(
             "/users/{user_id}",

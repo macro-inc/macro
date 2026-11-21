@@ -190,7 +190,7 @@ skills = { path = "../../crates/skills", features = ["axum"] }
 soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["chat", "document_text_extractor", "email", "gmail", "search"] }
-sse-core = { workspace = true }
+sse-core = { workspace = true, features = ["stream"] }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }
@@ -201,7 +201,7 @@ teams = { path = "../../crates/teams", default-features = false, features = ["ou
 team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = { workspace = true }
 tokio-retry = { workspace = true }
 tokio-tungstenite = { workspace = true }
@@ -215,6 +215,12 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 web_search = { path = "../../crates/web_search", features = ["axum"] }
+webhook = { path = "../../crates/webhook", default-features = false, features = [
+  "json-schema",
+  "kms",
+  "ports",
+] }
+webhook_signature = { path = "../../crates/webhook_signature" }
 zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 

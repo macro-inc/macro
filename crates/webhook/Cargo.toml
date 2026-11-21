@@ -13,7 +13,7 @@ consumer = [
   "ingestion",
   "macro_event_broker/outbound",
 ]
-default = ["consumer", "inbound", "outbound", "ports", "stream"]
+default = ["consumer", "inbound", "kms", "outbound", "ports", "stream"]
 inbound = [
   "dep:axum",
   "dep:axum-extra",
@@ -45,20 +45,34 @@ ingestion = [
   "dep:futures",
   "dep:user_events",
   "dep:password_events",
+  "dep:tokio",
   "dep:uuid",
   "ports",
 ]
 outbound = [
+  "dep:genai_telemetry",
   "dep:webhook_signature",
   "dep:macro_uuid",
   "dep:reqwest",
   "dep:sqlx",
   "dep:sqs_client",
+  "dep:subtle",
   "dep:tokio",
   "dep:url",
   "ports",
 ]
-ports = ["dep:serde_json", "dep:url"]
+json-schema = ["dep:schemars"]
+kms = ["dep:cursor_api_key", "ports"]
+ports = [
+  "dep:futures",
+  "dep:hex",
+  "dep:serde_json",
+  "dep:sha2",
+  "dep:url",
+  "dep:uuid",
+  "dep:webhook_signature",
+  "dep:zeroize",
+]
 stream = [
   "dep:futures",
   "dep:kafka_util",
@@ -68,7 +82,7 @@ stream = [
   "inbound",
   "macro_event_broker/outbound",
 ]
-worker = ["dep:tokio", "ports"]
+worker = ["dep:genai_telemetry", "dep:tokio", "ports"]
 
 [dependencies]
 messages = { path = "../messages", features = ["broker"] }
@@ -80,12 +94,16 @@ agent_trigger = { path = "../agent_trigger", optional = true }
 call = { path = "../call", default-features = false, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
+cursor_api_key = { path = "../cursor_api_key", optional = true }
+base64 = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
 model_owner = { path = "../model_owner" }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }
 futures = { workspace = true, optional = true }
+genai_telemetry = { path = "../genai_telemetry", optional = true }
+hex = { workspace = true, optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",
@@ -100,8 +118,10 @@ rate_limit = { path = "../rate_limit", optional = true, default-features = false
 rdkafka = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 webhook_signature = { path = "../webhook_signature", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
@@ -112,13 +132,16 @@ tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
 user_events = { path = "../user_events", optional = true }
 password_events = { path = "../password_events", optional = true }
+subtle = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
 agent_fold = { path = "../folds/agent_fold" }
+async-trait = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = [
   "test-utils",
@@ -134,3 +157,4 @@ rate_limit = { path = "../rate_limit", default-features = false, features = [
 ] }
 tokio = { workspace = true, features = ["test-util"] }
 tower = { workspace = true }
+wiremock = { workspace = true }

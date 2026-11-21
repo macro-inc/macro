@@ -842,6 +842,8 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "web_search",
+ "webhook",
+ "webhook_signature",
  "wiremock",
  "workspace-hack",
  "zeroize",
@@ -6861,6 +6863,7 @@ dependencies = [
  "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sns",
@@ -6887,6 +6890,7 @@ dependencies = [
  "connection_gateway_client",
  "contacts",
  "crm",
+ "cursor_api_key",
  "database_webhooks",
  "databases",
  "databases_sql",
@@ -20286,7 +20290,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28f4c044039e70ba5724b7e9dacf9fb610394773d15df2bb629170ca30391c88"
 dependencies = [
  "bytes",
+ "futures-core",
  "memchr",
+ "pin-project-lite",
  "thiserror 2.0.18",
 ]
 
@@ -23195,16 +23201,21 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "anyhow",
+ "async-trait",
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "bot_id",
  "call",
  "channel_sender",
  "channels",
  "chrono",
+ "cursor_api_key",
  "documents",
  "entity_access",
  "futures",
+ "genai_telemetry",
+ "hex",
  "kafka_util",
  "macro_authorization",
  "macro_db_migrator",
@@ -23221,11 +23232,14 @@ dependencies = [
  "rdkafka",
  "reqwest 0.13.4",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "sqs_client",
  "strum 0.27.2",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -23237,17 +23251,22 @@ dependencies = [
  "utoipa",
  "uuid",
  "webhook_signature",
+ "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
 name = "webhook_signature"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "hex",
  "hmac 0.12.1",
  "sha2 0.10.9",
+ "thiserror 2.0.18",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -24370,6 +24389,7 @@ dependencies = [
  "spin 0.9.9",
  "sqlx-core",
  "sqlx-postgres",
+ "sse-core",
  "stable_deref_trait",
  "subtle",
  "syn 1.0.109",
