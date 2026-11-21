@@ -6,6 +6,7 @@
 
 import type { LineRange } from '@app/components/diff-view/model/lines';
 import type {
+  AppLinkDescriber,
   AppLinkOpener,
   AppLinkPreview,
 } from '@core/component/LexicalMarkdown/component/core/app-link-opener';
@@ -15,8 +16,8 @@ import {
   findChangedFile,
   headBlobUrl,
   linkCodeReferences,
-  namesFile,
   parseCodeReference,
+  readsAsRepositoryPath,
 } from './core/code-reference';
 import type { ChangesController } from './primitives/create-changes';
 
@@ -46,17 +47,20 @@ export function createCodeLinkOpener(
     const reference = parseCodeReference(url);
     if (!reference) return false;
 
+    // Until the changes load nothing is known about the file; the link keeps
+    // its default handling rather than a wrong "not changed".
     const changeset = changes.model.changeset();
-    const file = findChangedFile(reference.path, changeset?.files ?? []);
+    if (!changeset) return false;
+    const file = findChangedFile(reference.path, changeset.files);
     if (file) {
       changes.layout.open();
       changes.review.activate(file.path, pointedLines(file, reference.lines));
       return true;
     }
 
-    // Past here only a path that reads as a file is ours to answer; anything
-    // else keeps the default handling.
-    if (!namesFile(reference)) return false;
+    // Past here only a path that reads as a file in the repository is ours to
+    // answer; anything else, such as `example.com`, keeps the default handling.
+    if (!readsAsRepositoryPath(reference)) return false;
     const blob = headBlobUrl(changeset, reference);
     if (blob) {
       changes.context.host.openExternal(blob);
@@ -71,12 +75,28 @@ export function createCodeLinkOpener(
 }
 
 /**
- * A code link's hover card: the file and its lines, then the folder it is in
- * (`a.ts, line 2` over `apps/web/src`), rather than the path twice.
+ * Describes the links the code link opener answers for their hover cards:
+ * the file and its lines, then the folder it is in (`a.ts, line 2` over
+ * `apps/web/src`), rather than the path twice.
  */
-export function describeCodeLink(url: string): AppLinkPreview | undefined {
-  const reference = parseCodeReference(url);
-  if (!reference || !namesFile(reference)) return undefined;
+export function createCodeLinkDescriber(
+  changes: ChangesController
+): AppLinkDescriber {
+  return (url) => {
+    if (!changes.available()) return undefined;
+    const reference = parseCodeReference(url);
+    if (!reference) return undefined;
+    const files = changes.model.changeset()?.files ?? [];
+    if (
+      !findChangedFile(reference.path, files) &&
+      !readsAsRepositoryPath(reference)
+    )
+      return undefined;
+    return describeReference(reference);
+  };
+}
+
+function describeReference(reference: CodeReference): AppLinkPreview {
   const slash = reference.path.lastIndexOf('/');
   const name = reference.path.slice(slash + 1);
   const lines = reference.lines;

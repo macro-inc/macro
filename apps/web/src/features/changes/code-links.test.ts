@@ -1,8 +1,8 @@
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import {
+  createCodeLinkDescriber,
   createCodeLinkOpener,
-  describeCodeLink,
   linkChangedCode,
 } from './code-links';
 import type { DiffStyle, PaneLayout } from './core/layout';
@@ -27,7 +27,12 @@ function setup(canHaveChanges = true) {
     view: { layout, setLayout, diffStyle, setDiffStyle },
     dismissed: [dismissed, setDismissed],
   });
-  return { context, changes, open: createCodeLinkOpener(changes) };
+  return {
+    context,
+    changes,
+    open: createCodeLinkOpener(changes),
+    describe: createCodeLinkDescriber(changes),
+  };
 }
 
 describe('createCodeLinkOpener', () => {
@@ -81,6 +86,27 @@ describe('createCodeLinkOpener', () => {
     });
   });
 
+  it('leaves a web address written without its scheme to the browser', () => {
+    createRoot((dispose) => {
+      const { context, open } = setup();
+      expect(open('example.com')).toBe(false);
+      expect(open('docs.rs')).toBe(false);
+      expect(open('example.com/spec.html')).toBe(false);
+      expect(context.opened).toEqual([]);
+      expect(context.notified).toEqual([]);
+      // Repository paths of the same look still open on GitHub.
+      expect(open('package.json#L5')).toBe(true);
+      expect(open('.github/ci.yml')).toBe(true);
+      expect(open('src/b.ts#L2')).toBe(true);
+      expect(context.opened).toEqual([
+        'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
+        'https://github.com/macro-inc/macro/blob/abc123/.github/ci.yml',
+        'https://github.com/macro-inc/macro/blob/abc123/src/b.ts#L2',
+      ]);
+      dispose();
+    });
+  });
+
   it('declines everything when the host can have no changes', () => {
     createRoot((dispose) => {
       const { changes, open } = setup(false);
@@ -93,24 +119,33 @@ describe('createCodeLinkOpener', () => {
   });
 });
 
-describe('describeCodeLink', () => {
+describe('createCodeLinkDescriber', () => {
   it('names the file and its lines, with the folder beneath', () => {
-    expect(describeCodeLink('apps/web/src/a.ts#L2')).toEqual({
-      title: 'a.ts, line 2',
-      subtitle: 'apps/web/src',
-    });
-    expect(describeCodeLink('crates/x/src/lib.rs#L3-L9')).toEqual({
-      title: 'lib.rs, lines 3-9',
-      subtitle: 'crates/x/src',
-    });
-    expect(describeCodeLink('package.json')).toEqual({
-      title: 'package.json',
-      subtitle: '',
+    createRoot((dispose) => {
+      const { describe } = setup();
+      expect(describe('apps/web/src/a.ts#L2')).toEqual({
+        title: 'a.ts, line 2',
+        subtitle: 'apps/web/src',
+      });
+      expect(describe('crates/x/src/lib.rs#L3-L9')).toEqual({
+        title: 'lib.rs, lines 3-9',
+        subtitle: 'crates/x/src',
+      });
+      expect(describe('package.json#L5')).toEqual({
+        title: 'package.json, line 5',
+        subtitle: '',
+      });
+      dispose();
     });
   });
 
-  it('leaves links that are not to a file as they are', () => {
-    expect(describeCodeLink('https://example.com/a.ts')).toBeUndefined();
-    expect(describeCodeLink('apps/web/src')).toBeUndefined();
+  it('leaves links the opener leaves alone', () => {
+    createRoot((dispose) => {
+      const { describe } = setup();
+      expect(describe('https://example.com/a.ts')).toBeUndefined();
+      expect(describe('example.com')).toBeUndefined();
+      expect(describe('apps/web/src')).toBeUndefined();
+      dispose();
+    });
   });
 });

@@ -23,9 +23,13 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
     setPreviewOpen(val);
   });
 
-  const [unfurlData] = useUnfurl(props.url);
   const openAppLink = useAppLinkOpener();
   const describeLink = useAppLinkDescriber();
+  // A link the surface describes, such as a path to code, is not a web page
+  // to unfurl.
+  const [unfurlData] = useUnfurl(
+    describeLink?.(props.url) ? undefined : props.url
+  );
 
   let linkRef: HTMLAnchorElement | undefined;
 

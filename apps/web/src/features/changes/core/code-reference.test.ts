@@ -225,6 +225,16 @@ describe('linkCodeReferences', () => {
     expect(linkCodeReferences(markdown, files)).toBe(markdown);
   });
 
+  it('leaves code inside the text of every link form', () => {
+    const markdown = [
+      '[`app/(group)/page.tsx`](app/(group)/page.tsx)',
+      '[`src/pane.tsx`](src/pane.tsx "the pane")',
+      '[`src/pane.tsx`](<src/pane.tsx>)',
+      '[`src/pane.tsx`][1]',
+    ].join('\n');
+    expect(linkCodeReferences(markdown, files)).toBe(markdown);
+  });
+
   it('keeps a fence open past a line that only opens one', () => {
     const markdown = '```\n```ts\n`src/pane.tsx`\n```';
     expect(linkCodeReferences(markdown, files)).toBe(markdown);

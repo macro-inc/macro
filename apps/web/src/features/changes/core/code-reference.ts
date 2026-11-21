@@ -64,6 +64,19 @@ export function namesFile(reference: CodeReference): boolean {
 }
 
 /**
+ * Whether a reference to a file outside the changes reads as a path in the
+ * repository rather than a web address written without its scheme: a first
+ * segment like `example.com` (an inner dot, not a dotfile) with no line
+ * suffix is a host. `package.json#L5` and `.github/ci.yml` stay paths.
+ */
+export function readsAsRepositoryPath(reference: CodeReference): boolean {
+  if (!namesFile(reference)) return false;
+  if (reference.lines) return true;
+  const first = reference.path.split('/')[0] ?? '';
+  return !/^[^.]+\..+$/.test(first);
+}
+
+/**
  * The changed file `path` names. An exact match wins. Otherwise an absolute
  * path matches a file it ends in (the agent's checkout), preferring the
  * longest, and a relative one matches the only file it ends in (a path written
@@ -136,6 +149,9 @@ const CLOSING_FENCE = /^(?:\s*>)*\s*(`{3,}|~{3,})\s*$/;
 const INLINE_CODE = /(?<!`)`([^`\n]+)`(?!`)/g;
 // A link's text and its target: `[text](target)`.
 const LINK = /\[([^[\]]*)\]\(([^()\s]+)\)/g;
+// A link's text in any form: followed by its target (with a title, angle
+// brackets or parentheses) or a reference label.
+const LINK_TEXT = /\[[^[\]]*\](?=[([])/g;
 
 function changedFileTarget(
   text: string,
@@ -177,7 +193,7 @@ function linkLine(line: string, files: readonly ChangedFile[]): string {
     }
   );
 
-  const links = ranges(linked, LINK);
+  const links = [...ranges(linked, LINK), ...ranges(linked, LINK_TEXT)];
   return linked.replace(INLINE_CODE, (span, code: string, offset: number) => {
     // Inside a link's text, or holding brackets that would end the new one.
     if (within(links, offset)) return span;
