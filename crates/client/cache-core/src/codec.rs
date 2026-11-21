@@ -99,11 +99,21 @@ const INFLATE_INITIAL_BYTES: usize = 64 * 1024;
 /// unusually large record doesn't hold its memory for the thread's lifetime.
 const INFLATE_RETAINED_BYTES: usize = 1024 * 1024;
 
+/// The inflate state and output space a thread reuses for every record.
+struct Inflater {
+    /// Reset per record. A fresh stream allocates and zeroes its window and
+    /// decoding tables, which costs more than inflating a typical record.
+    stream: zlib_rs::Inflate,
+    /// Most records inflate to a few hundred bytes, where growing a fresh
+    /// vector costs more than the inflate itself.
+    output: Vec<u8>,
+}
+
 thread_local! {
-    /// Inflate output reused by every record decoded on a thread. Most records
-    /// inflate to a few hundred bytes, where growing a fresh vector costs more
-    /// than the inflate itself.
-    static INFLATE_OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static INFLATER: RefCell<Inflater> = RefCell::new(Inflater {
+        stream: zlib_rs::Inflate::new(false, 15),
+        output: Vec::new(),
+    });
 }
 
 /// Inflates a raw deflate `payload` and hands the bytes to `decode`.
@@ -111,26 +121,31 @@ fn inflate_record<T>(
     payload: &[u8],
     decode: impl FnOnce(&[u8]) -> Result<T, CodecError>,
 ) -> Result<T, CodecError> {
-    INFLATE_OUTPUT.with(|cell| {
-        let mut output = cell.borrow_mut();
+    INFLATER.with(|cell| {
+        let Inflater { stream, output } = &mut *cell.borrow_mut();
         if output.len() < INFLATE_INITIAL_BYTES {
             output.resize(INFLATE_INITIAL_BYTES, 0);
         }
         let result = loop {
-            let (inflated, code) = zlib_rs::decompress_slice(
-                &mut output,
-                payload,
-                zlib_rs::InflateConfig { window_bits: -15 },
-            );
-            let length = inflated.len();
-            match code {
-                zlib_rs::ReturnCode::Ok => break decode(&output[..length]),
-                // The output was too small: inflate again into twice the room.
-                zlib_rs::ReturnCode::BufError if output.len() < RECORD_MAX_INFLATED_BYTES => {
+            stream.reset(false);
+            let status = stream.decompress(payload, output, zlib_rs::InflateFlush::Finish);
+            let length = usize::try_from(stream.total_out()).unwrap_or(usize::MAX);
+            match status {
+                Ok(zlib_rs::Status::StreamEnd) => break decode(&output[..length]),
+                // The stream stopped before its end with the output full: inflate
+                // again into twice the room.
+                Ok(_) if length == output.len() && output.len() < RECORD_MAX_INFLATED_BYTES => {
                     let length = (output.len() * 2).min(RECORD_MAX_INFLATED_BYTES);
                     output.resize(length, 0);
                 }
-                code => break Err(CodecError::Inflate(format!("{code:?}"))),
+                Ok(_) if length == output.len() => {
+                    break Err(CodecError::Inflate("BufError".to_owned()));
+                }
+                // The input ended before the stream did.
+                Ok(_) | Err(zlib_rs::InflateError::NeedDict { .. }) => {
+                    break Err(CodecError::Inflate("DataError".to_owned()));
+                }
+                Err(error) => break Err(CodecError::Inflate(format!("{error:?}"))),
             }
         };
         if output.len() > INFLATE_RETAINED_BYTES {
