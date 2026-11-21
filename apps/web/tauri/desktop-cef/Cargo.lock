@@ -1047,6 +1047,7 @@ dependencies = [
  "subsequence_match",
  "thiserror 2.0.21",
  "uuid",
+ "zlib-rs",
 ]
 
 [[package]]

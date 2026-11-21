@@ -12,8 +12,9 @@
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
 use crate::value::Record;
-use miniz_oxide::{deflate, inflate};
+use miniz_oxide::deflate;
 use serde::{Serialize, de::DeserializeOwned};
+use std::cell::RefCell;
 use thiserror::Error;
 
 /// Bump when the stored representation of [`Record`]/[`CacheValue`]
@@ -86,13 +87,72 @@ pub fn decode_record(bytes: &[u8]) -> Result<Record, CodecError> {
     let (encoding, payload) = bytes.split_first().ok_or(CodecError::UnknownEncoding(0))?;
     match *encoding {
         RECORD_ENCODING_RAW => decode(payload),
-        RECORD_ENCODING_DEFLATE => {
-            let raw = inflate::decompress_to_vec_with_limit(payload, RECORD_MAX_INFLATED_BYTES)
-                .map_err(|error| CodecError::Inflate(format!("{error:?}")))?;
-            decode(&raw)
-        }
+        RECORD_ENCODING_DEFLATE => inflate_record(payload, decode),
         other => Err(CodecError::UnknownEncoding(other)),
     }
+}
+
+/// Output space a thread's first inflate starts with.
+const INFLATE_INITIAL_BYTES: usize = 64 * 1024;
+
+/// A thread keeps its inflate output between records up to this size, so one
+/// unusually large record doesn't hold its memory for the thread's lifetime.
+const INFLATE_RETAINED_BYTES: usize = 1024 * 1024;
+
+/// The inflate state and output space a thread reuses for every record.
+struct Inflater {
+    /// Reset per record. A fresh stream allocates and zeroes its window and
+    /// decoding tables, which costs more than inflating a typical record.
+    stream: zlib_rs::Inflate,
+    /// Most records inflate to a few hundred bytes, where growing a fresh
+    /// vector costs more than the inflate itself.
+    output: Vec<u8>,
+}
+
+thread_local! {
+    static INFLATER: RefCell<Inflater> = RefCell::new(Inflater {
+        stream: zlib_rs::Inflate::new(false, 15),
+        output: Vec::new(),
+    });
+}
+
+/// Inflates a raw deflate `payload` and hands the bytes to `decode`.
+fn inflate_record<T>(
+    payload: &[u8],
+    decode: impl FnOnce(&[u8]) -> Result<T, CodecError>,
+) -> Result<T, CodecError> {
+    INFLATER.with(|cell| {
+        let Inflater { stream, output } = &mut *cell.borrow_mut();
+        if output.len() < INFLATE_INITIAL_BYTES {
+            output.resize(INFLATE_INITIAL_BYTES, 0);
+        }
+        let result = loop {
+            stream.reset(false);
+            let status = stream.decompress(payload, output, zlib_rs::InflateFlush::Finish);
+            let length = usize::try_from(stream.total_out()).unwrap_or(usize::MAX);
+            match status {
+                Ok(zlib_rs::Status::StreamEnd) => break decode(&output[..length]),
+                // The stream stopped before its end with the output full: inflate
+                // again into twice the room.
+                Ok(_) if length == output.len() && output.len() < RECORD_MAX_INFLATED_BYTES => {
+                    let length = (output.len() * 2).min(RECORD_MAX_INFLATED_BYTES);
+                    output.resize(length, 0);
+                }
+                Ok(_) if length == output.len() => {
+                    break Err(CodecError::Inflate("BufError".to_owned()));
+                }
+                // The input ended before the stream did.
+                Ok(_) | Err(zlib_rs::InflateError::NeedDict { .. }) => {
+                    break Err(CodecError::Inflate("DataError".to_owned()));
+                }
+                Err(error) => break Err(CodecError::Inflate(format!("{error:?}"))),
+            }
+        };
+        if output.len() > INFLATE_RETAINED_BYTES {
+            *output = Vec::new();
+        }
+        result
+    })
 }
 
 fn tagged(encoding: u8, payload: Vec<u8>) -> Vec<u8> {
@@ -251,6 +311,21 @@ mod tests {
             "compressed {} bytes",
             bytes.len()
         );
+        assert_eq!(decode_record(&bytes).unwrap(), record);
+    }
+
+    #[test]
+    fn inflate_grows_past_its_first_buffer_and_rejects_truncated_streams() {
+        let body: String = (0..40_000).map(|line| format!("{line}\n")).collect();
+        let record = record_with_body(&body);
+        let bytes = encode_record(&record);
+        assert_eq!(bytes.first(), Some(&RECORD_ENCODING_DEFLATE));
+        assert!(body.len() > INFLATE_INITIAL_BYTES * 3);
+        assert_eq!(decode_record(&bytes).unwrap(), record);
+        // The reused state starts clean for the next record.
+        let small = record_with_body(&"x".repeat(1_000));
+        assert_eq!(decode_record(&encode_record(&small)).unwrap(), small);
+        assert!(decode_record(&bytes[..bytes.len() / 2]).is_err());
         assert_eq!(decode_record(&bytes).unwrap(), record);
     }
 
