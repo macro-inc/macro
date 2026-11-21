@@ -233,12 +233,9 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         },
     };
     if let Some(operation) = decided.operation {
+        // Services under one base share a forwarder segment, so the
+        // operation's key, `service.operation`, says which one this is.
         span.record("operation", operation);
-        // Services under one base share a forwarder segment: the operation
-        // says which one this is.
-        if let Some((owner, _)) = operation.split_once('.') {
-            span.record("service", owner);
-        }
     }
     if decided.uncatalogued {
         span.record("uncatalogued", true);
