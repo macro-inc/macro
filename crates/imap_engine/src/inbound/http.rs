@@ -151,21 +151,45 @@ fn binding(link: Uuid, headers: &HeaderMap) -> Result<Binding, ApiError> {
         grant_generation,
     })
 }
-#[utoipa::path(post,path="/internal/v1/discover",request_body=DiscoveryRequest,responses((status=200,body=Discovery)))]
+#[utoipa::path(
+    post,
+    path = "/internal/v1/discover",
+    request_body = DiscoveryRequest,
+    responses(
+        (status = 200, body = Discovery)
+    )
+)]
 async fn discover(
     State(state): State<ApiState>,
     Json(input): Json<DiscoveryRequest>,
 ) -> Result<Json<Discovery>, ApiError> {
     Ok(Json(state.engine.discover_remote(&input.email.0).await?))
 }
-#[utoipa::path(post,path="/internal/v1/verify",request_body=VerifyRequest,responses((status=200,body=Verification)))]
+#[utoipa::path(
+    post,
+    path = "/internal/v1/verify",
+    request_body = VerifyRequest,
+    responses(
+        (status = 200, body = Verification)
+    )
+)]
 async fn verify(
     State(state): State<ApiState>,
     Json(input): Json<VerifyRequest>,
 ) -> Result<Json<Verification>, ApiError> {
     Ok(Json(state.engine.verify(input).await?))
 }
-#[utoipa::path(put,path="/internal/v1/accounts/{link}",params(("link"=Uuid,Path)),request_body=ConnectRequest,responses((status=200,body=Binding)))]
+#[utoipa::path(
+    put,
+    path = "/internal/v1/accounts/{link}",
+    params(
+        ("link" = Uuid, Path)
+    ),
+    request_body = ConnectRequest,
+    responses(
+        (status = 200, body = Binding)
+    )
+)]
 async fn connect(
     State(state): State<ApiState>,
     Path(link): Path<Uuid>,
@@ -173,7 +197,20 @@ async fn connect(
 ) -> Result<Json<Binding>, ApiError> {
     Ok(Json(state.engine.connect(link, input).await?))
 }
-#[utoipa::path(delete,path="/internal/v1/accounts/{link}",params(("link"=Uuid,Path),("x-mailbox-binding"=String,Header)),responses((status=200),(status=401,body=ErrorBody),(status=403,body=ErrorBody),(status=409,body=ErrorBody)))]
+#[utoipa::path(
+    delete,
+    path = "/internal/v1/accounts/{link}",
+    params(
+        ("link" = Uuid, Path),
+        ("x-mailbox-binding" = String, Header)
+    ),
+    responses(
+        (status = 200),
+        (status = 401, body = ErrorBody),
+        (status = 403, body = ErrorBody),
+        (status = 409, body = ErrorBody)
+    )
+)]
 async fn disconnect(
     State(state): State<ApiState>,
     Path(link): Path<Uuid>,
@@ -182,7 +219,26 @@ async fn disconnect(
     state.engine.delete(binding(link, &headers)?).await?;
     Ok(Json(serde_json::Value::Null))
 }
-#[utoipa::path(post,path="/internal/v1/accounts/{link}/operations",params(("link"=Uuid,Path),("x-mailbox-binding"=String,Header)),request_body=Operation,responses((status=200,body=serde_json::Value),(status=401,body=ErrorBody),(status=403,body=ErrorBody),(status=404,body=ErrorBody),(status=409,body=ErrorBody),(status=410,body=ErrorBody),(status=422,body=ErrorBody),(status=429,body=ErrorBody),(status=503,body=ErrorBody)))]
+#[utoipa::path(
+    post,
+    path = "/internal/v1/accounts/{link}/operations",
+    params(
+        ("link" = Uuid, Path),
+        ("x-mailbox-binding" = String, Header)
+    ),
+    request_body = Operation,
+    responses(
+        (status = 200, body = serde_json::Value),
+        (status = 401, body = ErrorBody),
+        (status = 403, body = ErrorBody),
+        (status = 404, body = ErrorBody),
+        (status = 409, body = ErrorBody),
+        (status = 410, body = ErrorBody),
+        (status = 422, body = ErrorBody),
+        (status = 429, body = ErrorBody),
+        (status = 503, body = ErrorBody)
+    )
+)]
 async fn operation(
     State(state): State<ApiState>,
     Path(link): Path<Uuid>,

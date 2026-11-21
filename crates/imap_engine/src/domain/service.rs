@@ -183,7 +183,7 @@ impl Engine {
         Ok(verification)
     }
     /// Promote only the original owner's verification and re-encrypt under the permanent link context.
-    #[tracing::instrument(skip_all,fields(link_id=%link),err)]
+    #[tracing::instrument(skip_all, fields(link_id = %link), err)]
     pub async fn connect(&self, link: Uuid, input: ConnectRequest) -> Result<Binding, Error> {
         let v = self.repository.verification(input.verification_id).await?;
         if v.user_id != input.owner_user_id
@@ -231,7 +231,7 @@ impl Engine {
     }
 
     /// Execute one account-scoped operation under a distributed fence.
-    #[tracing::instrument(skip_all,fields(link_id=%binding.link_id),err)]
+    #[tracing::instrument(skip_all, fields(link_id = %binding.link_id), err)]
     pub async fn execute(&self, binding: Binding, operation: Operation) -> Result<Value, Error> {
         // Admit before loading the account index so a reconnect wave cannot buffer thousands of mailboxes.
         let _capacity = self

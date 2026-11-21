@@ -11,8 +11,19 @@ use email::domain::mailbox::imap_settings::{AccountMailSettings, UpdateFolderSet
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use uuid::Uuid;
 
-#[utoipa::path(get,path="/email/links/{link_id}/imap/settings",params(("link_id"=Uuid,Path)),operation_id="get_imap_mailbox_settings",responses((status=200,body=AccountMailSettings),(status=404,body=ImapConnectionErrorResponse)))]
-#[tracing::instrument(skip_all,fields(link_id=%link),err)]
+#[utoipa::path(
+    get,
+    path = "/email/links/{link_id}/imap/settings",
+    params(
+        ("link_id" = Uuid, Path)
+    ),
+    operation_id = "get_imap_mailbox_settings",
+    responses(
+        (status = 200, body = AccountMailSettings),
+        (status = 404, body = ImapConnectionErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(link_id = %link), err)]
 pub(crate) async fn get_settings(
     State(ctx): State<ApiContext>,
     Path(link): Path<Uuid>,
@@ -25,8 +36,22 @@ pub(crate) async fn get_settings(
     ))
 }
 
-#[utoipa::path(patch,path="/email/links/{link_id}/imap/settings",params(("link_id"=Uuid,Path)),operation_id="update_imap_mailbox_settings",request_body=UpdateFolderSettings,responses((status=200,body=AccountMailSettings),(status=400,body=ImapConnectionErrorResponse),(status=404,body=ImapConnectionErrorResponse),(status=409,body=ImapConnectionErrorResponse)))]
-#[tracing::instrument(skip_all,fields(link_id=%link),err)]
+#[utoipa::path(
+    patch,
+    path = "/email/links/{link_id}/imap/settings",
+    params(
+        ("link_id" = Uuid, Path)
+    ),
+    operation_id = "update_imap_mailbox_settings",
+    request_body = UpdateFolderSettings,
+    responses(
+        (status = 200, body = AccountMailSettings),
+        (status = 400, body = ImapConnectionErrorResponse),
+        (status = 404, body = ImapConnectionErrorResponse),
+        (status = 409, body = ImapConnectionErrorResponse)
+    )
+)]
+#[tracing::instrument(skip_all, fields(link_id = %link), err)]
 pub(crate) async fn update_settings(
     State(ctx): State<ApiContext>,
     Path(link): Path<Uuid>,

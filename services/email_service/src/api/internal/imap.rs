@@ -4,7 +4,17 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{Json, extract::State, http::StatusCode};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 
-#[utoipa::path(post,path="/internal/imap/notifications",operation_id="imap_notification",request_body=imap_service_client::Notification,responses((status=204),(status=401),(status=503)))]
+#[utoipa::path(
+    post,
+    path = "/internal/imap/notifications",
+    operation_id = "imap_notification",
+    request_body = imap_service_client::Notification,
+    responses(
+        (status = 204),
+        (status = 401),
+        (status = 503)
+    )
+)]
 pub(crate) async fn handler(
     State(ctx): State<ApiContext>,
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,

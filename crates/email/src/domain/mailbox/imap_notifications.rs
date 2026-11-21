@@ -13,7 +13,7 @@ pub trait ImapNotificationRepository: Send + Sync + 'static {
 }
 pub struct ImapNotificationService<R>(pub R);
 impl<R: ImapNotificationRepository> ImapNotificationService<R> {
-    #[tracing::instrument(skip_all,fields(mailbox.link_id=%notification.binding.link_id),err)]
+    #[tracing::instrument(skip_all, fields(mailbox.link_id = %notification.binding.link_id), err)]
     pub async fn receive(
         &self,
         notification: imap_engine::domain::models::Notification,

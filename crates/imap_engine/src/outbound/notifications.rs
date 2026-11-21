@@ -31,7 +31,7 @@ impl HttpNotifier {
 }
 #[async_trait::async_trait]
 impl Notifier for HttpNotifier {
-    #[tracing::instrument(skip_all,fields(link_id=%notification.binding.link_id),err)]
+    #[tracing::instrument(skip_all, fields(link_id = %notification.binding.link_id), err)]
     async fn notify(&self, notification: Notification) -> Result<(), Error> {
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);

@@ -113,7 +113,15 @@ impl IntoResponse for ConnectionError {
     }
 }
 
-#[utoipa::path(get,path="/email/links/suggestion",operation_id="imap_suggestion",responses((status=200,body=ImapSuggestion),(status=401,body=model::response::ErrorResponse)))]
+#[utoipa::path(
+    get,
+    path = "/email/links/suggestion",
+    operation_id = "imap_suggestion",
+    responses(
+        (status = 200, body = ImapSuggestion),
+        (status = 401, body = model::response::ErrorResponse)
+    )
+)]
 pub(crate) async fn suggestion(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
@@ -126,7 +134,16 @@ pub(crate) async fn suggestion(
     }))
 }
 
-#[utoipa::path(post,path="/email/links/imap/discover",operation_id="imap_discover",request_body=ImapDiscoverRequest,responses((status=200,body=imap_service_client::Discovery),(status=403,body=ImapConnectionErrorResponse)))]
+#[utoipa::path(
+    post,
+    path = "/email/links/imap/discover",
+    operation_id = "imap_discover",
+    request_body = ImapDiscoverRequest,
+    responses(
+        (status = 200, body = imap_service_client::Discovery),
+        (status = 403, body = ImapConnectionErrorResponse)
+    )
+)]
 pub(crate) async fn discover(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
