@@ -36,6 +36,8 @@ export interface CalendarSyncControllerOptions {
   fetchChanges?: FetchCalendarChanges;
   /** Refetches the calendar list after calendars or links change. */
   refetchCalendars?: () => Promise<unknown>;
+  /** Called once a delta has dropped the cached calendar. */
+  onReset?: () => void;
   debounceMs?: number;
 }
 
@@ -66,7 +68,7 @@ export type CalendarCatchUp = 'current' | 'held' | 'retried' | 'behind';
  */
 type CalendarResetReason = 'retention' | 'new_link' | 'first_link';
 
-type DeltaSpan = Pick<Span, 'setAttr'>;
+type DeltaSpan = Pick<Span, 'setAttr' | 'error'>;
 
 const eventKey = (id: string) => `GraphqlCalendarEvent:${id}`;
 const occurrenceKey = (id: string) => `GraphqlCalendarOccurrence:${id}`;
@@ -113,6 +115,7 @@ export class CalendarSyncController {
   private retrying = false;
   private readonly fetchChanges: FetchCalendarChanges;
   private readonly refetchCalendars: () => Promise<unknown>;
+  private readonly onReset: () => void;
   private readonly debounceMs: number;
 
   constructor(
@@ -121,6 +124,7 @@ export class CalendarSyncController {
   ) {
     this.fetchChanges = options.fetchChanges ?? fetchCalendarChanges;
     this.refetchCalendars = options.refetchCalendars ?? refetchCalendarList;
+    this.onReset = options.onReset ?? (() => {});
     this.debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
   }
 
@@ -281,9 +285,17 @@ export class CalendarSyncController {
    * `undefined` when it stopped before the end of the change log.
    */
   private applyChanges(): Promise<number | undefined> {
-    return Telemetry.span('calendar.delta_sync', (span) =>
-      this.applyChangesIn(span)
-    );
+    return Telemetry.span('calendar.delta_sync', async (span) => {
+      const pass = await ResultAsync.fromPromise(
+        this.applyChangesIn(span),
+        (error) => error
+      );
+      if (pass.isErr()) {
+        span.error(pass.error);
+        throw pass.error;
+      }
+      return pass.value;
+    });
   }
 
   private async applyChangesIn(span: DeltaSpan): Promise<number | undefined> {
@@ -292,6 +304,7 @@ export class CalendarSyncController {
     const restAnswers = calendarRestAnswers();
     this.passRestAnswers = restAnswers;
     if (state.kind === 'unsupported' || !state.watermark) return restAnswers;
+    span.setAttr('calendar.delta.links', state.watermark.length);
     if (state.watermark.length === 0) {
       // Rows cached while no inbox was visible: no change log reaches them,
       // and the server answers an empty `since` with its watermark alone.
@@ -374,6 +387,7 @@ export class CalendarSyncController {
       { reset: true, watermark: { kind: 'merge', links: to } },
       generation
     );
+    this.onReset();
     await this.refetchCalendars();
   }
 }

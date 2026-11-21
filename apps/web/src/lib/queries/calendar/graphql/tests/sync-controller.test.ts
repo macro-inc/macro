@@ -89,18 +89,29 @@ const changes = (
 
 /** Records the attributes of each span the controller opens. */
 function recordSpans() {
-  const spans: { name: string; attributes: Record<string, unknown> }[] = [];
+  const spans: {
+    name: string;
+    attributes: Record<string, unknown>;
+    errors: unknown[];
+  }[] = [];
   vi.spyOn(Telemetry, 'span').mockImplementation(((
     name: string,
-    run: (span: Pick<Span, 'setAttr'>) => unknown
+    run: (span: Pick<Span, 'setAttr' | 'error'>) => unknown
   ) => {
-    const attributes: Record<string, unknown> = {};
-    spans.push({ name, attributes });
+    const recorded = {
+      name,
+      attributes: {} as Record<string, unknown>,
+      errors: [] as unknown[],
+    };
+    spans.push(recorded);
     return run({
       setAttr: (key: string, value: unknown) => {
-        attributes[key] = value;
+        recorded.attributes[key] = value;
       },
-    } as Pick<Span, 'setAttr'>);
+      error: (error: unknown) => {
+        recorded.errors.push(error);
+      },
+    } as Pick<Span, 'setAttr' | 'error'>);
   }) as unknown as typeof Telemetry.span);
   return spans;
 }
@@ -322,8 +333,42 @@ describe('CalendarSyncController', () => {
     expect(refetchCalendars).toHaveBeenCalledOnce();
     expect(spans.at(-1)).toMatchObject({
       name: 'calendar.delta_sync',
-      attributes: { 'calendar.delta.reset': 'first_link' },
+      attributes: {
+        'calendar.delta.reset': 'first_link',
+        'calendar.delta.links': 0,
+      },
     });
+  });
+
+  it('tells its owner when a delta dropped the cached calendar', async () => {
+    const onReset = vi.fn();
+    const host = {
+      calendarRange: vi.fn(async () => syncState([])),
+      calendarCommit: vi.fn(async () => ({
+        kind: 'committed' as const,
+        revision: '2' as never,
+        changed: [],
+      })),
+    };
+    const controller = new CalendarSyncController(host, {
+      fetchChanges: async () =>
+        changes({ newWatermark: [{ linkId: 'link-9', seq: '12' }] }),
+      refetchCalendars: async () => undefined,
+      onReset,
+    });
+    await controller.runDelta();
+    expect(onReset).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it('marks a failed pass on its span', async () => {
+    const spans = recordSpans();
+    const { fetchChanges, controller } = setup([]);
+    fetchChanges.mockRejectedValueOnce(new Error('offline'));
+    await expect(controller.runDelta()).rejects.toThrow('offline');
+    expect(spans.at(-1)?.errors).toHaveLength(1);
+    expect(spans.at(-1)?.attributes['calendar.delta.links']).toBe(2);
+    controller.dispose();
   });
 
   it('names a reset for a link the cache never tracked', async () => {

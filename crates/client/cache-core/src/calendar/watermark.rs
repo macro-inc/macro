@@ -47,7 +47,8 @@ pub enum CalendarWatermarkUpdate {
     },
     /// A delta computed from `since` applied every change up to `to`. A link
     /// still at its `since` value advances to `to`; a link another commit
-    /// moved meanwhile keeps the lower of the two values.
+    /// moved meanwhile keeps the lower of the two values, and one another
+    /// commit removed from a stored watermark stays removed.
     Advance {
         /// Watermark the delta was requested from.
         since: Vec<CalendarLinkWatermark>,
@@ -121,11 +122,16 @@ pub fn apply_watermark_update(
                 .map(|link| (link.link_id.as_str(), link.seq))
                 .collect::<BTreeMap<_, _>>();
             for link in to {
-                let stored = current.get(&link.link_id).copied();
-                let value = if stored == since.get(link.link_id.as_str()).copied() {
+                let tracked = current.get(&link.link_id).copied();
+                // Another commit removed the link while the delta ran: its rows
+                // are gone, so the delta's position no longer describes them.
+                if tracked.is_none() && stored.is_some() {
+                    continue;
+                }
+                let value = if tracked == since.get(link.link_id.as_str()).copied() {
                     link.seq
                 } else {
-                    lower(stored, link.seq)
+                    lower(tracked, link.seq)
                 };
                 current.insert(link.link_id.clone(), value);
             }

@@ -333,21 +333,27 @@ fn a_page_leaves_a_link_untracked_that_appeared_after_rows_were_cached() {
 #[test]
 fn deltas_advance_untouched_links_and_keep_concurrent_lowerings() {
     let since = vec![link("a", 10), link("b", 5)];
-    let to = vec![link("a", 20), link("b", 8), link("c", 4)];
+    let to = vec![link("a", 20), link("b", 8)];
     let advance = CalendarWatermarkUpdate::Advance {
         since: since.clone(),
         to,
     };
     assert_eq!(
         apply_watermark_update(Some(&since), Some(&advance), &[]),
-        [link("a", 20), link("b", 8), link("c", 4)]
+        [link("a", 20), link("b", 8)]
     );
 
     // A page lowered `a` while the delta was in flight: its change is replayed.
     let lowered = [link("a", 3), link("b", 5)];
     assert_eq!(
         apply_watermark_update(Some(&lowered), Some(&advance), &[]),
-        [link("a", 3), link("b", 8), link("c", 4)]
+        [link("a", 3), link("b", 8)]
+    );
+
+    // Another tab's delta removed `b` while this one was in flight.
+    assert_eq!(
+        apply_watermark_update(Some(&[link("a", 10)]), Some(&advance), &[]),
+        [link("a", 20)]
     );
 
     // A delta from an empty watermark bootstraps every link.
@@ -358,6 +364,27 @@ fn deltas_advance_untouched_links_and_keep_concurrent_lowerings() {
     assert_eq!(
         apply_watermark_update(None, Some(&bootstrap), &[]),
         [link("a", 2)]
+    );
+}
+
+#[test]
+fn a_reset_tracks_every_link_of_its_watermark() {
+    // The reset a new link causes must leave nothing untracked, or every
+    // later delta would reset again.
+    let stored = CalendarSyncState {
+        watermark: Some(vec![link("a", 4)]),
+        freshness: CalendarFreshness::Fresh,
+    };
+    let reset = CalendarCommit {
+        reset: true,
+        watermark: Some(CalendarWatermarkUpdate::Merge {
+            links: vec![link("a", 9), link("c", 30)],
+        }),
+        ..CalendarCommit::default()
+    };
+    assert_eq!(
+        next_sync_state(&stored, &reset).watermark,
+        Some(vec![link("a", 9), link("c", 30)])
     );
 }
 
