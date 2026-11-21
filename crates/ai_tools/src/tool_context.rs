@@ -29,6 +29,8 @@ use chat::outbound::postgres::PgChatRepo;
 pub use cognition::inbound::toolset::CognitionToolContext as ToolCognitionToolContext;
 use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
+use contacts::domain::list_reads::{ContactListReads, FlaggedContactReads};
+use contacts::domain::list_writes::{ContactListWrites, ListWritesGate};
 use contacts::domain::service::{ContactsDomainService, SqsContactsIngress};
 use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -326,6 +328,11 @@ pub struct ChannelSideEffectClients {
     pub sqs: aws_sdk_sqs::Client,
     /// Broker publishing channel events to the `macro.channels` topic.
     pub macro_event_broker: ToolEventBroker,
+    /// The host's environment, which turns list-aware contact changes on in
+    /// a local stack.
+    pub environment: macro_env::Environment,
+    /// Reads `contacts-list-writes` elsewhere; `None` keeps those changes off.
+    pub feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 }
 
 /// Build the channel AI tool context dispatching the same side effects as the
@@ -378,11 +385,14 @@ fn channel_event_dispatcher(
     pool: &sqlx::PgPool,
     clients: &ChannelSideEffectClients,
 ) -> ToolChannelEventDispatcher {
-    let contacts_ingress = Arc::new(SqsContactsIngress {
-        queue: SqsContactsQueue::new(
-            clients.sqs.clone(),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
+    let contacts_ingress = Arc::new(ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(
+                clients.sqs.clone(),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: ContactListWrites::new(clients.environment, clients.feature_flags.clone()),
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
@@ -1452,10 +1462,14 @@ pub fn build_databases_tool_context(
     )
 }
 
-/// The contacts the SQL tools read `macro.people` from. Reads only, so
-/// nothing is ever invalidated through a notifier.
-pub type ToolContactsService =
-    ContactsDomainService<DbContactsRepository, Option<ConnectionGatewayNotifier>>;
+/// The contacts the SQL tools read `macro.people` from: the legacy graph or
+/// the list-aware tables, by the session user's `contacts-list-reads` flag.
+/// Reads only, so nothing is ever invalidated through a notifier.
+pub type ToolContactsService = FlaggedContactReads<
+    ContactsDomainService<DbContactsRepository, Option<ConnectionGatewayNotifier>>,
+    DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
 
 /// Type alias for the SQL tools' context: SQL over the same databases
 /// service the schema tools use, reading rows through Soup.
@@ -1476,20 +1490,26 @@ pub type ToolViewOnlyDatabasesSqlToolContext = DatabasesSqlToolContext<
 >;
 
 /// Build the SQL tools' context over the schema tools' databases service
-/// and entity access, and the host's Soup.
+/// and entity access, and the host's Soup. `flags` selects each user's
+/// `macro.people` reads; without a provider every user reads the legacy graph.
 pub fn build_databases_sql_tool_context(
     databases: &ToolDatabasesToolContext,
     soup_service: Arc<ToolSoupService>,
     pool: sqlx::PgPool,
+    flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 ) -> ToolDatabasesSqlToolContext {
     DatabasesSqlToolContext::new(DatabasesSql::new(
         databases.service.clone(),
         databases.entity_access_service.clone(),
         soup_service,
-        Arc::new(ContactsDomainService {
-            repository: DbContactsRepository::new(pool),
-            notifier: None,
-        }),
+        Arc::new(FlaggedContactReads::new(
+            Arc::new(ContactsDomainService {
+                repository: DbContactsRepository::new(pool.clone()),
+                notifier: None,
+            }),
+            Arc::new(DbContactsRepository::new(pool)),
+            ContactListReads::optional(flags),
+        )),
     ))
 }
 

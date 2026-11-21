@@ -1,11 +1,13 @@
 use std::time::Duration;
 
 use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsNotifier, ContactsOutboxService, ContactsRepository};
+use crate::domain::ports::{
+    ContactListRepository, ContactsNotifier, ContactsOutboxService, ContactsRepository,
+};
 use crate::domain::service::ContactsDomainService;
 use rootcause::report;
 use sqs_worker::SQSWorker;
-use tracing::instrument;
+use tracing::{Instrument as _, instrument};
 
 #[cfg(test)]
 mod test;
@@ -17,14 +19,16 @@ pub struct ContactsWorker<R, N> {
     service: std::sync::Arc<ContactsDomainService<R, N>>,
 }
 
-impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
+impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier> ContactsWorker<R, N> {
     /// Creates a new worker with the given SQS client and domain service.
     pub fn new(sqs: SQSWorker, service: std::sync::Arc<ContactsDomainService<R, N>>) -> Self {
         Self { sqs, service }
     }
 
-    /// Polls SQS indefinitely, processing each message.
-    #[instrument(skip(self))]
+    /// Polls SQS indefinitely, processing each message in a span of its own.
+    ///
+    /// The loop itself has no span: one around it would never close, so none
+    /// of its rounds would form a finished trace.
     pub async fn poll(&self) {
         tracing::info!("initiated notification worker");
         loop {
@@ -36,9 +40,8 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
                         continue;
                     }
                     for message in messages {
-                        if let Err(e) = self.process_message(&message).await {
-                            tracing::error!(error=?e, "error processing message");
-                        }
+                        // A failure is logged in the message's own span.
+                        self.process_message(&message).await.ok();
                     }
                 }
                 Err(e) => {
@@ -48,21 +51,30 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsWorker<R, N> {
         }
     }
 
-    #[instrument(
-        skip(self, message),
-        fields(
-            message_id = message.message_id,
-            receive_count = sqs_worker::receive_count(message),
-        ),
-        err
-    )]
+    /// One worker round: a root span per message, parented on the sender's
+    /// trace when the message carries one. The span is built by hand because
+    /// its parent must be set before it is entered.
     async fn process_message(
         &self,
         message: &aws_sdk_sqs::types::Message,
     ) -> Result<(), rootcause::Report> {
-        self.parse_message(message).await?;
-        self.cleanup_message(message).await?;
-        Ok(())
+        let span = tracing::info_span!(
+            parent: None,
+            "contacts.worker.process_message",
+            message_id = message.message_id(),
+            receive_count = sqs_worker::receive_count(message).map(i64::from),
+        );
+        crate::trace_context::adopt(&span, message);
+        async {
+            self.parse_message(message).await?;
+            self.cleanup_message(message).await
+        }
+        .instrument(span.clone())
+        .await
+        .inspect_err(|error| {
+            // Entered, not just parented, so the log carries the round's trace ids.
+            span.in_scope(|| tracing::error!(error = ?error, "error processing message"));
+        })
     }
 
     #[instrument(skip(sqs_message, self), err)]

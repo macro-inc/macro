@@ -208,14 +208,14 @@
             "items": {
               "$ref": "#/components/schemas/SearchedPerson"
             },
-            "description": "Matches ranked teammates first, then prefix matches, then by name or email."
+            "description": "Matches ranked by group, then prefix matches, then by name or email.\nTeammates come first. For a viewer on the list-aware directory,\n`interacted` and `invited` people come next, then `gmail` and\n`outlook` contacts."
           }
         }
       },
       "SearchedPerson": {
         "type": "object",
         "description": "One ranked person in a GET /contacts/search response.",
-        "required": ["userId", "isTeammate", "isAgent"],
+        "required": ["userId", "isTeammate", "isAgent", "lists"],
         "properties": {
           "isAgent": {
             "type": "boolean",
@@ -224,6 +224,13 @@
           "isTeammate": {
             "type": "boolean",
             "description": "Whether the person is on the viewer's current team."
+          },
+          "lists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The keys of the viewer's contact lists the person is in (`teammates`,\n`interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty\nfor the viewer and for a contact only the legacy directory knows."
           },
           "name": {
             "type": ["string", "null"],

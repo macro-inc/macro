@@ -155,7 +155,10 @@ Outlook (Microsoft Graph) outbound adapters.
   replacement carrying an edited description (`without_meeting`) removes the
   top-level run around the join link whose texts, ignoring whitespace, match
   the saved block's (textless parts only between them), and refuses one with
-  the link or a part of the block anywhere else.
+  the link or a part of the block anywhere else. An ordinary description
+  edit (`preserve_meeting_details`) removes that run the same way and writes
+  Outlook's own block from the current body back in its place, so the block
+  keeps its markers; a description it cannot separate is written as given.
 - A replacement lays the editor's unsaved changes over the copied event
   with the same `patch_body` an Outlook update sends, so its create body holds
   no field the copy or an update does not already send. A series that moves

@@ -31,6 +31,7 @@ bounded, enriched pages under `GraphqlUser`; these are not CRM contacts.
 ## Gotchas
 
 - Construct the query only from the authenticated root viewer, never a user argument.
+- `GraphqlContact.lists` is the viewer's list keys for the person (`teammates`, `interacted`, `invited`, `gmail`, `outlook`; clients treat keys as opaque). It resolves from the list-aware tables for every viewer, whichever store the `contacts-list-reads` flag chose the ids from, so it is empty for self and for a person only the legacy graph knows.
 - `GraphqlContact.id` identifies the viewer/person pair; `userId` identifies the target.
   Viewer-specific names must not merge into public user profiles or `GraphqlUser`.
 - Only a null continuation proves exhaustion. Search budget exhaustion or invalid legacy IDs can leave empty pages. Reset cursors for a new query; server search returns ID-ordered pages, not ranked top-K results.

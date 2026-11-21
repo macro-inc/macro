@@ -50,7 +50,15 @@ fn people_policy_100k() {
             })
             .await
             .unwrap();
-        for query in ["alpha", "p099999@example.com", "absent", "", "alpha"] {
+        let mention = vec![
+            vec!["teammates".to_owned()],
+            vec!["interacted".to_owned(), "invited".to_owned()],
+            vec!["gmail".to_owned(), "outlook".to_owned()],
+        ];
+        for (query, list_priority) in ["alpha", "p099999@example.com", "absent", "", "alpha"]
+            .into_iter()
+            .flat_map(|query| [(query, vec![]), (query, mention.clone())])
+        {
             let start = std::time::Instant::now();
             let result = engine
                 .search_people(&PeopleSearch {
@@ -62,6 +70,8 @@ fn people_policy_100k() {
                     limit: 50,
                     now_ms: 2_000,
                     cursor: None,
+                    list_priority: list_priority.clone(),
+                    only_listed: false,
                 })
                 .await
                 .unwrap();
@@ -69,7 +79,8 @@ fn people_policy_100k() {
                 panic!("ready")
             };
             eprintln!(
-                "100k person policy: query={query:?}, elapsed={:?}, winners={}",
+                "100k person policy: query={query:?}, list_groups={}, elapsed={:?}, winners={}",
+                list_priority.len(),
                 start.elapsed(),
                 people.len()
             );

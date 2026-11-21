@@ -19,7 +19,8 @@ env_vars! {
 }
 
 maybe_env_vars! {
-    /// PostHog project key the Outlook sync's feature flags are read with.
+    /// PostHog project key the Outlook sync's and the contacts list writes'
+    /// feature flags are read with.
     pub struct PosthogApiKey;
     /// PostHog host; defaults to the project's US region.
     pub struct PosthogHost;
@@ -170,8 +171,8 @@ pub struct Config {
     /// The internal api key
     pub internal_api_key: InternalApiKey,
 
-    /// PostHog project key (optional). Without one, the Outlook sync's
-    /// feature flags read off.
+    /// PostHog project key (optional). Without one, the Outlook sync's and
+    /// the contacts list writes' feature flags read off.
     pub posthog_api_key: PosthogApiKey,
 
     /// PostHog host (optional).

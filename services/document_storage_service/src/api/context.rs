@@ -1,5 +1,7 @@
+use contacts::domain::list_writes::ListWritesGate;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
+use feature_flags::outbound::posthog::PostHogFeatureFlags;
 
 use crate::{config::Config, service::s3::S3};
 use account_manager::{
@@ -534,7 +536,9 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
                     notification::outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+            ContactsChannelDispatcher<
+                ListWritesGate<SqsContactsIngress<SqsContactsQueue>, PostHogFeatureFlags>,
+            >,
             DssEventBroker,
         >,
     >,
@@ -707,11 +711,19 @@ pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterStat
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
+    DssContactReads,
+    AuthorizationService,
+>;
+
+/// Contact reads that follow each viewer's `contacts-list-reads` flag between
+/// the legacy graph and the list-aware tables.
+pub(crate) type DssContactReads = contacts::domain::list_reads::FlaggedContactReads<
     contacts::domain::service::ContactsDomainService<
         contacts::outbound::repository::DbContactsRepository,
         Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     >,
-    AuthorizationService,
+    contacts::outbound::repository::DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 /// Type alias for the databases router state.
@@ -951,9 +963,7 @@ pub(crate) type DssWebhookState =
 pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
     EntityAccessService,
     PgWebhookRepo,
-    crate::outbound::stream_contacts::ContactsStreamChecker<
-        contacts::outbound::repository::DbContactsRepository,
-    >,
+    crate::outbound::stream_contacts::ContactsStreamChecker<DssContactReads>,
 >;
 
 /// Type alias for the webhook-event SSE router state.
