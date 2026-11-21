@@ -273,6 +273,163 @@ describe('Task.create', () => {
     ]);
   });
 
+  test('links a source reply with a chip that opens its thread and records it as Source', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      const { pathname } = new URL(request.url);
+      if (pathname === '/user/me') {
+        return Response.json({ user_id: 'macro|creator@example.test' });
+      }
+      if (
+        pathname ===
+        '/messages/channel/0195d2dd-5de9-71f2-9d59-5d9734f1adb7/items/01a1eaa3-102a-7bbc-8d8f-8a427f9efecb'
+      ) {
+        return Response.json({
+          id: '01a1eaa3-102a-7bbc-8d8f-8a427f9efecb',
+          parent: {
+            type: 'channel',
+            id: '0195d2dd-5de9-71f2-9d59-5d9734f1adb7',
+          },
+          thread_id: '01a1eaa3-0f00-7000-8000-000000000001',
+          sender_id: 'macro|asker@example.test',
+          content: 'Can we chip these links?',
+          mentions: [],
+          attachments: [],
+          reactions: [],
+          created_at: '2026-11-20T12:00:00Z',
+          updated_at: '2026-11-20T12:00:00Z',
+        });
+      }
+      return Response.json({
+        documentId: '0198a4cc-e138-7670-a308-a6b766602723',
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: {
+        auth: 'https://auth.example.test',
+        storage: 'https://storage.example.test',
+      },
+    });
+
+    await macro.tasks.create({
+      name: 'Enforce mention chips',
+      markdown: 'Agents should link what they quote.',
+      source: macro.channels
+        .byId('0195d2dd-5de9-71f2-9d59-5d9734f1adb7')
+        .message('01a1eaa3-102a-7bbc-8d8f-8a427f9efecb'),
+    });
+
+    expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+      '/messages/channel/0195d2dd-5de9-71f2-9d59-5d9734f1adb7/items/01a1eaa3-102a-7bbc-8d8f-8a427f9efecb',
+      '/user/me',
+      '/documents/create_task',
+    ]);
+    const body = await requests[2].json();
+    expect(body.markdown).toBe(
+      'Source: <m-document-mention>{"documentId":"0195d2dd-5de9-71f2-9d59-5d9734f1adb7","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"01a1eaa3-102a-7bbc-8d8f-8a427f9efecb","channel_thread_id":"01a1eaa3-0f00-7000-8000-000000000001"}}</m-document-mention>\n\nAgents should link what they quote.',
+    );
+    expect(body.propertyValues).toEqual([
+      {
+        propertyId: '00000001-0000-0000-0000-000000000002',
+        value: {
+          type: 'select_option',
+          option_id: '00000001-0000-0000-0002-000000000001',
+        },
+      },
+      {
+        propertyId: '00000001-0000-0000-0000-000000000001',
+        value: {
+          type: 'multi_entity_reference',
+          references: [
+            { entity_id: 'macro|creator@example.test', entity_type: 'USER' },
+          ],
+        },
+      },
+      {
+        propertyId: '00000001-0000-0000-0000-00000000000b',
+        value: {
+          type: 'entity_reference',
+          reference: {
+            entity_id: '0195d2dd-5de9-71f2-9d59-5d9734f1adb7',
+            entity_type: 'CHANNEL',
+            specific_message_id: '01a1eaa3-102a-7bbc-8d8f-8a427f9efecb',
+          },
+        },
+      },
+    ]);
+  });
+
+  test('links a source document with a chip when there is no other body', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      if (new URL(request.url).pathname === '/user/me') {
+        return Response.json({ user_id: 'macro|creator@example.test' });
+      }
+      return Response.json({
+        documentId: '0198a4cc-e138-7670-a308-a6b766602724',
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: {
+        auth: 'https://auth.example.test',
+        storage: 'https://storage.example.test',
+      },
+    });
+
+    await macro.tasks.create({
+      name: 'Follow up on the spec',
+      source: macro.documents.byId('0198a4cc-e138-7670-a308-a6b766602725'),
+      assignees: [],
+    });
+
+    const body = await requests[0].json();
+    expect(body.markdown).toBe(
+      'Source: <m-document-mention>{"documentId":"0198a4cc-e138-7670-a308-a6b766602725","documentName":"","blockName":"md"}</m-document-mention>',
+    );
+    expect(body.propertyValues).toContainEqual({
+      propertyId: '00000001-0000-0000-0000-00000000000b',
+      value: {
+        type: 'entity_reference',
+        reference: {
+          entity_id: '0198a4cc-e138-7670-a308-a6b766602725',
+          entity_type: 'DOCUMENT',
+        },
+      },
+    });
+  });
+
+  test('rejects a source that is not a message, document or chat', async () => {
+    const macro = new Macro({ token: 'user-token' });
+    await expect(
+      macro.tasks.create({
+        name: 'Bad source',
+        source:
+          'https://macro.com/app/md/0198a4cc-e138-7670-a308-a6b766602725' as never,
+      }),
+    ).rejects.toThrow('`source` as a channel message, document or chat');
+  });
+
+  test("rejects a handle's JSON passed back as the source", async () => {
+    const macro = new Macro({ token: 'user-token' });
+    await expect(
+      macro.tasks.create({
+        name: 'Bad source',
+        source: {
+          entityType: 'document',
+          id: '0198a4cc-e138-7670-a308-a6b766602725',
+        } as never,
+      }),
+    ).rejects.toThrow('`source` as a channel message, document or chat');
+  });
+
   test('keeps the service defaults when no properties are given', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input, init) => {
@@ -726,7 +883,7 @@ describe('Task.create options', () => {
         body: 'Signing in sends you back to the login page.',
       } as unknown as { name: string }),
     ).rejects.toThrow(
-      'tasks.create does not take `title`, `body`; its options are `name`, `markdown`, `project`, `initiative`, `assignees`, `dueDate`, `team`, `shareWithTeam`.',
+      'tasks.create does not take `title`, `body`; its options are `name`, `markdown`, `project`, `initiative`, `assignees`, `dueDate`, `team`, `shareWithTeam`, `source`.',
     );
     expect(requests).toHaveLength(0);
   });

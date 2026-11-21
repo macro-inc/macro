@@ -2,7 +2,13 @@ import type {
   Message as MessageRecord,
   MessageTimelineQuery,
 } from '../../../generated/storage/types.gen';
-import { type RichMessage, type SimpleMention, toBody } from '../../mentions';
+import {
+  type MentionPart,
+  type RichMessage,
+  type SimpleMention,
+  toBody,
+  wrapXml,
+} from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { FavoritableEntity } from '../entity';
@@ -145,6 +151,28 @@ export class Message extends FavoritableEntity<MessageRecord> {
   webUrl(): string {
     const query = new URLSearchParams({ channel_message_id: this.id });
     return `${this.client.webAppUrl}/app/channel/${this.channelId}?${query}`;
+  }
+
+  /**
+   * A mention part that renders an inline link to this message: a chip that
+   * opens its channel scrolled to it, as the app's own message mentions do.
+   *
+   * @readonly
+   */
+  toMention(): MentionPart {
+    const threadId = this.detail.peek()?.thread_id;
+    return {
+      tag: wrapXml('m-document-mention', {
+        documentId: this.channelId,
+        documentName: '',
+        blockName: 'channel',
+        blockParams: {
+          channel_message_id: this.id,
+          ...(threadId ? { channel_thread_id: threadId } : {}),
+        },
+      }),
+      mention: { entity_type: 'channel', entity_id: this.channelId },
+    };
   }
 
   /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */

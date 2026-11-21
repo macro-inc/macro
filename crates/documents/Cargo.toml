@@ -61,6 +61,7 @@ axum = [
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",
+  "dep:mention_utils",
   "dep:model-error-response",
   "dep:model_user",
   "dep:task_dedup",
@@ -156,6 +157,7 @@ macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+mention_utils = { path = "../mention_utils", optional = true }
 system_skills = { path = "../system_skills" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }

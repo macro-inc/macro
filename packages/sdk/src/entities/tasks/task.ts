@@ -1,7 +1,13 @@
-import type { PropertyInput } from '../../../generated/storage/types.gen';
+import { match } from 'ts-pattern';
+import type {
+  EntityReference,
+  PropertyInput,
+} from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
+import type { Message } from '../channels/message';
+import type { Chat } from '../chats/chat';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
@@ -18,8 +24,12 @@ const ASSIGNEES_PROPERTY_ID = '00000001-0000-0000-0000-000000000001';
 const STATUS_PROPERTY_ID = '00000001-0000-0000-0000-000000000002';
 const DUE_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000004';
 const PROJECT_PROPERTY_ID = '00000001-0000-0000-0000-000000000014';
+const SOURCE_PROPERTY_ID = '00000001-0000-0000-0000-00000000000b';
 const NOT_STARTED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000001';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
+
+/** What a task was created from: the message, document or chat it came out of. */
+export type TaskSource = Message | Document | Chat;
 
 /** A task's name and state from one batched read, without its content. */
 export interface TaskSummary {
@@ -85,6 +95,8 @@ export class Task extends Document {
       team?: Team;
       /** Defaults to team sharing, or private when the session cannot share. */
       shareWithTeam?: boolean;
+      /** What the task came from; linked as a chip above `markdown` and set as its Source. A team bot with no acting user can't pass it yet. */
+      source?: TaskSource;
     },
   ): Promise<Task> {
     if (typeof opts !== 'object' || opts === null)
@@ -100,18 +112,25 @@ export class Task extends Document {
       dueDate: true,
       team: true,
       shareWithTeam: true,
+      source: true,
     });
     if (typeof opts.name !== 'string' || !opts.name.trim())
       throw new MacroError('tasks.create needs `name`, the task title.');
+    const source = opts.source && sourceReference(opts.source);
+    // A reply's chip opens its thread only with the thread id, which
+    // `channel.message(id)` hasn't loaded yet; `content()` loads the whole
+    // message (messages are never seeded from listings).
+    if (opts.source?.entityType === 'channel_message')
+      await opts.source.content();
     const { documentId } = unwrap(
       await client.storage.createTaskHandler({
         body: {
           taskName: opts.name,
-          markdown: opts.markdown ?? null,
+          markdown: taskBody(opts.markdown, opts.source),
           projectId: opts.project?.id ?? null,
           teamId: opts.team?.id ?? null,
           shareWithTeam: opts.shareWithTeam,
-          propertyValues: await initialProperties(client, opts),
+          propertyValues: await initialProperties(client, opts, source),
         },
       }),
     );
@@ -262,6 +281,44 @@ export class Task extends Document {
   });
 }
 
+/** The Source property's reference to a task's source; throws for anything else. */
+function sourceReference(source: TaskSource): EntityReference {
+  // Code-mode programs are untyped, so `source` can be anything, including a
+  // handle's JSON, which has an `entityType` but no `toMention`.
+  if (typeof source?.toMention !== 'function') return notASource();
+  return match<TaskSource, EntityReference>(source)
+    .with({ entityType: 'channel_message' }, (message) => ({
+      entity_id: message.channelId,
+      entity_type: 'CHANNEL',
+      specific_message_id: message.id,
+    }))
+    .with({ entityType: 'document' }, (document) => ({
+      entity_id: document.id,
+      entity_type: 'DOCUMENT',
+    }))
+    .with({ entityType: 'chat' }, (chat) => ({
+      entity_id: chat.id,
+      entity_type: 'CHAT',
+    }))
+    .otherwise(notASource);
+}
+
+function notASource(): never {
+  throw new MacroError(
+    'tasks.create takes `source` as a channel message, document or chat handle, e.g. `channel.message(id)`.',
+  );
+}
+
+/** The task body: a chip linking its source, then the caller's markdown. */
+function taskBody(
+  markdown: string | undefined,
+  source: TaskSource | undefined,
+): string | null {
+  if (!source) return markdown ?? null;
+  const link = `Source: ${source.toMention().tag}`;
+  return markdown ? `${link}\n\n${markdown}` : link;
+}
+
 /**
  * Property values for a new task, or `null` to keep the service's defaults
  * (creator assigned, Not started). Sending any value replaces those defaults,
@@ -270,8 +327,10 @@ export class Task extends Document {
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],
+  source: EntityReference | undefined,
 ): Promise<PropertyInput[] | null> {
-  if (!opts.initiative && !opts.assignees && !opts.dueDate) return null;
+  if (!opts.initiative && !opts.assignees && !opts.dueDate && !source)
+    return null;
   const assignees = opts.assignees ?? [await User.me(client)];
   const values: PropertyInput[] = [
     {
@@ -304,6 +363,12 @@ async function initialProperties(
     values.push({
       propertyId: DUE_DATE_PROPERTY_ID,
       value: { type: 'date', value: opts.dueDate.toISOString() },
+    });
+  }
+  if (source) {
+    values.push({
+      propertyId: SOURCE_PROPERTY_ID,
+      value: { type: 'entity_reference', reference: source },
     });
   }
   return values;
