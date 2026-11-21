@@ -1578,6 +1578,55 @@ describe('useChannelParticipantsQuery', () => {
     expect(ids()).toEqual(['owner', 'other', 'a']);
   });
 
+  it('sends one more check for readers that shared a failed recheck though they saw the record change apart', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const owner = participant('owner', '2026-01-01T00:00:00Z', 'owner');
+    const admin = participant('owner', '2026-01-01T00:00:00Z', 'admin');
+    const other = participant('other', '2026-01-04T00:00:00Z');
+    setChannels({ 'channel-1': [owner], 'channel-2': [owner] });
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const ownerRow = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const a = restRow('a', '2026-01-03T00:00:00Z');
+    // Answers queued by earlier tests would shift these checks.
+    storage.getChannelParticipants.mockReset();
+    const older = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([ownerRow, a]))
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce(err([{ code: 'HTTP_ERROR', message: 'offline' }]))
+      .mockResolvedValueOnce(ok([ownerRow, a]))
+      .mockResolvedValue(err([{ code: 'HTTP_ERROR', message: 'offline' }]));
+    const { add, ids, setApart, apartIds } = mount({ apart: true });
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+    expect(apartIds()).toEqual(['owner', 'a']);
+
+    setChannels({ 'channel-1': [admin], 'channel-2': [owner] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
+    setApart('channel-2');
+    // The record changes, and the other reader comes back a moment later,
+    // before the check for the change is sent; both ride it.
+    setChannels({ 'channel-1': [admin, other], 'channel-2': [owner] });
+    vi.setSystemTime(Date.now() + 1);
+    setApart('channel-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    // The older check saw a leave; the shared one failed.
+    older.resolve(ok([ownerRow]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other']);
+    expect(apartIds()).toEqual(['owner', 'other']);
+    // One more check for both: a rejoined.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(4);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+    expect(apartIds()).toEqual(['owner', 'other', 'a']);
+  });
+
   it('keeps two readers of a channel agreeing when an older recheck answers before one joins a newer check', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
