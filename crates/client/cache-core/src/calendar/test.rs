@@ -350,10 +350,11 @@ fn deltas_advance_untouched_links_and_keep_concurrent_lowerings() {
         [link("a", 3), link("b", 8)]
     );
 
-    // Another tab's delta removed `b` while this one was in flight.
+    // Another tab's delta removed `b` while this one was in flight and wrote
+    // its rows again: `b` comes back, so the next delta can remove them.
     assert_eq!(
         apply_watermark_update(Some(&[link("a", 10)]), Some(&advance), &[]),
-        [link("a", 20)]
+        [link("a", 20), link("b", 8)]
     );
 
     // A delta from an empty watermark bootstraps every link.
