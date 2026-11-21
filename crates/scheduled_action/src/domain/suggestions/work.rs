@@ -266,9 +266,15 @@ impl WorkList {
     /// The list as the finding call answered it, bounded: at most
     /// [`MAX_STREAMS`] streams, every text on one line, cut short, and
     /// unable to close the tag it is passed in. Its words come from the
-    /// person's mail.
-    pub fn from_answer(answer: Value) -> serde_json::Result<Self> {
-        let list: Self = serde_json::from_value(answer)?;
+    /// person's mail, so an answer that doesn't fit is refused without
+    /// them: serde's message can quote the value it couldn't read.
+    pub fn from_answer(answer: Value) -> anyhow::Result<Self> {
+        let list: Self = serde_json::from_value(answer).map_err(|error| {
+            anyhow::anyhow!(
+                "the finding call's answer doesn't fit the work list ({:?} error)",
+                error.classify()
+            )
+        })?;
         Ok(Self {
             person: truncate(&list.person, MAX_TEXT_FIELD_CHARS),
             streams: list

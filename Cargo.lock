@@ -354,6 +354,7 @@ dependencies = [
  "email",
  "entity_access",
  "futures",
+ "genai_telemetry",
  "import",
  "jev",
  "lazy-regex",

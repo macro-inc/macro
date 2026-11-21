@@ -210,6 +210,24 @@ fn an_answer_missing_a_field_is_refused() {
     assert!(WorkList::from_answer(json!({ "person": "A baker", "streams": streams })).is_err());
 }
 
+/// The words of an answer come from the mail, so the refusal names none.
+#[test]
+fn an_answer_that_does_not_fit_is_refused_without_its_words() {
+    let mut odd = stream("Orders from the mill");
+    odd["count"] = json!("nine from the mill");
+    for answer in [
+        json!({ "person": "A baker", "streams": [odd] }),
+        json!({ "person": "A baker", "streams": "Orders from the mill" }),
+    ] {
+        let error = WorkList::from_answer(answer).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            "the finding call's answer doesn't fit the work list (Data error)"
+        );
+        assert!(!format!("{error:?}").contains("mill"), "{error:?}");
+    }
+}
+
 #[test]
 fn the_schema_requires_every_field_of_a_stream() {
     let schema = schema();

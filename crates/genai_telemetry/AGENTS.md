@@ -45,7 +45,10 @@ agent loop.
 
 `propagation::inject_mcp` / `set_parent_from_mcp` carry W3C context in an
 MCP request's `_meta` under SEP-414's `traceparent` / `tracestate` keys (the
-in-process agent's calls to the harness's internal MCP).
+in-process agent's calls to the harness's internal MCP). A request sent inside
+`withhold_content` also carries `macro.dev/withhold-content`, and the server
+runs the tool inside the scope when `mcp_withholds_content` says so: a caller
+can only ask for less on traces.
 
 `propagation::link` connects delayed outbox delivery to each producer's span
 without replacing the delivery worker's own parent.

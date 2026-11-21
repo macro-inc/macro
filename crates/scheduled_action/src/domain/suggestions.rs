@@ -566,7 +566,7 @@ where
                 routine.suggestions.try = tries
             ))
             .await
-            .and_then(|answer| Ok(WorkList::from_answer(answer)?));
+            .and_then(WorkList::from_answer);
             match answer {
                 Ok(list) => break list,
                 Err(error) if tries < WORK_TRIES => tracing::warn!(

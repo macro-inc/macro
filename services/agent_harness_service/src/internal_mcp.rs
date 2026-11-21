@@ -212,7 +212,13 @@ impl ServerHandler for InternalTools {
             agent_session_id = tracing::field::Empty,
         );
         genai_telemetry::propagation::set_parent_from_mcp(&span, &context.meta);
-        self.run_tool(request, context).instrument(span).await
+        // A turn whose content stays off traces asks the same of its tools.
+        let withheld = genai_telemetry::propagation::mcp_withholds_content(&context.meta);
+        genai_telemetry::withhold_content_if(
+            withheld,
+            self.run_tool(request, context).instrument(span),
+        )
+        .await
     }
 }
 

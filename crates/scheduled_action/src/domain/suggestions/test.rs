@@ -1395,6 +1395,39 @@ async fn a_finding_answer_outside_the_list_is_asked_for_once_more() {
     }
 }
 
+/// A finding call that answers a list in another shape.
+struct OddWorkModel;
+
+#[async_trait::async_trait]
+impl WorkModel for OddWorkModel {
+    async fn complete(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &str,
+        _: String,
+        _: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        Ok(json!({ "person": "Runs a bakery", "streams": "Supplier deliveries to confirm" }))
+    }
+}
+
+/// The finding call's span records the error it ends with, and its retry
+/// warns with the one before: neither carries a word of the answer.
+#[tokio::test]
+async fn a_finding_answer_that_does_not_fit_is_refused_without_its_words() {
+    let service = harness(true)
+        .service
+        .with_work_model(Arc::new(OddWorkModel) as Arc<dyn WorkModel>);
+    let error = service
+        .find_work(&user(), Uuid::new_v4())
+        .await
+        .unwrap_err();
+    let text = format!("{error:#} {error:?}");
+    assert!(text.contains("doesn't fit the work list"), "{text}");
+    assert!(!text.contains("Supplier"), "{text}");
+}
+
 #[tokio::test]
 async fn without_a_model_no_work_is_found() {
     assert!(

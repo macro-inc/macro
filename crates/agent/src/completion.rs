@@ -12,9 +12,9 @@ use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::agent::{AgentBuilder, PromptResponse};
-use rig_agent::completion::Prompt;
+use rig_agent::completion::{Prompt, PromptError};
 use rig_core::OneOrMany;
-use rig_core::completion::CompletionModel;
+use rig_core::completion::{CompletionError, CompletionModel};
 use rig_core::message::Message;
 
 const ONE_SHOT_MAX_TOKENS: u64 = 16_000;
@@ -252,11 +252,12 @@ async fn prompt_once<M: CompletionModel + 'static>(
         .max_tokens(ONE_SHOT_MAX_TOKENS)
         .build();
 
-    Ok(agent
+    agent
         .prompt(user_message)
         .extended_details()
         .add_hook(ChatSpanHook(telemetry))
-        .await?)
+        .await
+        .map_err(failure)
 }
 
 /// Build a toolless agent and prompt it with the last message of `messages`,
@@ -282,10 +283,37 @@ async fn prompt_with_history<M: CompletionModel + 'static>(
         anyhow::bail!("messages must not be empty");
     };
 
-    Ok(agent
+    agent
         .prompt(prompt.clone())
         .extended_details()
         .history(history.to_vec())
         .add_hook(ChatSpanHook(telemetry))
-        .await?)
+        .await
+        .map_err(failure)
+}
+
+/// A failed model call as its caller gets it. Inside
+/// [`genai_telemetry::withhold_content`] that is only the kind of failure:
+/// the model library's text can quote the request or the answer (a
+/// provider's error body, a response it couldn't read), and each caller up
+/// the stack records the error it is handed.
+fn failure(error: PromptError) -> anyhow::Error {
+    if !genai_telemetry::content_withheld() {
+        return error.into();
+    }
+    let kind = match &error {
+        PromptError::CompletionError(error) => match error {
+            CompletionError::HttpError(_) => "an HTTP error",
+            CompletionError::JsonError(_) => "a JSON error",
+            CompletionError::UrlError(_) => "a URL error",
+            CompletionError::RequestError(_) => "a request error",
+            CompletionError::ResponseError(_) => "a response error",
+            CompletionError::ProviderError(_) => "a provider error",
+            _ => "a completion error",
+        },
+        _ => "a prompt error",
+    };
+    anyhow::anyhow!(
+        "the model call failed with {kind}; its text is withheld with the call's content"
+    )
 }

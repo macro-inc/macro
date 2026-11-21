@@ -144,6 +144,72 @@ async fn a_failed_one_shot_completion_marks_its_chat_span() {
     assert_eq!(string_attribute(chat, attr::OUTPUT_MESSAGES), None);
 }
 
+/// A failed call inside `withhold_content` keeps none of the provider's text:
+/// not on its span, and not in the error its caller records.
+#[tokio::test]
+async fn a_failed_one_shot_inside_withhold_content_records_no_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let error = genai_telemetry::withhold_content(async {
+        let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::current(), true);
+        let model = TracedModel::new(
+            MockCompletionModel::new([MockTurn::error("cannot read the private answer")]),
+            telemetry.clone(),
+        );
+        prompt_with_history(
+            model,
+            "private instructions",
+            vec![Message::user("a private prompt")],
+            telemetry,
+            None,
+        )
+        .await
+    })
+    .await
+    .expect_err("the completion fails");
+    assert_eq!(
+        format!("{error:#}"),
+        "the model call failed with a provider error; its text is withheld with the call's content"
+    );
+    assert!(!format!("{error:?}").contains("private"), "{error:?}");
+
+    let spans = finished(&exporter, &provider);
+    let chats = chat_spans(&spans);
+    assert_eq!(chats.len(), 1, "{spans:#?}");
+    assert_eq!(
+        string_attribute(chats[0], attr::ERROR_TYPE).as_deref(),
+        Some("provider_error")
+    );
+    for span in &spans {
+        let status = format!("{:?}", span.status);
+        assert!(!status.contains("private"), "{} ends {status}", span.name);
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(!value.contains("private"), "{} carries {value}", kv.key);
+        }
+        for event in span.events.iter() {
+            let text = format!("{} {:?}", event.name, event.attributes);
+            assert!(!text.contains("private"), "{} records {text}", span.name);
+        }
+    }
+
+    // Outside the scope the caller still gets the provider's text.
+    let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::current(), true);
+    let model = TracedModel::new(
+        MockCompletionModel::new([MockTurn::error("upstream is down")]),
+        telemetry.clone(),
+    );
+    let error = prompt_with_history(
+        model,
+        "be brief",
+        vec![Message::user("hi")],
+        telemetry,
+        None,
+    )
+    .await
+    .expect_err("the completion fails");
+    assert!(error.to_string().contains("upstream is down"), "{error}");
+}
+
 /// A minimal valid 1x1 PNG.
 #[rustfmt::skip]
 const ONE_BY_ONE_PNG: &[u8] = &[
