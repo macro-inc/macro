@@ -261,9 +261,8 @@ pub(super) async fn write_projections(
     identity: Option<&str>,
     normalized: Option<&cache_core::normalize::RecordUpdates>,
 ) -> Result<Vec<ProjectionMutation>, String> {
-    let projections =
-        authoritative_projection_mutations(engine.schema(), query, operation, data)
-            .map_err(|error| error.to_string())?;
+    let projections = authoritative_projection_mutations(engine.schema(), query, operation, data)
+        .map_err(|error| error.to_string())?;
     // Do not compose the new viewer's partial writes with the old viewer's
     // authoritative data. Engine still owns the actual atomic identity reset.
     let reuse_stored_identity = match identity {
@@ -280,19 +279,10 @@ pub(super) async fn write_projections(
     let schema = engine.schema_snapshot();
     let response = match normalized {
         Some(updates) => soup_filter_cache_adapter::WriteResponse::with_updates(
-            &schema,
-            query,
-            operation,
-            variables,
-            data,
-            updates,
+            &schema, query, operation, variables, data, updates,
         ),
         None => soup_filter_cache_adapter::WriteResponse::new(
-            &schema,
-            query,
-            operation,
-            variables,
-            data,
+            &schema, query, operation, variables, data,
         ),
     };
     soup_filter_cache_adapter::write_passes(engine, &response, reuse_stored_identity, projections)
