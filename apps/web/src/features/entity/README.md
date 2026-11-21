@@ -9,6 +9,14 @@ app-local entry point.
 existing inline metadata area. Names and icons use the shared property preview
 cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
+A pill takes its click through `useSplitNavigationHandler`, and the overflow
+control lets go of the focus its closing menu hands back once a menu row has
+opened a record. Either focus change would make the list's split the active one
+again after the click brought forward a split that already shows the record.
+After a menu row, focus goes to the split the record opened in (`returnFocus`),
+except on touch, where that could raise the keyboard. A menu selection carries
+no event, so a menu row reads Shift from the release or key press that makes
+it.
 
 List selection checkmarks update without animation. Selection subscriptions notify
 only changed rows; task and project focus subscriptions update the old and new

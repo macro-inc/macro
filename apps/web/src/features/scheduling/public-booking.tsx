@@ -79,7 +79,7 @@ function ReceiptContent(params: { id: string }) {
   const source = createBookingReceiptSource(() => params.id, token);
   return (
     <BookingReceiptView
-      receipt={source.receipt.isSuccess ? source.receipt.data : undefined}
+      receipt={source.receipt.isPending ? undefined : source.receipt.data}
       unavailable={source.receipt.isError}
       cancel={source.cancel}
       loadSlots={source.replacementSlots}

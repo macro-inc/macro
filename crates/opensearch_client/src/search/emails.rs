@@ -139,6 +139,9 @@ pub(crate) struct EmailQueryBuilder {
     required_thread_ids: Vec<String>,
     /// link ids to query over
     link_ids: Vec<String>,
+    /// Links whose mail never matches, such as a mailbox being disconnected
+    /// whose documents are not deleted yet
+    exclude_link_ids: Vec<String>,
     /// The sender of the email message
     sender: Vec<String>,
     /// The cc of the email message
@@ -169,6 +172,7 @@ impl EmailQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             required_thread_ids: Vec::new(),
             link_ids: Vec::new(),
+            exclude_link_ids: Vec::new(),
             sender: Vec::new(),
             cc: Vec::new(),
             bcc: Vec::new(),
@@ -201,6 +205,11 @@ impl EmailQueryBuilder {
 
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
         self.link_ids = link_ids;
+        self
+    }
+
+    pub fn exclude_link_ids(mut self, exclude_link_ids: Vec<String>) -> Self {
+        self.exclude_link_ids = exclude_link_ids;
         self
     }
 
@@ -296,6 +305,10 @@ impl EmailQueryBuilder {
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("link_id", self.link_ids.clone()));
+        }
+
+        if !self.exclude_link_ids.is_empty() {
+            content_bool_query.must_not(QueryType::terms("link_id", self.exclude_link_ids.clone()));
         }
 
         if !self.sender.is_empty() {
@@ -440,6 +453,7 @@ pub struct EmailSearchArgs {
     pub thread_ids: Vec<String>,
     pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
+    pub exclude_link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
@@ -468,6 +482,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .ids(args.thread_ids)
             .required_thread_ids(args.required_thread_ids)
             .link_ids(args.link_ids)
+            .exclude_link_ids(args.exclude_link_ids)
             .sender(args.sender)
             .cc(args.cc)
             .bcc(args.bcc)

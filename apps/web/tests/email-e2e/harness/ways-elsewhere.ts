@@ -1,9 +1,11 @@
 // What the tests of email reached from outside the mail view share: the
-// universal input opened on a request, an account left without an inbox, and
-// what the app asked the authentication service when it started a connection.
+// universal input opened on a request, an inbox whose grant lapsed, an
+// account left without an inbox, and what the app asked the authentication
+// service when it started a connection.
 
 import { expect, type Page } from '@playwright/test';
 import type { Mailbox } from './fixtures';
+import { emulatorUrl } from './journeys';
 
 /** The universal input only offers its fields for a text this long. */
 export const REQUEST =
@@ -32,6 +34,32 @@ async function connectedInboxes(mailbox: Mailbox): Promise<string[]> {
     links: { email_address: string }[];
   };
   return links.map((link) => link.email_address);
+}
+
+/**
+ * Withdraws the inbox's grant at its provider and marks the inbox for
+ * reconnecting, as the services do once a token fetch is refused.
+ *
+ * The mark alone does not hold: a token the provider still grants clears it,
+ * and an Outlook inbox's sync fetches tokens just after it is linked. Once the
+ * grant is revoked the provider refuses them and the services keep the mark;
+ * a token granted just before the revocation can clear it once more, and the
+ * sync that asked for it is then refused and marks the inbox again.
+ * It is still written here rather than left to the services: on Gmail nothing
+ * fetches a token after the first sync, and the links health check a page
+ * sends probes an inbox at most once a quarter hour, so after a page has
+ * loaded it does not probe again.
+ */
+export async function lapseGrant(mailbox: Mailbox): Promise<void> {
+  const { email, linkId, provider } = mailbox.inbox;
+  const revoked = await fetch(
+    `${emulatorUrl(mailbox, provider)}/_emulator/mailboxes/${encodeURIComponent(email)}/revoke`,
+    { method: 'POST' }
+  );
+  expect(revoked.ok).toBe(true);
+  await mailbox.stack.sql(
+    `UPDATE email_links SET needs_reauth = true WHERE id = '${linkId}' RETURNING id`
+  );
 }
 
 /** Leaves the signed-in user with no inbox connected. */

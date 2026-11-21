@@ -13,6 +13,10 @@ use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
 use models_email::service::link;
+use nom::Parser;
+use nom::bytes::complete::{tag, take_until};
+use nom::character::complete::alphanumeric1;
+use nom::sequence::{preceded, terminated};
 use sha2::{Digest, Sha256};
 use static_file_service_client::StaticFileServiceClient;
 use std::str::FromStr;
@@ -43,7 +47,7 @@ pub enum UploadAttachmentError {
     ParseError(String),
 
     #[error("Database error: {0}")]
-    DatabaseError(String),
+    DatabaseError(anyhow::Error),
 
     #[error("Attachment filename is missing")]
     FilenameMissing,
@@ -61,11 +65,20 @@ pub enum UploadAttachmentError {
     #[error("Attachment was deleted before it could be imported")]
     AttachmentDeleted,
 
-    #[error("DSS response did not include a presigned URL")]
-    PresignedUrlMissing,
+    /// The upload never got an answer. The error carries no URL: a presigned
+    /// URL's query holds its credentials and session token.
+    #[error("Failed to send attachment to presigned URL: {0}")]
+    PresignedUrlUnreachable(reqwest::Error),
 
-    #[error("Failed to upload attachment to presigned URL. Status: {0}, Body: {1}")]
-    PresignedUrlUploadFailed(reqwest::StatusCode, String),
+    #[error(
+        "Failed to upload attachment to presigned URL. Status: {status}, code: {}",
+        code.as_deref().unwrap_or("none")
+    )]
+    PresignedUrlRefused {
+        status: reqwest::StatusCode,
+        /// The S3 error `<Code>`, the only part of the body kept.
+        code: Option<String>,
+    },
 
     #[error("Failed to set email attachment properties: {0}")]
     SystemPropertiesSetFailed(String),
@@ -134,7 +147,11 @@ pub async fn store_attachment(
 }
 
 /// Uploads an image or video attachment to SFS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(
+    skip(ctx, args, attachment_data),
+    fields(attachment_id = %args.attachment_metadata.attachment_db_id),
+    err
+)]
 async fn upload_media_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
@@ -163,13 +180,16 @@ async fn upload_media_attachment(
         },
     )
     .await
-    .map_err(|e| UploadAttachmentError::DatabaseError(e.to_string()))?;
+    .map_err(UploadAttachmentError::DatabaseError)?;
 
     Ok(sfs_response.id)
 }
 
 /// Uploads a document attachment to DSS.
-#[tracing::instrument(skip(ctx, attachment_data))]
+#[tracing::instrument(
+    skip(ctx, args, attachment_data),
+    fields(attachment_id = %args.attachment_metadata.attachment_db_id)
+)]
 async fn upload_document_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
@@ -208,8 +228,14 @@ async fn store_document_attachment(
     )
     .await?;
 
-    if dss_response.data.document_response.presigned_url.is_some() {
-        upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
+    if let Some(presigned_url) = &dss_response.data.document_response.presigned_url {
+        upload_data_to_presigned_url(
+            presigned_url,
+            &dss_response.data.content_type,
+            attachment_data,
+            &base64_hash,
+        )
+        .await?;
     }
 
     // 5. Get document id
@@ -388,40 +414,45 @@ async fn create_dss_document_record(
 
 /// Uploads the provided data to the presigned URL from the DSS response.
 async fn upload_data_to_presigned_url(
-    dss_response: &CreateDocumentResponse,
+    presigned_url: &str,
+    content_type: &str,
     attachment_data: Vec<u8>,
     base64_hash: &str,
 ) -> Result<(), UploadAttachmentError> {
-    let presigned_url = dss_response
-        .data
-        .document_response
-        .presigned_url
-        .as_ref()
-        .ok_or(UploadAttachmentError::PresignedUrlMissing)?;
-
+    // Without the explicit length an empty file goes out with no
+    // Content-Length at all, which storage refuses with 411.
     let response = reqwest::Client::new()
         .put(presigned_url)
-        .header("content-type", &dss_response.data.content_type)
+        .header("content-type", content_type)
+        .header("content-length", attachment_data.len())
         .header("x-amz-checksum-sha256", base64_hash)
         .body(attachment_data)
         .send()
         .await
-        .map_err(|e| {
-            UploadAttachmentError::PresignedUrlUploadFailed(
-                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-                e.to_string(),
-            )
-        })?;
+        .map_err(|error| UploadAttachmentError::PresignedUrlUnreachable(error.without_url()))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(UploadAttachmentError::PresignedUrlUploadFailed(
-            status, body,
-        ));
+        return Err(UploadAttachmentError::PresignedUrlRefused {
+            status,
+            code: s3_error_code(&body),
+        });
     }
 
     Ok(())
+}
+
+/// The `<Code>` of an S3 error response, such as `SignatureDoesNotMatch` or
+/// `SlowDown`. The rest of the body can echo the signed request, the presigned
+/// URL's credentials and session token included, so nothing else is read.
+pub fn s3_error_code(body: &str) -> Option<String> {
+    let mut code = preceded(
+        (take_until("<Code>"), tag("<Code>")),
+        terminated(alphanumeric1, tag("</Code>")),
+    );
+    let parsed: nom::IResult<&str, &str> = code.parse(body);
+    parsed.ok().map(|(_, code)| code.to_owned())
 }
 
 /// Sets email attachment properties for the uploaded document.

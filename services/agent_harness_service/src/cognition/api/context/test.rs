@@ -464,6 +464,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         &databases_tool_context,
         soup_service.clone(),
         pool.clone(),
+        None,
     );
     let crm_tool_context = ai_tools::build_crm_tool_context(pool.clone());
     let pipeline_tool_context = ai_tools::build_pipeline_tool_context(

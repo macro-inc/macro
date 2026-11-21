@@ -320,7 +320,7 @@ old hydration cannot resurrect verified removals, and old absence evidence canno
 delete a newer positive observation. Unfenced network/optimistic contact writes reject.
 The same backfill then verifies existing membership in bounded raw-key windows using
 the existing exact lookup. Only successful requested-ID omissions permit deletion;
-scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+scan omissions do not. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes
 only after an exhaustive, non-malformed verification pass. Context-only stubs,
 explicit selections and shared name labels do not establish membership. See the
 [contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.
@@ -332,7 +332,7 @@ search policy. Begin compares the previous epoch, patches cap at 500 and never
 write public contact identity/name fields, and commit publishes readiness. Full
 snapshot epochs expire omitted old facts without deleting membership records.
 Search uses indexed exact-name (full or first name)/word-prefix/contains stages, with people the viewer has messaged first among word-start matches, over the existing
-owned facts, with recent-first ordering and canonical identity ties. Core applies
+owned facts and a last stage for address terms (domain or local part), with recent-first ordering and canonical identity ties. Core applies
 membership, secondary-inbox/explicit exclusions and DM deduplication before the
 bounded result window. Generic title search keeps its separate scoring path.
 This uses schema 12 without adding a database or physical table; native/browser
@@ -340,8 +340,8 @@ hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
 `apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
 channel/inbox context under Soup's leader in bounded snapshot/delta batches;
-Quick Access and all migrated personal pickers now preserve policy-6 windows (policy 5 from
-native desktop, iOS and Android binaries released before it)
+Quick Access and all migrated personal pickers now preserve policy-7 windows (policies 5 and 6
+from native desktop, iOS and Android binaries released before it)
 instead of applying the old fuzzy/brevity scores. Empty property browsing pins self;
 recipient mode excludes automated addresses unless explicitly addressed. Interactive
 reads stay local, including partial hydration; unsupported hosts remain unavailable.

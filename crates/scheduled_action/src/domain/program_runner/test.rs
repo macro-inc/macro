@@ -844,3 +844,92 @@ async fn a_run_without_code_steps_records_no_code_identity() {
 
     assert_eq!(handle.run.unwrap().code_acts_as, None);
 }
+
+#[tokio::test]
+async fn a_code_step_whose_item_was_deleted_fails_plainly_without_running() {
+    use crate::domain::knob_entities::test::{Items, posting_step};
+    let code = Arc::new(Code::default());
+    let items = Arc::new(Items {
+        usable: vec!["channel:kept"],
+        ..Items::default()
+    });
+    let fixture = Fixture::new(Agents::default());
+    let runner = fixture
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades))
+        .with_knob_entities(items);
+    let mut posted = ExecutionHandle::default();
+    runner
+        .run(
+            &action(json!({ "steps": [posting_step("Post bugs", "kept")] })),
+            &mut posted,
+            manual(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(code.runs.lock().unwrap().len(), 1);
+
+    let mut handle = ExecutionHandle::default();
+    let error = runner
+        .run(
+            &action(json!({ "steps": [
+                posting_step("Post bugs", "deleted"),
+                code_step("after", "Never runs"),
+            ] })),
+            &mut handle,
+            manual(),
+        )
+        .await
+        .unwrap_err();
+    let failure = "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.";
+    assert_eq!(error.to_string(), format!("Post bugs failed: {failure}"));
+    // The code never ran: its handle would have failed somewhere inside it.
+    assert_eq!(code.runs.lock().unwrap().len(), 1);
+    assert_eq!(
+        handle.steps[0].result,
+        StepResult::Code {
+            calls: Vec::new(),
+            calls_truncated: false,
+            waited_ms: None,
+            output: None,
+            error: Some(failure.into()),
+        }
+    );
+    assert_eq!(handle.steps.len(), 1);
+}
+
+#[tokio::test]
+async fn an_item_several_steps_pick_is_looked_up_once_a_run() {
+    use crate::domain::knob_entities::test::{Items, posting_step};
+    let code = Arc::new(Code::default());
+    let items = Arc::new(Items {
+        usable: vec!["channel:kept", "channel:other"],
+        ..Items::default()
+    });
+    let runner = Fixture::new(Agents::default())
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades))
+        .with_knob_entities(Arc::clone(&items) as Arc<dyn KnobEntities>);
+    let routine = action(json!({ "steps": [
+        posting_step("Post bugs", "kept"),
+        posting_step("Post them again", "kept"),
+        posting_step("Post elsewhere", "other"),
+    ] }));
+
+    for run in 1..=2 {
+        let mut handle = ExecutionHandle::default();
+        runner.run(&routine, &mut handle, manual()).await.unwrap();
+        assert_eq!(code.runs.lock().unwrap().len(), 3 * run);
+    }
+
+    // Each run looks each item up once, and a new run looks again.
+    assert_eq!(
+        *items.lookups.lock().unwrap(),
+        [
+            "channel:kept",
+            "channel:other",
+            "channel:kept",
+            "channel:other"
+        ]
+    );
+}

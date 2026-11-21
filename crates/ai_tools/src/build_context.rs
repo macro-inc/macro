@@ -80,11 +80,35 @@ maybe_env_var! {
         EnableGmailOpsQueue,
         EnableNotificationQueue,
         McpCredentialsKeySecretName,
+        PosthogApiKey,
+        PosthogHost,
     }
 }
 
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 maybe_env_var! {
     struct GoogleGenerativeAiApiKey;
+}
+
+/// A PostHog client for service-wide flags, or `None` without a project key.
+pub fn service_feature_flags(
+    posthog_api_key: Option<&str>,
+    posthog_host: Option<&str>,
+    environment: Environment,
+) -> anyhow::Result<Option<feature_flags::outbound::posthog::PostHogFeatureFlags>> {
+    let Some(key) = posthog_api_key.filter(|key| !key.trim().is_empty()) else {
+        return Ok(None);
+    };
+    feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        posthog_host.unwrap_or(DEFAULT_POSTHOG_HOST),
+        key.to_owned(),
+        std::time::Duration::from_secs(3),
+        environment,
+    )
+    .map(Some)
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
 }
 
 /// The text-to-image provider for the GenerateImage tool: Gemini's Nano
@@ -296,7 +320,9 @@ pub async fn build_tool_service_context_from_env(
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(pool.clone()),
+        EmailPgRepo::new(pool.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -387,6 +413,18 @@ pub async fn build_tool_service_context_from_env(
         )),
         sqs: aws_sqs_client,
         macro_event_broker: macro_event_broker.clone(),
+        environment,
+        feature_flags: service_feature_flags(
+            maybe_env
+                .posthog_api_key
+                .as_ref()
+                .and_then(|key| key.value()),
+            maybe_env
+                .posthog_host
+                .as_ref()
+                .and_then(|host| host.value()),
+            environment,
+        )?,
     };
     let databases_gateway = side_effect_clients.connection_gateway.as_ref().clone();
     let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
@@ -440,7 +478,9 @@ pub async fn build_tool_service_context_from_env(
 
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(pool.clone()),
+            EmailPgRepo::new(pool.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs_client,
             crm_service.clone(),
@@ -560,6 +600,7 @@ pub async fn build_tool_service_context_from_env(
         &databases_tool_context,
         soup_service.clone(),
         pool.clone(),
+        side_effect_clients.feature_flags.clone(),
     );
     let crm_tool_context = crate::tool_context::build_crm_tool_context(pool.clone());
     let pipeline_tool_context = crate::tool_context::build_pipeline_tool_context(

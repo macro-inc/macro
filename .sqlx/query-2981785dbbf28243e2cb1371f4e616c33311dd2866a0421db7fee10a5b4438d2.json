@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT computer_id FROM computer_move\n            WHERE stage IN ('cutting_over', 'rolling_back') AND (from_host = $1 OR to_host = $1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2981785dbbf28243e2cb1371f4e616c33311dd2866a0421db7fee10a5b4438d2"
+}

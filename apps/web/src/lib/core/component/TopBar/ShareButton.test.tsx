@@ -44,7 +44,7 @@ vi.mock(
     >()),
     useShareRequestTrigger: (props: { open(): void }) => ({
       ref: () => {},
-      count: () => 0,
+      count: () => mocks.pendingRequests,
       open: props.open,
     }),
   })
@@ -75,6 +75,8 @@ const mocks = vi.hoisted(() => ({
   getInitiativePermissions: vi.fn(),
   updateInitiativePermissions: vi.fn(),
   getExternalChatPermissions: vi.fn(),
+  dssFetch: vi.fn(),
+  getBatchChannelPreviews: vi.fn(),
   updateExternalChatPermissions: vi.fn(),
   getDocumentPermissions: vi.fn(),
   getDatabasePermissions: vi.fn(),
@@ -97,6 +99,7 @@ const mocks = vi.hoisted(() => ({
   blockEditPermissionEnabled: true,
   inBlock: true,
   blockId: 'launcher-placeholder',
+  pendingRequests: 0,
 }));
 vi.mock('@app/features/crm/sharing-adapter', () => ({
   fetchPipelineSharePermissions: mocks.getPipelinePermissions,
@@ -173,8 +176,9 @@ vi.mock('@core/hotkey/hotkeys', () => ({
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
+  dssFetch: mocks.dssFetch,
   storageServiceClient: {
-    getBatchChannelPreviews: async () => ok({ previews: [] }),
+    getBatchChannelPreviews: mocks.getBatchChannelPreviews,
     getDocumentPermissions: mocks.getDocumentPermissions,
     editDocument: mocks.editDocument,
     projects: {
@@ -331,6 +335,9 @@ vi.mock('@components/app/mobile/MobileDrawer', () => {
 });
 vi.mock('@ui', async () => {
   const { createContext, useContext } = await import('solid-js');
+  const { CountBadge } = await vi.importActual<
+    typeof import('@ui/components/Badge')
+  >('@ui/components/Badge');
   const RadioContext = createContext<{
     label: string;
     onChange?: (value: string) => void;
@@ -354,6 +361,7 @@ vi.mock('@ui', async () => {
   return {
     Button,
     CopyButton: Button,
+    CountBadge,
     Panel: Object.assign(Container, { Header: Container, Body: Container }),
     // The owner row draws an unknown owner's avatar.
     Avatar: Object.assign(Container, { Fallback: Container }),
@@ -418,6 +426,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.inBlock = true;
   mocks.blockId = 'launcher-placeholder';
+  mocks.pendingRequests = 0;
+  mocks.getBatchChannelPreviews.mockResolvedValue(ok({ previews: [] }));
   mocks.getDocumentPermissions.mockResolvedValue(
     ok({ channelSharePermissions: [] })
   );
@@ -454,6 +464,52 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+
+it.each([false, true])(
+  'uses the thread roster and removes its channel grant (mobile: %s)',
+  async (mobile) => {
+    mocks.mobile = mobile;
+    mocks.blockId = 'thread-1';
+    mocks.dssFetch
+      .mockResolvedValueOnce(
+        ok([
+          {
+            channel_id: 'channel-1',
+            channel_type: 'private',
+            channel_name: 'Project updates',
+            access_level: 'edit',
+          },
+        ])
+      )
+      .mockResolvedValueOnce(ok([]));
+    render(() => (
+      <ShareModal
+        id="thread-1"
+        name="Agenda"
+        itemType="email"
+        blockAlias="email"
+        userPermissions={Permissions.OWNER}
+        open
+        onOpenChange={vi.fn()}
+      />
+    ));
+    if (mobile) {
+      fireEvent.click(await screen.findByRole('tab', { name: 'People' }));
+    }
+    expect(await screen.findByText('Project updates')).toBeTruthy();
+    expect(mocks.getBatchChannelPreviews).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set option none' }));
+    await vi.waitFor(() => {
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('email', 'thread-1', {
+        channelSharePermissions: [
+          { operation: 'remove', channelId: 'channel-1' },
+        ],
+      });
+      expect(screen.queryByText('Project updates')).toBeNull();
+    });
+  }
+);
 
 describe('document permissions source', () => {
   it('loads a document’s own permissions instead of its enclosing block’s', async () => {
@@ -752,6 +808,25 @@ describe('agent session sharing', () => {
       <ShareTrigger onClick={onClick} id="task-1" blockType="task" />
     ));
 
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('keeps sharing available when a compact header omits the copy shortcut', () => {
+    mocks.inBlock = false;
+    const onClick = vi.fn();
+    render(() => (
+      <ShareTrigger
+        onClick={onClick}
+        id="initiative-1"
+        blockType="initiative"
+        showCopyLink={false}
+      />
+    ));
+
+    expect(
+      screen.queryByRole('button', { name: 'Copy Share Link' })
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
     expect(onClick).toHaveBeenCalledOnce();
   });
@@ -1499,6 +1574,22 @@ describe('native project sharing', () => {
         }
       )
     );
+  });
+
+  it('names the pending permission requests its count shows', () => {
+    mocks.inBlock = false;
+    mocks.pendingRequests = 2;
+    render(() => (
+      <ShareTrigger
+        onClick={vi.fn()}
+        id="initiative-1"
+        blockType="initiative"
+      />
+    ));
+    const share = screen.getByRole('button', {
+      name: 'Share, 2 pending permission requests',
+    });
+    expect(share.textContent).toBe('Share2');
   });
 
   it('copies the project link that pastes as a mention', () => {

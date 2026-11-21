@@ -42,6 +42,7 @@ afterEach(() => {
 
 const groups: SettingsTabGroup[] = [
   {
+    id: 'personal',
     label: 'Account',
     items: [
       {

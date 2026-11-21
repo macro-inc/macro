@@ -5222,7 +5222,7 @@ export interface ToolNewEntry {
    */
   email?: string | null;
   /**
-   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a pipeline that tracks a record, Outcome is Open, Won or Lost independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
+   * Fields to fill in on the new entry, e.g. [{"field": "Stage", "value": "Lead"}, {"field": "Owner", "value": "me"}]. In a pipeline that tracks a record, Outcome is Open, Won, Lost or Declined (the team turned the deal down: closed, not lost) independently of Stage, and each monetary field has a separate currency field (e.g. Revenue currency): set its three-letter option code with the amount. New entries default to Open and USD. In a generic pipeline, e.g. [{"field": "Name", "value": "Launch site"}].
    */
   set?: ToolFieldValue[];
 }
@@ -6083,6 +6083,12 @@ export interface Booking {
    * When the most recent successful reschedule completed.
    */
   rescheduledAt?: string | null;
+  /**
+   * When Macro stopped trying to update the host's calendar for the
+   * booking's latest change. A failed booking with this set is not being
+   * retried, and cancelling it is the way to release its time.
+   */
+  abandonedAt?: string | null;
   /**
    * Final location or conference URL.
    */
@@ -7656,11 +7662,11 @@ export interface CreateConfirmedCalendarEvent {
   userConfirmation: string;
 }
 /**
- * Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany.
+ * Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Without a company, a work email links the contact to the company for its domain, adding that company when the team does not have it; a personal email, an address at a generic provider or vendor, a domain the team blocks or an archived company leaves the contact without a company, so check companyId in the result. With a company, any email is accepted, whatever its domain. Find the company with ListCompanies, or add it first with CreateCompany.
  */
 export interface CreateContact {
   /**
-   * The CRM company id to add the contact to. Omit it for a person with no company.
+   * The CRM company id to add the contact to. Omit it to file the contact by its email domain, or for a person with no company.
    */
   companyId?: string | null;
   /**
@@ -8496,9 +8502,10 @@ export interface CreateProjectResponse {
  * Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use code for everything a routine does or decides: labeling or archiving email, setting properties, creating tasks, posting messages, reading many items, loops, and judgments with `macro.ai.decide`. Usually one code step does all of it. It takes:
  * - `title`: what it does, in a few words. Saving names the step's output after it: "Find open invoices" becomes `find_open_invoices`. An `id` you give is kept.
  * - `summary`: one sentence on how, for the routine's owner.
- * - `knobs`: the values its owner may want to change without new code, which the code reads as `knobs.<name>`: label, channel or people's names, priorities, thresholds, time windows, and the yes/no questions it asks AI. Make a knob for every such constant instead of writing it into the code, never for logic; at most 12, and the code must read every one. Each is `{ "type", "name", "label", "value" }`:
+ * - `knobs`: the values its owner may want to change without new code, which the code reads as `knobs.<name>`: the items it uses (the channel it posts in, a person, a task, a folder, a database), labels, priorities, thresholds, time windows, and the yes/no questions it asks AI. Make a knob for every such constant instead of writing it into the code, never for logic; at most 12, and the code must read every one. Each is `{ "type", "name", "label", "value" }`:
  *   - `name` is camelCase (`dueWithinDays`); `label` says what it is, in up to 60 characters ("Label for money email").
- *   - `type` is `text`, `number` (optional `min` and `max`), `boolean`, `choice` (with `options`: 2 to 12 strings, `value` one of them), or `question`: a yes/no question for `macro.ai.decide`, its `value` the question and its `label` the condition as a short clause that reads inside a sentence ("it's about money").
+ *   - `type` is `text`, `number` (optional `min` and `max`), `boolean`, `choice` (with `options`: 2 to 12 strings, `value` one of them), `question`: a yes/no question for `macro.ai.decide`, its `value` the question and its `label` the condition as a short clause that reads inside a sentence ("it's about money"), or `entity`.
+ *   - `entity` is one of the owner's items the step uses, which they swap later by picking another. `entity_types` lists the kinds the owner may pick from: `channel`, `document`, `project` (a folder), `user` (a person), `task`, `email_thread`, `chat` (an AI chat), `crm_company`, `crm_contact`, `initiative` (what the app calls a project), or `database` (a whole database, listed alone). List the fewest kinds that fit the request, usually one: a step that posts lists `channel`. List several only when the request lets the owner pick among them, and every kind but `database` when any item will do. `value` is the item you found, `{ "type": "channel", "id": "<its id>" }`; when you create the routine with the SDK (`macro.routines.create`), it holds the handle instead, `{ type: 'channel', entity: channel }`. The code reads it as that item's SDK handle (`await knobs.bugsChannel.send(text)`). Every item a step uses by name goes in an entity knob: never a text knob with its name, and never an id in the code. Saving checks the owner can open it.
  *   - The owner can change any value later, so don't rely on today's.
  * - `sentence`: what the step does, as one plain sentence for its owner (up to 300 characters), with `{name}` where a knob's value shows and `{?name}` where a question knob's clause shows: "Label it {moneyLabel} when {?aboutMoney}, and {marketingLabel} when {?aboutMarketing}." Every `{…}` names one of the step's knobs; question knobs use `{?…}`. It must say what the code does, no more.
  * - `source`: a module exporting `async function main({ macro, run, routine, trigger, steps, knobs }: StepContext)`. Take only what you use.
@@ -8508,11 +8515,11 @@ export interface CreateProjectResponse {
  *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` (`text`, `thread_id`, and `sender`: a person's email, which their handle gives as `email()`, or a bot's name) for a channel event, `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
  *   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
  *   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
- *   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options.
+ *   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options, and an `entity` the SDK handle of each kind it lists, as `macro.channels.byId`, `documents.byId`, `projects.byId`, `users.byId`, `tasks.byId`, `email.byId`, `chats.byId`, `crm.companyById`, `crm.contactById`, `initiatives.byId` or `databases.byId` gives it. With several kinds it is their union: check its `entityType` (`'channel'`, `'email_thread'`, `'crm_company'`, …; a task's is `'document'`) before calling what only one kind has.
  * - What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. An Ask AI step after it sees it too.
  * - Call SDK methods as their declarations show, with `await`. Don't import anything.
  * - Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. Pass question knobs as the questions: `questions: { aboutMoney: knobs.aboutMoney }`. Build questions in code only when they come from data, such as one per label the owner has. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
- * - Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
+ * - Never hard-code an id. Items the step is about are entity knobs, a folder or project an event's item must be in included, which the code checks: a trigger's `entities` are the items its events are about, never the folders they are in. Resolve the rest in code, from the SDK (labels, properties, the people on an item), by what the data says.
  * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs with the owner's access, within 30 seconds.
  * - Its writes (messages, comments, emails) are attributed to Macro's agent acting for the owner. A routine's `dangerouslyOperateAsUser` setting makes them appear written by the owner, with no agent badge: it is set only when the user explicitly asks for the routine to act, send or post as them, never inferred from what the routine does.
  *
@@ -10139,7 +10146,7 @@ export interface WordDocumentResponse {
   content: string;
 }
 /**
- * Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Monetary amounts and their currency codes occupy separate columns, and Outcome exports as Open, Won or Lost. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
+ * Export a CRM pipeline's deals (entries) to a CSV file saved in the user's Macro files: Company and Domain (or Contact and Email), then one column per field, with people as emails. Monetary amounts and their currency codes occupy separate columns, and Outcome exports as Open, Won, Lost or Declined. Use it to back up a pipeline, move it to another team (ImportPipelineCsv reads the same file), or share it as a spreadsheet; to answer questions about deals, use FindPipelineEntries instead. Returns the file's documentId and how many entries it holds.
  */
 export interface ExportPipelineCsv {
   /**
@@ -12699,7 +12706,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Outcome, Owner, Revenue and Revenue currency. Outcome is Open/Won/Lost independently of Stage; monetary amounts use their paired currency field (USD by default). A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
+ * List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Outcome, Owner, Revenue and Revenue currency. Outcome is Open, Won, Lost or Declined independently of Stage: Declined is a deal the team turned down, closed but not lost, so leave it out of lost counts and win rates; monetary amounts use their paired currency field (USD by default). A generic pipeline has no `tracks`: its entries are free-form rows of fields, with no company or contact. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.
  */
 export type ListPipelines = {};
 /**
@@ -16257,7 +16264,7 @@ export interface ToolEntryUpdate {
    */
   recordId?: string | null;
   /**
-   * Fields to set, e.g. [{"field": "Stage", "value": "Negotiation"}, {"field": "Revenue", "value": "48000"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won or Lost independently of Stage. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount.
+   * Fields to set, e.g. [{"field": "Stage", "value": "Negotiation"}, {"field": "Revenue", "value": "48000"}]. Leave value out to empty an ordinary field; Outcome and currency cannot be empty. Outcome is Open, Won, Lost or Declined independently of Stage; Declined means the team turned the deal down: closed, not lost. Monetary fields have a separate currency field (e.g. Revenue currency); set its three-letter option code with the amount.
    */
   set: ToolFieldValue[];
 }
@@ -16397,7 +16404,7 @@ export interface UpdateSharingResponse {
  * - Star: add `STARRED` (add=true) / Unstar: remove (add=false)
  * - Move to trash: add `TRASH` (add=true) / Restore: remove (add=false)
  * - Mark important: add `IMPORTANT` (add=true) / Mark unimportant: remove (add=false)
- * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
+ * - Report spam: add `SPAM` (add=true), which also takes the thread out of the inbox / Not spam: remove (add=false), which puts mail that was in Spam back in the inbox
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
  * In an Outlook inbox the same system label names set the matching mailbox state (archive, read, flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.
@@ -16575,7 +16582,7 @@ export interface WebSearchResult {
   content?: string | null;
 }
 /**
- * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
+ * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
  */
 export interface DescribeCodeTools {
   /**
@@ -16664,15 +16671,17 @@ export interface CodeGuide {
   markdown: string;
 }
 /**
- * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. Optional images: up to 2 PNGs from the SDK, e.g. images: [await canvas.render()]; you see their pixels with the result, so return a render to look at a canvas. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
+ * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a TypeScript ES module in Deno. It is type-checked against the SDK before it runs: a program with type errors never runs, and the errors come back with their line numbers to fix. Export async function main({macro, session, execution}: CodeContext); return {data: <JSON>}. Type every function parameter the checker cannot infer. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. Optional images: up to 2 PNGs from the SDK, e.g. images: [await canvas.render()]; you see their pixels with the result, so return a render to look at a canvas. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No package installation.
  *
- * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
+ * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
+ *
+ * Never guess an SDK method, its arguments or its result's fields. Use only what this description, an index or a reference in context shows; read anything else first, an entity's index with DescribeCodeTools and a symbol's reference with ReadCodeDocs. Never wrap a call in try/catch or call it optionally (item.title?.()) to find out whether it exists.
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
  * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
- * Start every program with a brief comment saying what it does. Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
+ * Start every program with a brief comment saying what it does. Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary TypeScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Macro searches (macro.search and every entity's search) are heavy and often take seconds each; the SDK runs at most four at once and queues the rest in call order. Search less rather than one at a time: search several kinds with one macro.search.all(query), passing types only for kinds the user named, don't split one question into near-duplicate queries, and run the independent searches that remain together with Promise.all or Promise.allSettled. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
  * For a workspace overview, fetch small pages for the relevant categories concurrently in one execution with macro.workspace.page({includeTypes:[type], limit:3}). A single mixed page can be dominated by one category; each page is a sample, not a category total. Return selected metadata and hasMore per category, not whole items or snapshots. Exact workspace types include agent_session, calendar_event, ai_chat and channel_thread. Tasks are documents: use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | combine exactly two expressions; do not wrap a single filter.
  *
@@ -16694,7 +16703,7 @@ export interface ExecuteCode {
    */
   turn_id: string;
   /**
-   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token.
+   * TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}: CodeContext) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token.
    */
   source: string;
   /**
@@ -16753,7 +16762,7 @@ export interface ModelImage {
   data: string;
 }
 /**
- * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way. Read AboutMacro, before answering, for what Macro is, what it can do or how to do something in it: an overview and links into the docs at macro.com/docs.
+ * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way. Read AboutMacro, before answering, for what Macro is, what it can do or how to do something in it: an overview and links into the docs at macro.com/docs.
  */
 export interface ReadCodeDocs {
   /**

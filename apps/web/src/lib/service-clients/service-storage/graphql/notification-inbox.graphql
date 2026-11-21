@@ -144,3 +144,12 @@ subscription NotificationInboxUpdates($scope: NotificationInboxScopeInput) {
 		...NotificationInboxPatchFields
 	}
 }
+
+# Unread rows of the whole inbox by kind: the current counts at once, then
+# again whenever they change. Each payload replaces the last.
+subscription NotificationInboxUnreadUpdates {
+	notificationInboxUnreadUpdates {
+		rowType
+		count
+	}
+}

@@ -32,6 +32,7 @@ impl InboxCatalogRepository for PgInboxCatalog {
                     granted_scopes: inbox.provider_granted_scopes,
                     calendar_disabled: inbox.calendar_disabled,
                     has_calendar_data: inbox.has_calendar_data,
+                    mailbox_unavailable: inbox.mailbox_unavailable,
                 })
                 .collect(),
         )

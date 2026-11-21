@@ -103,7 +103,6 @@ export default {
     close: '關閉',
     delete: '刪除',
     rename: '重新命名',
-    more: '更多',
     search: '搜尋',
     settings: '設定',
   },
@@ -499,6 +498,9 @@ export default {
       other: '已刪除 {{count}} 個項目',
     },
     toastDeleteFailed: '無法刪除',
+    toastPropertySet: {
+      other: '已為 {{count}} 個項目設定 {{property}}',
+    },
     toastAddedToFavorites: '已加入我的最愛',
     toastAddedCountToFavorites: {
       other: '已將 {{count}} 個項目加入我的最愛',

@@ -231,6 +231,11 @@ pub struct Booking {
     /// When the most recent successful reschedule completed.
     #[serde(default)]
     pub rescheduled_at: Option<DateTime<Utc>>,
+    /// When Macro stopped trying to update the host's calendar for the
+    /// booking's latest change. A failed booking with this set is not being
+    /// retried, and cancelling it is the way to release its time.
+    #[serde(default)]
+    pub abandoned_at: Option<DateTime<Utc>>,
     /// Final location or conference URL.
     pub location: String,
     /// Answers keyed by question identity.
@@ -403,10 +408,15 @@ pub struct CalendarOperation {
     pub retry_at: DateTime<Utc>,
     /// Intended provider change, retained through failures.
     pub kind: CalendarOperationKind,
-    /// When recovery stopped retrying: the calendar refused the change or it
-    /// ran out of attempts. The booking stays failed and is never claimed again.
+    /// When recovery stopped retrying: the calendar refused the change, or the
+    /// meeting started while it kept failing. The booking stays failed and is
+    /// never claimed again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abandoned_at: Option<DateTime<Utc>>,
+    /// The calendar refused the first attempt, so nothing reached it: an
+    /// abandoned create left no event behind.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unsent: bool,
 }
 /// Provider changes that can be retried without creating a second event.
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -77,6 +77,12 @@ export function TutorialVideoEmbed(props: {
     const entry = tutorial();
     return 'preview' in entry && entry.preview === 'benefit';
   };
+  const watchLabel = () => {
+    const { feature, length } = tutorial();
+    return usesBenefitPoster()
+      ? `Watch\u00a0demo\u00a0·\u00a0${length}`
+      : `Watch ${feature} demo · ${length}`;
+  };
   // The diagram stands in for the video until it starts. This is a class and
   // not a `:has()` on the diagram: the video must never be hidden when play is
   // requested, and some mobile browsers restyle `:has()` late.
@@ -183,9 +189,7 @@ export function TutorialVideoEmbed(props: {
             <img src={presenterPhoto} alt="" />
             <span class="tutorial-video-byline">
               <span>{TUTORIAL_PRESENTER}</span>
-              <span>
-                Watch {tutorial().feature} demo · {tutorial().length}
-              </span>
+              <span>{watchLabel()}</span>
             </span>
           </button>
         </Show>

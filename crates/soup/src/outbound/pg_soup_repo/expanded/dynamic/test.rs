@@ -825,3 +825,45 @@ fn notification_conjunction_folds_to_the_side_that_implies_the_other() {
     assert!(strip(&Expr::and(state(Unseen), state(Seen))).is_none());
     assert!(strip(&Expr::and(inbox(), state(Done))).is_none());
 }
+
+#[test]
+fn scan_bound_limits_source_scans_only() {
+    let bound = |sources, utc| ScanBound {
+        sources,
+        utc,
+        exact: true,
+    };
+    let sources = FeedReads {
+        ordered: Some(OrderedScans::Sources),
+    };
+    let owner = FeedReads {
+        ordered: Some(OrderedScans::Owner),
+    };
+    let lookups = FeedReads { ordered: None };
+    assert!(bound(SOURCE_SCAN_SOURCES, true).allows(sources, 12));
+    assert!(!bound(SOURCE_SCAN_SOURCES + 1, true).allows(sources, 1));
+    assert!(bound(50, true).allows(sources, 100));
+    assert!(!bound(51, true).allows(sources, 100));
+    assert!(
+        bound(SOURCE_SCAN_SOURCES + 1, true).allows(owner, 500),
+        "owner scans do not read sources"
+    );
+    assert!(!bound(1, false).allows(owner, 1));
+    assert!(!bound(1, false).allows(sources, 1));
+    assert!(
+        bound(1, false).allows(lookups, 1),
+        "lookups sort whole and need no UTC"
+    );
+    let stale = |reads| {
+        ScanBound {
+            sources: 1,
+            utc: true,
+            exact: false,
+        }
+        .allows(reads, 1)
+    };
+    assert!(
+        !stale(sources) && !stale(owner) && !stale(lookups),
+        "an unmaintained or unbackfilled table is never read"
+    );
+}

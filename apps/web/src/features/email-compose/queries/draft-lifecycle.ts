@@ -1,3 +1,5 @@
+import { fetchToken } from '@core/auth/session-refresh';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -97,21 +99,39 @@ async function fetchServerLifecycle(
   input: DraftIdentity
 ): Promise<EmailDraftLifecycleState> {
   const observedAt = Date.now();
-  try {
-    const thread = await fetchFreshEmailThread(input.threadId, input.draftId);
-    return deriveEmailDraftLifecycle({
-      ...input,
-      observedAt,
-      message: thread.messages.find(
-        (message) => message.db_id === input.draftId
-      ),
-    });
-  } catch (error) {
-    if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+  const readThread = () =>
+    ResultAsync.fromPromise(
+      fetchFreshEmailThread(input.threadId, input.draftId),
+      (error) => error
+    );
+  let thread = await readThread();
+  // A cookie refresh cannot confirm that a separate bearer token is valid.
+  if (
+    !ENABLE_BEARER_TOKEN_AUTH &&
+    thread.isErr() &&
+    thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED') &&
+    (await fetchToken()).isOk()
+  ) {
+    // The first refusal can predate refreshed credentials. Use the fresh
+    // response before deciding that the draft itself is unavailable.
+    thread = await readThread();
+    if (
+      thread.isErr() &&
+      thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED')
+    ) {
       return deriveEmailDraftLifecycle({ ...input, observedAt });
     }
-    throw error;
   }
+  if (thread.isErr() && !thrownResultErrorHasCode(thread.error, 'NOT_FOUND')) {
+    throw thread.error;
+  }
+  return deriveEmailDraftLifecycle({
+    ...input,
+    observedAt,
+    message: thread.isOk()
+      ? thread.value.messages.find((message) => message.db_id === input.draftId)
+      : undefined,
+  });
 }
 
 function refreshInterval(state: EmailDraftLifecycleState | undefined) {

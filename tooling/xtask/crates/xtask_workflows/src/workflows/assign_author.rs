@@ -1,7 +1,8 @@
 //! `Pull Request` — assigns a newly opened/reopened PR to its author.
 
-use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Workflow};
 
+use crate::workflows::actions::TechnoteSpaceAssignAuthor;
 use crate::workflows::runners;
 
 /// Build the workflow.
@@ -24,9 +25,5 @@ fn assign_author_job() -> Job {
             pull_requests: Some(Level::Write),
             ..Default::default()
         })
-        .add_step(Step::new("Assign author to PR").uses(
-            "technote-space",
-            "assign-author",
-            "9558557c5c4816f38bd06176fbc324ba14bb3160",
-        ))
+        .add_step(TechnoteSpaceAssignAuthor::new("Assign author to PR"))
 }

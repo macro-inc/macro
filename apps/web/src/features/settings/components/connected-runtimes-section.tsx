@@ -120,6 +120,8 @@ export function MachineRow(props: {
   dot?: JSX.Element;
   name: string;
   meta: JSX.Element;
+  /** More under the meta line, e.g. a computer's usage. */
+  detail?: JSX.Element;
   actions?: JSX.Element;
   /**
    * The actions are one icon button (a lone ⋯): keep it on the name's line
@@ -145,6 +147,7 @@ export function MachineRow(props: {
         >
           {props.meta}
         </p>
+        {props.detail}
       </div>
       <Show when={props.actions}>
         <div

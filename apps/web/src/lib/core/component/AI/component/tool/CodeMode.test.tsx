@@ -6,8 +6,8 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
-import { executeCodeHandler } from './CodeMode';
-import { ToolErrorContext } from './ToolRenderer';
+import { codeRunLabel, executeCodeHandler } from './CodeMode';
+import { type ToolEnding, ToolErrorContext } from './ToolRenderer';
 
 vi.mock('@ui', () => ({
   Layer: (props: ParentProps) => props.children,
@@ -20,16 +20,15 @@ vi.mock('@ui', () => ({
 
 afterEach(cleanup);
 
-it('settles a failed workspace run that has no response', () => {
+function renderRun(props: { response?: unknown; ending?: ToolEnding }) {
   render(() => (
-    <ToolErrorContext.Provider
-      value={() => ({ kind: 'failed', reason: 'The program threw' })}
-    >
+    <ToolErrorContext.Provider value={() => props.ending}>
       <Dynamic
         component={
           executeCodeHandler.render as Component<Record<string, unknown>>
         }
         tool={{ name: 'ExecuteCode', data: { source: 'main' } }}
+        response={props.response}
         renderContext={{
           isStreaming: false,
           grouped: false,
@@ -38,8 +37,44 @@ it('settles a failed workspace run that has no response', () => {
       />
     </ToolErrorContext.Provider>
   ));
-  expect(screen.getByText('Worked in your workspace')).toBeTruthy();
-  expect(screen.queryByText('Working in your workspace')).toBeNull();
+}
+
+it('reads a workspace run that has not ended as working', () => {
+  renderRun({});
+  expect(screen.getByText('Working on it')).toBeTruthy();
+});
+
+it('reads a workspace run with a response as a finished step', () => {
+  renderRun({ response: { data: { status: 'succeeded' } } });
+  expect(screen.getByText('Finished a step')).toBeTruthy();
+});
+
+it('reads a workspace run whose program failed as a failed step', () => {
+  renderRun({
+    response: { data: { status: 'timed_out', error: 'Out of time' } },
+  });
+  expect(screen.getByText('A step failed')).toBeTruthy();
+});
+
+it('reads a stopped workspace run as an interrupted step', () => {
+  renderRun({ ending: { kind: 'stopped' } });
+  expect(screen.getByText('Step interrupted')).toBeTruthy();
+});
+
+it('settles a failed workspace run that has no response', () => {
+  renderRun({ ending: { kind: 'failed', reason: 'The program threw' } });
+  expect(screen.getByText('A step failed')).toBeTruthy();
+  expect(screen.queryByText('Working on it')).toBeNull();
+});
+
+it('reads a code run that ended in a call error as a failed step', () => {
+  expect(codeRunLabel(undefined, { kind: 'failed' })).toBe('A step failed');
+  expect(codeRunLabel({ status: 'succeeded' }, undefined)).toBe(
+    'Finished a step'
+  );
+  expect(codeRunLabel({ status: 'cancelled' }, undefined)).toBe(
+    'Step interrupted'
+  );
 });
 
 it('shows a chat code run as workspace work, without its program or result', () => {
@@ -79,7 +114,7 @@ it('shows a chat code run as workspace work, without its program or result', () 
   ));
 
   const text = view.container.textContent ?? '';
-  expect(text).toContain('Worked in your workspace');
+  expect(text).toContain('Finished a step');
   expect(text.toLowerCase()).not.toContain('code');
   expect(text).not.toContain('macro.search');
   expect(text).not.toContain('doc-launch-plan');

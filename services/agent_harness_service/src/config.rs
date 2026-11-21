@@ -14,7 +14,7 @@ use macro_uuid::Uuid;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
@@ -165,6 +165,9 @@ pub struct Config {
     pub environment: Environment,
     /// Optional physical fleet selection; absence attaches no computer fleet.
     pub computers_fleet: Option<ComputerFleetKind>,
+    /// Dev only: comma-separated Macro user ids that get computers without the
+    /// PostHog flag. Refused in production.
+    pub computers_rollout_allowlist: Option<String>,
     /// Days a Macro computer whose billing ended keeps its disk before it is
     /// destroyed; the timers the fleet operator fires use it. The same value
     /// authentication_service reads.
@@ -439,14 +442,59 @@ macro_env_var::maybe_env_vars! {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComputerFleetKind {
-    Incus,
+    /// Firecracker hosts, one per `hosted_runtime_host` row with a connection.
+    Firecracker,
+    /// The local Docker daemon; local stacks only.
     Docker,
+    /// Retired: Incus hosts are gone. A control plane still configured for
+    /// them attaches no fleet, as with `COMPUTERS_FLEET` unset.
+    // TODO: remove once COMPUTERS_FLEET=incus and the COMPUTERS_INCUS_* keys
+    // are deleted from Doppler dev/prd.
+    Incus,
 }
 
 /// Required settings for the selected fleet; unselected groups are not loaded.
 pub enum ComputerFleetConfig {
-    Incus(IncusFleetSettings),
+    Firecracker(FirecrackerFleetSettings),
     Docker(DockerFleetSettings),
+}
+
+/// Required Firecracker fleet configuration; each host's address and pinned
+/// certificate are on its `hosted_runtime_host` row.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct FirecrackerFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_image: String,
+    pub computers_agent_image: String,
+    pub computers_firecracker_client_cert: String,
+    pub computers_firecracker_client_key: String,
+}
+
+impl FirecrackerFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
+            (
+                "COMPUTERS_FIRECRACKER_CLIENT_CERT",
+                self.computers_firecracker_client_cert.as_str(),
+            ),
+            (
+                "COMPUTERS_FIRECRACKER_CLIENT_KEY",
+                self.computers_firecracker_client_key.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Config {
@@ -460,6 +508,17 @@ impl Config {
             ));
         }
         Ok(())
+    }
+
+    /// The computers rollout allowlist; refused in production.
+    pub fn computer_rollout_allowlist(
+        &self,
+    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::rollout::RolloutAllowlist> {
+        hosted_runtimes::outbound::rollout_allowlist::configured(
+            self.computers_rollout_allowlist.as_deref(),
+            self.environment,
+        )
+        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
     }
 
     /// Macro computers' retention and past-due grace.
@@ -477,10 +536,14 @@ impl Config {
     pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<Option<ComputerFleetConfig>> {
         self.validate_fleet_selection()?;
         match self.computers_fleet {
-            Some(ComputerFleetKind::Incus) => {
-                let settings: IncusFleetSettings = macro_config::load()?;
+            Some(ComputerFleetKind::Firecracker) => {
+                let settings: FirecrackerFleetSettings = macro_config::load()?;
                 settings.validate()?;
-                Ok(Some(ComputerFleetConfig::Incus(settings)))
+                Ok(Some(ComputerFleetConfig::Firecracker(settings)))
+            }
+            Some(ComputerFleetKind::Incus) => {
+                tracing::error!("COMPUTERS_FLEET=incus is retired; no computer fleet is attached");
+                Ok(None)
             }
             Some(ComputerFleetKind::Docker) => {
                 let settings: DockerFleetSettings = macro_config::load()?;
@@ -492,30 +555,6 @@ impl Config {
     }
 }
 
-/// Required Incus fleet configuration.
-#[derive(macro_config::MacroConfig)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub struct IncusFleetSettings {
-    pub computers_control_plane_id: String,
-    pub computers_host_name: String,
-    pub computers_image: String,
-    pub computers_agent_image: String,
-    pub computers_host_reserve_gb: u32,
-    pub computers_oversell_factor: u32,
-    pub computers_incus_request_timeout_secs: u64,
-    pub computers_incus_connect_timeout_secs: u64,
-    pub computers_incus_operation_wait_secs: u32,
-    pub computers_incus_state_change_timeout_secs: u32,
-    pub computers_incus_operation_waits: u32,
-    pub computers_incus_shutdown_grace_secs: u64,
-    pub computers_incus_profile: String,
-    pub computers_incus_storage_pool: String,
-    pub computers_incus_url: String,
-    pub computers_incus_client_cert: String,
-    pub computers_incus_client_key: String,
-    pub computers_incus_server_cert: String,
-}
-
 /// Required Docker fleet configuration.
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -524,56 +563,9 @@ pub struct DockerFleetSettings {
     pub computers_host_name: String,
     pub computers_image: String,
     pub computers_agent_image: String,
-    pub computers_host_reserve_gb: u32,
-    pub computers_oversell_factor: u32,
     pub computers_docker_network: String,
     pub computers_docker_enrollment_dir: String,
     pub computers_docker_memory_gb: u32,
-}
-
-impl IncusFleetSettings {
-    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
-        for (name, value) in [
-            (
-                "COMPUTERS_CONTROL_PLANE_ID",
-                self.computers_control_plane_id.as_str(),
-            ),
-            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
-            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
-            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
-            (
-                "COMPUTERS_INCUS_PROFILE",
-                self.computers_incus_profile.as_str(),
-            ),
-            (
-                "COMPUTERS_INCUS_STORAGE_POOL",
-                self.computers_incus_storage_pool.as_str(),
-            ),
-            ("COMPUTERS_INCUS_URL", self.computers_incus_url.as_str()),
-            (
-                "COMPUTERS_INCUS_CLIENT_CERT",
-                self.computers_incus_client_cert.as_str(),
-            ),
-            (
-                "COMPUTERS_INCUS_CLIENT_KEY",
-                self.computers_incus_client_key.as_str(),
-            ),
-            (
-                "COMPUTERS_INCUS_SERVER_CERT",
-                self.computers_incus_server_cert.as_str(),
-            ),
-        ] {
-            if value.trim().is_empty() {
-                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
-            }
-        }
-        if self.computers_oversell_factor == 0 {
-            return Err(macro_config::MacroConfigError::Deserialize(
-                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
-            ));
-        }
-        Ok(())
-    }
 }
 
 impl DockerFleetSettings {
@@ -598,11 +590,6 @@ impl DockerFleetSettings {
             if value.trim().is_empty() {
                 return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
             }
-        }
-        if self.computers_oversell_factor == 0 {
-            return Err(macro_config::MacroConfigError::Deserialize(
-                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
-            ));
         }
         Ok(())
     }

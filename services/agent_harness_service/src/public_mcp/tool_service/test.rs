@@ -667,6 +667,7 @@ mod code_mode {
         assert!(code_mode_instructions.contains("Code mode is on"));
         assert!(code_mode_instructions.contains("ExecuteCode"));
         assert!(code_mode_instructions.contains("DescribeCodeTools"));
+        assert!(code_mode_instructions.contains("Never guess an SDK method"));
         for leaked in [
             "NameSearch",
             "ReadContent",
@@ -703,6 +704,92 @@ mod code_mode {
                 "export async function main() { return {data: 1}; }".to_owned()
             )]
         );
+    }
+
+    /// Every public tool call, in either mode, has a span tying it to its
+    /// caller by opaque ids alone: the FusionAuth id, the OAuth client's id
+    /// and registered name. The Macro user id, an email, is never on it.
+    #[tokio::test]
+    async fn a_tool_call_span_names_its_caller_by_opaque_ids() {
+        use opentelemetry::{Key, Value};
+
+        let spans = crate::test_spans::exported_spans();
+        let app = app(Arc::new(Runs::default()));
+        for (client_id, client_name, tool) in [
+            ("client-code-mode", "Hermes", "ExecuteCode"),
+            ("client-standard-mode", "ChatGPT", "NameSearch"),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .extension(ToolCaller::McpClient {
+                            name: Some(client_name.to_owned()),
+                        })
+                        .extension(mcp_auth_proxy::inbound::middleware::McpCallerIds {
+                            fusionauth_user_id: Some("fusion-user-1".to_owned()),
+                            oauth_client_id: Some(client_id.to_owned()),
+                        })
+                        .method("POST")
+                        .uri("/mcp")
+                        .header("host", "localhost")
+                        .header("x-user", USER)
+                        .header("content-type", "application/json")
+                        .header("accept", "application/json, text/event-stream")
+                        .body(Body::from(
+                            serde_json::json!({
+                                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                "params": {"name": tool, "arguments": {"source": "1"}},
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(response.status().is_success());
+        }
+
+        spans.provider.force_flush().unwrap();
+        let finished = spans.exporter.get_finished_spans().unwrap();
+        for (client_id, client_name, tool, mode) in [
+            ("client-code-mode", "Hermes", "ExecuteCode", "code"),
+            ("client-standard-mode", "ChatGPT", "NameSearch", "standard"),
+        ] {
+            let span = finished
+                .iter()
+                .find(|span| {
+                    span.name == "public_mcp.call_tool"
+                        && span.attributes.iter().any(|attribute| {
+                            attribute.key == Key::from_static_str("mcp.client.id")
+                                && attribute.value == Value::from(client_id)
+                        })
+                })
+                .unwrap_or_else(|| panic!("no tool call span for {client_id}"));
+            let attributes: std::collections::BTreeMap<String, String> = span
+                .attributes
+                .iter()
+                .map(|attribute| (attribute.key.to_string(), attribute.value.to_string()))
+                .collect();
+            for (key, value) in [
+                ("mcp.tool.name", tool),
+                ("mcp.tool_mode", mode),
+                ("mcp.caller", "oauth_client"),
+                ("mcp.client.name", client_name),
+                ("fusionauth_user_id", "fusion-user-1"),
+                ("mcp.outcome", "success"),
+            ] {
+                assert_eq!(
+                    attributes.get(key).map(String::as_str),
+                    Some(value),
+                    "{key}: {attributes:?}"
+                );
+            }
+            assert!(
+                attributes.values().all(|value| !value.contains(USER)),
+                "{attributes:?}"
+            );
+        }
     }
 
     /// `ExecuteCode` runs for exactly the caller the middleware
@@ -860,7 +947,7 @@ mod code_mode {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn a_user_runs_real_javascript_over_mcp() {
+    async fn a_user_runs_a_checked_program_over_mcp() {
         let scratch = tempfile::tempdir().unwrap();
         let path = tokio::process::Command::new("which")
             .arg("deno")
@@ -868,15 +955,26 @@ mod code_mode {
             .await
             .unwrap();
         assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
+        let binary: std::path::PathBuf = String::from_utf8(path.stdout).unwrap().trim().into();
         let deno = code_execution::outbound::deno::DenoRunner::new(
-            String::from_utf8(path.stdout).unwrap().trim().into(),
-            scratch.path().to_owned(),
+            binary.clone(),
+            scratch.path().join("runs"),
             128,
+        )
+        .await
+        .unwrap();
+        let checker = code_execution::outbound::deno::check::DenoChecker::new(
+            binary,
+            scratch.path().join("checks"),
+            1,
+            4,
+            64 * 1024,
         )
         .await
         .unwrap();
         let runner = code_execution::domain::ExecutionService::new(
             Arc::new(deno),
+            Arc::new(checker),
             code_execution::domain::Limits::default(),
         )
         .unwrap();
@@ -891,7 +989,7 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro, session}) { return {data: {sdk: typeof macro.documents, session: session ?? null, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: {sdk: typeof macro.documents, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
             }),
         )
         .await;
@@ -899,7 +997,7 @@ mod code_mode {
         assert_eq!(receipt["status"], "succeeded", "{succeeded}");
         assert_eq!(
             receipt["result"],
-            serde_json::json!({"data": {"sdk": "object", "session": null, "sum": 6}})
+            serde_json::json!({"data": {"sdk": "object", "sum": 6}})
         );
 
         let failed = rpc(
@@ -908,15 +1006,19 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro}) { return {data: await macro.noSuchEntity.list()}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: await macro.noSuchEntity.list()}; }"},
             }),
         )
         .await;
         let receipt = &failed["result"]["structuredContent"];
         assert_eq!(receipt["status"], "failed", "{failed}");
+        // A public run has no session, and the SDK has no such entity.
+        let error = receipt["error"].as_str().unwrap();
+        assert!(error.contains("doesn't type-check"), "{failed}");
         assert!(
-            receipt["error"].as_str().unwrap().contains("TypeError"),
+            error.contains("Property 'noSuchEntity' does not exist on type 'Macro"),
             "{failed}"
         );
+        assert!(error.contains("at main.ts:1:"), "{failed}");
     }
 }

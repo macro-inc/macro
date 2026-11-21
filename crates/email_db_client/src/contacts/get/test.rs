@@ -1,6 +1,7 @@
 use crate::contacts::get::{
     fetch_address_book_emails_by_link_id, fetch_contacts_by_link_id, fetch_db_recipients_in_bulk,
     fetch_senders_by_message_ids, fetch_top_sent_contact_emails_by_link_id,
+    link_has_any_message_with,
 };
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -313,5 +314,89 @@ async fn fetch_top_sent_contact_emails_ranks_by_messages_sent(pool: Pool<Postgre
 
     let capped = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, 1).await?;
     assert_eq!(capped, vec!["carol@gmail.com"]);
+    Ok(())
+}
+
+/// The CRM cleanup keeps a correspondent while the mailbox has mail with
+/// them. Mail the provider no longer has (an Outlook message deleted there,
+/// kept as a `provider_missing` row) no longer counts, in either direction.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn link_has_any_message_with_skips_mail_deleted_at_the_provider(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+           VALUES ($1, 'macro|owner@example.com', 'owner', 'owner@example.com', 'OUTLOOK')"#,
+        link
+    )
+    .execute(&pool)
+    .await?;
+    let thread = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id) VALUES ($1, $2)",
+        thread,
+        link
+    )
+    .execute(&pool)
+    .await?;
+    let mut contacts = HashMap::new();
+    for email in ["carol@acme.example", "dave@acme.example"] {
+        let id = sqlx::query_scalar!(
+            "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3) RETURNING id",
+            Uuid::now_v7(),
+            link,
+            email
+        )
+        .fetch_one(&pool)
+        .await?;
+        contacts.insert(email, id);
+    }
+    // Received from Carol; sent to Dave.
+    let received = Uuid::now_v7();
+    let sent = Uuid::now_v7();
+    for (id, from, is_sent) in [
+        (received, Some(contacts["carol@acme.example"]), false),
+        (sent, None, true),
+    ] {
+        sqlx::query!(
+            r#"INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, is_sent, is_draft)
+               VALUES ($1, $2, $3, $4, $5, false)"#,
+            id,
+            thread,
+            link,
+            from,
+            is_sent
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
+        sent,
+        contacts["dave@acme.example"]
+    )
+    .execute(&pool)
+    .await?;
+    for email in ["Carol@acme.example", "dave@acme.example"] {
+        assert!(
+            link_has_any_message_with(&pool, link, email).await?,
+            "the mailbox has mail with {email}"
+        );
+    }
+
+    sqlx::query!(
+        r#"UPDATE email_messages SET mailbox_state = '{"provider_missing":true}'::jsonb
+           WHERE id = ANY($1)"#,
+        &[received, sent][..]
+    )
+    .execute(&pool)
+    .await?;
+    for email in ["Carol@acme.example", "dave@acme.example"] {
+        assert!(
+            !link_has_any_message_with(&pool, link, email).await?,
+            "mail with {email} deleted at the provider still counts"
+        );
+    }
     Ok(())
 }

@@ -70,6 +70,7 @@ import {
 } from '../primitives/create-pr-actions';
 import { usePrFileOperations } from '../primitives/pr-file-operations';
 import { githubAvatarUrl, githubDisplayLogin } from '../util/githubMarkdown';
+import { PR_HOST_MIN_WIDTH } from '../util/pr-layout';
 import type { PrRef } from '../util/prKey';
 import { prDisplayName, prHtmlUrl } from '../util/prKey';
 
@@ -139,7 +140,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
       <Scroll class="flex-1 min-h-0">
-        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
           <Show
             when={props.data}
             fallback={
@@ -189,7 +190,7 @@ export function PrDetailContent(props: PrDetailBodyProps) {
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
-            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
               <PrDetailSkeleton />
             </div>
           </Scroll>
@@ -294,7 +295,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
         pullRequestTitle={detail.data()?.pullRequest.name ?? undefined}
         pullRequestChangeCounts={detail.changeCounts()}
       >
-        <ChangesSplit>
+        <ChangesSplit hostMinWidth={PR_HOST_MIN_WIDTH}>
           {/* Touch shows the PR's split header, as a hosted PR does. */}
           <SplitHeaderScope.Root when={isTouchDevice()}>
             <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">

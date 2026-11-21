@@ -16,6 +16,7 @@ fn inbox(n: u128) -> FocusInboxOwner {
     FocusInboxOwner {
         link_id: Uuid::from_u128(n),
         owner: MacroUserIdStr::try_from_email(&format!("owner{n}@acme.example")).unwrap(),
+        delegates: Vec::new(),
     }
 }
 
@@ -88,6 +89,103 @@ fn an_owner_who_leaves_and_comes_back_is_filled_again() {
     assert_eq!(start(&mut backfills).1, vec![(1, Pass::First)]);
 }
 
+/// Inbox `n`, linked to the user at `email`.
+fn linked_to(n: u128, email: &str) -> FocusInboxOwner {
+    FocusInboxOwner {
+        delegates: vec![MacroUserIdStr::try_from_email(email).unwrap()],
+        ..inbox(n)
+    }
+}
+
+#[test]
+fn a_waiting_pass_asks_who_the_inbox_is_linked_to_at_the_latest_look() {
+    const BEFORE: &str = "before@acme.example";
+    const NOW: &str = "now@acme.example";
+    let mut backfills = Backfills::default();
+    backfills.found(
+        (1..=3).map(|n| linked_to(n, BEFORE)).collect(),
+        Instant::now(),
+    );
+    let (passes, _) = start(&mut backfills);
+    complete(&mut backfills, passes);
+
+    // Inbox 3 waits for its first pass, 1 and 2 for the rest: each takes
+    // whom the look read.
+    backfills.found((1..=3).map(|n| linked_to(n, NOW)).collect(), Instant::now());
+    let mut started = Vec::new();
+    loop {
+        let (passes, _) = start(&mut backfills);
+        if passes.is_empty() {
+            break;
+        }
+        for (waiting, pass) in &passes {
+            started.push((
+                waiting.inbox.link_id.as_u128(),
+                *pass,
+                waiting.inbox.clone(),
+            ));
+        }
+        complete(&mut backfills, passes);
+    }
+    let expected: Vec<_> = [
+        (3, Pass::First),
+        (1, Pass::Rest),
+        (2, Pass::Rest),
+        (3, Pass::Rest),
+    ]
+    .into_iter()
+    .map(|(n, pass)| (n, pass, linked_to(n, NOW)))
+    .collect();
+    assert_eq!(started, expected);
+}
+
+#[test]
+fn a_pass_that_finds_the_inbox_out_of_the_rollout_leaves_it_for_the_next_look() {
+    let metrics = FocusMetrics::default();
+    let filled = SweepReport {
+        inboxes: 1,
+        ..SweepReport::default()
+    };
+    // Out at the start, or partway through.
+    let out = [
+        SweepReport::default(),
+        SweepReport {
+            inboxes_left: 1,
+            ..filled
+        },
+    ];
+    for report in out {
+        let mut backfills = Backfills::default();
+        let pass_ending = |backfills: &mut Backfills, report: SweepReport| {
+            let (mut passes, _) = start(backfills);
+            let (waiting, pass) = passes.pop().unwrap();
+            let started = Instant::now();
+            finish(
+                backfills,
+                Finished {
+                    waiting,
+                    pass,
+                    started,
+                    report: Ok(report),
+                },
+                &metrics,
+            );
+        };
+        backfills.found(vec![inbox(1)], Instant::now());
+        pass_ending(&mut backfills, filled);
+        pass_ending(&mut backfills, report);
+        assert!(backfills.filled.is_empty(), "{report:?}");
+
+        // In at the next look: filled again from the start.
+        backfills.found(vec![inbox(1)], Instant::now());
+        assert_eq!(
+            start(&mut backfills).1,
+            vec![(1, Pass::First)],
+            "{report:?}"
+        );
+    }
+}
+
 #[test]
 fn a_stopped_pass_holds_the_rest_until_the_next_look_and_runs_again() {
     let mut backfills = Backfills::default();
@@ -117,6 +215,31 @@ type TestService = FocusService<
     NoDueDates,
     Enrolled,
 >;
+
+#[test]
+fn only_inboxes_found_after_the_first_look_are_new_and_a_retry_keeps_its_find() {
+    let mut backfills = Backfills::default();
+    let start_up = Instant::now();
+    backfills.found(vec![inbox(1)], start_up);
+    let later = start_up + Duration::from_secs(60);
+    backfills.found(vec![inbox(1), inbox(2)], later);
+
+    let (mut passes, _) = start(&mut backfills);
+    let news: Vec<_> = passes.iter().map(|(waiting, _)| waiting.new).collect();
+    assert_eq!(news, vec![false, true], "inbox 1 was there at the start");
+
+    // Inbox 2's pass stops; found again, it is still timed from its find.
+    let (second, pass) = passes.remove(1);
+    backfills.done(second, pass, false, false);
+    backfills.found(vec![inbox(1), inbox(2)], later + Duration::from_secs(60));
+    let (passes, _) = start(&mut backfills);
+    let (retried, _) = passes
+        .iter()
+        .find(|(waiting, _)| waiting.inbox.link_id == inbox(2).link_id)
+        .unwrap();
+    assert!(retried.new);
+    assert_eq!(retried.found, later);
+}
 
 fn service(
     pool: Pool<Postgres>,
@@ -149,7 +272,13 @@ async fn an_enrolled_inbox_fills_with_no_mail_arriving(pool: Pool<Postgres>) {
         Enrolled::owner("owner@acme.example"),
     );
     let shutdown = CancellationToken::new();
-    let backfills = tokio::spawn(run_backfills(service, 30, shutdown.clone()));
+    let metrics = FocusMetrics::default();
+    let backfills = tokio::spawn(run_backfills(
+        service,
+        30,
+        metrics.clone(),
+        shutdown.clone(),
+    ));
 
     // The seeded threads and the fixture's own signal mail in the window.
     tokio::time::timeout(
@@ -168,6 +297,14 @@ async fn an_enrolled_inbox_fills_with_no_mail_arriving(pool: Pool<Postgres>) {
     assert!(
         !asked.contains(&OTHERS_THREAD),
         "the other owner is not enrolled"
+    );
+    let batch = metrics.take();
+    assert_eq!(batch.samples[&Metric::EnrolledInboxes], vec![1.0]);
+    assert!(
+        !batch
+            .samples
+            .contains_key(&Metric::BackfillTopFilledSeconds),
+        "an inbox the first look finds is not timed: it may have joined long before"
     );
 }
 
@@ -201,6 +338,7 @@ async fn fill_speed(pool: Pool<Postgres>) {
                 &FocusInboxOwner {
                     link_id,
                     owner: MacroUserIdStr::try_from_email(&owner).unwrap(),
+                    delegates: Vec::new(),
                 },
                 chrono::Duration::days(30),
                 THREADS_AT_ONCE,
@@ -233,7 +371,12 @@ async fn fill_speed(pool: Pool<Postgres>) {
     let service = service(pool, classifier, due_dates.clone(), Enrolled(owners));
     let shutdown = CancellationToken::new();
     let started = Instant::now();
-    let backfills = tokio::spawn(run_backfills(service, 30, shutdown.clone()));
+    let backfills = tokio::spawn(run_backfills(
+        service,
+        30,
+        FocusMetrics::default(),
+        shutdown.clone(),
+    ));
     let total = usize::try_from(inboxes).unwrap() * usize::try_from(threads).unwrap();
     // The first passes cover 3 of the 29 days seeded.
     asked
@@ -251,4 +394,48 @@ async fn fill_speed(pool: Pool<Postgres>) {
         f64::from(u32::try_from(total).unwrap()) / took,
         due_dates.calls.lock().unwrap()
     );
+}
+
+#[test]
+fn a_completed_pass_times_a_new_inbox_and_not_one_found_at_the_start() {
+    let metrics = FocusMetrics::default();
+    let mut backfills = Backfills::default();
+    let filled = SweepReport {
+        inboxes: 1,
+        ..SweepReport::default()
+    };
+    let cases = [
+        (false, filled, false),
+        (true, filled, true),
+        // Not enrolled, or a thread failed: not filled.
+        (true, SweepReport::default(), false),
+        (
+            true,
+            SweepReport {
+                failed: 1,
+                ..filled
+            },
+            false,
+        ),
+    ];
+    for (new, report, timed_expected) in cases {
+        let now = Instant::now();
+        let finished = Finished {
+            waiting: Waiting {
+                inbox: inbox(1),
+                found: now,
+                new,
+            },
+            pass: Pass::First,
+            started: now,
+            report: Ok(report),
+        };
+        finish(&mut backfills, finished, &metrics);
+        let timed = metrics
+            .take()
+            .samples
+            .get(&Metric::BackfillTopFilledSeconds)
+            .map(Vec::len);
+        assert_eq!(timed, timed_expected.then_some(1), "new: {new}");
+    }
 }

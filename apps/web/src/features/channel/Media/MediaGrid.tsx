@@ -23,6 +23,7 @@ function MessageImageTile(props: {
   large: boolean;
   onOpen: () => void;
   onError?: () => void;
+  onLoad?: () => void;
 }) {
   const dimensions = () =>
     constrainImageDimensions(
@@ -54,6 +55,7 @@ function MessageImageTile(props: {
           height={dimensions()?.height ?? props.item.height ?? undefined}
           fallback={<MediaImage.Fallback fill={!!dimensions()} />}
           onError={props.onError}
+          onLoad={props.onLoad}
           style={{
             ...(dimensions()
               ? {
@@ -196,6 +198,8 @@ export function MediaGrid(props: {
   onOpen: (index: number) => void;
   /** An item whose file failed to load (message tiles only). */
   onError?: (id: string) => void;
+  /** An image whose file loaded (message tiles only). */
+  onLoad?: (id: string) => void;
   class?: string;
 }) {
   const hasSingleLargeImage = createMemo(
@@ -220,6 +224,7 @@ export function MediaGrid(props: {
                 large={hasSingleLargeImage()}
                 onOpen={() => props.onOpen(index())}
                 onError={() => props.onError?.(item.id)}
+                onLoad={() => props.onLoad?.(item.id)}
               />
             </Match>
             <Match

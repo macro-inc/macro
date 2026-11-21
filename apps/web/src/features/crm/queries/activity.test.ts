@@ -70,6 +70,7 @@ describe('CRM activity queries', () => {
         isFetchNextPageError: false,
         isEnabled: true,
         hasNextPage: false,
+        hasPageData: false,
         transport: 'graphql',
         fetchNextPage: vi.fn(async () => {}),
         refetch: vi.fn(async () => {}),

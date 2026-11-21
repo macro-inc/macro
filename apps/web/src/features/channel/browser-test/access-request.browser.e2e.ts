@@ -26,7 +26,7 @@ for (const pane of ['none', '320px']) {
       { outcome: { kind: 'pending', canAnswer: false } },
       { outcome: { kind: 'pending', canAnswer: true } },
       { busy: true },
-      { busy: false, outcome: { kind: 'approved', by: LONG_NAME } },
+      { busy: false, outcome: { kind: 'approved' } },
       { outcome: { kind: 'denied', by: LONG_NAME } },
       { outcome: { kind: 'withdrawn' } },
       { outcome: { kind: 'unavailable' } },
@@ -70,4 +70,19 @@ test('the answer buttons fit inside their line', async ({ page, isMobile }) => {
 
   expect(button.y).toBeGreaterThanOrEqual(line.y);
   expect(button.y + button.height).toBeLessThanOrEqual(line.y + line.height);
+});
+
+// The added row that follows an approval already names who let them in.
+test('an approved request shows no answer', async ({ page }) => {
+  await page.goto('/access-request.html');
+  const row = page.locator('[data-system-activity]');
+  await page.evaluate(() =>
+    window.update({ outcome: { kind: 'pending', canAnswer: true } })
+  );
+  await expect(row.getByRole('button', { name: 'Approve' })).toBeVisible();
+
+  await page.evaluate(() => window.update({ outcome: { kind: 'approved' } }));
+  await expect(row).toContainText('asked to join the channel');
+  await expect(row).not.toContainText('Approved');
+  await expect(row.getByRole('button')).toHaveCount(0);
 });
