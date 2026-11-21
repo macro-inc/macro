@@ -1984,13 +1984,25 @@ export async function main({ macro, knobs }: any) {
     service.shutdown().await;
 }
 
-/// Serves `/email/ok` and a redirect from `/email/redirect` to unfurl, and
-/// records every request that reached unfurl.
-async fn unfurl_fixture() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+/// Serves `/email/ok`, a redirect from `/email/redirect` to unfurl and a
+/// 307 from `/email/again` to `/email/ok`, records every request that
+/// reached unfurl and every request `/email/ok` got.
+struct UnfurlFixture {
+    host: String,
+    unfurl_host: String,
+    reached: Arc<std::sync::Mutex<Vec<String>>>,
+    landed: Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+async fn unfurl_fixture() -> UnfurlFixture {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let host = format!("http://{}", listener.local_addr().unwrap());
+    // Unfurl on its own origin, as a local stack serves it.
+    let unfurl = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let unfurl_host = format!("http://{}", unfurl.local_addr().unwrap());
     let reached = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let seen = Arc::clone(&reached);
+    let landed = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (seen, ok) = (Arc::clone(&reached), Arc::clone(&landed));
     tokio::spawn(async move {
         loop {
             let (mut stream, _) = listener.accept().await.unwrap();
@@ -2001,7 +2013,13 @@ async fn unfurl_fixture() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
                     .write_all(b"HTTP/1.1 302 Found\r\nLocation: /UnFurl/proxy?url=x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                     .await
                     .unwrap();
+            } else if path.starts_with("/email/again") {
+                stream
+                    .write_all(b"HTTP/1.1 307 Temporary Redirect\r\nLocation: /email/ok\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    .await
+                    .unwrap();
             } else if path.starts_with("/email/ok") {
+                ok.lock().unwrap().push(request);
                 respond(&mut stream, "{}").await;
             } else {
                 seen.lock().unwrap().push(path);
@@ -2009,16 +2027,32 @@ async fn unfurl_fixture() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
             }
         }
     });
-    (host, reached)
+    let seen = Arc::clone(&reached);
+    tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = unfurl.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            seen.lock()
+                .unwrap()
+                .push(request.lines().next().unwrap_or_default().to_owned());
+            respond(&mut stream, "{}").await;
+        }
+    });
+    UnfurlFixture {
+        host,
+        unfurl_host,
+        reached,
+        landed,
+    }
 }
 
-fn unfurl_run(host: &str, token: &str) -> RunEnvironment {
+fn unfurl_run(fixture: &UnfurlFixture, token: &str) -> RunEnvironment {
     RunEnvironment {
         token: token.into(),
         endpoints: SdkEndpoints {
             hosts: BTreeMap::from([
-                ("email".into(), host.to_owned()),
-                ("unfurl".into(), format!("{host}/unfurl")),
+                ("email".into(), fixture.host.clone()),
+                ("unfurl".into(), fixture.unfurl_host.clone()),
             ]),
             ..SdkEndpoints::default()
         },
@@ -2029,17 +2063,27 @@ fn unfurl_run(host: &str, token: &str) -> RunEnvironment {
 /// Unfurl fetches what its caller names from Macro's servers and takes no
 /// credential, so the run bootstrap is the only gate: a scoped run (here a
 /// background job's token) can't reach it however the URL spells its path,
-/// nor through a redirect; its other requests still go through.
+/// under the gateway's `/unfurl` prefix or on its own origin, as a URL, a
+/// string or a `Request`, nor through a redirect; its other requests still
+/// go through, a redirected POST with its body intact.
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_scoped_run_never_reaches_unfurl() {
     let (_root, service) = setup(Limits::default()).await;
-    let (host, reached) = unfurl_fixture().await;
+    let fixture = unfurl_fixture().await;
     let source = format!(
         r#"
 export async function main() {{
   const base = "{host}";
+  const unfurl = "{unfurl}";
   const results: string[] = [];
+  const attempt = async (input: string | Request | URL, init?: RequestInit) => {{
+    try {{
+      results.push(String((await fetch(input, init)).status));
+    }} catch (error) {{
+      results.push(String(error).includes("can't fetch links") ? "refused" : String(error));
+    }}
+  }};
   for (const url of [
     `${{base}}/unfurl/proxy?url=x`,
     `${{base}}/UNFURL/proxy?url=x`,
@@ -2047,19 +2091,22 @@ export async function main() {{
     `${{base}}/unfurl`,
     `${{base}}//unfurl//proxy`,
     `${{base}}/%75nfurl/proxy`,
+    `${{base}}/%2575nfurl/proxy`,
     `${{base}}/email/../unfurl/proxy`,
     `${{base}}/email/redirect`,
-    `${{base}}/email/ok`,
+    `${{unfurl}}/proxy?url=x`,
+    `${{unfurl}}/`,
   ]) {{
-    try {{
-      results.push(String((await fetch(url)).status));
-    }} catch (error) {{
-      results.push(String(error).includes("can't fetch links") ? "refused" : String(error));
-    }}
+    await attempt(url);
   }}
+  await attempt(new Request(`${{base}}/unfurl/proxy?url=x`));
+  await attempt(new URL(`${{unfurl}}/unfurl`));
+  await attempt(`${{base}}/email/again`, {{ method: "POST", body: "hello", headers: {{ "content-type": "text/plain" }} }});
   return {{ results }};
 }}
-"#
+"#,
+        host = fixture.host,
+        unfurl = fixture.unfurl_host,
     );
     let job = "eyJhbGciOiJub25lIn0.eyJhZ2VudF9zY29wZSI6ImpvYiJ9.signature";
     let (_, outcome) = collect(
@@ -2069,7 +2116,7 @@ export async function main() {{
                     source: source.clone(),
                     timeout_ms: 10_000,
                 },
-                unfurl_run(&host, job),
+                unfurl_run(&fixture, job),
             )
             .unwrap(),
     )
@@ -2077,18 +2124,25 @@ export async function main() {{
     let Outcome::Succeeded { value } = outcome else {
         panic!("{outcome:?}");
     };
-    assert_eq!(
-        value["results"],
-        serde_json::json!([
-            "refused", "refused", "refused", "refused", "refused", "refused", "refused", "refused",
-            "200"
-        ])
-    );
+    let refused = vec!["refused"; 13];
+    let mut expected = serde_json::json!(refused);
+    expected.as_array_mut().unwrap().push("200".into());
+    assert_eq!(value["results"], expected);
     assert!(
-        reached.lock().unwrap().is_empty(),
+        fixture.reached.lock().unwrap().is_empty(),
         "{:?}",
-        reached.lock().unwrap()
+        fixture.reached.lock().unwrap()
     );
+    // The redirected POST arrived with its body and its length.
+    let landed = fixture.landed.lock().unwrap().clone();
+    assert_eq!(landed.len(), 1, "{landed:?}");
+    assert!(landed[0].starts_with("POST /email/ok "), "{}", landed[0]);
+    assert!(
+        landed[0].to_lowercase().contains("content-length: 5"),
+        "{}",
+        landed[0]
+    );
+    assert!(landed[0].ends_with("hello"), "{}", landed[0]);
 
     // An unscoped run's token signs no scope: its link previews still work.
     let unscoped = "eyJhbGciOiJub25lIn0.e30.signature";
@@ -2099,12 +2153,12 @@ export async function main() {{
                     source,
                     timeout_ms: 10_000,
                 },
-                unfurl_run(&host, unscoped),
+                unfurl_run(&fixture, unscoped),
             )
             .unwrap(),
     )
     .await;
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
-    assert!(!reached.lock().unwrap().is_empty());
+    assert!(!fixture.reached.lock().unwrap().is_empty());
     service.shutdown().await;
 }

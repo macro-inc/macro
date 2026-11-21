@@ -166,8 +166,14 @@ try {
   // lower case, dot segments resolved, empty segments dropped.
   const routed = (url) => {
     const parsed = new URL(url);
+    // Decoded until it stops changing, so no encoding hides a segment.
     let path = parsed.pathname;
-    try { path = decodeURIComponent(path); } catch { /* keep it encoded */ }
+    for (let round = 0; round < 5; round++) {
+      let decoded = path;
+      try { decoded = decodeURIComponent(path); } catch { break; }
+      if (decoded === path) break;
+      path = decoded;
+    }
     const segments = [];
     for (const segment of path.toLowerCase().split(/[\\/]+/)) {
       if (segment === "" || segment === ".") continue;
@@ -188,22 +194,28 @@ try {
   // A scoped run follows redirects itself, so none lands on a fetcher.
   const guarded = async (first) => {
     let request = first;
+    const signal = first.signal;
     for (let hop = 0; hop <= 20; hop++) {
       if (reachesFetcher(request.url)) throw refusal();
-      const retry = request.body === null ? undefined : request.clone();
+      // The program's own headers and body, before this hop's marks, to
+      // replay on a redirect; a body replays with its length.
+      const headers = new Headers(request.headers);
+      const body = request.body === null ? null : await request.clone().arrayBuffer();
       const response = await route(request);
       const location = redirects.has(response.status) ? response.headers.get("location") : null;
       if (location === null) return response;
       const next = new URL(location, request.url).href;
       const asGet = response.status === 303 || ((response.status === 301 || response.status === 302) && request.method === "POST");
-      const headers = new Headers(request.headers);
       if (originOf(next) !== originOf(request.url)) {
         headers.delete("authorization");
         headers.delete("cookie");
       }
+      if (asGet) {
+        for (const name of ["content-type", "content-length", "content-encoding", "content-language", "content-location"]) headers.delete(name);
+      }
       request = asGet
-        ? new Request(next, {method: request.method === "HEAD" ? "HEAD" : "GET", headers, redirect: "manual"})
-        : new Request(next, retry ? {method: request.method, headers, body: retry.body, duplex: "half", redirect: "manual"} : {method: request.method, headers, redirect: "manual"});
+        ? new Request(next, {method: request.method === "HEAD" ? "HEAD" : "GET", headers, redirect: "manual", signal})
+        : new Request(next, {method: request.method, headers, body, redirect: "manual", signal});
     }
     throw new TypeError("Too many redirects.");
   };
