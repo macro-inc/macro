@@ -5,6 +5,7 @@ use super::*;
 use crate::domain::models::{TeamClaim, WrittenKind};
 use crate::domain::ports::{ImportRepo, ImportedDatabase, NotionDatabaseFallback};
 use std::collections::HashSet;
+mod failure;
 
 pub(super) struct Reservations {
     pub prepared: HashMap<NotionId, write::PreparedDatabase>,
@@ -45,7 +46,7 @@ where
         clippy::too_many_arguments,
         reason = "the reviewed set, destination layout and durable ledger"
     )]
-    #[tracing::instrument(name = "notion.reserve_databases", skip_all, fields(databases = tracing::field::Empty, failures = tracing::field::Empty), err)]
+    #[tracing::instrument(name = "notion.reserve_databases", skip_all, fields(databases = tracing::field::Empty, failures = tracing::field::Empty))]
     pub(super) async fn reserve_databases(
         &self,
         api: &super::databases::CachedNotion<N::Api>,
@@ -149,8 +150,37 @@ where
         })
     }
 
-    #[tracing::instrument(name = "notion.reserve_database", skip_all, fields(source_id = %item.notion_id), err)]
+    // Report errors contain reviewed titles; traces retain only ids and outcomes.
+    #[tracing::instrument(name = "notion.reserve_database", skip_all, fields(source_id = %item.notion_id, failed = tracing::field::Empty, attempts = tracing::field::Empty))]
     async fn reserve_source(
+        &self,
+        item: &write::WriteItem,
+        context: &ReservationContext<'_, N::Api>,
+    ) -> Result<ReservedSource> {
+        let result = self.reserve_source_inner(item, context).await;
+        let failed = result.as_ref().is_err()
+            || result
+                .as_ref()
+                .is_ok_and(|reserved| reserved.failure.is_some());
+        tracing::Span::current().record("failed", failed);
+        result.map_err(|error| {
+            let reason = match &error {
+                ImportError::Other(cause) => cause
+                    .downcast_ref::<failure::RunFailure>()
+                    .map(|failure| failure.0.as_str()),
+                _ => None,
+            }
+            .unwrap_or("database reservation could not be persisted; retry this import");
+            let title = if item.title.trim().is_empty() {
+                plan::UNTITLED_DATABASE
+            } else {
+                &item.title
+            };
+            ImportError::Other(anyhow::anyhow!("Database \"{title}\": {reason}"))
+        })
+    }
+
+    async fn reserve_source_inner(
         &self,
         item: &write::WriteItem,
         context: &ReservationContext<'_, N::Api>,
@@ -170,6 +200,7 @@ where
         let progress = write::Progress::new(store, user, item.import_id, written);
         let outcome: anyhow::Result<()> = async {
             progress.ensure_supported()?;
+            progress.reservation_failures()?;
             if !pending.contains(&item.import_id) {
                 if let Some(row) = store.get(user, item.import_id).await?
                     && row.entity_type.as_deref() == Some(write::DATABASE_ENTITY)
@@ -205,7 +236,7 @@ where
                 }
                 TeamClaim::Linked { .. } => return Ok(()),
                 TeamClaim::Waiting { .. } => {
-                    anyhow::bail!("Another import is still creating a database; retry this import when it finishes");
+                    return Err(failure::RunFailure("a teammate is still creating this database; retry this import when it finishes".into()).into());
                 }
                 TeamClaim::Held | TeamClaim::Free => {}
             }
@@ -232,36 +263,45 @@ where
             Ok(())
         }.await;
         if let Err(error) = outcome {
-            let fallback = if let Some(reason) =
-                error.downcast_ref::<crate::domain::models::SourceStopReason>()
-            {
-                progress.source_stopped(&item.title, *reason).await?;
-                Some(NotionDatabaseFallback::Unresolved)
-            } else if let Some(error) =
-                error.downcast_ref::<import_notion::domain::ports::NotionError>()
-            {
-                super::databases::read_failure(error).map(|reason| match reason {
-                    import_notion::domain::databases::ReadFailure::Forbidden => {
-                        NotionDatabaseFallback::NoAccess
-                    }
-                    import_notion::domain::databases::ReadFailure::NotFound
-                    | import_notion::domain::databases::ReadFailure::Trashed => {
-                        NotionDatabaseFallback::NotFound
-                    }
-                    _ => NotionDatabaseFallback::Unresolved,
-                })
-            } else {
-                None
-            };
-            let Some(fallback) = fallback else {
-                tracing::warn!(source_id = %item.notion_id, retryable = true, "database reservation stopped before body conversion");
+            let classified = if let Some(reason) = error.downcast_ref::<failure::RunFailure>() {
                 progress.flush_warnings().await?;
-                return Err(ImportError::Other(error));
+                return Err(ImportError::Other(
+                    failure::RunFailure(reason.0.clone()).into(),
+                ));
+            } else {
+                failure::classify(&error)
             };
-            let reason = super::super::admission::failure_reason(&error);
-            progress.warn(&[format!("Database {}: unresolved database destination: {reason}; occurrences retain Notion links", item.title)]).await?;
+            let (reason, fallback) = match classified {
+                failure::Failure::Permanent(reason, fallback) => (reason, fallback),
+                failure::Failure::SourceRetryable(reason) => {
+                    let attempts = progress.reservation_failure().await?;
+                    tracing::Span::current().record("attempts", attempts as i64);
+                    tracing::warn!(source_id = %item.notion_id, attempts, retryable = attempts < 3, "source reservation did not complete");
+                    if attempts < 3 {
+                        progress.flush_warnings().await?;
+                        return Err(ImportError::Other(
+                            failure::RunFailure(format!(
+                                "{reason}; attempt {attempts} of 3, retry this import"
+                            ))
+                            .into(),
+                        ));
+                    }
+                    (
+                        crate::domain::models::SourceStopReason::ReservationRetriesExhausted,
+                        NotionDatabaseFallback::Unresolved,
+                    )
+                }
+                failure::Failure::RunWide(reason) => {
+                    tracing::warn!(source_id = %item.notion_id, retryable = true, "database reservation stopped before body conversion");
+                    progress.flush_warnings().await?;
+                    return Err(ImportError::Other(
+                        failure::RunFailure(reason.into()).into(),
+                    ));
+                }
+            };
+            progress.source_stopped(&item.title, reason).await?;
             reserved.destination = Some(DatabaseDestination::Fallback(fallback));
-            reserved.failure = Some(reason);
+            reserved.failure = Some(reason.to_string());
         }
         progress.flush_warnings().await?;
         Ok(reserved)

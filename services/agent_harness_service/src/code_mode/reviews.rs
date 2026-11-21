@@ -103,15 +103,8 @@ where
                 "The import source cannot change after presentation.".into(),
             ));
         }
-        let dependencies = self
-            .import_service()?
-            .review_workspace_dependencies(
-                account_holder,
-                source,
-                record.id.0,
-                &draft.excluded,
-                false,
-            )
+        self.import_service()?
+            .approve_workspace_dependencies(account_holder, source, record.id.0, &draft.excluded)
             .await
             .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
         self.import_service()?
@@ -120,7 +113,6 @@ where
                 source,
                 record.id.0,
                 NotionWriteChoices {
-                    included_dependencies: dependencies.included,
                     excluded: draft.excluded.clone(),
                     shared: draft.shared.clone(),
                     personal: draft.personal.clone(),

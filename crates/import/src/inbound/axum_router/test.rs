@@ -309,6 +309,16 @@ async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_
 }
 
 impl WorkspaceImporter for FakeImportService {
+    async fn approve_workspace_dependencies(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: &[Uuid],
+    ) -> crate::domain::ports::Result<()> {
+        Ok(())
+    }
+
     async fn review_workspace_dependencies(
         &self,
         _: &MacroUserIdStr<'static>,

@@ -322,7 +322,10 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   external dependencies start unticked as Link. A saved draft first offers
   each dependency as excluded; removing its id explicitly opts in. Review-scoped
   `DependencyReviewed` / `DependencyIncluded` markers fail closed for missing,
-  legacy or different-review consent, including adopted writes. These markers
+  legacy or different-review consent, including adopted writes. Approval atomically
+  replaces the current review’s inclusion facts under ordered source-row locks;
+  re-saving and approving a changed selection revokes its earlier inclusions.
+  Start and resume derive authority only from these facts. These markers
   are prerequisites, not resumable output. In-scope inline sources retain their
   default Copy suggestion. Unavailable dependencies are visible by-hand rows without sharing controls.
   `plan.inlineOn` includes referenced sources already in selected roots; suggest
@@ -331,7 +334,13 @@ paths reject workspace-plan rows so approval cannot be bypassed.
 - Finish ancestor folder sharing, then reserve approved databases and saved
   views with at most four sources in flight before converting any body. Drain
   admitted reservations before returning a transient error; retry without
-  converting temporary failures into permanent fallback links. Use the source UUID as identity within the
+  converting run-wide outages into permanent fallback links. Source validation,
+  missing destinations and explicit source permissions degrade only that source.
+  Incomplete view lists and source conflicts spend durable reservation-failure
+  receipts, capped at three per generation before a named link fallback. Auth,
+  storage, transport and upstream rate limits/outages never spend that threshold.
+  Every failed reservation names its source; a pending teammate copy fails the
+  attempt with a named wait message and remains safe to retry. Use the source UUID as identity within the
   user/team ledger; globally unique Notion source UUIDs never dedupe by title.
 - File owner-only databases with their page when safe. Keep each database's
   reviewed sharing separate. Before filing a Personal source, use the shared
@@ -343,6 +352,8 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   `?v` selects the saved view, otherwise the first container tab is assumed and
   reported. Excluded sources retain `notImported` links and do not create folders;
   retain skipped page ancestors for the folder layout of written children.
+  Persisted review rows are the writer’s canonical plan: retain discarded data
+  sources as Skip references so start and resume report them as not imported.
   Keep permanently unreadable
   tab slots in list order; a missing default never silently selects the next tab.
   Retain other readable tabs and propagate transient detail failures.
@@ -388,8 +399,8 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   warning if a grant appeared after reservation; do not relocate it implicitly.
 
 The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
-`schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`
-and `dependency_included` written kinds. Unknown future kinds stay readable as
+`schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`,
+`dependency_included` and `database_reservation_failure` written kinds. Unknown future kinds stay readable as
 `Unsupported` prerequisites and stop only the affected source with a typed
 report warning. Deploy compatible readers before writers; drain affected import
 runs or keep compatible readers before rolling back to an older binary. Renewal

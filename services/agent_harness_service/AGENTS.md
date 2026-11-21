@@ -509,6 +509,8 @@ attachment observation can briefly differ from this service's operator presence.
 
 Import review actions reconcile external dependency defaults through the import
 service before saving. Record offered exclusions only after the review save
-succeeds, and pass the current saved review's explicit dependency whitelist when
-starting a write. The import domain owns consent, retry and source-stop policy;
+succeeds. At approval, call `approve_workspace_dependencies` with the saved
+draft; it replaces review-scoped inclusion facts before starting the write.
+Do not compute or pass a second dependency whitelist: the domain reads the
+current review’s persisted consent on start and resume. The import domain owns consent, retry and source-stop policy;
 the host never queries import tables directly.

@@ -519,6 +519,79 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
+    #[tracing::instrument(skip_all, fields(review_id = %review, sources = import_ids.len(), included = included.len()), err)]
+    async fn replace_dependency_inclusions(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+        import_ids: &[Uuid],
+        included: &[Uuid],
+    ) -> Result<()> {
+        let mut ids = import_ids.to_vec();
+        ids.sort_unstable();
+        ids.dedup();
+        let mut selected = included.to_vec();
+        selected.sort_unstable();
+        selected.dedup();
+        if !selected.iter().all(|id| ids.binary_search(id).is_ok()) {
+            return Err(crate::domain::ports::ImportError::NotReady(
+                "The approved dependency selection does not match this review.",
+            ));
+        }
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        // The lateral fence keeps each ownership check behind its requested PK.
+        // Lock in id order so concurrent approvals replace one another atomically.
+        let locked = sqlx::query_scalar!(
+            r#"SELECT owned.id AS "id!"
+               FROM (SELECT id FROM UNNEST($3::uuid[]) AS wanted(id) ORDER BY id) AS wanted
+               JOIN LATERAL (
+                   SELECT entity.id FROM import_entity AS entity
+                   WHERE entity.id = wanted.id AND (SELECT entity.user_id OFFSET 0) = $1
+                     AND entity.review_id = $2 AND entity.source = 'notion'
+                     AND entity.kind = 'data_source' AND entity.status = 'staged'
+                   OFFSET 0 FOR UPDATE OF entity
+               ) AS owned ON true"#,
+            user.as_ref(),
+            review,
+            &ids,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        if locked.len() != ids.len() {
+            return Err(crate::domain::ports::ImportError::NotReady(
+                "This import review changed; reload it before approving.",
+            ));
+        }
+        let scope = review.to_string();
+        sqlx::query!(
+            r#"DELETE FROM import_entity_written
+               WHERE import_id = ANY($1::uuid[]) AND kind = 'dependency_included' AND object = $2"#,
+            &locked,
+            &scope,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO import_entity_written (import_id, kind, object, macro_id)
+               SELECT selected.import_id, 'dependency_included', $1, $3
+               FROM UNNEST($2::uuid[]) AS selected(import_id)
+               ON CONFLICT (import_id, kind, object) DO NOTHING"#,
+            &scope,
+            &selected,
+            review,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, user), err)]
     async fn record_task_notice(
         &self,

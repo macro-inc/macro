@@ -52,6 +52,14 @@ pub trait WorkspaceImporter: NotionWorkspaceImporter {
         review: Uuid,
         choices: NotionWriteChoices,
     ) -> impl Future<Output = Result<NotionImportReport>> + Send;
+    /// Persist exactly the saved dependency selection being approved; later approvals replace it.
+    fn approve_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+    ) -> impl Future<Output = Result<()>> + Send;
     /// Reconcile dependency defaults; `saved` acknowledges only a successfully saved draft.
     fn review_workspace_dependencies(
         &self,
@@ -164,6 +172,18 @@ where
         workspace_source(source)?;
         self.scoped(source)
             .start_notion_write(user, review, choices)
+            .await
+    }
+    async fn approve_workspace_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review: Uuid,
+        excluded: &[Uuid],
+    ) -> Result<()> {
+        workspace_source(source)?;
+        self.scoped(source)
+            .approve_review_dependencies(user, review, excluded)
             .await
     }
     async fn review_workspace_dependencies(

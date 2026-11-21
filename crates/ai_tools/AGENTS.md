@@ -51,7 +51,10 @@ execution, display) that don't belong to a single domain.
   so the import domain does not invalidate a live copy on an outage.
 Return `SourceStopReason::RecordedTableMissing` only when the recorded table
 is gone; keep storage and database-service failures retryable so reservation
-never permanently downgrades page cards on an outage.
+never permanently downgrades page cards on an outage. Normalize database
+validation, not-found, explicit resource permission and version-conflict errors
+into `DatabaseWriteFailure`; repository/service outages stay run-wide. The
+import domain owns source retry thresholds and link fallback decisions.
 
 - `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
   ports. PostgreSQL adapter tests cover live targets without grants,

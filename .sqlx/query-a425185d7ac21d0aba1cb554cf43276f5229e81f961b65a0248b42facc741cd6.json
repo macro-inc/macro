@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM import_entity_written\n               WHERE import_id = ANY($1::uuid[]) AND kind = 'dependency_included' AND object = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a425185d7ac21d0aba1cb554cf43276f5229e81f961b65a0248b42facc741cd6"
+}

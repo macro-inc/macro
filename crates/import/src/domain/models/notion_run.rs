@@ -102,6 +102,8 @@ pub struct TaskImportNoticeCount {
 pub enum WrittenKind {
     /// A newer worker wrote an unrecognised prerequisite; stop this source safely.
     Unsupported,
+    /// One source-scoped reservation failure, retained across attempts of this generation.
+    DatabaseReservationFailure,
     /// This dependency was offered as excluded in a saved draft, keyed by review UUID.
     DependencyReviewed,
     /// Explicit inclusion approved for this review UUID, required on resumed writes too.

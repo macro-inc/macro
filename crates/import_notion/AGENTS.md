@@ -92,6 +92,9 @@ maps a data source onto Macro database columns and cells
   `ColumnPlan::new_with_date_ranges` to preserve both date endpoints.
 - `inventory::all_rows` reports raw `rows_read` separately from deduplicated
   rows, including overlap when restarting past the source result cap.
+- A view listing that cannot reach its final page returns typed
+  `NotionError::IncompleteViewList`; do not represent it as an upstream outage
+  or cache a partial listing as complete.
 - `NotionApi::list_views` returns paginated ids scoped by `ViewScope`; call
   `retrieve_view` for each full configuration. Listing by source includes
   linked views, whose `parent.database_id` may differ from the source owner.

@@ -11,6 +11,28 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
+    /// Persist the dependency selection of the saved review being approved.
+    #[tracing::instrument(name = "notion.approve_review_dependencies", skip_all, fields(review_id = %review, sources = tracing::field::Empty), err)]
+    pub(in crate::domain::service) async fn approve_review_dependencies(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+        excluded: &[Uuid],
+    ) -> Result<()> {
+        if self.workspace_source != ImportSource::Notion {
+            return Ok(());
+        }
+        let ids = self.repo.dependency_ids(user, review).await?;
+        tracing::Span::current().record("sources", ids.len() as i64);
+        let selected = self
+            .reconcile_dependency_ids(user, review, &ids, excluded, false)
+            .await?;
+        self.repo
+            .replace_dependency_inclusions(user, review, &ids, &selected.included)
+            .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(name = "notion.review_dependencies", skip_all, fields(review_id = %review, dependencies = tracing::field::Empty), err)]
     pub(in crate::domain::service) async fn review_dependencies(
         &self,
@@ -28,7 +50,19 @@ where
         }
         let ids = self.repo.dependency_ids(user, review).await?;
         tracing::Span::current().record("dependencies", ids.len() as i64);
-        let facts = self.repo.written(user, &ids).await?;
+        self.reconcile_dependency_ids(user, review, &ids, excluded, saved)
+            .await
+    }
+
+    async fn reconcile_dependency_ids(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+        ids: &[Uuid],
+        excluded: &[Uuid],
+        saved: bool,
+    ) -> Result<NotionDependencyReview> {
+        let facts = self.repo.written(user, ids).await?;
         let scope = review.to_string();
         let seen: std::collections::HashSet<Uuid> = facts
             .iter()
@@ -61,7 +95,7 @@ where
             .copied()
             .collect();
         let mut excluded = excluded.to_vec();
-        for id in ids {
+        for id in ids.iter().copied() {
             if !seen.contains(&id) && !excluded.contains(&id) {
                 excluded.push(id);
             }

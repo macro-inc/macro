@@ -503,9 +503,8 @@ where
 
     /// Write the plan's pending objects and record the outcome on the run.
     #[tracing::instrument(
-        skip(self, set),
+        skip(self, set, user),
         fields(
-            %user,
             review_id = %set.review_id,
             items = set.all.len(),
             pending = set.pending.len(),
@@ -536,7 +535,10 @@ where
                 )),
             ),
             Err(error) => {
-                tracing::warn!(error = ?error, "notion import write failed");
+                tracing::warn!(
+                    retryable = true,
+                    "notion import write failed; details retained in the report"
+                );
                 (RunStatus::Failed, Some(failure_text(error)))
             }
         };
@@ -861,10 +863,9 @@ impl Place<'_> {
     }
 
     fn path_for(&self, folder: Uuid) -> Result<&[String]> {
-        self.paths
-            .get(&folder)
-            .map(Vec::as_slice)
-            .ok_or_else(|| anyhow::anyhow!("missing source folder path").into())
+        self.paths.get(&folder).map(Vec::as_slice).ok_or_else(|| {
+            ImportError::Other(crate::domain::models::SourceStopReason::DestinationMissing.into())
+        })
     }
 }
 

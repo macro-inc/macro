@@ -11,6 +11,18 @@ pub(super) struct FakeStore {
 }
 
 impl WrittenObjects for FakeStore {
+    async fn replace_dependency_inclusions(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &[Uuid],
+        _: &[Uuid],
+    ) -> crate::domain::ports::Result<()> {
+        Err(crate::domain::ports::ImportError::NotReady(
+            "Review approval is outside this schema-writer fixture.",
+        ))
+    }
+
     async fn database_mapping(
         &self,
         _: &MacroUserIdStr<'static>,

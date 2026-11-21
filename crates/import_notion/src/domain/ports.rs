@@ -38,6 +38,9 @@ pub enum NotionError {
     /// Notion answered with a shape the importer could not read.
     #[error("unexpected Notion response: {0}")]
     Decode(String),
+    /// One source's saved view list did not finish; retry before approximating it.
+    #[error("the source saved-view list is incomplete")]
+    IncompleteViewList,
     /// The request did not complete.
     #[error("Notion request failed: {0:?}")]
     Transport(rootcause::Report),

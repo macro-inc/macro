@@ -3,7 +3,9 @@
 
 use crate::ToolEntityCreator;
 use crate::tool_context::ImportedContent;
-use databases::domain::models::{CreateDatabase, DatabaseDetail, DatabaseId, OpBatch, Viewer};
+use databases::domain::models::{
+    CreateDatabase, DatabaseDetail, DatabaseError, DatabaseId, OpBatch, Viewer,
+};
 use databases::domain::ports::{DatabasesProjectService as _, DatabasesService as _};
 use databases::domain::receipt::database_receipt;
 use databases::domain::sharing::DatabaseSharingService as _;
@@ -13,8 +15,8 @@ use documents::domain::ports::DocumentService as _;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
-    ImportedDocumentProperties, ImportedTarget, ImportedTaskProperties, NewDatabase, NotionLinks,
-    SharedEntity, SourceDates, TeamMember,
+    DatabaseWriteFailure, ImportedDocumentProperties, ImportedTarget, ImportedTaskProperties,
+    NewDatabase, NotionLinks, SharedEntity, SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
@@ -354,7 +356,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 model_entity::EntityType::Project,
             )
             .await
-            .map_err(|error| anyhow::anyhow!("no edit access to import folder: {error:?}"))?;
+            .map_err(database_access_failure)?;
         Ok(self
             .project_service
             .folder_has_explicit_grant(receipt)
@@ -376,7 +378,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 model_entity::EntityType::Project,
             )
             .await
-            .map_err(|error| anyhow::anyhow!("no edit access to import folder: {error:?}"))?;
+            .map_err(database_access_failure)?;
         Ok(self
             .project_service
             .folder_has_team_edit_grant(receipt)
@@ -430,7 +432,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 | AccessError::UnauthorizedWithMessage(_)
                 | AccessError::NotFound(_),
             ) => Ok(false),
-            Err(error) => Err(anyhow::anyhow!("database access check failed: {error:?}")),
+            Err(error) => Err(database_access_failure(error).into()),
         }
     }
 
@@ -503,14 +505,16 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                     model_entity::EntityType::Project,
                 )
                 .await
-                .map_err(|error| anyhow::anyhow!("no owner access to filing folder: {error:?}"))?;
+                .map_err(database_access_failure)?;
             self.databases_service
                 .create_database_in_project(DatabaseId::from_uuid(id), command, project)
-                .await?
+                .await
+                .map_err(database_write_failure)?
         } else {
             self.databases_service
                 .create_database_with_id(DatabaseId::from_uuid(id), command)
-                .await?
+                .await
+                .map_err(database_write_failure)?
         };
         let receipt = database_receipt::<ViewAccessLevel, _>(
             self.entity_access_service.as_ref(),
@@ -518,10 +522,12 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             database.id,
         )
         .await
-        .map_err(|error| {
-            anyhow::anyhow!("no view access to new database {}: {error:?}", database.id)
-        })?;
-        let detail = self.databases_service.get_database(receipt).await?;
+        .map_err(database_access_failure)?;
+        let detail = self
+            .databases_service
+            .get_database(receipt)
+            .await
+            .map_err(database_write_failure)?;
         new_database(&detail)
     }
 
@@ -539,11 +545,12 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             DatabaseId::from_uuid(database_id),
         )
         .await
-        .map_err(|error| anyhow::anyhow!("no edit access to database {database_id}: {error:?}"))?;
+        .map_err(database_access_failure)?;
         Ok(self
             .databases_service
             .apply_ops(receipt, viewer, OpBatch::from(ops))
-            .await?)
+            .await
+            .map_err(database_write_failure)?)
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -662,8 +669,42 @@ impl ToolEntityCreator {
             DatabaseId::from_uuid(id),
         )
         .await
-        .map_err(|error| anyhow::anyhow!("no view access to imported database: {error:?}"))?;
-        Ok(self.databases_service.get_database(receipt).await?)
+        .map_err(database_access_failure)?;
+        Ok(self
+            .databases_service
+            .get_database(receipt)
+            .await
+            .map_err(database_write_failure)?)
+    }
+}
+
+/// A service refusal is source-specific; repository failures affect the run.
+fn database_write_failure(error: DatabaseError) -> DatabaseWriteFailure {
+    match error {
+        DatabaseError::NotFound => DatabaseWriteFailure::NotFound,
+        DatabaseError::Unauthorized => DatabaseWriteFailure::PermissionDenied,
+        DatabaseError::VersionConflict => DatabaseWriteFailure::Conflict,
+        DatabaseError::Repo(_) => DatabaseWriteFailure::Unavailable,
+        DatabaseError::RowInUse
+        | DatabaseError::OptionInUse
+        | DatabaseError::InvalidAppearance(_)
+        | DatabaseError::InvalidSchemaOperation(_)
+        | DatabaseError::InvalidSharing(_)
+        | DatabaseError::InvalidOp(_) => DatabaseWriteFailure::InvalidSchema,
+    }
+}
+
+fn database_access_failure(
+    error: entity_access::domain::models::AccessError,
+) -> DatabaseWriteFailure {
+    use entity_access::domain::models::AccessError;
+    match error {
+        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+            DatabaseWriteFailure::PermissionDenied
+        }
+        AccessError::NotFound(_) => DatabaseWriteFailure::NotFound,
+        AccessError::BadRequest(_) => DatabaseWriteFailure::InvalidSchema,
+        AccessError::Unavailable(_) | AccessError::Internal(_) => DatabaseWriteFailure::Unavailable,
     }
 }
 

@@ -35,7 +35,8 @@ pub(in super::super::super) async fn prepare_database<
     progress.ensure_supported()?;
     let source = api.data_source(&item.notion_id).await?;
     let created = database_once(writer, user, item, folder, progress).await?;
-    let schema = super::schema::fingerprint(&source, created.database_id)?;
+    let schema = super::schema::fingerprint(&source, created.database_id)
+        .map_err(|_| crate::domain::models::SourceStopReason::DatabaseRejected)?;
     let metadata = derived_id(
         created.database_id,
         &serde_json::to_string(&source.properties)?,

@@ -46,8 +46,6 @@ pub enum NotionSharing {
 /// What the owner changed in a plan before approving it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NotionWriteChoices {
-    /// External dependencies explicitly included by this saved review; never inferred by SDK defaults.
-    pub included_dependencies: Vec<Uuid>,
     /// Plan rows left out of the import.
     pub excluded: Vec<Uuid>,
     /// Plan rows to share with the team although the plan keeps them.

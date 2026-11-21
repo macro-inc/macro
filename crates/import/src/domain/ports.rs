@@ -15,6 +15,29 @@ use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
+/// Host database failures classified without exposing provider details.
+#[derive(Debug, Clone, Copy, Error)]
+pub enum DatabaseWriteFailure {
+    /// A source-specific validation failure.
+    #[error("the source schema was rejected")]
+    InvalidSchema,
+    /// A source destination no longer exists.
+    #[error("the source database destination was not found")]
+    NotFound,
+    /// The owner cannot access this source destination.
+    #[error("the source database destination is not permitted")]
+    PermissionDenied,
+    /// A source version changed during its reservation.
+    #[error("the source database changed during reservation")]
+    Conflict,
+    /// Service authentication failed for the entire request.
+    #[error("database service authentication is unavailable; retry the import")]
+    Authentication,
+    /// Storage or the database service is unavailable for the run.
+    #[error("the database service is unavailable; retry the import")]
+    Unavailable,
+}
+
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {
@@ -1261,6 +1284,16 @@ pub trait NotionRunRepo: Send + Sync + 'static {
 /// What workspace writes created for each ledger row, recorded as they go so
 /// a resumed write reuses it instead of creating it again.
 pub trait WrittenObjects: Send + Sync + 'static {
+    /// Replace only this owned review's dependency consent. The selected ids
+    /// must be a subset of its staged source ids; created-object markers stay immutable.
+    fn replace_dependency_inclusions(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+        import_ids: &[Uuid],
+        included: &[Uuid],
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Persist a task notice once by task id, so resumed writes do not inflate report counts.
     fn record_task_notice(
         &self,

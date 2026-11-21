@@ -164,6 +164,12 @@ async fn transient_reservation_then_retry_restores_database_cards(pool: PgPool) 
             service.notion_import_report(&owner).await.unwrap().status,
             Some(RunStatus::Failed)
         );
+        let failed = service.notion_import_report(&owner).await.unwrap();
+        assert!(
+            failed.error.as_deref().is_some_and(
+                |error| error.contains("Work") && !error.contains(page_id('d').as_str())
+            )
+        );
         service
             .start_notion_write(&owner, review, NotionWriteChoices::default())
             .await
@@ -293,14 +299,11 @@ async fn audit_external_dependencies_need_explicit_review_scoped_consent(pool: P
         }
         planned(&service.repo, &owner).await;
         service
-            .start_notion_write(
-                &owner,
-                review,
-                NotionWriteChoices {
-                    included_dependencies: vec![ids[1]],
-                    ..Default::default()
-                },
-            )
+            .approve_review_dependencies(&owner, review, &[])
+            .await
+            .unwrap();
+        service
+            .start_notion_write(&owner, review, NotionWriteChoices::default())
             .await
             .unwrap();
         tracker.close();
@@ -414,14 +417,11 @@ async fn audit_ticking_an_offered_external_dependency_imports_its_cards(pool: Pg
         .unwrap();
     assert_eq!(included.included, vec![ids[1]]);
     service
-        .start_notion_write(
-            &owner,
-            review,
-            NotionWriteChoices {
-                included_dependencies: included.included,
-                ..Default::default()
-            },
-        )
+        .approve_review_dependencies(&owner, review, &[])
+        .await
+        .unwrap();
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
         .await
         .unwrap();
     tracker.close();

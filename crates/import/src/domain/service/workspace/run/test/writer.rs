@@ -1,6 +1,7 @@
 //! Test host writer: records writes and can exercise real target lifecycle reads.
 
 use super::*;
+use std::collections::HashMap;
 
 /// Records the documents and folders a write makes. With `hold` set, a
 /// document write waits until the process is shutting down and then fails,
@@ -26,6 +27,7 @@ pub(super) struct Writer {
     pub(super) grant_on_database: bool,
     pub(super) database_insert_rows: std::sync::atomic::AtomicUsize,
     pub(super) database_error_once: std::sync::atomic::AtomicBool,
+    pub(super) database_failures: HashMap<String, crate::domain::ports::DatabaseWriteFailure>,
 
     pub(super) tasks: Mutex<Vec<Uuid>>,
     pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
@@ -357,9 +359,12 @@ impl WorkspaceWriter for Writer {
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
-        _: &str,
+        name: &str,
         folder: Option<Uuid>,
     ) -> anyhow::Result<NewDatabase> {
+        if let Some(error) = self.database_failures.get(name) {
+            return Err((*error).into());
+        }
         if self
             .database_error_once
             .swap(false, std::sync::atomic::Ordering::SeqCst)

@@ -319,6 +319,34 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             .unwrap_or_default()
     }
 
+    /// Count only validated receipts from this source's current ledger generation.
+    pub fn reservation_failures(&self) -> anyhow::Result<usize> {
+        let receipts = self.all(WrittenKind::DatabaseReservationFailure);
+        for (object, id) in &receipts {
+            if Uuid::parse_str(object).ok() != Some(*id) {
+                return Err(crate::domain::models::SourceStopReason::UnsupportedMarker.into());
+            }
+        }
+        Ok(receipts.len().min(3))
+    }
+
+    /// Spend one source-scoped attempt; run-wide failures never call this.
+    pub async fn reservation_failure(&self) -> anyhow::Result<usize> {
+        let count = self.reservation_failures()?;
+        if count >= 3 {
+            return Ok(3);
+        }
+        let attempt = Uuid::now_v7();
+        self.record_all(vec![WrittenObject {
+            import_id: self.import_id,
+            kind: WrittenKind::DatabaseReservationFailure,
+            object: attempt.to_string(),
+            macro_id: attempt,
+        }])
+        .await?;
+        Ok(count + 1)
+    }
+
     /// Resolve this source's omitted assignees once, without revisiting user edits.
     fn omitted_assignee_tasks(&self) -> anyhow::Result<HashSet<Uuid>> {
         let mut tasks = HashSet::new();

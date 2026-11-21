@@ -29,6 +29,14 @@ pub enum ReferenceLossReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceStopReason {
+    /// The destination refused this source's schema or request.
+    DatabaseRejected,
+    /// The recorded source destination is no longer available.
+    DestinationMissing,
+    /// This source's destination denies the owner access.
+    DestinationNotPermitted,
+    /// A source-scoped reservation failed three times in this generation.
+    ReservationRetriesExhausted,
     /// The interrupted run never approved this external dependency in its current review.
     DependencyNotApproved,
     /// A newer worker recorded prerequisites this reader cannot interpret.
@@ -47,6 +55,10 @@ pub enum SourceStopReason {
 impl std::fmt::Display for SourceStopReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::DatabaseRejected => "the database rejected this source's schema or request; references retain their Notion links",
+            Self::DestinationMissing => "this source's database destination was not found; references retain their Notion links",
+            Self::DestinationNotPermitted => "this source's database destination does not permit access; references retain their Notion links",
+            Self::ReservationRetriesExhausted => "this source's database reservation could not finish after 3 attempts; references retain their Notion links",
             Self::DependencyNotApproved => "external dependency was not explicitly included in this review; re-plan to include it",
             Self::UnsupportedMarker => "this import contains unsupported written markers; resume with an upgraded importer before writing this source",
             Self::PersonalFolderShared => "folder sharing changed after reservation; no personal rows were added; re-import into an owner-only folder",
@@ -182,7 +194,7 @@ impl FidelityWarning {
                         "were not reviewed; kept as named Notion links"
                     }
                     ReferenceLossReason::NotImported => {
-                        "were not copied as a database; kept as named Notion links"
+                        "were not imported as a database; kept as named Notion links"
                     }
                     ReferenceLossReason::NoAccess => {
                         "could not be read; kept as named Notion links"

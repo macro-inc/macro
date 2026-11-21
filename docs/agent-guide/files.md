@@ -163,7 +163,13 @@ source and leave named Notion links in affected placements. An older interrupted
 database without planning facts asks for a re-import. A Personal source stops
 before writing rows if its reserved folder gains an explicit sharing grant, with
 a sharing-change warning. A resumed run reuses reserved
-databases and saved views. **Open full review** shows the whole plan in a dialog
+databases and saved views. Invalid source schemas or missing or inaccessible
+destinations leave named links for that source. An incomplete saved-view listing
+is retried across attempts; after three source-specific failures the report
+names the fallback. Authentication, rate limits and service outages stop the
+attempt without permanently replacing cards with links. A teammate still
+creating a shared copy produces a named waiting error; a later import retry
+finishes it. Failed cards currently have no resume action. **Open full review** shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

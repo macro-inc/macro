@@ -184,6 +184,21 @@ async fn excluded_sources_keep_named_notion_links_in_the_page(pool: PgPool) {
             .any(|name| name == "Project"),
         "an excluded child source must not turn its page into a folder"
     );
+    drop(documents);
+    let report = service.notion_import_report(&owner).await.unwrap();
+    assert!(
+        report.warnings.iter().any(|warning| {
+            warning.contains("Work") && warning.contains("were not imported as a database")
+        }),
+        "an excluded reviewed source must report NotImported: {:?}",
+        report.warnings
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|warning| !warning.contains("were not reviewed"))
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -390,9 +405,13 @@ async fn a_waiting_database_stops_bodies_until_a_retry_can_resolve_its_holder(po
         service.creator.documents.lock().unwrap().is_empty(),
         "a waiting reservation must not permanently downgrade page cards"
     );
-    assert_eq!(
-        service.notion_import_report(&owner).await.unwrap().status,
-        Some(RunStatus::Failed)
+    let report = service.notion_import_report(&owner).await.unwrap();
+    assert_eq!(report.status, Some(RunStatus::Failed));
+    assert!(
+        report
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("Work") && error.contains("teammate"))
     );
     let database = Uuid::from_u128(6001);
     repo.record_written(
@@ -639,7 +658,7 @@ async fn an_approved_tasks_source_keeps_not_imported_links_in_its_page(pool: PgP
         report
             .warnings
             .iter()
-            .any(|loss| loss.contains("not copied as a database"))
+            .any(|loss| loss.contains("not imported as a database"))
     );
 }
 
@@ -858,4 +877,5 @@ async fn a_personal_inline_database_never_lands_under_a_team_shared_folder(pool:
     );
 }
 
+mod failures;
 mod review;

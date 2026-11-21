@@ -668,7 +668,7 @@ impl ImportRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user, error), err)]
     async fn finish_run(
         &self,
         user: &MacroUserIdStr<'static>,

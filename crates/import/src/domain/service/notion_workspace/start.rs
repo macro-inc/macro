@@ -38,13 +38,19 @@ where
                 "This plan has nothing left to import.",
             ));
         }
-        let dependency_review = self
-            .review_dependencies(user, review_id, &choices.excluded, false)
-            .await?;
-        let approved_dependencies: std::collections::HashSet<Uuid> = dependency_review
-            .included
+        let dependencies = self.repo.dependency_ids(user, review_id).await?;
+        let scope = review_id.to_string();
+        let approved_dependencies: std::collections::HashSet<Uuid> = self
+            .repo
+            .written(user, &dependencies)
+            .await?
             .into_iter()
-            .filter(|id| choices.included_dependencies.contains(id))
+            .filter(|fact| {
+                fact.kind == crate::domain::models::WrittenKind::DependencyIncluded
+                    && fact.object == scope
+                    && fact.macro_id == review_id
+            })
+            .map(|fact| fact.import_id)
             .collect();
         // The owner's sharing changes are recorded on the rows first, so a
         // resumed write shares exactly what they approved.
@@ -81,34 +87,18 @@ where
             .await?;
 
         let mut to_write = Vec::new();
-        let mut link_only = Vec::new();
-        for (row, mut item) in planned {
+        for (row, item) in planned {
             let left_out = choices.excluded.contains(&row.id)
                 || (!item.dependency_of.is_empty() && !approved_dependencies.contains(&row.id));
             match (left_out, item.decision) {
                 (true, _) | (false, NotionDecision::Skip) => {
                     self.repo.discard(user, row.id).await?;
-                    if item.kind == ImportKind::DataSource {
-                        item.decision = NotionDecision::Skip;
-                        link_only.push(item);
-                    }
                 }
                 // Left staged for the agent, which handles it by hand.
                 (false, NotionDecision::Hand) => {}
                 (false, NotionDecision::Copy | NotionDecision::Tasks) => to_write.push(item),
             }
         }
-        let consent: Vec<_> = to_write
-            .iter()
-            .filter(|item| !item.dependency_of.is_empty())
-            .map(|item| crate::domain::models::WrittenObject {
-                import_id: item.import_id,
-                kind: crate::domain::models::WrittenKind::DependencyIncluded,
-                object: review_id.to_string(),
-                macro_id: review_id,
-            })
-            .collect();
-        self.repo.record_written(user, &consent).await?;
         let ids: Vec<Uuid> = to_write.iter().map(|item| item.import_id).collect();
         // Shared objects are claimed for the team now, before anything is
         // written, so a teammate writing the same object links to this copy.
@@ -129,11 +119,9 @@ where
 
         let service = self.clone();
         let owner = user.clone();
-        let mut all = to_write.clone();
-        all.extend(link_only);
         let set = WriteSet {
             review_id,
-            all,
+            all: to_write.clone(),
             pending: to_write,
         };
         self.jobs

@@ -122,7 +122,7 @@ impl NotionPlanRepo for PgImportRepo {
                       (entity.status IN ('importing', 'imported') AND entity.parent_id IS NOT NULL)
                       OR EXISTS (
                           SELECT 1 FROM import_entity_written AS written
-                          WHERE written.import_id = entity.id AND written.kind NOT IN ('task_notice', 'dependency_reviewed', 'dependency_included')
+                          WHERE written.import_id = entity.id AND written.kind NOT IN ('task_notice', 'dependency_reviewed', 'dependency_included', 'database_reservation_failure')
                           OFFSET 0
                       )
                   )
@@ -289,7 +289,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user, error), err)]
     async fn transition_run(
         &self,
         user: &MacroUserIdStr<'static>,

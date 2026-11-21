@@ -6,6 +6,7 @@ pub(super) struct Inline {
     pub(super) external_rows: usize,
     pub(super) external_title: Option<String>,
     pub(super) transient_query: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub(super) incomplete_views: bool,
 }
 impl NotionApi for Inline {
     async fn page(&self, id: &NotionId) -> std::result::Result<NotionPage, NotionError> {
@@ -81,6 +82,11 @@ impl NotionApi for Inline {
         scope: &ViewScope,
         _: Option<String>,
     ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        if self.incomplete_views
+            && matches!(scope, ViewScope::DataSource(id) if *id == page_id('d'))
+        {
+            return Err(NotionError::IncompleteViewList);
+        }
         if self.external_rows > 0 && matches!(scope, ViewScope::Database(id) if *id == page_id('6'))
         {
             return Ok(Paged {
@@ -121,7 +127,7 @@ impl NotionApi for Inline {
         {
             return Err(NotionError::Upstream {
                 status: 503,
-                body: "temporarily unavailable".into(),
+                body: format!("temporarily unavailable for {id}"),
             });
         }
         let rows = if *id == page_id('d') {
