@@ -105,7 +105,8 @@ impl AppLinkChips {
                     continue;
                 }
                 (Some(opening), Some(closing))
-                    if closing.quotes == opening.quotes
+                    if !closing.item
+                        && closing.quotes == opening.quotes
                         && closing.indent <= opening.indent + MAX_CLOSING_INDENT
                         && closing.run.starts_with(opening.run)
                         && closing.info.trim().is_empty() =>
@@ -232,6 +233,9 @@ struct Fence<'a> {
     quotes: usize,
     /// Its column inside its quote, list marker included.
     indent: usize,
+    /// Whether a list item's marker comes before it; such a line opens a
+    /// fence but never closes one.
+    item: bool,
     /// Its run of backticks or tildes.
     run: &'a str,
     /// The rest of the line after the run.
@@ -258,6 +262,7 @@ fn fence(line: &str) -> Option<Fence<'_>> {
     Some(Fence {
         quotes: prefix.matches('>').count(),
         indent: prefix.len() - quoted + item.len(),
+        item: !item.is_empty(),
         run,
         info,
     })
@@ -265,19 +270,26 @@ fn fence(line: &str) -> Option<Fence<'_>> {
 
 /// The byte ranges of `line` to leave as written: mention tags, and code
 /// spans, which close only on a backtick run as long as the one they open
-/// with. A run with no match is a literal backtick, not a span. Linear in the
-/// line: each run's closing run is found in one pass from the right.
+/// with. A run with no match is a literal backtick, not a span. Each run's
+/// closing run is found in one pass from the right, never by a rescan.
 fn protected_spans(line: &str) -> Vec<std::ops::Range<usize>> {
     let tokens: Vec<_> = lazy_regex::regex!(r"<m-[a-z-]+>.*?</m-[a-z-]+>|`+")
         .find_iter(line)
         .collect();
-    let mut closing_run = vec![None; tokens.len()];
     let mut next_run_of_length = std::collections::HashMap::new();
-    for (at, token) in tokens.iter().enumerate().rev() {
-        if token.as_str().starts_with('`') {
-            closing_run[at] = next_run_of_length.insert(token.len(), at);
-        }
-    }
+    let mut closing_run: Vec<Option<usize>> = tokens
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(at, token)| {
+            token
+                .as_str()
+                .starts_with('`')
+                .then(|| next_run_of_length.insert(token.len(), at))
+                .flatten()
+        })
+        .collect();
+    closing_run.reverse();
     let mut spans = Vec::new();
     let mut at = 0;
     while let Some(token) = tokens.get(at) {
@@ -286,7 +298,12 @@ fn protected_spans(line: &str) -> Vec<std::ops::Range<usize>> {
             at += 1;
             continue;
         }
-        match closing_run[at].and_then(|closing| Some((closing, tokens.get(closing)?))) {
+        match closing_run
+            .get(at)
+            .copied()
+            .flatten()
+            .and_then(|closing| Some((closing, tokens.get(closing)?)))
+        {
             Some((closing, closing_token)) => {
                 spans.push(token.start()..closing_token.end());
                 at = closing + 1;

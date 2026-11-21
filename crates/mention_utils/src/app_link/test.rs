@@ -207,6 +207,9 @@ fn a_fence_that_opens_a_list_item_is_code() {
         prod().rewrite(&bullet).markdown,
         format!("- ```\n  {TASK_URL}\n  ```\n{TASK_CHIP}\n")
     );
+    // Inside a block, a list item's fence is code, never a close.
+    let shown = format!("```md\n- ```\n  {TASK_URL}\n  ```\n```\n");
+    assert_eq!(prod().rewrite(&shown).markdown, shown);
     let numbered = format!("1. ~~~\n   {TASK_URL}\n   ~~~\n{TASK_URL}\n");
     assert_eq!(
         prod().rewrite(&numbered).markdown,
