@@ -7,7 +7,7 @@ use crate::sequence::{Generated, Op};
 use cache_core::engine::HydrationScope;
 use cache_core::people::{ContextAction, ContextUpdate};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 const SCOPE: &str = "diff-fuzz";
@@ -56,14 +56,19 @@ impl<'a> Exec<'a> {
     ) -> Result<Self, String> {
         std::fs::create_dir_all(root.join("db-0")).map_err(|error| error.to_string())?;
         let path = root.join("db-0").join("cache.turso");
-        let mut inputs = serde_json::to_string(generated).map_err(|error| error.to_string())?;
-        // Ids derived from the case are kept too: the people index partition is
-        // a UUIDv5 of the viewer, and a build that stored another one must differ.
-        inputs.push(' ');
-        inputs.push_str(
-            &uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, generated.viewer.as_bytes())
-                .to_string(),
-        );
+        let case = serde_json::to_value(generated).map_err(|error| error.to_string())?;
+        let mut inputs = case.to_string();
+        // Ids derived from the case are kept too: the people index partition is a
+        // UUIDv5 of the viewer, and a build that stored another one must differ.
+        // Every viewer counts: the starting one and each one an op runs as.
+        let mut viewers = BTreeSet::from([generated.viewer.clone()]);
+        collect_identities(&case, &mut viewers);
+        for viewer in viewers {
+            inputs.push(' ');
+            inputs.push_str(
+                &uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, viewer.as_bytes()).to_string(),
+            );
+        }
         let normalizer = Normalizer::new(&inputs, root);
         let mut exec = Self {
             docs,
@@ -836,6 +841,26 @@ impl<'a> Exec<'a> {
         let handle = self.handle.take().ok_or("engine is closed")?;
         handle.shutdown()?;
         Ok((self.lines, self.counters, self.path, self.normalizer))
+    }
+}
+
+/// Every string under an `identity` key: the viewers the case's ops run as.
+fn collect_identities(value: &Value, found: &mut BTreeSet<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                match (key.as_str(), child) {
+                    ("identity", Value::String(identity)) => {
+                        found.insert(identity.clone());
+                    }
+                    _ => collect_identities(child, found),
+                }
+            }
+        }
+        Value::Array(items) => items
+            .iter()
+            .for_each(|item| collect_identities(item, found)),
+        _ => {}
     }
 }
 
