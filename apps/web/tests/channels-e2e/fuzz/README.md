@@ -135,3 +135,18 @@ FUZZ_CASES=<work directory>/shrunk.json FUZZ_TRACE=1 \
   keeps nothing.
 - Channel management, membership, direct messages, attachments, mentions
   and notifications are left to the fixed suite.
+- Order is checked loosely. What the services hold is compared with the
+  model as a set of threads; their order is checked once, at the end, between
+  operations only, and not for deleted messages. A window is read by
+  scrolling, keeping each row where it was first seen, so a row drawn twice
+  or moved while being read is not noticed.
+- A reaction is compared by emoji and count, not by who made it.
+- Operations made at once are modelled in the order they are listed. Two that
+  conflict (a delete and a reaction on one message) are not both tried, and
+  only one outcome of the race is expected.
+- A write made on a cut-off device is not checked against the services until
+  the next operation that waits for them.
+- A deleted message whose last reply is then deleted stays in the model as
+  deleted; whether the services still list it was not checked.
+- `compare.ts` counts a finding as shared when both builds have one of the
+  same kind and shape, whatever the step; the steps are in each result.

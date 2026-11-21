@@ -41,6 +41,11 @@ let round = 0;
 function showsIn(candidates: Op[][], tries = TRIES): number[] {
   round += 1;
   const directory = join(work, `round-${round}`);
+  if (existsSync(directory)) {
+    throw new Error(
+      `${directory} is there already: give an empty work directory`
+    );
+  }
   mkdirSync(directory, { recursive: true });
   const cases = candidates.flatMap((ops, index) =>
     Array.from({ length: tries }, (_, attempt) => ({
@@ -67,6 +72,9 @@ function showsIn(candidates: Op[][], tries = TRIES): number[] {
       );
       if (!existsSync(out)) continue;
       const result = JSON.parse(readFileSync(out, 'utf8')) as Result;
+      // A result of other operations says nothing about this candidate.
+      if (JSON.stringify(result.ops) !== JSON.stringify(candidates[index]))
+        continue;
       if (result.findings.some((finding) => isOne(finding, kind))) shown += 1;
     }
     return shown;
@@ -148,3 +156,7 @@ console.log(
   `${original.id} (${original.side}), "${kind}": ${original.ops.length} → ${ops.length} operations, shown in ${shown} of ${checks} runs`
 );
 for (const op of ops) console.log(`  ${describe(op)}`);
+if (shown === 0) {
+  console.log('the shrunk sequence did not show it again: not a reproduction');
+  process.exitCode = 1;
+}

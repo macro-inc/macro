@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, LOCAL_SYNC_BUILD, test } from '../harness/fixtures';
 import { runDirectory } from '../harness/stack';
@@ -52,6 +52,9 @@ for (const kase of cases()) {
     mkdirSync(directory, { recursive: true });
     const run = new Run(browser, { ada, ben, cy, dee }, SIDE, kase, directory);
     const file = join(directory, `${kase.id}.json`);
+    // A result left by an earlier run must not stand for this one.
+    rmSync(file, { force: true });
+    rmSync(`${file}.failed`, { force: true });
     try {
       const result = await run.all();
       writeFileSync(file, JSON.stringify(result, null, 1));

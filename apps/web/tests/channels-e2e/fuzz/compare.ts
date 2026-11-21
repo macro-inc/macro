@@ -55,6 +55,17 @@ function load(directories: string[], side: Side): Map<string, Result> {
   return out;
 }
 
+/** Sequences that stopped before their end and so left no result. */
+function abortedIn(directories: string[], side: Side): string[] {
+  return directories.flatMap((directory) => {
+    const folder = join(directory, 'fuzz', side);
+    if (!existsSync(folder)) return [];
+    return readdirSync(folder)
+      .filter((name) => name.endsWith('.json.failed'))
+      .filter((name) => !existsSync(join(folder, name.slice(0, -7))))
+      .map((name) => `${name.slice(0, -12)} (${side})`);
+  });
+}
 /**
  * Whether the services hold the messages in an order the sequence allows:
  * a message the services got at a later operation comes later, and one
@@ -186,6 +197,18 @@ function main(): void {
   const ids = [...new Set([...off.keys(), ...on.keys()])].sort((a, b) =>
     a.localeCompare(b, undefined, { numeric: true })
   );
+  for (const id of ids) {
+    const [a, b] = [off.get(id), on.get(id)];
+    if (a && b && JSON.stringify(a.ops) !== JSON.stringify(b.ops)) {
+      throw new Error(
+        `${id} is not the same sequence on the two builds: run both with the same seeds and length`
+      );
+    }
+  }
+  const aborted = [
+    ...abortedIn(directories, 'off'),
+    ...abortedIn(directories, 'on'),
+  ];
   const entries = ids.map((id) => compareOne(off.get(id), on.get(id)));
   const total = (results: Map<string, Result>) => ({
     sequences: results.size,
@@ -234,6 +257,12 @@ function main(): void {
   console.log(
     `on:  ${report.on.sequences} sequences, ${report.on.operations} operations, bundle ${report.on.bundles.join('/')}`
   );
+  if (aborted.length > 0) {
+    console.log(`stopped before the end, not compared: ${aborted.join(', ')}`);
+  }
+  if (report.off.bundles.some((bundle) => report.on.bundles.includes(bundle))) {
+    console.log('WARNING: both sides ran the same bundle');
+  }
   for (const [end, list] of Object.entries(report.ends)) {
     console.log(
       `end states ${end}: ${list.length}${list.length && end !== 'same' ? ` (${list.join(', ')})` : ''}`
