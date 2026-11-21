@@ -44,6 +44,8 @@ const OUT = path.resolve(
     )
 );
 fs.mkdirSync(OUT, { recursive: true });
+// A results file left by an earlier run in this directory is never read as this run's.
+fs.rmSync(path.join(OUT, 'results.json'), { force: true });
 const PW = E.PW_PATH ?? path.join(ROOT, 'node_modules/playwright/index.mjs');
 const { chromium } = await import(PW);
 const ORIGIN = new URL(CONFIG.base).origin;
@@ -1770,6 +1772,9 @@ if (R.mutant) {
   if (!R.mutant.applied) failures.push(`mutant ${R.mutant.name} never applied`);
   if (!R.mutant.firstCatch) failures.push(`mutant ${R.mutant.name} not caught`);
 }
+// The verdict is written last, after every check above: a run without one did not finish.
+R.verdict = { passed: !failures.length, failures };
+flush();
 if (failures.length) {
   log(`FAILED: ${failures.join('; ')}`);
   process.exitCode = 1;

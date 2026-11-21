@@ -104,7 +104,40 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   each fuzzed account's NEW page read both catalogs in the background.
 - An uncaught page error seen on one side only is a `diff` at level
   `page-errors`.
-- `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`.
+- `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`
+  and prints each run's commit and verdict. A run deletes its old
+  `results.json` when it starts and writes `verdict` only after its final
+  checks, so a crashed or killed run reads `INCOMPLETE`, never as passed.
+
+## What the counts mean
+
+The counts measure work attempted, not successes, and are not interchangeable:
+
+- `counts`: `rawCases` are completed old/new pairs (errors on both sides
+  included). `readerComparisons` and `callerComparisons` count every reader or
+  caller compared, including one missing on a side or one that threw (each such
+  is a `state` or `diff`, never `equal`). `freshMounts`, `reloads` and
+  `imperativeReads` count mounts, reloads and reads started.
+- `classes` and the summary's rollups count assertions: one reader pair
+  gives a data and an error record, so these are not pair counts.
+  `diffSignatures` are the distinct differences.
+- `coverage` counts how often a generator chose a dimension, credited only
+  when the case really has it (a rename that changed the name, a null color
+  on an option that had one); it is not a count of successful reads.
+- `ops` is the NEW side's outcome per operation (OLD's replay is checked at
+  `write-replay`), and `rejections` buckets refused writes by class, codes
+  and the first 80 characters of the message. `sqlRefusals` are writes the
+  database refused; `sqlFailures` anything else, which fails the run.
+- `staleness` counts live vs fresh differences per side by the operation
+  chosen, whatever the step then did; `visibility` counts both missing and
+  unexpectedly present rows.
+- `volume` and `load` report their targets beside the successful counts.
+  `settle` buckets are by first quiet (the settle is confirmed 60 ms later),
+  the last bucket includes timeouts. `traffic` counts requests by method and
+  service as sent, `otherWrites` every non-catalog request that could write.
+- `mutant.applied` counts injections (a swallowed invalidation counts even if
+  no reader was open), `candidatesBy` observations, `caughtBy` accepted
+  catches, at most one per sequence.
 
 ## What it does not check
 

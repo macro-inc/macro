@@ -48,6 +48,8 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     identicalToPrHeadOutsideProof: r.identicalToPrHeadOutsideProof,
     startedAt: r.startedAt,
     finishedAt: r.finishedAt,
+    // null: the run never reached its final checks (crashed, killed, or still running)
+    verdict: r.verdict ?? null,
     counts: r.counts,
     comparisonsByFamily: byFamily,
     comparisonsByPhase: byPhase,
@@ -76,5 +78,6 @@ for (const dir of fs.readdirSync(OUT).sort()) {
 fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(runs, null, 2));
 for (const [name, s] of Object.entries(runs)) {
   const sigs = Object.entries(s.differenceSignatures);
-  console.log(`${name}: ${s.counts.sequences} seq, ${s.counts.steps} steps, ${s.counts.rawCases} raw, ${s.counts.readerComparisons} reader, ${s.counts.callerComparisons} caller; ${sigs.length} signatures; ${s.totals?.differences ?? '?'} differences; harness errors ${s.harnessErrors}; crashes ${s.crashes?.length ?? 0}${s.mutant ? `; mutant applied ${s.mutantResult.applied}, caught ${s.mutantResult.firstCatch ? 'yes' : 'NO'}` : ''}`);
+  const verdict = s.verdict ? (s.verdict.passed ? 'PASSED' : `FAILED (${s.verdict.failures.join('; ')})`) : 'INCOMPLETE';
+  console.log(`${name} [${verdict}] at ${s.commit}: ${s.counts.sequences} seq, ${s.counts.steps} steps, ${s.counts.rawCases} raw, ${s.counts.readerComparisons} reader, ${s.counts.callerComparisons} caller; ${sigs.length} signatures; ${s.totals?.differences ?? '?'} differences; harness errors ${s.harnessErrors}; crashes ${s.crashes?.length ?? 0}${s.mutant ? `; mutant applied ${s.mutantResult.applied}, caught ${s.mutantResult.firstCatch ? 'yes' : 'NO'}` : ''}`);
 }
