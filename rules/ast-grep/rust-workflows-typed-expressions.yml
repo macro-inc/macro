@@ -1,0 +1,28 @@
+id: rust-workflows-typed-expressions
+language: rust
+severity: error
+message: Build workflow expressions with `gh_workflow::expr::typed`, not `Expression::new`, `raw::<T>()` or `${{ }}` text.
+note: |-
+  Typed expressions are checked when they compile (operand types, output and
+  job names via handles) as well as when the workflow renders. Text is only
+  checked at render time. See `.agents/rules/infra/github-workflows.md`.
+files:
+  - tooling/xtask/crates/xtask_workflows/src/workflows/**
+ignores:
+  - tooling/xtask/crates/xtask_workflows/src/workflows/actions.rs
+  # Compares rendered expressions; it spells `${{ }}` to rebuild the text.
+  - tooling/xtask/crates/xtask_workflows/src/workflows/semantic_diff.rs
+  - '**/test.rs'
+rule:
+  any:
+    - pattern: Expression::new($$$)
+    - pattern: gh_workflow::Expression::new($$$)
+    - pattern: raw::<$T>($$$)
+    - pattern: typed::raw::<$T>($$$)
+    # A GitHub expression in a string literal, written plain or with
+    # `format!`-escaped braces. Bash `${VAR}` escaped as `${{VAR}}` has no
+    # space after the braces and is not matched.
+    - kind: string_literal
+      regex: '\$\{\{(\{\{)? '
+    - kind: raw_string_literal
+      regex: '\$\{\{(\{\{)? '

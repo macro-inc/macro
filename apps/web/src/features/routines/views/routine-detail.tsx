@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -11,6 +12,7 @@ import DotsIcon from '@icon/system/regular/dots-three.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
+import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
   createSignal,
@@ -119,6 +121,7 @@ function subRoutineItems(
 
 export function RoutineDetailView(props: {
   source: RoutineDetailSource;
+  mobileHeader?: ComponentProps<typeof RoutineEditor>['mobileHeader'];
   userId: Accessor<string | undefined>;
   defaultModel: string;
   /** Decisions are answered by the classifier behind trigger conditions. */
@@ -197,6 +200,8 @@ export function RoutineDetailView(props: {
     >
       {(routine) => (
         <RoutineEditor
+          mobile={isTouchDevice()}
+          mobileHeader={props.mobileHeader}
           appearance={routine().appearance}
           identityIcon={props.identityIcon}
           {...routineSections({

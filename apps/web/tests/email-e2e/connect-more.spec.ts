@@ -1,15 +1,18 @@
 // More of connecting inboxes: sharing an inbox someone else connected,
 // enabling a disabled one, connecting during onboarding, what the app says
 // about an inbox whose access stopped, and the send-as aliases of an inbox.
-// Gmail connections go through the Gmail emulator's consent page; an Outlook
-// mailbox is connected by the harness, so only what follows a connection is
-// shown for Outlook.
+// Gmail connections go through the Gmail emulator's consent page, and
+// connecting an Outlook inbox a teammate has through the Outlook emulator's
+// (`microsoft`); other Outlook mailboxes are connected by the harness, so
+// only what follows a connection is shown for them.
 
+import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import type { Mailbox } from './harness/fixtures';
 import { emulatorUrl } from './harness/journeys';
-import { expect, test } from './harness/linking';
+import { notice } from './harness/send';
 import type { Provider } from './harness/stack';
+import { expect, test } from './harness/ways-home';
 import { confirmed, did, saw } from './ledger/record';
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
@@ -192,7 +195,9 @@ test.describe('an inbox a teammate already connected', () => {
     const dialog = page.getByRole('dialog').filter({
       hasText: 'Share this inbox?',
     });
-    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(
+      `${team} is already connected by bob@example.com`
+    );
     saw('STX-213');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     did('AX-038');
@@ -223,6 +228,95 @@ test.describe('an inbox a teammate already connected', () => {
       team,
     ]);
     confirmed('F-005');
+  });
+});
+
+test.describe('an Outlook inbox a teammate already connected', () => {
+  test.use({ provider: 'OUTLOOK', outlookOffered: true });
+  test.beforeEach(({ page }) => loadAppSteadily(page));
+
+  const team = 'team@example.com';
+
+  /** Connects `team` from Settings through Microsoft's consent page. */
+  async function connectTeam(page: Page, mailbox: Mailbox): Promise<void> {
+    await mailbox.open(SETTINGS);
+    await page
+      .getByRole('button', { name: 'Connect an Outlook account' })
+      .click();
+    await page.waitForURL(/\/oauth2\/v2\.0\/authorize/);
+    await page.getByRole('button', { name: new RegExp(team) }).click();
+  }
+
+  // When this fails, connecting an Outlook inbox someone else already has
+  // asks to share it without saying which inbox or whose, or "Share inbox"
+  // leaves the user without it.
+  test('connecting it names the inbox and its owner, and Share inbox lists it as shared', async ({
+    page,
+    mailbox,
+    auth,
+    microsoft,
+  }) => {
+    const bob = await mailbox.stack.user('bob@example.com');
+    await mailbox.stack.link(bob, 'OUTLOOK', team);
+
+    await connectTeam(page, mailbox);
+    const dialog = page.getByRole('dialog').filter({
+      hasText: 'Share this inbox?',
+    });
+    await expect(dialog).toContainText(
+      `${team} is already connected by bob@example.com`
+    );
+    saw('STX-213');
+    await dialog.getByRole('button', { name: 'Share inbox' }).click();
+    did('AX-037');
+
+    await expect(notice(page, 'Account connected')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: `Remove ${team}` })
+    ).toBeVisible();
+    await expect(page.getByText('Shared', { exact: true })).toBeVisible();
+    saw('STX-967');
+    expect(await connectedInboxes(mailbox)).toEqual(
+      [mailbox.inbox.email, team].sort()
+    );
+    expect(microsoft.starts.map(({ address }) => address)).toEqual([team]);
+    expect(auth.starts).toEqual([]);
+    confirmed('F-005');
+  });
+
+  // When this fails, connecting an Outlook address whose inbox in Macro
+  // syncs another Microsoft mailbox opens "Share this inbox?" (empty, and
+  // its Share inbox cannot share it) instead of saying why nothing was
+  // connected.
+  test('an address another Microsoft account holds says so and asks nothing', async ({
+    page,
+    mailbox,
+    auth,
+    microsoft,
+  }) => {
+    const bob = await mailbox.stack.user('bob@example.com');
+    await mailbox.stack.link(bob, 'OUTLOOK', team);
+    // As if the address now belonged to another mailbox than the one bob
+    // connected.
+    await mailbox.stack.sql(
+      `UPDATE email_links SET provider_mailbox_id = 'another-mailbox'
+       WHERE email_address = '${team}' RETURNING id`
+    );
+
+    await connectTeam(page, mailbox);
+    await expect(
+      notice(
+        page,
+        'This address is connected through a different Microsoft account'
+      )
+    ).toBeVisible();
+    saw('STX-024', 'F-006');
+    await expect(
+      page.getByRole('dialog').filter({ hasText: 'Share this inbox?' })
+    ).toHaveCount(0);
+    expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
+    expect(microsoft.starts.map(({ address }) => address)).toEqual([team]);
+    expect(auth.starts).toEqual([]);
   });
 });
 

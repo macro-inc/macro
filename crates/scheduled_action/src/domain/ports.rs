@@ -1,4 +1,4 @@
-use super::appearance::ChangeAppearance;
+use super::appearance::{AppearanceSet, ChangeAppearance};
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
@@ -130,11 +130,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Atomically replace presentation and record the actual change in entity history.
+    /// Atomically replace presentation and record the actual change in entity
+    /// history. An agent's pick is skipped once the owner has chosen the
+    /// appearance; the owner's choice marks it chosen even when unchanged.
     fn set_appearance(
         &self,
         change: ChangeAppearance,
-    ) -> impl Future<Output = Result<Option<EntityAppearance>>> + Send;
+    ) -> impl Future<Output = Result<AppearanceSet>> + Send;
 
     /// Deletes the action row, its `entity_access` rows (`entity_type =
     /// 'scheduled_action'`), history, and the `entity` row in one transaction. A missing

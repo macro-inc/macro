@@ -11,8 +11,8 @@ use uuid::Uuid;
 mod notion_run;
 mod notion_sharing;
 pub use notion_run::{
-    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TeamClaim, WrittenKind,
-    WrittenObject,
+    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TaskImportNotice,
+    TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind, WrittenObject,
 };
 
 pub use notion_sharing::{

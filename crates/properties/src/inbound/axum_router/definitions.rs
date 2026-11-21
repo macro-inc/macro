@@ -192,6 +192,7 @@ impl IntoResponse for CreatePropertyDefinitionErr {
         (status = 201, description = "Property definition created successfully", body = PropertyDefinition),
         (status = 400, description = "Invalid request"),
         (status = 403, description = "Team membership required for team scope"),
+        (status = 409, description = "The name belongs to a built-in property. The body names that property."),
         (status = 500, description = "Internal server error")
     ),
     tags = ["Properties"]

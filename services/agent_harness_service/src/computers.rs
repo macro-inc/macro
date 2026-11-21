@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_harness::domain::ports::{
-    ConnectionRecorded, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    ConnectionRecorded, HarnessConnection, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
 };
 use anyhow::Context;
 use harness_id::HarnessId;
@@ -49,6 +49,9 @@ pub(crate) mod moves;
 mod presence;
 pub mod sign_in_ahead;
 pub(crate) mod wake;
+
+#[cfg(test)]
+mod test;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -217,13 +220,33 @@ impl DeploymentSource for ServiceDeployment {
 fn resolve_deployment() -> anyhow::Result<Deployment> {
     use macro_service_urls::{
         AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
+        TelemetryIntakeUrl,
     };
     Ok(Deployment {
         agent_harness_url: AgentHarnessServiceUrl::new()?.parse_url()?,
         document_storage_url: DocumentStorageServiceUrl::new()?.parse_url()?,
         app_url: AppServiceUrl::new()?.parse_url()?,
         egress_url: AgentHarnessEgressUrl::new()?.parse_url()?,
+        telemetry_url: computer_reachable(TelemetryIntakeUrl::new()?.parse_url()?),
     })
+}
+
+/// `url`, unless it is this machine's loopback (`localhost`, a name under it,
+/// which RFC 6761 keeps on loopback, or a loopback or unspecified address,
+/// as the authentication service's `agent_addresses` judges), which a computer
+/// can't reach (a local stack whose collector isn't wired for computers): the
+/// computer then exports no spans.
+fn computer_reachable(url: macro_service_urls::Url) -> Option<macro_service_urls::Url> {
+    let loopback = url.host_str().is_some_and(|host| {
+        let host = host.to_ascii_lowercase();
+        host == "localhost"
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    });
+    (!loopback).then_some(url)
 }
 
 /// The operator's periodic passes.
@@ -699,8 +722,8 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
     }
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
         Arc::clone(&self.inner).renew(live)
     }
 }

@@ -29,6 +29,27 @@ through the same service.
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
   `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute, and
   a channel's mentions-only level).
+- `domain/channel_settings.rs` + `outbound/channel_settings.rs`: a user's own
+  per-channel choice of which channel notification types they receive
+  (`ChannelNotificationKind`, one per event type), stored in
+  `user_channel_notification_setting`. A channel either follows its sections
+  for every type (`disabled_event_types` NULL) or has its own setting for all
+  of them, never a mix; `section_mute_override` keeps a channel notifying
+  inside muted sections. A kind change or reset also deletes the channel's
+  legacy mentions-only row, which these settings replace. Independent of mute
+  and snooze.
+- `domain/section_settings.rs` + `outbound/section_settings.rs`: a user's own
+  settings for Chat sidebar sections (`ChannelSection`: a custom section by
+  `channel_label` id, or Favorites, Direct messages, Team channels), stored in
+  `user_channel_section_notification_setting`: kinds off, and mute or snooze.
+  `channel_delivery` is the one place the rules combine: section mute (all
+  holding sections muted, unless the channel overrides it), then the channel's
+  own settings when it has them, else any holding section allowing the kind. A section
+  without a row allows everything and is unmuted; "All channels" is not a
+  section. Which sections hold a channel comes through the
+  `ChannelSectionMembershipReader` port, implemented by
+  `channel_labels::outbound::section_membership`; ingress without one
+  (`NoChannelSections`) applies no section settings.
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
@@ -96,6 +117,22 @@ through the same service.
   recipient directly must be added to `is_direct_mention`, or mentions-only
   channels stay silent for it. Mute and snooze writes clear the flag.
 
+- Ingress drops a channel notification's recipient whose
+  `user_channel_notification_setting` turns that event type off
+  (`ExclusionReason::DisabledForChannel`), alongside mute and the global type
+  preferences. A new channel event type users should control needs a
+  `ChannelNotificationKind` variant; channel invites are deliberately not one.
+  A notification decided by another kind's setting names it with
+  `with_channel_settings_kind`: a document mention follows its message's
+  kind, top-level outside a thread and thread reply inside one.
+- A channel message or reply leaves the users it @mentions out of its own
+  recipients; the producer names them with `with_mention_fallback`, and
+  ingress adds back each one whose channel settings turn mentions off, so
+  they still hear about the message. Ingress resolves section membership only
+  for recipients that have section settings, and never for channel invites.
+  The `notification.filter_recipients` span records the fallback, exclusion
+  and section-muted counts.
+
 - `user_notification` carries copies of its notification's `event_item_type`,
   `event_item_id` and `notification_event_type`. Entity reads find a viewer's
   rows through `idx_user_notification_viewer_entity` on those copies, and an
@@ -136,6 +173,10 @@ through the same service.
   `fix(notification): stop recording notification payloads` history).
 - Android call pushes carry W3C trace context inside their existing JSON offer;
   keep propagation in the outbound SNS adapter, with no baggage or payload logging.
+- Ingress queue messages carry the sender's `traceparent`/`tracestate`
+  (`IngressQueueMessage.trace_context`, `src/trace_context.rs`); the worker's
+  `notification.ingress.process` span links to it, keeping its own parent.
+  Never forward baggage or put payloads on that span.
 - iOS egress binds `recipientId` to each receiving account; channel pushes carry
   an optional typed `navigation` destination, with `threadId: null` for a root
   message. Preserve older payloads that omit these fields.

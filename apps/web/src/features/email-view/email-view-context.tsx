@@ -13,10 +13,16 @@ import type {
   SavedViewsSource,
 } from '@app/features/saved-views/context/saved-views-source';
 import {
+  createSavedViewCreation,
+  type NewSavedView,
+  type SavedViewCreation,
+} from '@app/features/saved-views/primitives/create-saved-view-creation';
+import {
   createTagFacetContext,
   normalizeFacetSelection,
 } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -49,6 +55,7 @@ import { listTagOptions } from '@property/tags/list-tag-options';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
   batch,
@@ -72,11 +79,15 @@ import {
   emailTabSearchCodec,
 } from './email-route';
 import {
+  EMAIL_SAVED_VIEW_KIND,
   type EmailFilterState,
+  type EmailSavedViewConfig,
+  type EmailSavedViewFilters,
   emailFilterStatesEqual,
   emailTabFilterState,
   emailTabRefinements,
   type MaterializedEmailSavedView,
+  materializeEmailSavedView,
   resolveEmailSavedViewScope,
   restoreEmailTabFilters,
 } from './filters/email-saved-view';
@@ -178,6 +189,15 @@ export type EmailViewContext = {
   setReadingPane: (enabled: boolean) => void;
   /** Whether saved views show at all; their sources may still be mounted. */
   savedViewsEnabled: Accessor<boolean>;
+  savedViewCreation?: SavedViewCreation;
+  discardNewSavedView: () => void;
+  startSavedView: (
+    filters: EmailSavedViewFilters,
+    name?: string,
+    afterStart?: () => void,
+    changed?: boolean,
+    appearance?: NewSavedView['appearance']
+  ) => void;
   /** Present only where the host mounts saved views. */
   savedViews?: EmailSavedViewDraft;
   savedViewsList?: SavedViewsSource;
@@ -252,7 +272,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     savedViewsEnabled() ? tabSearch.savedView : undefined;
   const savedViewsList = props.savedViewsSource?.();
   const savedViewSource = props.savedViewSource?.(selectedSavedViewId);
-  const savedViewActive = () => Boolean(selectedSavedViewId());
+  let savedViewCreation: SavedViewCreation | undefined;
+  const savedViewActive = () =>
+    Boolean(selectedSavedViewId() || savedViewCreation?.current());
   const [savedViewNavigation, setSavedViewNavigation] = createSignal({});
   let savedViews: EmailSavedViewDraft | undefined;
   const facetContext = () => {
@@ -296,6 +318,17 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         draft.beforeSavedView = undefined;
       })
     );
+  if (savedViewSource && savedViewsList)
+    savedViewCreation = createSavedViewCreation({
+      kind: 'email',
+      viewerId: userId,
+      list: savedViewsList.items,
+      capture: () => {
+        const value = savedViews?.capture();
+        return value?.isOk() ? value.value : undefined;
+      },
+      equal: deepEqual,
+    });
   if (savedViewSource) {
     savedViews = createEmailSavedViewDraft({
       source: savedViewSource,
@@ -303,6 +336,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       viewerId: userId,
       state,
       facetContext,
+      creating: () => Boolean(savedViewCreation?.current()),
       apply: applySavedView,
     });
   }
@@ -310,6 +344,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     id: selectedSavedViewId(),
     viewerId: userId(),
     navigation: savedViewNavigation(),
+    draftId: savedViewCreation?.current()?.id,
   }));
   let disposed = false;
   onCleanup(() => {
@@ -322,7 +357,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     on(
       () => [selectedSavedViewId(), userId()] as const,
       ([id, viewer], previous) => {
-        if (!savedViewSource) return;
+        if (!savedViewSource || savedViewCreation?.current()) return;
         const [previousId, previousViewer] = previous ?? [];
         const accountChanged =
           previousViewer !== undefined && viewer !== previousViewer;
@@ -412,6 +447,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   // show all mail under the view's name.
   const savedViewQueryReady = () =>
     !savedViewActive() ||
+    savedViews?.view().kind === 'new' ||
     (savedViews?.view().kind === 'saved' && !!state.conditions);
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
@@ -594,7 +630,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   // A tab is a fresh slice of the mailbox: filters chosen for one tab (Done
   // on Signal, say) would silently narrow the next, so they reset with it.
-  const setTab = (requestedTab: EmailTab) => {
+  const setTabNow = (requestedTab: EmailTab) => {
     const tab = availableTab(requestedTab);
     if (savedViewActive()) {
       batch(() => {
@@ -629,7 +665,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   };
 
   // Opening a view replaces the current filters; its definition fills them in.
-  const selectSavedView = (id: string) => {
+  const selectSavedViewNow = (id: string) => {
     if (!savedViewSource) return;
     batch(() => {
       setSavedViewNavigation({});
@@ -643,12 +679,55 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       fireAndForget(navigateToList(id), 'email-view');
     });
   };
-  const leaveSavedView = () =>
-    batch(() => {
-      setSavedViewNavigation({});
-      clearSavedViewState();
-      fireAndForget(navigateToList(undefined), 'email-view');
-    });
+  const discardNewSavedView = () => {
+    savedViewCreation?.discard();
+    if (!selectedSavedViewId() && state.beforeSavedView) clearSavedViewState();
+  };
+  const selectSavedView = (id: string) => {
+    const select = () => {
+      savedViewCreation?.discard();
+      selectSavedViewNow(id);
+    };
+    if (savedViewCreation) savedViewCreation.run(select);
+    else select();
+  };
+  const startSavedView = (
+    filters: EmailSavedViewFilters,
+    name = t('viewMenus.newView'),
+    afterStart?: () => void,
+    changed = false,
+    appearance?: NewSavedView['appearance']
+  ) => {
+    const start = () => {
+      const config: EmailSavedViewConfig = {
+        kind: EMAIL_SAVED_VIEW_KIND,
+        version: 1 as const,
+        filters,
+      };
+      batch(() => {
+        applySavedView(materializeEmailSavedView(config));
+        savedViewCreation?.begin(config, name, changed, appearance);
+        setSavedViewNavigation({});
+        savedViewCreation?.internalNavigation(() =>
+          fireAndForget(navigateToList(undefined), 'email-view')
+        );
+      });
+      afterStart?.();
+    };
+    if (savedViewCreation) savedViewCreation.run(start);
+    else start();
+  };
+  const leaveSavedView = () => {
+    const leave = () =>
+      batch(() => {
+        discardNewSavedView();
+        setSavedViewNavigation({});
+        clearSavedViewState();
+        fireAndForget(navigateToList(undefined), 'email-view');
+      });
+    if (savedViewCreation) savedViewCreation.run(leave);
+    else leave();
+  };
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
@@ -747,7 +826,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   return {
     state,
     setState,
-    setTab,
+    setTab: (tab) => {
+      const select = () => setTabNow(tab);
+      if (savedViewCreation) savedViewCreation.run(select);
+      else select();
+    },
     setInboxIds,
     setAliasFilter,
     setFacets,
@@ -772,6 +855,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setReadingPane,
     savedViewsEnabled,
     savedViews,
+    savedViewCreation,
+    discardNewSavedView,
+    startSavedView,
     savedViewsList,
     savedViewSource,
     savedViewActive,

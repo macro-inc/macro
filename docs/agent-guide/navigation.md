@@ -208,6 +208,14 @@ safe areas. Also change display size with the keyboard hidden: bottom composers
 must remain visible before the keyboard is opened again. Editors expose labeled
 multiline textboxes for TalkBack.
 
+On native phones, opening Tasks from a project's Overview pushes an internal
+route step. The header caret and Android Back pop that step to Overview
+without closing the project pane, even when it is the only pane. An edge swipe
+pops the same step without previewing an unrelated pane. The next Back keeps
+the usual pane-stack behavior. Tasks entries without a preceding Overview,
+nested task routes, different-project history, and tablets retain their
+existing behavior.
+
 With the keyboard closed, the Android dock sits above the measured system
 navigation inset with the usual 12px gutter. Check both gesture and three-button
 navigation, including after rotation and display-size changes. Opening the
@@ -259,7 +267,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/tasks` | Tasks table |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
-| `/app/tasks/projects` | Projects collection inside Tasks (requires the Projects flag) |
+| `/app/tasks/projects` | Projects collection inside Tasks |
 | `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
 | `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
 | `/app/component/new-project` | Alias for the project composer; existing links remain valid |
@@ -393,6 +401,17 @@ favor of its owner and view-navigation islands, except while creating or editing
 a schedule: a separate **Back to availability** pill sits beside the editor
 title, matching other mobile routes.
 
+Projects are available without a feature flag.
+Projects live within Tasks. Open **Show sidebar** on touch to choose a built-in
+project view or a saved project view. The Tasks dock button remains selected;
+Projects has no separate dock/More entry, header tabs, or saved-view picker.
+Saved project views follow the built-in project views; **Create view** is the
+last item. Hold a saved-view row on touch for its options sheet; desktop keeps
+the hover More menu. Collection headers keep navigation left and search/filters right.
+Project definitions use the `sN.projects.savedView` search parameter; opening a
+project pushes detail and Back returns to that collection.
+Existing Files folders stay separate from task projects.
+
 Projects open as native detail views within Tasks, preserving its sidebar and
 shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
 filters, groups, and scroll position. Opening a task from a project extends the
@@ -419,7 +438,11 @@ stacked CRM activity controls contribute to that measured inset.
 
 The app views are referred to as **workspaces**. Desktop navigation sidebars
 start at 256px and dock above the shared 720px container breakpoint, overlaying
-at narrower widths. On wide touch, list-aside views (Chat, Agents, Notifications)
+at narrower widths. A new split shows its sidebar like any other; hiding it
+there lasts for that split, across the views it shows, and leaves the first
+split's saved choice alone. At 720px or narrower, desktop Chat and
+Notifications fill the split with their list until a row opens, which then
+fills it with **Back** returning to the list. On wide touch, list-aside views (Chat, Agents, Notifications)
 keep their list on the left and open selections in the right preview. Their
 initial list width is 403px, with thin desktop-style pane dividers.
 
@@ -486,6 +509,27 @@ The sidebar spacing contract uses 8px outer gutters, 24px between sections, and
 share rails 26px from either edge, including collapse, search, add, and tree
 controls. Use the shared slots described in
 [the sidebar spacing guide](../../apps/web/src/components/view-shell/README.md).
+
+### Reorder workspace sidebar sections
+
+On desktop, drag a section heading past another section to change their shared
+order. An eight-pixel mouse movement starts the drag; a click still collapses the
+section, and header actions still run normally. Tab to a headed section's
+**Reorder** control and press Up or Down for keyboard reordering. This works in Email,
+Drive, Tasks (including Projects), Customers, Calls, Reviews, Agents, Calendar,
+Passwords, and Settings. Chat uses the same interaction with its existing
+section preferences.
+
+Reload to verify persistence. Each account and workspace has its own local
+order; moving Email sections does not move Drive sections. New sections retain
+their default slot, and removed sections are ignored. Unnamed navigation groups
+and the mini calendar share that order but have no grip, drag behavior, or keyboard
+move control. Drop a headed section before or after them to change their relative
+positions. Account and workspace selectors, search/create controls, promotions,
+and footer tools stay pinned; they have no drag handle or drop target. Old saved
+keys cannot move them.
+At 390×844 with touch emulation, headings still collapse and actions still work;
+section dragging and the keyboard reorder control are desktop-only.
 
 Desktop app navigation panels have **Hide navigation** at the right end of their
 48px title bar. It hides only that split's navigation; **Show navigation** (the
@@ -581,7 +625,8 @@ On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
 cannot be hidden. Verify that hovering within a destination row keeps the drag
 preview stable, dropping saves the order, and reopening retains it. In short
-desktop windows, the app list scrolls while More and the footer remain reachable.
+desktop windows, the rail shows only whole app buttons: apps that don't fit move
+to the top of More in rail order, and More and the footer remain reachable.
 Touch devices retain the flag-gated Reviews tab in Tasks.
 Scheduling appears in Customize sidebar only when the calendar-scheduling flag is
 on. It starts hidden in More, including for existing sidebar preferences. Enable
@@ -603,8 +648,10 @@ External (plug icon, `g x`) appears on the rail only with the
   a new split, including when Search is already active. The command menu stays
   on ⌘K (Ctrl+K elsewhere).
 - Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
-  their features are enabled. Calendar shows a next-meeting badge (`Now`, or
+  `Agents`, `Customers`. Notifications follows its feature gate; Customers is
+  hidden only once CRM access is proven denied, including in More, customization,
+  and the phone dock, and stays while that check is pending or has failed.
+  Calendar shows a next-meeting badge (`Now`, or
   minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
@@ -731,9 +778,10 @@ the other entity actions used on Home.
 
 Desktop inner sidebars place the same full-width, outlined **New** pill directly
 below the title. List toolbars use its compact version, including when the
-sidebar is hidden. Email, Drive, Tasks, and the Projects list use one desktop
-row: title, filter controls, view options, New, and Search. Filter and view
-controls use the rounded, bordered button groups from the email thread toolbar;
+sidebar is hidden. Collection toolbars keep their title and navigation left and
+search/filter controls right. Projects uses the same sidebar navigation and
+saved-view creation flow as Tasks, without additional tabs or a saved-view
+selector in its header. Filter and view controls use the rounded, bordered button groups from the email thread toolbar;
 New and Search have their own rounded, bordered backgrounds. Search starts as an
 icon and expands into a compact field when clicked or opened with Cmd/Ctrl+F.
 Closing it clears the query and returns to the icon. The action stays specific to
@@ -743,7 +791,7 @@ conversations, new channels, and direct messages; when disabled, Chat offers
 separate channel and direct-message creation actions.
 Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
-lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
+lists. Customers offers Company, Contact, and Pipeline creation to members with CRM access. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
 A desktop sidebar has a Search icon, immediately left of the collapse control,
 only where the sidebar is itself the list being searched: Home, Chat, and
@@ -1394,7 +1442,7 @@ whose only step is **Ask AI** saves in the original single-agent form.
 step. There are two kinds. **Code** steps run TypeScript against Macro's SDK;
 AI writes them (**Draft it**, the starter templates, or a conversation about
 the routine), and they run with the owner's access. Each shows the sentence
-of what it does, with its values to change; its code is in the step's ⋯ menu. **Ask AI** hands the run to a model or agent with instructions; it sees
+of what it does, with its values to change; its code is in the step's ⋯ menu. Code, type-check problems, code changes, a paused routine's reason and proposed update, a run's step output and a failed run's errors can be selected and copied (`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts` from `apps/web` checks each). **Ask AI** hands the run to a model or agent with instructions; it sees
 the triggering event and what earlier steps returned, a routine has one, and
 its required apps go to it. The tray under the last step card (like the tray
 under Home's composer) holds **Then… say what should happen next**, where AI

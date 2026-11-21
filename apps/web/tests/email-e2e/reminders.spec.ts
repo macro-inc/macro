@@ -80,7 +80,7 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       await remindWhen(page).fill('tomorrow 9am');
       await expect(
         page.getByRole('option', { name: /^tomorrow 9am/ })
-      ).toBeVisible();
+      ).toBeEnabled();
       await remindWhen(page).press('Enter');
       did('AL-621');
       await expect(remindWhen(page)).toBeHidden();

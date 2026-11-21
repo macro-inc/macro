@@ -212,6 +212,22 @@ describe('a drafted routine in the editor', () => {
     expect(draft.created).toEqual(created);
   });
 
+  it('keeps the look AI picked, which creating the routine saves', () => {
+    const appearance = {
+      icon: { kind: 'macro', name: 'tag-simple' },
+      color: 'green',
+    } as const;
+    const draft = draftFromRoutine(routine({ appearance }), 'claude');
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.appearance).toEqual(appearance);
+    expect(draftToCreateBody(draft).appearance).toEqual(appearance);
+
+    const plain = draftFromRoutine(routine(), 'claude');
+    if (typeof plain === 'string') throw new Error(plain);
+    expect(plain.appearance).toBeUndefined();
+    expect(draftToCreateBody(plain)).not.toHaveProperty('appearance');
+  });
+
   it('keeps a trigger limited to the items it names', () => {
     const channel = '0195f5d1-4c4b-7a3e-9b3f-2d6a1c8e9f01';
     const draft = draftFromRoutine(

@@ -1,10 +1,9 @@
-import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import { createCallback } from '@solid-primitives/rootless';
 import { ButtonGroup, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../core/context';
-import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
+import { usePropertyEntityLink } from '../hooks/usePropertyEntityLink';
 import type { Property } from '../types';
 import { getEntityValues } from '../utils/typeGuards';
 
@@ -27,22 +26,11 @@ export function EntityLinkPill(props: {
 }) {
   const ctx = useProperty();
   const reference = () => getEntityValues(props.property)[0];
-  const display = usePropertyEntityDisplay(
-    () => reference()?.entity_id ?? '',
-    () => reference()?.entity_type,
-    {
-      iconSize: 'fill',
-      specificMessageId: () => reference()?.specific_message_id,
-      loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? ''),
-    }
-  );
-  const open = createCallback((event: MouseEvent) => {
-    event.stopPropagation();
-    const value = reference();
-    const type = display.blockOrFileType();
-    if (!value || !type) return;
-    openDocument(type, value.entity_id, display.linkParams(), event.shiftKey);
+  const { display, open } = usePropertyEntityLink(reference, {
+    iconSize: 'fill',
+    loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? ''),
   });
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
 
   // A document's type is known only once its preview loads; keep the split
   // pill mounted meanwhile so the swap can't drop focus or shift the row.
@@ -62,7 +50,7 @@ export function EntityLinkPill(props: {
           aria-label={props.openLabel(display.name())}
           class="min-w-0 shrink justify-start"
           disabled={!display.blockOrFileType()}
-          onClick={open}
+          {...navHandlers}
         >
           <Show when={props.label}>
             {(label) => <span class="shrink-0 text-ink-muted">{label()}:</span>}

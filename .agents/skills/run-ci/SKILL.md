@@ -96,11 +96,16 @@ that run use names such as `Web App / Typecheck` or `Cloud Storage / test`.
 - Fix every real failure caused by the branch, run the affected local checks,
   commit, and push. Request CI again by removing `run-ci` if it remains, then
   adding it again.
-- For an unrelated failure, record the job, error, and evidence in the PR body
-  and `PROGRESS.md`; remove personal data and secrets from error excerpts.
-  Rerun CI once through `run-ci` to check whether the failure is flaky. If the
-  same unrelated failure persists, report the blocker and leave the PR incomplete
-  instead of rerunning indefinitely.
+- For a failure unrelated to the branch, such as a flaky job, record the job,
+  error, and evidence in the PR body, without personal data or secrets. On a PR
+  from this repository, re-run only the failed jobs of the `PR CI` run for the
+  PR's current head (`gh run rerun <run-id> --failed`); fork PRs follow
+  [Fork PRs](#fork-prs). The `CI gate` job depends on every check, so it
+  reruns too and sets the `CI gate` status when it finishes; no new label is
+  needed. Until then the status still shows the previous failure, so wait with
+  `gh run watch <run-id>` rather than acting on it. If the same unrelated
+  failure persists after one rerun, report the blocker and leave the PR
+  incomplete instead of rerunning indefinitely.
 - For branch failures, repeat the fix-and-rerun cycle until the latest commit
   passes. Review later CI failures without waiting for another request. Do not
   declare the PR done until `CI gate` passes on its latest commit.

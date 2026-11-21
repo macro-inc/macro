@@ -450,12 +450,40 @@ fn the_instructions_say_what_this_kind_of_draft_may_write() {
     assert!(prose.contains("the reference of routines"));
     assert!(!prose.contains("the reference of ai"));
     for text in [code, prose] {
-        for placeholder in ["{items}", "{conditions}", "{steps}", "{reference}"] {
+        for placeholder in [
+            "{items}",
+            "{conditions}",
+            "{steps}",
+            "{icons}",
+            "{reference}",
+        ] {
             assert!(!text.contains(placeholder), "{placeholder}");
         }
     }
 }
 
+#[test]
+fn the_instructions_ask_for_a_look_from_macros_icons_and_colors() {
+    let prompts = FindingPrompts::new(&Areas::default());
+    for text in [
+        prompts.instructions(true, true, "model"),
+        prompts.instructions(false, false, "model"),
+    ] {
+        assert!(text.contains("{name, appearance, trigger, steps: [...]}"));
+        assert!(text.contains(&model_entity::macro_icon_names().join(", ")));
+        let colors = text
+            .split_once("`color` one of ")
+            .and_then(|(_, rest)| rest.split_once('.'))
+            .map(|(colors, _)| colors)
+            .unwrap();
+        let colors: Vec<&str> = colors.split(", ").collect();
+        assert_eq!(colors.len(), 12, "{colors:?}");
+        for color in colors {
+            serde_json::from_value::<model_entity::AppearanceColor>(json!(color))
+                .unwrap_or_else(|error| panic!("{color}: {error}"));
+        }
+    }
+}
 #[tokio::test(start_paused = true)]
 async fn without_code_the_prompt_carries_no_area_reference() {
     let model = Arc::new(Model::finding(named(&[])));

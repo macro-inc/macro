@@ -178,7 +178,7 @@ fn test_build_bool_query_name_mode_matches_document_name() -> anyhow::Result<()>
     let must = json["bool"]["must"].as_array().expect("must array");
     assert_eq!(must.len(), 1, "name mode emits one title clause: {must:?}");
     assert_eq!(
-        must[0]["match_phrase_prefix"]["document_name"]["query"],
+        must[0]["match_bool_prefix"]["document_name"]["query"],
         "report"
     );
     assert!(
@@ -215,7 +215,7 @@ fn test_build_bool_query_name_content_mode_matches_either() -> anyhow::Result<()
     assert!(
         should
             .iter()
-            .any(|c| c["match_phrase_prefix"]["document_name"]["query"] == "report"),
+            .any(|c| c["match_bool_prefix"]["document_name"]["query"] == "report"),
         "missing document_name branch: {should:?}"
     );
     // …the other matches child content via has_child.

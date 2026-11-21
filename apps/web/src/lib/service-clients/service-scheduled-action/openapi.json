@@ -2966,6 +2966,10 @@
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked for what the routine does. Saved\nunless the owner chose the routine's appearance, which only the\nappearance endpoint does; absent leaves the stored one."
+          },
           "description": {
             "type": "string",
             "description": "What the routine is for, in the owner's words; empty when unset."
@@ -2997,6 +3001,10 @@
         "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked, as on create. Saved only when the\nupdate is made for the routine's owner; skipped for anyone else."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "An empty string clears it."
@@ -4098,6 +4106,10 @@
         "description": "A drafted routine.",
         "required": ["name", "steps", "problems", "created"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "The icon and colour AI picked for it from Macro's icons; absent when\nit picked none, or one Macro doesn't have."
+          },
           "apps": {
             "type": "array",
             "items": {

@@ -333,6 +333,39 @@ test('routine options carry run visibility and updates that omit it keep it', as
   expect(bodies[1]).not.toHaveProperty('run_visibility');
 });
 
+test('routine options carry the agent’s pick of a look, and updates that omit it keep the stored one', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const options = {
+    name: 'Daily report',
+    trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'UTC' },
+    prompt: 'Summarize',
+    userPrompt: 'Daily summary',
+  } as const;
+  const appearance = {
+    icon: { kind: 'macro', name: 'chart-bar' },
+    color: 'blue',
+  } as const;
+  const routine = await macro.routines.create({ ...options, appearance });
+  await routine.update(options);
+  await macro.routines.check({ ...options, appearance });
+  expect(bodies[0]).toMatchObject({ appearance });
+  expect(bodies[1]).not.toHaveProperty('appearance');
+  expect(bodies[2]).toMatchObject({ routine: { appearance } });
+});
+
 test('a rejected routine create carries the server validation message', async () => {
   const rejection =
     'invalid routine task; select a model or agent and provide instructions';

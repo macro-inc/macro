@@ -233,7 +233,7 @@ macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 schemars = { workspace = true }
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

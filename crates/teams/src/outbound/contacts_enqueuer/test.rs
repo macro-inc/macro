@@ -3,7 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use contacts::domain::{
+    models::{list::InboxSource, messages::ContactConnection},
+    ports::{ContactListIngress, ContactsIngress},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 
@@ -31,6 +34,36 @@ impl ContactsIngress for FakeContactsIngress {
             .expect("connection batches lock should not be poisoned")
             .push(connections);
         Ok(())
+    }
+}
+
+impl ContactListIngress for FakeContactsIngress {
+    async fn record_interactions(
+        &self,
+        _users: Vec<MacroUserIdStr<'static>>,
+        _peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Report> {
+        panic!("unexpected interactions enqueue")
+    }
+
+    async fn record_inbox_contacts(
+        &self,
+        _inbox: InboxSource,
+        _contacts: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Report> {
+        panic!("unexpected inbox contacts enqueue")
+    }
+
+    async fn directory_changed(
+        &self,
+        _users: Vec<MacroUserIdStr<'static>>,
+        _changed: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Report> {
+        panic!("unexpected directory change enqueue")
+    }
+
+    async fn user_deleted(&self, _user: MacroUserIdStr<'static>) -> Result<(), Report> {
+        panic!("unexpected user deletion enqueue")
     }
 }
 

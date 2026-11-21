@@ -318,8 +318,9 @@ impl AgentAuth for ClaudeAuth {
             CodeOutcome::Created { token, valid_for } => {
                 self.store(token, valid_for).map(AgentStatus::SignedIn)
             }
+            // The CLI has ended this sign-in, so the code can't be pasted
+            // again: a malformed code is caught before it is typed.
             CodeOutcome::Rejected => Err(ErrorKind::InvalidCode),
-            CodeOutcome::Malformed => Err(ErrorKind::MalformedCode),
         }
     }
 

@@ -25,6 +25,7 @@ import { NotificationRow } from '../components/notification-row';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
 import { describeInboxCard } from '../primitives/describe-row';
 import { InboxRowAvatar } from '../views/inbox-row-avatar';
+import { NotificationGenerationFixture } from './generation-fixture';
 
 const VIEWER_ID = 'macro|viewer@example.test';
 
@@ -217,25 +218,29 @@ function Fixture() {
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <AnalyticsContextProvider>
-        <PosthogProvider>
-          <EntityProvider>
-            <UserContextProvider>
-              <ChannelsContextProvider>
-                <EmailLinksContextProvider>
-                  <MobileSettingsProvider>
-                    <StaticMarkdownContext>
-                      <MemoryRouter>
-                        <Route path="*" component={Fixture} />
-                      </MemoryRouter>
-                    </StaticMarkdownContext>
-                  </MobileSettingsProvider>
-                </EmailLinksContextProvider>
-              </ChannelsContextProvider>
-            </UserContextProvider>
-          </EntityProvider>
-        </PosthogProvider>
-      </AnalyticsContextProvider>
+      {new URLSearchParams(location.search).has('generation') ? (
+        <NotificationGenerationFixture />
+      ) : (
+        <AnalyticsContextProvider>
+          <PosthogProvider>
+            <EntityProvider>
+              <UserContextProvider>
+                <ChannelsContextProvider>
+                  <EmailLinksContextProvider>
+                    <MobileSettingsProvider>
+                      <StaticMarkdownContext>
+                        <MemoryRouter>
+                          <Route path="*" component={Fixture} />
+                        </MemoryRouter>
+                      </StaticMarkdownContext>
+                    </MobileSettingsProvider>
+                  </EmailLinksContextProvider>
+                </ChannelsContextProvider>
+              </UserContextProvider>
+            </EntityProvider>
+          </PosthogProvider>
+        </AnalyticsContextProvider>
+      )}
     </QueryClientProvider>
   ),
   document.getElementById('root') as HTMLElement

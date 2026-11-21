@@ -181,6 +181,12 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+    /// An icon and colour an agent picked for what the routine does. Saved
+    /// unless the owner chose the routine's appearance, which only the
+    /// appearance endpoint does; absent leaves the stored one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 /// What saving a routine would find wrong, without saving it: the answer to
@@ -249,6 +255,11 @@ pub struct ActionConfigurationUpdate {
     /// An empty string clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// An icon and colour an agent picked, as on create. Saved only when the
+    /// update is made for the routine's owner; skipped for anyone else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 impl ActionConfigurationUpdate {
@@ -265,6 +276,7 @@ impl ActionConfigurationUpdate {
             description: self
                 .description
                 .unwrap_or_else(|| stored.description.clone()),
+            appearance: self.appearance,
         }
     }
 }

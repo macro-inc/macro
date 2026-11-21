@@ -244,6 +244,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn create_contact_for_email_domain(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
     async fn list_blocked_domains(
         &self,
         _team_id: &uuid::Uuid,
@@ -462,6 +472,15 @@ impl CompaniesRepository for StubRepo {
         _email: &str,
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn get_company_by_domain_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
 

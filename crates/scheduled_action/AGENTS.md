@@ -116,8 +116,9 @@ each run.
   bounded by `DRAFT_TIMEOUT`). It turns the last passing check (else the
   last check) into the draft (a single agent task, which the SDK still
   accepts, becomes one agent step holding its prompt and user prompt, or
-  fails the draft if that step breaks a program's rules), then stops and
-  deletes the session and the
+  fails the draft if that step breaks a program's rules; a new routine's
+  draft keeps the `appearance` its check picked, dropped when `check_pick`
+  refuses it), then stops and deletes the session and the
   row, also once it sees the request dropped mid-draft (the web composer,
   given no answer, sends the draft once more, `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
@@ -233,7 +234,9 @@ each run.
   brackets in the data swapped so it can't close them; a nightly or manual
   brief adds review and retire, and only onboarding's asks for speed; a
   drafted routine is told to start on mail only where saving one can: the
-  person has `enable-event-routines` and the deployment evaluates conditions) and
+  person has `enable-event-routines` and the deployment evaluates conditions,
+  and to add CRM companies only where the person may: in a team whose CRM is
+  open to them) and
   count what it suggested (`suggested`). A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
@@ -370,6 +373,24 @@ each run.
   loads the routine only for its owner (`granted_action`). Without a grant
   they answer 401; with a grant but not the owner, 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
+  An agent picks a routine's look through `appearance` on create, update
+  and check (`ActionConfiguration`, `ActionConfigurationUpdate`; validated by
+  `appearance::check_pick`, which names Macro's icons when it refuses one). An
+  update applies a pick after saving the configuration, and only when the
+  caller acts for the owner; a repeated sub-routine key checks a pick but
+  keeps the look the key created. `PUT /appearance` is the owner's choice and
+  sets `scheduled_action.appearance_chosen_by_owner`, even for no icon; an
+  agent's pick (`AppearanceChooser::Agent`) never replaces it.
+  Every change to a look records an `appearance_changed` activity, on this
+  code and on replicas built before these columns, which change the look for
+  the owner without marking it; `appearance_changes_by_agent` counts the ones
+  an agent's pick recorded, so any beyond it are the owner's. A routine from
+  before the columns, or one such a replica created, holds NULL in both, and
+  a look it has is its owner's. Only an agent's pick reads the activity
+  (`pg_activity_repo::appearance_changes_exceed`), in its own statement once
+  the row is locked, and no more than one event past the agent's count. A
+  refused pick answers with the look read under that lock
+  (`AppearanceSet::Kept`), not the one the update loaded.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
@@ -453,7 +474,14 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   and an `Option` in `ActionConfigurationUpdate` that keeps the stored value
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
-  which builds its own `ScheduledAction`.
+  which builds its own `ScheduledAction`. `appearance` is the exception: an
+  agent's pick, written through `ScheduledActionRepo::set_appearance`, not a
+  stored configuration field. It is serialized only when set, and kept JSON
+  never holds it inside a configuration, which a replica built before it
+  rejects: a draft's hand-back check keeps it beside the routine
+  (`pg_draft_hand_backs::KeptCheck`), and a kept routine suggestion drops it
+  (`decode::drafted_pick`), since suggestions outlive a rollback and one
+  unreadable row fails the person's whole list.
 - A `once` trigger (stored as `trigger_type = 'once'`, or inside `multiple`)
   runs a single time at `at`, kept to whole seconds. A past `at` is due as soon
   as it is saved, unless the stored routine already consumed it (its

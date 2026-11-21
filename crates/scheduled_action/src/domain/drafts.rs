@@ -40,6 +40,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
+use super::appearance::check_pick;
 use super::code_check::MAX_TASK_CHARS;
 use super::event_trigger::ActionTrigger;
 use super::models::{CreatedItem, RoutineCheck};
@@ -191,6 +192,11 @@ pub struct DraftedRoutine {
     /// What AI created while drafting, such as the database the routine
     /// writes to. These exist whether or not the routine is saved.
     pub created: Vec<DraftCreated>,
+    /// The icon and colour AI picked for it from Macro's icons; absent when
+    /// it picked none, or one Macro doesn't have.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Apps outside Macro its Ask AI step uses that its owner connected,
     /// which the routine requires (its task's `mcp_servers`).
     #[serde(default)]
@@ -1391,6 +1397,11 @@ fn drafted(
             span.record("routine.draft.apps", apps.len());
             Draft::Routine(DraftedRoutine {
                 name: check.routine.name.trim().to_owned(),
+                appearance: check
+                    .routine
+                    .appearance
+                    .clone()
+                    .filter(|pick| check_pick(pick).is_ok()),
                 trigger: Some(check.routine.trigger.clone()),
                 problems: check
                     .steps
