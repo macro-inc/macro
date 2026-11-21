@@ -1,4 +1,4 @@
-use crate::cognition::api::context::test::{ADMISSION_TEST_USER, test_api_context};
+use crate::cognition::{ADMISSION_TEST_USER, test_api_context};
 use agent_code_mode::domain::{
     CodeModeError, ExecutionStatus, MentionCodeMode, MentionContext, UserExecutionReceipt,
 };
