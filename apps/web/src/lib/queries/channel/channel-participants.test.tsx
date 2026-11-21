@@ -95,6 +95,17 @@ function setDetail(participants: ChannelParticipant[] | undefined) {
   for (const listener of detail.listeners) listener();
 }
 
+/** The by-id read answered with these channels. */
+function setChannels(channels: Record<string, ChannelParticipant[]>) {
+  detail.pending = false;
+  detail.error = null;
+  detail.entities = Object.entries(channels).map(
+    ([id, participants]) =>
+      ({ id, type: 'channel', participants }) as Partial<ChannelEntity>
+  );
+  for (const listener of detail.listeners) listener();
+}
+
 /** The by-id read came back without the channel. */
 function missChannel() {
   detail.pending = false;
@@ -137,7 +148,7 @@ function mount(options: { staleTime?: number } = {}) {
   let query!: ReturnType<typeof useChannelParticipantsQuery>;
   let add!: ReturnType<typeof useAddParticipantsMutation>;
   let remove!: ReturnType<typeof useRemoveParticipantsMutation>;
-  const [channelId] = createSignal('channel-1');
+  const [channelId, setChannel] = createSignal('channel-1');
   // A component, so the hooks' reads are not tracked by the render.
   function Harness() {
     query = useChannelParticipantsQuery(channelId);
@@ -151,7 +162,7 @@ function mount(options: { staleTime?: number } = {}) {
     </QueryClientProvider>
   ));
   const ids = () => query.data?.map((participant) => participant.user_id);
-  return { query, add, remove, ids };
+  return { query, add, remove, ids, setChannel };
 }
 
 afterEach(() => {
@@ -757,6 +768,208 @@ describe('useChannelParticipantsQuery', () => {
     first.resolve(ok([owner]));
     await vi.advanceTimersByTimeAsync(0);
     expect(ids()).toEqual(['owner', 'a', 'b']);
+  });
+
+  it('keeps the answer for each channel when the reader moves between channels during its checks', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const owner = participant('owner', '2026-01-01T00:00:00Z', 'owner');
+    setChannels({ 'channel-1': [owner], 'channel-2': [owner] });
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const answers = new Map<string, PromiseWithResolvers<unknown>>();
+    storage.getChannelParticipants.mockImplementation(
+      ({ channel_id }: { channel_id: string }) => {
+        const answer = Promise.withResolvers<unknown>();
+        answers.set(channel_id, answer);
+        return answer.promise;
+      }
+    );
+    const { add, ids, setChannel } = mount();
+
+    setChannel('channel-2');
+    add.mutate({ channelId: 'channel-2', participants: ['b'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    setChannel('channel-1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner', 'a']);
+
+    // channel-2's question goes out, then channel-1's.
+    setChannel('channel-2');
+    await vi.advanceTimersByTimeAsync(26_000);
+    setChannel('channel-1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    setChannel('channel-2');
+    expect([...answers.keys()]).toEqual(['channel-2', 'channel-1']);
+
+    // channel-1's answer says `a` is not there; channel-2's arrives last.
+    answers
+      .get('channel-1')!
+      .resolve(ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')]));
+    answers
+      .get('channel-2')!
+      .resolve(
+        ok([
+          restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+          restRow('b', '2026-01-03T00:00:00Z'),
+        ])
+      );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'b']);
+    setChannel('channel-1');
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('judges a write shown over REST again against the GraphQL record that follows', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const withNew = [owner, restRow('new', '2026-01-03T00:00:00Z')];
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner]))
+      .mockResolvedValue(ok(withNew));
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+
+    // The GraphQL read is slow, so REST answers; the write's REST reread shows it.
+    await vi.advanceTimersByTimeAsync(3_100);
+    await vi.waitFor(() => expect(ids()).toEqual(['owner']));
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.waitFor(() => expect(ids()).toEqual(['owner', 'new']));
+
+    // Then the GraphQL read, sent before the write, answers without it.
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    expect(ids()).toEqual(['owner', 'new']);
+    // Its time to show runs out and the server says it holds.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'new']);
+  });
+
+  it('waits for an older question when a newer one fails, and lets a newer answer decide over an older one', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const first = Promise.withResolvers<unknown>();
+    const second = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(1_000);
+    add.mutate({ channelId: 'channel-1', participants: ['b'] });
+    await vi.waitFor(() => expect(ids()).toEqual(['owner', 'a', 'b']));
+    await vi.advanceTimersByTimeAsync(30_500);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
+
+    // The newer question fails: `a` waits for the older one, `b` has none.
+    second.resolve(err([{ code: 'HTTP_ERROR', message: 'offline' }]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'a']);
+    first.resolve(ok([owner, restRow('a', '2026-01-03T00:00:00Z')]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'a']);
+  });
+
+  it('decides a change from the newest question while it waits, not from an older answer', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const first = Promise.withResolvers<unknown>();
+    const second = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(1_000);
+    add.mutate({ channelId: 'channel-1', participants: ['b'] });
+    await vi.waitFor(() => expect(ids()).toEqual(['owner', 'a', 'b']));
+    await vi.advanceTimersByTimeAsync(30_500);
+
+    // The older answer, without `a`, arrives while the newer question waits.
+    first.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'a', 'b']);
+    second.resolve(
+      ok([
+        owner,
+        restRow('a', '2026-01-03T00:00:00Z'),
+        restRow('b', '2026-01-04T00:00:00Z'),
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'a', 'b']);
+  });
+
+  it('shows someone who rejoined after a confirmed remove', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+    storage.removeParticipantsFromChannel.mockResolvedValue(ok({}));
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+    );
+    const { remove, ids } = mount();
+
+    remove.mutate({ channelId: 'channel-1', participants: ['member'] });
+    await vi.waitFor(() => expect(remove.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner']);
+
+    // Added back elsewhere; the record skips the roster without them.
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-05T00:00:00Z'),
+    ]);
+    expect(ids()).toEqual(['owner', 'member']);
+  });
+
+  it('keeps the people of an add the server says hold, and drops the rest', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([
+        restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+        restRow('x', '2026-01-03T00:00:00Z'),
+      ])
+    );
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['x', 'y'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'x']);
+  });
+
+  it('lets the change that finished last decide, whatever order they were sent in', async () => {
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+    const removal = Promise.withResolvers<unknown>();
+    storage.removeParticipantsFromChannel.mockReturnValue(removal.promise);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, remove, ids } = mount();
+
+    remove.mutate({ channelId: 'channel-1', participants: ['member'] });
+    await waitFor(() => expect(ids()).toEqual(['owner']));
+    add.mutate({ channelId: 'channel-1', participants: ['member'] });
+    await waitFor(() => expect(add.isSuccess).toBe(true));
+
+    // The remove, sent first, finishes last.
+    removal.resolve(ok({}));
+    await waitFor(() => expect(remove.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
   });
 
   it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
