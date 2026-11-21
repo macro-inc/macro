@@ -1,0 +1,18 @@
+apps/web/src/components/app/sidebar-next/create-button.tsx
+  h_659b58cf3b37bf 27
+apps/web/src/components/app/sidebar-next/search-bar-button.tsx
+  h_659b58cf3b37bf 58
+apps/web/src/components/app/sidebar-next/sidebar-rail.tsx
+  h_659b58cf3b37bf 9-16,71-74,77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "43e384a1e090a69b00a25921341ffcf61ea7b8db",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
