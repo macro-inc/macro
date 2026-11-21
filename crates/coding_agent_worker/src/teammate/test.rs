@@ -2855,9 +2855,6 @@ async fn the_real_engine_enforces_the_egress_policy() {
         "--ip",
         "44.31.250.10",
         "nginx:alpine",
-        "nginx",
-        "-g",
-        "daemon off; worker_processes 1;",
     ]);
     let up_id = test_image(program, "egress-up", RUNS_UNTIL_STOPPED);
 
@@ -3028,9 +3025,6 @@ async fn the_real_engine_allows_only_a_local_stacks_named_services() {
         "--network-alias",
         "svc",
         "nginx:alpine",
-        "nginx",
-        "-g",
-        "daemon off; worker_processes 1;",
     ]);
     // Another container on the shared network (another teammate, say).
     run(&[
@@ -3041,9 +3035,6 @@ async fn the_real_engine_allows_only_a_local_stacks_named_services() {
         "--network",
         &stack,
         "nginx:alpine",
-        "nginx",
-        "-g",
-        "daemon off; worker_processes 1;",
     ]);
     let other_address = inspect(
         program,
