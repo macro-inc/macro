@@ -37,7 +37,7 @@ mod capsolver;
 mod solves;
 
 pub(crate) use capsolver::Capsolver;
-pub(crate) use solves::{SolveLimits, SolveOutcome, VendorErrorKind};
+pub(crate) use solves::{KeptOutcome, SolveLimits, SolveOutcome, VendorErrorKind};
 
 #[cfg(test)]
 mod test;
@@ -61,6 +61,8 @@ pub(crate) struct Ledgers {
     pub(crate) solves: Arc<dyn SolveLedger>,
     pub(crate) run_limits: RunLimits,
     pub(crate) solve_limits: SolveLimits,
+    /// Where solves run; shutdown waits for it.
+    pub(crate) tasks: tokio_util::task::TaskTracker,
 }
 
 impl<Solver: CaptchaSolver> CaptchaGateway<Solver> {
@@ -79,7 +81,13 @@ impl<Solver: CaptchaSolver> CaptchaGateway<Solver> {
             runs: ledgers.runs,
             run_limits: ledgers.run_limits,
             model_configured,
-            solves: Solves::new(solver, ledgers.solves, recorder, ledgers.solve_limits),
+            solves: Solves::new(
+                solver,
+                ledgers.solves,
+                recorder,
+                ledgers.solve_limits,
+                ledgers.tasks,
+            ),
         }
     }
 }

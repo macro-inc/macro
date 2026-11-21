@@ -322,6 +322,54 @@ pub(crate) enum SolveOutcome {
     NotConfigured,
 }
 
+/// What the solves ledger keeps of a finished solve: its outcome without a
+/// solved token (or the user agent that goes with it). The token exists only
+/// in the one answer that carries it, so nothing needs to expire it later.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "outcome",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub(crate) enum KeptOutcome {
+    Solved { task_id: TaskId },
+    Unsolvable,
+    Timeout,
+    BudgetExceeded { limit: BudgetLimit },
+    VendorError { kind: VendorErrorKind },
+    NotConfigured,
+}
+
+impl From<&SolveOutcome> for KeptOutcome {
+    fn from(outcome: &SolveOutcome) -> Self {
+        match outcome {
+            SolveOutcome::Solved { task_id, .. } => Self::Solved {
+                task_id: task_id.clone(),
+            },
+            SolveOutcome::Unsolvable => Self::Unsolvable,
+            SolveOutcome::Timeout => Self::Timeout,
+            SolveOutcome::BudgetExceeded { limit } => Self::BudgetExceeded { limit: *limit },
+            SolveOutcome::VendorError { kind } => Self::VendorError { kind: *kind },
+            SolveOutcome::NotConfigured => Self::NotConfigured,
+        }
+    }
+}
+
+impl KeptOutcome {
+    /// What a repeated `solveId` answers. A solved one's token is gone, and
+    /// it was short-lived anyway: it answers `timeout`, so the caller solves
+    /// again (no second task was created or charged for the repeat).
+    pub(crate) fn replayed(self) -> SolveOutcome {
+        match self {
+            Self::Solved { .. } | Self::Timeout => SolveOutcome::Timeout,
+            Self::Unsolvable => SolveOutcome::Unsolvable,
+            Self::BudgetExceeded { limit } => SolveOutcome::BudgetExceeded { limit },
+            Self::VendorError { kind } => SolveOutcome::VendorError { kind },
+            Self::NotConfigured => SolveOutcome::NotConfigured,
+        }
+    }
+}
+
 impl SolveOutcome {
     /// The span's `captcha.outcome`.
     pub(crate) fn as_str(&self) -> &'static str {
@@ -410,6 +458,8 @@ pub(crate) struct Solves<Solver> {
     /// The vendor blocked our key; no task goes out before this. Per
     /// process: it saves vendor calls, it guards no budget.
     key_blocked_until: Arc<Mutex<Option<Instant>>>,
+    /// Where the solves run, so shutdown waits for the ones under way.
+    tasks: tokio_util::task::TaskTracker,
 }
 
 impl<Solver: CaptchaSolver> Solves<Solver> {
@@ -418,6 +468,7 @@ impl<Solver: CaptchaSolver> Solves<Solver> {
         ledger: Arc<dyn SolveLedger>,
         recorder: Arc<dyn UsageRecorder>,
         limits: SolveLimits,
+        tasks: tokio_util::task::TaskTracker,
     ) -> Self {
         Self {
             solver: solver.map(Arc::new),
@@ -425,6 +476,7 @@ impl<Solver: CaptchaSolver> Solves<Solver> {
             recorder,
             limits,
             key_blocked_until: Arc::new(Mutex::new(None)),
+            tasks,
         }
     }
 
@@ -469,7 +521,7 @@ impl<Solver: CaptchaSolver> Solves<Solver> {
         let limits = self.limits;
         let solve_span = span.clone();
         let blocked_until = Arc::clone(&self.key_blocked_until);
-        tokio::spawn(
+        self.tasks.spawn(
             async move {
                 let answer = match ledger.claim(&claim).await {
                     Err(error) => Err(SolveRefused::Ledger(error)),

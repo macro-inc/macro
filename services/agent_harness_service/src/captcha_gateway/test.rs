@@ -167,6 +167,7 @@ fn ledgers(pool: &PgPool, limits: SolveLimits) -> Ledgers {
         solves: runs,
         run_limits: ROOMY,
         solve_limits: limits,
+        tasks: tokio_util::task::TaskTracker::new(),
     }
 }
 
@@ -502,7 +503,17 @@ async fn a_repeated_solve_id_on_another_replica_replays_without_a_second_task(po
     let (status, taken) = answer(&replica, solve_request("mak_other", &other_run, body)).await;
 
     assert_eq!(first["outcome"], "solved");
-    assert_eq!(repeated, first);
+    // The token was only in the first answer: the ledger never kept it, so
+    // the repeat says to solve again, without a second task.
+    assert_eq!(repeated, json!({ "outcome": "timeout" }));
+    let kept = sqlx::query_scalar!("SELECT outcome FROM agent_captcha_solves")
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(kept["outcome"], "solved");
+    assert!(kept.get("token").is_none(), "{kept}");
+    assert!(kept.get("userAgent").is_none(), "{kept}");
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(
         taken,
@@ -769,6 +780,7 @@ async fn a_run_allows_two_solves(pool: PgPool) {
             solves: runs,
             run_limits: RunLimits::default(),
             solve_limits: FAST,
+            tasks: tokio_util::task::TaskTracker::new(),
         },
     ));
     let run = start_run(&app, "mak_agent").await;

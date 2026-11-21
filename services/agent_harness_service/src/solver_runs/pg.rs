@@ -12,7 +12,7 @@ use super::{
     BudgetLimit, Claimed, LedgerError, RunLimits, RunRefusal, RunStart, SolveClaim, SolveLedger,
     SolverRunId, SolverRuns,
 };
-use crate::captcha_gateway::{SolveOutcome, VendorErrorKind};
+use crate::captcha_gateway::{KeptOutcome, SolveOutcome, VendorErrorKind};
 
 pub(crate) struct PgSolverRuns {
     pool: PgPool,
@@ -45,7 +45,7 @@ async fn lock_agent(
 
 /// Why `run` can't be spent, read after the conditional update refused it.
 /// A run past its expiry is expired; one that ended early is used up when
-/// `used_up` says so, and over otherwise.
+/// `used_up` says its counts ran out, and ended otherwise.
 async fn refusal(
     executor: impl sqlx::PgExecutor<'_>,
     run: SolverRunId,
@@ -71,7 +71,7 @@ async fn refusal(
                     row.solves_used,
                 );
                 if row.ended && refused != RunRefusal::Exhausted {
-                    RunRefusal::Expired
+                    RunRefusal::Ended
                 } else {
                     refused
                 }
@@ -195,7 +195,7 @@ impl SolveLedger for PgSolverRuns {
         lock_agent(&mut tx, &claim.agent).await?;
 
         let known = sqlx::query!(
-            r#"SELECT user_id, outcome AS "outcome: Json<SolveOutcome>",
+            r#"SELECT user_id, outcome AS "outcome: Json<KeptOutcome>",
                       created_at < now() - make_interval(secs => $2) AS "abandoned!"
                FROM agent_captcha_solves WHERE solve_id = $1"#,
             claim.solve_id,
@@ -207,7 +207,7 @@ impl SolveLedger for PgSolverRuns {
             return Ok(match known {
                 known if known.user_id != agent => Claimed::OtherAgent,
                 known => match known.outcome {
-                    Some(Json(outcome)) => Claimed::Finished(outcome),
+                    Some(Json(kept)) => Claimed::Finished(kept.replayed()),
                     None if known.abandoned => Claimed::Finished(SolveOutcome::VendorError {
                         kind: VendorErrorKind::Unavailable,
                     }),
@@ -231,8 +231,14 @@ impl SolveLedger for PgSolverRuns {
         .fetch_optional(&mut *tx)
         .await?;
         if taken.is_none() {
-            let refused = refusal(&mut *tx, claim.run, &claim.agent, |_, _, _| {
-                RunRefusal::Exhausted
+            let solves = i32::from(self.limits.solves);
+            let refused = refusal(&mut *tx, claim.run, &claim.agent, |_, _, used| {
+                // A live run that refused a claim has used its solves up.
+                if used >= solves {
+                    RunRefusal::Exhausted
+                } else {
+                    RunRefusal::Ended
+                }
             })
             .await?;
             return Ok(Claimed::Refused(refused));
@@ -295,7 +301,7 @@ impl SolveLedger for PgSolverRuns {
             r#"UPDATE agent_captcha_solves SET finished_at = now(), outcome = $2, task_id = $3
                WHERE solve_id = $1"#,
             solve_id,
-            Json(outcome) as _,
+            Json(KeptOutcome::from(outcome)) as _,
             task_id,
         )
         .execute(&mut *tx)

@@ -213,6 +213,7 @@ async fn capsolver_live_contract() {
         Arc::new(EverySolve),
         Arc::new(NoUsage),
         SolveLimits::default(),
+        tokio_util::task::TaskTracker::new(),
     );
     let agent = BrainCaller {
         user_id: MacroUserIdStr::parse_from_str("macro|live-contract@agents.macro.invalid")

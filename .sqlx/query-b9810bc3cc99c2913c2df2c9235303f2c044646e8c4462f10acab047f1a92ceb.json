@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, outcome AS \"outcome: Json<SolveOutcome>\",\n                      created_at < now() - make_interval(secs => $2) AS \"abandoned!\"\n               FROM agent_captcha_solves WHERE solve_id = $1",
+  "query": "SELECT user_id, outcome AS \"outcome: Json<KeptOutcome>\",\n                      created_at < now() - make_interval(secs => $2) AS \"abandoned!\"\n               FROM agent_captcha_solves WHERE solve_id = $1",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "outcome: Json<SolveOutcome>",
+        "name": "outcome: Json<KeptOutcome>",
         "type_info": "Jsonb"
       },
       {
@@ -31,5 +31,5 @@
       null
     ]
   },
-  "hash": "96388809da9e75bc5803d6cd93dc637194bc9a241cc6c1770a6525c234840a30"
+  "hash": "b9810bc3cc99c2913c2df2c9235303f2c044646e8c4462f10acab047f1a92ceb"
 }

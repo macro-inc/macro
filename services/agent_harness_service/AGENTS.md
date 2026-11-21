@@ -93,7 +93,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   call cap is also the calls-per-hour bound (20 × 16), and the in-flight cap
   on the run row is a per-agent cap. Every model call and solve sends the run
   as `x-macro-solver-run`: missing, unknown or another agent's run is a 403
-  `solver_run_required`, expired 403 `solver_run_expired`, used up 429
+  `solver_run_required`, expired 403 `solver_run_expired`, ended early 403 `solver_run_ended`, used up 429
   `solver_run_exhausted`, two calls running 429 `solver_run_busy`. A call is
   taken by one conditional `UPDATE`; starting a run and claiming a solve
   hold a per-agent advisory lock. `track` delivers `ai_usage` tracking
@@ -133,7 +133,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   503 `{"error":{"type":"not_configured"}}`). Same brain check; each call takes
   one model call from its solver run (refusals in the OpenAI shape with
   `error.code`); only `accounts/fireworks/models/kimi-k3`, output cap at most
-  8192 (4096 when unset or null), and a stream gets `stream_options.include_usage`.
+  2048 (also when unset or null), and a stream gets `stream_options.include_usage`.
   Usage (cached prompt tokens as `cache_read`) is billed against the agent at
   `kimi-k3` pricing on the legacy recorder, draining a stream whose caller
   hung up (the shared `anthropic_gateway::pump`), and observed in the

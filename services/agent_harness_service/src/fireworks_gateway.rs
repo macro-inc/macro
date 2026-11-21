@@ -48,9 +48,11 @@ const KIMI_K3: &str = "accounts/fireworks/models/kimi-k3";
 const KIMI_K3_PRICING: &str = "kimi-k3";
 /// The tracking journal's provider name.
 const FIREWORKS_PROVIDER: &str = "fireworks";
-/// Output cap a request may ask for, and the one it gets when it asks for none.
-const MAX_OUTPUT_TOKENS: u64 = 8192;
-const DEFAULT_OUTPUT_TOKENS: u64 = 4096;
+/// Output cap a request may ask for, and the one it gets when it asks for
+/// none: the guest's solver asks for 2048, and a script holding the relay
+/// gets no more.
+const MAX_OUTPUT_TOKENS: u64 = 2048;
+const DEFAULT_OUTPUT_TOKENS: u64 = 2048;
 /// The two names OpenAI-compatible clients send the output cap under.
 const OUTPUT_TOKEN_FIELDS: [&str; 2] = ["max_tokens", "max_completion_tokens"];
 
@@ -58,7 +60,7 @@ const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// The whole upstream call, stream included: a CAPTCHA run's model turn is
-/// at most 8192 tokens, and the run itself ends after five minutes.
+/// at most 2048 tokens, and the run itself ends after five minutes.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// Chunks buffered between Fireworks and a slow caller.
 const STREAM_BUFFER_CHUNKS: usize = 16;
@@ -79,6 +81,8 @@ pub(crate) struct FireworksGateway {
     upstream_url: String,
     /// `None` when no key is configured.
     api_key: Option<HeaderValue>,
+    /// Where stream pumps and slot releases run; shutdown waits for it.
+    tasks: tokio_util::task::TaskTracker,
 }
 
 impl FireworksGateway {
@@ -89,6 +93,7 @@ impl FireworksGateway {
         runs: Arc<dyn SolverRuns>,
         upstream_url: &str,
         api_key: Option<&str>,
+        tasks: tokio_util::task::TaskTracker,
     ) -> anyhow::Result<Self> {
         let api_key = match api_key.map(str::trim) {
             Some(key) if !key.is_empty() => {
@@ -108,6 +113,7 @@ impl FireworksGateway {
                 .build()?,
             upstream_url: upstream_url.trim_end_matches('/').to_owned(),
             api_key,
+            tasks,
         })
     }
 }
@@ -218,6 +224,7 @@ async fn forward(
         context: UsageContext::new(AiFeature::AgentSession, brain.user_id.clone()),
         tracked: None,
         runs: gateway.runs.clone(),
+        tasks: gateway.tasks.clone(),
         run,
         status: None,
         broken: false,
@@ -264,7 +271,7 @@ async fn forward(
     let body = if event_stream {
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
         let mut parser = SseUsage::default();
-        tokio::spawn(
+        gateway.tasks.spawn(
             pump(
                 Box::pin(upstream.bytes_stream()),
                 move |chunk| match chunk {
@@ -421,6 +428,8 @@ async fn read_limited(upstream: reqwest::Response) -> Result<Bytes, Rejection> {
 /// observes the call with Fireworks' response id and bills nothing. Gives
 /// back the run's in-flight slot.
 struct UsageMeter {
+    /// Where the slot's release runs, so shutdown waits for it.
+    tasks: tokio_util::task::TaskTracker,
     recorder: Arc<dyn UsageRecorder>,
     context: UsageContext,
     tracked: Option<(Arc<dyn ai_usage::UsageTracking>, TrackedInvocation)>,
@@ -503,7 +512,7 @@ impl Drop for UsageMeter {
         });
         let runs = Arc::clone(&self.runs);
         let run = self.run;
-        tokio::spawn(
+        self.tasks.spawn(
             async move {
                 let _ = runs.release_model_call(run).await.inspect_err(|error| {
                     tracing::error!(error = ?error, "the model call's in-flight slot was not given back");
@@ -558,7 +567,7 @@ impl Rejection {
     /// A run the call may not spend: 403 or 429 with the refusal's `code`.
     fn run(refusal: RunRefusal) -> Self {
         let kind = match refusal {
-            RunRefusal::Required | RunRefusal::Expired => "permission_error",
+            RunRefusal::Required | RunRefusal::Expired | RunRefusal::Ended => "permission_error",
             RunRefusal::Exhausted | RunRefusal::Busy => "rate_limit_error",
         };
         Self {

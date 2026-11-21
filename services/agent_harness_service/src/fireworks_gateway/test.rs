@@ -210,6 +210,7 @@ fn gateway_with(
         Arc::new(PgSolverRuns::new(pool.clone(), RunLimits::default())),
         upstream_url,
         key,
+        tokio_util::task::TaskTracker::new(),
     )
     .unwrap();
     (
@@ -296,7 +297,7 @@ async fn a_completion_is_forwarded_with_macros_key_a_default_cap_and_billed_to_t
         json!({
             "model": KIMI_K3,
             "messages": [{ "role": "user", "content": "hi" }],
-            "max_tokens": 4096,
+            "max_tokens": 2048,
         })
     );
     let event = recorded.usage.recv().await.unwrap();
@@ -364,7 +365,7 @@ async fn a_stream_is_capped_asked_for_its_usage_and_passed_through_unchanged(poo
             "messages": [],
             "stream": true,
             "stream_options": { "include_usage": true, "other": 1 },
-            "max_tokens": 8192,
+            "max_tokens": 2048,
             "max_completion_tokens": 100,
         })
     );
@@ -424,11 +425,11 @@ async fn a_null_output_cap_is_unset_and_gets_the_default(pool: PgPool) {
     let seen = seen.lock().unwrap().clone();
     assert_eq!(
         seen[0].body,
-        json!({ "model": KIMI_K3, "messages": [], "max_tokens": 4096 })
+        json!({ "model": KIMI_K3, "messages": [], "max_tokens": 2048 })
     );
     assert_eq!(
         seen[1].body,
-        json!({ "model": KIMI_K3, "messages": [], "max_completion_tokens": 8192 })
+        json!({ "model": KIMI_K3, "messages": [], "max_completion_tokens": 2048 })
     );
 }
 

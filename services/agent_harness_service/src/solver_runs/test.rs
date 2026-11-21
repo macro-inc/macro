@@ -344,13 +344,14 @@ async fn an_ended_run_frees_the_agent_for_the_next_one(pool: PgPool) -> anyhow::
 
     runs.end(run, &who).await?;
     runs.end(run, &who).await?;
+    // Ended, not expired and not used up: said as it is.
     assert_eq!(
         runs.take_model_call(run, &who).await?,
-        Err(RunRefusal::Expired)
+        Err(RunRefusal::Ended)
     );
     assert_eq!(
         runs.claim(&claim(1, run, &who)).await?,
-        Claimed::Refused(RunRefusal::Exhausted)
+        Claimed::Refused(RunRefusal::Ended)
     );
     started(&runs, &who).await;
     Ok(())

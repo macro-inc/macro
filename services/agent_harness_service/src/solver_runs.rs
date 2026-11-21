@@ -101,7 +101,10 @@ pub(crate) enum RunStart {
 pub(crate) enum RunRefusal {
     /// No run, an unknown one, or another agent's.
     Required,
+    /// Past its lifetime.
     Expired,
+    /// Ended early: by its tool, or when its last solve finished.
+    Ended,
     /// Its model calls or solves are used up.
     Exhausted,
     /// [`RunLimits::model_calls_in_flight`] calls are already running.
@@ -114,6 +117,7 @@ impl RunRefusal {
         match self {
             Self::Required => "solver_run_required",
             Self::Expired => "solver_run_expired",
+            Self::Ended => "solver_run_ended",
             Self::Exhausted => "solver_run_exhausted",
             Self::Busy => "solver_run_busy",
         }
@@ -122,7 +126,7 @@ impl RunRefusal {
     /// 403 for a run the caller can't use, 429 for one it used up.
     pub(crate) fn status(self) -> axum::http::StatusCode {
         match self {
-            Self::Required | Self::Expired => axum::http::StatusCode::FORBIDDEN,
+            Self::Required | Self::Expired | Self::Ended => axum::http::StatusCode::FORBIDDEN,
             Self::Exhausted | Self::Busy => axum::http::StatusCode::TOO_MANY_REQUESTS,
         }
     }
@@ -130,7 +134,8 @@ impl RunRefusal {
     pub(crate) fn message(self) -> &'static str {
         match self {
             Self::Required => "start a solver run and send its runId as x-macro-solver-run",
-            Self::Expired => "the solver run has ended or expired; start another",
+            Self::Expired => "the solver run has expired; start another",
+            Self::Ended => "the solver run has ended; start another",
             Self::Exhausted => "the solver run has used up its budget",
             Self::Busy => "too many model calls of this solver run are running",
         }

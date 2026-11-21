@@ -196,6 +196,7 @@ async fn serve() -> anyhow::Result<()> {
             solves: runs.clone(),
             run_limits,
             solve_limits: captcha_gateway::SolveLimits::default(),
+            tasks: tokio_util::task::TaskTracker::new(),
         },
     );
     let fireworks = fireworks_gateway::FireworksGateway::new(
@@ -204,6 +205,7 @@ async fn serve() -> anyhow::Result<()> {
         runs,
         fireworks_gateway::FIREWORKS_API_URL,
         firework_key,
+        tokio_util::task::TaskTracker::new(),
     )?;
 
     let app = captcha_gateway::router(captcha)

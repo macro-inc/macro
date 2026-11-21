@@ -1513,6 +1513,9 @@ pub async fn run() -> anyhow::Result<()> {
         .value()
         .map(str::trim)
         .filter(|key| !key.is_empty());
+    // CAPTCHA solves and Fireworks slot releases outlive their requests;
+    // shutdown waits for them.
+    let brain_tasks = tokio_util::task::TaskTracker::new();
     let run_limits = solver_runs::RunLimits::default();
     let solver_runs = Arc::new(solver_runs::pg::PgSolverRuns::new(pool.clone(), run_limits));
     let captcha = captcha_gateway::CaptchaGateway::new(
@@ -1525,6 +1528,7 @@ pub async fn run() -> anyhow::Result<()> {
             solves: solver_runs.clone(),
             run_limits,
             solve_limits: captcha_gateway::SolveLimits::default(),
+            tasks: brain_tasks.clone(),
         },
     );
     let fireworks = fireworks_gateway::FireworksGateway::new(
@@ -1533,6 +1537,7 @@ pub async fn run() -> anyhow::Result<()> {
         solver_runs,
         fireworks_gateway::FIREWORKS_API_URL,
         firework_api_key,
+        brain_tasks.clone(),
     )?;
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
@@ -2796,6 +2801,15 @@ pub async fn run() -> anyhow::Result<()> {
     service_shutdown.cancel();
     computer_tasks.close();
     computer_tasks.wait().await;
+    // Solves under way get a while to finish and be recorded; past that
+    // the ledger replays them as unavailable.
+    brain_tasks.close();
+    if tokio::time::timeout(std::time::Duration::from_secs(30), brain_tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("CAPTCHA solves were still running at shutdown");
+    }
     scheduling_runtime.stop();
     cognition_runtime.stop();
     notification_cancel.cancel();
