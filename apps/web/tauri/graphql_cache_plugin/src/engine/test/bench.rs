@@ -706,6 +706,16 @@ fn native_cache_bench() {
                 (lane, serde_json::json!({ "ops": ops, "bytes": bytes, "ms": (ms * 10.0).round() / 10.0 }))
             })
             .collect();
+        // Every contended read, and the same reads uncontended, raw, so rounds
+        // can be pooled.
+        let raw = |from: &Samples| -> Vec<f64> {
+            contended
+                .ms
+                .keys()
+                .flat_map(|name| from.ms.get(name).into_iter().flatten().copied())
+                .collect()
+        };
+        let (contended_ms, uncontended_ms) = (raw(&contended), raw(&samples));
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
@@ -716,6 +726,8 @@ fn native_cache_bench() {
                 "lanes": lanes,
                 "steps": samples.summary(),
                 "contended": contended.summary(),
+                "contendedMs": contended_ms,
+                "uncontendedMs": uncontended_ms,
                 "background": { "hydrates": background_ms.len(), "meanMs": background_ms.iter().sum::<f64>() / background_ms.len().max(1) as f64 },
                 "io": samples.io_summary(),
                 "memory": { "rssKbPerRun": rss_kb, "peakRssKb": memory_kb("VmHWM") },
