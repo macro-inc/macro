@@ -31,14 +31,15 @@ disk after a reopen must come out the same.
   `~/.cache/cache-diff-fuzz/sides/NAME`, binary in `bin/NAME`). Set
   `IDLE_CHECKPOINT=1` when the side has `TursoStorage::checkpoint_if_due`.
 - Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. RUN must be a new name.
-  Differences go to `runs/RUN/diffs.txt`, seeds a side could not finish to
+  The run works on copies of both binaries, the schema and the assets, so a
+  rebuild or an edit meanwhile does not reach it. Differences go to `runs/RUN/diffs.txt`, seeds a side could not finish to
   `runs/RUN/failures.txt`; it exits 0 only when neither has a line.
 - Shrink a difference: `minimize.sh SEED SIDE_A SIDE_B`.
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case
-  depends on the fuzzer source (hashed in `bin/SIDE.side`) and the schema (hashed
-  in `runs/RUN/run.txt`); rerun it with both unchanged.
+  depends on the fuzzer source (hashed in `bin/SIDE.side`), the schema and the
+  assets (hashed in `runs/RUN/run.txt`); rerun it with all three unchanged.
 
 ## Checks
 
