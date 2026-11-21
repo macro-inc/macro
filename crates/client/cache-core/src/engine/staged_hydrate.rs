@@ -16,28 +16,22 @@ pub struct StagedHydrate {
     fence: Option<Uuid>,
     identity: Option<String>,
     revision: CacheRevision,
+    /// Installing a schema changes neither revision nor storage, so the
+    /// staged write also holds only for the schema it was computed with.
+    schema: std::sync::Arc<crate::meta::Schema>,
 }
 
 impl<S: Storage> Engine<S> {
     /// Reads and computes everything the hydrate would write, and writes
-    /// nothing. `None` means the hydrate runs whole at commit: it fails, it
-    /// would bind or switch the account, or optimistic layers compose with
-    /// it. The engine calls of [`Self::hydrate_query_in_scope`] (with
+    /// nothing. `Ok(None)` means the hydrate runs whole at commit: it would
+    /// bind or switch the account, optimistic layers compose with it, or
+    /// admission fails. An error is a storage or document failure the whole
+    /// hydrate would meet too; a host should run nothing before the commit,
+    /// which then reports it, since a failed read may already have marked
+    /// storage for reset. The engine calls of [`Self::hydrate_query_in_scope`] (with
     /// `scope`) or [`Self::hydrate_query_with_projections`] (without) are
     /// what a commit falls back to.
     pub async fn stage_hydrate(
-        &mut self,
-        write: NetworkWrite<'_>,
-        scope: Option<&HydrationScope>,
-        projections: &[ProjectionMutation],
-    ) -> Option<StagedHydrate> {
-        self.try_stage_hydrate(write, scope, projections)
-            .await
-            .ok()
-            .flatten()
-    }
-
-    async fn try_stage_hydrate(
         &mut self,
         write: NetworkWrite<'_>,
         scope: Option<&HydrationScope>,
@@ -95,6 +89,7 @@ impl<S: Storage> Engine<S> {
             fence,
             identity: write.identity.map(str::to_owned),
             revision: self.revision,
+            schema: std::sync::Arc::clone(&self.schema),
         }))
     }
 
@@ -103,6 +98,7 @@ impl<S: Storage> Engine<S> {
     /// commit as the whole hydrate would have now.
     pub fn staged_hydrate_current(&self, staged: &StagedHydrate) -> bool {
         self.revision == staged.revision
+            && std::sync::Arc::ptr_eq(&self.schema, &staged.schema)
             && self.optimistic_hydrated
             && self.optimistic.is_empty()
             && staged.fence.is_none_or(|fence| fence == self.contact_fence)

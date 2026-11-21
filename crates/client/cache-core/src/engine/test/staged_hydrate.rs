@@ -117,7 +117,7 @@ fn a_staged_hydrate_commits_as_the_whole_hydrate() {
                     )
                     .await
                     .unwrap();
-                let actual = match steps.stage_hydrate(write, None, &[]).await {
+                let actual = match steps.stage_hydrate(write, None, &[]).await.unwrap() {
                     Some(staged) => {
                         staged_count += 1;
                         // Reads run between the halves and change nothing.
@@ -200,6 +200,7 @@ fn a_write_between_the_halves_makes_a_staged_hydrate_stale() {
                 &[],
             )
             .await
+            .unwrap()
             .expect("stageable");
         assert!(engine.staged_hydrate_current(&staged));
         let third = json!({"user": {"id": "viewer", "soup": {"items": [
@@ -209,6 +210,39 @@ fn a_write_between_the_halves_makes_a_staged_hydrate_stale() {
             .hydrate_query(QUERY, None, &variables, &third, Some("viewer"))
             .await
             .unwrap();
+        assert!(!engine.staged_hydrate_current(&staged));
+    });
+}
+
+/// Installing a schema changes neither revision nor storage, and the staged
+/// write was computed with the old one, so it is stale too.
+#[test]
+fn a_schema_installed_between_the_halves_makes_a_staged_hydrate_stale() {
+    pollster::block_on(async {
+        let variables = serde_json::Map::new();
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let data = json!({"user": {"id": "viewer", "soup": {"items": [
+            {"__typename": "GraphqlSoupDocument", "id": "doc", "name": "Plan"}
+        ]}}});
+        engine
+            .hydrate_query(QUERY, None, &variables, &data, Some("viewer"))
+            .await
+            .unwrap();
+        let write = NetworkWrite {
+            query: QUERY,
+            operation_name: None,
+            variables: &variables,
+            data: &data,
+            identity: Some("viewer"),
+        };
+        let staged = engine
+            .stage_hydrate(write, None, &[])
+            .await
+            .unwrap()
+            .expect("stageable");
+        assert!(engine.staged_hydrate_current(&staged));
+        let schema = engine.schema_snapshot();
+        engine.install_schema(&schema).unwrap();
         assert!(!engine.staged_hydrate_current(&staged));
     });
 }
@@ -227,16 +261,34 @@ fn a_hydrate_that_binds_the_account_is_not_staged() {
             data: &data,
             identity: Some("viewer"),
         };
-        assert!(engine.stage_hydrate(write, None, &[]).await.is_none());
+        assert!(
+            engine
+                .stage_hydrate(write, None, &[])
+                .await
+                .unwrap()
+                .is_none()
+        );
         engine
             .hydrate_query(QUERY, None, &variables, &data, Some("viewer"))
             .await
             .unwrap();
-        assert!(engine.stage_hydrate(write, None, &[]).await.is_some());
+        assert!(
+            engine
+                .stage_hydrate(write, None, &[])
+                .await
+                .unwrap()
+                .is_some()
+        );
         let other = NetworkWrite {
             identity: Some("someone-else"),
             ..write
         };
-        assert!(engine.stage_hydrate(other, None, &[]).await.is_none());
+        assert!(
+            engine
+                .stage_hydrate(other, None, &[])
+                .await
+                .unwrap()
+                .is_none()
+        );
     });
 }
