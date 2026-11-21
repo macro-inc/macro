@@ -414,7 +414,8 @@ encrypts the secret before calling it.
 - **Delivery.** Fan-out queues one message per matched row on the webhook FIFO
   queue, 16 sends at a time (group `mcp:<row id>`, dedup
   `mcp:<row id>:<event id>`). Ingestion runs it after queueing the event's
-  webhooks and tries it three times; a fan-out that still fails is dropped
+  webhooks and tries it three times within 30 s; a fan-out that still fails
+  or runs out of time is dropped
   for that event with an error log, so it never fails ingestion or queues the
   webhooks again. The webhook
   worker tells the two message kinds apart by shape. Each POST is a Standard

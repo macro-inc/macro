@@ -2260,3 +2260,38 @@ async fn a_failing_mcp_fan_out_is_retried_then_dropped_without_failing_ingestion
         "the webhook was queued once"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_fan_out_past_its_budget_is_dropped_without_failing_ingestion() {
+    let TestBrokerEvent::Document(document_event) = document_event_cases().remove(3).event else {
+        panic!("a document case");
+    };
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_personal", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access, repository, enqueuer.clone()).with_mcp_fanout(StalledMcpFanout);
+
+    service
+        .ingest_document_event(document_event)
+        .await
+        .expect("a stalled MCP Events fan-out does not fail ingestion");
+
+    assert_eq!(lock(&enqueuer.state).attempted_messages.len(), 1);
+}
+
+/// A fan-out that never finishes.
+#[derive(Clone)]
+struct StalledMcpFanout;
+
+impl McpEventFanout for StalledMcpFanout {
+    async fn fan_out(
+        &self,
+        _event: &NormalizedWebhookEvent,
+        _audience: &[String],
+    ) -> Result<usize, McpSubscriptionError> {
+        std::future::pending().await
+    }
+}

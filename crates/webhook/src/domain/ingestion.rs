@@ -158,6 +158,9 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
 const MCP_FANOUT_ATTEMPTS: u32 = 3;
 /// The wait before the second attempt; the third waits twice as long.
 const MCP_FANOUT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+/// The most time one event's MCP Events fan-out may take, retries included,
+/// so a slow fan-out never holds ordinary events behind it for long.
+const MCP_FANOUT_BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Webhook event ingestion service implementation.
 #[derive(Clone)]
@@ -281,11 +284,28 @@ where
     }
 
     /// Queue the event to matching MCP Events subscriptions, retrying a
-    /// failure a few times. MCP Events delivery is at most once: a fan-out
-    /// that keeps failing is dropped for this event instead of failing
-    /// ingestion, which would hold the partition and queue the webhooks above
-    /// again.
+    /// failure a few times within `MCP_FANOUT_BUDGET`. MCP Events delivery is
+    /// best effort: a fan-out that keeps failing or runs out of time is
+    /// dropped for this event (sends already accepted may still go out)
+    /// instead of failing ingestion, which would hold the partition and queue
+    /// the webhooks above again.
     async fn fan_out_mcp(&self, event: &NormalizedWebhookEvent, audience: &[String]) {
+        if tokio::time::timeout(
+            MCP_FANOUT_BUDGET,
+            self.fan_out_mcp_with_retries(event, audience),
+        )
+        .await
+        .is_err()
+        {
+            tracing::error!(
+                budget_ms = MCP_FANOUT_BUDGET.as_millis(),
+                "dropping mcp events fan-out for this event: out of time"
+            );
+            tracing::Span::current().record("mcp_fanout_outcome", "timed_out");
+        }
+    }
+
+    async fn fan_out_mcp_with_retries(&self, event: &NormalizedWebhookEvent, audience: &[String]) {
         let span = tracing::Span::current();
         let mut attempt = 1;
         loop {
