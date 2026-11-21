@@ -188,8 +188,9 @@ export type ChannelDirectory = {
   /** A joined channel, `pending` while the directory cannot tell yet. A
    * pending lookup reads the channel by id. */
   lookup: (channelId: string) => ChannelLookup;
-  /** Every joined channel, read from the network unless the directory is
-   * complete. */
+  /** Every joined channel, read from the network now, for an action on all
+   * of them: what the directory shows can trail a change made on another
+   * device. */
   readComplete: () => Promise<readonly DirectoryChannel[]>;
   /** Whether filling the directory failed and stays failed until `retry`.
    * The cached directory fails only when its backfill lane gave up and the
@@ -650,20 +651,23 @@ export function channelDirectoryPagesQueryOptions(
 }
 
 /**
- * The directory's pages, read after the latest channel write. A read that
- * started before one may hold the pages before it, and nothing reads again
- * for a caller of `fetchQuery`: an invalidation refetches only observed
- * queries, and the read's success clears it. So it reads until a read began
- * after the latest write. The writes are this client's own, one per action
- * the viewer takes, so the reads end once the viewer pauses.
+ * The directory's pages, read now and again until a read began after the
+ * latest channel write. A read that started before one may hold the pages
+ * before it, and nothing reads again for a caller of `fetchQuery`: an
+ * invalidation refetches only observed queries, and the read's success
+ * clears it. The writes are this client's own, one per action the viewer
+ * takes, so the reads end once the viewer pauses. Never an earlier read: an
+ * action on every joined channel needs the membership as it is now, and
+ * another device may have changed it since.
  */
 export async function fetchCurrentDirectoryPages(
   client: QueryClient,
   options: ReturnType<typeof channelDirectoryPagesQueryOptions>
 ): Promise<readonly DirectoryChannel[]> {
-  let channels = await client.fetchQuery(options);
+  const now = { ...options, staleTime: 0 };
+  let channels = await client.fetchQuery(now);
   while (readsBeforeWrite(client, options.queryKey))
-    channels = await client.fetchQuery({ ...options, staleTime: 0 });
+    channels = await client.fetchQuery(now);
   return channels;
 }
 
@@ -1072,8 +1076,7 @@ type CachedDirectoryDeps = {
     input: GraphqlSoupInput,
     options: Pick<FetchGraphqlSoupOptions, 'signal'>
   ) => Promise<GraphqlSoupHydrationPage>;
-  /** Every joined channel, for `readComplete` before the directory is
-   * complete; may answer from a recent read. */
+  /** Every joined channel, read from the network now, for `readComplete`. */
   fetchAll: () => Promise<readonly DirectoryChannel[]>;
   /** Every joined channel, paged from the network now, for the fallback,
    * and the cache's writes of its pages. */
@@ -1911,7 +1914,8 @@ export function createCachedChannelDirectory(
       return result;
     },
     async readComplete() {
-      if (untrack(proven)) return untrack(view).joined;
+      // Even a complete directory can trail a change made on another
+      // device, by as long as its update takes or until a pass of the lane.
       return inDirectoryOrder(
         views.applyList(own.applyList(await deps.fetchAll()))
       );

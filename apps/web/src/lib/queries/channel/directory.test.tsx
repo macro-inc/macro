@@ -650,6 +650,20 @@ describe('in-memory channel directory', () => {
     expect(ids(await directory.readComplete())).toEqual(['a', 'b', 'c']);
   });
 
+  it('reads the network for a full read, even while its pages are fresh', async () => {
+    const network = changingNetwork(
+      [channelRecord('a')],
+      [channelRecord('a'), channelRecord('b')]
+    );
+    network.release();
+    const directory = mountMemoryDirectory(network);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels())).toEqual(['a']);
+
+    // 'b' was joined on another device since the pages were read.
+    expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
+  });
+
   it('lists and reads every channel newest update first, across pages', async () => {
     const network = fakeNetwork([
       channelRecord('old', { updatedAt: UPDATED_OLD }),
@@ -921,11 +935,6 @@ describe('cached channel directory', () => {
 
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(inOrder(directory.channels())).toEqual(['new', 'mid', 'old']);
-    expect(inOrder(await directory.readComplete())).toEqual([
-      'new',
-      'mid',
-      'old',
-    ]);
   });
 
   it('never calls a scan complete that started before the lane finished', async () => {
@@ -1149,8 +1158,6 @@ describe('cached channel directory', () => {
     release();
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(ids(directory.channels()).sort()).toEqual(['a', 'thin']);
-    expect(ids(await directory.readComplete()).sort()).toEqual(['a', 'thin']);
-    expect(fetchAll).toHaveBeenCalledOnce();
   });
 
   it('reads every incomplete record, 500 new ones a read, past ones already read', async () => {
@@ -1266,7 +1273,9 @@ describe('cached channel directory', () => {
     expect(ids(directory.channels()).sort()).toEqual(['a', 'joined']);
   });
 
-  it('reads every channel from the network until complete, then from the cache', async () => {
+  it('reads every channel from the network, even once the directory is complete', async () => {
+    // 'b' was joined on another device, and its update has not reached
+    // this cache yet.
     const network = [directoryChannel('a'), directoryChannel('b')];
     const { cache, directory, fetchAll } = mountCachedDirectory([], {
       fetchAll: async () => network,
@@ -1278,8 +1287,9 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('a'));
     completeLane('g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(ids(await directory.readComplete())).toEqual(['a']);
-    expect(fetchAll).toHaveBeenCalledOnce();
+    expect(ids(directory.channels())).toEqual(['a']);
+    expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
+    expect(fetchAll).toHaveBeenCalledTimes(2);
   });
 
   describe('a lane that stalls', () => {
@@ -1401,7 +1411,6 @@ describe('cached channel directory', () => {
         .sort()
     ).toEqual(['channel a', 'channel b']);
     expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
-    expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
     expect(directory.lookup(channelUuid('zzz')).status).toBe('missing');
     expect(directory.failed()).toBe(false);
   });
@@ -1459,7 +1468,7 @@ describe('cached channel directory', () => {
           .sort()
       ).toEqual(['renamed'])
     );
-    expect(ids(await directory.readComplete())).toEqual(['kept']);
+    expect(ids(directory.channels())).toEqual(['kept']);
   });
 
   it('leaves out a cached channel the network did not list, though the cache rewrote it', async () => {
@@ -1746,7 +1755,7 @@ describe('cached channel directory', () => {
     );
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(directory.lookup(channelUuid('joined')).status).toBe('loaded');
-    expect(ids(await directory.readComplete()).sort()).toEqual(['a', 'joined']);
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'joined']);
   });
 
   it.each([
@@ -1836,7 +1845,7 @@ describe('cached channel directory', () => {
       await vi.waitFor(() => expect(directory.complete()).toBe(true));
       expect(directory.lookup(channelUuid('x')).status).toBe('loaded');
       expect(
-        ids(await directory.readComplete())
+        ids(directory.channels())
           .map((id) => channelName(id))
           .sort()
       ).toEqual(['a', 'x']);
@@ -1922,7 +1931,6 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(ids(directory.channels())).toEqual(['a']);
     expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
-    expect(ids(await directory.readComplete())).toEqual(['a']);
   });
 
   it('settles a read that finds an unlisted channel gone without walking the network rows again', async () => {
@@ -2332,7 +2340,10 @@ describe('cached channel directory', () => {
   });
 
   it('shows a recorded view at once and writes it onto the cached record', async () => {
-    const { cache, cachedViewedAt, directory } = mountCachedDirectory([]);
+    const { cache, cachedViewedAt, directory } = mountCachedDirectory([], {
+      // The network has yet to show the view.
+      fetchAll: async () => [directoryChannel('a', { viewedAt: VIEWED_0 })],
+    });
     cache.put(channelRecord('a', { viewedAt: VIEWED_0 }));
     completeLane('g1');
     await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
@@ -2465,11 +2476,12 @@ describe('refreshChannelDirectory', () => {
 
     expect(ids(await read)).toEqual(['a', 'b']);
     expect(network.walks()).toBe(2);
-    // Later reads use the cached pages again.
+    // A later read reads the network again: another device may have changed
+    // the membership since.
     expect(ids(await fetchCurrentDirectoryPages(queryClient, options))).toEqual(
       ['a', 'b']
     );
-    expect(network.walks()).toBe(2);
+    expect(network.walks()).toBe(3);
   });
 
   it('reads until no write landed during the read', async () => {
@@ -2738,6 +2750,7 @@ describe("the viewer's own channel writes", () => {
     const client = queryClient();
     const { cache, directory, reopen } = mountCachedDirectory([], {
       queryClient: client,
+      fetchAll: async () => [directoryChannel('a', { name: 'before' })],
     });
     cache.put(channelRecord('a', { name: 'before' }));
     completeLane('g1');
