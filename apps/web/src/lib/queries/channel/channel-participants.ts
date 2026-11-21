@@ -48,6 +48,12 @@ type SettledChange = {
   roster: string;
   /** Since when it shows. */
   since: number;
+  /**
+   * From when the server's answers count: once its time to show runs out, or
+   * at once when the reader starts it over or its record changes after the
+   * server said it holds.
+   */
+  checkFrom: number;
   /** Whether this reader showed it before its time to show ran out. */
   watched: boolean;
   /** Whether the server said it holds once that time ran out. */
@@ -232,14 +238,20 @@ function stillShown(
   };
 }
 
-/** Adds a question, keeping the channel's latest few. */
+/**
+ * Adds a question, keeping the channel's latest few answers. A question still
+ * waiting is never dropped: its answer may be the only one that decides (each
+ * waits ten seconds at most).
+ */
 function withQuestion(
   questions: readonly ServerQuestion[],
   question: ServerQuestion
 ): readonly ServerQuestion[] {
-  const same = questions.filter((q) => q.channelId === question.channelId);
+  const answered = questions.filter(
+    (q) => q.channelId === question.channelId && q.answer
+  );
   const dropped = new Set(
-    same.slice(0, Math.max(0, same.length - (QUESTIONS_KEPT - 1)))
+    answered.slice(0, Math.max(0, answered.length - (QUESTIONS_KEPT - 1)))
   );
   return [...questions.filter((q) => !dropped.has(q)), question];
 }
@@ -288,18 +300,49 @@ function fallbackReason(
   return slow ? 'channel read slow' : 'channel not in soup';
 }
 
-/** Asks the server who is in the channel, once a change's time to show ran out. */
-async function askServer(
-  channelId: string,
+/** A read of who the server says is in a channel, and when it was sent. */
+type ServerCheck = {
+  at: number;
+  members: Promise<readonly string[] | undefined>;
+};
+
+/** The latest server check, per query client and channel. */
+const SERVER_CHECKS = new WeakMap<object, Map<string, ServerCheck>>();
+
+/** Who the server says is in the channel; a read that threw says nothing. */
+async function membersOnServer(channelId: string) {
+  try {
+    return await readParticipantsOnServer(channelId);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The read a question rides on: the channel's latest, in flight or answered,
+ * when it was sent no earlier than `notBefore`, so the readers mounted on a
+ * channel (its view, header, roster and request rows) ask once; otherwise a
+ * new one.
+ */
+function serverCheck(channelId: string, notBefore: number): ServerCheck {
+  let checks = SERVER_CHECKS.get(queryClient);
+  if (!checks) {
+    checks = new Map();
+    SERVER_CHECKS.set(queryClient, checks);
+  }
+  const latest = checks.get(channelId);
+  if (latest && latest.at >= notBefore) return latest;
+  const check = { at: Date.now(), members: membersOnServer(channelId) };
+  checks.set(channelId, check);
+  return check;
+}
+
+/** Hands a check's answer to the question that asked it. */
+async function answerWith(
+  check: ServerCheck,
   answered: (members: readonly string[] | undefined) => void
 ) {
-  let members: readonly string[] | undefined;
-  try {
-    members = await readParticipantsOnServer(channelId);
-  } finally {
-    // Even a read that threw is an answer: the change stops waiting on it.
-    answered(members);
-  }
+  answered(await check.members);
 }
 
 /** What a reader judges a succeeded change against. */
@@ -337,6 +380,11 @@ function firstSeen(
     source: context.source,
     roster: context.roster,
     since,
+    // A change started over against another read asks the server at once:
+    // that read can be older than the change, or newer than someone else's.
+    checkFrom: restarted
+      ? context.now
+      : since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
     watched: context.now < since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
     confirmed: false,
     released: [],
@@ -387,6 +435,19 @@ function afterExpiry(
 }
 
 /**
+ * A record that changes otherwise supersedes a change (someone changed it
+ * since), unless the server already said the change holds: then the record can
+ * be one read before the change, so the reader asks the server again.
+ */
+function recheckOnChange(
+  seen: SettledChange,
+  context: SettledContext
+): Partial<SettledChange> {
+  if (seen.roster === context.roster || !seen.confirmed) return {};
+  return { roster: context.roster, confirmed: false, checkFrom: context.now };
+}
+
+/**
  * Whether a succeeded change still shows, and how: undefined once something
  * has superseded it.
  */
@@ -404,6 +465,7 @@ function judgeSettled(
   const first = earlier ?? firstSeen(change, context, restarted);
   const seen = {
     ...first,
+    ...recheckOnChange(first, context),
     released: released(
       change,
       context.changes,
@@ -418,7 +480,7 @@ function judgeSettled(
     recordShows(shown, context.participants)
   )
     return undefined;
-  const expires = seen.since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS;
+  const expires = seen.checkFrom;
   if (now < expires) return { seen, shown, askAt: expires };
   return afterExpiry(shown, seen, expires, context);
 }
@@ -628,15 +690,18 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   // change's time to show ran out, and what it answered.
   const [questions, setQuestions] = createSignal<readonly ServerQuestion[]>([]);
   let asks = 0;
-  const ask = (channel: string, at: number) => {
+  const ask = (channel: string, notBefore: number) => {
+    const check = serverCheck(channel, notBefore);
     asks += 1;
     const seq = asks;
     batch(() => {
-      setQuestions((all) => withQuestion(all, { channelId: channel, seq, at }));
+      setQuestions((all) =>
+        withQuestion(all, { channelId: channel, seq, at: check.at })
+      );
       setTick((value) => value + 1);
     });
     fireAndForget(
-      askServer(channel, (members) =>
+      answerWith(check, (members) =>
         setQuestions((all) => withAnswer(all, seq, members))
       ),
       'channel participants server check'
@@ -664,10 +729,15 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   createEffect(
     on([openId, expiresAt], ([current, expires]) => {
       if (expires === undefined) return;
-      const timer = setTimeout(
-        () => ask(current, Math.max(Date.now(), expires)),
-        Math.max(0, expires - Date.now())
-      );
+      // A clock set back wakes the timer early: it waits out the rest, since
+      // only an answer asked for once the time ran out counts.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const wake = () => {
+        const wait = expires - Date.now();
+        if (wait > 0) timer = setTimeout(wake, wait);
+        else ask(current, expires);
+      };
+      timer = setTimeout(wake, Math.max(0, expires - Date.now()));
       onCleanup(() => clearTimeout(timer));
     })
   );
