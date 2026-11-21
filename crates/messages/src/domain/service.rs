@@ -19,6 +19,7 @@ pub mod guest_chat;
 pub struct MessageView;
 
 impl RequiredPermission for MessageView {
+    const CHANGES: bool = false;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.satisfies::<ViewAccessLevel>() || permission.satisfies::<ViewOnly>()
     }
@@ -29,6 +30,7 @@ impl RequiredPermission for MessageView {
 pub struct MessageWrite;
 
 impl RequiredPermission for MessageWrite {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.satisfies::<CommentAccessLevel>()
             || permission.satisfies::<MemberParticipantRole>()

@@ -225,7 +225,7 @@ pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
     /// Whether the requirement guards a change (a comment, an edit, an
     /// owner's or admin's action) rather than a read. A background job's
     /// credential makes a change only to an item its owner owns.
-    const CHANGES: bool = false;
+    const CHANGES: bool;
     /// Returns whether the provided permission satisfies this requirement.
     fn is_satisfied_by(permission: &EntityPermission) -> bool;
 }
@@ -311,12 +311,14 @@ impl EntityPermission {
 }
 
 impl RequiredPermission for AnyEntityPermission {
+    const CHANGES: bool = false;
     fn is_satisfied_by(_permission: &EntityPermission) -> bool {
         true
     }
 }
 
 impl RequiredPermission for ViewAccessLevel {
+    const CHANGES: bool = false;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_access_level(AccessLevel::View)
     }
@@ -344,6 +346,7 @@ impl RequiredPermission for OwnerAccessLevel {
 }
 
 impl RequiredPermission for ViewOnly {
+    const CHANGES: bool = false;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         matches!(
             permission,
@@ -367,12 +370,14 @@ impl RequiredPermission for AdminParticipantRole {
 }
 
 impl RequiredPermission for MemberParticipantRole {
+    const CHANGES: bool = false;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_participant_role(ParticipantRole::Member)
     }
 }
 
 impl RequiredPermission for MemberTeamRole {
+    const CHANGES: bool = false;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_team_role(TeamRole::Member)
     }

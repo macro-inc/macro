@@ -22,6 +22,7 @@ use crate::domain::models::{
 pub struct FavoriteView;
 
 impl RequiredPermission for FavoriteView {
+    const CHANGES: bool = false;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.satisfies::<ViewAccessLevel>() || permission.satisfies::<ViewOnly>()
     }
