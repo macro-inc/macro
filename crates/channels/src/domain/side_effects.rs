@@ -1177,7 +1177,8 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
-    /// Channel members the message @mentions, other than its sender.
+    /// Channel members the message @mentions, or the person a resolved
+    /// reply answers (see `answering`), other than its sender.
     mentioned_members: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
 }
