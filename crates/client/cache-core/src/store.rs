@@ -69,6 +69,66 @@ pub struct WritePosition {
     pub offset: u64,
 }
 
+/// The durable reads a projection pass makes before a write. Every
+/// [`Storage`] serves them; [`crate::engine::PassReads`] serves them through
+/// the engine's hot tier and reads each key once, so the write that follows
+/// does not read again.
+pub trait DurableRead {
+    type Error: std::error::Error + MaybeSend + 'static;
+    /// The storage underneath, for the reads this trait does not cover.
+    type Storage: crate::predicate::PredicateIndexStorage<Error = Self::Error>;
+
+    /// The storage underneath.
+    fn storage(&self) -> &Self::Storage;
+
+    /// Durable records aligned with `keys`, as [`Storage::get_batch`].
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend;
+
+    /// Projection states aligned with `keys`, as
+    /// [`Storage::load_projection_states`].
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend;
+
+    /// The queued mutations, as [`Storage::load_mutation_queue`].
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+}
+
+impl<S: crate::predicate::PredicateIndexStorage> DurableRead for S {
+    type Error = S::Error;
+    type Storage = S;
+
+    fn storage(&self) -> &S {
+        self
+    }
+
+    fn read_records(
+        &self,
+        keys: &[EntityKey<'_>],
+    ) -> impl Future<Output = Result<Vec<Option<Record>>, Self::Error>> + MaybeSend {
+        self.get_batch(keys)
+    }
+
+    fn read_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        self.load_projection_states(keys)
+    }
+
+    fn read_mutation_queue(
+        &self,
+    ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend {
+        self.load_mutation_queue()
+    }
+}
+
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {

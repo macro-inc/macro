@@ -5,9 +5,11 @@
 pub mod authority;
 mod calendar;
 mod hydration;
+mod pass_reads;
 mod people;
 mod retirement;
 pub use hydration::HydrationScope;
+pub use pass_reads::{PassReadSet, PassReads};
 #[cfg(test)]
 mod test;
 
@@ -443,6 +445,8 @@ pub struct Engine<S: Storage> {
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
+    /// What the last projection passes read, for the write that follows.
+    kept_reads: Option<pass_reads::KeptReads>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -477,6 +481,7 @@ impl<S: Storage> Engine<S> {
             response_records: None,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
+            kept_reads: None,
         }
     }
 
@@ -1888,12 +1893,19 @@ impl<S: Storage> Engine<S> {
         // records mid-merge and overwrite storage with partial updates.
         let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
+        let mut kept = self.take_kept_reads();
         for key in updates.keys() {
             match self.hot.peek(key) {
                 Some(record) => {
                     staging.insert(key.clone(), record.clone());
                 }
-                None => missing.push(key.clone()),
+                None => match kept.as_mut().and_then(|kept| kept.record(key)) {
+                    Some(Some(record)) => {
+                        staging.insert(key.clone(), record);
+                    }
+                    Some(None) => {}
+                    None => missing.push(key.clone()),
+                },
             }
         }
         if !missing.is_empty() {
@@ -1958,7 +1970,8 @@ impl<S: Storage> Engine<S> {
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(&projections).await?
+            self.projection_mutations_change(&projections, kept.as_ref())
+                .await?
         } else {
             true
         };
@@ -2003,6 +2016,7 @@ impl<S: Storage> Engine<S> {
     async fn projection_mutations_change(
         &self,
         mutations: &[ProjectionMutation],
+        kept: Option<&PassReadSet>,
     ) -> Result<bool, EngineError<S::Error>> {
         if mutations.is_empty() {
             return Ok(false);
@@ -2011,19 +2025,28 @@ impl<S: Storage> Engine<S> {
             .iter()
             .map(ProjectionMutation::record_key)
             .cloned()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let states = self
-            .storage
-            .load_projection_states(&keys)
-            .await
-            .map_err(EngineError::Storage)?;
-        let mut projected = keys
-            .into_iter()
-            .zip(states)
-            .filter_map(|(key, state)| state.map(|state| (key, state)))
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeSet<_>>();
+        let mut projected = HashMap::new();
+        let mut missing = Vec::new();
+        for key in keys {
+            match kept.and_then(|kept| kept.state(&key)) {
+                Some(state) => projected.extend(state.map(|state| (key, state))),
+                None => missing.push(key),
+            }
+        }
+        if !missing.is_empty() {
+            let states = self
+                .storage
+                .load_projection_states(&missing)
+                .await
+                .map_err(EngineError::Storage)?;
+            projected.extend(
+                missing
+                    .into_iter()
+                    .zip(states)
+                    .filter_map(|(key, state)| state.map(|state| (key, state))),
+            );
+        }
         let before = projected.clone();
         apply_authoritative_projection_mutations(&mut projected, mutations);
         Ok(projected != before)

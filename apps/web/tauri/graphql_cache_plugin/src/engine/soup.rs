@@ -294,29 +294,32 @@ pub(super) async fn write_projections(
             data,
         ),
     };
+    // The passes read through the hot tier, and the write after them reuses
+    // what they read from storage.
+    let reads = engine.pass_reads();
     if reuse_stored_identity {
         projections.extend(
-            soup_filter_cache_adapter::notification_projection_updates_for(
-                engine.storage(),
-                &response,
-            )
-            .await
-            .map_err(|error| error.to_string())?,
+            soup_filter_cache_adapter::notification_projection_updates_for(&reads, &response)
+                .await
+                .map_err(|error| error.to_string())?,
         );
     }
     projections.extend(
-        mail::projection_updates_for_response(engine.storage(), &response, reuse_stored_identity)
+        mail::projection_updates_for_response(&reads, &response, reuse_stored_identity)
             .await
             .map_err(|error| error.to_string())?,
     );
-    soup_filter_cache_adapter::properties::augment_authoritative_response(
-        engine.storage(),
+    let projections = soup_filter_cache_adapter::properties::augment_authoritative_response(
+        &reads,
         &response,
         reuse_stored_identity,
         projections,
     )
     .await
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+    let reads = reads.finish();
+    engine.keep_pass_reads(reads);
+    Ok(projections)
 }
 
 pub(super) async fn optimistic_projections(
