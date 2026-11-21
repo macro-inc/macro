@@ -1195,9 +1195,7 @@ fn free_disk_is_read_from_posix_df() {
 #[tokio::test]
 #[ignore = "needs a container engine and the teammate image (teammate-runtime:latest)"]
 async fn the_real_engine_runs_the_container_confined_and_deletes_it_on_stop() {
-    use super::cli::CliEngine;
-
-    let engine = CliEngine::new();
+    let engine = real_engine();
     let info = engine.info().await.expect("a container engine answers");
     let program = if info.kind == ContainerEngineKind::Docker {
         "docker"
@@ -1733,6 +1731,25 @@ const RUNS_UNTIL_STOPPED: &str = r#"["sh", "-c", "trap 'exit 0' TERM; sleep 1000
 /// An agent stand-in that crashes at once.
 const CRASHES: &str = r#"["sh", "-c", "exit 1"]"#;
 
+macro_env_var::maybe_env_vars! { struct MacroTeammateTestEngine; }
+
+/// The engine the real-engine tests run on: `MACRO_TEAMMATE_TEST_ENGINE`
+/// (`docker` or `podman`), else `auto`.
+fn real_engine() -> super::cli::CliEngine {
+    use crate::config::EngineChoice;
+
+    let choice = match MacroTeammateTestEngine::new()
+        .map(|engine| engine.to_string())
+        .as_deref()
+    {
+        Some("docker") => EngineChoice::Docker,
+        Some("podman") => EngineChoice::Podman,
+        Some(other) => panic!("MACRO_TEAMMATE_TEST_ENGINE must be docker or podman, not {other}"),
+        None => EngineChoice::Auto,
+    };
+    super::cli::CliEngine::with_choice(choice)
+}
+
 /// The teammate image the real-engine tests build on: it has the guard's
 /// nftables and `sh` (`nix run .#teammate-runtime-image` loads it).
 const TEAMMATE_IMAGE: &str = "teammate-runtime:latest";
@@ -1774,9 +1791,7 @@ fn inspect(program: &str, object: &str, name: &str, format: &str) -> String {
 #[tokio::test]
 #[ignore = "needs a container engine and the teammate image (teammate-runtime:latest); takes over two minutes"]
 async fn the_real_engine_swaps_images_rolls_back_and_keeps_the_volume() {
-    use super::cli::CliEngine;
-
-    let engine = CliEngine::new();
+    let engine = real_engine();
     let info = engine.info().await.expect("a container engine answers");
     let program = if info.kind == ContainerEngineKind::Docker {
         "docker"
@@ -2698,9 +2713,7 @@ fn the_list_header_names_every_engine_and_the_one_that_runs_teammates() {
 #[tokio::test]
 #[ignore = "needs a container engine, the teammate image (teammate-runtime:latest) and the internet"]
 async fn the_real_engine_enforces_the_egress_policy() {
-    use super::cli::CliEngine;
-
-    let engine = CliEngine::new();
+    let engine = real_engine();
     let info = engine.info().await.expect("a container engine answers");
     let program = if info.kind == ContainerEngineKind::Docker {
         "docker"
@@ -2835,9 +2848,7 @@ async fn the_real_engine_enforces_the_egress_policy() {
 #[tokio::test]
 #[ignore = "needs a container engine, the teammate image (teammate-runtime:latest, with getent) and nginx:alpine"]
 async fn the_real_engine_allows_only_a_local_stacks_named_services() {
-    use super::cli::CliEngine;
-
-    let engine = CliEngine::new();
+    let engine = real_engine();
     let info = engine.info().await.expect("a container engine answers");
     let program = if info.kind == ContainerEngineKind::Docker {
         "docker"

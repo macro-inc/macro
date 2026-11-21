@@ -273,7 +273,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Teammate containers against the real engine (needs Docker or Podman, the
   teammate image loaded as `teammate-runtime:latest`, and the internet):
   `cargo test -p coding_agent_worker --bins the_real_engine -- --ignored
-  --test-threads=1`; they build throwaway images from the teammate image,
+  --test-threads=1` (`MACRO_TEAMMATE_TEST_ENGINE=docker|podman` picks one); they build throwaway images from the teammate image,
   create and delete their own containers, holders, networks and volumes, check
   the egress policy from inside a teammate, and take about three minutes.
 - `cargo tree -p coding_agent_worker -i rdkafka-sys --target x86_64-unknown-linux-musl`
