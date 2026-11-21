@@ -223,6 +223,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
     hostsQuery.isSuccess
       ? hostsQuery.data.hosts.map((host) => host.harnessId)
       : [];
+  /** The machine it runs on, or nothing while it is parked off one. */
+  const hostedName = (agent: TeamAgent) =>
+    agent.installProblem?.kind === 'hostRemoved' ? undefined : hostName(agent);
   const [moveAgent, setMoveAgent] = createSignal<TeamAgent>();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
   const [pictureAgent, setPictureAgent] = createSignal<AgentPictureSelection>();
@@ -618,14 +621,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       }
                       retrying={retryAgent.pending()}
                       runsOn={
-                        <Show when={selfHosted() && hostName(agent)}>
+                        <Show when={selfHosted() && hostedName(agent)}>
                           {(host) => <TeammateRunsOn host={host()} />}
                         </Show>
                       }
                       claude={
                         <Show when={isAdminOrOwner()}>
                           <Show
-                            when={selfHosted() && hostName(agent)}
+                            when={selfHosted() && hostedName(agent)}
                             fallback={<TeamAgentClaude agent={agent} />}
                           >
                             {(host) => (

@@ -13,7 +13,7 @@ export function installProblemLine(
 ): string | undefined {
   if (!problem) return undefined;
   return match(problem)
-    .with({ kind: 'hostRemoved' }, () => t('teamAgents.hostRemoved', { host }))
+    .with({ kind: 'hostRemoved' }, () => t('teamAgents.hostRemoved'))
     .with({ kind: 'rolledBack' }, ({ reason }) =>
       match(reason)
         .with('crashLoop', () => t('teamAgents.rolledBackCrashLoop'))
