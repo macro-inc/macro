@@ -19,7 +19,8 @@ export type WorkspaceFeature = {
   sceneTitle: string;
   rows: readonly string[];
   message: string;
-  sections?: readonly { title: string; description: string }[];
+  /** `id` is the section's anchor and its key in `featureScreens`, where a page renders sections by id. */
+  sections?: readonly { id?: string; title: string; description: string }[];
   faq: readonly { q: string; a: string }[];
 };
 
@@ -204,16 +205,19 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: '',
     sections: [
       {
+        id: 'calendar-team-availability',
         title: 'Find a time with your team.',
         description:
           'Ask an agent in Macro Chat to find a time for the team to meet. It checks everyone’s availability and finds a time that works. Teammates who share busy blocks show when they’re busy, not what.',
       },
       {
+        id: 'calendar-agent-invites',
         title: 'Let Macro Agents send and edit invites.',
         description:
           'Ask an agent to invite your team, move a meeting, or update the guest list, and review the details before it changes your calendar. The invite shows up right in the channel as a calendar pill, and you can @mention events anywhere in Macro.',
       },
       {
+        id: 'calendar-booking-links',
         title: 'Let guests book with Macro Booking Links.',
         description:
           'Send a booking link and guests pick from your open times in their own time zone, without a Macro account. Busy times on your connected calendars are left out, and the meeting lands on your calendar with an invitation for everyone.',
