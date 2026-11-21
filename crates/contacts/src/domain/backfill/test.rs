@@ -118,6 +118,21 @@ impl ContactListRepository for RecordingLists {
         Ok(contacts.to_vec())
     }
 
+    async fn record_invite(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &MacroUserIdStr<'static>,
+    ) -> Result<bool, Report> {
+        Ok(false)
+    }
+
+    async fn missing_profiles(
+        &self,
+        _: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn delete_user_lists(
         &self,
         _: &MacroUserIdStr<'static>,
