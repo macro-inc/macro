@@ -232,7 +232,7 @@ function coreArgs(limit: number): EntityFilterCacheArgs {
     sortMethod: 'UPDATED_AT',
     sortDirection: 'DESC',
     limit,
-    baseline: [],
+    // No baseline: exact evaluation, the request the native bench measures.
   };
 }
 
