@@ -217,10 +217,10 @@ function toQueryError(error: CombinedError): Error {
   return error;
 }
 
-// Outside every hashed operation key: urql's `phash` moves at most about 2^31
-// per character hashed, so no document or variables under 2^20 characters
-// reach it, and far below the normalized cache's link repairs (from -2^40).
-let lastCatalogReadKey = -(2 ** 52);
+// urql hashes every other operation key to an integer (its `phash` sums
+// integers, and a long enough document or variables reaches any range), so a
+// key halfway between two integers is one no hashed operation can have.
+let lastCatalogReadKey = 0.5;
 
 /**
  * urql's client answers a query whose key (document and variables) is already
