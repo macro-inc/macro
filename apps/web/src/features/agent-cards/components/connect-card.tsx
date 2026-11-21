@@ -15,7 +15,7 @@ import {
   usePipedreamConnectedSlugs,
 } from '@queries/pipedream-connectors';
 import { Badge, Button, Item } from '@ui';
-import { ResultAsync } from 'neverthrow';
+import { Result, ResultAsync } from 'neverthrow';
 import {
   createSignal,
   type JSX,
@@ -156,8 +156,16 @@ function ConnectAppCard(props: { name: string; appSlug: string }) {
 
 /** A server URL's host, as the card names it; the URL itself if it has none. */
 function serverHost(url: string): string {
-  return URL.canParse(url) ? new URL(url).host : url;
+  return parseUrl(url).match(
+    (parsed) => parsed.host,
+    () => url
+  );
 }
+
+const parseUrl = Result.fromThrowable(
+  (url: string) => new URL(url),
+  () => 'unparseable' as const
+);
 
 function ConnectServerCard(props: { name: string; url: string }) {
   const { disabled, reason } = useConnectAccess();

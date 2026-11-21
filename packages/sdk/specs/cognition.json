@@ -2090,6 +2090,16 @@
               }
             }
           },
+          "400": {
+            "description": "The server's sign-in page is not https",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {

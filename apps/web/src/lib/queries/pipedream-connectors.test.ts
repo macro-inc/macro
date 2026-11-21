@@ -346,7 +346,7 @@ describe('overlaid apps connect through their own MCP server', () => {
     const popup = { closed: false, close: vi.fn() };
     mocks.reservePopup.mockReturnValue(popup);
     mocks.startAuth.mockResolvedValue(
-      ok({ authorization_url: "javascript:alert(document.cookie)//" })
+      ok({ authorization_url: 'javascript:alert(document.cookie)//' })
     );
     mocks.assignUrl.mockReturnValue(false);
 

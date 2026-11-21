@@ -29,7 +29,11 @@ describe('Settings → Connections sign-in', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('refuses a sign-in page that is not https and reports the failure', () => {
-    const tab = { closed: false, close: vi.fn(), location: { href: 'about:blank' } };
+    const tab = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+    };
     vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
     mocks.authorizationUrl = 'javascript:alert(document.cookie)//';
     const onStarted = vi.fn();
@@ -48,7 +52,11 @@ describe('Settings → Connections sign-in', () => {
   });
 
   it('opens an https sign-in page', () => {
-    const tab = { closed: false, close: vi.fn(), location: { href: 'about:blank' } };
+    const tab = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+    };
     vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
     mocks.authorizationUrl = 'https://auth.example.com/authorize?state=s';
     const onStarted = vi.fn();
@@ -57,7 +65,9 @@ describe('Settings → Connections sign-in', () => {
       onStarted,
     });
 
-    expect(tab.location.href).toBe('https://auth.example.com/authorize?state=s');
+    expect(tab.location.href).toBe(
+      'https://auth.example.com/authorize?state=s'
+    );
     expect(onStarted).toHaveBeenCalled();
     expect(mocks.failure).not.toHaveBeenCalled();
   });

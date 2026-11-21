@@ -1,5 +1,11 @@
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
+import { Result } from 'neverthrow';
+
+const parseUrl = Result.fromThrowable(
+  (url: string) => new URL(url),
+  () => 'unparseable' as const
+);
 
 /** Open a blank tab during the click so later OAuth assign is not blocked. */
 export function reserveOauthPopup(): Window | null {
@@ -18,8 +24,9 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
  * run as Macro.
  */
 export function isSafeOauthUrl(url: string): boolean {
-  if (!URL.canParse(url)) return false;
-  const parsed = new URL(url);
+  const result = parseUrl(url);
+  if (result.isErr()) return false;
+  const parsed = result.value;
   return (
     parsed.protocol === 'https:' ||
     (parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname))

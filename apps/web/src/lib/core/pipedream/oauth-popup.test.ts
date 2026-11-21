@@ -29,7 +29,9 @@ describe('assignOauthUrl', () => {
     );
 
     expect(opened).toBe(true);
-    expect(tab.location.href).toBe('https://auth.example.com/authorize?state=s');
+    expect(tab.location.href).toBe(
+      'https://auth.example.com/authorize?state=s'
+    );
     expect(tab.close).not.toHaveBeenCalled();
   });
 
@@ -37,7 +39,10 @@ describe('assignOauthUrl', () => {
     const tab = popup();
 
     expect(
-      assignOauthUrl(tab as unknown as Window, 'http://127.0.0.1:8790/authorize')
+      assignOauthUrl(
+        tab as unknown as Window,
+        'http://127.0.0.1:8790/authorize'
+      )
     ).toBe(true);
     expect(tab.location.href).toBe('http://127.0.0.1:8790/authorize');
   });
@@ -63,7 +68,9 @@ describe('assignOauthUrl', () => {
   });
 
   it('opens a safe URL in the system browser when no tab was reserved', () => {
-    expect(assignOauthUrl(null, 'https://auth.example.com/authorize')).toBe(true);
+    expect(assignOauthUrl(null, 'https://auth.example.com/authorize')).toBe(
+      true
+    );
     expect(mocks.openExternalUrl).toHaveBeenCalledWith(
       'https://auth.example.com/authorize'
     );

@@ -46,7 +46,9 @@ function useProductionContext(
             parentSpan: span,
           });
           if (!assignOauthUrl(popup, authorization_url)) {
-            throw new Error('The server offered a sign-in page that is not https');
+            throw new Error(
+              'The server offered a sign-in page that is not https'
+            );
           }
           span.setAttr('connector.outcome', 'started');
           return 'started';

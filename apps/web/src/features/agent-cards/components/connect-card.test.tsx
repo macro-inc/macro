@@ -159,7 +159,9 @@ describe('connect card', () => {
       />
     ));
 
-    expect(screen.getByText('MCP server · linear-mcp.evil.example')).toBeTruthy();
+    expect(
+      screen.getByText('MCP server · linear-mcp.evil.example')
+    ).toBeTruthy();
   });
 
   it('asks to add an unlisted server, naming its host, before any sign-in', () => {
