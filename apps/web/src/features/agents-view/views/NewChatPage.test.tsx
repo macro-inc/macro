@@ -45,11 +45,20 @@ const mocks = vi.hoisted(() => ({
   }),
   repositories: [] as { url: string; defaultBranch?: string }[],
   autoEnabled: true,
+  setFlagsLoaded: (_loaded: boolean) => {},
   chooseAgentMode: vi.fn(async (_prompt: string) => 'chat' as 'chat' | 'code'),
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.autoEnabled, loading: false }),
-}));
+vi.mock('@app/lib/analytics/posthog', async () => {
+  const { createSignal } = await import('solid-js');
+  const [loaded, setLoaded] = createSignal(true);
+  mocks.setFlagsLoaded = setLoaded;
+  return {
+    useFeatureFlag: () => () => ({
+      enabled: loaded() && mocks.autoEnabled,
+      loading: !loaded(),
+    }),
+  };
+});
 vi.mock('@queries/agents/mode-choice', () => ({
   chooseAgentMode: (prompt: string) => mocks.chooseAgentMode(prompt),
 }));
@@ -262,6 +271,7 @@ beforeEach(() => {
   mocks.userId = () => 'user';
   mocks.chooseAgentMode.mockClear();
   mocks.autoEnabled = true;
+  mocks.setFlagsLoaded(true);
 });
 
 function page(
@@ -875,6 +885,22 @@ describe('agent-led new conversation', () => {
       sendNow();
       expect(send).toHaveBeenLastCalledWith(
         expect.objectContaining({ botId: undefined })
+      );
+    });
+
+    it('but not the flags loading', () => {
+      mocks.setFlagsLoaded(false);
+      const { send, mention, load, sendNow } = loadingPage();
+      mention('bot|maya-agent');
+      mocks.setFlagsLoaded(true);
+      load();
+      expect(
+        (screen.getByRole('radio', { name: 'Code' }) as HTMLInputElement)
+          .checked
+      ).toBe(true);
+      sendNow();
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({ botId: 'maya-agent' })
       );
     });
 

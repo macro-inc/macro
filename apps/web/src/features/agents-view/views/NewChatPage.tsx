@@ -166,7 +166,11 @@ export function NewChatPage(props: {
       }
     )
   );
-  createEffect(on(mode, () => setPendingMention(undefined), { defer: true }));
+  // A switch between Chat and Code, not Auto appearing once the flags load.
+  const agentKind = createMemo(agentsMode);
+  createEffect(
+    on(agentKind, () => setPendingMention(undefined), { defer: true })
+  );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
@@ -611,6 +615,7 @@ export function NewChatPage(props: {
   );
 
   const setMode = (next: ComposerMode) => {
+    setPendingMention(undefined);
     // A model picked for the other mode's agent does not carry over.
     setModelOverride(undefined);
     if (props.onModeChange) props.onModeChange(next);
