@@ -11,6 +11,9 @@
 # Exits 0 only when every seed finished on both sides with the same trace.
 # UPGRADE=1 starts both sides from the file SIDE_A left after the seed's case, so
 # SIDE_B reads and writes on top of what the older build stored.
+# CHAIN_A and CHAIN_B (e.g. "a a" and "b a", a downgrade) run each side as a chain of builds on
+# one file: the first build runs the case on an empty file, each next one reopens what the one
+# before left and runs a probe and the case again.
 set -euo pipefail
 
 if [ $# -lt 5 ]; then
@@ -33,6 +36,12 @@ done
 if [ "$count" -lt 1 ] || [ "$jobs" -lt 1 ]; then
   echo "COUNT and JOBS must be at least 1" >&2
   exit 2
+fi
+if [ -n "${CHAIN_A:-}${CHAIN_B:-}" ]; then
+  [[ "${CHAIN_A:-}" =~ ^[ab]( [ab])*$ ]] && [[ "${CHAIN_B:-}" =~ ^[ab]( [ab])*$ ]] \
+    && [ "$(wc -w <<< "$CHAIN_A")" = "$(wc -w <<< "$CHAIN_B")" ] \
+    || { echo "CHAIN_A and CHAIN_B must be equally long lists of a and b" >&2; exit 2; }
+  [ -z "${UPGRADE:-}" ] || { echo "UPGRADE and CHAIN_A do not mix" >&2; exit 2; }
 fi
 repo=$(git rev-parse --show-toplevel)
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
@@ -81,6 +90,8 @@ cp -r "$repo/crates/client/cache-diff-fuzz/assets" "$work/assets"
   echo "fuzz-args-a ${FUZZ_ARGS_A:-}"
   echo "fuzz-args-b ${FUZZ_ARGS_B:-}"
   echo "upgrade ${UPGRADE:-}"
+  echo "chain-a ${CHAIN_A:-}"
+  echo "chain-b ${CHAIN_B:-}"
 } > "$out/run.txt"
 
 export out work
@@ -111,12 +122,56 @@ one() {
     common+=(--case "$up/upgrade.json" --start-from "$up/w/$seed/db-$last")
   fi
   status=ok
+  if [ -n "${CHAIN_A:-}" ]; then
+    # Each side runs a chain of builds on one file: the first runs the case on an empty
+    # file, each next one starts from what the one before left, with a probe and the case
+    # again. A side's trace is its segments' traces in order.
+    up=$work/up/$seed
+    mkdir -p "$up"
+    # shellcheck disable=SC2086
+    if ! { "$work/bin/a" "${common[@]}" --emit-case --out "$up" --work "$up/w" \
+      && jq -c '.ops = [{"op": "probe"}] + .ops' "$up/$seed.case.json" > "$up/again.json"; } \
+      2> "$out/stderr/$seed.write"; then
+      echo "$seed write-failed" >> "$out/failures.txt" || return 1
+      rm -rf "${up:?}"
+      return 0
+    fi
+    for side in a b; do
+      chain=$CHAIN_A
+      [ "$side" = b ] && chain=$CHAIN_B
+      : > "$up/$side.trace"
+      segment=0
+      for bin in $chain; do
+        side_args=${FUZZ_ARGS_A:-}
+        [ "$bin" = b ] && side_args=${FUZZ_ARGS_B:-}
+        seg=$up/$side$segment
+        start=(--case "$up/$seed.case.json")
+        [ "$segment" -gt 0 ] && start=(--case "$up/again.json" --start-from "$from")
+        # shellcheck disable=SC2086
+        if ! "$work/bin/$bin" "${common[@]}" $side_args "${start[@]}" --keep --out "$seg" \
+          --work "$seg/w" 2>> "$out/stderr/$seed.$side"; then
+          status="$status $side-failed"
+          break
+        fi
+        { echo "segment $segment"; cat "$seg/$seed.trace"; } >> "$up/$side.trace"
+        [ "$segment" -eq 0 ] && cp "$seg/$seed.stats.json" "$out/$side/$seed.stats.json"
+        # A crash moves the engine to the next copy: the last is what the segment left.
+        last=0
+        while [ -d "$seg/w/$seed/db-$((last + 1))" ]; do last=$((last + 1)); done
+        from=$seg/w/$seed/db-$last
+        segment=$((segment + 1))
+      done
+      cp "$up/$side.trace" "$out/$side/$seed.trace"
+    done
+    status=${status/#ok /}
+  else
   # shellcheck disable=SC2086
   "$work/bin/a" "${common[@]}" ${FUZZ_ARGS_A:-} --out "$out/a" --work "$work/a" \
     2> "$out/stderr/$seed.a" || status="a-failed"
   # shellcheck disable=SC2086
   "$work/bin/b" "${common[@]}" ${FUZZ_ARGS_B:-} --out "$out/b" --work "$work/b" \
     2> "$out/stderr/$seed.b" || status="$status b-failed"
+  fi
   for side in a b; do
     # A finished trace ends with `end`.
     [ -f "$out/$side/$seed.trace" ] && [ "$(tail -n 1 "$out/$side/$seed.trace")" = end ] \
@@ -124,7 +179,7 @@ one() {
   done
   same=0
   [ "$status" = ok ] && { cmp -s "$out/a/$seed.trace" "$out/b/$seed.trace" || same=$?; }
-  if [ -n "${UPGRADE:-}" ]; then
+  if [ -n "${UPGRADE:-}${CHAIN_A:-}" ]; then
     # The starting file and the upgrade case are kept for any seed that needs a look.
     if [ "$status" = ok ] && [ "$same" -eq 0 ]; then
       rm -rf "${up:?}"

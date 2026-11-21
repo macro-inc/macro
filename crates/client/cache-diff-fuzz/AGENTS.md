@@ -50,6 +50,12 @@ disk after a reopen must come out the same.
   Seeds that differ or fail keep the file in `runs/RUN/upgrade/SEED`. When NEW hashes
   records differently, add `--mask-source-hashes` to `FUZZ_ARGS`: NEW rehashes
   records OLD stored when the case writes them again, though their content is the same.
+- Downgrade and mixed builds: `CHAIN_A="a a" CHAIN_B="b a" fuzz.sh RUN FIRST COUNT OLD NEW`.
+  Each side runs a chain of builds on one file (`a` is SIDE_A, `b` SIDE_B): the first
+  runs the case on an empty file, each next one starts from what the one before left,
+  with a probe and the case again. `"b a"` against `"a a"` is NEW's file opened by OLD,
+  compared with OLD alone; `"b a b a"` alternates builds across reopens. Add
+  `--mask-source-hashes` when the builds hash records differently.
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
   `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case
