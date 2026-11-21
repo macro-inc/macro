@@ -542,6 +542,9 @@ struct CacheState {
     /// A hydrate whose projections were computed and whose write is still to
     /// run (`prepareHydrate`, then `commitHydrate`).
     prepared_hydrate: Option<PreparedHydrate>,
+    /// How many times a hydrate computed its projections (tests only).
+    #[cfg(test)]
+    projection_reads: usize,
 }
 
 impl CacheState {
@@ -587,6 +590,10 @@ impl CacheState {
         &mut self,
         request: &HydrateRequest,
     ) -> Result<Vec<ProjectionMutation>, JsValue> {
+        #[cfg(test)]
+        {
+            self.projection_reads += 1;
+        }
         let mut projections = authoritative_projection_mutations(
             &self.engine_mut()?.schema_snapshot(),
             &request.query,
@@ -1008,6 +1015,8 @@ async fn open_cache_inner(
                 hot_capacity,
                 reset_required: false,
                 prepared_hydrate: None,
+                #[cfg(test)]
+                projection_reads: 0,
             })),
             ops: Rc::new(RefCell::new(OpInterner::default())),
         },
@@ -1978,7 +1987,10 @@ impl CacheEngine {
     /// The first half of `hydrateQuery`: converts the response and reads the
     /// projection rows it changes, without writing. The engine keeps the
     /// result for `commitHydrate`, replacing any it kept before. Between the
-    /// two the host may run requests that only read.
+    /// two the host may run requests that only read. A write in between makes
+    /// the commit read the projections again; a clear, an external reset, an
+    /// authority transition, a physical reset or a close drops the kept
+    /// hydrate, and the commit then rejects.
     #[wasm_bindgen(js_name = prepareHydrate)]
     pub fn prepare_hydrate(
         &self,
@@ -2605,6 +2617,7 @@ impl CacheEngine {
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            state.prepared_hydrate = None;
             let result = state.engine_mut()?.external_reset();
             let affected = state.engine_result(result)?;
             to_js(&JsAffectedOperationsResult {
@@ -2634,6 +2647,7 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            state.prepared_hydrate = None;
             let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
             to_js(&JsRevisionResult {

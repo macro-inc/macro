@@ -2978,8 +2978,13 @@ fn write_soup(engine: &CacheEngine, document_id: &str) -> js_sys::Promise {
     )
 }
 
-/// Both queries and the projection rows the backfill wrote, as JSON.
+/// Both queries, the predicate index over the user's documents, and the
+/// revision, as JSON.
 async fn hydrated_state(engine: &CacheEngine) -> serde_json::Value {
+    let mut owned = documents_preset_filter(
+        serde_json::json!({"literal": {"owner": "macro|user@example.com"}}),
+    );
+    owned["limit"] = serde_json::json!(10);
     let read = |query: &str, name: &str, variables: JsValue| {
         engine.read_query(
             None,
@@ -2995,6 +3000,7 @@ async fn hydrated_state(engine: &CacheEngine) -> serde_json::Value {
             resolved(read(SOUP_BACKFILL_WITH_PROJECTION_QUERY, "SoupBackfill", backfill_variables()))
                 .await
         ),
+        "owned": from_js::<serde_json::Value>(resolved(engine.entity_filter(js(owned))).await),
         "revision": from_js::<String>(resolved(engine.current_revision()).await),
     })
 }
@@ -3024,6 +3030,7 @@ async fn a_prepared_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() 
     let split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
     assert_eq!(split, whole);
     assert!(split.get("projectionsReread").is_none());
+    assert_eq!(engine.state.lock().await.projection_reads, 1);
     assert_eq!(hydrated_state(&engine).await, whole_state);
 
     // The kept hydrate is gone once committed.
@@ -3055,6 +3062,8 @@ async fn a_write_between_prepare_and_commit_makes_the_commit_read_projections_ag
     resolved(write_soup(&engine, "doc-between")).await;
     let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
     assert_eq!(split["projectionsReread"], true);
+    // Once before the write and once after it.
+    assert_eq!(engine.state.lock().await.projection_reads, 2);
     split.as_object_mut().unwrap().remove("projectionsReread");
     assert_eq!(split, whole);
     assert_eq!(hydrated_state(&engine).await, whole_state);
@@ -3090,5 +3099,29 @@ async fn a_failed_prepare_leaves_nothing_to_commit() {
         from_js::<String>(resolved(engine.current_revision()).await),
         "0"
     );
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_clear_between_prepare_and_commit_drops_the_prepared_hydrate() {
+    const SCOPE: &str = "cache-wasm-prepared-hydrate-cleared";
+    let engine = fresh_engine(SCOPE).await;
+    resolved(write_soup(&engine, "doc-before-clear")).await;
+    resolved(prepare_backfill(&engine)).await;
+    resolved(engine.clear()).await;
+    // The response predates the clear: writing it would bring back what the
+    // clear removed.
+    assert!(JsFuture::from(engine.commit_hydrate()).await.is_err());
+    let backfill: serde_json::Value = from_js(
+        resolved(engine.read_query(
+            None,
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            JsValue::UNDEFINED,
+        ))
+        .await,
+    );
+    assert_eq!(backfill["kind"], "miss");
     close_and_destroy(&engine, SCOPE).await;
 }
