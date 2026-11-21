@@ -135,7 +135,7 @@ export function CalendarColorPicker(props: {
         class={cn(
           'flex shrink-0 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-accent',
           props.compact
-            ? 'size-5 rounded-md not-touch:hover:bg-ink/10 data-expanded:bg-ink/10 touch:size-8'
+            ? 'size-5 rounded-md not-touch:hover:bg-ink/10 data-expanded:bg-ink/10 touch:size-11 touch:rounded-full'
             : 'size-8 rounded-full hover:bg-ink/5 data-expanded:bg-ink/5'
         )}
       >

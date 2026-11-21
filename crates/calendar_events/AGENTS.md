@@ -514,6 +514,18 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Outlook logged none before November 2026;
   `20261105002046_log_outlook_calendars_for_their_sync_error.sql` logs every
   visible Outlook calendar once so caches that missed a change refetch it.
+- A person's own color for a calendar lives in `calendar_color_preferences`
+  (user, calendar), never in `calendars.color`, which every Google and
+  Outlook sync overwrites; `upsert_calendar_tx` is that column's only writer.
+  Both calendar list readers (`list_visible_calendars` and the change log's
+  `list_calendars_by_ids`) join it for the viewer as `custom_color`, so add a
+  column to both. `set_calendar_color` (`src/outbound/pg/calendar_color.rs`)
+  checks the calendar is the requester's (owned or delegated inbox), writes or
+  deletes the row and, only when it changed, logs `UpsertCalendar` for the
+  calendar's inbox in the same transaction; the domain then nudges the inbox's
+  viewers (`calendar_changed`, no out-of-office hint). Every viewer of the
+  inbox rereads the calendar with their own color, so a delegate's choice is
+  theirs alone. The provider never sees it.
 - Every calendar failure writer stores its `CalendarSyncFailure` in
   `calendars.last_sync_error_kind` beside `last_sync_error`, and each round that
   clears the error clears it; a failure stored without one reads as permanent.

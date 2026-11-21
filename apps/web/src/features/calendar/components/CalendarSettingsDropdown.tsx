@@ -10,6 +10,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
 import MinusIcon from '@icon/system/regular/minus.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Dropdown } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
@@ -18,18 +19,16 @@ import {
   type CalendarAccount,
   useCalendarAccounts,
 } from '../hooks/use-calendar-accounts';
+import { useSetCalendarColor } from '../hooks/use-calendar-color';
 import type { CalendarTimeFormat, CalendarWeekStart } from '../types';
 import {
   type CalendarAccountGroup,
   groupCalendarSourcesByAccount,
 } from '../utils/calendar-source-groups';
 import { useCalendarView } from './CalendarViewContext';
+import { CalendarColorPicker } from './calendar-color-picker';
 import { MobilePeriodControls } from './PeriodSelector';
-import {
-  CalendarAccountLabel,
-  CalendarSourceLabel,
-  CalendarSwatch,
-} from './SourceControls';
+import { CalendarAccountLabel, CalendarSourceLabel } from './SourceControls';
 import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
@@ -345,6 +344,7 @@ function MobileCalendarVisibility(props: {
   controls: CalendarSettingsControls;
 }) {
   const controls = props.controls;
+  const setCalendarColor = useSetCalendarColor();
   const [expandedKeys, setExpandedKeys] = createSignal<readonly string[]>([]);
   const isExpanded = (key: string) => expandedKeys().includes(key);
   const toggleExpanded = (key: string) =>
@@ -416,23 +416,54 @@ function MobileCalendarVisibility(props: {
               </div>
               <CollapseTransition open={isExpanded(group.key)}>
                 <div class="flex min-w-0 flex-col pt-1">
-                  <For each={group.calendars}>
-                    {(source) => (
-                      <MobileFilterDrawer.Option
-                        checked={controls.calendarView.isSourceVisible(
-                          source.id
-                        )}
-                        onChange={(visible) =>
-                          controls.changeCalendarVisibility(source.id, visible)
-                        }
-                      >
-                        <span class="flex min-w-0 flex-1 items-center gap-2">
-                          <CalendarSwatch color={source.color} />
-                          <CalendarSourceLabel source={source} />
-                        </span>
-                      </MobileFilterDrawer.Option>
-                    )}
-                  </For>
+                  <Key each={group.calendars} by={(calendar) => calendar.id}>
+                    {(source) => {
+                      const visible = () =>
+                        controls.calendarView.isSourceVisible(source().id);
+                      // Like the account header: the selection fills the
+                      // whole row, the color button included, and shown
+                      // neighbours join into one selection.
+                      return (
+                        <div
+                          class="flex min-w-0 items-center rounded-[20px] [&[data-shown]:has(+[data-shown])]:rounded-b-none [&[data-shown]+[data-shown]]:rounded-t-none"
+                          classList={{ 'bg-ink/8': visible() }}
+                          data-shown={visible() ? '' : undefined}
+                        >
+                          <span class="flex shrink-0 pl-1">
+                            <CalendarColorPicker
+                              compact
+                              label={`Color for ${source().name} (${source().emailAddress ?? ''})`}
+                              color={source().color}
+                              overridden={source().hasCustomColor === true}
+                              onChange={(color) =>
+                                setCalendarColor(source().id, color)
+                              }
+                            />
+                          </span>
+                          <MobileDrawer.Item
+                            role="checkbox"
+                            aria-checked={visible()}
+                            class="min-w-0 flex-1 pl-1 aria-checked:bg-transparent"
+                            onClick={() =>
+                              controls.changeCalendarVisibility(
+                                source().id,
+                                !visible()
+                              )
+                            }
+                          >
+                            <span class="flex min-w-0 flex-1 items-center gap-2">
+                              <CalendarSourceLabel source={source()} />
+                            </span>
+                            <span class="flex size-5 shrink-0 items-center justify-center">
+                              <Show when={visible()}>
+                                <CheckIcon class="size-4 text-ink" />
+                              </Show>
+                            </span>
+                          </MobileDrawer.Item>
+                        </div>
+                      );
+                    }}
+                  </Key>
                 </div>
               </CollapseTransition>
             </MobileDrawer.Section>

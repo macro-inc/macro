@@ -100,7 +100,7 @@ export function SourceControls(props: SourceControlsProps) {
                         class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-auto touch:min-h-11 touch:py-1"
                       >
                         <Checkbox.Control />
-                        <span class="-mx-[5px] flex shrink-0 touch:-mx-[11px]">
+                        <span class="-mx-[5px] flex shrink-0 touch:-mx-2">
                           <CalendarColorPicker
                             compact
                             label={`Color for ${source().name} (${source().emailAddress ?? ''})`}
@@ -142,17 +142,6 @@ export function CalendarAccountLabel(props: { group: CalendarAccountGroup }) {
       />
       <span class="min-w-0 flex-1 truncate">{props.group.emailAddress}</span>
     </>
-  );
-}
-
-/** A calendar's color, as the small square its rows show beside its name. */
-export function CalendarSwatch(props: { color: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      class="size-2.5 shrink-0 rounded-sm"
-      style={{ 'background-color': props.color }}
-    />
   );
 }
 
