@@ -16,7 +16,7 @@ first.
 | 2. Enable migration (this PR, third) | triggers: every write maintains the rows of the items it touches | about +2 ms per item write, more WAL, commit-time locks | `SELECT source_items_remove_triggers()` (disables them) |
 | 3. Backfill | rows for items untouched since step 2 | 10–40 min at production scale, load and WAL | rerun; or remove triggers and `TRUNCATE source_items` |
 | 4. Audit | nothing | one long read snapshot | none |
-| 5. Read switch (not wired yet) | soup reads `source_items` | none on writes | switch off, restart |
+| 5. Read flag | soup reads `source_items` | none on writes | `SOUP_SOURCE_ITEMS_ENABLED=false`, restart |
 
 ## Before you start
 
@@ -96,8 +96,8 @@ Undo: `SELECT source_items_remove_triggers();` under `SET LOCAL lock_timeout = '
 It disables the triggers, with the same SHARE ROW EXCLUSIVE locks as install, so
 readers keep going. Writes return to their old cost at once. Reads stop trusting
 the table in the same commit (`source_items_exact()` turns false), so even with
-the read switch on soup goes back to the item tables. To re-enable, first turn
-the read switch off and restart, then repeat steps 2–4, and turn
+the read flag on soup goes back to the item tables. To re-enable, first set
+`SOUP_SOURCE_ITEMS_ENABLED=false` and restart, then repeat steps 2–4, and turn
 reads back on (step 5) only after the audits pass: the backfill alone makes
 `source_items_exact()` true again, before any audit has run.
 
@@ -163,15 +163,11 @@ removed; do not enable reads.
 
 ## 5. Enable reads
 
-No service reads `source_items` yet: soup reads it only when its repository is
-built with `PgSoupRepo::with_source_items_enabled(true)`, and only soup's tests
-call that. Turning reads on first needs a change that wires it to a typed
-config value (`maybe_env_vars!`, CS-14) with Doppler keys in every config
-(CS-18). Then turn it on for one document storage canary and restart it.
-Compare soup list latency (`soup.sql.fetch_decode` spans,
+Set `SOUP_SOURCE_ITEMS_ENABLED=true` for one document storage canary and
+restart it. Compare soup list latency (`soup.sql.fetch_decode` spans,
 `soup.source_items.bound` for routing) and error rates with the other tasks for
 a day, then roll out to the rest.
 
-Undo: turn the switch off and restart. The triggers keep running;
+Undo: `SOUP_SOURCE_ITEMS_ENABLED=false` and restart. The triggers keep running;
 remove them (step 2's undo) to drop the write cost as well. Removing them alone
 also stops projected reads at once, without a restart: reads fail closed.

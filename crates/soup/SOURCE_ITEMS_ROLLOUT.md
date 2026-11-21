@@ -13,8 +13,7 @@ holds the backfill, the audit and the tests.
    mutex table and the maintenance functions. It installs no trigger and takes
    no lock on `entity_access`, `"Document"`, `"Chat"`, `"Project"` or
    `document_sub_type`, so writes cost what they did. Projected reads stay off
-   (no service calls `PgSoupRepo::with_source_items_enabled`; wiring it to
-   config is a later change).
+   (`SOUP_SOURCE_ITEMS_ENABLED` defaults to false).
 2. **Enable, in this order, following `docs/runbooks/source-items.md`:** build the two
    indexes only projected reads use (`"Document"(owner, "updatedAt" DESC, id
    DESC)` for the owner driver, `"UserHistory"("userId", "itemType",
@@ -71,7 +70,7 @@ transaction continues. The temporary tables rule out `PREPARE TRANSACTION`, and
 `DISCARD TEMP` fails inside a transaction that wrote an input (between
 transactions it is harmless).
 
-For a read regression, turn the read switch off and restart.
+For a read regression, set `SOUP_SOURCE_ITEMS_ENABLED=false` and restart.
 Drift can only come from removing the triggers or writing `source_items` by
 hand; the backfill repairs it and the audit confirms it.
 
