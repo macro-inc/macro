@@ -17,7 +17,7 @@ use crate::shared::{DateValue, EntityReference};
 ///
 /// Represents the actual value stored for an entity property.
 /// This is serialized to/from JSONB in the database.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(
     tag = "type",
     content = "value",
@@ -39,7 +39,7 @@ pub enum PropertyValue {
     Str(String),
     /// Date value, with or without a time of day
     /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
-    Date(#[schema(inline)] DateValue),
+    Date(DateValue),
     /// Date range value
     /// Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
     DateRange(crate::shared::DateRange),
@@ -56,6 +56,27 @@ pub enum PropertyValue {
     /// Single-select: {"type": "Link", "value": ["https://example.com"]} (length 0 or 1)
     /// Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+)
     Link(Vec<String>),
+}
+
+impl utoipa::PartialSchema for PropertyValue {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        crate::shared::stored_value::property_value_schema(
+            "Property value (service representation).\n\n\
+             Represents the actual value stored for an entity property.\n\
+             This is serialized to/from JSONB in the database.",
+        )
+    }
+}
+
+impl utoipa::ToSchema for PropertyValue {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        crate::shared::stored_value::property_value_schemas(schemas);
+    }
 }
 
 // ===== Conversions =====

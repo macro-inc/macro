@@ -220,7 +220,7 @@ pub fn create_metadata_property_date(
     value: Option<chrono::DateTime<chrono::Utc>>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    let property_value = value.map(|value| PropertyValue::Date(DateValue::new(value)));
+    let property_value = value.map(|value| PropertyValue::Date(DateValue::with_time(value)));
     create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
 }
 

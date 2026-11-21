@@ -393,8 +393,8 @@ fn parse_date(value: &str) -> async_graphql::Result<chrono::DateTime<chrono::Utc
 pub enum GraphqlSetPropertyValue {
     /// A Boolean value.
     Boolean(bool),
-    /// An RFC 3339 date-time value standing for the whole day it falls on
-    /// where it was picked.
+    /// An RFC 3339 date-time value standing for a whole day, shown as the day
+    /// it falls on in the viewer's time zone.
     Date(String),
     /// An RFC 3339 date-time whose time of day was set.
     DateWithTime(String),

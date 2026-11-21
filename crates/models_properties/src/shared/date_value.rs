@@ -40,18 +40,3 @@ impl DateValue {
         self.has_time
     }
 }
-
-/// Documented as the instant it is sent as; `has_time` sits beside the
-/// tagged value, outside this schema.
-impl utoipa::PartialSchema for DateValue {
-    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-        utoipa::openapi::ObjectBuilder::new()
-            .schema_type(utoipa::openapi::schema::Type::String)
-            .format(Some(utoipa::openapi::SchemaFormat::KnownFormat(
-                utoipa::openapi::KnownFormat::DateTime,
-            )))
-            .into()
-    }
-}
-
-impl utoipa::ToSchema for DateValue {}

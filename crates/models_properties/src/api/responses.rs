@@ -82,7 +82,7 @@ pub struct EntityPropertyResponse {
 
 /// Property value that matches JSONB structure - supports single or multi-select.
 /// Uses serde's tag/content pattern to create discriminated unions.
-#[derive(ToSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(
     tag = "type",
     content = "value",
@@ -104,7 +104,7 @@ pub enum PropertyValue {
     Str(String),
     /// Date value, with or without a time of day
     /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
-    Date(#[schema(inline)] crate::shared::DateValue),
+    Date(crate::shared::DateValue),
     /// Date range value
     /// Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
     DateRange(crate::shared::DateRange),
@@ -121,6 +121,26 @@ pub enum PropertyValue {
     /// Single-select: {"type": "Link", "value": ["https://example.com"]} (length 0 or 1)
     /// Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+)
     Link(Vec<String>),
+}
+
+impl utoipa::PartialSchema for PropertyValue {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        crate::shared::stored_value::property_value_schema(
+            "Property value that matches JSONB structure - supports single or multi-select.\n\
+             Uses serde's tag/content pattern to create discriminated unions.",
+        )
+    }
+}
+
+impl ToSchema for PropertyValue {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        crate::shared::stored_value::property_value_schemas(schemas);
+    }
 }
 
 // ===== Composite Responses =====

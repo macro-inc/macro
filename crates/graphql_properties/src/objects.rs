@@ -175,8 +175,9 @@ pub struct GraphqlStringPropertyValue {
 pub struct GraphqlDatePropertyValue {
     /// The stored instant formatted as RFC 3339.
     value: String,
-    /// Whether its time of day was set. Without one the value stands for the
-    /// whole day it falls on where it was picked.
+    /// Whether its time of day was set. Without one the value stands for a
+    /// whole day, shown as the day its instant falls on in the viewer's time
+    /// zone.
     has_time: bool,
 }
 
