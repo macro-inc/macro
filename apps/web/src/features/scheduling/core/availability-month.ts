@@ -4,6 +4,13 @@ import type { TimeWindow } from './types';
 
 export type AvailabilityTimeFormat = '12h' | '24h';
 
+/** The availability clock for the calendar's 12/24-hour preference. */
+export function availabilityTimeFormat(
+  calendar: '12-hour' | '24-hour'
+): AvailabilityTimeFormat {
+  return calendar === '24-hour' ? '24h' : '12h';
+}
+
 /** Six Sunday-first rows, including adjacent-month days. */
 export function availabilityMonth(date: string): string[] {
   if (!validAvailabilityDate(date)) return [];

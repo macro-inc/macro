@@ -1,7 +1,9 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
+import { getDefaultCalendarTimeFormat } from '../../calendar/utils/time-format';
 import type { Booking, BookingReceipt } from '../core/types';
 import { BookingReceiptView } from './booking-receipt-view';
 
@@ -92,4 +94,22 @@ it('drops the refusal once the receipt shows the booking cancelled', async () =>
     screen.getByRole('heading', { name: 'Booking cancelled' })
   ).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('keeps the visitor’s own clock whatever the calendar is set to', () => {
+  const [, setPreferences] = useCalendarPreferences();
+  // The calendar set to the other clock than the runner's locale, so the
+  // receipt following it would read differently.
+  setPreferences(
+    'timeFormat',
+    getDefaultCalendarTimeFormat() === '24-hour' ? '12-hour' : '24-hour'
+  );
+  onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+  renderReceipt(receipt());
+  const visitorClock = new Date('2026-09-18T17:00:00Z').toLocaleString([], {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  });
+  expect(screen.getByText(visitorClock)).toBeTruthy();
 });

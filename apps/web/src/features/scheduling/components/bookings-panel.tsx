@@ -13,6 +13,8 @@ export function BookingsPanel(props: {
   search: string;
   eventId: string;
   timeZone: string;
+  /** A 12-hour (`true`) or 24-hour (`false`) clock; the locale's when unset. */
+  hour12?: boolean;
   count: number;
   loading?: boolean;
   error?: string;
@@ -93,6 +95,7 @@ export function BookingsPanel(props: {
                     <BookingCard
                       booking={booking}
                       timeZone={props.timeZone}
+                      hour12={props.hour12}
                       canManageBookings={props.canManageBookings}
                       currentUserId={props.currentUserId}
                       busyId={props.busyId}
