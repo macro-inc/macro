@@ -873,7 +873,7 @@ async function waitReady(s) {
   for (;;) {
     const ready = await s.page.evaluate(() => !!(window.__harnessReady && window.__h.authenticated() === true)).catch(() => false);
     if (ready) return;
-    const dead = s.netlog.find((x) => /^failed \/(src|node_modules|@)/.test(x));
+    const dead = s.netlog.find((x) => /^(failed |[45]\d\d )\/(src|node_modules|@)/.test(x));
     if (dead) throw new Error(`module request failed: ${dead}`);
     if (Date.now() > deadline) throw new Error(`page.waitForFunction: Timeout ${bound}ms exceeded.`);
     await sleep(250);
@@ -890,9 +890,9 @@ async function loadHarness(s) {
     } catch (e) {
       const st = await s.page.evaluate(() => ({ ready: !!window.__harnessReady, auth: window.__h?.authenticated?.(), url: location.href, body: document.body.innerText.slice(0, 200) })).catch((x) => String(x));
       const msg = `${s.label}: harness not ready (attempt ${attempt}) ${JSON.stringify(st)}: ${e.message.slice(0, 100)}; last requests: ${JSON.stringify(s.netlog.slice(-8))}`;
-      R.harnessReloadRetries = (R.harnessReloadRetries ?? 0) + 1;
       harnessError(msg);
       if (attempt >= LOAD_ATTEMPTS) throw new Error(msg);
+      R.harnessReloadRetries = (R.harnessReloadRetries ?? 0) + 1;
       log(msg.slice(0, 300));
       await sleep(2000 * attempt);
     }
@@ -1187,16 +1187,18 @@ async function setKeys(pair, keys) {
 }
 // What a side that timed out was still waiting on: its busy queries, its API
 // requests in flight (with their age) and its last failed requests.
-function waitedOn(s, t) {
+function withWaitedOn(s, t) {
+  if (!t.timedOut) return t;
   const now = Date.now();
-  return { busy: t.busy ?? null, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), net: (s.netlog ?? []).slice(-8) };
+  return { ...t, waitedOn: { busy: t.busy ?? null, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), net: (s.netlog ?? []).slice(-8) } };
 }
 async function settleAll(pair) {
-  const res = await Promise.all(sides(pair).map((s) => ev(s, 'settle', CONFIG.settleMs)));
+  // what a side that timed out waited on is sampled as its settle returns
+  const res = await Promise.all(sides(pair).map(async (s) => withWaitedOn(s, await ev(s, 'settle', CONFIG.settleMs))));
   // A side that did not settle within the bound broke the live-update bound:
   // a difference, and its snapshot is not compared as data.
   res.forEach((t, i) => {
-    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms, ...waitedOn(sides(pair)[i], t) });
+    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms }, { waitedOn: t.waitedOn });
   });
   for (const t of res) {
     R.settle.samples++;
@@ -1234,7 +1236,12 @@ async function compareStep(pair, level, op) {
   // Only a fault applied before a snapshot was taken can show in it.
   const liveAsOf = clockNow();
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map((s) => ev(s, 'snapshot')));
-  const fresh = await Promise.all(sides(pair).map(async (s) => ({ ...(await ev(s, 'fresh', keys, CONFIG.settleMs)), asOf: clockNow() })));
+  const fresh = await Promise.all(
+    sides(pair).map(async (s) => {
+      const f = await ev(s, 'fresh', keys, CONFIG.settleMs);
+      return { ...f, timing: withWaitedOn(s, f.timing), asOf: clockNow() };
+    })
+  );
   R.counts.freshMounts += 4;
   for (const f of fresh) {
     R.settle.fresh.samples++;
@@ -1242,7 +1249,7 @@ async function compareStep(pair, level, op) {
     if (f.timing.timedOut) R.settle.fresh.timeouts++;
   }
   fresh.forEach((f, i) => {
-    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms, ...waitedOn(sides(pair)[i], f.timing) });
+    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms }, { waitedOn: f.timing.waitedOn });
   });
   const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);
