@@ -143,13 +143,15 @@ impl WritePasses {
         let reads = engine.resume_pass_reads(std::mem::take(&mut self.reads));
         let result = self.run(&reads, response, stepping && one).await;
         self.reads = reads.finish();
-        result?;
         // What the passes computed so far holds only if every key they read
-        // still reads the same, i.e. storage committed nothing since.
+        // still reads the same, i.e. storage committed nothing since. That
+        // goes for a pass that failed too: it may have failed on what it read
+        // before the commit.
         if stepping && engine.storage().write_position() != self.position {
             self.restart();
             return Ok(WritePassStep::Pending);
         }
+        result?;
         if self.next.is_some() {
             return Ok(WritePassStep::Pending);
         }
