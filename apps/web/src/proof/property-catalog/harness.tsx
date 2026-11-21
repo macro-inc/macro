@@ -130,17 +130,18 @@ function errorShape(error: unknown) {
         )
       : null,
     // The query client's own retry decision (lib/queries/client.ts); the
-    // message with ids masked, for grouping; and the whole message, which
-    // equality compares, so two different failures never pass as one.
+    // whole message with ids masked, for the signature; and the whole
+    // message as it is, which equality compares.
     retry:
       thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
       thrownResultErrorHasCode(error, 'FORBIDDEN')
         ? 'terminal'
         : 'retried',
-    message: String((error as Error)?.message ?? error)
-      .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>')
-      .slice(0, 160),
-    fullMessage: String((error as Error)?.message ?? error).slice(0, 4000),
+    message: String((error as Error)?.message ?? error).replace(
+      /[0-9a-f]{8}-[0-9a-f-]{27}/gi,
+      '<id>'
+    ),
+    fullMessage: String((error as Error)?.message ?? error),
   };
 }
 

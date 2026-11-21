@@ -57,7 +57,7 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   nanosecond, only on a row's `created_at`/`updated_at`); `tie-order` (only
   rows whose server sort key is equal swap: definitions by lowercased name,
   options by display order then value, and caller rows only when both sides'
-  catalogs give them the same key; an option without a key never ties). Tie
+  catalogs, as the callers read them, give them the same key; an option without a key never ties). Tie
   keys lowercase the way the server sorted that list: definitions with options
   like Rust's `to_lowercase` (JavaScript's `toLowerCase`), plain definitions,
   options and tag options like PostgreSQL's `LOWER` under its libc collation
@@ -66,10 +66,9 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   any differs from the harness's mapping. Timestamps normalize to a NUL-prefixed instant, so no literal can
   pass for one. `error-shape` (the same retry decision, a different error
   object; the retry decision is the app's own, computed in the page with
-  `thrownResultErrorHasCode`, and each old→new pair, message included, is its
-  own signature; equality compares the whole message, and two errors that
-  differ only in the ids they name, or past the signature's 160 characters,
-  are a `diff`); `state`
+  `thrownResultErrorHasCode`; equality compares the whole message, and each
+  old→new pair is its own signature: both whole messages with ids masked, and
+  whether the two name the same ids); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
   errors are compared whatever the data did.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a

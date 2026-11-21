@@ -231,7 +231,7 @@ const readerKind = (id) => {
 
 // Callers derive their arrays from those lists. Two caller rows may swap only
 // when the server tied them: each row id gets the tie key the server sorted it
-// by (from the lists the snapshot holds), and a run of adjacent rows sharing
+// by (from the lists the callers read), and a run of adjacent rows sharing
 // one key is sorted by id. A row whose key is unknown, or differs between the
 // sides, keeps its place.
 function tieGroups(snapshot) {
@@ -256,16 +256,9 @@ function tieGroups(snapshot) {
   const tagSets = (sets) => {
     for (const s of Array.isArray(sets) ? sets : []) for (const o of s?.options ?? []) put(o?.id, optIn(s?.definition?.id, o));
   };
-  for (const [id, r] of Object.entries(snapshot ?? {})) {
-    if (id === 'callers' || !r?.isSuccess) continue;
-    const k = readerKind(id);
-    if (k === 'defs') defs(r.data);
-    else if (k === 'tags') tagSets(r.data);
-    else if (k === 'opts') {
-      const defId = JSON.parse(id.replace(/^reader/, '')).id;
-      for (const o of Array.isArray(r.data) ? r.data : []) put(o?.id, optIn(defId, o));
-    }
-  }
+  // Only the listings the callers read (harness.tsx `__sources`): a reader
+  // listing sorted another way (plain definitions, by SQL) must not change a
+  // caller row's key.
   const src = snapshot?.callers?.__sources;
   for (const list of src?.defs ?? []) defs(list);
   tagSets(src?.tags);
@@ -696,7 +689,8 @@ async function loadHarness(s) {
   const want = s.old ? `old:${OLD_COMMIT}` : 'head';
   const wrong = Object.entries(sides).filter(([, v]) => v !== want);
   if (wrong.length) throw new Error(`${s.label}: page runs the wrong query modules: ${JSON.stringify(sides)}, want ${want}`);
-  R.moduleChecks[s.old ? 'old' : 'neu']++;
+  // By physical side: in CONTROL both sides run the base commit's modules.
+  R.moduleChecks[s.side]++;
   if (s.side === 'neu' && CONFIG.mutant === 'skip-live-update') await ev(s, 'mutant.skipLiveUpdate');
   if (s.sameUserLoad) await startSameUserLoad(s);
 }
@@ -766,22 +760,20 @@ const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpSt
 // Errors are always compared, whatever the data did. A different error with
 // the same retry decision is error-shape (each old=>new pair its own
 // signature); one side failing alone, or a different retry decision, is a diff.
-// Equality reads the whole message; the signature shows the masked one. Two
-// errors whose masked views agree but whose whole messages differ (other ids,
-// or text past the mask's 160 characters), or whose messages name different
-// ids, are a diff: the same kind of failure about something else.
+// Equality reads the whole message as it is. The signature carries both
+// sides' whole messages with ids masked, and whether the ids they name are
+// the same, so a pair that differs in what it says or which ids it names is a
+// signature of its own, closed on its own.
 const idsIn = (e) => [...new Set(String(e?.fullMessage ?? '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [])].map((x) => x.toLowerCase()).sort();
-const maskedView = (e) => e && { ...e, fullMessage: undefined };
 function compareErrors(level, kind, ea, eb, extra = {}) {
   const A = errorView(ea);
   const B = errorView(eb);
   if (J(A) === J(B)) return record(level, `${kind}.error`, 'equal');
   const ia = idsIn(A);
   const ib = idsIn(B);
-  const otherIds = ia.length > 0 && ib.length > 0 && J(ia) !== J(ib);
-  const sameMask = A !== null && B !== null && J(maskedView(A)) === J(maskedView(B));
-  const cls = (A === null) !== (B === null) || A?.retry !== B?.retry || otherIds || sameMask ? 'diff' : 'error-shape';
-  record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: `${errorLabel(A)}=>${errorLabel(B)}` });
+  const ids = !ia.length && !ib.length ? 'none' : J(ia) === J(ib) ? 'same' : 'differ';
+  const cls = (A === null) !== (B === null) || A?.retry !== B?.retry ? 'diff' : 'error-shape';
+  record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: `${errorLabel(A)}=>${errorLabel(B)}|ids:${ids}` });
 }
 function compareReader(level, id, a, b) {
   R.counts.readerComparisons++;
