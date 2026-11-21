@@ -585,7 +585,7 @@ the shimmer.
   counts describe loaded rows, not a server total. Phone has its own Archived view.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
-  conversations** menu, which counts it on the filter badge and unchecks it with
+  conversations** menu, which adds it to the count in the filter button and unchecks it with
   **Clear filters**; runs of routines with it on are always listed. Every
   routine run keeps its clock icon in the desktop row. The list starts without
   hidden runs each time the Agents view opens.
@@ -773,7 +773,8 @@ the shimmer.
   the owner must have access through the connected GitHub App.
   Paired macrod agents also receive the repository choice. With native Herdr,
   macrod finds an existing clone or clones it using local Git credentials, then
-  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  creates a worktree from a fresh `origin/main` and opens the session in its own
+  Herdr workspace. **Branch** shows `main`
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
@@ -866,7 +867,7 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
-  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  This works in herdr 0.9 and in the herdr app (herdr-core, which names its `hc` in each terminal's `HC_BIN`),
   where session tabs open in macrod's space. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
   versions" in `crates/coding_agent_worker/README.md`.
@@ -1862,7 +1863,9 @@ and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
-latest turn.
+latest turn. A date chip written for a moment (a timestamp whose label names a
+time, as agents write a busy block) shows that moment's day and time in the
+viewer's zone, such as "Today, 3:15 PM"; a day chip shows the day alone.
 `@mention` a person in a prompt and, if you can edit the session, they are granted edit
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.

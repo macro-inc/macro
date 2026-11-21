@@ -2,7 +2,7 @@
 // local stack, has a model mark them against each persona's answer key, and
 // scores each section with one number you can hill climb. See README.md.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -13,6 +13,7 @@ import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } fro
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
 import { shiftDays } from './clock';
+import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
 import { type Attempt, type Margins, type RunFile, type Section, PARTS, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
@@ -35,6 +36,11 @@ type SectionSpec = {
    * more than the 30 s it allows to accept a session's first prompt.
    */
   concurrency: number;
+  /**
+   * Whether a persona's judgements share a cached prefix: then every rep
+   * reads its mail at one `now` and judging starts after the last rep.
+   */
+  judgeLast: boolean;
 };
 
 /**
@@ -54,6 +60,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     seats: 3,
     reps: 3,
     concurrency: 3,
+    judgeLast: true,
   },
   feed: {
     about: 'The Suggestions feed: a "fresh suggestions" generation with only suggestions on, over a workspace in use for weeks.',
@@ -65,6 +72,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     reps: 3,
     // One session a generation.
     concurrency: 9,
+    judgeLast: false,
   },
 };
 
@@ -217,16 +225,26 @@ async function runSection(section: Section, values: Record<string, string | unde
     flags: spec.flags,
     attempts: [],
   };
-  const save = () => writeFileSync(out, `${JSON.stringify(run, null, 1)}\n`);
+  // Through a sibling file, so a run stopped mid-write keeps its last whole snapshot.
+  const save = () => {
+    writeFileSync(`${out}.tmp`, `${JSON.stringify(run, null, 1)}\n`);
+    renameSync(`${out}.tmp`, out);
+  };
   await exclusive(at.instance, `suggestions bench ${section}`, async () => {
     startStub(at.instance);
     await setFlags(at.instance, spec.flags);
     await seedGraders(at.instance);
     const base = (slot: Persona, rep: number) => join(dir, `${slotName(slot).replace('/', '-')}-${rep}`);
-    // Judging needs only what a generation wrote, so it runs on while the next round seeds.
+    // Judging needs only what a generation wrote, so it runs on while the next
+    // round seeds, except where a persona's judgements share a cached prefix
+    // (`judgeLast`): there every rep reads the mail at one `now` and judging
+    // waits for the last rep, so the prefix is written once a persona, not
+    // once a rep.
+    const runNow = Date.now();
     const judged: Promise<void>[] = [];
+    const unjudged: Waiting<Persona, Attempt>[] = [];
     for (let rep = 1; rep <= reps; rep++) {
-      const now = Date.now();
+      const now = spec.judgeLast ? runNow : Date.now();
       await eachAtMost(slots, SEEDING, (slot) => prepare(at, slot, spec.variant, now, base(slot, rep)));
       // A held-out set is read once its people are seeded and generations start.
       if (rep === 1 && set !== 'tune') spend(set, section, values.label!);
@@ -235,20 +253,36 @@ async function runSection(section: Section, values: Record<string, string | unde
         const generation = await generate(at, slot, spec.variant, spec.trigger, now, base(slot, rep));
         const attempt: Attempt = { section, label: run.label, persona: slot.name, seat: slot.seat, heldout: slot.heldout, rep, generation, judgeUsd: 0 };
         const truth = section === 'routines' ? slot.routinesTruth!.needs : slot.feedTruth!.planted;
-        const done = () => {
+        const record = () => {
           run.attempts.push(attempt);
           save();
+        };
+        const log = () => {
           const s = attempt.score;
           console.log(
-            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, $${generation.cost.usd.toFixed(3)}`}`,
+            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, ${generation.cost.usd.toFixed(3)}`}`,
           );
         };
         if (generation.buildFailed) attempt.score = failedScore(truth.length);
         else if (generation.error) attempt.benchError = `generation: ${generation.error}`;
-        else return void judged.push(judgeAndScore(at, section, slot, attempt).then(done));
-        done();
+        else if (spec.judgeLast) {
+          // In the run file from now on, so a run that stops before judging
+          // keeps its generations for `rejudge`.
+          attempt.benchError = UNJUDGED;
+          record();
+          return void unjudged.push({ slot, attempt, log });
+        } else
+          return void judged.push(
+            judgeAndScore(at, section, slot, attempt).then(() => {
+              record();
+              log();
+            }),
+          );
+        record();
+        log();
       });
     }
+    judged.push(...judgeWaiting(unjudged, (slot, attempt) => judgeAndScore(at, section, slot, attempt), save));
     await Promise.all(judged);
   });
   save();

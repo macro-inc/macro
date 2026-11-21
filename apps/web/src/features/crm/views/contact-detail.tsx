@@ -2,6 +2,7 @@ import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -37,6 +38,7 @@ type ContactProps = {
 };
 
 export function Contact(props: ContactProps) {
+  const context = useCrmContext();
   return (
     <TraceFlow
       name="crm.contact"
@@ -46,7 +48,17 @@ export function Contact(props: ContactProps) {
         'crm.section': props.section ?? 'overview',
       }}
     >
-      <ContactContent {...props} />
+      <Show
+        when={context.canAccess()}
+        fallback={
+          <CrmAccessFallback
+            state={context.accessState()}
+            onRetry={context.retryAccess}
+          />
+        }
+      >
+        <ContactContent {...props} />
+      </Show>
     </TraceFlow>
   );
 }

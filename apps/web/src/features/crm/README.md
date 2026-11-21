@@ -4,6 +4,25 @@ CRM company and contact screens, settings, filters, saved views, lists, import,
 export, and company actions belong here. The dependency rules are enforced by
 `architecture.test.ts` and the feature rules in `rules/ast-grep`.
 
+Read `crmAccessAllowed` for navigation and create entry points: pending or failed
+proofs keep them visible, while proven denial hides them. Pass
+`crmAccessAuthority.allowed` through `CrmContext.canAccess` for record data and
+CRM-owned views; the workspace retains its loading, retry, and denied states, and
+keeps its sidebar tools (import, export, new list) disabled until access is proven.
+Settings is the exception: its Stages and Email sync sections read `accessState`
+and stay until access is proven denied, with a retry row after a failed check.
+Keep individually shared pipeline navigation available after CRM denial, but
+do not open a referenced company or contact. The workspace owns the record
+detail gate and unmounts its content on denial; standalone record views retain
+their own gate. Close global company/contact creation dialogs on proven denial
+and do not navigate to a late successful creation after access has been lost.
+The retired CRM/activity/pipeline rollout flags never replace this access gate.
+Keep owner-scoped email privacy controls, excluded-thread lists, and email mentions
+available after CRM viewing access is revoked. The context always supplies the plain
+email mention; privacy settings and the thread header never require CRM record data.
+Run the root CRM browser config for its immediate fixtures; the archive and privacy
+suites have separate configs and fixture servers in their own directories.
+
 ```text
 crm/
   core/         Domain types, permissions, stage resolution, CSV and view validation
@@ -49,6 +68,8 @@ cached by pipeline and view. Move results update the originating view's cache,
 even if the viewer switches boards while saving. The adapter supplies the selected
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
+Refresh current pipeline queries after a committed create, rename, trash, or
+sharing change even when retirement prevents applying the old response locally.
 
 Selective email settings use generated storage-service schemas through the
 storage client. The owner/session/team query scope retires drafts on account
@@ -99,12 +120,11 @@ Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style
 pill, primary first; each pill opens Make primary and Remove, and a trailing
-control adds another. The company pill links or switches only for a
-personal-provider primary with no address on the company's domain, and offers
-Remove company whenever no address is on the company's domain
-(`companyDomain === false`), behind the shared confirmation dialog, which
-adds that the link cannot be recreated when the primary is not a
-personal-provider address. The single address in `companyDomainEmails`
+control adds another. The company pill offers Add company to any contact
+without a company, switches only for a personal-provider primary with no
+address on the company's domain, and offers Remove company whenever no address
+is on the company's domain (`companyDomain === false`), behind the shared
+confirmation dialog. The single address in `companyDomainEmails`
 shows no Remove, and a company-domain contact keeps a read-only company value
 with its reason in a tooltip. These fields come only from the REST contact
 detail; a response without `emails` or `companyDomain` stays read-only.
@@ -228,7 +248,9 @@ header island that opens the shared bottom drawer with the current section
 checked under **Switch view**. A collapsed host keeps the section icon and
 accessible label; embedded phone headers put the switcher below the breadcrumb
 and action row. Keep the
-workspace's mobile view strip separate. Copy-link islands
+workspace's mobile view strip separate. Restore that strip when access loss
+denies an open CRM record, including one opened from a shared pipeline; keep
+independently accessible pipeline items' detail headers unchanged. Copy-link islands
 are square on touch, with a 24px glyph and the standard 40px icon control.
 On touch, record list search has space below the header and fills the row beside
 any filter button. Email filters use the shared filter drawer. Each section's

@@ -87,7 +87,15 @@ export function forgetSetupTiming(computerId: string) {
 /** Setup is over for good: the computer is up, or gone. */
 export function setupSettled(computer: ComputerStatus): boolean {
   return match(computer.status)
-    .with('ready', 'stopped', 'starting', 'stopping', 'released', () => true)
+    .with(
+      'ready',
+      'unhealthy',
+      'stopped',
+      'starting',
+      'stopping',
+      'released',
+      () => true
+    )
     .with(
       'purchasing',
       'setting_up',

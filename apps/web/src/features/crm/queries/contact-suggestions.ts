@@ -60,7 +60,7 @@ export function useQuickAccessCrmContactsQuery(
 ) {
   const query = useCrmContactsQuery(deps, enabled, () => '', 500);
   const contacts = createMemo<CrmContactEntity[]>(() =>
-    queryReadyGate(query)
+    enabled() && queryReadyGate(query)
       ? query.data.pages.flatMap((page) =>
           page.contacts.map(toCrmContactEntity)
         )

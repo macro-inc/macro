@@ -37,6 +37,10 @@ runs: input a function doesn't take is refused with the compiler's error.
   (`.worktrees/`), never here, and bring it in with `bin/agent land`. Memory
   and `AGENT.md` are edited in place.
 - Never edit `node_modules/@macro-inc/muppet`: the library is a dependency.
+- Never change `muppetApi` in `package.json`: it is the muppet API the
+  template was written for, and your computer's image decides which muppet
+  you run on. Code can only use what that muppet has (`land` type-checks
+  against it). Template authors raise it, after muppet's `apiLevel`.
 - Never start a second `bin/agent run`: two would answer the same messages.
 - Nothing in this repository names a particular agent, owner or product,
   outside `agent.json` and `state/`. Keep it that way: it is a template.

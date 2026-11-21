@@ -38,6 +38,7 @@ vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
+  ChatWithAgentButton: () => null,
   openChatWithAgent: vi.fn(),
 }));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({
@@ -95,6 +96,7 @@ vi.mock('@core/context/channels', () => ({
   useChannelCanCall: () => () => true,
   useChannelName: () => () => 'channel-name',
   useChannelType: () => () => 'private',
+  useChannelsContext: () => ({ channelsById: () => ({}) }),
 }));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: () => ({ isSuccess: false, data: undefined }),

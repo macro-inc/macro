@@ -183,7 +183,14 @@ expanded workflows. Disk and write costs are measured, not assumed free.
 
 **Name-policy cutover:** the approved [name-focused search design](contact-name-search-proposal.md)
 is now the active local-only suggestion path: among exact full or first names and all-word prefixes, people the viewer has a direct message with come first (policy 6), each group by name tier;
-then literal contains, then address terms, recent-first with identity ties. Consumers preserve that
+then literal contains, then address terms, recent-first with identity ties. Policy 7 lets a
+caller pass a list order (`listPriority`, groups of contact list keys, and `onlyListed`):
+then the messaged split gives way to name stage, list group, recency. With
+`enable-contact-lists`, personal @mention windows pass teammates, then interacted and
+invited, then Gmail and Outlook contacts; other surfaces pass none yet. Hosts report their
+policy only in answers and those on 5 or 6 refuse list fields, so the web sends an order
+only to a host that has answered with 7 (the first search on a host goes without it and
+is resent). Consumers preserve that
 order; server suggestion fallback and old person scoring are removed. Partial
 hydration stays explicit, and refresh schedules background sync. Fresh regular-profile
 runs of `94dce7c0` put 100k broad command reads at 89–92 ms, recipient reads at
@@ -232,8 +239,9 @@ branch changes, not a claim that the feature is deployed.
   retention; the old Solid store and separate CallKit name queue are removed.
 - No web consumer or handwritten web client requests the full directory. The retired
   full-list query/hooks and shared recipient pool no longer exist, including their
-  fixture shims. Contact invalidations only schedule the bounded refresh runner;
-  they cannot recreate the old query. Active label retention scales with mounted
+  fixture shims. Contact invalidations schedule the bounded refresh runner and,
+  when they name changed contacts, an exact lookup of just those ids; they cannot
+  recreate the old query. Active label retention scales with mounted
   readers; inactive names and outstanding name work have explicit budgets.
 - The deployed contacts GET endpoint and SDK user search still have compatibility
   consumers outside the web app; retire those only through their own API migration.
@@ -270,7 +278,10 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   existing email fallback choice. Self remains included.
 - [x] Define a distinct viewer-scoped contact record and stable normalized identity.
   `GraphqlContact.id` derives from the viewer/person pair; `userId` identifies the
-  target. Names do not affect identity.
+  target. Names do not affect identity. `lists` carries the viewer's list keys
+  for the person (`teammates`, `interacted`, `invited`, `gmail`, `outlook`),
+  read from the list-aware tables for every viewer; which store chooses the
+  directory's ids follows the per-viewer `contacts-list-reads` flag.
   Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
   do not merge viewer-specific names into a global public-profile record.
 - [x] Provide bounded search and batch ID/email resolution under the same authorized
@@ -436,6 +447,14 @@ rewind an active pass. Hourly passes refresh profile/address-book names even
 without graph events. Leadership/account/generation changes interrupt the job;
 interrupted scans resume from their last durable cursor.
 
+An invalidation that names its changed contacts (`{"changed": [ids]}`, at most
+500; the contacts worker sends the other end of each connection it wrote) also
+makes the leader tab re-read those ids through the exact lookup and store them
+under the contact write fence, so a new contact reaches pickers within seconds.
+Scan pages and these top-ups take turns on each cache host's fence
+(`contacts/write-turn.ts`); selection lookups still write outside those turns.
+A top-up never deletes: the scan's verification pass still handles removals.
+
 Track cold, partial, complete, and failed synchronization distinctly. Discard stale
 async responses after account/generation changes. Interrupted or failed scans never
 prove that omitted contacts were removed.
@@ -455,7 +474,14 @@ foreign record keys, duplicates, unsolicited IDs and omitted self. Context stubs
 never establish membership; malformed membership prevents completion. Empty raw
 windows may continue. Hydration-page omissions never authorize deletion.
 
-Checkpoint v2 stores phase, cursor and scalar completeness/progress. Verification
+Checkpoint v2 stores phase, cursor and scalar completeness/progress. The web
+flag `enable-contact-lists` adds `lists` to the two reads that write contacts
+to the cache (the backfill page and the exact lookup); the fetch-only server
+pages never select it, and a server without the field still answers every
+read while the flag is off. Storing lists needs one full rescan, so it runs
+under checkpoint v3: only the clients the flag turns on start cold, and
+turning it off returns them to their v2 checkpoint. Native binaries take their
+schema from the bundle's SDL, so builds older than the field store it too. Verification
 resumes after failures/interruption, and completion is published only after its
 last acknowledged write and storage-generation recheck. Account/session,
 leadership and storage changes interrupt work. Offline/error responses never
@@ -607,9 +633,10 @@ cannot safely certify absence. No production migration/deployment is implied.
 - [x] Remove web `useContacts()`, `useContactsQuery()`, `useCombinedRecipients()`,
   full-list query options/key, re-exports, manual GET wrapper and obsolete fixture
   shims after the caller audit. Message send, native sharing and websocket contact
-  invalidations now issue only `requestContactRefresh()` hints to the existing
-  bounded/coalesced runner. Shared recipient mapping types remain for scoped windows;
-  deployed backend/SDK APIs retain compatibility.
+  invalidations now issue `requestContactRefresh()` hints to the existing
+  bounded/coalesced runner, plus an exact top-up when they name changed
+  contacts. Shared recipient mapping types remain for scoped windows; deployed
+  backend/SDK APIs retain compatibility.
 
 Rediscover callers rather than treating this list as exhaustive:
 

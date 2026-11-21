@@ -41,6 +41,16 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   for replanning while unrelated objects continue.
   If a linked data source disappears after planning, plan and approve again to
   choose its database or task-list format; the old review cannot guess a new shape.
+
+Personal choices create owner-only copies. Personal tasks omit teammate
+assignees because assignment grants access; the import report lists the omitted
+assignee count. For Notion, when an old destination
+folder was explicitly shared, personal copies go into the matching path under
+**Notion (personal)**. The import report lists each relocation; the old shared
+folder stays as it is. A later shared plan uses a separate shared folder when
+reusing the old folder would expose personal contents, and the report explains
+that separation.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.

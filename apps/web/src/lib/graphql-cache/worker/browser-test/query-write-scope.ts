@@ -54,6 +54,7 @@ async function read(opKey: number) {
 }
 async function write(limit: number, name: string) {
   await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
     query,
     variables: variables(limit),
     data: data(name),

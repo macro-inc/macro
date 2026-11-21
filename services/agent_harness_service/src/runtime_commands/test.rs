@@ -288,7 +288,7 @@ impl hosted_runtimes::domain::agent::AgentEnrollmentSource for AdaAgent {
 type Sent = Arc<std::sync::Mutex<Vec<(HarnessId, std::collections::BTreeMap<String, String>)>>>;
 
 fn recording_send(sent: Sent) -> SendAgent {
-    Arc::new(move |harness, environment| {
+    Arc::new(move |harness, environment, _traceparent| {
         sent.lock().unwrap().push((harness, environment.0.clone()));
         Box::pin(async { true })
     })
@@ -338,6 +338,53 @@ async fn the_replica_holding_the_socket_issues_the_agent_and_sends_it_down() {
                 .into_iter()
                 .collect()
         )]
+    );
+}
+
+#[tokio::test]
+async fn the_agent_is_handed_the_setup_trace_its_hand_off_carried() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let traceparents = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let send: SendAgent = {
+        let traceparents = Arc::clone(&traceparents);
+        Arc::new(move |_harness, _environment, traceparent| {
+            traceparents.lock().unwrap().push(traceparent);
+            Box::pin(async { true })
+        })
+    };
+    let mut request = hand_off();
+    request.trace_context = [(
+        "traceparent".to_owned(),
+        "00-11111111111111111111111111111111-2222222222222222-01".to_owned(),
+    )]
+    .into_iter()
+    .collect();
+
+    let _guard = tracing::subscriber::set_default(subscriber);
+    deliver_agent_to_runtime(
+        request,
+        Arc::new(AdaAgent::default()),
+        Arc::default(),
+        Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
+        send,
+    )
+    .await;
+
+    let traceparents = traceparents.lock().unwrap();
+    let [Some(traceparent)] = traceparents.as_slice() else {
+        panic!("expected one hand-off with a traceparent, got {traceparents:?}");
+    };
+    assert!(
+        traceparent.starts_with("00-11111111111111111111111111111111-"),
+        "{traceparent}"
     );
 }
 

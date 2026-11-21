@@ -32,6 +32,7 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
 - In `InputGroup`, keep the input as the single control and place surrounding
   content in `Addon` slots. Use `align` for visual placement so accessible DOM
   order stays independent of layout.
+- Keep input-group addon clicks on native controls from refocusing the text input, and preserve event bubbling for delegated controls.
 
 ## Button and ButtonGroup
 

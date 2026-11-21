@@ -27,6 +27,7 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import {
+  bumpSoupEntityTouchedAt,
   getSoupEntityById,
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
@@ -619,6 +620,28 @@ const CRM_ASSOCIATION_PROPERTY_IDS: readonly string[] = [
   SYSTEM_PROPERTY_IDS.CONTACTS,
 ];
 
+/**
+ * Whether a property's values decide which items a CRM record lists: the
+ * built-in Companies and Contacts properties, and a custom entity property,
+ * which lists a task on the records it references.
+ */
+function decidesCrmAssociation(
+  property: Property | PropertyDefinitionDomain
+): boolean {
+  if (
+    CRM_ASSOCIATION_PROPERTY_IDS.includes(getPropertyDefinitionId(property))
+  ) {
+    return true;
+  }
+  if (property.valueType !== 'ENTITY') return false;
+
+  // Properties read over GraphQL carry no owner, so the built-in flag decides.
+  const builtIn = isInstantiatedProperty(property)
+    ? (property.isSystemProperty ?? false)
+    : property.isSystem;
+  return !builtIn && property.owner.scope !== 'database';
+}
+
 function invalidatePropertySaveCaches(
   item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
@@ -632,11 +655,7 @@ function invalidatePropertySaveCaches(
     'entity-properties'
   );
   // CRM record lists resolve membership on the server, not from these rows.
-  if (
-    CRM_ASSOCIATION_PROPERTY_IDS.includes(
-      getPropertyDefinitionId(item.property)
-    )
-  ) {
+  if (decidesCrmAssociation(item.property)) {
     fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
   }
 }
@@ -647,6 +666,9 @@ function handleCommittedPropertySave(
 ): void {
   if (disposition.kind !== 'committed') return;
 
+  // A saved property is the viewer's own touch (a PropertyChanged activity),
+  // so Recent moves the item now rather than after a later refetch.
+  bumpSoupEntityTouchedAt(item.entityId);
   trackTaskPropertySave(
     item.entityId,
     getPropertyDefinitionId(item.property),

@@ -929,6 +929,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
                 routine_connect,
             ),
+            teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
+            crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         }),
         suggestion_code,
         request_sessions,

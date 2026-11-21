@@ -198,15 +198,36 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    pub(super) async fn eligible_interactions(
-        &self,
+    /// Whether the mailbox may contribute this address at all: a live primary
+    /// mailbox, current membership, consent (in a queued worker's exact
+    /// generation) and an unblocked domain. It reads no message history.
+    async fn admitted(
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
         email: &str,
-    ) -> Result<Option<EligibleInteractions>, CrmError> {
-        self.eligible_interactions_with_authority(conn, team, link, email, None)
-            .await
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
+    ) -> Result<bool, CrmError> {
+        use crate::domain::email_policy_work::EmailHistoryAuthority;
+        let (incarnation, version) = match authority {
+            Some(EmailHistoryAuthority::Policy(generation)) => (
+                Some(generation.consent_incarnation),
+                Some(generation.policy_version),
+            ),
+            None | Some(EmailHistoryAuthority::Legacy) => (None, None),
+        };
+        sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/admission.sql",
+            team,
+            link,
+            email,
+            authority.is_some(),
+            incarnation,
+            version
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(
@@ -230,29 +251,9 @@ impl CompaniesRepositoryImpl {
             .execute(&mut *conn)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        use crate::domain::email_policy_work::EmailHistoryAuthority;
-        let (incarnation, version) = match authority {
-            Some(EmailHistoryAuthority::Policy(generation)) => (
-                Some(generation.consent_incarnation),
-                Some(generation.policy_version),
-            ),
-            None | Some(EmailHistoryAuthority::Legacy) => (None, None),
-        };
         // Reject stale work cheaply, without a mailbox row lock. Sync commits
         // need that row while this potentially long address-history scan runs.
-        let admitted = sqlx::query_file_scalar!(
-            "src/outbound/companies_repo/email_privacy/admission.sql",
-            team,
-            link,
-            email,
-            authority.is_some(),
-            incarnation,
-            version
-        )
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        if !admitted {
+        if !Self::admitted(conn, team, link, email, authority).await? {
             return Ok(None);
         }
         let row = sqlx::query_file!(
@@ -530,19 +531,16 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         link: Uuid,
         email: &str,
     ) -> Result<bool, CrmError> {
-        let mut tx = self
+        // Admission only. The population transaction scans the address
+        // history once, after skipping a job that would change nothing: one
+        // job is queued per message, so most of a busy contact's jobs are
+        // duplicates that need no history at all.
+        let mut conn = self
             .pool
-            .begin()
+            .acquire()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let eligible = self
-            .eligible_interactions(&mut tx, team, link, &email.to_ascii_lowercase())
-            .await?
-            .is_some();
-        tx.commit()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(eligible)
+        Self::admitted(&mut conn, team, link, &email.to_ascii_lowercase(), None).await
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %team), err)]

@@ -69,7 +69,6 @@ fn instance_settings_keep_native_arguments_after_the_separator() {
             "codex",
             "--state-dir",
             "/private state",
-            "--managed-worktrees",
             "--model=custom-model",
             "--no-focus",
             "--",
@@ -92,4 +91,62 @@ fn viewer_states_encode_as_program_status_reports() {
         AgentState::Blocked.osc_7501(Some("Run ls?")),
         "\x1b]7501;state=blocked:app=macro:kind=permission:msg=UnVuIGxzPw==\x1b\\"
     );
+}
+
+#[test]
+fn a_herdr_core_terminal_runs_the_hc_its_hc_bin_names() {
+    let herdr = HerdrSession::from_environment(HerdrEnvironment {
+        hc_terminal_id: Some("t3".to_owned()),
+        hc_bin: Some("/nix/store/core/bin/hc".to_owned()),
+        ..HerdrEnvironment::default()
+    });
+    assert!(matches!(
+        herdr,
+        Ok(Some(HerdrSession::Core { bin, terminal }))
+            if bin == std::path::Path::new("/nix/store/core/bin/hc") && terminal == "t3"
+    ));
+}
+
+#[test]
+fn a_herdr_core_terminal_without_hc_bin_is_refused() {
+    for hc_bin in [None, Some(String::new())] {
+        let herdr = HerdrSession::from_environment(HerdrEnvironment {
+            hc_terminal_id: Some("t3".to_owned()),
+            hc_bin,
+            ..HerdrEnvironment::default()
+        });
+        assert!(matches!(herdr, Err(HcBinMissing)));
+    }
+}
+
+#[test]
+fn a_herdr_core_terminal_without_hc_bin_does_not_fall_back_to_an_inherited_herdr_pane() {
+    let herdr = HerdrSession::from_environment(HerdrEnvironment {
+        hc_terminal_id: Some("t3".to_owned()),
+        herdr_env: Some("1".to_owned()),
+        herdr_bin_path: Some("/usr/bin/herdr".to_owned()),
+        ..HerdrEnvironment::default()
+    });
+    assert!(matches!(herdr, Err(HcBinMissing)));
+}
+
+#[test]
+fn an_empty_hc_terminal_id_is_not_a_herdr_core_terminal() {
+    let outside = HerdrSession::from_environment(HerdrEnvironment {
+        hc_terminal_id: Some(String::new()),
+        ..HerdrEnvironment::default()
+    });
+    assert!(matches!(outside, Ok(None)));
+
+    let pane = HerdrSession::from_environment(HerdrEnvironment {
+        hc_terminal_id: Some(String::new()),
+        herdr_env: Some("1".to_owned()),
+        herdr_workspace_id: Some("w2".to_owned()),
+        ..HerdrEnvironment::default()
+    });
+    assert!(matches!(
+        pane,
+        Ok(Some(HerdrSession::Legacy { bin, workspace_id }))
+            if bin == std::path::Path::new("herdr") && workspace_id.as_deref() == Some("w2")
+    ));
 }

@@ -17,6 +17,7 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { Match, Show, Switch } from 'solid-js';
 import { MobileCreateButton } from './MobileCreateButton';
 import {
@@ -65,6 +66,7 @@ export function MobilePageCreateButton() {
     view: MobileNavViewId | undefined
   ): PageCreateAction | undefined => {
     if (view === 'companies') {
+      if (!crmAccessAllowed()) return;
       return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {

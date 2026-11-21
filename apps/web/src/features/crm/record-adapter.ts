@@ -10,6 +10,7 @@ import { isCrmContactEntity } from '@entity/types/entity';
 import { createContactAliasWindow } from '@queries/contacts/alias-window';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { createContactDiscovery } from './primitives/contact-discovery';
@@ -37,7 +38,7 @@ export function useCrmContactByEmailQuery(
     { storage: storageServiceClient, client: useQueryClient() },
     teamId,
     email,
-    enabled
+    () => enabled() && crmAccessAllowed()
   );
 }
 
@@ -45,7 +46,7 @@ export function useCrmContactByEmailQuery(
 export function useQuickAccessCrmContactsQuery() {
   return createContactSuggestions(
     { storage: storageServiceClient, client: useQueryClient() },
-    () => true
+    crmAccessAllowed
   );
 }
 
@@ -59,11 +60,11 @@ export function useCrmContactMentionSource(
 ) {
   const query = useCrmContactsQuery(
     { client: useQueryClient() },
-    enabled,
+    () => enabled() && crmAccessAllowed(),
     search
   );
   const entities = createMemo<EntityItem[]>(() =>
-    queryReadyGate(query)
+    crmAccessAllowed() && queryReadyGate(query)
       ? query.data.pages.flatMap((page) =>
           page.contacts.map((record) =>
             toCrmContactItem(toCrmContactEntity(record))
@@ -120,7 +121,10 @@ export function useCrmContactDiscovery(
   const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const query = () => search().trim();
   const enabled = () =>
-    !contactSearchDisabled().enabled && active() && query().length > 0;
+    crmAccessAllowed() &&
+    !contactSearchDisabled().enabled &&
+    active() &&
+    query().length > 0;
   const serverQuery = debouncedDependent(query, CONTACT_SEARCH_DEBOUNCE_MS);
   const cached = useQuickAccess().useList({
     buckets: ['crm_contact'],
