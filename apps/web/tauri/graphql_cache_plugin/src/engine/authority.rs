@@ -51,8 +51,9 @@ impl EngineHandle {
         self
     }
 
-    /// A read on this handle stops waiting for the engine, failing, once
-    /// [`Self::abandon`] names `request_id`. Without an id it always waits.
+    /// A read on this handle that [`Self::abandon`] names by `request_id`
+    /// before it gets the engine fails without reading. Without an id it
+    /// always reads.
     pub fn abandonable(mut self, request_id: Option<String>) -> Self {
         self.abandon = request_id
             .and_then(|id| self.abandons.register(id))
@@ -60,10 +61,10 @@ impl EngineHandle {
         self
     }
 
-    /// Gives up the read registered with `request_id`, if it still waits for
-    /// the engine. Takes no lock the engine holds.
-    pub fn abandon(&self, request_id: &str) {
-        self.abandons.abandon(request_id);
+    /// Gives up the read registered with `request_id`, and says whether one
+    /// was running. Takes no lock the engine holds.
+    pub fn abandon(&self, request_id: &str) -> bool {
+        self.abandons.abandon(request_id)
     }
 
     async fn check_generation(&self, state: &mut EngineState) -> Result<(), String> {
@@ -93,42 +94,28 @@ impl EngineHandle {
     }
 
     /// [`Self::ready_read`] for a read that registers operation `op_id`'s
-    /// dependencies. Abandoned, it leaves the operation for the next command
-    /// that takes the engine to register against every change, so later
-    /// writes still report it, as they would have once the read ran.
+    /// dependencies. An abandoned read still waits its turn, then gives the
+    /// engine back without reading, so whatever was queued behind it finds
+    /// the engine as before. In place of the dependencies it would have
+    /// registered, it registers the operation against every change and drops
+    /// its retained view: the next write reports the operation, and the
+    /// caller's next watch reads it whole, as it would have had to after a
+    /// read it never saw.
     pub(super) async fn ready_op_read(
         &self,
         op_id: Option<&str>,
     ) -> Result<AccessGuard<'_, EngineState>, String> {
-        let mut state = match &self.abandon {
-            None => self.inner.read().await,
-            // Giving up the wait is safe: `read` leaves the queue on drop and
-            // wakes whoever it would have. A read abandoned as it got the
-            // engine gives it back before reading.
-            Some(abandon) => {
-                let state = tokio::select! {
-                    biased;
-                    () = abandon.abandoned() => None,
-                    state = self.inner.read() => Some(state),
-                };
-                match state {
-                    Some(state) if !abandon.is_abandoned() => state,
-                    state => {
-                        match (state, op_id) {
-                            (Some(mut state), Some(op_id)) => register_broadly(&mut state, op_id),
-                            (None, Some(op_id)) => {
-                                let op_id = op_id.to_owned();
-                                self.inner.defer(move |state: &mut EngineState| {
-                                    register_broadly(state, &op_id)
-                                });
-                            }
-                            (_, None) => {}
-                        }
-                        return Err(super::abandon::ABANDONED.into());
-                    }
-                }
+        let mut state = self.inner.read().await;
+        if self
+            .abandon
+            .as_ref()
+            .is_some_and(|abandon| abandon.is_abandoned())
+        {
+            if let Some(op_id) = op_id {
+                register_broadly(&mut state, op_id);
             }
-        };
+            return Err(super::abandon::ABANDONED.into());
+        }
         self.resume_retirement(&mut state).await?;
         Ok(state)
     }

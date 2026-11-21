@@ -1630,15 +1630,17 @@ drops pending callbacks.
 
 Tauri cannot cancel a command, and the engine runs commands one at a time, so a
 caller that stops waiting loses only the outcome of work that still happens,
-with one exception. Timed commands carry a `requestId`, and on timeout the host
-sends it to `graphql_cache_abandon`. A read on the engine's read path (`read`,
-`watch`, explicit keys, search, people context and search, entity filter and
-resume, calendar range, query inspection, current authority) that has not yet
-taken the engine then fails at once, so reads nobody waits for do not queue
-ahead of live ones after a stall. A live-view release is never abandoned, and
-an abandoned read of an operation leaves that operation registered against
-every change, so the next write still reports it. Other timed commands ignore
-the id.
+with one exception. Timed commands other than init carry a `requestId`, and on
+timeout the host sends it to `graphql_cache_abandon`. A read on the engine's
+read path (`read`, `watch`, explicit keys, search, people context and search,
+entity filter and resume, calendar range, query inspection, current authority)
+that has not yet taken the engine keeps its place in the queue, and when its
+turn comes it gives the engine back without reading, so reads nobody waits for
+do not hold the engine ahead of live ones after a stall. An abandoned read of
+an operation registers that operation against every change and drops its
+retained watch view instead of reading: the next write reports it, and its
+next watch reads it whole. A live-view release never takes an id, and a read
+that already holds the engine finishes. Other timed commands ignore the id.
 As in worker-host, only reads and initialization have the ten-second deadline:
 a read falls back to the network, and every request waits behind init. Writes,
 hydration, queue claims and settlements, deletes, invalidations, teardown and

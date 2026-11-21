@@ -63,7 +63,8 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
 }
 
 /// The handle for a read the webview may abandon: given `request_id`, the read
-/// stops waiting for the engine once `graphql_cache_abandon` names it.
+/// gives the engine back without reading if `graphql_cache_abandon` names it
+/// before its turn.
 fn reading_handle(
     state: &State<'_, CacheState>,
     request_id: Option<String>,
@@ -71,25 +72,25 @@ fn reading_handle(
     Ok(engine_handle(state)?.abandonable(request_id))
 }
 
-/// The webview stopped waiting for the read sent with `request_id`: if it still
-/// waits for the engine, it gives up, so reads nobody waits for do not queue
-/// ahead of the ones somebody does. Takes no engine lock. Older bundles never
-/// send it; newer ones ignore its absence on older binaries.
+/// The webview stopped waiting for the read sent with `request_id`: if it has
+/// not got the engine yet, it will skip reading when it does, so reads nobody
+/// waits for do not hold the engine ahead of the ones somebody does. Says
+/// whether the read was still running. Takes no engine lock. Older bundles
+/// never send it; newer ones ignore its absence on older binaries.
 #[tauri::command]
 pub async fn graphql_cache_abandon(
     state: State<'_, CacheState>,
     request_id: String,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     // Not through a cloned handle: shutdown fails while another handle lives.
-    state
+    Ok(state
         .0
         .lock()
         .map_err(|_| "graphql cache state poisoned".to_string())?
         .as_ref()
         .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())?
         .handle
-        .abandon(&request_id);
-    Ok(())
+        .abandon(&request_id))
 }
 
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;

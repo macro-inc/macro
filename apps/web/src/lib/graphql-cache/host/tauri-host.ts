@@ -323,11 +323,26 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache.ipc.outcome',
         deadline.timedOut ? 'timeout' : 'error'
       );
-      // Older binaries lack the abandon command; the read then runs as before.
-      // The native read span records whether it gave up its wait.
+      // A marked read skips its turn natively, unless it already holds the
+      // engine; the native read span records the skip. Older binaries lack
+      // the command, and the read then runs as before. Nothing surfaces.
       if (deadline.timedOut && requestId) {
         span.setAttr('graphql_cache.ipc.abandoned', true);
-        void invoke(ABANDON_COMMAND, { requestId }).catch(() => undefined);
+        fireAndForget(
+          span.span('graphql_cache.ipc.abandon', async (abandon) => {
+            let outcome: string;
+            try {
+              const running = await invoke<boolean>(ABANDON_COMMAND, {
+                requestId,
+              });
+              outcome = running ? 'marked' : 'not_running';
+            } catch {
+              outcome = 'failed';
+            }
+            abandon.setAttr('graphql_cache.ipc.abandon.outcome', outcome);
+          }),
+          'graphql_cache.ipc.abandon'
+        );
       }
       span.error(
         deadline.timedOut
