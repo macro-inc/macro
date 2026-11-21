@@ -55,8 +55,11 @@ contract and the multi-target verification commands.
   termination — don't read passing tests here as proof of that.
 - `adopt_previous` is the only way files move between identities: it moves
   main and WAL together, only under the older identity's free lock, and never
-  onto an existing file. Don't checkpoint or copy instead; a copy leaves the
-  older build a second queue to replay.
+  onto an existing file, journaling the move until the moved files open so a
+  stop resumes it or hands the files back. Don't checkpoint or copy instead; a
+  copy leaves the older build a second queue to replay. An open that would
+  delete files an unfinished adoption brought (a recovery open, a reset) calls
+  `return_adoption` first.
 
 ## Related
 

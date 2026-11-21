@@ -107,17 +107,50 @@ this build's database does not exist yet, the open moves the newest upgradable
 older database of the scope to this build's name (`OpfsOwner::adopt_previous`,
 main and WAL together, under the older build's free owner lock) and then opens
 it, which runs the steps. A tab of the older build still holding its lock, a
-browser without OPFS moves, or a failed move leaves the old file where it is and
-starts empty, as every version change did before. The open result reports
-`upgraded-existing` with `fromStorageVersion`, and `carryForward` says whether
-an older database was moved or left behind; `graphql_cache.schema_init` records
-both. The coordinator protocol carries an upgrade as `opened-existing`, since
-storage survived.
+browser without OPFS moves, a pair that does not start like a database, or a
+failed move leaves the old file where it is and starts empty, as every version
+change did before. The open result reports `upgraded-existing` with
+`fromStorageVersion`, and `carryForward` says what happened to the older
+database; `graphql_cache.schema_init` records both. The coordinator protocol
+carries an upgrade as `opened-existing`, since storage survived.
+
+A journal beside this build's files names the older database from just before
+the move until the moved files first open. A worker stopped in between leaves
+it behind, and the next open acts on it before anything else: an ordinary open
+completes the move and opens the file (`resumed`); a recovery open, which the
+coordinator asks for after losing a worker mid-open, hands the files back to the
+older name before wiping its own (`returned`). A moved file this build cannot
+open (a failing step, an incompatible shape) is handed back the same way before
+this build starts empty, so its queued writes stay with the build that wrote
+them. Once the moved files have opened they are this build's own, and a later
+recovery open discards them like any others.
+An open slower than the coordinator's database watchdog (20 seconds) counts as
+a lost worker, so the files go back the same way.
+
+Before upgrades a newer build never touched an older file, so its queued writes
+waited there until that build ran again. Three narrow windows can now lose them
+instead, each needing a worker lost mid-open:
+
+- the worker stops between the two moves and an older build's tab opens its
+  half before this build opens again: the journal can neither resume nor
+  return, and both halves reset;
+- the worker stops after the move, before the first open finished, and an older
+  build's tab opens its own name before this build opens again: the files
+  cannot go back and are reset (`discarded`);
+- the worker is lost after the first open succeeded but before the coordinator
+  saw it ready: the recovery open wipes the upgraded file.
+
+An older tab holding its lock, or this build's file already existing, when the
+newer build first opens leaves the older file where it is, as before upgrades:
+its queue is sent only if that build runs again.
 
 Returning to the older build after a move finds its own name empty and starts
 fresh; its queued writes went forward with the file and are sent by the newer
-build. The next newer open finds its own file and moves nothing again. A
-recovery open never carries anything forward.
+build. A file handed back after a step had already committed holds the newer
+version, so the older build resets it. Natively, an older build opening a file
+a newer build upgraded resets it, as any newer file did before. The next newer
+open finds its own file and moves nothing again. A recovery open never carries
+anything forward.
 
 Only storage versions migrate this way. A record format change keeps its own
 path above, and a GraphQL schema epoch change still starts a new file.

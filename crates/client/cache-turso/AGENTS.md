@@ -49,7 +49,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - The `web` wasm test target checks streamed search over real OPFS; use the [browser runner](../turso-opfs/README.md#repeatable-verification).
 - `cargo test --release -p cache-turso --lib compare_search_scan_options -- --ignored --nocapture`: isolate prepared-statement, covering-index, and borrowed-row costs on a temporary database, without changing production schema.
 - `cargo test --release -p cache-turso --lib generated_chains_long_run -- --ignored`: 1,000 generated storage upgrade chains with interruptions, each checked against a fresh file at the target version.
-- `CACHE_MIGRATION_DB=<bench database> cargo test --release -p cache-turso --lib --features migration-test-hooks upgrade_cost_on_a_retained_cache -- --ignored --nocapture`: time the 11 to 12 upgrade, and each of its statements, against an ordinary reopen of the same database (a `cache-bench` file from `crates/client/cache-bench`). `CACHE_MIGRATION_OUT=<dir>` also keeps both shapes for the browser measurement in `cache-wasm`.
+- `CACHE_MIGRATION_DB=<bench database> cargo test --release -p cache-turso --lib --features migration-test-hooks upgrade_cost_on_a_retained_cache -- --ignored --nocapture`: time the 11 to 12 upgrade, and each of its statements, against an ordinary reopen of the same database: any closed cache file of this build written under the `cache-bench` scope, such as the production-size p50 and p90 files the separate `cache-bench` generator writes. `CACHE_MIGRATION_OUT=<dir>` also keeps both shapes for the browser measurement in `cache-wasm`.
 
 ## Gotchas
 

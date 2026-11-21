@@ -5,10 +5,10 @@ Browser-only Turso `Clock`/`IO`/`File` adapter for DedicatedWorker-owned OPFS.
 ## Ownership and recovery boundary
 
 `OpfsOwner::acquire(database_identity)` validates one direct-child canonical
-identity (reserving the `-wal` suffix) and derives both the exclusive Web Lock
-name and main/WAL paths from it. There are no independent scope/path inputs or
-main-as-WAL aliases that could map the same files to different locks. `open()`
-accepts no path argument. The lock remains held
+identity (reserving the `-wal` and `-adopting` suffixes) and derives both the
+exclusive Web Lock name and main/WAL paths from it. There are no independent
+scope/path inputs or main-as-WAL aliases that could map the same files to
+different locks. `open()` accepts no path argument. The lock remains held
 through Turso use, consuming close, preserve/reset, and idle ownership, and is
 released only by `OpfsOwner::release()`.
 
@@ -25,13 +25,24 @@ own paths, which only this owner can create while it holds their lock, and moves
 nothing if either exists. Otherwise it takes the older identity's lock only if
 that lock is free (`ifAvailable`) and holds it through both moves; a held lock
 means a context of the older build may have the files open, and nothing moves.
-Main and WAL move under their new names together, so committed WAL frames move
-with them and no checkpoint is needed. A failed WAL move moves the main file
-back. A process stopped between the two moves leaves one path at each identity,
-which either identity's next open treats as an interrupted creation and resets.
-Browsers without `FileSystemHandle.move` report `Unsupported` and move nothing.
-`src/browser/test/adopt.rs` covers each outcome, the held lock, and the stop
-between moves in a real DedicatedWorker.
+A pair moves only if each file is empty or starts with its header (the SQLite
+header for main, a WAL magic number for the WAL), and not both are empty
+(`Unreadable` and `NothingToAdopt` otherwise). Main and WAL move under their
+new names together, so committed WAL frames move with them and no checkpoint is
+needed. Browsers without `FileSystemHandle.move` report `Unsupported` and move
+nothing.
+
+Before the first move the owner writes a journal beside its own files
+(`<identity>-adopting`, a reserved suffix) naming the older identity, and keeps
+it until the moved files have opened (`ConnectedOpfsSession::finish_adoption`).
+A process stopped between the two moves, or before the first open finished,
+leaves that journal behind: `resume_adoption` completes the move under the
+older identity's free lock, and `return_adoption` moves what arrived back to
+the older identity instead, for an open that would otherwise delete the files.
+A failed WAL move moves the main file back. Wiping or resetting an identity
+removes its journal with its pair. `src/browser/test/adopt.rs` covers each
+outcome, the held lock, the stop between moves, resuming and returning in a
+real DedicatedWorker.
 
 The crate tests physical lock contention in its real DedicatedWorker. Actual
 cross-worker termination/restart orchestration remains a WP-08 coordinator
