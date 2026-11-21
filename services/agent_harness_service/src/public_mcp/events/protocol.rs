@@ -72,7 +72,10 @@ impl From<EventsError> for McpError {
                 message,
                 Some(json!({"reason": reason})),
             ),
-            EventsError::ConfirmFilter { query, compiled } => McpError::invalid_params(
+            EventsError::ConfirmFilter {
+                arguments,
+                compiled,
+            } => McpError::invalid_params(
                 format!(
                     "Nothing is subscribed yet. Your query reads as: {} If that is what you \
                      want, repeat this request with `arguments` set to this error's \
@@ -80,7 +83,7 @@ impl From<EventsError> for McpError {
                     compiled.interpretation
                 ),
                 Some(json!({
-                    "arguments": {"query": query, "filter": &compiled.filter},
+                    "arguments": arguments,
                     FILTER_META: compiled.filter,
                     INTERPRETATION_META: compiled.interpretation,
                 })),
@@ -346,23 +349,22 @@ async fn stream<Sink: NotificationSink>(
     check_name_header(scope.extensions, &name)?;
     tracing::Span::current().record("mcp.event.name", name.as_str());
     let selected = selection(&name, &arguments)?;
-    let slot = events.claim_stream(&scope.user)?;
     // rmcp signals a client leaving without dropping this future, so setup
-    // stops on it too, releasing the slot rather than holding it until the
-    // model and the sources answer.
-    let setup = async {
-        let compiled = events.compile(&scope.user, &selected).await?;
-        let sources = super::stream::open_sources(&events.source, &scope.user, &compiled.filter)
-            .await
-            .map_err(|error| EventsError::Internal(error.0))?;
-        Ok::<_, EventsError>((compiled, sources))
-    };
-    let (compiled, sources) = tokio::select! {
+    // stops on it too, rather than waiting for the model and the sources.
+    let cancelled = || McpError::new(ErrorCode::INTERNAL_ERROR, "request cancelled", None);
+    // Words alone end here with their proposal, before taking a stream slot.
+    let compiled = tokio::select! {
         biased;
-        () = scope.cancel.cancelled() => {
-            return Err(McpError::new(ErrorCode::INTERNAL_ERROR, "request cancelled", None));
+        () = scope.cancel.cancelled() => return Err(cancelled()),
+        compiled = events.compile(&scope.user, &selected) => compiled?,
+    };
+    let slot = events.claim_stream(&scope.user)?;
+    let sources = tokio::select! {
+        biased;
+        () = scope.cancel.cancelled() => return Err(cancelled()),
+        sources = super::stream::open_sources(&events.source, &scope.user, &compiled.filter) => {
+            sources.map_err(|error| EventsError::Internal(error.0))?
         }
-        setup = setup => setup?,
     };
     tracing::Span::current().record("mcp.events.sources", sources.len());
     let heartbeat = heartbeat_ms

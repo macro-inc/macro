@@ -63,8 +63,17 @@ fn value(value: &McpFilterValue) -> String {
     }
 }
 
+/// `text` as a code span whose fence is longer than any run of backticks
+/// inside it, so a value holding backticks still reads as one value.
 fn code(text: &str) -> String {
-    format!("`{text}`")
+    let longest = text
+        .split(|character| character != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or(0);
+    let fence = "`".repeat(longest + 1);
+    let pad = if longest > 0 { " " } else { "" };
+    format!("{fence}{pad}{text}{pad}{fence}")
 }
 
 fn list<T>(items: &[T], conjunction: &str, show: impl Fn(&T) -> String) -> String {

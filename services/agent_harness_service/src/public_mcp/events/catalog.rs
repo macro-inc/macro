@@ -33,12 +33,41 @@ pub(crate) enum Selection {
     },
 }
 
+impl Selection {
+    /// The arguments as the subscription is keyed: the parsed values written
+    /// back, so arguments that mean the same thing (an empty `allOf` given or
+    /// left out, a query with surrounding spaces) name the same subscription.
+    pub(crate) fn arguments(&self) -> Value {
+        match self {
+            Self::Query { query, filter } => match filter {
+                Some(filter) => query_arguments(query, filter),
+                None => json!({"query": query}),
+            },
+            Self::Event { ids: Some(ids), .. } => json!({"ids": ids}),
+            Self::Event { ids: None, .. } => json!({}),
+        }
+    }
+}
+
+/// The `macro.events` arguments that confirm `filter` for `query`.
+pub(crate) fn query_arguments(query: &str, filter: &McpEventFilter) -> Value {
+    json!({"query": query, "filter": filter})
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct QueryArguments {
     query: String,
-    #[serde(default)]
+    /// Absent when only the words are sent; `null` is not a filter.
+    #[serde(default, deserialize_with = "present")]
     filter: Option<McpEventFilter>,
+}
+
+/// A field that, when present, must hold a value.
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -114,14 +143,11 @@ pub(crate) static EVENT_TYPES: LazyLock<Vec<Value>> = LazyLock::new(|| {
                     "description": "Which events you want, in plain words. Mentions mean \
                         mentions of you unless you name someone else."
                 },
-                "filter": {
-                    "type": "object",
-                    "description": "The filter you confirm for the query, exactly as the \
-                        first step returned it. Leave it out to see what the query compiles to."
-                }
+                "filter": FILTER_SCHEMA.0,
             },
             "required": ["query"],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "$defs": FILTER_SCHEMA.1,
         },
         "payloadSchema": payload_schema(),
     })];
@@ -148,6 +174,30 @@ pub(crate) static EVENT_TYPES: LazyLock<Vec<Value>> = LazyLock::new(|| {
         })
     }));
     types
+});
+
+/// The filter's JSON schema for `macro.events`'s `filter` argument, and the
+/// definitions it refers to, which go at the root of the input schema where
+/// its `#/$defs/…` references resolve.
+static FILTER_SCHEMA: LazyLock<(Value, Value)> = LazyLock::new(|| {
+    let mut schema = schemars::schema_for!(McpEventFilter).to_value();
+    let definitions = schema
+        .as_object_mut()
+        .and_then(|schema| {
+            schema.remove("$schema");
+            schema.remove("title");
+            schema.remove("$defs")
+        })
+        .unwrap_or_else(|| json!({}));
+    if let Some(schema) = schema.as_object_mut() {
+        schema.insert(
+            "description".to_owned(),
+            "The filter you confirm for the query, exactly as the first step returned it. \
+             Leave it out to see what the query compiles to."
+                .into(),
+        );
+    }
+    (schema, definitions)
 });
 
 /// The broker envelope Macro webhooks deliver.

@@ -21,8 +21,9 @@ use webhook::domain::mcp::filter::{
     McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
 };
 use webhook::domain::mcp::models::{
-    McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult,
-    McpSubscriptionErrorBody, McpSubscriptionId, McpTtlRequest, McpUnsubscribeRequest,
+    MAX_FILTER_BYTES, McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest,
+    McpSubscribeResult, McpSubscriptionErrorBody, McpSubscriptionId, McpTtlRequest,
+    McpUnsubscribeRequest,
 };
 use webhook::domain::models::{WEBHOOK_EVENT_NAMES, WebhookFilter};
 use webhook_signature::standard::SigningSecret;
@@ -102,6 +103,8 @@ fn event(name: &str, envelope: Value) -> SourceEvent {
 struct FakeCompiler {
     queries: Mutex<Vec<String>>,
     answer: Mutex<Option<CompileError>>,
+    /// The filter to answer with instead of `channel_mentions`.
+    filter: Mutex<Option<McpEventFilter>>,
     /// When set, each compile waits for it before answering.
     hold: Mutex<Option<Arc<tokio::sync::Notify>>>,
 }
@@ -120,7 +123,12 @@ impl FilterCompiler for FakeCompiler {
         }
         match self.answer.lock().unwrap().take() {
             Some(error) => Err(error),
-            None => Ok(channel_mentions()),
+            None => Ok(self
+                .filter
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(channel_mentions)),
         }
     }
 }
@@ -354,6 +362,8 @@ fn a_query_is_trimmed_and_bounded() {
         }
     );
     assert!(selection(QUERY_EVENT, &json!({"query": "x", "filter": {"anyOf": 1}})).is_err());
+    // `null` is not a filter, so it is refused rather than taken for words alone.
+    assert!(selection(QUERY_EVENT, &json!({"query": "x", "filter": null})).is_err());
     assert!(selection(QUERY_EVENT, &json!({"query": "   "})).is_err());
     let long = "a".repeat(MAX_QUERY_CHARS + 1);
     assert!(selection(QUERY_EVENT, &json!({"query": long})).is_err());
@@ -405,6 +415,15 @@ async fn list_offers_the_query_type_and_every_webhook_event() {
     assert_eq!(types.len(), WEBHOOK_EVENT_NAMES.len() + 1);
     assert_eq!(types[0]["name"], QUERY_EVENT);
     assert_eq!(types[0]["inputSchema"]["required"], json!(["query"]));
+    // The filter argument is described by the filter's own schema, whose
+    // references resolve at the input schema's root.
+    let schema = &types[0]["inputSchema"];
+    assert_eq!(schema["properties"]["filter"]["required"], json!(["anyOf"]));
+    let reference = schema["properties"]["filter"]["properties"]["anyOf"]["items"]["$ref"]
+        .as_str()
+        .unwrap();
+    let name = reference.strip_prefix("#/$defs/").unwrap();
+    assert!(schema["$defs"][name].is_object());
     for entry in types {
         assert_eq!(entry["delivery"], json!(["push", "webhook"]));
         assert!(!entry["description"].as_str().unwrap().is_empty());
@@ -766,6 +785,65 @@ async fn a_mismatched_name_header_is_refused() {
 // --- events/unsubscribe ---------------------------------------------------
 
 #[tokio::test]
+async fn arguments_that_mean_the_same_name_the_same_subscription() {
+    let fixture = fixture();
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(QUERY_EVENT, confirmed()),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    // Spaces around the words and an empty `allOf` spelled out are the same
+    // request.
+    let mut filter = serde_json::to_value(McpEventFilter::for_events(
+        vec!["message.mentioned".to_owned()],
+        None,
+    ))
+    .unwrap();
+    filter["anyOf"][0]["allOf"] =
+        serde_json::to_value(&channel_mentions().any_of[0].all_of).unwrap();
+    let mut spelled = filter.clone();
+    spelled["anyOf"][0]["ids"] = Value::Null;
+    call(
+        &fixture.events,
+        "events/unsubscribe",
+        json!({
+            "name": QUERY_EVENT,
+            "arguments": {"query": format!("  {MENTIONS} "), "filter": spelled},
+            "delivery": {"url": "https://agent.example/hook"},
+        }),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_proposal_too_large_to_confirm_is_refused() {
+    let fixture = fixture();
+    // A filter within its own limit whose arguments, words included, are not.
+    let ids: Vec<String> = (0..16).map(|n| format!("{n:0>220}")).collect();
+    let large = McpEventFilter::for_events(vec!["message.posted".to_owned()], Some(ids));
+    large.validate().unwrap();
+    assert!(serde_json::to_string(&large).unwrap().len() <= MAX_FILTER_BYTES);
+    *fixture.compiler.filter.lock().unwrap() = Some(large);
+    let query = "a".repeat(MAX_QUERY_CHARS);
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(QUERY_EVENT, json!({"query": query})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32602);
+    assert!(error.message.contains("too large to confirm"));
+    assert!(error.data.is_none());
+}
+
+#[tokio::test]
 async fn unsubscribe_removes_by_name_arguments_and_url() {
     let fixture = fixture();
     call(
@@ -927,7 +1005,7 @@ fn the_reading_names_every_alternative() {
     let filter = McpEventFilter {
         any_of: vec![
             McpFilterClause {
-                events: vec!["message.posted".to_owned(), "message.edited".to_owned()],
+                events: vec!["message.posted".to_owned(), "message.patched".to_owned()],
                 ids: Some(vec![CHANNEL.to_owned(), OTHER_CHANNEL.to_owned()]),
                 all_of: vec![McpFieldCondition {
                     field: McpFilterField::Actor,
@@ -944,7 +1022,7 @@ fn the_reading_names_every_alternative() {
     assert_eq!(
         super::describe::describe(&filter),
         format!(
-            "Any of: `message.posted` or `message.edited` events for `{CHANNEL}` or \
+            "Any of: `message.posted` or `message.patched` events for `{CHANNEL}` or \
              `{OTHER_CHANNEL}` where whoever acted (sent it, or for an edit, deletion or \
              attachment change, whoever made that change, not necessarily its author) is \
              `{OTHER}` or you; or `document.created` events."
@@ -970,6 +1048,25 @@ fn the_reading_names_the_sender_only_where_the_actor_is_the_sender() {
     );
     // A deletion's actor is whoever deleted the message, not its author.
     assert!(!super::describe::describe(&by_me(&["message.deleted"])).contains("the sender is"));
+}
+
+#[test]
+fn a_value_holding_backticks_reads_as_one_value() {
+    let in_parent = |values: &[&str]| McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: vec!["message.posted".to_owned()],
+            ids: None,
+            all_of: vec![McpFieldCondition {
+                field: McpFilterField::ParentType,
+                one_of: values.iter().map(|value| literal(value)).collect(),
+            }],
+        }],
+    };
+    let two = super::describe::describe(&in_parent(&["channel", "document"]));
+    let one = super::describe::describe(&in_parent(&["channel` or `document"]));
+    assert_ne!(two, one);
+    assert!(two.contains("a `channel` or `document`."));
+    assert!(one.contains("a `` channel` or `document ``."));
 }
 
 // --- the live source ------------------------------------------------------
@@ -1375,6 +1472,23 @@ async fn a_stream_of_words_alone_shows_its_filter_and_opens_nothing() {
         .map(|_| fixture.events.claim_stream(&me()))
         .collect();
     assert!(slots.iter().all(Result::is_ok));
+}
+
+#[tokio::test]
+async fn words_alone_get_their_proposal_even_with_every_stream_slot_held() {
+    let fixture = fixture();
+    let _held: Vec<_> = (0..MAX_STREAMS_PER_USER)
+        .map(|_| fixture.events.claim_stream(&me()).unwrap())
+        .collect();
+    let result = stream_with(
+        &fixture.events,
+        json!({"name": QUERY_EVENT, "arguments": {"query": MENTIONS}}),
+        |_, _| async {},
+    )
+    .await;
+    let error = result.unwrap_err();
+    assert_eq!(error.code.0, -32602);
+    assert_eq!(error.data.unwrap()["arguments"], confirmed());
 }
 
 #[tokio::test]

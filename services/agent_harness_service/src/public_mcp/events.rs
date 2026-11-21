@@ -37,8 +37,8 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use webhook::domain::mcp::filter::McpEventFilter;
 use webhook::domain::mcp::models::{
-    McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult,
-    McpSubscriptionErrorBody, McpTtlRequest, McpUnsubscribeRequest,
+    MAX_ARGUMENTS_BYTES, McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest,
+    McpSubscribeResult, McpSubscriptionErrorBody, McpTtlRequest, McpUnsubscribeRequest,
 };
 use webhook_signature::standard::SigningSecret;
 
@@ -103,11 +103,14 @@ pub(crate) enum EventsError {
     CallbackEndpoint(McpEndpointFailure),
     #[error("AI usage is not available: {0}")]
     NotAdmitted(String),
-    /// A request in words was compiled; the caller confirms the filter
-    /// before anything is subscribed. The display leaves out the filter and
-    /// the words, which may name people.
+    /// A request in words was compiled; the caller confirms the filter, by
+    /// sending `arguments`, before anything is subscribed. The display leaves
+    /// out the filter and the words, which may name people.
     #[error("the compiled filter awaits the caller's confirmation")]
-    ConfirmFilter { query: String, compiled: Compiled },
+    ConfirmFilter {
+        arguments: serde_json::Value,
+        compiled: Compiled,
+    },
     #[error("internal error")]
     Internal(rootcause::Report),
 }
@@ -258,8 +261,18 @@ impl McpEvents {
                 filter
                     .validate()
                     .map_err(|error| EventsError::InvalidParams(error.to_string()))?;
+                // Offer only what can be confirmed: the arguments that carry
+                // the filter must fit the subscription's own limit.
+                let arguments = catalog::query_arguments(query, &filter);
+                if arguments.to_string().len() > MAX_ARGUMENTS_BYTES {
+                    return Err(EventsError::InvalidParams(format!(
+                        "the filter this request compiles to is too large to confirm (the \
+                         arguments carrying it must be at most {MAX_ARGUMENTS_BYTES} bytes of \
+                         JSON); ask for less"
+                    )));
+                }
                 return Err(EventsError::ConfirmFilter {
-                    query: query.clone(),
+                    arguments,
                     compiled: Compiled::new(filter),
                 });
             }
@@ -287,7 +300,7 @@ impl McpEvents {
             .map_err(EventsError::Internal)?;
         let body = McpSubscribeRequest {
             event_type: request.name,
-            arguments: request.arguments,
+            arguments: selection.arguments(),
             endpoint_url: request.url,
             filter: compiled.filter,
             secret: request.secret,
@@ -305,10 +318,10 @@ impl McpEvents {
         user: &MacroUserIdStr<'static>,
         request: Unsubscribe,
     ) -> Result<(), EventsError> {
-        catalog::selection(&request.name, &request.arguments)?;
+        let selection = catalog::selection(&request.name, &request.arguments)?;
         let body = McpUnsubscribeRequest {
             event_type: request.name,
-            arguments: request.arguments,
+            arguments: selection.arguments(),
             endpoint_url: request.url,
         };
         Ok(self.store.unsubscribe(user, &body).await?)
