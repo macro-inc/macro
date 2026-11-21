@@ -82,12 +82,13 @@ fn decode_records(
                         .map(|byte| format!("{byte:02x}"))
                         .collect();
                     hashes.insert((render(&values[0]), render(&values[1])), hash);
+                    // A record that doesn't decode keeps its bytes, so two different ones differ.
                     match cache_core::codec::decode_record(bytes) {
                         Ok(record) => match serde_json::to_string(&record) {
                             Ok(json) => format!("r:{json}"),
-                            Err(error) => format!("r!{error}"),
+                            Err(error) => format!("r!{error} {}", render_bytes(bytes)),
                         },
-                        Err(error) => format!("r!{error}"),
+                        Err(error) => format!("r!{error} {}", render_bytes(bytes)),
                     }
                 }
                 other => render(other),
@@ -146,9 +147,10 @@ fn decode_facts(
         rows(
             &mut select(connection, "index_document_facts", "document_id, facts")?,
             |values| {
+                // Undecodable values keep their bytes, so two different ones differ.
                 let facts = match &values[1] {
-                    Value::Blob(blob) => facts_blob::decode(blob),
-                    _ => None,
+                    Value::Blob(blob) => facts_blob::decode(blob).ok_or_else(|| render_bytes(blob)),
+                    other => Err(render(other)),
                 };
                 documents.insert(render(&values[0]), facts);
             },
@@ -159,7 +161,7 @@ fn decode_facts(
             &mut select(connection, "index_documents", "id, state")?,
             |values| {
                 if render(&values[1]) == render(&Value::from_i64(0)) {
-                    documents.insert(render(&values[0]), Some(Vec::new()));
+                    documents.insert(render(&values[0]), Ok::<Vec<String>, String>(Vec::new()));
                 }
             },
         )?;
@@ -171,7 +173,7 @@ fn decode_facts(
             rows(
                 &mut select(connection, table, "document_id, attribute, value")?,
                 |values| {
-                    if let Some(Some(facts)) = documents.get_mut(&render(&values[0])) {
+                    if let Some(Ok(facts)) = documents.get_mut(&render(&values[0])) {
                         let attribute = match &values[1] {
                             Value::Text(text) => text.as_str().to_owned(),
                             other => render(other),
@@ -188,11 +190,11 @@ fn decode_facts(
         .into_iter()
         .map(|(id, facts)| {
             let facts = match facts {
-                Some(mut facts) => {
+                Ok(mut facts) => {
                     facts.sort();
                     serde_json::to_string(&facts).unwrap_or_default()
                 }
-                None => "invalid blob".to_owned(),
+                Err(value) => format!("invalid {value}"),
             };
             row_text([id, facts].into_iter())
         })
@@ -254,7 +256,11 @@ mod facts_blob {
             let mut value = 0u64;
             for shift in (0..64).step_by(7) {
                 let byte = self.byte()?;
-                value |= u64::from(byte & 0x7f).checked_shl(shift)?;
+                // The tenth byte holds bit 63 only; more would overflow.
+                if shift == 63 && byte & 0x7f > 1 {
+                    return None;
+                }
+                value |= u64::from(byte & 0x7f) << shift;
                 if byte & 0x80 == 0 {
                     return Some(value);
                 }
