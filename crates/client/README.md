@@ -343,8 +343,8 @@ hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
 `apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
 channel/inbox context under Soup's leader in bounded snapshot/delta batches;
-Quick Access and all migrated personal pickers now preserve policy-6 windows (policy 5 from
-native desktop, iOS and Android binaries released before it)
+Quick Access and all migrated personal pickers now preserve policy-7 windows (policies 5 and 6
+from native desktop, iOS and Android binaries released before it)
 instead of applying the old fuzzy/brevity scores. Empty property browsing pins self;
 recipient mode excludes automated addresses unless explicitly addressed. Interactive
 reads stay local, including partial hydration; unsupported hosts remain unavailable.

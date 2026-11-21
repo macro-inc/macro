@@ -49,3 +49,36 @@ fn consumer_deserializes_explicit_connections_message() {
 
     assert!(matches!(message, ContactsMessage::Connections(_)));
 }
+
+#[test]
+fn consumer_deserializes_directory_changes() {
+    let message: ContactsMessage = serde_json::from_str(
+        r#"{"type":"inbox_contacts","inbox":{"owner":"macro|owner@example.com","link_id":"00000000-0000-7000-8000-000000000001","provider":"gmail"},"contacts":["macro|contact@example.com"]}"#,
+    )
+    .unwrap();
+
+    let ContactsMessage::Change(DirectoryChange::InboxContacts { inbox, contacts }) = message
+    else {
+        panic!("expected an inbox contacts change");
+    };
+    assert_eq!(inbox.owner, user("owner@example.com"));
+    assert_eq!(contacts, [user("contact@example.com")]);
+}
+
+#[test]
+fn consumer_rejects_an_unknown_directory_change() {
+    let message = serde_json::from_str::<ContactsMessage>(
+        r#"{"type":"teammates","users":["macro|owner@example.com"],"peers":[]}"#,
+    );
+
+    assert!(message.is_err());
+}
+
+#[test]
+fn consumer_rejects_a_directory_change_with_a_non_macro_id() {
+    let message = serde_json::from_str::<ContactsMessage>(
+        r#"{"type":"interacted","users":["macro|owner@example.com"],"peers":["bot|helper"]}"#,
+    );
+
+    assert!(message.is_err());
+}

@@ -437,6 +437,9 @@ in
         WorkingDirectory = workspace;
         # --ignore-stdin-eof: systemd's closed stdin must not stop the daemon.
         ExecStart = "${lib.getExe' cfg.macrod "macrod"} service --ignore-stdin-eof --config ${macrodConfig} --workspace ${workspace}";
+        # Where macrod's spans go: the OTel variables `macrod enroll` wrote
+        # from the enrollment's telemetry intake. Absent: none are exported.
+        EnvironmentFile = "-/var/lib/macrod/telemetry.env";
         Restart = "always";
         RestartSec = 1;
         RestartSteps = 5;

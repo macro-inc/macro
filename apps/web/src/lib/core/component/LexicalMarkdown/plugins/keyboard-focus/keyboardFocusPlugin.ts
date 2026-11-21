@@ -14,6 +14,7 @@ import {
 } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { $getCaretRect, isRectFlushWith } from '../../utils';
+import { $canOutdentSelection } from '../tab-indentation';
 
 type KeyboardFocusPluginProps = {
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
@@ -77,7 +78,9 @@ function registerKeyboardFocusPlugin(
       (e: KeyboardEvent) => {
         if (props.ignoreKeys()) return true;
         if (e.shiftKey) {
-          if ($testSelectionPosition('start', 'horizontal')) {
+          // Shift+Tab outdents while there is something to outdent, and
+          // otherwise leaves, so it never stalls in the editor.
+          if (!$canOutdentSelection()) {
             props.onFocusLeaveStart?.(e);
             return true;
           }

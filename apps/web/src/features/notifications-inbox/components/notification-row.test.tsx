@@ -53,16 +53,31 @@ describe('NotificationRow', () => {
     expect(toggle().getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('unfolds from its own button without opening, and hands it to its last notification', () => {
+  it('unfolds and folds from the same button without opening', () => {
     const { onClick, onToggleStack } = setup();
+    const button = toggle();
 
-    fireEvent.click(toggle());
+    fireEvent.click(button);
+    expect(toggle()).toBe(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.textContent).toBe('Hide');
 
-    expect(onToggleStack).toHaveBeenCalledOnce();
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.textContent).toBe('2 more');
+
+    expect(onToggleStack).toHaveBeenCalledTimes(2);
     expect(onClick).not.toHaveBeenCalled();
-    expect(
-      screen.queryByRole('button', { name: /3 notifications/ })
-    ).toBeNull();
+  });
+
+  it('marks done from its own button without opening', () => {
+    const onDone = vi.fn();
+    const { onClick } = setup({ onDone });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
+
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   it('unfolds and folds from its caret on a phone without opening', () => {
@@ -141,8 +156,8 @@ describe('NotificationRow', () => {
   it("keeps a phone's caret on the first line, next to the time", () => {
     layout.phone = true;
     setup();
-    const time = screen.getByText('2m');
-    expect(time.nextElementSibling).toBe(toggle());
+    const time = screen.getByText('2m').closest('[data-card-time]');
+    expect(time?.nextElementSibling).toBe(toggle());
     expect(toggle().textContent).toBe('');
   });
 

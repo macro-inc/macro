@@ -1,12 +1,14 @@
 # Macro computer setup traces
 
-Use this to find where the time goes between Buy computer and the computer
-being Ready.
+Use this to find where the time goes between Buy computer (or adding an agent
+teammate) and the computer being Ready, and for an agent teammate, until the
+agent is online.
 
 ## What one trace contains
 
-The purchase request is the root. Every later step joins it while first setup
-runs ([Macro computers: Observability](../architecture/macro-computers.md#observability)):
+The purchase request is the root (for an agent teammate, the web app's
+`team-agent.add`). Every later step joins it during the first start, which for
+an agent teammate lasts until the agent reports online ([Macro computers: Observability](../architecture/macro-computers.md#observability)):
 
 | Span | Service | Meaning |
 | --- | --- | --- |
@@ -20,7 +22,13 @@ runs ([Macro computers: Observability](../architecture/macro-computers.md#observ
 | `claim_pairing` | document_storage_service | macrod claiming its harness (its request carries the setup `traceparent`). |
 | `computer.macrod.connected` | agent_harness_service | The first connection being recorded. |
 | `computer.setup` | agent_harness_service | Total, reservation until macrod first connected. |
-| `run_enroll`, `macrod.enroll.claim` | macrod | Guest-side detail, only when the guest has `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+| `run_enroll`, `macrod.enroll.claim` | macrod | Guest-side detail, exported to the enrollment's telemetry intake (`Deployment.telemetry_url`). |
+| `computer.setup.agent_handoff` | agent_harness_service | Agent teammate: macrod connected until macrod took the agent (the queued hand-off ran; waits for the charge to settle). |
+| `computer.agent.deliver` → `computers.agent_enrollment.issue` | agent_harness_service, authentication_service | The hand-off: the agent's environment issued and sent down macrod's socket. |
+| `macrod.agent.apply` | macrod | macrod staging the environment (and the setup `traceparent`) for the guest. |
+| `computer.setup.agent_start` | agent_harness_service | Hand-off until the agent reports online: guest install, `start-agent` (clone, lock check), the runtime's start. Missing if the agent came online before its hand-off was recorded as finished. |
+| `agent.start` → `agent.launch` → `agent.launch.*` | macro-agent | `start-agent`'s steps (`settings`, `clone` on a first start, `configure`, `rollback`, `packages`, `compatibility` (the muppet API check)) until it execs the runtime; the script times them and the runtime exports them. |
+| `agent.start` → `agent.start.*`, `agent.online.report` | macro-agent | The agent's start, from `start-agent`'s start (its own process start without one), and its online report (`team_agents.agent_online` joins). |
 
 The control-plane wait spans are exported with their recorded start and end
 times when the next milestone arrives, so a still-running wait is not visible
@@ -47,6 +55,16 @@ span.computer_id = "<computer uuid>" }`.
 In Datadog, use `operation_name:computer.setup @computer_id:<computer uuid>`,
 and the `computer.setup.phase.duration` / `computer.setup.duration`
 histograms (by `phase`) for distributions.
+
+## Rate limit at the intake
+
+Deployed computers export through the analytics proxy
+(`services/analytics-proxy`), which rate-limits by client IP (300 requests /
+10 s). Computers behind one egress IP share that budget. macrod and the agent
+already send `x-macro-computer-id`, but the proxy ignores it: the header is
+unauthenticated, so honouring it would let any client raise its own limit.
+A per-computer limit waits on a signed id. A 429 there drops spans: look for
+missing guest spans across many computers of one host.
 
 ## Local collector
 

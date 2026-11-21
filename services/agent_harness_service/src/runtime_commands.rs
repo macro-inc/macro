@@ -85,12 +85,13 @@ pub(crate) async fn publish_deliver_agent(
     Ok(())
 }
 
-/// Sends an agent environment down a harness's runtime connection; whether
-/// this replica held it.
+/// Sends an agent environment, with the setup trace the agent's start
+/// joins, down a harness's runtime connection; whether this replica held it.
 pub(crate) type SendAgent = Arc<
     dyn Fn(
             HarnessId,
             agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+            Option<String>,
         ) -> futures::future::BoxFuture<'static, bool>
         + Send
         + Sync,
@@ -126,7 +127,12 @@ pub(crate) async fn deliver_agent_to_runtime(
         else {
             return;
         };
-        let delivered = send(request.deliver_agent_harness, environment).await;
+        let delivered = send(
+            request.deliver_agent_harness,
+            environment,
+            hosted_runtimes::domain::telemetry::traceparent(),
+        )
+        .await;
         tracing::Span::current().record("delivered", delivered);
     }
     .instrument(span)
