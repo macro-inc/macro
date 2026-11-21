@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const navigate = vi.fn((..._args: unknown[]) => Promise.resolve());
 const orchestrator = { name: 'orchestrator' };
 let channelNames: Record<string, string> = {};
+let channelTypes: Record<string, string> = {};
 
 vi.mock('@block-channel/utils/link', () => ({
   navigateToChannelMessage: (...args: unknown[]) => navigate(...args),
@@ -22,9 +23,15 @@ vi.mock('@components/app/GlobalAppState', () => ({
 vi.mock('@core/context/channels', () => ({
   useChannelName: (channelId: string, fallback?: string) => () =>
     channelNames[channelId] ?? fallback,
+  useChannelType: (channelId: string) => () => channelTypes[channelId],
 }));
-vi.mock('@core/component/EntityIcon', () => ({
-  EntityIcon: () => <span aria-hidden="true" />,
+vi.mock('@core/component/EntityIcon', async (importOriginal) => ({
+  getEntityIconType: (
+    await importOriginal<typeof import('@core/component/EntityIcon')>()
+  ).getEntityIconType,
+  EntityIcon: (props: { targetType: string }) => (
+    <span data-testid="icon" data-icon={props.targetType} />
+  ),
 }));
 // The thread itself is the channel feature's, over message queries; here it
 // is a parent and one reply that report clicks the way it does.
@@ -55,6 +62,7 @@ import { ChannelMessage } from './ChannelMessage';
 afterEach(() => {
   navigate.mockClear();
   channelNames = {};
+  channelTypes = {};
 });
 
 describe('ChannelMessage', () => {
@@ -105,5 +113,15 @@ describe('ChannelMessage', () => {
       'message-1',
       undefined
     );
+  });
+
+  it('names and draws a group chat as the channel list does', () => {
+    channelNames = { 'channel-3': 'Ada, Grace, Linus, Margaret, Barbara' };
+    channelTypes = { 'channel-3': 'private' };
+    const view = render(() => (
+      <ChannelMessage channelId="channel-3" messageId="message-1" />
+    ));
+    view.getByText('Ada, Grace and 3 others');
+    expect(view.getByTestId('icon').dataset.icon).toBe('private');
   });
 });
