@@ -313,8 +313,9 @@ describe('by-id reader', () => {
   });
 
   type Read = Parameters<typeof createByIdReader>[0];
+  type ReaderOptions = Parameters<typeof createByIdReader>[1];
   /** A reader whose ids, requested, read and answered, are test names. */
-  function mountReader(read: Read) {
+  function mountReader(read: Read, options?: ReaderOptions) {
     const reader = createRoot((dispose) => {
       disposers.push(dispose);
       return createByIdReader(async (ids, signal) => {
@@ -324,7 +325,7 @@ describe('by-id reader', () => {
             found.returned && new Set([...found.returned].map(channelUuid)),
           unreadable: found.unreadable?.map(channelUuid),
         };
-      });
+      }, options);
     });
     return {
       request: (name: string) => reader.request(channelUuid(name)),
@@ -335,6 +336,7 @@ describe('by-id reader', () => {
             outcome,
           ])
         ),
+      reset: () => reader.reset(),
     };
   }
 
@@ -350,15 +352,18 @@ describe('by-id reader', () => {
     expect(read.mock.calls.map(([ids]) => ids)).toEqual([[channelUuid('a')]]);
   });
 
-  it('reads a failed id again after the cooldown unasked, while others keep failing', async () => {
+  it('forgets a failed id after the cooldown, while others keep failing, and reads it only when asked again', async () => {
     const read = vi.fn<Read>(async () => {
       throw new Error('offline');
     });
-    const reader = mountReader(read);
+    const onSettle = vi.fn();
+    const reader = mountReader(read, { onSettle });
     reader.request('a');
     await vi.advanceTimersByTimeAsync(100);
     expect(read).toHaveBeenCalledTimes(2);
     expect(reader.outcomes().a).toBe('failed');
+    // Asking meanwhile queues nothing.
+    expect(reader.request('a')).toBe(false);
 
     // Another channel fails every ten seconds.
     for (const id of ['b', 'c', 'd']) {
@@ -367,33 +372,129 @@ describe('by-id reader', () => {
     }
     await vi.advanceTimersByTimeAsync(1_000);
 
-    // Two attempts each time, and nobody had to ask again.
-    expect(read.mock.calls.filter(([ids]) => ids.includes('a'))).toHaveLength(
-      4
-    );
+    // Forgotten, its owner told, and not read again unasked.
+    expect(reader.outcomes().a).toBeUndefined();
+    const settles = onSettle.mock.calls.length;
+    expect(settles).toBeGreaterThan(1);
+    const readsOfA = () =>
+      read.mock.calls.filter(([ids]) => ids.includes('a')).length;
+    expect(readsOfA()).toBe(2);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(readsOfA()).toBe(2);
+
+    // Asked again: two more attempts.
+    expect(reader.request('a')).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(readsOfA()).toBe(4);
     expect(reader.outcomes().a).toBe('failed');
-    expect(reader.request('a')).toBe(false);
   });
 
-  it('reads failed ids again only once a hidden tab is shown', async () => {
+  it('keeps failed ids until a hidden tab is shown', async () => {
     const read = vi.fn<Read>(async () => {
       throw new Error('offline');
     });
-    const reader = mountReader(read);
+    const onSettle = vi.fn();
+    const reader = mountReader(read, { onSettle });
     reader.request('a');
     await vi.advanceTimersByTimeAsync(100);
     const visibility = vi
       .spyOn(document, 'visibilityState', 'get')
       .mockReturnValue('hidden');
     document.dispatchEvent(new Event('visibilitychange'));
+    onSettle.mockClear();
     await vi.advanceTimersByTimeAsync(90_000);
-    expect(read).toHaveBeenCalledTimes(2);
+    expect(reader.outcomes().a).toBe('failed');
+    expect(reader.request('a')).toBe(false);
+    expect(onSettle).not.toHaveBeenCalled();
 
     visibility.mockReturnValue('visible');
     document.dispatchEvent(new Event('visibilitychange'));
+    expect(reader.outcomes().a).toBeUndefined();
+    expect(onSettle).toHaveBeenCalledOnce();
+    expect(reader.request('a')).toBe(true);
     await vi.advanceTimersByTimeAsync(100);
     expect(read).toHaveBeenCalledTimes(4);
     visibility.mockRestore();
+  });
+
+  /** Hands each read a deadline the test aborts, as `BY_ID_DEADLINE_MS`
+   * passing would, and a read that hangs until its signal aborts. */
+  function hungReads() {
+    const deadlines: AbortController[] = [];
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+      const deadline = new AbortController();
+      deadlines.push(deadline);
+      return deadline.signal;
+    });
+    const read = vi.fn<Read>(
+      (_ids, signal) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        })
+    );
+    return { deadlines, timeout, read };
+  }
+
+  it('fails a read whose deadline passes, after trying it once more', async () => {
+    const { deadlines, timeout, read } = hungReads();
+    try {
+      const reader = mountReader(read);
+      reader.request('a');
+      await vi.advanceTimersByTimeAsync(100);
+      expect(timeout).toHaveBeenCalledWith(20_000);
+      expect(read).toHaveBeenCalledTimes(1);
+
+      deadlines[0]?.abort();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(reader.outcomes()).toEqual({});
+
+      deadlines[1]?.abort();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(reader.outcomes()).toEqual({ a: 'failed' });
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it('frees the slot of a read whose deadline passes', async () => {
+    const { deadlines, timeout, read } = hungReads();
+    try {
+      const reader = mountReader(read);
+      for (let i = 0; i < 200; i += 1) reader.request(`c${i}`);
+      await vi.advanceTimersByTimeAsync(100);
+      reader.request('late');
+      await vi.advanceTimersByTimeAsync(100);
+      // Both slots hang, so the late batch waits.
+      expect(read.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100]);
+
+      deadlines[0]?.abort();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(read.mock.calls[2]?.[0]).toEqual(['late']);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it('settles nothing for a read a reset aborts', async () => {
+    const { timeout, read } = hungReads();
+    try {
+      const reader = mountReader(read);
+      reader.request('a');
+      await vi.advanceTimersByTimeAsync(100);
+      expect(read).toHaveBeenCalledTimes(1);
+
+      reader.reset();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(reader.outcomes()).toEqual({});
+      expect(reader.request('a')).toBe(true);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   it('reads at most two batches at a time', async () => {
@@ -1198,6 +1299,34 @@ describe('cached channel directory', () => {
     // is complete only once all of them answered.
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(named().size).toBe(600);
+  });
+
+  it('reads an incomplete record again once its failed reads are forgotten, with nobody looking it up', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cache, directory, hydrate } = mountCachedDirectory([
+        channelRecord('thin'),
+      ]);
+      const read = hydrate.getMockImplementation();
+      hydrate.mockImplementation(async () => {
+        throw new Error('offline');
+      });
+      cache.put(channelRecord('thin'), { incomplete: true });
+      completeLane('g1');
+      await vi.advanceTimersByTimeAsync(1_000);
+      // Read once more, then given up on for now.
+      expect(hydrate).toHaveBeenCalledTimes(2);
+      expect(directory.complete()).toBe(false);
+
+      if (read) hydrate.mockImplementation(read);
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(hydrate).toHaveBeenCalledTimes(3);
+      expect(directory.complete()).toBe(true);
+      expect(ids(directory.channels())).toEqual(['thin']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reads a channel by id again when its record loses a field after a read returned it', async () => {

@@ -10,7 +10,7 @@
  */
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
-import { abortedBy } from '@core/util/abort-signal';
+import { abortedBy, anyAbortSignal } from '@core/util/abort-signal';
 import { deepEqual } from '@core/util/compareUtils';
 import { debounce, throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -121,11 +121,15 @@ import { isLaterView, stampCachedChannelView } from './viewed-at';
 const BY_ID_BATCH = 100;
 const BY_ID_WAIT_MS = 25;
 // A failed by-id read is tried once more before its channels count as
-// failed, and read again after a pause while a lookup still asks for them.
+// failed. After a pause the failures are forgotten, so whoever still asks
+// reads them again.
 const BY_ID_ATTEMPTS = 2;
 const BY_ID_RETRY_AFTER_MS = 30_000;
 // By-id batches read at once; more wait their turn.
 const BY_ID_CONCURRENCY = 2;
+// A by-id read still unanswered after this has failed, so one that never
+// settles cannot hold a batch slot.
+const BY_ID_DEADLINE_MS = 20_000;
 // Records still lacking a field once the lane finished, read per refresh.
 const INCOMPLETE_READS_PER_REFRESH = 500;
 const DIRECTORY_STALE_MS = 5 * 60_000;
@@ -907,7 +911,9 @@ type ByIdRead = {
 };
 
 type ByIdReaderOptions = {
-  /** Runs after reads settle, for an owner that reads `outcomes` untracked. */
+  /** Runs after reads settle and after failures are forgotten, for an owner
+   * that reads `outcomes` untracked: one that still wants a forgotten id
+   * requests it again. */
   onSettle?: () => void;
   /** What the cache holds of the channel's record now. A read that finds a
    * channel absent answers for its record as it was when the read was sent:
@@ -918,12 +924,14 @@ type ByIdReaderOptions = {
 };
 
 /**
- * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time. Each
- * id is read once until `reset` or `renew`, except that the ids whose reads
- * failed are read again together at most every `BY_ID_RETRY_AFTER_MS`, with
- * nobody asking: an owner waiting on them may hear of nothing else. A hidden
- * tab holds that read until it is shown. With `version`, an absence holds
- * only while the channel's record stays as it was when its read was sent.
+ * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time, each
+ * failed once `BY_ID_DEADLINE_MS` pass without an answer. Each id is read
+ * once until `reset` or `renew`, except that the ids whose reads failed are
+ * forgotten together at most every `BY_ID_RETRY_AFTER_MS`, and `onSettle`
+ * runs: whoever still asks for one reads it again, and an id nobody asks for
+ * any more costs nothing. A hidden tab keeps its failures until it is shown.
+ * With `version`, an absence holds only while the channel's record stays as
+ * it was when its read was sent.
  */
 export function createByIdReader(
   read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>,
@@ -946,21 +954,25 @@ export function createByIdReader(
     options.onSettle?.();
   };
 
-  // The ids stay requested, so a lookup asking meanwhile queues nothing.
-  const retryFailures = () => {
+  // Until then the ids stay requested, so a lookup asking meanwhile queues
+  // nothing.
+  const forgetFailed = () => {
     const failed = Object.entries(untrack(outcomes)).flatMap(([id, outcome]) =>
       outcome === 'failed' ? [id] : []
     );
     if (failed.length === 0) return;
-    for (const id of failed) attempts.delete(id);
+    for (const id of failed) {
+      requested.delete(id);
+      attempts.delete(id);
+    }
     setOutcomes((previous) =>
       Object.fromEntries(
         Object.entries(previous).filter(([, outcome]) => outcome !== 'failed')
       )
     );
-    for (const id of failed) batcher.addItem(id);
+    options.onSettle?.();
   };
-  const whileShown = createHiddenDeferral(retryFailures);
+  const whileShown = createHiddenDeferral(forgetFailed);
   // Not a debounce: failures that keep arriving would postpone the retry of
   // earlier ones for as long as they arrive.
   const forgetFailures = throttle(
@@ -981,29 +993,39 @@ export function createByIdReader(
   };
 
   // A batch never rejects: a read that a reset aborted settles nothing, and
-  // a failed one is retried or marked failed here.
+  // a failed one, its deadline's abort included, is retried or marked failed
+  // here.
   const readBatch = async (ids: string[]) => {
-    const signal = controller.signal;
-    if (signal.aborted) return;
+    const reset = controller.signal;
+    if (reset.aborted) return;
+    const deadline = AbortSignal.timeout(BY_ID_DEADLINE_MS);
+    const signal = anyAbortSignal([reset, deadline]);
     const before = new Map(ids.map((id) => [id, versionOf?.(id)]));
     try {
       const found = await Telemetry.span(
         'channel_directory.by_id',
         async (span) => {
           span.setAttr('channel_directory.requested', ids.length);
-          const result = await read(ids, signal);
-          span.setAttr(
-            'channel_directory.returned',
-            result.returned?.size ?? -1
-          );
-          span.setAttr(
-            'channel_directory.unreadable',
-            result.unreadable?.length ?? 0
-          );
-          return result;
+          try {
+            const result = await read(ids, signal);
+            span.setAttr(
+              'channel_directory.returned',
+              result.returned?.size ?? -1
+            );
+            span.setAttr(
+              'channel_directory.unreadable',
+              result.unreadable?.length ?? 0
+            );
+            return result;
+          } finally {
+            span.setAttr(
+              'channel_directory.timed_out',
+              deadline.aborted && !reset.aborted
+            );
+          }
         }
       );
-      if (signal.aborted) return;
+      if (reset.aborted) return;
       const unreadable = new Set(found.unreadable);
       const updates: Record<string, ByIdOutcome> = {};
       const rewritten: string[] = [];
@@ -1031,7 +1053,7 @@ export function createByIdReader(
       const again = [...unreadable, ...rewritten];
       if (again.length > 0) retryOrFail(again);
     } catch (error) {
-      if (signal.aborted) return;
+      if (reset.aborted) return;
       Telemetry.error(error, { surface: 'channel-directory-by-id' });
       retryOrFail(ids);
     }
@@ -1543,6 +1565,12 @@ export function createCachedChannelDirectory(
     });
   };
 
+  // Every render asks for the undecided ones, so one whose failed read the
+  // reader forgot is read again; one already asked for queues nothing.
+  const requestConfirmations = (open: Readonly<Record<string, true>>) => {
+    for (const id of Object.keys(open)) confirm.request(id);
+  };
+
   /** Shows the last read and, once the network's channels loaded, those
    * channels as the evidence since leaves them. A render after by-id reads
    * settled (`settle`) reuses the confirmations the last read chose, and
@@ -1570,7 +1598,9 @@ export function createCachedChannelDirectory(
       confirmations &&
       !membershipChanged(listedIds(network.channels), builtFrom, confirmed)
     ) {
-      show(untrack(shown).state, undecided(confirmations, confirmed));
+      const open = undecided(confirmations, confirmed);
+      show(untrack(shown).state, open);
+      requestConfirmations(open);
       return;
     }
     builtFrom = confirmed;
@@ -1599,9 +1629,9 @@ export function createCachedChannelDirectory(
               evidence,
               lastRead?.incompleteIds
             );
-    show(next, undecided(confirmations, confirmed));
-    if (settle) return;
-    for (const id of confirmations) confirm.request(id);
+    const open = undecided(confirmations, confirmed);
+    show(next, open);
+    requestConfirmations(open);
   };
   const renderConfirmed = throttle(() => render(true), CONFIRM_RENDER_MS);
 
