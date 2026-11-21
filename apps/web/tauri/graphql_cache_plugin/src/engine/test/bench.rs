@@ -25,6 +25,8 @@ struct Op {
     variables: Variables,
     data: serde_json::Value,
     bytes: usize,
+    /// Foreground ops come in variants; run `n` writes variant `n % count`.
+    variant: u64,
 }
 
 fn ops(path: &Path) -> Vec<Op> {
@@ -41,19 +43,124 @@ fn ops(path: &Path) -> Vec<Op> {
                 variables: serde_json::from_value(op["variables"].take()).unwrap(),
                 data: op["data"].take(),
                 bytes: line.len(),
+                variant: op["variant"].as_u64().unwrap_or(0),
             }
         })
         .collect()
 }
 
+/// This process's IO counters (`/proc/self/io`): bytes and syscalls through
+/// read/write, and bytes the kernel sent to storage. Zero where `/proc` is absent.
+#[derive(Clone, Copy, Default)]
+struct Io {
+    rchar: u64,
+    wchar: u64,
+    syscr: u64,
+    syscw: u64,
+    write_bytes: u64,
+}
+
+impl Io {
+    fn now() -> Self {
+        let text = std::fs::read_to_string("/proc/self/io").unwrap_or_default();
+        let field = |name: &str| {
+            text.lines()
+                .find_map(|line| line.strip_prefix(name)?.strip_prefix(": "))
+                .and_then(|value| value.trim().parse().ok())
+                .unwrap_or(0)
+        };
+        Self {
+            rchar: field("rchar"),
+            wchar: field("wchar"),
+            syscr: field("syscr"),
+            syscw: field("syscw"),
+            write_bytes: field("write_bytes"),
+        }
+    }
+
+    fn since(self, before: Self) -> Self {
+        Self {
+            rchar: self.rchar.saturating_sub(before.rchar),
+            wchar: self.wchar.saturating_sub(before.wchar),
+            syscr: self.syscr.saturating_sub(before.syscr),
+            syscw: self.syscw.saturating_sub(before.syscw),
+            write_bytes: self.write_bytes.saturating_sub(before.write_bytes),
+        }
+    }
+
+    fn add(&mut self, other: Self) {
+        self.rchar += other.rchar;
+        self.wchar += other.wchar;
+        self.syscr += other.syscr;
+        self.syscw += other.syscw;
+        self.write_bytes += other.write_bytes;
+    }
+}
+
+/// A `/proc/self/status` memory field in kB (`VmRSS`, `VmHWM`).
+fn memory_kb(field: &str) -> u64 {
+    std::fs::read_to_string("/proc/self/status")
+        .unwrap_or_default()
+        .lines()
+        .find_map(|line| line.strip_prefix(field)?.strip_prefix(':'))
+        .and_then(|value| value.trim().trim_end_matches("kB").trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// When a step started, and the IO counters then.
+#[derive(Clone, Copy)]
+struct Mark {
+    at: Instant,
+    io: Io,
+}
+
+impl Mark {
+    fn now() -> Self {
+        // Read the counters first, so the timed span leaves their read out.
+        let io = Io::now();
+        Self {
+            at: Instant::now(),
+            io,
+        }
+    }
+}
+
 #[derive(Default)]
-struct Samples(BTreeMap<String, Vec<f64>>);
+struct Samples {
+    ms: BTreeMap<String, Vec<f64>>,
+    io: BTreeMap<String, (u64, Io)>,
+}
 
 impl Samples {
-    fn record(&mut self, name: &str, started: Instant) -> f64 {
-        let ms = started.elapsed().as_secs_f64() * 1000.0;
-        self.0.entry(name.to_owned()).or_default().push(ms);
+    fn record(&mut self, name: &str, started: Mark) -> f64 {
+        let ms = started.at.elapsed().as_secs_f64() * 1000.0;
+        let io = Io::now().since(started.io);
+        self.ms.entry(name.to_owned()).or_default().push(ms);
+        let entry = self.io.entry(name.to_owned()).or_default();
+        entry.0 += 1;
+        entry.1.add(io);
         ms
+    }
+
+    /// Mean IO per call of each step.
+    fn io_summary(&self) -> serde_json::Value {
+        self.io
+            .iter()
+            .map(|(name, (calls, io))| {
+                let per = |value: u64| value / (*calls).max(1);
+                (
+                    name.clone(),
+                    serde_json::json!({
+                        "rchar": per(io.rchar),
+                        "syscr": per(io.syscr),
+                        "wchar": per(io.wchar),
+                        "syscw": per(io.syscw),
+                        "writeBytes": per(io.write_bytes),
+                    }),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>()
+            .into()
     }
 
     fn summary(&self) -> serde_json::Value {
@@ -63,7 +170,7 @@ impl Samples {
             sorted[low] + (sorted[high] - sorted[low]) * (position - low as f64)
         };
         let round = |value: f64| (value * 10.0).round() / 10.0;
-        self.0
+        self.ms
             .iter()
             .map(|(name, values)| {
                 let mut sorted = values.clone();
@@ -257,7 +364,7 @@ async fn read_pass(
     samples: &mut Samples,
 ) -> serde_json::Value {
     for (tab, request) in mail_tabs() {
-        let started = Instant::now();
+        let started = Mark::now();
         let result = handle
             .entity_filter(serde_json::from_value(request).unwrap())
             .await
@@ -268,7 +375,7 @@ async fn read_pass(
     }
     let mail_rows = &docs["fragment:MailItemFields"];
     let soup_rows = &docs["fragment:SoupItemFields"];
-    let started = Instant::now();
+    let started = Mark::now();
     let inbox = serde_json::to_value(
         handle
             .entity_filter(mail_args(50, "INBOX", None))
@@ -277,14 +384,14 @@ async fn read_pass(
     )
     .unwrap();
     samples.record("mail.inbox.filter", started);
-    let started = Instant::now();
+    let started = Mark::now();
     handle
         .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&inbox))
         .await
         .unwrap();
     samples.record("mail.inbox.rows", started);
     if let Some(cursor) = inbox.get("nextCursor").filter(|cursor| !cursor.is_null()) {
-        let started = Instant::now();
+        let started = Mark::now();
         let next = serde_json::to_value(
             handle
                 .entity_filter(mail_args(50, "INBOX", Some(cursor)))
@@ -293,14 +400,14 @@ async fn read_pass(
         )
         .unwrap();
         samples.record("mail.inbox.page2.filter", started);
-        let started = Instant::now();
+        let started = Mark::now();
         handle
             .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&next))
             .await
             .unwrap();
         samples.record("mail.inbox.page2.rows", started);
     }
-    let started = Instant::now();
+    let started = Mark::now();
     let all = serde_json::to_value(
         handle
             .entity_filter(mail_args(50, "ALL", None))
@@ -309,24 +416,24 @@ async fn read_pass(
     )
     .unwrap();
     samples.record("mail.all.filter", started);
-    let started = Instant::now();
+    let started = Mark::now();
     handle
         .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&all))
         .await
         .unwrap();
     samples.record("mail.all.rows", started);
-    let started = Instant::now();
+    let started = Mark::now();
     let core = serde_json::to_value(handle.entity_filter(core_args(50)).await.unwrap()).unwrap();
     samples.record("soup.core.filter", started);
     if matches!(core["kind"].as_str(), Some("complete" | "reconciled")) {
-        let started = Instant::now();
+        let started = Mark::now();
         handle
             .read_records_by_keys(soup_rows.clone(), "SoupItemFields".into(), keys(&core))
             .await
             .unwrap();
         samples.record("soup.core.rows", started);
     }
-    let started = Instant::now();
+    let started = Mark::now();
     handle
         .read(
             None,
@@ -339,7 +446,7 @@ async fn read_pass(
         .unwrap();
     samples.record("soup.home.readQuery", started);
     for thread in threads {
-        let started = Instant::now();
+        let started = Mark::now();
         let variables = serde_json::from_value(
             serde_json::json!({ "threadId": thread, "offset": 0, "limit": 20 }),
         )
@@ -356,11 +463,11 @@ async fn read_pass(
             .unwrap();
         samples.record("thread.readQuery", started);
     }
-    let started = Instant::now();
+    let started = Mark::now();
     handle.search(search("")).await.unwrap();
     samples.record("search.empty", started);
     for query in ["pro", "project update", "zzqx"] {
-        let started = Instant::now();
+        let started = Mark::now();
         handle.search(search(query)).await.unwrap();
         samples.record("search.typed", started);
     }
@@ -404,14 +511,14 @@ fn native_cache_bench() {
     block_on(async {
         let mut samples = Samples::default();
         let mut lanes: BTreeMap<String, (usize, usize, f64)> = BTreeMap::new();
-        let started = Instant::now();
+        let started = Mark::now();
         let handle = open(&path);
         if !reuse {
             samples.record("open.fresh", started);
         }
-        let seeding = Instant::now();
+        let seeding = Mark::now();
         for op in seed.iter().filter(|_| !reuse) {
-            let started = Instant::now();
+            let started = Mark::now();
             apply(&handle, &docs, op, &identity).await;
             let ms = samples.record(&format!("seed.{}", op.lane), started);
             let lane = lanes.entry(op.lane.clone()).or_default();
@@ -424,24 +531,45 @@ fn native_cache_bench() {
         }
         handle.shutdown().unwrap();
 
+        // Each run writes the next foreground variant, continuing across
+        // invocations over a reused database, so every write changes rows the
+        // last one wrote. A dataset without variants rewrites the same bytes.
+        let variants = foreground.iter().map(|op| op.variant).max().unwrap_or(0) + 1;
+        let rotation = dir.join("next-variant");
+        let mut variant = std::fs::read_to_string(&rotation)
+            .ok()
+            .and_then(|text| text.trim().parse::<u64>().ok())
+            .unwrap_or(1)
+            % variants;
         let mut counts = serde_json::Value::Null;
+        let mut rss_kb = Vec::new();
         for _ in 0..runs {
-            let started = Instant::now();
+            let started = Mark::now();
             let handle = open(&path);
             samples.record("open.cold", started);
-            let started = Instant::now();
+            let started = Mark::now();
             handle
                 .entity_filter(mail_args(50, "INBOX", None))
                 .await
                 .unwrap();
             samples.record("open.first_read", started);
             counts = read_pass(&handle, &docs, &threads, &home, &mut samples).await;
-            for op in &foreground {
-                let started = Instant::now();
+            let writes = foreground.iter().filter(|op| op.variant == variant);
+            for op in writes.clone() {
+                let started = Mark::now();
                 apply(&handle, &docs, op, &identity).await;
                 samples.record(&format!("write.{}", op.lane), started);
             }
+            // The same responses again: what a refetch that changed nothing costs.
+            for op in writes {
+                let started = Mark::now();
+                apply(&handle, &docs, op, &identity).await;
+                samples.record(&format!("write.{}.same", op.lane), started);
+            }
+            rss_kb.push(memory_kb("VmRSS"));
             handle.shutdown().unwrap();
+            variant = (variant + 1) % variants;
+            std::fs::write(&rotation, variant.to_string()).unwrap();
         }
         let bytes = std::fs::read_dir(&dir)
             .unwrap()
@@ -463,6 +591,9 @@ fn native_cache_bench() {
                 "counts": counts,
                 "lanes": lanes,
                 "steps": samples.summary(),
+                "io": samples.io_summary(),
+                "memory": { "rssKbPerRun": rss_kb, "peakRssKb": memory_kb("VmHWM") },
+                "variants": variants,
             }))
             .unwrap()
         );

@@ -75,6 +75,18 @@ const meta = JSON.parse(readFileSync(`${dataDir}/meta.json`, 'utf8')) as {
   threadIds: string[];
 };
 const homeVariables = JSON.parse(String(foregroundOps[0])).variables;
+// Foreground ops come in variants; each run writes the next one, continuing
+// across invocations on one profile, so every write changes rows.
+const foregroundVariants = foregroundOps.map(
+  (line) => (JSON.parse(String(line)) as { variant?: number }).variant ?? 0
+);
+const variantCount = Math.max(...foregroundVariants) + 1;
+const variantFile = `${profileDir}/.next-variant`;
+function variantIndices(variant: number) {
+  return foregroundVariants.flatMap((each, index) =>
+    each === variant ? [index] : []
+  );
+}
 const threads = meta.threadIds.slice(0, 5);
 // Background hydration during the contended pass replays mail pages.
 const backgroundBase = '/bench-data/seed';
@@ -335,13 +347,17 @@ async function runBench(
       counts = readResult.counts;
       collect(reads, readResult.steps, `${pass}:`);
     }
+    const variant = existsSync(variantFile)
+      ? Number(readFileSync(variantFile, 'utf8')) % variantCount
+      : 1 % variantCount;
     const writeResult = await call<{ steps: Step[] }>(
       page,
       'writePass',
       '/bench-data/foreground',
-      foregroundOps.length
+      variantIndices(variant)
     );
     collect(writes, writeResult.steps);
+    writeFileSync(variantFile, String((variant + 1) % variantCount));
     if (!args['skip-contended']) {
       const contendedResult = await call<{
         steps: Step[];

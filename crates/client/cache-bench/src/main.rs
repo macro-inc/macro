@@ -88,17 +88,26 @@ fn main() -> Result<(), rootcause::Report> {
                     std::io::BufWriter::new(std::fs::File::create(out.join(file)).map_err(io)?);
                 let mut count = 0usize;
                 let mut bytes = 0usize;
+                // Foreground lines carry the variant a replay picks per run.
+                let variant = std::cell::Cell::new(None::<u64>);
                 let mut emit = |op: dataset::Op| -> Result<(), rootcause::Report> {
-                    let line = serde_json::to_vec(&op.to_json()).map_err(io)?;
+                    let mut json = op.to_json();
+                    if let Some(variant) = variant.get() {
+                        json["variant"] = variant.into();
+                    }
+                    let line = serde_json::to_vec(&json).map_err(io)?;
                     bytes += line.len();
                     count += 1;
                     writer.write_all(&line).map_err(io)?;
                     writer.write_all(b"\n").map_err(io)
                 };
                 if foreground {
-                    dataset::foreground_ops(
-                        &faker, &parsed, &identity, &entities, &tier_spec, &mut emit,
-                    )?;
+                    for each in 0..dataset::FOREGROUND_VARIANTS {
+                        variant.set(Some(each));
+                        dataset::foreground_ops(
+                            &faker, each, &parsed, &identity, &entities, &tier_spec, &mut emit,
+                        )?;
+                    }
                 } else {
                     dataset::seed_ops(
                         &faker, &parsed, &identity, &entities, &tier_spec, &mut emit,
