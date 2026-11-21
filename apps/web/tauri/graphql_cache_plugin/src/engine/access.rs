@@ -48,19 +48,23 @@ impl<T> EngineAccess<T> {
     /// release wakes waiters but starts nothing.
     pub(super) fn try_idle(&self) -> Option<AccessGuard<'_, T>> {
         self.quiet.armed.store(false, Ordering::SeqCst);
-        if self.quiet.closed.load(Ordering::SeqCst)
-            || self.hydrates_waiting.load(Ordering::SeqCst) > 0
-        {
+        if self.quiet.closed.load(Ordering::SeqCst) {
             return None;
         }
-        let value = self.value.try_lock().ok()?;
-        Some(AccessGuard {
-            value,
+        let guard = AccessGuard {
+            value: self.value.try_lock().ok()?,
             _release: ReleaseNotice {
                 available: &self.available,
                 quiet: None,
             },
-        })
+        };
+        // Checked once the engine is held: a hydrate that starts waiting
+        // after this is woken by the guard's release. Dropping the guard here
+        // wakes any hydrate already waiting.
+        if self.hydrates_waiting.load(Ordering::SeqCst) > 0 {
+            return None;
+        }
+        Some(guard)
     }
 
     /// Stops idle work for good, before the engine is closed.
@@ -440,6 +444,36 @@ mod test {
             );
             drop(hydration.await.expect("current"));
             assert!(access.try_idle().is_some());
+        });
+    }
+
+    /// Idle work that finds a hydrate waiting once it holds the engine gives
+    /// it back with a wake, so the hydrate cannot sleep through it.
+    #[test]
+    fn idle_work_that_finds_a_waiting_hydrate_wakes_it() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let blocker = access.lock().await;
+            let mut hydration = std::pin::pin!(access.hydrate());
+            poll_fn(|cx| {
+                assert!(hydration.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            drop(blocker);
+            let woken = access.available.notified();
+            let mut woken = std::pin::pin!(woken);
+            woken.as_mut().enable();
+            assert!(access.try_idle().is_none(), "a hydrate is waiting");
+            poll_fn(|cx| {
+                assert!(
+                    woken.as_mut().poll(cx).is_ready(),
+                    "the refusal woke waiters"
+                );
+                Poll::Ready(())
+            })
+            .await;
+            drop(hydration.await.expect("current"));
         });
     }
 
