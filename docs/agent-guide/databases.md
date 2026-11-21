@@ -101,6 +101,8 @@ restore them. A later successful positive lookup/backfill can add them again.
 The table selector matches the inset project/channel navigation. In narrow panes,
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
 The **+** menu stays visible, and focusing or selecting a table reveals its tab.
+Tab, Shift+Tab and the number keys switch tables while the keyboard is on the
+database pane itself; on a cell, Tab moves to the next cell as before.
 
 The grid’s sticky bottom summary shows the loaded saved records in the current view.
 While more pages remain, it says **records loaded** and calculations cover only
