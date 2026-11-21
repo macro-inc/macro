@@ -1,15 +1,17 @@
 //! Classify a thread whenever mail arrives in it or its owner sends a reply.
 //!
 //! Every email event on the platform passes through here, so the consumer
-//! hands each thread to the Focus service, which drops inboxes off the
-//! allowlist after a single-row read. Up to [`MAX_CONCURRENT_CLASSIFICATIONS`]
-//! threads run side by side, so a slow classifier call delays only its own
-//! thread; with every slot taken the consumer stops reading until one frees.
+//! hands each thread to the Focus service, which drops inboxes whose owner is
+//! outside the Focus rollout after a single-row read and a flag check evaluated in memory.
+//! Up to [`MAX_CONCURRENT_CLASSIFICATIONS`] threads run side by side, so a slow
+//! classifier call delays only its own thread; with every slot taken the
+//! consumer stops reading until one frees.
 //!
 //! An event's offset is committed when it is handed off, in the order received,
 //! not when its classification ends. So an event is never replayed, and one in
-//! flight when the worker dies is lost like any failed classification. The sweep
-//! that runs when the worker starts picks those up, newest first.
+//! flight when the worker dies is lost like any failed classification. The
+//! backfill and the sweep that run when the worker starts pick those up, newest
+//! first.
 
 use std::{future::Future, sync::Arc};
 
@@ -17,8 +19,8 @@ use chrono::Utc;
 use email::domain::{
     events::{EmailMacroEvent, EmailTopicEvent},
     focus::{
-        ClassifyOutcome, DueDateExtractor, FocusClassifier, FocusNotifier, FocusService,
-        FocusStore, ProfileSource,
+        ClassifyOutcome, DueDateExtractor, FocusClassifier, FocusEnrollment, FocusNotifier,
+        FocusService, FocusStore, ProfileSource,
     },
 };
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
@@ -32,6 +34,7 @@ use tracing::{Instrument as _, field::Empty};
 use uuid::Uuid;
 
 use self::classifications::Classifications;
+use crate::metrics::{FocusMetrics, Metric};
 
 mod classifications;
 #[cfg(test)]
@@ -68,6 +71,15 @@ fn event_age_ms(published_at_ms: Option<i64>) -> Option<i64> {
     published_at_ms.map(|published_at_ms| Utc::now().timestamp_millis() - published_at_ms)
 }
 
+/// Milliseconds as seconds, for a metric.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "an event's age is far below 2^52 ms"
+)]
+fn seconds(ms: i64) -> f64 {
+    ms as f64 / 1_000.0
+}
+
 fn outcome_name(outcome: &ClassifyOutcome) -> &'static str {
     match outcome {
         ClassifyOutcome::Classified(_) => "classified",
@@ -81,16 +93,18 @@ fn outcome_name(outcome: &ClassifyOutcome) -> &'static str {
     }
 }
 
-async fn classify<S, P, C, N, D>(
-    service: &FocusService<S, P, C, N, D>,
+async fn classify<S, P, C, N, D, E>(
+    service: &FocusService<S, P, C, N, D, E>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
+    metrics: &FocusMetrics,
 ) where
     S: FocusStore,
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
     let span = tracing::info_span!(
         "email_focus.classify",
@@ -104,13 +118,17 @@ async fn classify<S, P, C, N, D>(
         .classify_thread(thread_id)
         .instrument(span.clone())
         .await;
-    span.record("event_age_ms", event_age_ms(published_at_ms));
+    let age_ms = event_age_ms(published_at_ms);
+    span.record("event_age_ms", age_ms);
     let _in_span = span.enter();
     match result {
         Ok(outcome) => {
             span.record("outcome", outcome_name(&outcome));
             match outcome {
                 ClassifyOutcome::Classified(verdict) | ClassifyOutcome::Redecided(verdict) => {
+                    if let Some(age_ms) = age_ms {
+                        metrics.observe(Metric::EventToClassifiedSeconds, seconds(age_ms));
+                    }
                     tracing::info!(
                         %thread_id,
                         is_focus = verdict.is_focus,
@@ -135,10 +153,11 @@ async fn classify<S, P, C, N, D>(
 
 /// The work for one event: waiting for a slot, then classifying, in the event's
 /// trace. Nothing happens until it runs.
-fn classification<S, P, C, N, D>(
-    service: Arc<FocusService<S, P, C, N, D>>,
+fn classification<S, P, C, N, D, E>(
+    service: Arc<FocusService<S, P, C, N, D, E>>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
+    metrics: FocusMetrics,
     event_span: tracing::Span,
 ) -> impl Future<Output = ()> + Send + 'static
 where
@@ -147,6 +166,7 @@ where
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
     let queued = tracing::info_span!(
         parent: &event_span,
@@ -156,7 +176,7 @@ where
     );
     async move {
         drop(queued);
-        classify(&service, thread_id, published_at_ms).await;
+        classify(&service, thread_id, published_at_ms, &metrics).await;
     }
     .instrument(event_span)
 }
@@ -165,9 +185,10 @@ where
 /// drops the classifications in flight. Receive and commit failures are logged
 /// and skipped, as in the activity consumer: a restart would only re-run the
 /// startup sweep.
-pub async fn run_focus_consumer<S, P, C, N, D>(
+pub async fn run_focus_consumer<S, P, C, N, D, E>(
     brokers: &str,
-    service: Arc<FocusService<S, P, C, N, D>>,
+    service: Arc<FocusService<S, P, C, N, D, E>>,
+    metrics: FocusMetrics,
     shutdown: CancellationToken,
 ) -> Result<(), Report>
 where
@@ -176,6 +197,7 @@ where
     C: FocusClassifier,
     N: FocusNotifier,
     D: DueDateExtractor,
+    E: FocusEnrollment,
 {
     let consumer = KafkaEventConsumer::<EmailFocusGroup>::from_env(brokers)?;
     let consumer =
@@ -213,7 +235,13 @@ where
             let published_at_ms = message.inner().timestamp().to_millis();
             classifications.submit(
                 thread_id,
-                classification(Arc::clone(&service), thread_id, published_at_ms, span),
+                classification(
+                    Arc::clone(&service),
+                    thread_id,
+                    published_at_ms,
+                    metrics.clone(),
+                    span,
+                ),
             );
         }
         if let Err(error) = consumer

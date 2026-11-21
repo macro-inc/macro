@@ -103,7 +103,6 @@ export default {
     close: 'बंद करें',
     delete: 'मिटाएं',
     rename: 'नाम बदलें',
-    more: 'और',
     search: 'खोजें',
     settings: 'सेटिंग',
   },
@@ -509,6 +508,10 @@ export default {
       other: '{{count}} आइटम मिटाए गए',
     },
     toastDeleteFailed: 'मिटाया नहीं जा सका',
+    toastPropertySet: {
+      one: '{{property}} सेट किया गया',
+      other: '{{count}} आइटम के लिए {{property}} सेट किया गया',
+    },
     toastAddedToFavorites: 'पसंदीदा में जोड़ा गया',
     toastAddedCountToFavorites: {
       one: '{{count}} आइटम पसंदीदा में जोड़ा गया',
@@ -679,8 +682,6 @@ export default {
     create: 'बनाएं',
     getMobileApp: 'मोबाइल ऐप पाएं',
     signedInAs: '{{name}} के रूप में साइन इन किया है',
-    commandMenu: 'कमांड मेन्यू',
-    searchEverything: 'हर जगह खोजें',
     customizeSidebar: 'साइडबार को पसंद के मुताबिक बनाएं',
     customizeSidebarDescription:
       'चुनें कि साइडबार में कौन-से ऐप दिखें, और उनका क्रम बदलने के लिए उन्हें खींचें। होम हमेशा सबसे ऊपर रहता है।',

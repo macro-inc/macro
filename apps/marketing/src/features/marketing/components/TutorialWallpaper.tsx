@@ -90,6 +90,11 @@ export const wallpapers: Record<
     ridge: 920,
     crest: 300,
   },
+  'teams-admin': {
+    colors: ['#d9e8e7', '#8dbbbd', '#477f8c', '#254657'],
+    ridge: 720,
+    crest: 410,
+  },
   routines: {
     colors: ['#f5e4bc', '#d2b477', '#9a814f', '#5d553b'],
     ridge: 610,

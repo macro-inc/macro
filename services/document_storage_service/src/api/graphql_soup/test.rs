@@ -36,3 +36,24 @@ async fn serialization_preserves_graphql_errors() {
         br#"{"data":null,"errors":[{"message":"refused"}]}"#
     );
 }
+
+/// GraphQL runs mutations, so no session scope reaches it where it is
+/// mounted: under `items`, at the root or `/dss`, with or without an API
+/// version. A moved mount fails here until the scope names it.
+#[test]
+fn no_scope_reaches_graphql_where_it_is_mounted() {
+    use agent_correlation::scope::SessionScope;
+    for prefix in ["", "/dss"] {
+        for version in ["", "/v1"] {
+            for (method, path) in [
+                ("POST", super::GRAPHQL_PATH),
+                ("GET", super::GRAPHQL_SUBSCRIPTION_PATH),
+            ] {
+                let path = format!("{prefix}{version}{}{path}", crate::api::ITEMS_PATH);
+                for scope in [SessionScope::Generation, SessionScope::NoSend] {
+                    assert!(!scope.allows(method, &path), "{scope:?} {method} {path}");
+                }
+            }
+        }
+    }
+}

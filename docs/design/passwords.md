@@ -13,6 +13,17 @@ favorites, last use, and activity. Its domain service owns human membership, gra
 requests; PostgreSQL and OpenBao implement repository and secret-provider ports.
 The provider boundary allows future 1Password and Bitwarden implementations.
 
+Favorites are private per-user preferences, available to anyone with current
+human view access. PUT/DELETE `/passwords/teams/{team}/items/{item}/favorite`
+changes only that preference: no credential lease, revision/version change or
+shared Activity entry. List, detail and import matching project the viewer's
+flag with a bounded bulk lookup. Create/import seeds the creator's initial flag
+atomically with item insertion; retries and subsequent saves never reseed it.
+Membership and physical item deletion cascade; soft deletion clears preferences.
+Existing true metadata flags are copied to creators who remain members, in
+independently committed keyset pages. The legacy JSON flag remains for rollback;
+removing it is a follow-up after older writers are retired.
+
 Document storage hosts the routes because it already owns the authenticated
 content API, database pool, and browser transport. A separate deployable service
 would add configuration and operational overhead without changing the security

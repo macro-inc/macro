@@ -509,6 +509,7 @@ mod elicitation {
                     actor: Some(sender()),
                     context: None,
                     client: None,
+                    prompter: agent_session::domain::model::PrompterKind::User,
                 })),
             )
             .await

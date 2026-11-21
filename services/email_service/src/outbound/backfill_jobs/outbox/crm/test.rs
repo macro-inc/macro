@@ -1,3 +1,4 @@
+mod policy;
 use super::drain;
 use axum::{Json, Router, extract::State, http::StatusCode};
 use crm::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyRepository};
@@ -170,7 +171,7 @@ async fn publishes_committed_consent_and_removes_request(pool: PgPool) -> anyhow
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn selected_grant_publishes_but_legacy_withdrawal_discards_pending_work(
+async fn legacy_history_cannot_adopt_selected_consent_or_a_withdrawn_grant(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let (repo, team, link) = consent(&pool).await?;
@@ -190,7 +191,7 @@ async fn selected_grant_publishes_but_legacy_withdrawal_discards_pending_work(
         .execute(&pool).await?;
     let queue = TestQueue::start().await?;
     drain(&pool, &queue.sqs).await?;
-    assert_eq!(queue.messages().len(), 1);
+    assert_eq!(queue.messages().len(), 0);
     assert_eq!(pending(&pool).await?, 0);
 
     repo.change_email_privacy(
@@ -210,7 +211,7 @@ async fn selected_grant_publishes_but_legacy_withdrawal_discards_pending_work(
     .execute(&pool)
     .await?;
     drain(&pool, &queue.sqs).await?;
-    assert_eq!(queue.messages().len(), 1);
+    assert_eq!(queue.messages().len(), 0);
     assert_eq!(pending(&pool).await?, 0);
     Ok(())
 }

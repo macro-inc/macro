@@ -73,7 +73,6 @@ vi.mock('../tasks-view-context', () => ({
     },
     setPrimarySort: vi.fn(),
     setState: vi.fn(),
-    projectsEnabled: () => false,
     ganttEnabled: () => false,
   }),
 }));

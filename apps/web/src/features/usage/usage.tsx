@@ -1,11 +1,5 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  DEV_MODE_ENV,
-  enableAiUsageBilling,
-  LOCAL_ONLY,
-  PROD_MODE_ENV,
-} from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -21,18 +15,13 @@ import {
 import { createSignal, Suspense } from 'solid-js';
 import { useAiUsagePreview } from '../paywall/ai-usage-preview';
 import type { UsageContext } from './context/usage-context';
-import {
-  type AutoReloadSettings,
-  DEFAULT_AUTO_RELOAD,
-  isUsageAvailable,
-} from './core/usage';
+import { type AutoReloadSettings, DEFAULT_AUTO_RELOAD } from './core/usage';
 import { toUsageSummary } from './queries/usage-summary';
 import { UsageSettingsView } from './views/usage-settings';
 
 export function Usage() {
   const summary = useAiBillingSummaryQuery();
   const plans = useAiBillingPlansQuery();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const purchase = usePurchaseAiCreditsMutation();
   const checkout = useCreateAiCreditCheckoutMutation();
   const portal = useCreateBillingPortalMutation();
@@ -45,9 +34,7 @@ export function Usage() {
   const [previewSettings, setPreviewSettings] =
     createSignal<AutoReloadSettings>({ ...DEFAULT_AUTO_RELOAD });
   const previewing = usagePreview.active;
-  const available = () =>
-    !usagePreview.beforeLaunch() &&
-    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
+  const available = () => !usagePreview.beforeLaunch();
   // Stripe can't return to the native app's own origin.
   const returnUrl = `${getWebOrigin()}/app/settings/usage`;
   const usageSummary = () => {

@@ -18,6 +18,7 @@ import {
 } from './range';
 import {
   activeCalendarSyncController,
+  type CalendarStaleReason,
   CalendarSyncController,
   setActiveCalendarSyncController,
 } from './sync-controller';
@@ -25,8 +26,12 @@ import {
 const SYNCING_POLL_MS = 60_000;
 const DAY_MS = 86_400_000;
 
-/** Re-reads ingestion state while syncing; covered views would never ask. */
-async function refreshSyncStatus(): Promise<void> {
+/**
+ * Reads the server's viewer-wide ingestion state. Viewports already in the
+ * cache fetch nothing, so they never report it themselves. A read that ends
+ * after its controller was retired (sign-out, another account) is dropped.
+ */
+async function refreshSyncStatus(owner: CalendarSyncController): Promise<void> {
   const now = Date.now();
   const range = createCalendarOccurrenceQueryRange(
     new Date(now),
@@ -35,6 +40,7 @@ async function refreshSyncStatus(): Promise<void> {
   const sample = beginCalendarSyncStatusSample();
   const page = await fetchCalendarOccurrencePage({ ...range, first: 1 });
   const status = mapCalendarSyncStatus(page.syncStatus);
+  if (activeCalendarSyncController() !== owner) return;
   const previous = latestCalendarSyncStatus();
   if (!recordCalendarSyncStatus(status, sample) || status === previous) return;
   await queryClient.invalidateQueries({
@@ -42,12 +48,20 @@ async function refreshSyncStatus(): Promise<void> {
   });
 }
 
+function startSyncStatusRefresh(owner: CalendarSyncController): void {
+  refreshSyncStatus(owner).catch((error) => {
+    console.warn('Calendar sync status refresh failed', error);
+  });
+}
+
 /**
  * Keeps the cached calendar current while calendar reads use the cache:
  * pokes (`refresh_calendar`), reconnects, coming online, becoming visible,
  * and cache generation changes run a delta, with a slow poll while the
- * server is still syncing. The cross-tab leader also widens coverage in the
- * background.
+ * server is still syncing. Starting, and each of those except pokes, also
+ * reads the server's sync status, so a reload whose viewports are all cached
+ * still learns that a first import is running. The cross-tab leader also
+ * widens coverage in the background.
  */
 /** Keeps the calendar cache in sync while `active`, i.e. once a user is signed in. */
 export function useCalendarCache(active: Accessor<boolean>): void {
@@ -58,35 +72,39 @@ export function useCalendarCache(active: Accessor<boolean>): void {
   createEffect(() => {
     const cacheHost = host();
     if (!cacheHost || !active()) return;
-    const controller = new CalendarSyncController(cacheHost);
+    // A reset drops the covered months the backfill lane already filled.
+    const controller = new CalendarSyncController(cacheHost, {
+      onReset: () => setGeneration((value) => value + 1),
+    });
     setActiveCalendarSyncController(controller);
-    controller.markStale('start');
+    const resync = (reason: CalendarStaleReason) => {
+      controller.markStale(reason);
+      startSyncStatusRefresh(controller);
+    };
+    resync('start');
     const unsubscribeReconnect = subscribeGraphqlSoupReconnected(() =>
-      controller.markStale('reconnect')
+      resync('reconnect')
     );
     const untrackCreates = trackCalendarCreateSettlements(cacheHost);
     const unsubscribeGeneration = cacheHost.onCacheGenerationChanged(() => {
-      controller.markStale('generation');
+      resync('generation');
       setGeneration((value) => value + 1);
     });
     const removeOnline = makeEventListener(window, 'online', () =>
-      controller.markStale('online')
+      resync('online')
     );
     const removeVisibility = makeEventListener(
       document,
       'visibilitychange',
       () => {
         if (document.visibilityState === 'visible') {
-          controller.markStale('visible');
+          resync('visible');
         }
       }
     );
     const poll = setInterval(() => {
       if (latestCalendarSyncStatus() !== CalendarSyncStatus.syncing) return;
-      controller.markStale('syncing');
-      refreshSyncStatus().catch((error) => {
-        console.warn('Calendar sync status refresh failed', error);
-      });
+      resync('syncing');
     }, SYNCING_POLL_MS);
     onCleanup(() => {
       clearInterval(poll);

@@ -53,13 +53,13 @@ tokio-util = { version = "0.7", features = ["io"] }
 # packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
 # gzip: the services compress only for clients that ask, and the plugin asks
 # only when built with it.
-tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "5896804dbd481f14bb17e8cadc1828ff5619aa1e", features = [
+tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "a6f62aed2b573d46ccac835598f8624676876e92", features = [
   "gzip",
   "unsafe-headers",
 ] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
 tauri-plugin-opener = "2"
-tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "5896804dbd481f14bb17e8cadc1828ff5619aa1e" }
+tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "a6f62aed2b573d46ccac835598f8624676876e92" }
 thiserror = "2.0.14"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing = { workspace = true }
@@ -161,8 +161,8 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
 tauri-plugin-haptics = "2"
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
-rustls-platform-verifier = "0.6"
+jni = "0.22"
+rustls-platform-verifier = "0.7"
 tauri-plugin-android-auth = { path = "../android_auth_plugin" }
 tauri-plugin-android-mobile = { path = "../android_mobile_plugin" }
 tauri-plugin-android-push = { path = "../android_push_plugin" }
@@ -177,6 +177,7 @@ tauri-plugin-call-kit = { path = "../callkit_plugin" }
 tauri-plugin-edit-menu = { path = "../edit_menu_plugin" }
 tauri-plugin-file-export = { path = "../file_export_plugin" }
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
+tauri-plugin-layout = { path = "../layout_plugin" }
 tauri-plugin-network-status = { path = "../network_status_plugin" }
 tauri-plugin-pasteboard = { path = "../pasteboard_plugin" }
 tauri-plugin-photo-library = { path = "../photo_library_plugin" }

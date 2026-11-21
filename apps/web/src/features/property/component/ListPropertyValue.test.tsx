@@ -1,19 +1,24 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { SYSTEM_PROPERTY_IDS } from '../constants';
 import type { EntityProperty } from '../types';
 import { ListPropertyValue } from './ListPropertyValue';
 
 vi.mock('@property', async () => {
   const { PropertyText } = await import('../extractors/PropertyText');
-  const passthrough = (props: { children: JSX.Element }) => props.children;
   return {
     Property: {
       Root: (props: {
         property: EntityProperty;
         children: (property: () => EntityProperty) => JSX.Element;
       }) => props.children(() => props.property),
-      Tooltip: passthrough,
+      Tooltip: (props: { children: JSX.Element; actions?: JSX.Element }) => (
+        <>
+          {props.children}
+          {props.actions}
+        </>
+      ),
       Pill: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
         <button {...props} />
       ),
@@ -48,7 +53,10 @@ vi.mock('../hooks/usePropertyEntityDisplay', () => ({
   }),
 }));
 vi.mock('../hooks/usePropertyUserDisplay', () => ({
-  usePropertyUserDisplay: () => ({ shortName: () => 'Alice' }),
+  usePropertyUserDisplay: (id: () => string) => ({
+    name: () => (id() === 'macro|bob@example.com' ? 'Bob Stone' : 'Alice'),
+    shortName: () => 'Alice',
+  }),
 }));
 
 const project: EntityProperty = {
@@ -100,4 +108,39 @@ it('keeps a count when multiple projects are linked', () => {
     />
   ));
   expect(view.getByRole('button', { name: 'Project: 2 items' })).toBeDefined();
+});
+
+it('filters by the assignee picked in the hover card, and only for person properties', () => {
+  const onFilterByUser = vi.fn();
+  const assignees: EntityProperty = {
+    ...project,
+    propertyId: 'task-assignees',
+    propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+    displayName: 'Assignees',
+    isMultiSelect: true,
+    specificEntityType: 'USER',
+    value: [
+      { entity_id: 'macro|alice@example.com', entity_type: 'USER' },
+      { entity_id: 'macro|bob@example.com', entity_type: 'USER' },
+    ],
+  };
+  const [property, setProperty] = createSignal(assignees);
+  const view = render(() => (
+    <ListPropertyValue
+      entityId="task"
+      property={property()}
+      onFilterByUser={onFilterByUser}
+    />
+  ));
+
+  fireEvent.click(view.getByRole('button', { name: 'Filter by Bob Stone' }));
+  expect(onFilterByUser).toHaveBeenCalledExactlyOnceWith(
+    'macro|bob@example.com'
+  );
+  expect(view.getByRole('button', { name: 'Filter by Alice' })).toBeDefined();
+
+  setProperty({ ...assignees, value: null });
+  expect(view.queryByRole('button', { name: /^Filter by/ })).toBeNull();
+  setProperty(project);
+  expect(view.queryByRole('button', { name: /^Filter by/ })).toBeNull();
 });

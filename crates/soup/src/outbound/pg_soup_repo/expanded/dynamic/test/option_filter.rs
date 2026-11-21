@@ -144,6 +144,7 @@ async fn matching(pool: &PgPool, properties: Expr<DocumentLiteral>) -> anyhow::R
             cursor: first_page(properties),
             exclude_frecency: false,
         },
+        false,
     )
     .await?
     .iter()

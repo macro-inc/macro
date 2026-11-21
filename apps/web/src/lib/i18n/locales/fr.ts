@@ -104,7 +104,6 @@ export default {
     close: 'Fermer',
     delete: 'Supprimer',
     rename: 'Renommer',
-    more: 'Plus',
     search: 'Rechercher',
     settings: 'Paramètres',
   },
@@ -529,6 +528,11 @@ export default {
       other: '{{count}} éléments supprimés',
     },
     toastDeleteFailed: 'Impossible de supprimer',
+    toastPropertySet: {
+      one: '{{property}} : valeur définie',
+      many: '{{property}} : valeur définie pour {{count}} d’éléments',
+      other: '{{property}} : valeur définie pour {{count}} éléments',
+    },
     toastAddedToFavorites: 'Ajouté aux favoris',
     toastAddedCountToFavorites: {
       one: '{{count}} élément ajouté aux favoris',
@@ -719,8 +723,6 @@ export default {
     create: 'Créer',
     getMobileApp: 'Obtenir l’app mobile',
     signedInAs: 'Connecté en tant que {{name}}',
-    commandMenu: 'Menu des commandes',
-    searchEverything: 'Tout rechercher',
     customizeSidebar: 'Personnaliser la barre latérale',
     customizeSidebarDescription:
       'Choisissez les apps affichées dans la barre latérale et faites-les glisser pour les réorganiser. Accueil reste toujours en premier.',

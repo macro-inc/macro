@@ -1,8 +1,6 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';
-import { enableTaskDuplicates } from '@core/constant/featureFlags';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import { queryReadyGate } from '@queries/gate';
@@ -16,61 +14,51 @@ import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function TaskDuplicateMatchPill() {
-  const flag = useFeatureFlag(enableTaskDuplicates);
   const matches = useTaskDuplicateMatches();
   const [open, setOpen] = createSignal(false);
 
   return (
-    <Show when={flag().enabled}>
-      <Suspense>
-        <Show when={matches.count() > 0}>
-          <Dropdown
-            open={open()}
-            onOpenChange={setOpen}
-            placement="bottom-start"
+    <Suspense>
+      <Show when={matches.count() > 0}>
+        <Dropdown open={open()} onOpenChange={setOpen} placement="bottom-start">
+          <Dropdown.Trigger
+            class={cn(
+              'h-auto min-w-0 gap-1.5 border-failure/40 px-2 py-1 leading-tight',
+              'bg-failure/10 text-failure-ink shadow-none',
+              'hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60',
+              open() && 'bg-failure/15'
+            )}
+            title="Possible duplicate tasks"
           >
-            <Dropdown.Trigger
-              class={cn(
-                'h-auto min-w-0 gap-1.5 border-failure/40 px-2 py-1 leading-tight',
-                'bg-failure/10 text-failure-ink shadow-none',
-                'hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60',
-                open() && 'bg-failure/15'
-              )}
-              title="Possible duplicate tasks"
-            >
-              <WarningIcon class="size-3 shrink-0" />
-              <span class="truncate">Possible duplicate</span>
-              <CaretDownIcon class="size-3 shrink-0 text-current/70" />
-            </Dropdown.Trigger>
-            <Dropdown.Content class="max-w-[calc(100vw-24px)]">
-              <TaskDuplicateMatchPopover matches={matches} />
-            </Dropdown.Content>
-          </Dropdown>
-        </Show>
-      </Suspense>
-    </Show>
+            <WarningIcon class="size-3 shrink-0" />
+            <span class="truncate">Possible duplicate</span>
+            <CaretDownIcon class="size-3 shrink-0 text-current/70" />
+          </Dropdown.Trigger>
+          <Dropdown.Content class="max-w-[calc(100vw-24px)]">
+            <TaskDuplicateMatchPopover matches={matches} />
+          </Dropdown.Content>
+        </Dropdown>
+      </Show>
+    </Suspense>
   );
 }
 
 export function TaskDuplicateMatchesSidePanelSection() {
-  const flag = useFeatureFlag(enableTaskDuplicates);
   const matches = useTaskDuplicateMatches();
 
   return (
-    <Show when={flag().enabled}>
-      <Suspense>
-        <Show when={matches.count() > 0}>
-          <SidePanel.Section
-            id="duplicates"
-            title="Duplicate Tasks"
-            defaultOpen
-            order={60}
-          >
-            <TaskDuplicateMatchesSidePanel matches={matches} />
-          </SidePanel.Section>
-        </Show>
-      </Suspense>
-    </Show>
+    <Suspense>
+      <Show when={matches.count() > 0}>
+        <SidePanel.Section
+          id="duplicates"
+          title="Duplicate Tasks"
+          defaultOpen
+          order={60}
+        >
+          <TaskDuplicateMatchesSidePanel matches={matches} />
+        </SidePanel.Section>
+      </Show>
+    </Suspense>
   );
 }
 

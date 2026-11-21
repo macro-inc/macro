@@ -311,7 +311,6 @@ const deps = {
 };
 export const useCrmContext = () => ({
   userId: () => 'user-1',
-  pipelinesEnabled: () => () => false,
   isTeamAdmin: () => () => role() !== 'member',
   createCompanySource: (id: Accessor<string>) => useCompanyQuery(deps, id),
   createCompanyContactsSource: (

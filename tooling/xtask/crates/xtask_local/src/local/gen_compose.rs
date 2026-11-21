@@ -26,7 +26,7 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, microsoft_emulator, repo_root};
+use super::{Mode, google_emulator, microsoft_emulator, model_emulator, repo_root};
 
 #[cfg(test)]
 mod test;
@@ -83,6 +83,9 @@ pub struct Sidecars {
     /// The Outlook emulator, in place of Microsoft. On when the stack runs
     /// its own FusionAuth and the env names no real Microsoft client.
     pub outlook_emulator: bool,
+    /// The model emulator, in place of Gemini. On when the stack is
+    /// self-contained and the env names no real Gemini key.
+    pub model_emulator: bool,
 }
 
 impl Sidecars {
@@ -94,6 +97,7 @@ impl Sidecars {
                     .is_some_and(|key| !key.trim().is_empty()),
             gmail_emulator: google_emulator::stands_in(mode, env),
             outlook_emulator: microsoft_emulator::stands_in(mode, env),
+            model_emulator: model_emulator::stands_in(mode, env),
         }
     }
 }
@@ -121,6 +125,14 @@ pub fn generate(
             && svc.compose_name == microsoft_emulator::AUTHENTICATION_SERVICE
         {
             environment.extend(microsoft_emulator::authentication_service_env());
+        }
+        let pubsub_workers_env = microsoft_emulator::pubsub_workers_env(instance);
+        if sidecars.outlook_emulator && svc.compose_name == microsoft_emulator::PUBSUB_WORKERS {
+            environment.extend(
+                pubsub_workers_env
+                    .iter()
+                    .map(|(name, value)| (*name, value.as_str())),
+            );
         }
         let mut s = dct::Service {
             image: Some(runtime_image.clone()),
@@ -181,6 +193,7 @@ pub fn generate(
     if sidecars.outlook_emulator {
         let mut volumes = mounts.clone();
         volumes.push(microsoft_emulator::seed_volume());
+        volumes.push(microsoft_emulator::authority_volume());
         services.insert(
             microsoft_emulator::SERVICE.to_string(),
             Some(dct::Service {
@@ -195,6 +208,19 @@ pub fn generate(
                     ("services", &[microsoft_emulator::network_alias()]),
                     ("auth", &[microsoft_emulator::network_alias()]),
                 ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.model_emulator {
+        services.insert(
+            model_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(model_emulator::command())),
+                ports: dct::Ports::Short(vec![model_emulator::published_port(instance)]),
+                networks: net_aliases(&[("services", &[model_emulator::network_alias()])]),
                 ..Default::default()
             }),
         );
@@ -312,7 +338,6 @@ fn add_computers(
                 .volumes
                 .push(dct::Volumes::Simple(format!("{0}:{0}", dir.display())));
         }
-        Fleet::Incus => {}
     }
     Ok(())
 }
@@ -434,12 +459,8 @@ fn add_proxy_service(
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
-    // Incus reverse tunnels dial the host loopback; Docker computers use the
-    // proxy's services-network name and need no host DNS or guest CA changes.
+    // Docker computers reach the gateway by the proxy's services-network name.
     let computer_gateway_port = instance.port(Port::ComputerGateway);
-    ports.push(format!(
-        "127.0.0.1:{computer_gateway_port}:{computer_gateway_port}"
-    ));
     if previews {
         ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
         volumes.push(dct::Volumes::Simple(format!(

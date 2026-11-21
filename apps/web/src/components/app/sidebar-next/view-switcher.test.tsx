@@ -42,9 +42,7 @@ vi.mock('@app/signal/splitLayout', () => ({
 // Flags are PostHog-backed; the rail's own gates decide what is listed.
 vi.mock('./use-nav-item-gates', () => ({
   useNavItemGates: () => () => ({
-    showCalendar: true,
-    showScheduling: false,
-    showCustomers: false,
+    showCustomers: true,
     showCalls: true,
     showReviews: false,
     showActivity: false,
@@ -126,7 +124,9 @@ describe('ViewSwitcher', () => {
       'Tasks',
       'Calendar',
       'Agents',
+      'Customers',
       'Calls',
+      'Scheduling',
     ]);
     expect(screen.getByRole('menuitem', { current: 'page' }).textContent).toBe(
       'Email'

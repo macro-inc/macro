@@ -159,7 +159,7 @@ async fn save_record(
     let grants = serde_json::to_value(&record.grants).map_err(|_| Error::Invalid)?;
     let totp_key_id = record.totp_key_id.map(|key| key.0);
     let changed=if let Some(expected_version)=expected_version {
-        sqlx::query!("UPDATE password_item_entities SET metadata=$3,version=$4,grants=$5,deleting=$7,revision=revision+1,totp_key_id=$8,cleanup_due_at=CASE WHEN $7 THEN COALESCE(cleanup_due_at,now()+interval '180 seconds') ELSE cleanup_due_at END WHERE team_id=$1 AND id=$2 AND version=$6 AND revision=$9 AND deleted_at IS NULL",record.metadata.team_id.0,record.metadata.id.0,metadata,record.metadata.version,grants,expected_version,record.deleting,totp_key_id,record.revision).execute(&mut **transaction).await
+        sqlx::query_file!("src/outbound/postgres/update_record.sql",record.metadata.team_id.0,record.metadata.id.0,metadata,record.metadata.version,grants,expected_version,record.deleting,totp_key_id,record.revision).execute(&mut **transaction).await
     }else{
         sqlx::query!("INSERT INTO password_item_entities(team_id,id,user_id,metadata,version,grants,deleting,totp_key_id,cleanup_due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $7 THEN now()+interval '180 seconds' ELSE NULL END) ON CONFLICT(team_id,id) DO NOTHING",record.metadata.team_id.0,record.metadata.id.0,record.user_id.as_ref(),metadata,record.metadata.version,grants,record.deleting,totp_key_id).execute(&mut **transaction).await
     }.map_err(|_|Error::Unavailable)?;
@@ -588,6 +588,23 @@ impl Repository for PgRepository {
             })
             .collect()
     }
+    async fn favorites(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        items: &[ItemId],
+    ) -> Result<Vec<ItemId>, Error> {
+        self.list_favorites(actor, team, items).await
+    }
+    async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error> {
+        self.store_favorite(actor, team, item, favorite).await
+    }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
         let row=sqlx::query!(r#"SELECT metadata,user_id,grants,(deleting OR deleted_at IS NOT NULL) AS "deleting!",revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND id=$2"#,team.0,item.0).fetch_optional(&self.pool).await.map_err(|_|Error::Unavailable)?.ok_or(Error::NotFound)?;
         decode(
@@ -605,15 +622,16 @@ impl Repository for PgRepository {
         transaction.commit().await.map_err(database_error)
     }
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+        let mut transaction = self.bounded_transaction().await?;
         sqlx::query!(
             "UPDATE password_item_entities SET deleted_at=COALESCE(deleted_at,now()),cleanup_due_at=now()+interval '1 hour' WHERE team_id=$1 AND id=$2",
             team.0,
             item.0
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .map_err(|_| Error::Unavailable)?;
-        Ok(())
+        transaction.commit().await.map_err(database_error)
     }
     #[tracing::instrument(skip_all,err,name="passwords.audit",fields(team_id=%team.0,item_id=%item.0,event_id=%id))]
     async fn audit(
@@ -700,3 +718,5 @@ mod cleanup;
 mod folders;
 
 mod import;
+
+mod favorites;

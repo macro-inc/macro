@@ -41,10 +41,14 @@ export function fitsOnOneLine(row: HTMLElement): boolean {
  *
  * Solid updates the DOM synchronously, so each step is measured before the
  * browser paints and the row never shows a wrapped intermediate state.
+ *
+ * `watchContent` also measures again when a control in the row changes size
+ * while the row's width does not, such as a search field opening in it.
  */
 export function createLabelCollapse(
   row: Accessor<HTMLElement | undefined>,
-  order: Accessor<readonly string[]>
+  order: Accessor<readonly string[]>,
+  options: { watchContent?: boolean } = {}
 ) {
   const [count, setCount] = createSignal(0);
   let width: number | undefined;
@@ -71,6 +75,7 @@ export function createLabelCollapse(
   };
   // New controls render before the next frame; measure them then.
   createEffect(on(order, schedule, { defer: true }));
+  if (options.watchContent) watchChildren(row, schedule);
   // A web font that swaps in widens the labels without resizing the row.
   document.fonts?.addEventListener('loadingdone', schedule);
   onCleanup(() => {
@@ -82,4 +87,31 @@ export function createLabelCollapse(
     const index = order().indexOf(id);
     return index !== -1 && index < count();
   };
+}
+
+/** Calls `onChange` when a child of the row resizes, or children come and go. */
+function watchChildren(
+  row: Accessor<HTMLElement | undefined>,
+  onChange: () => void
+) {
+  createEffect(
+    on(row, (element) => {
+      if (!element) return;
+      const sizes = new ResizeObserver(onChange);
+      const observeChildren = () => {
+        sizes.disconnect();
+        for (const child of element.children) sizes.observe(child);
+      };
+      const children = new MutationObserver(() => {
+        observeChildren();
+        onChange();
+      });
+      observeChildren();
+      children.observe(element, { childList: true });
+      onCleanup(() => {
+        sizes.disconnect();
+        children.disconnect();
+      });
+    })
+  );
 }

@@ -38,12 +38,26 @@ gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a 
 `gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
 releases fail on a Projects (classic) error before adding the label.
 
-- Adding the label again starts a fresh run. A run still going for the same PR
-  is cancelled.
+- Before requesting another run, remove `run-ci` if it remains on the PR, then
+  add it again. The new run cancels any run still going for the same PR.
 - Draft PRs run too.
 - Only PRs into `main` run. A stacked PR, based on another branch, gets no
-  `CI gate` and the label does nothing until its base is `main`.
+  `CI gate` and the label does nothing until its base is `main`. To run
+  one, set its base to `main`
+  (`gh api -X PATCH repos/macro-inc/macro/pulls/<pr> -f base=main`), wait
+  until `gh pr view <pr> --json baseRefName,mergeable` says `main` and
+  `MERGEABLE`, take the label off and add it again, and set the base back
+  when `CI gate` has its result. The run tests the PR merged with `main`,
+  so what `main` has gained since the stack last merged it is part of what
+  runs. While its base is `main` the PR's diff holds its parents' commits:
+  it is not to be merged then.
 - Other labels never start or cancel CI.
+- The email end-to-end suites are not in `PR CI`. For a PR that changes
+  email, calendar or those suites, also run them on the branch by hand:
+  `gh workflow run email_e2e_browser.yml --ref <branch>` and
+  `gh workflow run email_e2e.yml --ref <branch>`, then read the runs with
+  `gh run list --workflow email_e2e_browser.yml --branch <branch>`
+  (`apps/web/tests/email-e2e/README.md`, CI).
 - A label added within seconds of a push can reach GitHub before the push
   does. `Start` then fails within seconds and `CI gate` says to add the label
   again. To avoid it, add the label once `gh pr view <pr> --json headRefOid`
@@ -72,14 +86,29 @@ on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
 such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
 and says why in `CI gate`.
 
-## Fix a failure
+## Review results and fix failures
 
-- A flaky job: re-run the failed jobs of the `PR CI` run
-  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
-  the status; no new label is needed.
-- A real failure: fix it, push, and add the label again.
-- The checks inside the run are named `<workflow> / <job>`, such as
-  `Web App / Typecheck` or `Cloud Storage / test`.
+After every run, inspect `gh pr checks <pr>` and confirm that `CI gate`
+passes on the latest PR commit. Read every failed job's logs with
+`gh run view <run-id> --log-failed` before deciding what to fix. Checks inside
+that run use names such as `Web App / Typecheck` or `Cloud Storage / test`.
+
+- Fix every real failure caused by the branch, run the affected local checks,
+  commit, and push. Request CI again by removing `run-ci` if it remains, then
+  adding it again.
+- For a failure unrelated to the branch, such as a flaky job, record the job,
+  error, and evidence in the PR body, without personal data or secrets. On a PR
+  from this repository, re-run only the failed jobs of the `PR CI` run for the
+  PR's current head (`gh run rerun <run-id> --failed`); fork PRs follow
+  [Fork PRs](#fork-prs). The `CI gate` job depends on every check, so it
+  reruns too and sets the `CI gate` status when it finishes; no new label is
+  needed. Until then the status still shows the previous failure, so wait with
+  `gh run watch <run-id>` rather than acting on it. If the same unrelated
+  failure persists after one rerun, report the blocker and leave the PR
+  incomplete instead of rerunning indefinitely.
+- For branch failures, repeat the fix-and-rerun cycle until the latest commit
+  passes. Review later CI failures without waiting for another request. Do not
+  declare the PR done until `CI gate` passes on its latest commit.
 
 ## Fork PRs
 

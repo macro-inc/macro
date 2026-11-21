@@ -14,6 +14,12 @@ import {
   appRoute,
   baseRoute,
   calendarSplitRoute,
+  driveFolderDocumentRoute,
+  driveFolderRoute,
+  driveRootDocumentRoute,
+  driveSplitRoute,
+  driveTabDocumentRoute,
+  driveTabRoute,
   homeCalendarRoute,
   homeSplitRoute,
   legacyContentRoute,
@@ -47,6 +53,14 @@ const definitions = {
       children: [
         { ...homeSplitRoute, children: [homeCalendarRoute] },
         calendarSplitRoute,
+        {
+          ...driveSplitRoute,
+          children: [
+            driveRootDocumentRoute,
+            { ...driveFolderRoute, children: [driveFolderDocumentRoute] },
+            { ...driveTabRoute, children: [driveTabDocumentRoute] },
+          ],
+        },
         legacyContentRoute,
         notFoundRoute,
       ],
@@ -58,7 +72,7 @@ const routes = createRoutesManifest(definitions);
 
 let cleanup: (() => void) | undefined;
 
-function openApp(url: string) {
+function openApp(url: string, touch = false) {
   const solid = createFakeSolidRouter(url);
   return createRoot((dispose) => {
     const router = createSplitRouter({
@@ -73,7 +87,7 @@ function openApp(url: string) {
       paneStore: createMemoryPaneStore(),
       policy: createTestPolicy().policy,
       middleware: createAppSplitRouterMiddleware({
-        isTouchDevice: () => false,
+        isTouchDevice: () => touch,
       }),
     });
     cleanup = () => {
@@ -174,6 +188,33 @@ describe('legacy link mentions', () => {
 });
 
 describe('opening an app URL', () => {
+  it.each([
+    '/drive/md/document',
+    '/drive/recent/pdf/document',
+    '/drive/folder/folder/md/document',
+  ])('keeps the touch Drive preview in its workspace: %s', async (path) => {
+    vi.useFakeTimers();
+    const { router, solid } = openApp('/app/drive', true);
+    await router.settled();
+    const pane = router.panes()[0]!;
+
+    await router.navigatePane(pane, path, {
+      state: [{ type: 'document', id: 'document' }],
+    });
+    vi.runAllTimers();
+
+    expect(solid.landed()).toBe(`/app${path}`);
+    expect(router.panes()).toEqual([pane]);
+    expect(router.entry(pane)?.state).toEqual([
+      { type: 'document', id: 'document' },
+    ]);
+    expect(
+      router
+        .entry(pane)
+        ?.location.route.matches.some((match) => match.id === 'drive')
+    ).toBe(true);
+  });
+
   it('opens a bare Calendar path at the preferred period with its event', async () => {
     vi.useFakeTimers();
     localStorage.setItem(

@@ -145,6 +145,38 @@ export function useCodeUpgradesQuery(
   return useQuery(() => codeUpgradesQueryOptions(scheduleId(), enabled()));
 }
 
+// Cached past unmount; closes over the resolved schedule id only.
+function unusableItemsQueryOptions(
+  scheduleId: string | null | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.unusableItems({
+      scheduleId: scheduleId ?? '__none__',
+    }).queryKey,
+    enabled: enabled && Boolean(scheduleId),
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await scheduledActionClient.listUnusableItems({
+            scheduleId: scheduleId!,
+          })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/**
+ * The routine's knobs whose picked item its owner can't use now: deleted,
+ * trashed or out of their reach. Back from another tab, it checks again.
+ */
+export function useUnusableItemsQuery(
+  scheduleId: Accessor<string | null | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => unusableItemsQueryOptions(scheduleId(), enabled()));
+}
+
 function fetchSubRoutines() {
   return throwOnErr(async () => await scheduledActionClient.listSubRoutines());
 }
@@ -212,6 +244,10 @@ export function invalidateSchedules() {
     }),
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.detail._def,
+    }),
+    // A save may have repicked one, or picked one its owner can't use.
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.unusableItems._def,
     }),
   ]);
 }

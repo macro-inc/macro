@@ -109,6 +109,13 @@ fn routines_suggested_unpicked_need_no_knob_filled_for_others() {
 }
 
 #[test]
+fn the_drafters_examples_are_code() {
+    for routine in CATALOG.iter().filter(|routine| routine.example) {
+        assert!(routine.code.is_some(), "{}", routine.key);
+    }
+}
+
+#[test]
 fn cron_schedules_leave_the_zone_to_the_owner() {
     for routine in CATALOG.iter() {
         if routine.trigger["type"] == "cron" {

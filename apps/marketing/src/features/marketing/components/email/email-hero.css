@@ -32,13 +32,14 @@
 
 .feature-page .email-page-hero h1 {
   max-width: 100%;
-  margin: 0 0 24px;
+  /* Offset the extra leading before the first and after the last line. */
+  margin: -.05em 0 calc(24px - .05em);
   font-family: 'Roboto Slab Variable', display, serif;
   font-size: 40px;
   white-space: normal;
   text-wrap: balance;
   font-weight: calc(320 + var(--cream-slab-weight-increase, 0));
-  line-height: 1.06;
+  line-height: 1.16;
   letter-spacing: -.04em;
 }
 
@@ -57,30 +58,42 @@
   padding-inline: 26px;
 }
 
-/* The mail providers the inbox connects to, under the call to action. */
-.email-page-hero-providers {
+.email-page-provider-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 6px 8px;
-  margin-top: 20px;
-  color: var(--feature-copy-color, var(--color-ink-muted));
-  font-size: 14px;
-  line-height: 20px;
+  gap: 9.6px;
+  width: 100%;
+  margin-top: 28px;
 }
 
-.email-page-hero-providers span {
+.email-page-provider-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--color-ink);
+  justify-content: center;
+  gap: 8px;
+  min-height: 38.4px;
+  padding: 0 17.6px;
+  border-radius: 999px;
+  font: 360 11.2px/1.4 'Inter Variable', Inter, sans-serif;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: opacity 150ms;
 }
 
-.email-page-hero-providers svg {
-  flex: none;
-  width: 16px;
-  height: 16px;
+.feature-page .email-page-provider-button {
+  background: #141415;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px #ffffff09, inset 0 1px 0 #ffffff10;
+}
+.email-page-provider-button svg { flex: none; width: 14.4px; height: 14.4px; }
+.email-page-provider-button:hover { opacity: .85; }
+.email-page-provider-button:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 4px; }
+
+@media (max-width: 699px) {
+  .email-page-provider-actions { gap: 8px; width: 80%; }
+  .email-page-provider-button { flex: 1; max-width: 144px; min-width: 0; min-height: 44px; padding-inline: 9.6px; }
+  .email-page-provider-prefix { display: none; }
 }
 
 /* Get started, then the Block's "Watch demo" tutorial. */
@@ -110,7 +123,7 @@
     white-space: normal;
     text-wrap: balance;
     letter-spacing: -.035em;
-    line-height: 1.08;
+    line-height: 1.18;
   }
 
   .feature-page .email-page-hero > .email-page-hero-label {

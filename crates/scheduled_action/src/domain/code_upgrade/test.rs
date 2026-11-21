@@ -379,3 +379,53 @@ async fn a_rewritten_later_step_is_checked_but_not_dry_run() {
     );
     assert!(code.dry_runs.lock().unwrap().is_empty());
 }
+
+/// Code that writes as its owner is never rewritten by a model, so nothing
+/// unreviewed runs under their name: the routine is paused for them with its
+/// code as it was. Code that writes as Macro still upgrades
+/// (`failing_code_is_rewritten_checked_dry_run_and_saved_once`).
+#[tokio::test]
+async fn code_that_writes_as_its_owner_is_paused_for_them_not_rewritten() {
+    let (code, upgrades) = (Code::default(), Upgrades::default());
+    let mut action = routine("await macro.tasks.create(x)", Some("0.2.0+old"));
+    action.task["dangerously_operate_as_user"] = json!(true);
+    let error = upgrade(&code, &upgrades, &action).await.unwrap_err();
+    let NeedsUpdate(reason) = error.downcast_ref::<NeedsUpdate>().unwrap().clone();
+    assert_eq!(
+        reason,
+        "\"File invoices\" doesn't work with Macro's current SDK, and it writes as you, so Macro doesn't rewrite it:\nTS2339 [ERROR]: Property 'create' does not exist on type 'TaskNamespace'."
+    );
+    assert!(code.rewrites.lock().unwrap().is_empty());
+    assert!(code.dry_runs.lock().unwrap().is_empty());
+    assert_eq!(
+        *upgrades.recorded.lock().unwrap(),
+        [
+            Recorded::Claimed(CURRENT.into()),
+            Recorded::NeedsUpdate(reason, None),
+        ]
+    );
+}
+
+/// Once paused, a run of a routine that writes as its owner says why again,
+/// not that an update is on its way.
+#[tokio::test]
+async fn a_paused_owner_routine_says_why_on_its_next_run() {
+    let code = Code::default();
+    let upgrades = Upgrades {
+        claimable: false,
+        ..Upgrades::default()
+    };
+    let mut action = routine("await macro.tasks.create(x)", Some("0.2.0+old"));
+    action.task["dangerously_operate_as_user"] = json!(true);
+    let error = upgrade(&code, &upgrades, &action).await.unwrap_err();
+    let NeedsUpdate(reason) = error.downcast_ref::<NeedsUpdate>().unwrap().clone();
+    assert_eq!(
+        reason,
+        "\"File invoices\" doesn't work with Macro's current SDK, and it writes as you, so Macro doesn't rewrite it:\nTS2339 [ERROR]: Property 'create' does not exist on type 'TaskNamespace'."
+    );
+    assert!(code.rewrites.lock().unwrap().is_empty());
+    assert_eq!(
+        *upgrades.recorded.lock().unwrap(),
+        [Recorded::Claimed(CURRENT.into())]
+    );
+}

@@ -504,6 +504,14 @@ impl Message {
     pub fn root_id(&self) -> Uuid {
         self.thread_id.unwrap_or(self.id)
     }
+
+    /// Whether `bot` posted this message for `user`. Only then may a tool
+    /// acting as `bot` for `user` change the message as the bot; every other
+    /// change goes through the user's own receipt and authorship rules.
+    pub fn posted_by_bot_for(&self, bot: bot_id::BotId, user: &str) -> bool {
+        self.sender_id.as_bot().map(|sender| sender.bot_id()) == Some(bot)
+            && self.triggered_by.as_deref() == Some(user)
+    }
 }
 
 /// A discussion with its root and ordered replies, including root tombstones.
@@ -519,7 +527,8 @@ pub struct MessageThread {
     pub replies: Vec<Message>,
 }
 
-/// Internal notification behavior for a posted channel message.
+/// Who hears about a posted message. A caller may choose it for its own
+/// channel message, since every choice only narrows who is notified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -529,7 +538,9 @@ pub enum PostMessageNotificationPolicy {
     Default,
     /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
     MentionsOnly,
-    /// Do not send notifications for this post. Realtime/search side effects still run.
+    /// Do not send notifications for this post, mentions included: no push,
+    /// email or inbox entry. Delivery, realtime, search and agent triggers
+    /// still run.
     Silent,
 }
 
@@ -586,9 +597,10 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub attribution: MessageAttribution,
-    /// Notification behavior chosen by a trusted server caller.
-    #[serde(skip)]
-    #[cfg_attr(feature = "schema", schema(ignore))]
+    /// Who hears about this post. `Silent` still delivers and shows the
+    /// message, but sends no notification of any kind, mentions included.
+    /// Channel messages only; other parents accept only `Default`.
+    #[serde(default)]
     pub notification_policy: PostMessageNotificationPolicy,
     /// Client-minted UUIDv7 for the new message, so an optimistic message
     /// already carries its final id; the server mints one when absent.

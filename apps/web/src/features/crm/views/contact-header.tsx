@@ -45,7 +45,6 @@ export function ContactHeader(props: {
 }) {
   const context = useCrmContext();
   const getInitialsFromName = context.contactInitials;
-  const pipelinesEnabled = context.pipelinesEnabled();
   // Default avatar mirrors the channel user avatar: initials on a flat circle.
   // Contacts have no photo, so initials come from the name or email.
   const initials = () => {
@@ -89,7 +88,7 @@ export function ContactHeader(props: {
             />
           )}
         </Show>
-        <Show when={pipelinesEnabled() && props.contact}>
+        <Show when={props.contact}>
           {(contact) => (
             <AddToPipeline
               record={{

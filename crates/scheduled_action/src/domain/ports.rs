@@ -1,11 +1,11 @@
-use super::appearance::ChangeAppearance;
+use super::appearance::{AppearanceSet, ChangeAppearance};
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
-    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, RunCaller, RunHistory,
-    RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
+    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester, RunCaller,
+    RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -31,6 +31,63 @@ pub trait TaskTargetValidator: Send + Sync + 'static {
         task: &serde_json::Value,
         owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The entity knobs of a saved task whose item its owner can't use now.
+    fn unusable_knobs(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<super::knob_entities::UnusableKnob>>> + Send;
+}
+
+/// Whether a routine's owner can use the item an entity knob names: it
+/// exists, is of the knob's kind, and they can open it. `async_trait` keeps
+/// it object-safe; validation and the runner hold it as `Arc<dyn KnobEntities>`.
+#[async_trait::async_trait]
+pub trait KnobEntities: Send + Sync + 'static {
+    /// `Ok(false)` when it is gone or out of reach; `Err` only when that
+    /// couldn't be found out.
+    async fn usable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        item: &routine_program::EntityValue,
+    ) -> Result<bool, Report>;
+}
+
+/// Compositions that can't look items up: every entity knob is refused.
+pub struct NoKnobEntities;
+
+#[async_trait::async_trait]
+impl KnobEntities for NoKnobEntities {
+    async fn usable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _item: &routine_program::EntityValue,
+    ) -> Result<bool, Report> {
+        Err(rootcause::report!(
+            "this scheduler cannot check the items routines use"
+        ))
+    }
+}
+
+/// Whether a person is a Macro user, for entity knobs that name a person.
+pub trait KnownPeople: Send + Sync + 'static {
+    fn exists(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
+/// Whether an item its owner can open is still one an entity knob can use:
+/// not in the trash, and a task still a task. Documents, tasks, folders and
+/// chats go to the trash, where their owner can still open them; the other
+/// kinds are deleted outright, which the access check already catches.
+pub trait LiveItems: Send + Sync + 'static {
+    /// `Ok(false)` when it is trashed, gone, or no longer of its kind.
+    fn live(
+        &self,
+        item: &routine_program::EntityValue,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
 
 pub trait ScheduledActionRepo: Send + Sync + 'static {
@@ -73,11 +130,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Atomically replace presentation and record the actual change in entity history.
+    /// Atomically replace presentation and record the actual change in entity
+    /// history. An agent's pick is skipped once the owner has chosen the
+    /// appearance; the owner's choice marks it chosen even when unchanged.
     fn set_appearance(
         &self,
         change: ChangeAppearance,
-    ) -> impl Future<Output = Result<Option<EntityAppearance>>> + Send;
+    ) -> impl Future<Output = Result<AppearanceSet>> + Send;
 
     /// Deletes the action row, its `entity_access` rows (`entity_type =
     /// 'scheduled_action'`), history, and the `entity` row in one transaction. A missing
@@ -255,12 +314,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     /// routine as it would be stored, without saving anything. A check made
     /// by a routine draft's session (`correlation`, the code-mode invocation
     /// the request's credential names) is kept as that draft's answer, with
-    /// the items it says it `created` for the routine.
+    /// the items it says it `created` for the routine and the apps it needs
+    /// that `principal` hasn't connected (`missing_apps`, kept as
+    /// [`super::models::RoutineCheck::missing_apps`] says).
     fn check_action(
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         created: Vec<super::models::CreatedItem>,
+        missing_apps: Vec<AgentMcpServer>,
         correlation: Option<Uuid>,
     ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
@@ -272,6 +334,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         input: ActionConfiguration,
         template_id: Uuid,
         appearance: EntityAppearance,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// `create_action` for a routine saved from routine suggestion
@@ -282,6 +345,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         suggestion_id: Uuid,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Actions `user_id` can access, within `scope`. Legacy clients see cron
@@ -298,6 +362,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         input: ActionConfigurationUpdate,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Change the owner's routine presentation without changing its execution revision.
@@ -313,6 +378,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         enabled: bool,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     fn delete_action(
@@ -341,6 +407,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+
+    /// The routine's entity knobs whose item its owner can't use now, checked
+    /// as the owner, as its runs will be.
+    fn get_unusable_knobs(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<super::knob_entities::UnusableKnob>>> + Send;
 }
 
 /// A create's result: a new routine, or the sub-routine its key already named.
@@ -640,6 +713,25 @@ impl SessionCreations for NoSessionCreations {
     }
 }
 
+/// The apps a person connected, which a routine drafted for them may
+/// require: the ones saving and every run count as connected. Object-safe so
+/// the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait DraftApps: Send + Sync + 'static {
+    /// `owner`'s connected apps, by slug and display name.
+    async fn connected(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>>;
+
+    /// The ones of `apps` a routine of `owner`'s can require once they
+    /// connect them, in order: not one `owner` can't connect at all, nor
+    /// one they would connect to its vendor's own MCP server, which never
+    /// makes it an app a routine can require.
+    async fn requirable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> Result<Vec<AgentMcpServer>>;
+}
+
 /// The agent session a code-mode request came from, by the invocation its
 /// credential names. Object-safe for the same reason.
 #[async_trait::async_trait]
@@ -705,6 +797,7 @@ pub trait RoutineTemplateService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         template_id: Uuid,
         input: ActionConfiguration,
+        requester: Requester,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 }
 

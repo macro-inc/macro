@@ -13,6 +13,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SidePanel, useSidePanel } from '../side-panel';
+import { SplitBackButton } from '../split-layout/components/SplitBackButton';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
@@ -21,7 +22,8 @@ import { MobileHeaderIsland } from './island';
 
 /**
  * The header of a mobile view: `children` on the left, `trailing` on the
- * right, each built from islands. Back comes from the shell.
+ * right, each built from islands. Back comes from the shell; scoped headers
+ * use MobileHeader.Back to share its history action and caret.
  *
  * While it is mounted it owns the pane's header: `SplitHeaderLeft` /
  * `SplitHeaderRight` contributions from anywhere else in the pane render
@@ -73,6 +75,8 @@ function Title(props: {
   /** Shown after the label, such as a Beta badge. */
   trailingBadges?: JSX.Element;
   colorIcon?: boolean;
+  /** Session identities use the same regular weight as their list rows. */
+  weight?: 'normal' | 'semibold';
   class?: string;
 }) {
   const panel = useSplitPanelOrThrow();
@@ -113,7 +117,12 @@ function Title(props: {
         </Show>
         {props.badges}
         <span class="inline-flex min-w-0 items-center gap-1">
-          <span class="inline-block truncate text-sm font-semibold">
+          <span
+            class={cn(
+              'inline-block truncate text-sm',
+              props.weight === 'normal' ? 'font-normal' : 'font-semibold'
+            )}
+          >
             {props.label}
           </span>
           <Show when={panel.titleFileMenuTrigger()}>
@@ -126,6 +135,14 @@ function Title(props: {
   );
 }
 
+/** Use the shell's history-aware Back action and canonical caret. */
+function Back(props: { onBack?: () => void } = {}) {
+  return (
+    <MobileHeaderIsland class="size-10 justify-center !px-0">
+      <SplitBackButton onBack={props.onBack} />
+    </MobileHeaderIsland>
+  );
+}
 /** Opens the pane's details drawer. Renders nothing without details. */
 function Info() {
   const sidePanel = useSidePanel();
@@ -146,6 +163,7 @@ function Info() {
 
 export const MobileHeader = Object.assign(MobileHeaderRoot, {
   Title,
+  Back,
   Island: MobileHeaderIsland,
   Info,
 });

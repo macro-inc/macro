@@ -302,8 +302,6 @@ pub struct CanvasRouteDeps {
     pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
     /// Records model usage of edits by instructions.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
-    /// Whether a user has the Canvas artifacts rollout.
-    pub artifacts: crate::domain::canvas::CanvasArtifactsRollout,
     /// Keeps rendered images as the caller's static files.
     pub images: Arc<dyn crate::domain::canvas::CanvasImageStore>,
 }

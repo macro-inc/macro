@@ -184,7 +184,7 @@ export function ChannelOption(props: {
               item().focused &&
               'bg-hover text-ink'
           )}
-          active={item().selected && !isTouchDevice()}
+          active={item().selected}
           aria-current={item().selected ? 'page' : undefined}
           onClick={(event) => {
             if (!isPrimaryMouseDown(event) || didDrag) return;

@@ -40,15 +40,22 @@ impl PgComputerRepo {
                 }
                 effect => {
                     let worker = OutboxWorker::try_from(effect.worker())?;
+                    // The worker hears of it on commit; Postgres sends one
+                    // notification per worker however many effects it queued.
                     sqlx::query!(
                         r#"
-                        INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)
-                        VALUES ($1, $2, $3, $4, $4)
+                        WITH queued AS (
+                            INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)
+                            VALUES ($1, $2, $3, $4, $4)
+                            RETURNING worker
+                        )
+                        SELECT pg_notify($5, queued.worker::text) FROM queued
                         "#,
                         computer_id.as_uuid(),
                         worker as OutboxWorker,
                         serde_json::to_value(&effect)?,
                         now,
+                        super::effect_signals::EFFECT_QUEUED_CHANNEL,
                     )
                     .execute(&mut **tx)
                     .await?;
@@ -73,7 +80,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size AS "size: ComputerSize", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at
             FROM hosted_runtime
             WHERE id = $1
             FOR UPDATE
@@ -100,7 +107,12 @@ impl PgComputerRepo {
         }
 
         let host = computer.host;
-        let host_has_room = Self::host_has_room(tx, host, computer.id, computer.resources).await?;
+        if matches!(event, Event::PowerOn) {
+            // On to the lifecycle already; only its guest sleeps.
+            Self::request_wake_in(tx, computer_id, now).await?;
+        }
+        let host_has_room =
+            Self::host_has_room(tx, host, computer.id, computer.resources, now).await?;
         let transitioned = transition(
             &computer.state,
             event,
@@ -119,6 +131,29 @@ impl PgComputerRepo {
                 return Ok(Some(Applied::Rejected(rejected)));
             }
         };
+        // The setup timeline is part of the state: an event that only
+        // advances it (a finished agent hand-off) is still a change.
+        let agent = crate::domain::setup::AgentProgress {
+            reported_online: matches!(event, Event::AgentOnline),
+            delivered: matches!(event, Event::AgentDelivered),
+        };
+        let waiting_for_capacity = state.waiting_for_capacity();
+        let (phase, connected, payment) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.payment_progress(),
+        );
+        let finished_setup = state
+            .setup
+            .as_mut()
+            .map(|setup| {
+                let mut finished =
+                    setup.advance(&phase, connected, waiting_for_capacity, payment, now);
+                finished.extend(setup.advance_agent(agent, now));
+                finished
+            })
+            .unwrap_or_default();
+
         if state == computer.state && effects.is_empty() {
             return Ok(Some(Applied::Changed(Box::new(computer))));
         }
@@ -126,6 +161,9 @@ impl PgComputerRepo {
             if let Effect::Create { generation, .. } = effect {
                 computer.enrollment_generation = *generation;
             }
+        }
+        if effects.iter().any(Effect::starts_guest) {
+            Self::count_admitted_start(tx, host, now).await?;
         }
         Self::store_effects(tx, computer_id, effects, now).await?;
 
@@ -135,14 +173,6 @@ impl PgComputerRepo {
         {
             span.record("phase", tag);
         }
-
-        let waiting_for_capacity = state.waiting_for_capacity();
-        let (phase, connected) = (state.phase.clone(), state.macrod_connected);
-        let finished_setup = state
-            .setup
-            .as_mut()
-            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, now))
-            .unwrap_or_default();
 
         if !state.is_live() {
             sqlx::query!(
@@ -220,37 +250,5 @@ impl PgComputerRepo {
                 },
             );
         }
-    }
-
-    /// Whether a computer of `resources` fits among the host's other awake
-    /// computers. Locks the host row so concurrent starts on one host are serialized.
-    pub(super) async fn host_has_room(
-        tx: &mut Tx<'_>,
-        host: HostId,
-        computer_id: ComputerId,
-        resources: ComputerResources,
-    ) -> Result<bool, PgComputerError> {
-        let capacity = sqlx::query_scalar!(
-            "SELECT awake_capacity_units FROM hosted_runtime_host WHERE id = $1 FOR UPDATE",
-            host.into_inner(),
-        )
-        .fetch_optional(&mut **tx)
-        .await?;
-        let Some(capacity) = capacity else {
-            return Ok(false);
-        };
-        let others = sqlx::query_scalar!(
-            r#"
-            SELECT COALESCE(SUM(GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)), 0)::INTEGER AS "units!"
-            FROM hosted_runtime
-            WHERE host_id = $1 AND awake AND id <> $2
-            "#,
-            host.into_inner(),
-            computer_id.as_uuid(),
-        )
-        .fetch_one(&mut **tx)
-        .await?;
-
-        Ok(others + units(resources)? <= capacity)
     }
 }

@@ -180,7 +180,10 @@ it('seeds the live detail and identity edges from an authoritative create withou
         data: {
           user: {
             id: 'viewer',
-            initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
+            visibleInitiative: {
+              __typename: 'GraphqlSoupInitiative',
+              id: 'project',
+            },
           },
         },
       })

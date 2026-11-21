@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"due_items!\",\n                floor(extract(epoch FROM now()-min(x.next_run_at)))::bigint AS oldest_due_seconds\n            FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id\n            JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation\n            JOIN calendar_outlook_work x ON x.account_id=a.id LEFT JOIN calendars c ON c.id=x.calendar_id\n            WHERE l.is_sync_active AND a.provider='outlook' AND a.sync_status NOT IN ('disabled','reauth_required') AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]\n              AND x.next_run_at<=now() AND(x.lease_until IS NULL OR x.lease_until<now()) AND(x.calendar_id IS NULL OR NOT c.is_deleted)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "due_items!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "oldest_due_seconds",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "2249ea602a156d3bf397f110ffe1e196a50b53da6a22869abb84b51a10fac98c"
+}

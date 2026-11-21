@@ -1,4 +1,5 @@
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -170,6 +171,7 @@ it('delivers hidden-tab events before parked writes, preserving cache order with
     stream.emit(NEW_NOTIFICATION);
     await writeStarted.promise;
     stream.emit(DELETION);
+    await vi.advanceTimersByTimeAsync(0);
     expect(onPatch.mock.calls.map(([patch]) => patch)).toEqual([
       NEW_NOTIFICATION,
       DELETION,
@@ -189,9 +191,10 @@ it('delivers hidden-tab events before parked writes, preserving cache order with
     resume.resolve();
     await caughtUp.promise;
     expect(host.writeQuery).toHaveBeenCalledOnce();
-    expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith([
-      'GraphqlNotification:notification-1',
-    ]);
+    expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith(
+      ['GraphqlNotification:notification-1'],
+      UNKNOWN_CACHE_GENERATION
+    );
     expect(onResult).toHaveBeenCalledTimes(2);
     expect(onPatch).toHaveBeenCalledTimes(2);
     for (const receipt of [first, second]) {

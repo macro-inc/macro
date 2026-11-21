@@ -1,0 +1,652 @@
+{
+  "scenario": "ideas-sales",
+  "description": "Corvana mid-market sales team (dock scheduling software). Owner Tessa Quinlan (AE) with Derek (regional director, team owner), Priyanka (SE), Lena (commercial counsel) and Marcus (AE). Workspace matches the sales benchmark inbox and plants cross-source suggestion opportunities plus stale decoys.",
+  "users": {
+    "owner": {
+      "email": "tessa.quinlan@corvana.example",
+      "first_name": "Tessa",
+      "last_name": "Quinlan",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "derek": {
+      "email": "derek.hollins@corvana.example",
+      "first_name": "Derek",
+      "last_name": "Hollins",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "priyanka": {
+      "email": "priyanka.rao@corvana.example",
+      "first_name": "Priyanka",
+      "last_name": "Rao",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "lena": {
+      "email": "lena.fischer@corvana.example",
+      "first_name": "Lena",
+      "last_name": "Fischer",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "marcus": {
+      "email": "marcus.lee@corvana.example",
+      "first_name": "Marcus",
+      "last_name": "Lee",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    }
+  },
+  "teams": {
+    "corvana": {
+      "name": "Corvana Mid-Market AMER",
+      "owner": "derek",
+      "members": {
+        "owner": "member",
+        "priyanka": "member",
+        "lena": "member",
+        "marcus": "member"
+      }
+    }
+  },
+  "channels": {
+    "deals": {
+      "type": "team",
+      "name": "deals",
+      "team": "corvana"
+    },
+    "se-requests": {
+      "type": "public",
+      "name": "se-requests",
+      "owner": "priyanka",
+      "members": [
+        "owner",
+        "marcus",
+        "derek",
+        "lena"
+      ]
+    },
+    "legal-desk": {
+      "type": "private",
+      "name": "legal-desk",
+      "owner": "lena",
+      "members": [
+        "owner",
+        "derek",
+        "marcus"
+      ]
+    },
+    "dm-tessa-priyanka": {
+      "type": "direct_message",
+      "members": [
+        "owner",
+        "priyanka"
+      ]
+    }
+  },
+  "projects": {
+    "q4-pipeline": {
+      "owner": "owner",
+      "name": "Tessa - Q4 pipeline",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "view"
+        }
+      ]
+    },
+    "ironbridge": {
+      "owner": "owner",
+      "name": "Ironbridge 3PL - final",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "view"
+        }
+      ]
+    },
+    "enablement": {
+      "owner": "derek",
+      "name": "Mid-market enablement",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "view"
+        }
+      ]
+    }
+  },
+  "documents": {
+    "territory-plan": {
+      "owner": "owner",
+      "name": "Territory plan - Q4 2026 / H1 2027",
+      "project": "q4-pipeline",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Territory plan: Q4 2026 and H1 2027\n\nTessa Quinlan, Mid-Market AE, Central territory. Reviewed with Derek on Oct 5.\n\n## Where I am\n\n- Annual quota: $1.02M. YTD attainment at Oct 1: 82%.\n- Q4 target: $340,000. Accelerator: 1.5x on everything above 100% of annual.\n- Customers I own: Coastal Crossdock (closed Oct 28), Halbrook Cold Chain (renewal Jun 2027), Tri-County Foods DC (renewal Mar 2027).\n\n## Q4 goals\n\n| # | Goal | Target date | Owner | Status |\n|---|------|-------------|-------|--------|\n| 1 | Close Harborline Freight, 3-year with Ohio DCs in year 2 | Nov 20 | Tessa | Envelope out |\n| 2 | Close Bluegate Cold Storage, 4 sites | Dec 4 | Tessa, Priyanka (security) | Security approved |\n| 3 | Win Ironbridge 3PL (6 sites), decision Nov 20 | Nov 20 | Tessa | Finalist |\n| 4 | Every Q4 opp has a next step dated within 14 days | weekly | Tessa | Ongoing |\n\n## H1 2027 goals\n\n| # | Goal | Target date | Owner | Status |\n|---|------|-------------|-------|--------|\n| 5 | Build Q1 pipeline to 3x Q1 target ($900k) | Jan 15 | Tessa | $610k |\n| 6 | Open an expansion opportunity at every customer with a new site in 2027 (Coastal Crossdock Savannah site, Halbrook's Peoria DC) | Dec 15 | | Not started |\n| 7 | Two referenceable cold-storage customers for Bluegate-type deals | Dec 15 | | Not started |\n| 8 | Pinecrest Joliet pilot signed | Jan 29 | Tessa | Pilot terms due Nov 11 |\n\n## Notes on goal 6\n\nExpansion is the cheapest bookings in the plan: no security review, existing MSA, and the multi-year SPIFF applies if we co-term. Coastal's CFO mentioned a third site in our handoff call. Halbrook said in September they're opening Peoria in Q2. Neither is in Stratus yet.\n\n## Accounts to deprioritize\n\n- Redrock Transload: spend freeze until the January budget cycle.\n- Summit Grain: lost to the WMS add-on; revisit in 12 months.\n\n## Weekly rhythm\n\n- Monday 8:00: update Stratus, post the Monday deal update in #deals before the commit call.\n- Wednesday: SE sync with Priyanka.\n- Friday: forecast notes to Derek.\n"
+    },
+    "coastal-handoff": {
+      "owner": "owner",
+      "name": "Coastal Crossdock - CS handoff notes (Oct 30)",
+      "project": "q4-pipeline",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Coastal Crossdock Co: Customer Success handoff\n\nClosed Oct 28, 2026. 2 sites (Charleston, Jacksonville), 24 months, $64,800 per year. Order form OF-2026-0412, no redlines. Handoff call Oct 30 with Danielle Price (CFO), Ray Ostrander (Ops Manager), and Jamie Cole (Corvana CSM).\n\n## Customer contacts\n\n- Danielle Price, CFO: signer, budget owner. Has signing authority up to $150k.\n- Ray Ostrander, Operations Manager: day-to-day owner, runs both docks.\n- AP: needs the W-9 (sent Oct 23) and the PO addressed to Corvana Inc.\n\n## What they bought and why\n\n- Dock scheduling and carrier portal for 2 cross-docks, 46 doors combined.\n- Pain: carriers arriving without appointments at 6am shift change; 2h+ average dwell in peak.\n- Success metric they agreed to: average dwell under 75 minutes by the end of March.\n\n## Implementation\n\n- Kickoff: Nov 16. Go-live target: Jan 11, before the post-holiday returns wave.\n- Integrations: their WMS via the standard connector (Priyanka confirmed it during discovery).\n- Carrier onboarding: Coastal will email their top 40 carriers in December; CS sends the template.\n\n## Things Danielle said that matter later\n\n- \"If Charleston and Jacksonville go well, Savannah is next. We're opening it in May, about 30 doors, and I'd want the same pricing.\" She asked us to come back with a number after go-live.\n- She prefers 3-year terms for anything new because her board likes predictable costs.\n\n## Handoff checklist\n\n- [x] Closed Won in Stratus (Oct 28)\n- [x] Handoff form filed with CS (Oct 30)\n- [x] Intro email to Jamie Cole\n- [x] Kickoff scheduled (Nov 16)\n- [ ] Expansion opportunity for Savannah (after go-live)\n"
+    },
+    "integrations-faq": {
+      "owner": "priyanka",
+      "name": "Integrations & packaging FAQ",
+      "project": "enablement",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Integrations and packaging FAQ\n\nOwner: Priyanka Rao (SE). For AEs and BDRs. If your question is answered here, don't ping #se-requests. Last updated: Oct 30, 2026.\n\n## Packaging\n\n1. **Do we price per site or per user?** Per site (dock scheduling, by door band) plus named users included per site (10 per site; extra users $15 per user per month). Carrier portal access is unlimited carriers at no extra cost.\n2. **Can the yard module be sold on its own?** Yes, since Oct 1: \"Yard Standalone\" SKU, priced per trailer spot: $4.50 per spot per month, minimum 200 spots, includes gate check-in on tablets and the yard map. No dock scheduling needed. Quote it through deal desk like any other SKU.\n3. **Is SSO included?** SAML SSO is included on every mid-market plan. SCIM is Enterprise only.\n4. **Setup fees?** Implementation is $3,000 per site, waived on 3-year terms and on single-site deals under $20k.\n\n## Integrations\n\n5. **Standard WMS connectors** (appointment sync both ways): Korvex WMS, Lattice WMS, Stonepath, OpenDock WMS. Typical setup: 1 to 2 weeks.\n6. **TMS connectors**: Routewise TMS, Freightlane, Haulbase. For any other TMS: inbound and outbound webhooks or nightly CSV over SFTP. Small TMS vendors usually take 2 to 3 weeks via webhooks.\n7. **Homegrown WMS/TMS**: REST API (OpenAPI spec at docs.corvana.example/api). Typical integration effort on the customer side is 3 to 4 weeks with one developer; we provide a sandbox tenant and a Postman collection.\n8. **ERP**: no direct ERP connectors; go through the WMS.\n\n## Security\n\n9. SOC 2 Type II (report period Apr 2025 to Mar 2026) and the latest pen test executive summary are in the trust profile. The full pen test report requires an NDA and goes through the TrustGate vault.\n10. Data retention after termination: 90 days by default, 60 days with certified deletion available as a contract term (Lena has the clause).\n11. AI: customer data is not used to train or fine-tune models. Approved wording is in the trust profile.\n\n## Requests that do need an SE\n\n- Custom demo data or a tailored demo\n- Security questionnaires (start them the day you get them)\n- Integration scoping calls with customer IT\n"
+    },
+    "reference-list": {
+      "owner": "derek",
+      "name": "Reference customers (mid-market)",
+      "project": "enablement",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Reference customers, mid-market\n\nOwner: Derek. Ask the account owner before you contact any reference. Max one reference call per customer per month. Last updated: Sep 14, 2026.\n\n| Customer | Segment | Sites | Live since | Good for | Account owner | Status |\n|----------|---------|-------|-----------|----------|---------------|--------|\n| Tri-County Foods DC | Grocery distribution | 2 | 2024 | Detention savings, WMS sync | Tessa | Available (used twice in Q3) |\n| Halbrook Cold Chain | Cold storage | 1 | 2025 | Ambient + frozen doors | Tessa | Not yet referenceable (go-live issues) |\n| Pellston Logistics | 3PL | 3 | - | Shared-client warehouses | Marcus | Late-stage prospect, not a customer yet |\n| Summit Grain Logistics | Bulk ag | - | - | - | Tessa | Prospect, potential reference after close |\n| Ardent Parcel | Parcel | 4 | 2023 | Sort centers, overnight linehaul | Jasmine | Available |\n| Westmark Supply | Industrial distribution | 5 | 2022 | Multi-site rollout | Marcus | Available, prefers email references |\n\n## Notes\n\n- We still have no live cold-storage reference. Halbrook's issues were resolved in August but nobody has asked them since.\n- Asking for references: send the account owner the prospect name, the one question the prospect wants answered, and three time slots.\n- Log every reference call here (date, prospect, outcome) so we don't burn anyone.\n\n## Reference call log\n\n| Date | Reference | Prospect | Rep | Outcome |\n|------|-----------|----------|-----|---------|\n| Aug 12 | Tri-County Foods DC | Summit Grain | Tessa | Positive, deal lost on price |\n| Sep 3 | Tri-County Foods DC | Northgate 3PL | Jasmine | Positive |\n"
+    },
+    "tool-spend": {
+      "owner": "derek",
+      "name": "Mid-market team tools - renewal review",
+      "project": "enablement",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Mid-market team tools: renewal review\n\nOwner: Derek Hollins. Team budget line: Sales tools, mid-market AMER (8 seats: 6 AEs, 1 BDR, Derek). Sales ops (Kyle) gives me the usage numbers. Last updated: Oct 20.\n\n| Tool | What for | Seats | Price per seat per month | Monthly | Renewal | Active users, last 30 days |\n|------|----------|-------|--------------------------|---------|---------|----------------------------|\n| Stratus CRM | CRM | 8 | company-paid | - | - | 8 |\n| Convoq | Call recording, recaps, deal health | 8 | $150 | $1,200 | Aug 2027 | 8 |\n| Callsight | Call recording + coaching (pre-Convoq) | 8 | $120 | $960 | Dec 1, 2026 (auto-renews annually, 30-day notice) | 1 |\n| Prospectra | Contact data + intent signals | 8 | $250 | $2,000 | Mar 2027 | 3 |\n| Inkwell Sign | E-signature | 8 | $25 | $200 | Feb 2027 | 6 |\n| Comptally | Commission statements | company-paid | - | - | - | 8 |\n| LinkedIn Sales Navigator | Prospecting | 4 | $99 | $396 | monthly | 4 |\n\nTotal team spend: about $4,756 per month, $57k a year.\n\n## Requests\n\n- Tessa: is Intently worth buying after the trial ($79 per seat, intent signals in territory)? Note that Prospectra's plan includes intent topics; I'm not sure anyone has turned them on.\n- Marcus: wants Sales Navigator.\n\n## Decisions to make\n\n- Callsight renewal: notice needed by Nov 1 to avoid auto-renewal. (Missed? Check with procurement.)\n- Prospectra: 3 of 8 seats used. Downgrade at renewal?\n\n## Notes\n\nConvoq replaced Callsight in August when the company standardized on it. Callsight's coaching scorecards are the only feature people mentioned, and Convoq has had scorecards since September.\n"
+    },
+    "meridian-pilot": {
+      "owner": "owner",
+      "name": "Meridian Parcel - pilot proposal (draft)",
+      "project": "q4-pipeline",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Meridian Parcel: 90-day pilot proposal v2 (DRAFT)\n\nv1 went to Alicia on Nov 2. This v2 answers her Nov 3 reply (IT docs for Tasha, pilot fee credit) and is what she takes to her VP.\n\nFor: Alicia Romero, Director of Network Operations. Also reviewing: Tasha Greene (IT), Ruben Castro (network planning). Prepared by Tessa Quinlan, SE: Priyanka Rao.\n\n## Background\n\nMeridian runs 2 sort centers (about 90 doors) and opens 2 more in April and May (120 doors). Linehaul arrivals bunch between 2 and 5am, causing 90-minute waits. Dock scheduling today is email plus a shared calendar. One other vendor is under evaluation.\n\n## Pilot scope\n\n- Site: Fort Wayne sort center (the team's choice), 48 doors.\n- Modules: dock scheduling, carrier portal for linehaul carriers, arrival-window enforcement.\n- Duration: 90 days, starting the first Monday after signature.\n- Integration: TMS appointment feed via REST API (Tasha's requirement).\n\n## Pilot fee\n\n$9,000 for 90 days (equivalent to the list monthly rate for 48 doors).\n\nTODO: credit the pilot fee against the full contract if they sign within 30 days of pilot end. Alicia's condition. Need deal desk to approve the credit language; nobody has asked yet.\n\n## Success criteria\n\nTODO: use the three weeks of linehaul arrival data Alicia sent (attached to her Nov 3 email). Proposed: median linehaul wait under 30 minutes at Fort Wayne by day 60; 90% of linehaul arrivals booked in the portal by day 45.\n\n## IT and security\n\nTODO: link the SSO documentation and the API reference for Tasha. Ask Priyanka which version of the API docs to send (public docs vs. the integration guide PDF).\n\n## Commercial path after the pilot\n\n- Full contract: 4 sort centers, 210 doors, 3-year term preferred.\n- New sites added at go-live of each building (April, May).\n- Estimated year-1 ACV at 4 sites: about $142,000.\n\n## Timeline\n\n| Step | Target |\n|------|--------|\n| v1 proposal to Alicia | Nov 2 (sent) |\n| v2 with credit terms + IT docs | Nov 6 |\n| Alicia to her VP | week of Nov 9 |\n| Pilot signature | Nov 30 |\n| Pilot start | Dec 7 |\n"
+    },
+    "ironbridge-plan": {
+      "owner": "owner",
+      "name": "Ironbridge final presentation plan (Nov 12)",
+      "project": "ironbridge",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Ironbridge 3PL: final presentation plan, Thu Nov 12\n\nBuyer: Sunita Varma (Procurement Lead) and the COO. Decision: by Nov 20. Two finalists. We are about 8% above the other finalist on the 3-year price.\n\n## Current quote (Q-2026-1187, approved Oct 27)\n\n- 1-year: $171,600 per year, implementation $18,000. Quarterly billing available, +3%.\n- 3-year: $154,440 per year (10% multi-year discount, annual prepay), implementation waived.\n- 6 sites, about 210 doors, 60 named users, carrier portal with unlimited carriers, yard module at the 2 shared-client sites.\n\n## Best and final: options\n\n| Option | 3-year discount | Annual | Approval |\n|--------|-----------------|--------|----------|\n| A: hold | 10% | $154,440 | approved |\n| B: 13% | 13% | $149,292 | needs Marisol (above 10% band); 48-hour turnaround this month |\n| C: 13% + quarterly billing | 13% | $149,292 + 3% uplift if quarterly | needs Marisol and deal desk |\n\nPlan: go in with B. The gap to the other finalist becomes about 3%, which our shared-client warehouse setup covers.\n\n## Agenda (60 minutes)\n\n1. Recap of their requirements (5 min), Tessa\n2. Shared-client warehouse demo using the Pellston configuration (20 min), Priyanka\n3. Pellston outcome story (5 min), Marcus, with a written quote from Pellston's ops lead\n4. Implementation plan and timeline for 6 sites (10 min), Priyanka\n5. Commercials: best and final 3-year (10 min), Tessa\n6. Q&A (10 min)\n\n## Pre-reads Ironbridge asked for\n\n- MSA in advance (legal): Lena to send by Nov 10.\n- Standard security documents (procurement): SOC 2 Type II + pen test executive summary.\n\n## Open items\n\n- Marisol approval for 13%: Derek\n- Pellston written quote: Marcus\n- Final price plan to Derek: before Nov 12\n"
+    },
+    "bluegate-rider": {
+      "owner": "lena",
+      "name": "Bluegate - security conditions rider (Lena)",
+      "project": "q4-pipeline",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Bluegate Cold Storage: security conditions rider\n\nPrepared by Lena Fischer, Commercial Counsel, Nov 5. To be attached to MSA v2026.2 and referenced in the order form under \"Special terms\". This wording matches what Hannah Sorensen (Bluegate IT Security) approved on Nov 3.\n\n## 1. Certified deletion of customer data\n\nWithin sixty (60) days after the effective date of termination or expiration of the Agreement, Corvana will delete all Customer Data from its production systems and backups, and will provide Customer with a written certificate of deletion signed by an officer of Corvana within ten (10) business days after deletion is complete. Customer may request an export of Customer Data in CSV format at any time before deletion.\n\n## 2. Subprocessor change notification\n\nCorvana will notify Customer in writing at least seventy-two (72) hours before any new subprocessor begins processing Customer Data, or any existing subprocessor's processing of Customer Data materially changes. Customer may object in writing within thirty (30) days of the notice. If the parties cannot resolve the objection in good faith, Customer may terminate the affected services without penalty.\n\n## 3. AI use\n\nCorvana will not use Customer Data to train or fine-tune machine learning models. (Same wording as the questionnaire answer, AI addendum Q4.)\n\n## Notes for Tessa\n\n- Do not change the numbers above. Hannah approved exactly 60 days and 72 hours, and any change sends it back to her security review.\n- Order form: put \"Special terms: per Security Conditions Rider dated Nov 5, 2026\" and attach this rider. Do not paraphrase it in the order form.\n- Ken asked about holding price for a 3-year term. That's a deal desk question, not legal; the rider works for any term length.\n"
+    },
+    "bluegate-order-notes": {
+      "owner": "priyanka",
+      "name": "Bluegate order form - working notes",
+      "project": "q4-pipeline",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Bluegate order form: working notes\n\nPriyanka's notes so Tessa can build the order form quickly. Nov 4.\n\n## Commercials (from the approved quote)\n\n- 4 sites (Joliet, Aurora, Kenosha, Rockford), cold-storage doors flagged for temperature-controlled appointments.\n- 2-year term, $148,800 per year. Close date in Stratus: Dec 4.\n- Ken asked whether the price can be held for a 3-year term (CFO likes multi-year). Ask deal desk.\n\n## Special terms (my draft for the order form)\n\nSecurity conditions from Hannah's approval, written so they read cleanly in the order form:\n\n- \"Upon termination, Corvana will delete Customer Data within 30 days and confirm deletion in writing on request.\"\n- \"Corvana will notify Customer of changes to subprocessors within 5 business days.\"\n- \"Customer Data will not be used to train AI models.\"\n\n(I tightened the deletion window to 30 days because that's what Bluegate originally asked for in the questionnaire, so they'll like it.)\n\n## Implementation notes\n\n- Go-live target: early December, before the January volume spike.\n- WMS: Korvex, standard connector.\n- Temperature-controlled door types need to be configured per site; I'll do it in the kickoff.\n\n## Who signs\n\n- Ken Liddell (COO) with CFO review the week of Nov 16. Ken wants to sign before Thanksgiving.\n"
+    },
+    "forecast-notes": {
+      "owner": "owner",
+      "name": "Q4 forecast notes - risks & mitigations",
+      "project": "q4-pipeline",
+      "share": [
+        {
+          "with": "user:derek",
+          "level": "comment"
+        }
+      ],
+      "content": "# Q4 forecast notes: risks and mitigations\n\nFor Derek, as asked on Oct 29. Updated Nov 6.\n\n| Deal | Amount | Category | Close date | Risk | Mitigation |\n|------|--------|----------|-----------|------|------------|\n| Harborline Freight | $186,560 yr-1 ACV (3-yr) | Commit | Nov 20 | Insurance certificate ($5M cyber) and banking via portal block the PO, not the signature | Risk team asked for the updated COI Oct 27; banking form submitted by finance |\n| Bluegate Cold Storage | $148,800 | Best case | Dec 4 | Security conditions need contract language; CFO review the week of Nov 16 | Lena drafts the rider; order form out the week of Nov 9 |\n| Ironbridge 3PL | $154,440 to $171,600 | Pipeline | Nov 20 decision | 8% above the other finalist | 13% best and final if Marisol approves; Pellston reference |\n| Pinecrest Distribution | $86,400 | Pipeline, moving to Q1 | Jan 29 | GM wants a 60-day paid pilot at Joliet and a reference of similar size | Pilot terms by Nov 11; Tri-County as reference |\n| Northstar Drayage | $14,400 | Commit | Nov 6 | Small, low risk | Signed Nov 6 |\n| Valewood Fulfillment | $48,000 | Pipeline (Q1) | Feb | Homegrown WMS integration effort | Priyanka sends the API docs |\n\n## Commit math\n\nClosed: Coastal Crossdock $64,800 + Northstar $14,400 = $79,200. Commit adds Harborline $186,560 = $265,760. Best case adds Bluegate $148,800 = $414,560 against a $340,000 target.\n\n## Biggest risk to the number\n\nBluegate's order form. The Stratus task to send it was due Nov 5. If it isn't out the week of Nov 9, the CFO review slips past Thanksgiving.\n"
+    },
+    "handoff-process": {
+      "owner": "derek",
+      "name": "Closed-won to CS handoff process",
+      "project": "enablement",
+      "share": [
+        {
+          "with": "team:corvana",
+          "level": "edit"
+        }
+      ],
+      "content": "# Closed-won to Customer Success handoff\n\nOwner: Derek Hollins. Applies to every new logo, any size. Adopted Sep 1 after two customers waited three weeks to hear from anyone.\n\n## Within 1 business day of signature\n\n1. Mark the opportunity Closed Won in Stratus with the signed order form attached.\n2. Post the win in #deals.\n3. Email cs-handoffs@corvana.example with the customer name and signed date. CS assigns a CSM within 1 business day.\n\n## Within 2 business days of signature\n\n4. Create a handoff task in Macro (template: \"Handoff: <customer>\") assigned to yourself, with:\n   - Customer contacts: signer, day-to-day owner, IT contact, AP contact\n   - What they bought (sites, users, modules, term, start date)\n   - Why they bought, and the success metric they agreed to\n   - Anything promised during the sale (training, hardware, integrations, dates)\n   - Carrier communication plan (who tells their carriers, and when)\n5. Hold a 30-minute handoff call with the customer and the CSM. Write notes in a handoff doc.\n\n## Small deals (under $25k)\n\nSame steps. Small customers churn faster when onboarding is slow. Make sure the CSM knows about any training request: CS has recorded training videos for gate check-in, the dock board and the carrier portal that can go out the same day.\n\n## Tablet hardware\n\nCustomers provide their own tablets (iPad 9th gen or newer, or Android 12+). CS sends the hardware checklist at kickoff.\n\n## Checklist\n\n- [ ] Closed Won in Stratus\n- [ ] Win posted\n- [ ] cs-handoffs email\n- [ ] Handoff task created\n- [ ] Handoff call held\n"
+    }
+  },
+  "tasks": {
+    "coastal-handoff": {
+      "owner": "owner",
+      "name": "Handoff: Coastal Crossdock",
+      "project": "q4-pipeline",
+      "status": "completed",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Handoff: Coastal Crossdock\n\n- [x] Closed Won in Stratus (Oct 28)\n- [x] Win posted in #deals\n- [x] cs-handoffs email (Oct 28), CSM Jamie Cole\n- [x] Handoff call held Oct 30 (notes in the handoff doc)\n"
+    },
+    "bluegate-order-form": {
+      "owner": "owner",
+      "name": "Send Bluegate order form + MSA with security conditions",
+      "project": "q4-pipeline",
+      "status": "in_progress",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Bluegate order form\n\nStratus task was due Thu Nov 5. Ken wants it this week; CFO review the week of Nov 16.\n\n- [x] Security approved (Nov 3) with 2 conditions\n- [ ] Special terms in the order form\n- [ ] Ask deal desk about holding price for a 3-year term\n- [ ] Envelope out via Inkwell\n"
+    },
+    "harborline-coi": {
+      "owner": "owner",
+      "name": "Harborline: updated insurance certificate ($5M cyber)",
+      "project": "q4-pipeline",
+      "status": "completed",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Harborline COI\n\nMike Tanaka needs a COI naming Harborline Freight as additional insured with at least $5M cyber.\n\n- [x] Requested from risk (Oct 27)\n- [x] Updated COI issued by risk (Nov 6)\n- [x] Sent to Mike Tanaka (Nov 6)\n"
+    },
+    "harborline-sla-answer": {
+      "owner": "lena",
+      "name": "Harborline: confirm SLA maintenance-window exclusion in writing",
+      "project": "q4-pipeline",
+      "status": "not_started",
+      "assignees": [
+        "lena",
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Harborline SLA question\n\nRachel's counsel asks whether the 99.5% uptime SLA excludes scheduled maintenance, and if so, whether maintenance hours per month are capped. Rachel signs Monday afternoon if Lena confirms in writing.\n"
+    },
+    "ironbridge-final": {
+      "owner": "owner",
+      "name": "Ironbridge final presentation (Nov 12)",
+      "project": "ironbridge",
+      "status": "in_progress",
+      "assignees": [
+        "owner",
+        "priyanka"
+      ],
+      "share_with_team": true,
+      "content": "# Ironbridge final\n\n- [x] References done (Pellston + Westmark)\n- [x] Agenda\n- [ ] Best and final price approved (13% needs Marisol)\n- [ ] Final price plan to Derek before Nov 12\n- [ ] MSA + security docs pre-read to Sunita\n- [ ] Dry run Wed Nov 11\n"
+    },
+    "pinecrest-pilot-terms": {
+      "owner": "owner",
+      "name": "Pinecrest: send 60-day Joliet pilot terms",
+      "project": "q4-pipeline",
+      "status": "not_started",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Pinecrest pilot terms\n\nVictor asked for these by Wed Nov 11. 60-day paid pilot at Joliet that converts to the 3-site contract if detention targets are hit, plus a reference call with a distributor of similar size.\n"
+    },
+    "pinecrest-q1": {
+      "owner": "owner",
+      "name": "Move Pinecrest to Q1 in Stratus",
+      "project": "q4-pipeline",
+      "status": "completed",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Pinecrest to Q1\n\nDone Nov 6: close date Jan 29, 2027, category Pipeline.\n"
+    },
+    "pen-test-bluegate": {
+      "owner": "priyanka",
+      "name": "Share full pen test report with Bluegate via TrustGate vault",
+      "project": "q4-pipeline",
+      "status": "completed",
+      "assignees": [
+        "priyanka"
+      ],
+      "share_with_team": true,
+      "content": "# Pen test report for Bluegate\n\nHannah confirmed the September mutual NDA covers it.\n\n- [x] Shared via TrustGate document vault (Oct 29)\n- [x] Hannah confirmed access (Oct 30)\n"
+    },
+    "valewood-proposal": {
+      "owner": "owner",
+      "name": "Valewood: proposal with Q1 start",
+      "project": "q4-pipeline",
+      "status": "not_started",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Valewood proposal\n\nFrom the Nov 5 demo: 2 warehouses, about 60 doors, carrier no-show rebooking. Homegrown WMS via REST API (3 to 4 weeks). Budget approved for Q1.\n"
+    },
+    "meridian-pilot": {
+      "owner": "owner",
+      "name": "Meridian: send pilot proposal + IT docs",
+      "project": "q4-pipeline",
+      "status": "in_progress",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Meridian pilot\n\n- [x] Discovery (Oct 28)\n- [x] Pilot proposal sent (Nov 2)\n- [ ] Answer Alicia's two conditions (SSO + API docs for Tasha; pilot fee credited)\n"
+    },
+    "redrock-q4": {
+      "owner": "owner",
+      "name": "Redrock Transload: Q4 close plan",
+      "project": "q4-pipeline",
+      "status": "canceled",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Redrock Q4\n\nCanceled: corporate froze new software spend until the January budget cycle. Paul wants to restart the second week of January.\n"
+    }
+  },
+  "calls": {
+    "ironbridge-prep": {
+      "channel": "deals",
+      "created_by": "owner",
+      "participants": [
+        "owner",
+        "derek",
+        "priyanka",
+        "marcus"
+      ],
+      "duration_minutes": 30,
+      "ended_minutes_ago": 4300,
+      "name": "Ironbridge final prep",
+      "transcript": [
+        {
+          "speaker": "owner",
+          "text": "Final is Thursday the twelfth. Sunita wants best and final on the three-year. We're about eight percent above the other finalist at one fifty-four four forty."
+        },
+        {
+          "speaker": "derek",
+          "text": "What do you need from me?"
+        },
+        {
+          "speaker": "owner",
+          "text": "Thirteen percent on the three-year gets us to about one forty-nine three and within three percent. Anything above ten needs Marisol."
+        },
+        {
+          "speaker": "derek",
+          "text": "I'll take it to Marisol. Approvals over ten percent are taking forty-eight hours this month, so I'll file it with deal desk Friday and have an answer for you Monday."
+        },
+        {
+          "speaker": "priyanka",
+          "text": "I'll run the shared-client warehouse demo off the Pellston configuration. That's the part their COO liked on the reference call."
+        },
+        {
+          "speaker": "marcus",
+          "text": "Pellston's ops lead said she'd give us a written two-line quote for the deck. I'll ask her this week."
+        },
+        {
+          "speaker": "owner",
+          "text": "Great. Legal also wants the MSA in advance, I'll get Lena to send it."
+        },
+        {
+          "speaker": "derek",
+          "text": "Different topic, Coastal. Did Danielle say anything about the Savannah site?"
+        },
+        {
+          "speaker": "owner",
+          "text": "Yes, thirty doors, opening in May, she wants the same pricing. I'll circle back after their go-live in January."
+        },
+        {
+          "speaker": "derek",
+          "text": "Don't wait that long. If it's a three-year co-term it's a SPIFF and it's Q1 bookings."
+        }
+      ]
+    },
+    "bluegate-huddle": {
+      "channel": "dm-tessa-priyanka",
+      "created_by": "priyanka",
+      "participants": [
+        "priyanka",
+        "owner"
+      ],
+      "duration_minutes": 10,
+      "ended_minutes_ago": 7100,
+      "name": "Bluegate paper - quick sync",
+      "transcript": [
+        {
+          "speaker": "priyanka",
+          "text": "Hannah's approval came through. I wrote up the two security conditions as special terms in my order form notes so you can paste them in."
+        },
+        {
+          "speaker": "owner",
+          "text": "Perfect, that saves me an hour. Ken wants the paper this week."
+        },
+        {
+          "speaker": "priyanka",
+          "text": "I made the deletion window thirty days, that's what they asked for originally, they'll like it."
+        },
+        {
+          "speaker": "owner",
+          "text": "Works for me. I'll build the envelope off your notes Monday."
+        },
+        {
+          "speaker": "priyanka",
+          "text": "Also, the pen test report is in their TrustGate vault, Hannah confirmed she can open it."
+        },
+        {
+          "speaker": "owner",
+          "text": "Great, one less thing."
+        }
+      ]
+    }
+  },
+  "messages": [
+    {
+      "channel": "deals",
+      "from": "owner",
+      "text": "Monday update (Oct 26). Harborline: Negotiation, legal on MSA redlines, deal desk 12 vs 14%. Bluegate: Security Review, questionnaire 80%. Ironbridge: quote due Oct 30. Pinecrest: proposal with ROI model due Oct 28. Coastal: board approved, signing this week."
+    },
+    {
+      "channel": "deals",
+      "from": "derek",
+      "text": "Thanks Tessa. Everyone else: this is the format I want before the commit call. Stage, blocker, next date."
+    },
+    {
+      "channel": "deals",
+      "from": "owner",
+      "text": "Monday update (Nov 2). Harborline: MSA v4 final, envelope out by Nov 4, target signature Nov 13. Bluegate: security decision this week. Ironbridge: finalist, references Thursday. Pinecrest: Victor back Nov 4. Coastal: Closed Won, handoff done. Northstar: order form out, signing this week."
+    },
+    {
+      "channel": "deals",
+      "from": "derek",
+      "text": "Commit call moves to 8:30 tomorrow. Tessa, post your Monday update before then please, it's the first thing Marisol reads."
+    },
+    {
+      "channel": "deals",
+      "from": "marcus",
+      "text": "Anyone have a cold storage reference? I have a Bluegate-type prospect, 3 frozen DCs."
+    },
+    {
+      "channel": "deals",
+      "from": "marcus",
+      "text": "Also who has a 3PL reference with shared-client sites? Asking for my Lakeview deal."
+    },
+    {
+      "channel": "deals",
+      "from": "derek",
+      "text": "Reference list is in the doc. Ask the account owner first.",
+      "mentions": [
+        "document:reference-list"
+      ]
+    },
+    {
+      "channel": "deals",
+      "from": "marcus",
+      "text": "That list still has Pellston as a prospect. They signed Oct 16, site 1 has been live since Nov 2, and they just did Tessa's Ironbridge reference. And Summit Grain is on it as a 'potential reference'."
+    },
+    {
+      "channel": "deals",
+      "from": "owner",
+      "text": "Northstar Drayage signed! One yard, 25 users, $14,400, 1-year, starts Dec 1. Signed in 3 weeks."
+    },
+    {
+      "channel": "deals",
+      "from": "derek",
+      "text": "Nice. Small but fast. Multi-year SPIFF reminder: $1,200 per 3+ year deal with annual prepay through Dec 31."
+    },
+    {
+      "channel": "deals",
+      "from": "marcus",
+      "text": "Is Callsight still a thing? I haven't opened it since August and it's still on my expense report."
+    },
+    {
+      "channel": "deals",
+      "from": "derek",
+      "text": "Any Q1 deals still sitting in Q4 in Stratus, fix them today please."
+    },
+    {
+      "channel": "se-requests",
+      "from": "marcus",
+      "text": "Prospect runs Routewise TMS. Do we integrate or is it CSV?"
+    },
+    {
+      "channel": "se-requests",
+      "from": "owner",
+      "text": "Fenwick Haulage uses a smaller TMS vendor and wants to know if we price per site or per user. What do I tell them?"
+    },
+    {
+      "channel": "se-requests",
+      "from": "marcus",
+      "text": "Can we sell the yard module without dock scheduling? Got asked twice this month."
+    },
+    {
+      "channel": "se-requests",
+      "from": "owner",
+      "text": "Same question from Kestrel Yard Services: yard only, 3 drop yards, about 900 trailer spots."
+    },
+    {
+      "channel": "se-requests",
+      "from": "priyanka",
+      "text": "All of these are in the integrations FAQ. Please check it before pinging me, I have 3 questionnaires open.",
+      "mentions": [
+        "document:integrations-faq"
+      ]
+    },
+    {
+      "channel": "se-requests",
+      "from": "derek",
+      "text": "Is SSO included in mid-market or is that an Enterprise upsell now?"
+    },
+    {
+      "channel": "se-requests",
+      "from": "marcus",
+      "text": "Does a homegrown WMS REST integration really take 3-4 weeks? Prospect thinks we're padding."
+    },
+    {
+      "channel": "se-requests",
+      "from": "owner",
+      "text": "Valewood needs the API docs and an integration estimate before they'll do a proposal review."
+    },
+    {
+      "channel": "se-requests",
+      "from": "priyanka",
+      "text": "Valewood API docs sent to Erin Nov 6."
+    },
+    {
+      "channel": "legal-desk",
+      "from": "lena",
+      "text": "Bluegate security rider is drafted with Hannah's exact wording: certified deletion within 60 days, 72-hour notice on subprocessor changes. Please attach the rider, don't paraphrase it.",
+      "mentions": [
+        "document:bluegate-rider"
+      ]
+    },
+    {
+      "channel": "legal-desk",
+      "from": "owner",
+      "text": "Harborline: risk issued the updated COI with $5M cyber and I sent it to Mike Tanaka Friday. PO is unblocked on their side once signed."
+    },
+    {
+      "channel": "legal-desk",
+      "from": "lena",
+      "text": "Harborline SLA question: our standard SLA excludes scheduled maintenance, capped at 4 hours per month with 72 hours' notice. I'll put it in writing for Rachel Monday morning."
+    },
+    {
+      "channel": "legal-desk",
+      "from": "derek",
+      "text": "Lena, Ironbridge legal wants our MSA ahead of Thursday. Can you send the standard v2026.2?"
+    },
+    {
+      "channel": "legal-desk",
+      "from": "lena",
+      "text": "Yes, by Tuesday."
+    },
+    {
+      "channel": "dm-tessa-priyanka",
+      "from": "priyanka",
+      "text": "Bluegate special terms are in my order form notes doc, ready to paste.",
+      "mentions": [
+        "document:bluegate-order-notes"
+      ]
+    },
+    {
+      "channel": "dm-tessa-priyanka",
+      "from": "owner",
+      "text": "Thanks! Building the envelope Monday."
+    },
+    {
+      "channel": "dm-tessa-priyanka",
+      "from": "priyanka",
+      "text": "Pen test report shared with Hannah through the TrustGate vault Oct 29, she confirmed access."
+    },
+    {
+      "channel": "dm-tessa-priyanka",
+      "from": "owner",
+      "text": "Can you join the Ironbridge dry run Wednesday at 2?"
+    },
+    {
+      "channel": "dm-tessa-priyanka",
+      "from": "priyanka",
+      "text": "Yes."
+    }
+  ]
+}

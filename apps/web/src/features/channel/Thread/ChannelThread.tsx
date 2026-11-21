@@ -206,6 +206,11 @@ export function ChannelThread(props: ThreadProps) {
   const hasRootSlot = () => !!props.rootSlot;
   const hasInlineReplyInput = () =>
     props.isReplying() && props.inputMode !== 'unified';
+  // Replies render only under a thread that has them (or is being replied to).
+  const shownReplyIds = () =>
+    hasReplies() || hasInlineReplyInput()
+      ? displayReplies().map((reply) => reply.id)
+      : [];
   const rootRailVisible = () =>
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
@@ -381,6 +386,15 @@ export function ChannelThread(props: ThreadProps) {
               visible={rootRailVisible()}
               grouped={props.listMeta?.isGroupedWithPrevious}
             />
+            <Show when={props.gutter}>
+              {(gutter) => (
+                <Thread.GutterSlot
+                  grouped={props.listMeta?.isGroupedWithPrevious}
+                >
+                  {gutter().root(shownReplyIds)}
+                </Thread.GutterSlot>
+              )}
+            </Show>
             <MarkMessageNotifications
               element={messageElement()}
               messageId={props.data().id}
@@ -466,6 +480,7 @@ export function ChannelThread(props: ThreadProps) {
                         shouldShowCollapsedIndicator() ||
                         shouldShowReplyButton()
                       }
+                      gutter={props.gutter?.reply}
                     />
                   </DebugSuspense>
 

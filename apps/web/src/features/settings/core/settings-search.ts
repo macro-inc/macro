@@ -3,7 +3,10 @@ import type {
   SettingsTabGroup,
   SettingsTabItem,
 } from '@core/constant/settingsTabsConfig';
-import { NOTIFICATION_EVENT_GROUPS } from '../../notifications/notification-event-catalog';
+import {
+  AGENT_PINGS_EVENT_TYPE,
+  NOTIFICATION_EVENT_GROUPS,
+} from '../../notifications/notification-event-catalog';
 import { settingsTarget } from './settings-target';
 
 type Setting = {
@@ -13,6 +16,8 @@ type Setting = {
   keywords: string;
   /** Listed only with `enable-macro-computers` on. */
   macroComputers?: true;
+  /** The notification event this setting toggles. */
+  eventType?: string;
 };
 export type SettingsSearchResult = Setting & {
   id: string;
@@ -62,6 +67,7 @@ const SETTINGS: Setting[] = [
       target: group.label,
       keywords: `${group.label} ${event.description}`,
       macroComputers: event.macroComputers,
+      eventType: event.type,
     }))
   ),
   {
@@ -69,6 +75,13 @@ const SETTINGS: Setting[] = [
     title: 'Email accounts',
     target: 'Accounts',
     keywords: 'gmail connect add inbox sync reconnect remove',
+  },
+  {
+    tab: 'Email',
+    title: 'Email row style',
+    target: 'Display options',
+    keywords:
+      'display options minimalist classic list rows unread bold divider checkbox density',
   },
   {
     tab: 'Email',
@@ -400,9 +413,12 @@ export function searchSettings(
   groups: readonly SettingsTabGroup[],
   query: string,
   options: {
-    emailSignatures?: boolean;
+    /** Phones always show Minimalist rows and leave out the choice. */
+    emailRowStyle?: boolean;
     outlook?: boolean;
     macroComputers?: boolean;
+    /** Whether search lists the Agent pings notification setting. */
+    agentNotifications?: boolean;
   } = {}
 ): SettingsSearchResult[] {
   const tokens = words(query);
@@ -422,10 +438,12 @@ export function searchSettings(
     ...SETTINGS.filter(
       (setting) =>
         setting.tab === page.tab &&
-        (options.emailSignatures !== false ||
-          setting.title !== 'Email signatures') &&
+        (options.emailRowStyle !== false ||
+          setting.title !== 'Email row style') &&
         (options.outlook !== false || setting.title !== 'Outlook') &&
-        (options.macroComputers !== false || !setting.macroComputers)
+        (options.macroComputers !== false || !setting.macroComputers) &&
+        (options.agentNotifications !== false ||
+          setting.eventType !== AGENT_PINGS_EVENT_TYPE)
     ).map((setting) => ({
       ...setting,
       target: settingsTarget(setting.target),

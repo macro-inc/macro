@@ -39,7 +39,6 @@ export function createTaskBoardQueries(options: {
   grouping: Accessor<TaskBoardGrouping>;
   searching: Accessor<boolean>;
   userId: Accessor<string | undefined>;
-  projectsEnabled: Accessor<boolean>;
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
   calendar?: Accessor<DateBucketBoundaries>;
@@ -114,7 +113,7 @@ export function createTaskBoardQueries(options: {
   );
 
   const projectIds = createMemo(() => {
-    if (options.grouping() !== 'project' || !options.projectsEnabled()) {
+    if (options.grouping() !== 'project') {
       return [];
     }
 
@@ -187,7 +186,7 @@ export function createTaskBoardQueries(options: {
       }
 
       if (grouping === 'due_date') return isTaskDueDateBucket(id);
-      return grouping !== 'project' || options.projectsEnabled();
+      return true;
     },
     async save(move, grouping) {
       const entity = entities().get(move.id);
@@ -286,7 +285,7 @@ export function createTaskBoardQueries(options: {
 
     try {
       if (definition.id === SYSTEM_PROPERTY_IDS.PROJECT) {
-        if (!options.projectsEnabled() || apiValues.valueType !== 'ENTITY') {
+        if (apiValues.valueType !== 'ENTITY') {
           throw new Error('Project editing is unavailable');
         }
       }

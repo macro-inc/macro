@@ -25,3 +25,13 @@ fn a_line_without_a_count_is_kept() {
     assert_eq!(clean_summary("  \n "), None);
     assert_eq!(clean_summary("(3)…"), None);
 }
+
+#[test]
+fn the_prompt_names_every_step_that_says_nothing_about_the_work() {
+    for label in agent_fold::domain::model::UNNAMED_STEP_LABELS {
+        assert!(
+            super::ACTIVITY_SUMMARY_SYSTEM_PROMPT.contains(&format!("\"{label}\"")),
+            "the summarizer prompt does not name {label:?}"
+        );
+    }
+}

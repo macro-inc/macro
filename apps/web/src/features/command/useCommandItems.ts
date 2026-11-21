@@ -1,7 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { inEnglish } from '@app/lib/i18n';
-import { enableProjects } from '@core/constant/featureFlags';
 import type {
   EntityItem,
   QuickAccessItem,
@@ -13,7 +11,6 @@ import {
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
 import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
@@ -40,7 +37,7 @@ type CommandItem = {
   data: HotkeyCommand;
   displayHotkey?: string;
   displayHotkeySequence?: DisplayHotkeyStep[];
-  /** Its keys run another command here, as Email's g t runs Sent. */
+  /** Its keys run another command here, as a focused view's go-to letter. */
   hideHotkey?: boolean;
 };
 
@@ -264,19 +261,10 @@ function getSurfacedNestedCommands(commands: CommandWithInfo[]) {
 function useCommandsList(
   commandScopeCommands: Accessor<CommandWithInfo[]>
 ): () => CommandItem[] {
-  const projectsFlag = useFeatureFlag(enableProjects);
   const availableItems = (
     commands: CommandWithInfo[],
     options?: Parameters<typeof commandsToItems>[1]
-  ) =>
-    commandsToItems(
-      commands.filter(
-        (command) =>
-          command.hotkeyToken !== TOKENS.create.initiative ||
-          projectsFlag().enabled
-      ),
-      options
-    );
+  ) => commandsToItems(commands, options);
   const scopeId = activeScope() ?? '';
   const capturedCommands = getActiveCommandsFromScope(scopeId, {
     sortByScopeLevel: false,
@@ -291,8 +279,8 @@ function useCommandsList(
     limitToCurrentScope: true,
     ignoreInputFocused: true,
   });
-  // The command each go-to letter runs: a focused view's letter (Email's g t
-  // Sent) runs before the app's, which then shows no keys.
+  // The command each go-to letter runs: a focused view's letter runs before
+  // the app's, which then shows no keys.
   const goToKeyOwners = new Map<ValidHotkey, CommandWithInfo>();
   for (const command of [...goToCommands].sort(
     (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
@@ -305,7 +293,6 @@ function useCommandsList(
     command.hotkeys?.find((key) => goToKeyOwners.get(key) === command);
 
   return createMemo(() => {
-    projectsFlag();
     // If we're in a command scope (multi-stage command), show those commands instead
     const scopeCommands = commandScopeCommands();
     if (scopeCommands.length > 0) {
@@ -389,7 +376,6 @@ export function useCommandItems(
     excludeEmails: true,
     contactDiscovery: options?.contactDiscovery,
   });
-  const projectsFlag = useFeatureFlag(enableProjects);
   const categoryItems = (): CommandMenuItem[] => {
     if (
       commandScopeCommands().length > 0 ||
@@ -408,9 +394,7 @@ export function useCommandItems(
     const items = entities.items();
     return [
       ...items,
-      ...(projectsFlag().enabled && categoryFilter() === 'projects'
-        ? [newProjectCommand]
-        : []),
+      ...(categoryFilter() === 'projects' ? [newProjectCommand] : []),
     ];
   };
   const rankInput = createMemo(categoryItems, undefined, {

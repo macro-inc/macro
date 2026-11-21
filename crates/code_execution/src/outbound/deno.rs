@@ -1,4 +1,4 @@
-//! Fresh JavaScript processes with run-only credentials and allowlisted API egress.
+//! Fresh Deno processes with run-only credentials and allowlisted API egress.
 
 use crate::domain::*;
 use async_trait::async_trait;
@@ -164,6 +164,10 @@ pub struct DenoRunner {
     binary: PathBuf,
     scratch: PathBuf,
     heap_mb: u32,
+    /// Forwards proxied runs' requests, its connections kept warm across
+    /// runs. It follows no redirects: a redirect is the host's answer to
+    /// the program.
+    egress: reqwest::Client,
 }
 
 impl DenoRunner {
@@ -182,10 +186,18 @@ impl DenoRunner {
         let binary = pinned_deno(binary).await?;
         tokio::fs::create_dir_all(&scratch).await?;
         let scratch = tokio::fs::canonicalize(scratch).await?;
+        // No overall timeout: a response may stream for as long as the run
+        // lasts, and the run's end stops its forwarder.
+        let egress = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|error| rootcause::report!("could not build the egress client: {error}"))?;
         Ok(Self {
             binary,
             scratch,
             heap_mb,
+            egress,
         })
     }
 
@@ -224,13 +236,8 @@ impl DenoRunner {
                 .await
                 .map_err(internal)?;
         }
-        // An unattended program is TypeScript; Deno strips its types on load.
-        let program = if job.environment.unattended.is_some() {
-            "main.ts"
-        } else {
-            "main.mjs"
-        };
-        tokio::fs::write(root.join(program), &job.request.source)
+        // Programs are TypeScript; Deno strips their types on load.
+        tokio::fs::write(root.join("main.ts"), &job.request.source)
             .await
             .map_err(internal)?;
         let bootstrap = root.join("bootstrap.mjs");
@@ -255,8 +262,27 @@ impl DenoRunner {
         )
         .await
         .map_err(internal)?;
+        // A proxied run reaches only its forwarder, which reaches the hosts.
+        let egress = match job.environment.egress {
+            Egress::Direct => None,
+            Egress::Proxied => Some(
+                egress::RunEgress::start(
+                    self.egress.clone(),
+                    &job.environment.endpoints.hosts,
+                    &job.environment.trace_headers,
+                )
+                .await
+                .map_err(internal)?,
+            ),
+        };
+        // The program keeps the real hosts, which its links need; its fetch
+        // sends their requests to the forwarder, the only address it reaches.
+        let forwarder = egress.as_ref().map(|egress| &egress.hosts);
         let mut destinations = std::collections::BTreeSet::new();
-        for base in job.environment.endpoints.hosts.values() {
+        for base in forwarder
+            .unwrap_or(&job.environment.endpoints.hosts)
+            .values()
+        {
             let url = url::Url::parse(base).map_err(internal)?;
             if !matches!(url.scheme(), "http" | "https")
                 || !url.username().is_empty()
@@ -305,26 +331,51 @@ impl DenoRunner {
             .arg(&bootstrap)
             .spawn()
             .map_err(internal)?;
+        let spawned = tokio::time::Instant::now();
         if let Err(error) = limit(&child, &job.limits) {
             reap(&mut child).await;
             return Err(error);
         }
+        let pid = child.id();
         let stdin = child.stdin.take().expect("piped child stdin");
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
+        // Kept outside the run so a run the deadline, a cancellation or a
+        // protocol error cuts short still records how its child ended.
+        let mut usage = exit::ProcessUsage::default();
+        let mut answered = false;
+        let mut exited_by_itself = false;
         let execution = async {
-            let candidate = bridge(
+            let bridged = bridge(
                 &job.environment,
-                stdin,
-                stdout,
-                stderr,
+                forwarder,
+                ChildPipes {
+                    stdin,
+                    stdout,
+                    stderr,
+                },
                 events,
                 &job.limits,
                 job.deadline,
-            )
-            .await?;
-            // Both streams have closed, so the process is exiting.
+            );
+            tokio::pin!(bridged);
+            let mut samples = tokio::time::interval(exit::SAMPLE_INTERVAL);
+            let candidate = loop {
+                tokio::select! {
+                    candidate = &mut bridged => break candidate?,
+                    _ = samples.tick() => if let Some(pid) = pid {
+                        usage.sample(pid);
+                    },
+                }
+            };
+            answered = candidate.is_some();
+            // Both streams have closed, so the process is exiting; its CPU
+            // time stays readable until it is reaped.
+            if let Some(pid) = pid {
+                usage.sample(pid);
+            }
             let status = child.wait().await.map_err(internal)?;
+            exited_by_itself = true;
             if std::os::unix::process::ExitStatusExt::signal(&status)
                 == Some(rustix::process::Signal::XCPU.as_raw())
             {
@@ -350,7 +401,25 @@ impl DenoRunner {
             _ = sleep_until(job.deadline) => Ok(Outcome::TimedOut),
             result = execution => result,
         };
-        reap(&mut child).await;
+        if !exited_by_itself && let Some(pid) = pid {
+            usage.sample(pid);
+        }
+        // A run that failed before waiting (an output budget overrun, say)
+        // may still have a child that already exited on its own.
+        let killed = !exited_by_itself && !matches!(child.try_wait(), Ok(Some(_)));
+        if let Some(status) = reap(&mut child).await {
+            exit::ProcessExit {
+                status,
+                wall: spawned.elapsed(),
+                usage,
+                answered,
+                killed,
+            }
+            .record(&tracing::Span::current());
+        }
+        if let Some(egress) = egress {
+            egress.stop().await;
+        }
         // Drop the directory only after the process is reaped.
         drop(directory);
         outcome
@@ -418,9 +487,10 @@ fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
 /// Niceness of background programs: below the host, above idle work.
 const BACKGROUND_NICENESS: i32 = 10;
 
-async fn reap(child: &mut Child) {
+/// Kill `child` if it still runs and wait for it; its exit status, once known.
+async fn reap(child: &mut Child) -> Option<std::process::ExitStatus> {
     let _ = child.start_kill();
-    let _ = child.wait().await;
+    child.wait().await.ok()
 }
 
 fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {
@@ -434,6 +504,9 @@ fn internal(_error: impl std::fmt::Display) -> ExecutionFailure {
 struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
+    /// A proxied run's forwarder, each service's base under it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    forwarder: Option<&'a std::collections::BTreeMap<String, String>>,
     max_result_bytes: usize,
     max_calls_per_operation: u32,
     /// Time left before the host stops the run, so the program can report a
@@ -486,17 +559,29 @@ enum ChildFrame {
     },
 }
 
-async fn bridge(
-    environment: &RunEnvironment,
-    mut stdin: tokio::process::ChildStdin,
+/// The child's standard streams, which the bridge owns for the run.
+struct ChildPipes {
+    stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
+}
+
+async fn bridge(
+    environment: &RunEnvironment,
+    forwarder: Option<&std::collections::BTreeMap<String, String>>,
+    pipes: ChildPipes,
     events: &mut EventSink,
     limits: &Limits,
     deadline: tokio::time::Instant,
 ) -> Result<Option<Outcome>, ExecutionFailure> {
+    let ChildPipes {
+        mut stdin,
+        stdout,
+        stderr,
+    } = pipes;
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
+        forwarder,
         max_result_bytes: limits.max_result_bytes,
         max_calls_per_operation: limits.max_calls_per_operation,
         remaining_ms: deadline
@@ -600,6 +685,8 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
 }
 
 pub mod check;
+mod egress;
+mod exit;
 
 #[cfg(test)]
 mod test;

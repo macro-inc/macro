@@ -56,6 +56,8 @@ export type GraphqlSoupAstItemsQuery = {
   isEnabled: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isFetching: Accessor<boolean>;
+  /** Excludes partial local predicate snapshots with no cached or fetched page. */
+  hasPageData: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   /** The current error came from loading a continuation page. */
   isFetchNextPageError: Accessor<boolean>;

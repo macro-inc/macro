@@ -307,6 +307,8 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
             StatusCode::FORBIDDEN,
         ),
         ("no_send", "POST", "/email/messages", StatusCode::FORBIDDEN),
+        ("dry_run", "POST", "/email/messages", StatusCode::FORBIDDEN),
+        ("dry_run", "GET", "/email/threads", StatusCode::OK),
         ("newer", "POST", "/email/messages", StatusCode::FORBIDDEN),
         ("newer", "GET", "/email/threads", StatusCode::OK),
     ] {
@@ -325,8 +327,8 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
             .unwrap();
         assert_eq!(response.status(), expected, "{scope} {method} {path}");
     }
-    // Only the one request inside its signed scope reached the lookup.
-    assert_eq!(repository.calls.load(Ordering::SeqCst), 1);
+    // Only the two requests inside their signed scope reached the lookup.
+    assert_eq!(repository.calls.load(Ordering::SeqCst), 2);
 }
 
 /// A handler sees the scope stored with the correlation, else the one the
@@ -460,6 +462,244 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
     }
 }
 
+/// The scope check reads the request's credentials as authentication does,
+/// through `macro_auth::credential`, and holds the request to every scope
+/// any verified token in it signs: a scoped token in the ambient cookie
+/// scopes the request whatever else it carries, however the query spells
+/// its key. Tokens of different users are refused.
+#[tokio::test]
+async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carries() {
+    use tower::ServiceExt;
+
+    let app = axum::Router::new()
+        .route(
+            "/api/file/{id}",
+            axum::routing::delete(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+            enforce_signed_scope,
+        ));
+    let scoped = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        Some("generation"),
+    );
+    let unscoped = mint(
+        Some(Uuid::from_u128(1)),
+        Some(Uuid::from_u128(3)),
+        None,
+        None,
+    );
+    let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        fusionauth_id: "fixture".into(),
+        macro_user_id: "macro|someone@example.com".into(),
+        organization_id: None,
+        issuer: "fixture".into(),
+        private_key: PRIVATE.into(),
+        expiry_seconds: 60,
+        agent_id: None,
+        agent_via: None,
+        agent_correlation_id: None,
+        agent_session_id: None,
+        routine_id: None,
+        agent_scope: None,
+    })
+    .unwrap();
+    let cookie_name = macro_auth::credential::access_token_cookie_name();
+    let scoped_cookie = format!("{cookie_name}={scoped}");
+    let cases: Vec<(String, Option<String>, Option<String>, StatusCode)> = vec![
+        (
+            String::new(),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        // The bypass: an encoded key with a value that isn't a token.
+        (
+            "?macro%2Dapi%2Dtoken=junk".into(),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            "?Macro-Api-Token=junk".into(),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            format!("?macro-api-token={unscoped}&macro-api-token={unscoped}"),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            format!("?macro-api-token={unscoped}"),
+            None,
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            String::new(),
+            Some(format!("Bearer {unscoped}")),
+            Some(scoped_cookie.clone()),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            format!("?macro-api-token={unscoped}"),
+            Some(format!("Bearer {scoped}")),
+            None,
+            StatusCode::FORBIDDEN,
+        ),
+        // An encoded cookie name and value are the cookie, as cookie jars read it.
+        (
+            String::new(),
+            None,
+            Some(format!(
+                "{}={}",
+                cookie_name.replace('-', "%2D"),
+                scoped.replace('.', "%2E")
+            )),
+            StatusCode::FORBIDDEN,
+        ),
+        // Unscoped, however many places carry it, and with an unverifiable bearer.
+        (
+            String::new(),
+            Some(format!("Bearer {unscoped}")),
+            Some(format!("{cookie_name}={unscoped}")),
+            StatusCode::OK,
+        ),
+        (
+            String::new(),
+            Some("Bearer booking-capability".into()),
+            Some(format!("{cookie_name}={unscoped}")),
+            StatusCode::OK,
+        ),
+        // Tokens of different users.
+        (
+            String::new(),
+            Some(format!("Bearer {someone_else}")),
+            Some(format!("{cookie_name}={unscoped}")),
+            StatusCode::BAD_REQUEST,
+        ),
+    ];
+    for (query, authorization, cookie, expected) in cases {
+        let mut request = Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/file/01a1{query}"));
+        if let Some(authorization) = &authorization {
+            request = request.header("authorization", authorization);
+        }
+        if let Some(cookie) = &cookie {
+            request = request.header("cookie", cookie);
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            expected,
+            "{query} {authorization:?} {cookie:?}"
+        );
+    }
+}
+
+/// `propagate` alone, on a route that reads no `MacroAuthorization`, refuses
+/// tokens of different users before the handler runs, in any pairing of
+/// bearer, query parameter and cookie; one user's tokens pass.
+#[tokio::test]
+async fn propagate_refuses_tokens_of_different_users() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let handled = Arc::new(AtomicUsize::new(0));
+    let app = axum::Router::new()
+        .route(
+            "/items",
+            axum::routing::get({
+                let handled = handled.clone();
+                move || async move {
+                    handled.fetch_add(1, Ordering::SeqCst);
+                    StatusCode::OK
+                }
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    let owner = token(None, None);
+    let someone_else = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        fusionauth_id: "fixture".into(),
+        macro_user_id: "macro|someone@example.com".into(),
+        organization_id: None,
+        issuer: "fixture".into(),
+        private_key: PRIVATE.into(),
+        expiry_seconds: 60,
+        agent_id: None,
+        agent_via: None,
+        agent_correlation_id: None,
+        agent_session_id: None,
+        routine_id: None,
+        agent_scope: None,
+    })
+    .unwrap();
+    let cookie = |token: &str| {
+        format!(
+            "{}={token}",
+            macro_auth::credential::access_token_cookie_name()
+        )
+    };
+    type Case<'a> = (String, Vec<(&'a str, String)>, StatusCode);
+    let cases: Vec<Case> = vec![
+        (
+            "/items".into(),
+            vec![
+                ("authorization", format!("Bearer {owner}")),
+                ("cookie", cookie(&someone_else)),
+            ],
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/items?macro-api-token={someone_else}"),
+            vec![("cookie", cookie(&owner))],
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/items?macro-api-token={owner}"),
+            vec![("authorization", format!("Bearer {someone_else}"))],
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/items".into(),
+            vec![
+                ("authorization", format!("Bearer {owner}")),
+                ("cookie", cookie(&owner)),
+            ],
+            StatusCode::OK,
+        ),
+    ];
+    for (uri, headers, expected) in cases {
+        let mut request = Request::builder().uri(&uri);
+        for (name, value) in &headers {
+            request = request.header(*name, value);
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{uri}");
+    }
+    assert_eq!(handled.load(Ordering::SeqCst), 1);
+}
+
 /// A refused sharing change is answered 403 on every route, whatever error
 /// the code between the refusal and the route made of it; a request that
 /// refused a change and still succeeded keeps its answer.
@@ -524,5 +764,54 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
             let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(body["message"], message);
         }
+    }
+}
+
+/// Normal member-authorized agent sessions retain direct contribution writes;
+/// only credentials carrying a restricted scope are refused at the route gate.
+#[tokio::test]
+async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let app = axum::Router::new()
+        .route(
+            "/dss/v1/crm/email-privacy/policy",
+            axum::routing::put(|| async { StatusCode::OK }),
+        )
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    for scope in [None, Some("no_send"), Some("dry_run"), Some("generation")] {
+        let bearer = mint(
+            Some(Uuid::from_u128(1)),
+            Some(Uuid::from_u128(3)),
+            None,
+            scope,
+        );
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/dss/v1/crm/email-privacy/policy")
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            if scope.is_none() {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "{scope:?}",
+        );
     }
 }

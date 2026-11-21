@@ -182,7 +182,7 @@ pub(crate) async fn upsert_contacts(
                     recipient_type: *kind,
                 });
             } else {
-                tracing::error!(email=%addr.email, type_=?kind, "Recipient ID missing post-upsert");
+                tracing::error!(type_=?kind, "Recipient ID missing post-upsert");
             }
         }
     }

@@ -128,7 +128,7 @@ export const CODERABBIT_COMMENTS: GithubPullRequestComment[] = [
   comment(1, 'issue_comment', WALKTHROUGH),
   comment(2, 'review', REVIEW),
   comment(3, 'review_comment', INLINE, {
-    path: 'src/Activity.tsx',
+    path: 'crates/macro_db_client/migrations/20261118120000_activity_index.sql',
     line: 222,
   }),
 ];

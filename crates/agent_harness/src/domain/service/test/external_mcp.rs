@@ -27,6 +27,7 @@ async fn external_binding_preserves_an_explicit_agent_mcp_selection() {
             actor: Some(sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let (result, ()) = tokio::join!(prompted, complete_bound_handshake(&runtime));
@@ -89,6 +90,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
             actor: Some(sender()),
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         },
     );
     let (result, ()) = tokio::join!(prompted, complete_bound_handshake(&runtime));

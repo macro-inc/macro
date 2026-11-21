@@ -156,4 +156,6 @@ export const PARITY_VIEWS: ParityView[] = [
   fileBlock('pptx', '5eeda0ac-edb0-8a25-8b6a-c3305e335dce', 'Parity slides'),
   fileBlock('write', '5eeda0ac-e5d7-8f83-b114-9c2860c37259', 'Parity words'),
   fileBlock('chat', '5eeda0ac-4d06-8b88-a612-9ce488531aba', 'Parity chat'),
+  fileBlock('project', '5eeda0ac-35f3-8593-877f-0fa64fbc46ef', 'Parity folder'),
+  fileBlock('call', '5eeda0ac-ada9-85c7-b48b-7ed28a1d65dd', 'Parity call'),
 ];

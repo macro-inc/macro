@@ -197,6 +197,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
             mentions: vec![],
         },
         reply_to: None,
+        user_confirmation: None,
     };
     assert!(
         linked

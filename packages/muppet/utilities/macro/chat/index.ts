@@ -142,17 +142,60 @@ export const pushed = <Item>(
 });
 
 const recent = 20;
+/** How many delivered message ids are remembered to keep catch-ups from repeating one. */
+const rememberedIds = 1_000;
+/** A catch-up starts this long before the newest message delivered, or the drop. */
+const catchUpMarginMs = 60_000;
+/** A catch-up waits up to this long first, so agents reconnecting together after a deploy don't all read at once. */
+const catchUpSpreadMs = 5_000;
 const directMessage = 'direct_message';
+
+const failureOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 /** A name for someone with no display name: the front of their id's email. */
 export const nameFromId = (id: string): string =>
   id.replace(/^macro\|/, '').replace(/@.*/, '');
 
+/** What a catch-up after a dropped stream did, for the agent's log. */
+export type CatchUpReport =
+  | {
+      readonly kind: 'caught-up';
+      readonly after: string;
+      readonly channels: number;
+      readonly messages: number;
+    }
+  /** One channel's, thread's or message's history couldn't be read: skipped, the rest still caught up. */
+  | {
+      readonly kind: 'skipped';
+      readonly channelId: string;
+      readonly root?: string;
+      readonly message?: string;
+      readonly error: string;
+    }
+  /** The whole pass failed (the backend still coming back): tried again after `retryInMs`. */
+  | {
+      readonly kind: 'retrying';
+      readonly error: string;
+      readonly retryInMs: number;
+    };
+
+const warnUnlessCaughtUp = (report: CatchUpReport): void => {
+  if (report.kind !== 'caught-up')
+    console.warn(`chat catch-up: ${JSON.stringify(report)}`);
+};
+
 /** Chat over Macro's SDK, as the account the client is signed in as. */
 export const sdkChat = ({
   macro: connect,
+  report = warnUnlessCaughtUp,
+  sleep = (ms) => Bun.sleep(ms),
 }: {
   readonly macro: () => Promise<Macro>;
+  /** Told what each catch-up after a dropped stream did. Must not throw. By default, what was skipped or retried goes to stderr. */
+  readonly report?: (report: CatchUpReport) => void;
+  /** Waits between catch-up attempts. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }): Chat => {
   let me: Promise<string> | undefined;
   const myId = () => {
@@ -265,29 +308,57 @@ export const sdkChat = ({
       const mine = await myId();
       const channelNames = new Map<string, string>();
       const senderNames = new Map<string, string>();
+      type Channel = ReturnType<Macro['channels']['byId']>;
+      const channelFacts = async (channel: Channel) => {
+        const name =
+          channelNames.get(channel.id) ??
+          (await channel.name().catch(() => channel.id)).trim();
+        channelNames.set(channel.id, name);
+        const type = await channel.type().catch(() => undefined);
+        return { name, dm: type === directMessage };
+      };
+      const senderName = async (
+        sender: string,
+        name: () => Promise<string | undefined>
+      ) => {
+        const known =
+          senderNames.get(sender) ??
+          (await name().catch(() => undefined)) ??
+          nameFromId(sender);
+        senderNames.set(sender, known);
+        return known;
+      };
+      // What was delivered, by id, so a message caught up from history and
+      // also redelivered live reaches the agent once; and the newest one's
+      // time, where a catch-up starts.
+      const delivered = new Set<string>();
+      let newest: string | undefined;
+      const deliver = (message: Message): void => {
+        if (delivered.has(message.id)) return;
+        delivered.add(message.id);
+        if (delivered.size > rememberedIds) {
+          const [oldest] = delivered;
+          if (oldest !== undefined) delivered.delete(oldest);
+        }
+        if (newest === undefined || Date.parse(message.at) > Date.parse(newest))
+          newest = message.at;
+        emit(message);
+      };
+
       macro.events.on('message.posted', async (event) => {
         if (event.target.type !== 'channel') return;
         const { channel } = event.target;
         const { metadata } = event;
-        const channelName =
-          channelNames.get(channel.id) ??
-          (await channel.name().catch(() => channel.id)).trim();
-        channelNames.set(channel.id, channelName);
+        const facts = await channelFacts(channel);
         const sender = metadata.sender;
-        const senderName =
-          senderNames.get(sender) ??
-          (await event.sender?.name().catch(() => undefined)) ??
-          nameFromId(sender);
-        senderNames.set(sender, senderName);
-        const type = await channel.type().catch(() => undefined);
-        emit({
+        deliver({
           id: metadata.message_id,
           channelId: channel.id,
-          channel: channelName,
+          channel: facts.name,
           root: metadata.root_id,
           thread: metadata.thread_id ?? null,
-          dm: type === directMessage,
-          from: senderName,
+          dm: facts.dm,
+          from: await senderName(sender, async () => event.sender?.name()),
           senderId: sender,
           mine: sender === mine,
           at: metadata.created_at,
@@ -301,7 +372,169 @@ export const sdkChat = ({
           ),
         });
       });
-      await macro.events.listen();
+
+      type Posted = ReturnType<Channel['message']>;
+      const fromHistory = async (
+        channel: Channel,
+        message: Posted,
+        at: string
+      ): Promise<Message> => {
+        const facts = await channelFacts(channel);
+        const author = await message.author();
+        // History carries the record; its thread and attachments are read
+        // from it, the rest through the handle.
+        const record = message.toJSON().detail;
+        const thread = record?.thread_id ?? null;
+        return {
+          id: message.id,
+          channelId: channel.id,
+          channel: facts.name,
+          root: thread ?? message.id,
+          thread,
+          dm: facts.dm,
+          from: await senderName(author.id, () => author.name()),
+          senderId: author.id,
+          mine: author.id === mine,
+          at,
+          text: await message.content(),
+          mentions: message.mentions.map(({ entity_id }) => entity_id),
+          attachments: (record?.attachments ?? []).map(
+            ({ entity_type, entity_id }) => ({
+              type: entity_type,
+              id: entity_id,
+            })
+          ),
+        };
+      };
+
+      // Messages posted while the stream was down (a backend restart or
+      // deploy ends it; it reconnects on its own) are never replayed: read
+      // the history of each channel active since, after the newest one
+      // delivered. A root is
+      // listed when it was posted or replied to since, so its replies are
+      // read too.
+      const catchUpFrom = async (after: string): Promise<void> => {
+        const since = Date.parse(after);
+        let channels = 0;
+        let messages = 0;
+        // Listing the channels failing fails the pass, which is tried again;
+        // one channel or thread failing is skipped and reported, so a bad
+        // one can't stop every later catch-up.
+        for await (const channel of macro.channels.activeSince(after)) {
+          const missed: Message[] = [];
+          try {
+            for await (const root of channel.messagesAfter(after)) {
+              let replies: readonly Posted[] = [];
+              try {
+                replies = await root.thread().replies();
+              } catch (error) {
+                report({
+                  kind: 'skipped',
+                  channelId: channel.id,
+                  root: root.id,
+                  error: failureOf(error),
+                });
+              }
+              for (const message of [root, ...replies]) {
+                if (delivered.has(message.id)) continue;
+                // A root deleted in the gap is still listed for its live
+                // replies; the stream would never have delivered it.
+                if (message.toJSON().detail?.deleted_at) continue;
+                // One message that can't be read is skipped, not the rest
+                // of its channel.
+                try {
+                  const at = await message.createdAt();
+                  if (Date.parse(at) < since) continue;
+                  missed.push(await fromHistory(channel, message, at));
+                } catch (error) {
+                  report({
+                    kind: 'skipped',
+                    channelId: channel.id,
+                    root: root.id,
+                    message: message.id,
+                    error: failureOf(error),
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            report({
+              kind: 'skipped',
+              channelId: channel.id,
+              error: failureOf(error),
+            });
+          }
+          channels += 1;
+          missed.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+          messages += missed.length;
+          for (const message of missed) deliver(message);
+        }
+        report({ kind: 'caught-up', after, channels, messages });
+      };
+      // Where the next catch-up starts: the earliest drop not caught up yet.
+      // It runs once the stream is open again, since a message posted
+      // between a read and the reconnect would reach neither; a drop during
+      // a catch-up leaves this set, for another pass after it.
+      let pending: string | undefined;
+      let open = true;
+      // Nothing before the stream first opened is caught up: the margin is
+      // for events late within this listen, not for what a previous process
+      // may have answered.
+      let firstOpened: number | undefined;
+      let catchingUp = false;
+      const catchUp = async (): Promise<void> => {
+        if (catchingUp) return;
+        catchingUp = true;
+        try {
+          while (open && pending !== undefined) {
+            const after = pending;
+            pending = undefined;
+            await sleep(Math.random() * catchUpSpreadMs);
+            for (let attempt = 0; ; attempt += 1) {
+              try {
+                await catchUpFrom(after);
+                break;
+              } catch (error) {
+                // The backend is still coming back: try again.
+                const retryInMs = Math.min(1_000 * 2 ** attempt, 30_000);
+                report({
+                  kind: 'retrying',
+                  error: failureOf(error),
+                  retryInMs,
+                });
+                await sleep(retryInMs);
+              }
+            }
+          }
+        } finally {
+          catchingUp = false;
+        }
+      };
+      await macro.events.listen({
+        onDrop: (droppedAt) => {
+          open = false;
+          // A margin before the newest message delivered too: one posted
+          // just before it whose event hadn't arrived yet (commits out of
+          // order, another channel's event lagging) is read; the ids
+          // delivered drop the overlap.
+          const from = new Date(
+            Math.max(
+              Math.min(
+                newest === undefined ? droppedAt.getTime() : Date.parse(newest),
+                droppedAt.getTime()
+              ) - catchUpMarginMs,
+              firstOpened ?? Number.NEGATIVE_INFINITY
+            )
+          ).toISOString();
+          if (pending === undefined || Date.parse(from) < Date.parse(pending))
+            pending = from;
+        },
+        onOpen: (at) => {
+          firstOpened ??= at.getTime();
+          open = true;
+          catchUp().catch(() => undefined);
+        },
+      });
     }),
   };
 };
@@ -321,38 +554,165 @@ export type Typing = {
 const resendEvery = 4_000;
 const longest = 10 * 60_000;
 
-export const typing = ({
+/**
+ * Typing on indicators of its own: `typingOn(typingIndicators(options))`.
+ * Everything that types in one process should share one `typingIndicators`
+ * (chat() makes it) instead, so overlapping indicators are counted together.
+ */
+export const typing = (options: {
+  readonly send: Chat['typing'];
+  readonly every?: number;
+  readonly most?: number;
+}): Typing => typingOn(typingIndicators(options));
+
+/** Shows the agent typing, and returns a stop for this indicator only. */
+export type TypingIndicators = {
+  readonly start: (channelId: string, root?: string) => () => Promise<void>;
+};
+
+/** Timers, as typing indicators use them: each returns its cancel. */
+export type TypingTimers = {
+  readonly every: (ms: number, run: () => void) => () => void;
+  readonly after: (ms: number, run: () => void) => () => void;
+};
+
+const realTimers: TypingTimers = {
+  every: (ms, run) => {
+    const timer = setInterval(run, ms);
+    return () => clearInterval(timer);
+  },
+  after: (ms, run) => {
+    const timer = setTimeout(run, ms);
+    return () => clearTimeout(timer);
+  },
+};
+
+/** A thread's root, or the channel itself. */
+const channelLevel = '';
+
+/**
+ * Typing indicators that can overlap in one channel, each with a stop of its
+ * own, so one consumer (a greeting) never ends another's (a reply's). Every
+ * consumer in a process shares one instance: `chat()` makes it, and builds
+ * its `typing` on it.
+ *
+ * - Indicators are counted per channel and per thread (`root`): "start" is
+ *   sent, and resent as indicators expire, for each thread that has one
+ *   showing.
+ * - Macro's "stop" ends the channel's typing, so it is sent only once the
+ *   channel's last indicator stops. A thread whose last indicator stops
+ *   while others in the channel still show just isn't resent, and expires.
+ * - A channel's sends go out in order, so a stop never overtakes its start.
+ *   Sends never throw: a failed one is ignored, and the next resend tries
+ *   again.
+ * - Each indicator stops by itself after `most`.
+ */
+export const typingIndicators = ({
   send,
   every = resendEvery,
   most = longest,
+  timers = realTimers,
 }: {
   readonly send: Chat['typing'];
   readonly every?: number;
   readonly most?: number;
-}): Typing => {
-  const stops = new Map<string, () => Promise<void>>();
-  const stop = (channelId: string) =>
-    stops.get(channelId)?.() ?? Promise.resolve();
+  /** The clock it resends and gives up by; a test's fires by hand. */
+  readonly timers?: TypingTimers;
+}): TypingIndicators => {
+  type Showing = {
+    /** Live indicators by thread root (`channelLevel` for the channel). */
+    readonly roots: Map<string, number>;
+    /** Stops the resends. */
+    readonly stopTicking: () => void;
+  };
+  const showing = new Map<string, Showing>();
+  /** Each channel's sends, chained, so they reach Macro in order. */
+  const queues = new Map<string, Promise<void>>();
+  const enqueue = (
+    channelId: string,
+    action: 'start' | 'stop',
+    root: string
+  ): Promise<void> => {
+    const now = (): Promise<void> =>
+      send(channelId, action, root === channelLevel ? undefined : root).catch(
+        () => undefined
+      );
+    // Sent at once when nothing is in flight there; after it otherwise.
+    const before = queues.get(channelId);
+    const sent = before === undefined ? now() : before.then(now);
+    queues.set(channelId, sent);
+    void sent.then(() => {
+      if (queues.get(channelId) === sent) queues.delete(channelId);
+    });
+    return sent;
+  };
+  // A resend while a send is still out is skipped: a slow endpoint never
+  // builds a backlog, so a stop waits behind one send at most.
+  const resend = (channelId: string): void => {
+    if (queues.has(channelId)) return;
+    for (const root of showing.get(channelId)?.roots.keys() ?? [])
+      void enqueue(channelId, 'start', root);
+  };
   return {
-    stop,
-    start: (channelId, root) => {
-      void stop(channelId);
-      const quiet = (action: 'start' | 'stop') =>
-        send(channelId, action, root).catch(() => undefined);
-      const tick = setInterval(() => void quiet('start'), every);
+    start: (channelId, given) => {
+      const root = given ?? channelLevel;
+      let shown = showing.get(channelId);
+      if (shown === undefined) {
+        shown = {
+          roots: new Map(),
+          stopTicking: timers.every(every, () => resend(channelId)),
+        };
+        showing.set(channelId, shown);
+      }
+      const live = shown.roots.get(root) ?? 0;
+      shown.roots.set(root, live + 1);
+      if (live === 0) void enqueue(channelId, 'start', root);
       let stopped: Promise<void> | undefined;
-      const end = () => {
+      const stop = (): Promise<void> => {
         stopped ??= (async () => {
-          clearInterval(tick);
-          clearTimeout(cap);
-          if (stops.get(channelId) === end) stops.delete(channelId);
-          await quiet('stop');
+          cancelCap();
+          const now = showing.get(channelId);
+          const count = now?.roots.get(root) ?? 0;
+          if (now === undefined || count === 0) return;
+          if (count > 1) now.roots.set(root, count - 1);
+          else now.roots.delete(root);
+          // Others still show: nothing to send, but this stop resolves only
+          // once what was queued for the channel (its own start) is out.
+          if (now.roots.size > 0) {
+            await queues.get(channelId);
+            return;
+          }
+          now.stopTicking();
+          showing.delete(channelId);
+          await enqueue(channelId, 'stop', root);
         })();
         return stopped;
       };
-      const cap = setTimeout(() => void end(), most);
-      stops.set(channelId, end);
-      void quiet('start');
+      const cancelCap = timers.after(most, () => void stop());
+      return stop;
+    },
+  };
+};
+
+/**
+ * One indicator per channel on shared indicators, replaced by the next start
+ * there: what a reply needs. `stop(channelId)` stops only this one.
+ */
+export const typingOn = (indicators: TypingIndicators): Typing => {
+  const stops = new Map<string, () => Promise<void>>();
+  const stop = (channelId: string): Promise<void> => {
+    const own = stops.get(channelId);
+    stops.delete(channelId);
+    return own?.() ?? Promise.resolve();
+  };
+  return {
+    stop,
+    start: (channelId, root) => {
+      // The new indicator starts before the old one stops, so the channel
+      // never sees a stop in between.
+      const previous = stops.get(channelId);
+      stops.set(channelId, indicators.start(channelId, root));
+      void previous?.();
     },
   };
 };
@@ -512,17 +872,25 @@ export const chatting = module({
 });
 
 /**
- * Macro chat as a behavior to `use`: `chat` and `typing` in the context, a
+ * Macro chat as a behavior to `use`: `chat`, `typing` and the
+ * `typingIndicators` it is built on in the context, a
  * `messages` source of every message posted where the agent is (its own
  * included: check `mine`), and the chat capabilities. Pass `chat` to use
  * another implementation, e.g. a fake in tests.
  */
 export const chat = (
-  from: { readonly macro: () => Promise<Macro> } | { readonly chat: Chat }
+  from: Parameters<typeof sdkChat>[0] | { readonly chat: Chat }
 ) => {
   const port = 'chat' in from ? from.chat : sdkChat(from);
+  // One set of indicators for the process: replies' typing and anything else
+  // that types (a greeting) count together.
+  const indicators = typingIndicators({ send: port.typing });
   return behavior()
-    .decorate({ chat: port, typing: typing({ send: port.typing }) })
+    .decorate({
+      chat: port,
+      typing: typingOn(indicators),
+      typingIndicators: indicators,
+    })
     .source({ messages: source(port.incoming) })
     .capability(chatting);
 };

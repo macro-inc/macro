@@ -13,6 +13,10 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 - `src/api/proxy/resolver.rs`: the legacy generic proxy DNS guard.
 - `src/outbound/resolver.rs`: the stricter public-image DNS guard for logos.
 - `src/api/context.rs`: `ApiContext` / `AuthorizationService`.
+- `src/api.rs`: `agent_correlation::inbound::refuse_signed_scopes` wraps the
+  whole app: every route fetches what its caller names, so no scoped agent
+  credential (a suggestion generation, or a run that sends nothing) reaches
+  one.
 - `/logos?domain=`: authenticated, bounded raster favicon cache; `src/domain.rs`
   owns cache policy and `src/outbound.rs` fetches through its strict DNS guard.
 - `src/openapi.rs`, `src/doppler_config.rs`: separate `[[bin]]` targets for

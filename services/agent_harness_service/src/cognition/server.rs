@@ -251,7 +251,9 @@ pub async fn build(
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -362,6 +364,12 @@ pub async fn build(
         connection_gateway: channels_connection_gateway.clone(),
         sqs: aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker: macro_event_broker.clone(),
+        environment: config.environment,
+        feature_flags: ai_tools::service_feature_flags(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            config.environment,
+        )?,
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -385,14 +393,6 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
-        config.posthog_api_key.value(),
-        config.posthog_host.value(),
-        config.environment,
-    )? {
-        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
-        None => document_tool_context,
-    };
 
     tracing::info!("initialized document tool context");
 
@@ -455,7 +455,9 @@ pub async fn build(
     ));
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
@@ -834,6 +836,7 @@ pub async fn build(
         &databases_tool_context,
         soup_service.clone(),
         db.clone(),
+        side_effect_clients.feature_flags.clone(),
     );
     let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
     let pipeline_tool_context = ai_tools::build_pipeline_tool_context(

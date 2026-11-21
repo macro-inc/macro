@@ -51,7 +51,9 @@ impl From<email::domain::mailbox::lifecycle::InboxLifecycleError> for InboxActio
         match error {
             InboxLifecycleError::NotFound => Self::NotFound,
             InboxLifecycleError::Forbidden => Self::Forbidden,
-            InboxLifecycleError::Changed | InboxLifecycleError::Disconnecting => Self::Conflict,
+            InboxLifecycleError::Changed
+            | InboxLifecycleError::Disconnecting
+            | InboxLifecycleError::Contended => Self::Conflict,
             InboxLifecycleError::Unavailable => Self::Internal(anyhow::Error::new(error)),
         }
     }

@@ -6,7 +6,6 @@ import { useCallLinkQuery } from '@queries/call/meetings';
 import { Dropdown } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import { MeetingCopyButton } from '../../meetings/components/meeting-copy-button';
-import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 import { useCallContext } from './CallContext';
 import { getMeetingUrl } from './call-link';
 
@@ -64,15 +63,12 @@ export function ActiveCallLink(props: {
   compact?: boolean;
   menuItem?: boolean;
 }) {
-  const flag = useQuickCallsFlag();
   return (
-    <Show when={!flag().loading && flag().enabled}>
-      <Suspense>
-        <ActiveCallLinkContent
-          compact={props.compact}
-          menuItem={props.menuItem}
-        />
-      </Suspense>
-    </Show>
+    <Suspense>
+      <ActiveCallLinkContent
+        compact={props.compact}
+        menuItem={props.menuItem}
+      />
+    </Suspense>
   );
 }

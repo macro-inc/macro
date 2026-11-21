@@ -17,6 +17,7 @@ use super::instance::Port;
 use super::inventory::services_for_mode;
 use super::local_env::Tunnels;
 use super::microsoft_emulator;
+use super::model_emulator;
 use super::{Mode, arch, env_layer, gen_compose, instance::Instance, proxy, workspace_root};
 
 /// Required non-Rust services that must be present in the rendered local
@@ -154,6 +155,17 @@ fn local_compose_flavor(
             Some(_) => {}
         }
     }
+    if sidecars.model_emulator {
+        match services.get(model_emulator::SERVICE) {
+            None => failures.push(
+                "model_emulator sidecar is absent although no real Gemini key is configured".into(),
+            ),
+            Some(node) if !has_app_out_mount(node) => {
+                failures.push("model_emulator is missing the /app/out bind mount".into());
+            }
+            Some(_) => {}
+        }
+    }
     if sidecars.gmail_forwarder {
         match services.get("gmail_forwarder") {
             None => failures.push(
@@ -182,6 +194,7 @@ fn local_compose_flavor(
         [
             (sidecars.gmail_emulator, " + gmail_emulator"),
             (sidecars.outlook_emulator, " + outlook_emulator"),
+            (sidecars.model_emulator, " + model_emulator"),
             (sidecars.gmail_forwarder, " + gmail_forwarder"),
         ]
         .iter()
@@ -238,25 +251,6 @@ fn computers_failures(
             }
             if !mounts(harness, "/var/run/docker.sock", "/var/run/docker.sock") {
                 failures.push("agent_harness_service does not mount the Docker socket".into());
-            }
-        }
-        Fleet::Incus => {
-            if env("COMPUTERS_FLEET") != Some("incus") {
-                failures.push("agent_harness_service lacks COMPUTERS_FLEET=incus".into());
-            }
-            for sidecar in ["computers_incus_uplink", "computers_incus_relay"] {
-                if services.contains_key(sidecar) {
-                    failures.push(format!(
-                        "obsolete Incus relay sidecar '{sidecar}' is present"
-                    ));
-                }
-            }
-            let direct_endpoint = env("COMPUTERS_INCUS_URL")
-                .and_then(|url| url.strip_prefix("https://"))
-                .and_then(|endpoint| endpoint.strip_suffix(":8443"))
-                .is_some_and(|address| address.parse::<std::net::Ipv4Addr>().is_ok());
-            if !direct_endpoint {
-                failures.push("COMPUTERS_INCUS_URL must be https://<runtime IPv4>:8443".into());
             }
         }
     }

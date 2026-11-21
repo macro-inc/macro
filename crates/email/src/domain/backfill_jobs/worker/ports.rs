@@ -16,7 +16,6 @@ use futures::future::BoxFuture;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{backfill::*, link::Link, pubsub::ProcessingError};
-use std::collections::HashSet;
 use uuid::Uuid;
 
 /// A database error's original value and ordered SQLSTATE facts.
@@ -204,12 +203,15 @@ pub trait BackfillEffects:
         link: &Link,
         payload: &BackfillAttachmentPayload,
     ) -> impl Future<Output = Result<(), BackfillUploadError>> + Send;
-    /// Enqueue the existing two-user contact set.
+    /// Record the recipients of a sent message as known to the owner through
+    /// this inbox.
     fn connect(
         &self,
-        users: HashSet<MacroUserIdStr<'static>>,
+        link: &Link,
+        recipients: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-    /// Acquire a team's existing CRM write lease.
+    /// One of a team's CRM population slots if one is free now, without
+    /// waiting.
     fn acquire_crm(
         &self,
         team: Uuid,
@@ -220,12 +222,32 @@ pub trait BackfillEffects:
 
 /// CRM's existing domain operations, with their original errors.
 pub trait BackfillCrm: Send + Sync + 'static {
+    /// Reauthorize and prepare one bounded policy-history page.
+    fn policy_history_page(
+        &self,
+        payload: &models_email::service::backfill::PopulateCrmPolicyPayload,
+    ) -> impl Future<
+        Output = Result<Option<crm::domain::email_policy_work::EmailPolicyHistoryPage>, CrmError>,
+    > + Send;
+    /// Apply one address using the original generation, never current consent by substitution.
+    fn populate_policy_contact(
+        &self,
+        payload: &models_email::service::backfill::PopulateCrmPolicyPayload,
+        page: &crm::domain::email_policy_work::EmailPolicyHistoryPage,
+        contact: &crm::domain::email_policy_work::EmailPolicyHistoryContact,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+    /// Durably hand off the next page only after all effects succeeded.
+    fn finish_policy_history_page(
+        &self,
+        payload: &models_email::service::backfill::PopulateCrmPolicyPayload,
+        page: &crm::domain::email_policy_work::EmailPolicyHistoryPage,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
     /// The current team, if any.
     fn get_team_id_for_user(
         &self,
         user: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, CrmError>> + Send;
-    /// The currently consented mailbox, if any.
+    /// The legacy, uninitialized all-mail consented mailbox, if any.
     fn contribution_mailbox(
         &self,
         team: Uuid,

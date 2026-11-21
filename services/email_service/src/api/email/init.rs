@@ -72,6 +72,9 @@ pub const ALREADY_INITIALIZED_CODE: &str = "ALREADY_INITIALIZED";
 /// Stable machine-readable code for [`ConnectionError::NoGmailGrant`].
 pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
 
+/// Stable machine-readable code for [`InitializationError::InboxBeingRemoved`].
+pub const INBOX_BEING_REMOVED_CODE: &str = "INBOX_BEING_REMOVED";
+
 /// Structured 400 body carrying a machine-readable code. Clients branch on
 /// `code` instead of parsing the human message.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -87,11 +90,18 @@ fn connection_error_status(error: &ConnectionError) -> StatusCode {
     match error {
         ConnectionError::MailboxInitialization(error) => match error {
             InitializationError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
-            InitializationError::InvalidAttempt => StatusCode::BAD_REQUEST,
+            InitializationError::InvalidAttempt | InitializationError::InboxBeingRemoved => {
+                StatusCode::BAD_REQUEST
+            }
             InitializationError::IdentityConflict
             | InitializationError::Changed
             | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
-            InitializationError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            // Clients released before the coded 409s read any 409 here as a
+            // sharing conflict to confirm, so a busy inbox answers 503 like any
+            // other passing failure.
+            InitializationError::Unavailable | InitializationError::Contended => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
         },
         ConnectionError::AlreadyInitialized
         | ConnectionError::NoGmailGrant
@@ -151,10 +161,26 @@ impl IntoResponse for InitError {
                 existing_link_id,
             } => (
                 status_code,
-                Json(SharedInboxConflictResponse {
+                Json(InitConflictResponse::SharedInboxConflict {
                     email_address,
                     existing_owner_email,
                     existing_link_id,
+                }),
+            )
+                .into_response(),
+            InitErrorKind::MailboxInitialization(error @ InitializationError::IdentityConflict) => {
+                (
+                    status_code,
+                    Json(InitConflictResponse::InboxIdentityConflict {
+                        message: error.to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+            InitErrorKind::MailboxInitialization(error @ InitializationError::Changed) => (
+                status_code,
+                Json(InitConflictResponse::InboxChanged {
+                    message: error.to_string(),
                 }),
             )
                 .into_response(),
@@ -174,22 +200,47 @@ impl IntoResponse for InitError {
                 }),
             )
                 .into_response(),
+            InitErrorKind::MailboxInitialization(InitializationError::InboxBeingRemoved) => (
+                status_code,
+                Json(InitErrorCodeResponse {
+                    code: INBOX_BEING_REMOVED_CODE.to_string(),
+                    message: InitializationError::InboxBeingRemoved.to_string(),
+                }),
+            )
+                .into_response(),
             other => (status_code, headers, other.to_string()).into_response(),
         }
     }
 }
 
-/// Returned with a `409 Conflict` when a connect targets an external mailbox another
-/// macro user has already connected. The client surfaces a confirmation; on confirm it
-/// retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
+/// Body of every `409 Conflict` from `/email/init`; `code` says which conflict it
+/// is. Clients offer to share the inbox only for a `SHARED_INBOX_CONFLICT`.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct SharedInboxConflictResponse {
-    /// The mailbox address that is already connected.
-    pub email_address: String,
-    /// The email of the macro user who first connected the mailbox.
-    pub existing_owner_email: String,
-    /// The existing link that would be shared if the caller confirms.
-    pub existing_link_id: Uuid,
+#[serde(tag = "code", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum InitConflictResponse {
+    /// Returned when a connect targets an external mailbox another macro user has
+    /// already connected. The client surfaces a confirmation; on confirm it retries
+    /// `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
+    SharedInboxConflict {
+        /// The mailbox address that is already connected.
+        email_address: String,
+        /// The email of the macro user who first connected the mailbox.
+        existing_owner_email: String,
+        /// The existing link that would be shared if the caller confirms.
+        existing_link_id: Uuid,
+    },
+    /// The mailbox signed in at consent is not the one the inbox at its address
+    /// syncs ([`InitializationError::IdentityConflict`]).
+    InboxIdentityConflict {
+        /// Human-readable explanation.
+        message: String,
+    },
+    /// The inbox changed while it was being connected; connecting again works
+    /// ([`InitializationError::Changed`]).
+    InboxChanged {
+        /// Human-readable explanation.
+        message: String,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -231,12 +282,12 @@ pub struct InitParams {
             (status = 400, body=InitErrorCodeResponse),
             (status = 401, body=ErrorResponse),
             (status = 402, body=ErrorResponse),
-            (status = 409, body=SharedInboxConflictResponse),
+            (status = 409, body=InitConflictResponse),
             (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization), fields(fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub(crate) async fn handler(
     State(ctx): State<ApiContext>,
     query: Query<InitParams>,

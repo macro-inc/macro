@@ -3,11 +3,11 @@ import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import {
-  GithubConversationDemo,
-  GithubTaskDemo,
-} from '../components/reviews/GithubWorkflow';
+import { GithubCursorDemo } from '../components/reviews/GithubCursorDemo';
+import { GithubPasteDemo } from '../components/reviews/GithubPasteDemo';
+import { GithubTaskDemo } from '../components/reviews/GithubWorkflow';
 import { ReviewInboxDemo } from '../components/reviews/ReviewStories';
+import './product-reviews-page.css';
 
 const githubFaq = [
   {
@@ -70,8 +70,8 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="GitHub"
-          title="Diffs and merge PRs from chat."
-          description="Review diffs and merge pull requests from team chat. Comments and @mentions come back to your inbox."
+          title={'From bug report\nto merged pull request.'}
+          description="Track a fix as a task, review and merge the linked pull request from chat, and get GitHub comments and @mentions in your inbox."
           cta="github_hero_get_started"
           tutorial="github"
         />
@@ -79,26 +79,30 @@ export function RouteGithub() {
           id="pr-links"
           demo={{
             tone: 'github',
+            glassFrame: false,
           }}
-          title="Paste a GitHub link, get a live pull request."
-          description="GitHub links render as pretty links in a document, in a channel in Macro Chat, or anywhere else you can write Markdown. Hover over one to see the pull request’s status."
+          title={'Link the task, the chat,\nand the pull request.'}
+          description="Paste a GitHub link in chat or a document and hover to see its live status. When a linked pull request opens or merges, the task in Macro updates automatically."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
-            render={() => <GithubConversationDemo />}
+            label="GitHub link preview"
+            render={() => <GithubPasteDemo />}
           />
         </FeaturePageSection>
         <FeaturePageSection
           id="coding-agents"
           demo={{
             tone: 'github',
+            glassFrame: false,
           }}
           title="@mention Cursor, merge from Macro Chat."
           description="Coding agents like Cursor live right in your channels. @mention one and ask it to fix something, and when the pull request is ready, merge it right from the channel. The task and the pull request link back to each other."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
-            render={() => <GithubConversationDemo agent />}
+            label="Cursor in chat"
+            render={() => <GithubCursorDemo />}
           />
         </FeaturePageSection>
         <FeaturePageSection

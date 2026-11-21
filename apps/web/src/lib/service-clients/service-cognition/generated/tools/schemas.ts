@@ -976,6 +976,9 @@ export const Booking = z.object({
   rescheduledAt: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
+  abandonedAt: z
+    .union([z.string().datetime({ offset: true }), z.null()])
+    .optional(),
   location: z.string(),
   answers: z.record(z.string()),
   questionLabels: z.record(z.string()).optional(),
@@ -12109,6 +12112,9 @@ export const BookingsResult = z.object({
       rescheduledAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
+      abandonedAt: z
+        .union([z.string().datetime({ offset: true }), z.null()])
+        .optional(),
       location: z.string(),
       answers: z.record(z.string()),
       questionLabels: z.record(z.string()).optional(),
@@ -19060,6 +19066,7 @@ export const SendChannelMessage = z.object({
       })
     )
     .optional(),
+  silent: z.boolean().optional(),
 });
 
 export const SendChannelMessageResponse = z.object({

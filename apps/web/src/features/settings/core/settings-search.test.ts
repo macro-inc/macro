@@ -69,12 +69,28 @@ describe('individual settings search', () => {
       false
     );
   });
-  it('omits disabled signature controls', () => {
+  it('finds the email row style except on phones', () => {
+    const rowStyle = (options?: { emailRowStyle: boolean }) =>
+      searchSettings(SETTINGS_TAB_GROUPS, 'row style', options).some(
+        (result) => result.title === 'Email row style'
+      );
+    expect(rowStyle()).toBe(true);
+    expect(rowStyle({ emailRowStyle: false })).toBe(false);
+  });
+  it('lists the Agent pings setting only while agent notifications are on', () => {
+    const agentPings = (agentNotifications?: boolean) =>
+      searchSettings(SETTINGS_TAB_GROUPS, 'agent pings', {
+        agentNotifications,
+      }).filter((result) => result.title.startsWith('Agent pings'));
+
+    expect(agentPings(true)).toMatchObject([{ tab: 'Notifications' }]);
+    expect(agentPings(false)).toEqual([]);
+    // Other notification settings stay searchable.
     expect(
-      searchSettings(SETTINGS_TAB_GROUPS, 'signature', {
-        emailSignatures: false,
-      }).some((result) => result.title === 'Email signatures')
-    ).toBe(false);
+      searchSettings(SETTINGS_TAB_GROUPS, 'routine runs', {
+        agentNotifications: false,
+      })[0]
+    ).toMatchObject({ tab: 'Notifications' });
   });
   it('finds the team members page for inviting people', () => {
     for (const query of ['invite', 'members', 'team members', 'teammates']) {
@@ -117,6 +133,7 @@ describe('individual settings search', () => {
     if (!billing) throw new Error('Billing tab missing');
     const groups = [
       {
+        id: 'personal',
         label: '個人',
         items: [{ ...billing, label: '請求', englishLabel: 'Billing' }],
       },

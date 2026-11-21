@@ -17,7 +17,11 @@ import { suggestionsKeys } from './keys';
 /** How often to read the feed again while a run or a generation is under way. */
 const WORKING_POLL_MS = 10_000;
 
-function feedOptions(userId: string, enabled: boolean, generating: boolean) {
+export function feedOptions(
+  userId: string,
+  enabled: boolean,
+  generating: boolean
+) {
   return queryOptions({
     ...suggestionsKeys.feed(userId),
     queryFn: async () =>

@@ -18,8 +18,14 @@ struct Source {
     own_calendar: Vec<Uuid>,
     own_sent: Vec<Uuid>,
     own_drafts: Vec<Uuid>,
+    /// Threads the folder rule admits, with whether each is the viewer's own
+    /// and whether only a thread grant shares it.
+    in_projects: Vec<(SharedThread, bool, bool)>,
+    /// Threads outside the viewer's inboxes in folders granted to them.
+    project_shared: Vec<SharedThread>,
     threads: HashMap<Uuid, Thread>,
     shared_requests: Mutex<Vec<Vec<Uuid>>>,
+    project_requests: Mutex<Vec<(Vec<String>, Vec<Uuid>, bool, bool)>>,
 }
 
 impl EmailSearchSource for Source {
@@ -40,6 +46,47 @@ impl EmailSearchSource for Source {
             .filter(|thread| !own_link_ids.contains(&thread.link_id))
             .filter(|thread| requested.is_empty() || requested.contains(&thread.thread_id))
             .take(limit)
+            .copied()
+            .collect())
+    }
+
+    async fn project_threads(
+        &self,
+        _: &MacroUserId<Lowercase<'_>>,
+        _: &[Uuid],
+        project_ids: &[String],
+        requested: &[Uuid],
+        include_own: bool,
+        include_thread_shares: bool,
+        limit: usize,
+    ) -> Result<Vec<SharedThread>, Report> {
+        self.project_requests.lock().unwrap().push((
+            project_ids.to_vec(),
+            requested.to_vec(),
+            include_own,
+            include_thread_shares,
+        ));
+        Ok(self
+            .in_projects
+            .iter()
+            .filter(|(thread, _, _)| requested.is_empty() || requested.contains(&thread.thread_id))
+            .filter(|(_, own, _)| include_own || !own)
+            .filter(|(_, _, thread_share)| include_thread_shares || !thread_share)
+            .map(|(thread, _, _)| *thread)
+            .take(limit)
+            .collect())
+    }
+
+    async fn project_shared_threads(
+        &self,
+        _: &MacroUserId<Lowercase<'_>>,
+        _: &[Uuid],
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<SharedThread>, Report> {
+        Ok(self
+            .project_shared
+            .iter()
+            .filter(|thread| thread_ids.contains(&thread.thread_id))
             .copied()
             .collect())
     }
@@ -514,4 +561,208 @@ async fn attachment_kinds_are_checked_hit_by_hit() {
     assert!(!scope.ids_only);
     assert_eq!(scope.user_ids, inboxes().user_ids);
     assert_eq!(scope.hit_states.attachments, vec![AttachmentKind::Document]);
+}
+
+fn in_folder(id: u128, link: Uuid) -> SharedThread {
+    SharedThread {
+        thread_id: Uuid::from_u128(id),
+        link_id: link,
+    }
+}
+
+fn folder_source() -> Source {
+    Source {
+        in_projects: vec![
+            (in_folder(30, OWN_LINK), true, false),
+            (in_folder(31, OTHER_LINK), false, false),
+            (in_folder(32, OTHER_LINK), false, true),
+        ],
+        own_calendar: vec![Uuid::from_u128(30)],
+        ..Default::default()
+    }
+}
+
+fn folder_filters(shared: SharedEmailFilter) -> EmailFilters {
+    EmailFilters {
+        project_ids: vec!["folder".into(), "folder".into(), String::new()],
+        shared,
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn folders_search_the_threads_the_folder_list_shows() {
+    let service = EmailSearchService(folder_source());
+
+    let scope = threads(
+        service
+            .scope(
+                &viewer(),
+                &folder_filters(SharedEmailFilter::Exclude),
+                &inboxes(),
+            )
+            .await
+            .unwrap(),
+    );
+
+    assert!(scope.ids_only);
+    assert_eq!(
+        scope.thread_ids,
+        vec![Uuid::from_u128(30), Uuid::from_u128(31)]
+    );
+    assert!(scope.user_ids.is_empty());
+    assert_eq!(
+        service.0.project_requests.lock().unwrap().as_slice(),
+        &[(vec!["folder".to_string()], vec![], true, false)]
+    );
+}
+
+#[tokio::test]
+async fn shared_only_folders_leave_out_the_viewers_own_threads() {
+    let service = EmailSearchService(folder_source());
+
+    let scope = threads(
+        service
+            .scope(
+                &viewer(),
+                &folder_filters(SharedEmailFilter::Only),
+                &inboxes(),
+            )
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(
+        scope.thread_ids,
+        vec![Uuid::from_u128(31), Uuid::from_u128(32)]
+    );
+    assert_eq!(
+        service.0.project_requests.lock().unwrap().as_slice(),
+        &[(vec!["folder".to_string()], vec![], false, true)]
+    );
+}
+
+#[tokio::test]
+async fn folders_check_the_other_thread_sets_hit_by_hit() {
+    let service = EmailSearchService(folder_source());
+    let filters = EmailFilters {
+        calendar_only: Some(true),
+        view: Some(EmailSearchView::Sent),
+        email_thread_ids: vec![Uuid::from_u128(31).to_string()],
+        ..folder_filters(SharedEmailFilter::Exclude)
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(scope.thread_ids, vec![Uuid::from_u128(31)]);
+    assert!(scope.hit_states.calendar_only);
+    assert!(scope.hit_states.sent);
+}
+
+#[tokio::test]
+async fn a_requested_thread_past_the_folder_cap_is_still_searched() {
+    let last = (MAX_PROJECT_THREADS + 1) as u128;
+    let service = EmailSearchService(Source {
+        in_projects: (1..=last)
+            .map(|n| (in_folder(n, OTHER_LINK), false, false))
+            .collect(),
+        ..Default::default()
+    });
+    let filters = EmailFilters {
+        email_thread_ids: vec![Uuid::from_u128(last).to_string()],
+        ..folder_filters(SharedEmailFilter::Exclude)
+    };
+
+    let scope = threads(
+        service
+            .scope(&viewer(), &filters, &inboxes())
+            .await
+            .unwrap(),
+    );
+
+    assert_eq!(scope.thread_ids, vec![Uuid::from_u128(last)]);
+    assert_eq!(
+        service.0.project_requests.lock().unwrap().as_slice(),
+        &[(
+            vec!["folder".to_string()],
+            vec![Uuid::from_u128(last)],
+            true,
+            false
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_folder_the_viewer_reaches_nothing_in_searches_no_email() {
+    let service = EmailSearchService(Source::default());
+
+    let scope = service
+        .scope(
+            &viewer(),
+            &folder_filters(SharedEmailFilter::Exclude),
+            &inboxes(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(scope, EmailScope::Nothing);
+}
+
+#[tokio::test]
+async fn folders_past_the_limit_are_marked_capped() {
+    let service = EmailSearchService(Source {
+        in_projects: (0..MAX_PROJECT_THREADS as u128)
+            .map(|n| (in_folder(1_000 + n, OTHER_LINK), false, false))
+            .collect(),
+        ..Default::default()
+    });
+
+    let scope = threads(
+        service
+            .scope(
+                &viewer(),
+                &folder_filters(SharedEmailFilter::Exclude),
+                &inboxes(),
+            )
+            .await
+            .unwrap(),
+    );
+
+    assert!(scope.project_capped);
+    assert_eq!(scope.thread_ids.len(), MAX_PROJECT_THREADS);
+}
+
+#[tokio::test]
+async fn shared_among_reads_threads_shared_through_their_folder() {
+    let service = EmailSearchService(Source {
+        shared: vec![shared(10)],
+        project_shared: vec![in_folder(31, OTHER_LINK)],
+        ..Default::default()
+    });
+
+    let shared = service
+        .shared_among(
+            &viewer(),
+            &[OWN_LINK],
+            &[
+                Uuid::from_u128(10),
+                Uuid::from_u128(31),
+                Uuid::from_u128(99),
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        shared
+            .iter()
+            .map(|thread| thread.thread_id)
+            .collect::<Vec<_>>(),
+        vec![Uuid::from_u128(10), Uuid::from_u128(31)]
+    );
 }

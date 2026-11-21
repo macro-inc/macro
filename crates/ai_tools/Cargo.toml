@@ -129,6 +129,8 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+aws-sdk-s3 = { workspace = true }
+wiremock = { workspace = true }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }

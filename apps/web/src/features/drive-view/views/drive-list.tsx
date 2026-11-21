@@ -383,6 +383,10 @@ export function DriveList() {
                 >
                   {/* Outside the virtualized rows, so list focus skips it. */}
                   <div ref={setListStart}>
+                    <div
+                      aria-hidden
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
                     <Show when={state.value().location.kind === 'tab'}>
                       <TutorialRow tutorial="drive" />
                     </Show>

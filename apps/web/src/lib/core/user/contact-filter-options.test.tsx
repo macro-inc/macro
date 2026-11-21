@@ -6,7 +6,7 @@ import { createContactFilterOptions } from './contact-filter-options';
 
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 
-it('keeps off-page selections and self without reordering clicked rows or retaining old pages', () => {
+it('keeps off-page selections and self without reordering clicked or listed rows or retaining old lists', () => {
   createRoot((dispose) => {
     const me = {
       id: 'macro|viewer@example.com',
@@ -25,6 +25,7 @@ it('keeps off-page selections and self without reordering clicked rows or retain
     };
     const [selected, setSelected] = createSignal<readonly string[]>([]);
     const [query, setQuery] = createSignal('');
+    const [windowKey, setWindowKey] = createSignal('window');
     const [page, setPage] = createSignal<ContactDirectoryPage>({
       users: [first, second],
       query: '',
@@ -37,12 +38,13 @@ it('keeps off-page selections and self without reordering clicked rows or retain
       viewer: () => me.id,
       suggestions: {
         inputKey: query,
-        windowKey: () => 'window',
+        windowKey,
         continued: () => false,
         data: page,
         search: query,
         setSearch: setQuery,
         loading: () => false,
+        loadingMore: () => false,
         error: () => null,
         next: () => {},
         loadNext: async () => {},
@@ -73,6 +75,20 @@ it('keeps off-page selections and self without reordering clicked rows or retain
       first.id,
       second.id,
     ]);
+    // A further page lists below the rows on screen, moving none of them.
+    const third = {
+      id: 'macro|third@example.com',
+      email: 'third@example.com',
+      name: 'Third',
+    };
+    setPage({ ...page(), users: [first, second, third] });
+    expect(options.options().map((option) => option.id)).toEqual([
+      me.id,
+      first.id,
+      second.id,
+      third.id,
+    ]);
+    setWindowKey('another-window');
     setPage({ ...page(), users: [] });
     expect(options.options().map((option) => option.id)).toEqual([
       second.id,

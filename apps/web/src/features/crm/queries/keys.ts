@@ -1,6 +1,16 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const crmKeys = createQueryKeys('crm', {
+  emailPolicy: (scope: string | undefined) => [scope],
+  emailPolicyHistory: (scope: string | undefined, before?: string) => [
+    scope,
+    before,
+  ],
+  emailPolicyRevision: (scope: string | undefined, revision: number) => [
+    scope,
+    revision,
+  ],
+  emailPolicyPreview: (scope: string | undefined) => [scope],
   emailPrivacy: (teamId: string | undefined, userId: string | undefined) => [
     teamId,
     userId,
@@ -9,8 +19,14 @@ export const crmKeys = createQueryKeys('crm', {
     teamId: string | undefined,
     userId: string | undefined,
     session: number | undefined,
-    after: string | undefined
-  ) => [teamId, userId, session, after],
+    after: string | undefined,
+    threadId?: string
+  ) => [teamId, userId, session, after, threadId],
+  emailConsent: (
+    teamId: string | undefined,
+    userId: string | undefined,
+    session: number | undefined
+  ) => [teamId, userId, session],
   // One `/saved_views` read serves CRM lists and personal views.
   savedViews: null,
   pipelines: (teamId: string | undefined) => [teamId],

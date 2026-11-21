@@ -19,6 +19,9 @@ pub struct View {
     /// is up to the frontend. The structure and composition of view configuration
     /// is still very much in flux.
     pub config: serde_json::Value,
+    /// Validated icon and color metadata, independent of configuration revisions.
+    #[serde(default)]
+    pub appearance: Option<model_entity::EntityAppearance>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     /// Optimistic-write revision, omitted from legacy REST responses.
@@ -39,6 +42,7 @@ impl View {
             user_id,
             name,
             config,
+            appearance: None,
             created_at: now,
             updated_at: now,
             revision: 1,
