@@ -90,7 +90,7 @@ describe('createCodeLinkOpener', () => {
     createRoot((dispose) => {
       const { context, open } = setup();
       expect(open('example.com')).toBe(false);
-      expect(open('docs.rs')).toBe(false);
+      expect(open('example.org')).toBe(false);
       expect(open('example.com/spec.html')).toBe(false);
       expect(context.opened).toEqual([]);
       expect(context.notified).toEqual([]);
@@ -98,10 +98,15 @@ describe('createCodeLinkOpener', () => {
       expect(open('package.json#L5')).toBe(true);
       expect(open('.github/ci.yml')).toBe(true);
       expect(open('src/b.ts#L2')).toBe(true);
+      // A bare docs or source file, and a version folder, are paths too.
+      expect(open('README.md')).toBe(true);
+      expect(open('v1.2/notes.md')).toBe(true);
       expect(context.opened).toEqual([
         'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
         'https://github.com/macro-inc/macro/blob/abc123/.github/ci.yml',
         'https://github.com/macro-inc/macro/blob/abc123/src/b.ts#L2',
+        'https://github.com/macro-inc/macro/blob/abc123/README.md',
+        'https://github.com/macro-inc/macro/blob/abc123/v1.2/notes.md',
       ]);
       dispose();
     });

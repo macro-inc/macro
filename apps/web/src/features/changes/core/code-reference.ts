@@ -63,17 +63,76 @@ export function namesFile(reference: CodeReference): boolean {
   return FILE_NAME.test(name);
 }
 
+// Extensions of source and docs files: a bare `README.md` or `lib.rs` is a
+// file in the repository, not a host, though `.md` and `.rs` are also TLDs.
+const SOURCE_EXTENSIONS = new Set([
+  'md',
+  'mdx',
+  'txt',
+  'rst',
+  'ts',
+  'tsx',
+  'mts',
+  'cts',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'rs',
+  'json',
+  'jsonc',
+  'toml',
+  'yaml',
+  'yml',
+  'py',
+  'go',
+  'java',
+  'kt',
+  'swift',
+  'rb',
+  'sh',
+  'sql',
+  'css',
+  'scss',
+  'html',
+  'lock',
+  'c',
+  'h',
+  'cpp',
+  'hpp',
+  'cs',
+  'php',
+  'vue',
+  'svelte',
+  'xml',
+  'ini',
+  'proto',
+  'graphql',
+  'nix',
+  'zig',
+  'lua',
+]);
+
+// A segment that reads as a host: labels ending in an alphabetic TLD
+// (`example.com`, `docs.example.org`), not a version like `v1.2`.
+const HOST = /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i;
+
 /**
  * Whether a reference to a file outside the changes reads as a path in the
- * repository rather than a web address written without its scheme: a first
- * segment like `example.com` (an inner dot, not a dotfile) with no line
- * suffix is a host. `package.json#L5` and `.github/ci.yml` stay paths.
+ * repository rather than a web address written without its scheme. With a
+ * line suffix it is a path. A first segment that reads as a host is a web
+ * address (`example.com`, `example.com/spec.html`), unless it is the whole
+ * reference and ends in a source or docs extension (`README.md`).
  */
 export function readsAsRepositoryPath(reference: CodeReference): boolean {
   if (!namesFile(reference)) return false;
   if (reference.lines) return true;
-  const first = reference.path.split('/')[0] ?? '';
-  return !/^[^.]+\..+$/.test(first);
+  const segments = reference.path.split('/');
+  const first = segments[0] ?? '';
+  if (!HOST.test(first)) return true;
+  if (segments.length > 1) return false;
+  const extension = first.split('.').at(-1)?.toLowerCase() ?? '';
+  return SOURCE_EXTENSIONS.has(extension);
 }
 
 /**

@@ -25,10 +25,10 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
 
   const openAppLink = useAppLinkOpener();
   const describeLink = useAppLinkDescriber();
-  // A link the surface describes, such as a path to code, is not a web page
-  // to unfurl.
+  // Only a web page unfurls: a relative link, such as a path to code, never
+  // goes to the unfurl service.
   const [unfurlData] = useUnfurl(
-    describeLink?.(props.url) ? undefined : props.url
+    /^https?:\/\//i.test(props.url) ? props.url : undefined
   );
 
   let linkRef: HTMLAnchorElement | undefined;
