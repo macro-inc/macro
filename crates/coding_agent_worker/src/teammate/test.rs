@@ -2828,3 +2828,157 @@ async fn the_real_engine_enforces_the_egress_policy() {
         .output();
     drop(listener);
 }
+
+/// A local stack against a real engine: the holder joins the stack's
+/// network, the agent reaches the service its environment names, at that
+/// port only, and nothing else on the shared network.
+#[tokio::test]
+#[ignore = "needs a container engine, the teammate image (teammate-runtime:latest, with getent) and nginx:alpine"]
+async fn the_real_engine_allows_only_a_local_stacks_named_services() {
+    use super::cli::CliEngine;
+
+    let engine = CliEngine::new();
+    let info = engine.info().await.expect("a container engine answers");
+    let program = if info.kind == ContainerEngineKind::Docker {
+        "docker"
+    } else {
+        "podman"
+    };
+    let run = |arguments: &[&str]| {
+        let output = std::process::Command::new(program)
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{arguments:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    };
+    let pid = std::process::id();
+    let stack = format!("macro-teammate-test-stack-{pid}");
+    let service = format!("macro-teammate-test-svc-{pid}");
+    let other = format!("macro-teammate-test-other-{pid}");
+    run(&["network", "create", &stack]);
+    run(&[
+        "run",
+        "--detach",
+        "--name",
+        &service,
+        "--network",
+        &stack,
+        "--network-alias",
+        "svc",
+        "nginx:alpine",
+    ]);
+    // Another container on the shared network (another teammate, say).
+    run(&[
+        "run",
+        "--detach",
+        "--name",
+        &other,
+        "--network",
+        &stack,
+        "nginx:alpine",
+    ]);
+    let other_address = inspect(
+        program,
+        "container",
+        &other,
+        "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+    );
+    let up_id = test_image(program, "stack-up", RUNS_UNTIL_STOPPED);
+
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-test"));
+    let install_id = TeammateInstallId::new(format!("stack-{pid}")).unwrap();
+    let install = TeammateInstall {
+        install_id: install_id.clone(),
+        generation: 1,
+        delivery: 1,
+    };
+    let seccomp = super::store::write_file(
+        directory.path(),
+        "teammate-seccomp.json",
+        super::SECCOMP_PROFILE.as_bytes(),
+    )
+    .unwrap();
+    let teammates = Teammates::new(
+        engine,
+        store,
+        Platform::current(),
+        seccomp,
+        Egress {
+            network: Some(TeammateNetwork::new(&stack).unwrap()),
+            allow: Vec::new(),
+        },
+    );
+    let mut statuses = teammates.subscribe();
+    teammates.detect().await;
+    teammates.handle(TeammateRequest::Run {
+        install: install.clone(),
+        image: TeammateImage {
+            repository: "localhost:1/macro-teammate-test".to_owned(),
+            image_id: up_id,
+        },
+        environment: AgentEnvironment(
+            [(
+                "OVERRIDE_TEST_SERVICE_URL".to_owned(),
+                "http://svc:80".to_owned(),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+        traceparent: None,
+    });
+    let states = next_states(&mut statuses, 3).await;
+
+    let name = format!("macro-teammate-{}", install_id.as_str());
+    let connects = |address: &str, port: u16| {
+        std::process::Command::new(program)
+            .args([
+                "exec",
+                &name,
+                "bash",
+                "-c",
+                &format!("timeout 4 bash -c 'echo > /dev/tcp/{address}/{port}'"),
+            ])
+            .status()
+            .unwrap()
+            .success()
+    };
+    let reached_service = connects("svc", 80);
+    let reached_other = connects(&other_address, 80);
+
+    teammates.handle(TeammateRequest::Stop {
+        install,
+        traceparent: None,
+    });
+    while statuses.recv().await.unwrap().state != TeammateRunState::Stopped {}
+    for container in [&service, &other] {
+        let _ = std::process::Command::new(program)
+            .args(["rm", "--force", container])
+            .output();
+    }
+    let _ = std::process::Command::new(program)
+        .args(["network", "rm", &stack])
+        .output();
+    let _ = std::process::Command::new(program)
+        .args(["rmi", &format!("macro-teammate-test-stack-up:{pid}")])
+        .output();
+
+    assert_eq!(
+        states,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+    assert!(reached_service, "the named service is reachable");
+    assert!(
+        !reached_other,
+        "another container on the shared network was reachable"
+    );
+}
