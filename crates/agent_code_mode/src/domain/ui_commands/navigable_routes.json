@@ -92,6 +92,7 @@
     {"route":"view-calendar","navigable":true,"segments":["calendar",":"]},
     {"route":"channels-channel","navigable":true,"segments":["channels",":"]},
     {"route":"call-detail","navigable":true,"segments":["call",":"]},
+    {"route":"agent-screen","navigable":false,"segments":["screen",":"]},
     {"route":"pr-detail","navigable":true,"segments":["pr",":"]},
     {"route":"legacy-content","navigable":true,"segments":["md",":"]},
     {"route":"legacy-content","navigable":true,"segments":["pdf",":"]},
