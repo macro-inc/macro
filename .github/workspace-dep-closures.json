@@ -13804,6 +13804,10 @@
       "crates/roles_and_permissions",
       "crates/workspace-hack"
     ],
+    "route_policy": [
+      "crates/route_policy",
+      "crates/workspace-hack"
+    ],
     "routine_program": [
       "crates/activity",
       "crates/agent",
