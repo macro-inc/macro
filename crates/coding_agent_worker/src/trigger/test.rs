@@ -349,3 +349,104 @@ fn receipt_lag_is_the_time_since_the_event_id_was_minted() {
         None
     );
 }
+
+/// The values recorded onto spans after they open, as `(field, value)`.
+#[derive(Clone, Default)]
+pub(crate) struct RecordedFields(std::sync::Arc<Mutex<Vec<(String, String)>>>);
+
+impl RecordedFields {
+    /// Collect recorded fields while the returned guard lives.
+    pub(crate) fn capture(&self) -> tracing::subscriber::DefaultGuard {
+        use tracing_subscriber::layer::SubscriberExt as _;
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(self.clone()))
+    }
+
+    /// The value recorded for `field`, if any.
+    pub(crate) fn get(&self, field: &str) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(name, _)| name == field)
+            .map(|(_, value)| value.clone())
+    }
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for RecordedFields {
+    fn on_record(
+        &self,
+        _span: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        _context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        struct Visitor<'a>(&'a Mutex<Vec<(String, String)>>);
+        impl tracing::field::Visit for Visitor<'_> {
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push((field.name().to_owned(), value.to_owned()));
+            }
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push((field.name().to_owned(), format!("{value:?}")));
+            }
+        }
+        values.record(&mut Visitor(&self.0));
+    }
+}
+
+// A span of the test's own: a callsite other tests also hit can have its
+// interest cached while no subscriber is set, and miss these records.
+fn outcome_span() -> tracing::Span {
+    tracing::info_span!(
+        "test.outcome",
+        outcome = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+    )
+}
+
+#[test]
+fn a_failed_outcome_marks_the_span_as_an_error() {
+    let fields = RecordedFields::default();
+    let _guard = fields.capture();
+
+    record_outcome(&outcome_span(), EventOutcome::Workspace);
+
+    assert_eq!(fields.get("outcome").as_deref(), Some("workspace"));
+    assert_eq!(fields.get("otel.status_code").as_deref(), Some("ERROR"));
+}
+
+#[test]
+fn done_and_skipped_outcomes_leave_the_span_ok() {
+    for outcome in [EventOutcome::Ok, EventOutcome::Skipped] {
+        let fields = RecordedFields::default();
+        let _guard = fields.capture();
+
+        record_outcome(&outcome_span(), outcome);
+
+        assert_eq!(
+            fields.get("outcome").as_deref(),
+            Some(<&str>::from(outcome))
+        );
+        assert_eq!(fields.get("otel.status_code"), None);
+    }
+}
+
+#[test]
+fn dispatch_errors_name_their_kind_and_status_never_their_message() {
+    let refused =
+        crate::dispatch::DispatchError::Api(crate::outbound::agent_session::ApiError::Refused {
+            status: reqwest::StatusCode::BAD_GATEWAY,
+            message: "a body that must not reach a span".to_owned(),
+        });
+    assert_eq!(refused.outcome(), EventOutcome::ApiRefused);
+    assert_eq!(refused.api_status(), Some(502));
+
+    let workspace = crate::dispatch::DispatchError::Workspace("git: /home/x".to_owned());
+    assert_eq!(workspace.outcome(), EventOutcome::Workspace);
+    assert_eq!(workspace.api_status(), None);
+    assert_eq!(<&str>::from(EventOutcome::ApiRefused), "api_refused");
+}

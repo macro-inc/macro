@@ -42,8 +42,33 @@ impl<Store: RepositoryStore> Workspaces<Store> {
     /// exists is returned as it is, on whatever branch its agent left it,
     /// without a fetch: only a new worktree fetches `origin/main` and starts
     /// from it.
-    #[tracing::instrument(name = "macrod.workspace.worktree", skip_all, fields(session_id = session, fetched = tracing::field::Empty), err)]
+    ///
+    /// Its span records `outcome` and marks a failure, never the error's
+    /// text: that can hold git output and local paths.
+    #[tracing::instrument(
+        name = "macrod.workspace.worktree",
+        skip_all,
+        fields(
+            session_id = session,
+            fetched = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        ),
+        err
+    )]
     pub(crate) async fn prepare(&self, session: &str, url: &str) -> rootcause::Result<PathBuf> {
+        let result = self.worktree(session, url).await;
+        crate::trigger::record_outcome(
+            &tracing::Span::current(),
+            match &result {
+                Ok(_) => crate::trigger::EventOutcome::Ok,
+                Err(_) => crate::trigger::EventOutcome::Workspace,
+            },
+        );
+        result
+    }
+
+    async fn worktree(&self, session: &str, url: &str) -> rootcause::Result<PathBuf> {
         let repository = Repository::parse(url)?;
         let _guard = self.preparing.lock().await;
         let path = self.root.join("worktrees").join(session);

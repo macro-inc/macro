@@ -39,6 +39,29 @@ pub enum DispatchError {
     Dial(#[source] tokio_tungstenite::tungstenite::Error),
 }
 
+impl DispatchError {
+    /// The kind of failure, for the event's span. Never the message: it can
+    /// hold git output, a response body or a local path.
+    pub(crate) fn outcome(&self) -> crate::trigger::EventOutcome {
+        use crate::trigger::EventOutcome;
+        match self {
+            Self::Workspace(_) => EventOutcome::Workspace,
+            Self::Api(ApiError::Http(_)) => EventOutcome::ApiUnreachable,
+            Self::Api(ApiError::Refused { .. }) => EventOutcome::ApiRefused,
+            Self::Api(ApiError::ThreadSessionExists { .. }) => EventOutcome::ApiConflict,
+            Self::Dial(_) => EventOutcome::Dial,
+        }
+    }
+
+    /// The status the service refused with, if it did.
+    pub(crate) fn api_status(&self) -> Option<u16> {
+        match self {
+            Self::Api(ApiError::Refused { status, .. }) => Some(status.as_u16()),
+            Self::Workspace(_) | Self::Api(_) | Self::Dial(_) => None,
+        }
+    }
+}
+
 /// The daemon's real executor: the API client plus the bridge registry.
 pub struct Dispatcher {
     api: HarnessApi,

@@ -61,7 +61,10 @@ pub(crate) enum HerdrError {
     #[error("the agent did not become ready; finish any dialog in its Herdr tab")]
     NotReady,
     /// The agent reported it was still working when the wait for it ended.
-    #[error("the agent is busy: it was still working after 60 s; send again once it finishes")]
+    #[error(
+        "the agent is busy: it was still working after {} s; send again once it finishes",
+        hc::AGENT_READY_TIMEOUT.as_secs()
+    )]
     Busy,
 }
 

@@ -25,7 +25,7 @@ const AGENT_LABEL: &str = "macro.agent";
 /// The herdr app's CLI; optional, so every call to it is best effort.
 const APP_BIN: &str = "herdr-app";
 /// How long a new agent may take to report it is ready for input.
-const AGENT_READY_TIMEOUT: Duration = Duration::from_secs(60);
+pub(super) const AGENT_READY_TIMEOUT: Duration = Duration::from_secs(60);
 const AGENT_READY_POLL: Duration = Duration::from_millis(250);
 /// Polls with an unchanged screen after which an agent that never reports
 /// status counts as ready.
