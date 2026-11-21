@@ -29,6 +29,7 @@ use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
+use soup_filter_cache_adapter::WritePassStep;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -828,30 +829,56 @@ impl EngineHandle {
         // One normalization serves the projection passes and the write, as in
         // `write`.
         let mut normalized = state.engine.normalize_network(None, write).ok();
-        // Compute the write in two read-only steps, letting reads that queued
-        // meanwhile run after each. Only reads can: this hydrate keeps its
-        // turn. If storage moved anyway, the hydrate runs whole after
-        // rechecking the session.
+        // Compute the write in read-only steps (the authoritative rows, each
+        // projection pass, the merge), letting reads that queued meanwhile
+        // run after each. Only reads can: this hydrate keeps its turn. If
+        // storage moved anyway, the hydrate runs whole after rechecking the
+        // session.
         let mut reuse = None;
         if staging()
             && let Ok(wal) = state.engine.storage().wal_position()
         {
+            let unmoved =
+                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
             // A failed read is the hydrate's error, as it is for a whole
             // one: retrying it whole could succeed where that failed.
-            let projections = soup::write_projections(
+            let mut passes = soup::write_passes(
                 &mut state.engine,
+                &query,
+                operation_name.as_deref(),
+                &data,
+                identity.as_deref(),
+            )
+            .await?;
+            let schema = state.engine.schema_snapshot();
+            let response = soup::write_response(
+                &schema,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
-                identity.as_deref(),
                 normalized.as_ref().map(NormalizedResponse::updates),
-            )
-            .await?;
-            state = self.let_reads_run(state).await;
-            let unmoved =
-                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
-            if unmoved(&state.engine) {
+            );
+            let mut projections = None;
+            loop {
+                state = self.let_reads_run(state).await;
+                if !unmoved(&state.engine) {
+                    break;
+                }
+                if let WritePassStep::Done(done) = passes
+                    .step(&mut state.engine, &response)
+                    .await
+                    .map_err(|error| error.to_string())?
+                {
+                    projections = Some(done);
+                    state = self.let_reads_run(state).await;
+                    break;
+                }
+            }
+            drop(response);
+            if let Some(projections) = projections
+                && unmoved(&state.engine)
+            {
                 let staged = state
                     .engine
                     .stage_normalized_hydrate(
