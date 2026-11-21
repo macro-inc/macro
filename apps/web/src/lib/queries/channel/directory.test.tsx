@@ -6,6 +6,7 @@ import type {
   CacheChangeListener,
   CacheGenerationChange,
 } from '@graphql-cache/host/types';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import type {
   ChannelDirectoryEntityQuery,
   ChannelDirectoryFieldsFragment,
@@ -350,6 +351,84 @@ describe('by-id reader', () => {
     reader.request(channelUuid('a'));
     await vi.advanceTimersByTimeAsync(100);
     expect(read.mock.calls.map(([ids]) => ids)).toEqual([[channelUuid('a')]]);
+  });
+
+  it('reads in the trace of the view that asked, and retries in a trace of their own', async () => {
+    const active: string[] = [];
+    const within = <T,>(name: string, work: () => T): T => {
+      active.push(name);
+      try {
+        return work();
+      } finally {
+        active.pop();
+      }
+    };
+    const spans: {
+      parent: string | undefined;
+      attrs: Record<string, unknown>;
+    }[] = [];
+    const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
+      name: string,
+      operation: (span: unknown) => Promise<unknown>
+    ) => {
+      const recorded = { parent: active.at(-1), attrs: {} };
+      spans.push(recorded);
+      return within(name, () =>
+        operation({
+          setAttr: (key: string, value: unknown) => {
+            (recorded.attrs as Record<string, unknown>)[key] = value;
+          },
+        })
+      );
+    }) as never);
+    const sentIn: (string | undefined)[] = [];
+    let fail = true;
+    const read = vi.fn<Read>(async (ids) => {
+      sentIn.push(active.at(-1));
+      if (fail) {
+        fail = false;
+        throw new Error('offline');
+      }
+      return { returned: new Set(ids) };
+    });
+    const reader = createRoot((dispose) => {
+      disposers.push(dispose);
+      return createByIdReader(read);
+    });
+    const view: TraceContext = {
+      run: (work) => within('view.channel', work),
+    };
+
+    reader.request(channelUuid('a'));
+    reader.request(channelUuid('b'), view);
+    await vi.advanceTimersByTimeAsync(100);
+    span.mockRestore();
+
+    // One batch of both, in the view's trace, then its retry outside it.
+    expect(sentIn).toEqual([
+      'channel_directory.by_id',
+      'channel_directory.by_id',
+    ]);
+    expect(spans.map(({ parent }) => parent)).toEqual([
+      'view.channel',
+      undefined,
+    ]);
+    expect(spans.map(({ attrs }) => attrs)).toEqual([
+      expect.objectContaining({
+        'channel_directory.requested': 2,
+        'channel_directory.retried': 0,
+        'channel_directory.queued_ms': expect.any(Number),
+      }),
+      expect.objectContaining({
+        'channel_directory.requested': 2,
+        'channel_directory.retried': 2,
+        'channel_directory.returned': 2,
+      }),
+    ]);
+    expect(reader.outcomes()).toEqual({
+      [channelUuid('a')]: 'returned',
+      [channelUuid('b')]: 'returned',
+    });
   });
 
   it('forgets a failed id after the cooldown, while others keep failing, and reads it only when asked again', async () => {

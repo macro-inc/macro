@@ -19,17 +19,41 @@ const channelRecord = (
   overrides?: Parameters<typeof recordWithId>[1]
 ) => recordWithId(channelUuid(name), overrides);
 
-const telemetry = vi.hoisted(() => ({ error: vi.fn() }));
-vi.mock('@macro-inc/observability', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Telemetry: {
-    error: telemetry.error,
-    span: async (
-      _name: string,
-      operation: (span: { setAttr: () => void }) => Promise<unknown>
-    ) => operation({ setAttr: () => {} }),
-  },
+// The span that is current, which, as in a browser, does not survive an
+// await: only work started inside `run` sees it.
+const telemetry = vi.hoisted(() => ({
+  error: vi.fn(),
+  active: [] as string[],
 }));
+vi.mock('@macro-inc/observability', async (importOriginal) => {
+  const within = <T>(name: string, work: () => T): T => {
+    telemetry.active.push(name);
+    try {
+      return work();
+    } finally {
+      telemetry.active.pop();
+    }
+  };
+  return {
+    ...(await importOriginal<object>()),
+    Telemetry: {
+      error: telemetry.error,
+      span: async (
+        name: string,
+        operation: (span: {
+          setAttr: () => void;
+          run: <T>(work: () => T) => T;
+        }) => Promise<unknown>
+      ) =>
+        within(name, () =>
+          operation({
+            setAttr: () => {},
+            run: (work) => within(name, work),
+          })
+        ),
+    },
+  };
+});
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: vi.fn(),
   hydrateGraphqlSoup: vi.fn(),
@@ -190,6 +214,14 @@ describe('channel directory reconciliation', () => {
     const ids = Array.from({ length: 250 }, (_, index) => `c${index}`);
     const { host } = reconcileHost(ids);
     const fetch = server([{ nextCursor: null, entityIds: [] }], ids);
+    const sentIn: (string | undefined)[] = [];
+    const answer = fetch.getMockImplementation();
+    fetch.mockImplementation(async (input) => {
+      if (input.initial?.filters?.channelFilter)
+        sentIn.push(telemetry.active.at(-1));
+      if (!answer) throw new Error('no server');
+      return answer(input);
+    });
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
@@ -202,6 +234,8 @@ describe('channel directory reconciliation', () => {
       .slice(1)
       .map(([input]) => input.initial?.limit);
     expect(batches).toEqual([100, 100, 50]);
+    // Each in the reconciliation's span, the later ones past an await too.
+    expect(sentIn).toEqual(Array(3).fill('channel_directory.reconcile'));
     expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 

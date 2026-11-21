@@ -16,7 +16,7 @@ import { debounce, throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   ChannelDirectoryEntityDocument,
   ChannelDirectoryPageDocument,
@@ -130,6 +130,10 @@ const BY_ID_CONCURRENCY = 2;
 // A by-id read still unanswered after this has failed, so one that never
 // settles cannot hold a batch slot.
 const BY_ID_DEADLINE_MS = 20_000;
+
+// The context of a read no flow asked for: the caller's.
+const NO_TRACE: TraceContext = { run: (work) => work() };
+
 // Records still lacking a field once the lane finished, read per refresh.
 const INCOMPLETE_READS_PER_REFRESH = 500;
 const DIRECTORY_STALE_MS = 5 * 60_000;
@@ -191,8 +195,9 @@ export type ChannelDirectory = {
    * failed keeps it incomplete until a later read answers. */
   complete: Accessor<boolean>;
   /** A joined channel, `pending` while the directory cannot tell yet. A
-   * pending lookup reads the channel by id. */
-  lookup: (channelId: string) => ChannelLookup;
+   * pending lookup reads the channel by id, as part of `trace` (the flow that
+   * asked) when one is given and still open as the read starts. */
+  lookup: (channelId: string, trace?: TraceContext) => ChannelLookup;
   /** Every joined channel, read from the network now, for an action on all
    * of them: what the directory shows can trail a change made on another
    * device. */
@@ -868,12 +873,15 @@ async function readOwnWrites(
     // one replaces it, whichever lands first.
     const sequence = own.nextSequence();
     const reads: PrimaryChannelRead[] = [];
+    // Chunks after the first start past an await, outside the span.
     for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY)
       reads.push(
-        ...(await Promise.all(
-          reading
-            .slice(at, at + OWN_WRITE_READ_CONCURRENCY)
-            .map((id) => readChannelFromPrimary(soup(), id))
+        ...(await span.run(() =>
+          Promise.all(
+            reading
+              .slice(at, at + OWN_WRITE_READ_CONCURRENCY)
+              .map((id) => readChannelFromPrimary(soup(), id))
+          )
         ))
       );
     const now = account();
@@ -931,7 +939,8 @@ type ByIdReaderOptions = {
  * runs: whoever still asks for one reads it again, and an id nobody asks for
  * any more costs nothing. A hidden tab keeps its failures until it is shown.
  * With `version`, an absence holds only while the channel's record stays as
- * it was when its read was sent.
+ * it was when its read was sent. A batch's span joins the trace of the first
+ * of its ids whose request named one, on that id's first read only.
  */
 export function createByIdReader(
   read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>,
@@ -944,6 +953,10 @@ export function createByIdReader(
   let attempts = new Map<string, number>();
   // For each absence, the record its read was sent against.
   let sentAgainst = new Map<string, RecordVersion>();
+  // The flow that asked for each id not yet read, and when each id still to
+  // read was queued.
+  let askedIn = new Map<string, TraceContext>();
+  let queuedAt = new Map<string, number>();
   let controller = new AbortController();
   const versionOf = options.version;
 
@@ -985,7 +998,7 @@ export function createByIdReader(
     for (const id of ids) {
       const tried = (attempts.get(id) ?? 0) + 1;
       attempts.set(id, tried);
-      if (tried < BY_ID_ATTEMPTS) batcher.addItem(id);
+      if (tried < BY_ID_ATTEMPTS) queue(id);
       else failed[id] = 'failed';
     }
     settle(failed);
@@ -1001,11 +1014,18 @@ export function createByIdReader(
     const deadline = AbortSignal.timeout(BY_ID_DEADLINE_MS);
     const signal = anyAbortSignal([reset, deadline]);
     const before = new Map(ids.map((id) => [id, versionOf?.(id)]));
+    const { parent, waitedMs } = takeBatchTrace(ids);
     try {
-      const found = await Telemetry.span(
-        'channel_directory.by_id',
-        async (span) => {
+      const found = await (parent ?? NO_TRACE).run(() =>
+        Telemetry.span('channel_directory.by_id', async (span) => {
           span.setAttr('channel_directory.requested', ids.length);
+          // From the batch's oldest id's request (or retry) to its read:
+          // the batching wait plus the wait for a free read slot.
+          span.setAttr('channel_directory.queued_ms', waitedMs);
+          span.setAttr(
+            'channel_directory.retried',
+            ids.filter((id) => attempts.has(id)).length
+          );
           try {
             const result = await read(ids, signal);
             span.setAttr(
@@ -1023,7 +1043,7 @@ export function createByIdReader(
               deadline.aborted && !reset.aborted
             );
           }
-        }
+        })
       );
       if (reset.aborted) return;
       const unreadable = new Set(found.unreadable);
@@ -1068,12 +1088,34 @@ export function createByIdReader(
     wait: BY_ID_WAIT_MS,
     maxSize: BY_ID_BATCH,
   });
+  function queue(id: string) {
+    queuedAt.set(id, performance.now());
+    batcher.addItem(id);
+  }
+  /** The trace a batch's span joins and how long its oldest id waited; the
+   * ids' requests are used up, so a retry starts a trace of its own. */
+  function takeBatchTrace(ids: readonly string[]) {
+    let parent: TraceContext | undefined;
+    let oldest = Number.POSITIVE_INFINITY;
+    for (const id of ids) {
+      parent ??= askedIn.get(id);
+      askedIn.delete(id);
+      oldest = Math.min(oldest, queuedAt.get(id) ?? oldest);
+      queuedAt.delete(id);
+    }
+    const waitedMs = Number.isFinite(oldest)
+      ? Math.round(performance.now() - oldest)
+      : 0;
+    return { parent, waitedMs };
+  }
   const drop = () => {
     controller.abort();
     batcher.cancel();
     batcher.clear();
     queuer.clear();
     forgetFailures.clear();
+    askedIn = new Map();
+    queuedAt = new Map();
   };
   onCleanup(() => {
     drop();
@@ -1101,12 +1143,14 @@ export function createByIdReader(
 
   return {
     outcomes,
-    /** Queues a by-id read; false when the id was already requested. Never
-     * writes a signal, so a reactive read may call it. */
-    request(id: string) {
+    /** Queues a by-id read, as part of `trace` when given; false when the id
+     * was already requested. Never writes a signal, so a reactive read may
+     * call it. */
+    request(id: string, trace?: TraceContext) {
       if (!isChannelId(id) || requested.has(id)) return false;
       requested.add(id);
-      batcher.addItem(id);
+      if (trace) askedIn.set(id, trace);
+      queue(id);
       return true;
     },
     /** Forgets what the reads of these ids settled, so asking reads them
@@ -1471,6 +1515,8 @@ export function createCachedChannelDirectory(
     hasRecord: (id: string) => boolean,
     vouches: (id: string) => boolean = hasRecord
   ): Promise<ByIdRead> => {
+    // The by-id span, for the reread after the await.
+    const context = Telemetry.captureContext();
     const page = await deps.hydrate(
       readableChannelsInput(CHANNEL_DIRECTORY_INPUT, ids),
       { signal }
@@ -1482,7 +1528,7 @@ export function createCachedChannelDirectory(
     const written = returned ? [...returned] : ids;
     if (written.length > 0) {
       for (const id of written) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
-      await runner();
+      await context.run(() => runner());
     }
     // Without evidence, an id with no record may still be the viewer's.
     if (!returned)
@@ -1792,13 +1838,16 @@ export function createCachedChannelDirectory(
         // -1 when the writes did not all settle in time.
         span.setAttr('channel_directory.fallback_pages_written', written ?? -1);
         if (signal.aborted || run !== fallbackRun) return;
-        await refresh();
+        // The span stopped being the active context at the first await.
+        await span.run(() => refresh());
         if (signal.aborted || run !== fallbackRun) return;
         fallback = { status: 'loaded', channels: walk.channels };
+        span.setAttr('channel_directory.fallback_outcome', 'loaded');
         render();
       } catch (error) {
         if (signal.aborted || run !== fallbackRun) return;
         Telemetry.error(error, { surface: 'channel-directory-fallback' });
+        span.setAttr('channel_directory.fallback_outcome', 'failed');
         fallback = { status: 'failed' };
         render();
       }
@@ -1865,11 +1914,14 @@ export function createCachedChannelDirectory(
         return;
       }
       // Read before the scan: a pass that finishes during it may have
-      // written records the scan missed, and its save reads again.
+      // written records the scan missed, and its save reads again. Past the
+      // first await, calls run in the span only through `span.run`.
       lane = readLaneProgress(userId, scope, sessionStartedAt);
-      const read = await index.refresh(scope, signal);
+      const read = await span.run(() => index.refresh(scope, signal));
       // The cache may have changed hands while it was read.
-      await assertContactCacheScope(host, userId, scope, signal);
+      await span.run(() =>
+        assertContactCacheScope(host, userId, scope, signal)
+      );
       span.setAttr('channel_directory.records', read.channels.length);
       span.setAttr('channel_directory.incomplete', read.incompleteIds.length);
       span.setAttr('channel_directory.reread', read.reread);
@@ -1885,12 +1937,18 @@ export function createCachedChannelDirectory(
       span.setAttr('channel_directory.keys', keys.length);
       const signal = controller.signal;
       const scope = await readContactCacheScope(host, userId, signal);
-      if (scope === undefined || scope !== generation) return false;
-      const found = await index.readKeys(scope, keys, signal);
+      if (scope === undefined || scope !== generation) {
+        span.setAttr('channel_directory.keys_outcome', 'scope_changed');
+        return false;
+      }
+      const found = await span.run(() => index.readKeys(scope, keys, signal));
+      // `stale` hands the keys to a full read.
+      span.setAttr('channel_directory.keys_outcome', found.kind);
       if (found.kind === 'stale') return false;
-      span.setAttr('channel_directory.keys_changed', found.kind === 'read');
       if (found.kind === 'unchanged') return true;
-      await assertContactCacheScope(host, userId, scope, signal);
+      await span.run(() =>
+        assertContactCacheScope(host, userId, scope, signal)
+      );
       publish(found.read);
       return true;
     });
@@ -2017,7 +2075,7 @@ export function createCachedChannelDirectory(
   return {
     channels: () => view().joined,
     complete: proven,
-    lookup(channelId) {
+    lookup(channelId, trace) {
       const { unconfirmed } = shown();
       const result = lookupChannel(
         view(),
@@ -2027,7 +2085,7 @@ export function createCachedChannelDirectory(
       );
       // The fallback's own read decides an unconfirmed one.
       if (result.status === 'pending' && !unconfirmed[channelId])
-        reader.request(channelId);
+        reader.request(channelId, trace);
       return result;
     },
     async readComplete() {
@@ -2138,9 +2196,9 @@ export function createMemoryChannelDirectory(
   return {
     channels: () => state().joined,
     complete: () => state().complete,
-    lookup(channelId) {
+    lookup(channelId, trace) {
       const result = lookupChannel(state(), reader.outcomes(), channelId);
-      if (result.status === 'pending') reader.request(channelId);
+      if (result.status === 'pending') reader.request(channelId, trace);
       return result;
     },
     async readComplete() {
@@ -2257,7 +2315,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
   return {
     channels: () => directory().channels(),
     complete: () => directory().complete(),
-    lookup: (channelId) => directory().lookup(channelId),
+    lookup: (channelId, trace) => directory().lookup(channelId, trace),
     readComplete: () => untrack(directory).readComplete(),
     failed: () => directory().failed(),
     retry: () => untrack(directory).retry(),

@@ -1,5 +1,7 @@
+import { useFlowTrace } from '@app/observability/flow';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type ChannelDirectory,
   type ChannelLookup,
@@ -44,16 +46,27 @@ function sameLastViewed(a: ChannelLastViewed, b: ChannelLastViewed) {
   return a.status === b.status && knownLastView(a) === knownLastView(b);
 }
 
+/** What became of the server's answer: the open used it, had already
+ * stopped waiting (after `LAST_VIEW_WAIT_MS`), or had closed. */
+type LastViewOutcome = 'used' | 'late' | 'closed';
+
 async function askLastView(
   channelId: string,
-  settle: (state: ChannelLastViewed) => void
+  settle: (state: ChannelLastViewed) => LastViewOutcome
 ) {
-  const viewedAt = await readChannelViewedAt(channelId);
-  settle(
-    viewedAt.isOk()
-      ? { status: 'known', viewedAt: viewedAt.value }
-      : LAST_VIEW_UNKNOWN
-  );
+  await Telemetry.span('channel.last_view', async (span) => {
+    span.setAttr('channel.id', channelId);
+    const viewedAt = await readChannelViewedAt(channelId);
+    if (viewedAt.isErr()) span.error(viewedAt.error);
+    span.setAttr(
+      'channel.last_view.outcome',
+      settle(
+        viewedAt.isOk()
+          ? { status: 'known', viewedAt: viewedAt.value }
+          : LAST_VIEW_UNKNOWN
+      )
+    );
+  });
 }
 
 type ChannelDirectoryProviderProps = {
@@ -78,8 +91,10 @@ export function useChannelLookup(
   channelId: string | Accessor<string>
 ): Accessor<ChannelLookup> {
   const directory = useChannelDirectory();
+  // A by-id read the lookup starts joins the view that asked, while it loads.
+  const flow = useFlowTrace();
   const id = typeof channelId === 'string' ? () => channelId : channelId;
-  return createMemo(() => directory.lookup(id()), undefined, {
+  return createMemo(() => directory.lookup(id(), flow), undefined, {
     equals: sameChannelLookup,
   });
 }
@@ -120,16 +135,26 @@ export function useChannelLastViewed(
   const asks = untrack(
     () => lookup().status !== 'loaded' || !directory.viewsCurrent()
   );
+  // The view that is opening, for the ask's span.
+  const flow = useFlowTrace();
   onMount(() => {
     if (!asks) return;
+    let closed = false;
     const wait = setTimeout(() => settle(LAST_VIEW_UNKNOWN), LAST_VIEW_WAIT_MS);
-    onCleanup(() => clearTimeout(wait));
-    // The first settlement wins: an answer after the wait is ignored.
-    function settle(state: ChannelLastViewed) {
+    onCleanup(() => {
+      closed = true;
       clearTimeout(wait);
-      if (answer().status === 'pending') setAnswer(state);
+    });
+    // The first settlement wins: an answer after the wait is ignored.
+    function settle(state: ChannelLastViewed): LastViewOutcome {
+      clearTimeout(wait);
+      if (closed) return 'closed';
+      if (answer().status !== 'pending') return 'late';
+      setAnswer(state);
+      return 'used';
     }
-    fireAndForget(askLastView(channelId, settle), 'channel-viewed-at');
+    const ask = () => askLastView(channelId, settle);
+    fireAndForget(flow ? flow.run(ask) : ask(), 'channel-viewed-at');
   });
   return createMemo(
     (previous): ChannelLastViewed => {

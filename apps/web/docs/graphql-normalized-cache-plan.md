@@ -1491,6 +1491,22 @@ record's on no answer within five seconds); a tab that does not run the
 backfill stays not current until a pass starts after it loaded. A channel
 mention in rendered Markdown waits up to five seconds for a pending lookup.
 
+A by-id batch is a `channel_directory.by_id` span in the trace of the view
+whose lookup asked for its first id (`useChannelLookup` passes
+`useFlowTrace()`), so a channel opened on a cold cache shows its read under
+`view.*`. It records `requested`, `returned`, `unreadable`, `timed_out`,
+`retried` (ids read before) and `queued_ms`: from the oldest id's request or
+retry to the read, the batching wait plus the wait for a free read slot. A
+retry is read in a trace of its own. `channel_directory.read_keys` records
+`keys_outcome` (`read`, `unchanged`, `stale`, `scope_changed`) and
+`channel_directory.fallback` its `fallback_outcome` (`loaded`, `failed`). The
+reads under these spans, under `channel_directory.reconcile` (each by-id batch
+of a pass) and under `channel_directory.own_writes`, are sent inside the span,
+including those that start after an await. `useChannelLastViewed`'s ask is a
+`channel.last_view` span in the opening view's trace, whose
+`channel.last_view.outcome` says whether the open used the answer (`used`),
+had already stopped waiting (`late`) or had closed (`closed`).
+
 ## Authoritative Mail membership repair
 
 The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages

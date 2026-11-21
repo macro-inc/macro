@@ -1,7 +1,7 @@
 import { sleep } from '@core/util/sleep';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   type GraphqlChannelExpr,
   SoupChannelDirectoryBackfillDocument,
@@ -114,19 +114,23 @@ export function returnedChannelIds(
 }
 
 /** Which of `ids` the server no longer returns to the viewer. Undefined when
- * a page is not complete evidence. */
+ * a page is not complete evidence. Each read is sent in `trace`: a batch
+ * after the first starts past an await. */
 async function unreadableChannels(
   lane: GraphqlSoupInitialInput,
   ids: readonly string[],
   fetch: FetchPage,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  trace: TraceContext
 ): Promise<string[] | undefined> {
   // No channel has an id the server cannot parse, and naming one in a read
   // would fail it.
   const gone = ids.filter((id) => !isChannelId(id));
   for (const batch of chunks(ids.filter(isChannelId), BY_ID_BATCH)) {
     signal?.throwIfAborted();
-    const page = await fetch(readableChannelsInput(lane, batch), { signal });
+    const page = await trace.run(() =>
+      fetch(readableChannelsInput(lane, batch), { signal })
+    );
     const returned = returnedChannelIds(batch, page);
     if (!returned) return undefined;
     gone.push(...batch.filter((id) => !returned.has(id)));
@@ -226,7 +230,10 @@ async function removeUnreadableChannels(
       // Taken before the evidence, so a removal it proves is refused once the
       // session it was read in has ended.
       const session = input.session();
-      const before = await cachedHashes(input.host, pending, input.signal);
+      // Each round starts after an await, outside the span.
+      const before = await span.run(() =>
+        cachedHashes(input.host, pending, input.signal)
+      );
       // A channel no longer cached needs no read.
       const deciding = pending.filter((id) => before.has(id));
       const rereading = deleted;
@@ -235,7 +242,8 @@ async function removeUnreadableChannels(
         input.lane,
         [...deciding, ...rereading],
         input.fetch,
-        input.signal
+        input.signal,
+        span
       );
       if (!gone) {
         if (deciding.length > 0) return finish('incomplete');
@@ -251,14 +259,19 @@ async function removeUnreadableChannels(
         continue;
       }
       // Delete only for the viewer and storage the evidence was read for.
-      if (!(await stillInScope(input))) return finish('scope_changed');
-      const after = await cachedHashes(input.host, decided, input.signal);
+      if (!(await span.run(() => stillInScope(input))))
+        return finish('scope_changed');
+      const after = await span.run(() =>
+        cachedHashes(input.host, decided, input.signal)
+      );
       const stale = decided.filter((id) => after.get(id) === before.get(id));
       for (const batch of chunks(stale, DELETE_BATCH)) {
         input.signal?.throwIfAborted();
-        await input.host.deleteRecords(
-          batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
-          session
+        await span.run(() =>
+          input.host.deleteRecords(
+            batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
+            session
+          )
         );
       }
       removed += stale.length;

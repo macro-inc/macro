@@ -3,6 +3,7 @@
  */
 
 import { dmWorkAccount } from '@app/features/agent-work/core/work-visibility';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type ChannelDirectory,
   channelDirectoryState,
@@ -227,6 +228,71 @@ describe('useChannelLastViewed', () => {
       expect(lastViewed()).toEqual({ status: 'unknown' });
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('records on its span whether the open used the answer, had stopped waiting, or had closed', async () => {
+    const spans: { name: string; attrs: Record<string, unknown> }[] = [];
+    const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
+      name: string,
+      operation: (span: unknown) => Promise<unknown>
+    ) => {
+      const attrs: Record<string, unknown> = {};
+      spans.push({ name, attrs });
+      return operation({
+        setAttr: (key: string, value: unknown) => {
+          attrs[key] = value;
+        },
+        error: () => {
+          attrs.error = true;
+        },
+      });
+    }) as never);
+    vi.useFakeTimers();
+    try {
+      const filling = fillingDirectory();
+      filling.fill([]);
+      const outcome = () => spans.at(-1)?.attrs['channel.last_view.outcome'];
+
+      serverViews.read.mockReturnValue(okAsync(SERVER_VIEWED));
+      setup(channelUuid('used'), filling);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(spans.at(-1)).toEqual({
+        name: 'channel.last_view',
+        attrs: {
+          'channel.id': channelUuid('used'),
+          'channel.last_view.outcome': 'used',
+        },
+      });
+      cleanup();
+
+      let answer = heldAnswer();
+      setup(channelUuid('late'), filling);
+      await vi.advanceTimersByTimeAsync(LAST_VIEW_WAIT_MS);
+      answer(SERVER_VIEWED);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(outcome()).toBe('late');
+      cleanup();
+
+      answer = heldAnswer();
+      setup(channelUuid('closed'), filling);
+      await vi.advanceTimersByTimeAsync(0);
+      cleanup();
+      answer(SERVER_VIEWED);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(outcome()).toBe('closed');
+
+      serverViews.read.mockReturnValue(errAsync(new Error('lookup failed')));
+      setup(channelUuid('failed'), filling);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(spans.at(-1)?.attrs).toMatchObject({
+        error: true,
+        'channel.last_view.outcome': 'used',
+      });
+      expect(spans).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+      span.mockRestore();
     }
   });
 
