@@ -107,6 +107,13 @@ pub trait OwnedEntityCleanup: Clone + Send + Sync + 'static {
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Release every agent teammate's email inbox the team has, so no
+    /// mailbox keeps receiving mail for a deleted team. Safe to repeat.
+    fn release_agent_inboxes(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The cleanup of a team service that was never given one.
@@ -144,6 +151,10 @@ impl OwnedEntityCleanup for UnwiredOwnedEntityCleanup {
     }
 
     async fn release_computers(&self, _team_id: Uuid) -> Result<(), Self::Err> {
+        Err(OwnedEntityCleanupUnwired)
+    }
+
+    async fn release_agent_inboxes(&self, _team_id: Uuid) -> Result<(), Self::Err> {
         Err(OwnedEntityCleanupUnwired)
     }
 }
@@ -242,6 +253,13 @@ pub enum OwnedEntityCleanupError {
     /// The team's computers could not be released.
     #[error("unable to release the team's computers")]
     ReleaseComputers {
+        /// The port's error.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    /// The team's agent teammates' inboxes could not be released.
+    #[error("unable to release the team's agent inboxes")]
+    ReleaseAgentInboxes {
         /// The port's error.
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,

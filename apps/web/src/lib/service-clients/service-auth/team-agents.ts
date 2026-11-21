@@ -5,6 +5,7 @@ import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { ok } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type {
+  AgentInbox,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
@@ -16,6 +17,9 @@ import {
 } from './purchase-refusal';
 
 export type {
+  AgentInbox,
+  AgentInboxFailure,
+  AgentInboxState,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
@@ -86,6 +90,23 @@ async function setVoiceError(
 const voiceUrl = (agentUserId: string) =>
   `${base}/${encodeURIComponent(agentUserId)}/voice`;
 
+const inboxUrl = (agentUserId: string) =>
+  `${base}/${encodeURIComponent(agentUserId)}/inbox`;
+
+export type AddAgentInboxErrorCode = 'AGENTS_NOT_ENABLED' | 'INBOX_UNAVAILABLE';
+
+async function addInboxError(
+  response: Response
+): Promise<ResultError<BaseFetchErrorCode | AddAgentInboxErrorCode>> {
+  const code = match(response.status)
+    .returnType<AddAgentInboxErrorCode | undefined>()
+    .with(403, () => 'AGENTS_NOT_ENABLED')
+    .with(503, () => 'INBOX_UNAVAILABLE')
+    .otherwise(() => undefined);
+  if (!code) return statusError(response.status);
+  return { code, message: await serverMessage(response) };
+}
+
 /** The caller's current team's agent teammates. Writes need team admin. */
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
@@ -119,5 +140,14 @@ export const teamAgentsClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(voice),
       errorResponseHandler: setVoiceError,
+    }),
+  /**
+   * Gives the agent its own email inbox, or retries the one it has; one inbox
+   * per agent however often it is called.
+   */
+  addInbox: (agentUserId: string) =>
+    fetchWithToken<AgentInbox, AddAgentInboxErrorCode>(inboxUrl(agentUserId), {
+      method: 'PUT',
+      errorResponseHandler: addInboxError,
     }),
 };

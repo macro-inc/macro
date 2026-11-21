@@ -1,9 +1,13 @@
+mod inbox;
+
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 
-use entity_access::domain::models::EntityType;
+use entity_access::domain::models::{
+    Entity, EntityAccessAuth, EntityPermission, EntityType, TeamRole,
+};
 use feature_flags::{FlagSnapshot, FlagValue};
 use rootcause::Report;
 
@@ -22,7 +26,20 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 }
 
 fn receipt<Permission: RequiredPermission>() -> EntityAccessReceipt<Permission> {
-    EntityAccessReceipt::dangerously_assert_authenticated_user(user(ADMIN), TEAM, EntityType::Team)
+    team_receipt(TeamRole::Owner)
+}
+
+/// A receipt for the team's admin holding `role`.
+fn team_receipt<Permission: RequiredPermission>(role: TeamRole) -> EntityAccessReceipt<Permission> {
+    EntityAccessReceipt::try_new(
+        EntityAccessAuth::Authenticated(user(ADMIN)),
+        Entity {
+            entity_id: TEAM.to_owned(),
+            entity_type: EntityType::Team,
+        },
+        EntityPermission::TeamRole { role },
+    )
+    .unwrap()
 }
 
 fn request() -> CreateTeamAgent {
@@ -34,6 +51,7 @@ fn request() -> CreateTeamAgent {
         size: ComputerSize::Standard,
         avatar_url: None,
         voice: None,
+        inbox: false,
     }
 }
 
@@ -401,21 +419,30 @@ impl agent_credentials::AgentCreators for FakeRepository {
 /// The rollout for people, which a test can turn off after an invite. Like
 /// PostHog's targeting, it never matches an agent's own account.
 #[derive(Clone)]
-struct Flags(Arc<AtomicBool>);
+struct Flags(Arc<AtomicBool>, Arc<AtomicBool>);
 
 impl Flags {
     fn set(&self, on: bool) {
         self.0.store(on, Ordering::SeqCst);
+    }
+
+    /// Turn only `enable-agent-inboxes` on or off.
+    fn set_inboxes(&self, on: bool) {
+        self.1.store(on, Ordering::SeqCst);
     }
 }
 
 impl FeatureFlags for Flags {
     async fn load(&self, user: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
         let agent = user.as_ref().ends_with(AGENT_EMAIL_DOMAIN);
-        Ok(FlagSnapshot::new([(
-            AGENT_TEAMMATES_FLAG.to_owned(),
-            FlagValue::Boolean(!agent && self.0.load(Ordering::SeqCst)),
-        )]))
+        let on = !agent && self.0.load(Ordering::SeqCst);
+        Ok(FlagSnapshot::new([
+            (AGENT_TEAMMATES_FLAG.to_owned(), FlagValue::Boolean(on)),
+            (
+                AGENT_INBOXES_FLAG.to_owned(),
+                FlagValue::Boolean(on && self.1.load(Ordering::SeqCst)),
+            ),
+        ]))
     }
 }
 
@@ -447,7 +474,10 @@ fn service(flag: bool, computers: FakeComputers) -> (Service, Journal) {
 }
 
 fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal, Flags) {
-    let flags = Flags(Arc::new(AtomicBool::new(flag)));
+    let flags = Flags(
+        Arc::new(AtomicBool::new(flag)),
+        Arc::new(AtomicBool::new(true)),
+    );
     let journal = computers.journal.clone();
     let repository = FakeRepository {
         journal: journal.clone(),

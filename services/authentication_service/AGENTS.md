@@ -99,6 +99,9 @@ access, webhook reconciliation and billing workers remain independent of attachm
 - Team deletion releases the team's computers first through
   `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
   `hosted_runtimes`' `TeamComputerRelease` (needs only the repository).
+  Then `release_agent_inboxes` releases its agent teammates' inboxes through
+  `team_agents`' `InboxService` (`TeamAgentInboxes`); the same service runs
+  the agent inbox sweep on its own `TaskTracker` (`inbox_sweep`).
 - `COMPUTER_RETENTION_DAYS` and `COMPUTER_PAST_DUE_GRACE_DAYS` default to 14
   and 7 (`Config::computer_billing_policy`, zero refused); agent_harness_service
   reads the same keys with the same defaults.

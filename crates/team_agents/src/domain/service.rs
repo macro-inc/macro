@@ -1,6 +1,8 @@
 //! The agent teammates service.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+
+use futures::future::join_all;
 
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, RequiredPermission,
@@ -14,6 +16,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use super::inbox::{
+    AGENT_INBOXES_FLAG, AgentInbox, AgentInboxFailure, AgentInboxState, AgentInboxes, NoInboxes,
+};
 use super::models::{
     AGENT_EMAIL_DOMAIN, AgentName, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent,
     CreatedAccount, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, PurchaseKey, TeamAgent,
@@ -64,6 +69,7 @@ pub struct TeamAgentServiceImpl<
     Creators,
     Flags,
     Notices,
+    Inboxes = NoInboxes,
 > {
     repository: Repository,
     membership: Membership,
@@ -76,6 +82,8 @@ pub struct TeamAgentServiceImpl<
     /// Tells an agent's inviter when the agent first comes online.
     notices: Notices,
     environment: Box<dyn EnrollmentEnvironment>,
+    /// The agents' email inboxes.
+    inboxes: Inboxes,
 }
 
 impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
@@ -107,6 +115,36 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
             flags,
             notices,
             environment: Box::new(environment),
+            inboxes: NoInboxes,
+        }
+    }
+
+    /// Give agents email inboxes through `inboxes`.
+    pub fn with_inboxes<Inboxes: AgentInboxes>(
+        self,
+        inboxes: Inboxes,
+    ) -> TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+        Inboxes,
+    > {
+        TeamAgentServiceImpl {
+            repository: self.repository,
+            membership: self.membership,
+            api_keys: self.api_keys,
+            repos: self.repos,
+            computers: self.computers,
+            creators: self.creators,
+            flags: self.flags,
+            notices: self.notices,
+            environment: self.environment,
+            inboxes,
         }
     }
 }
@@ -158,6 +196,7 @@ fn validate(request: CreateTeamAgent) -> Result<TeamAgentInvite, TeamAgentError>
         size: request.size,
         avatar_url: request.avatar_url,
         voice: request.voice,
+        inbox: request.inbox,
     })
 }
 
@@ -225,9 +264,20 @@ struct Undo {
     repo: bool,
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
-    TeamAgentServiceImpl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Inboxes>
+    TeamAgentServiceImpl<
+        Repository,
+        Membership,
+        ApiKeys,
+        Repos,
+        Computer,
+        Creators,
+        Flags,
+        Notices,
+        Inboxes,
+    >
 where
+    Inboxes: AgentInboxes,
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
@@ -239,6 +289,96 @@ where
 {
     async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
         ensure_enabled(self.flags.as_ref(), caller).await
+    }
+
+    /// The agent inboxes rollout for `caller`, on top of agent teammates.
+    /// Fails closed like [`ensure_enabled`].
+    async fn ensure_inboxes_enabled(
+        &self,
+        caller: &MacroUserIdStr<'_>,
+    ) -> Result<(), TeamAgentError> {
+        let Some(flags) = self.flags.as_ref() else {
+            return Err(TeamAgentError::NotEnabled);
+        };
+        let enabled = flags
+            .load(caller)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not load feature flags; agent inboxes stay off");
+            })
+            .is_ok_and(|snapshot| {
+                snapshot.is_enabled(AGENT_TEAMMATES_FLAG) && snapshot.is_enabled(AGENT_INBOXES_FLAG)
+            });
+        if enabled {
+            Ok(())
+        } else {
+            Err(TeamAgentError::NotEnabled)
+        }
+    }
+
+    /// The team's agents' inboxes, for an admin in the inbox rollout; none
+    /// otherwise. Inboxes still being made are asked about again, all at
+    /// once: each ask is bounded by the email_service adapter, so a slow
+    /// email_service delays the list by one ask, not one per agent. A failed
+    /// read or ask shows what is stored.
+    async fn team_inboxes(
+        &self,
+        receipt: &EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<HashMap<String, AgentInbox>, TeamAgentError> {
+        // Addresses are for those who manage agents; members see none.
+        if receipt
+            .clone()
+            .try_into_requirement::<AdminTeamRole>()
+            .is_err()
+        {
+            return Ok(HashMap::new());
+        }
+        if let Err(error) = self.ensure_inboxes_enabled(&acting_user(receipt)?).await {
+            tracing::debug!(error = ?error, "agent inboxes are off for this admin; listing without them");
+            return Ok(HashMap::new());
+        }
+        let inboxes = self
+            .inboxes
+            .for_team(team_id(receipt)?)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read the agents' inboxes");
+            })
+            .unwrap_or_default();
+        let refreshed = join_all(inboxes.into_iter().map(|(agent, inbox)| async move {
+            let unsettled = inbox.state == AgentInboxState::Provisioning
+                || inbox.failure == Some(AgentInboxFailure::Unavailable);
+            if !unsettled {
+                return (agent, inbox);
+            }
+            let Ok(agent_id) = MacroUserIdStr::parse_from_str(&agent) else {
+                return (agent, inbox);
+            };
+            let inbox = self
+                .inboxes
+                .refresh(&agent_id)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "could not refresh an agent's inbox");
+                })
+                .unwrap_or(inbox);
+            (agent, inbox)
+        }))
+        .await;
+        Ok(refreshed.into_iter().collect())
+    }
+
+    /// Create or retry the agent's inbox, named after it.
+    async fn provision_inbox(
+        &self,
+        record_team: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        name: &str,
+    ) -> Result<AgentInbox, TeamAgentError> {
+        Ok(self
+            .inboxes
+            .provision(record_team, agent, name, &slug(name))
+            .await?)
     }
 
     /// The receipt team's agent, or `NotFound`.
@@ -311,6 +451,8 @@ where
             return Ok(());
         };
         self.api_keys.revoke_all(&record.user_id).await?;
+        // Nothing to keep from an agent that never started.
+        self.inboxes.release(team_id, &record.user_id).await?;
         self.repos.delete(&record.user_id).await?;
         let removed_by = record
             .created_by
@@ -432,11 +574,13 @@ where
             computer_id,
             status,
             created_at: record.created_at,
+            inbox: None,
         })
     }
 }
 
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices> TeamAgentService
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Inboxes>
+    TeamAgentService
     for TeamAgentServiceImpl<
         Repository,
         Membership,
@@ -446,8 +590,10 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         Creators,
         Flags,
         Notices,
+        Inboxes,
     >
 where
+    Inboxes: AgentInboxes,
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
@@ -482,7 +628,21 @@ where
             .await
         {
             Ok(Prepared::New(user_id, seed)) => (user_id, seed),
-            Ok(Prepared::Repeat(record)) => return self.repeated_invite(record).await,
+            Ok(Prepared::Repeat(record)) => {
+                let mut agent = self.repeated_invite(record).await?;
+                // The first request may have died before it made the inbox;
+                // provisioning is idempotent, so the repeat asks again.
+                if request.inbox && self.ensure_inboxes_enabled(&created_by).await.is_ok() {
+                    agent.inbox = self
+                        .provision_inbox(agent.team_id, &agent.user_id, &agent.name)
+                        .await
+                        .inspect_err(|error| {
+                            tracing::warn!(error = ?error, "could not give the invited agent an inbox");
+                        })
+                        .ok();
+                }
+                return Ok(agent);
+            }
             Err(error) => {
                 self.undo(receipt, undo).await;
                 return Err(error);
@@ -508,6 +668,20 @@ where
         };
         tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
 
+        // Best effort: the agent and its computer exist and are paid for, so
+        // an inbox that can't be made leaves a failed inbox to retry from
+        // its card, never a failed invite.
+        let inbox = if request.inbox && self.ensure_inboxes_enabled(&created_by).await.is_ok() {
+            self.provision_inbox(team_id, &user_id, &seed.name)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "could not give the invited agent an inbox");
+                })
+                .ok()
+        } else {
+            None
+        };
+
         Ok(TeamAgent {
             user_id,
             team_id,
@@ -518,6 +692,7 @@ where
             computer_id: Some(computer_id),
             status: TeamAgentStatus::Provisioning,
             created_at: chrono::Utc::now(),
+            inbox,
         })
     }
 
@@ -532,9 +707,13 @@ where
             .list_for_team(team_id(&receipt)?)
             .await
             .map_err(TeamAgentError::internal)?;
+        let mut inboxes = self.team_inboxes(&receipt).await?;
         let mut agents = Vec::with_capacity(records.len());
         for record in records {
-            agents.push(self.team_agent(record).await?);
+            let inbox = inboxes.remove(record.user_id.as_ref());
+            let mut agent = self.team_agent(record).await?;
+            agent.inbox = inbox;
+            agents.push(agent);
         }
         Ok(TeamAgents { agents })
     }
@@ -565,6 +744,9 @@ where
             self.computers.release(team_id, computer_id).await?;
         }
         self.api_keys.revoke_all(&record.user_id).await?;
+        // Its inbox stops syncing and sending; its mail is kept until
+        // email_service releases it.
+        self.inboxes.pause(team_id, &record.user_id).await?;
         // Issuing a fresh token voids the one a lost guest might hold; the
         // repository itself stays.
         self.repos
@@ -621,6 +803,39 @@ where
             .set_voice(&record.user_id, record.team_id, &voice.model)
             .await?;
         Ok(voice)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.inbox",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        err
+    )]
+    async fn inbox(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<AgentInbox, TeamAgentError> {
+        self.ensure_inboxes_enabled(&acting_user(&receipt)?).await?;
+        let record = self.team_record(&receipt, agent).await?;
+        Ok(self.inboxes.refresh(&record.user_id).await?)
+    }
+
+    #[tracing::instrument(
+        name = "team_agents.add_inbox",
+        skip_all,
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
+        err
+    )]
+    async fn add_inbox(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<AgentInbox, TeamAgentError> {
+        self.ensure_inboxes_enabled(&acting_user(&receipt)?).await?;
+        let record = self.team_record(&receipt, agent).await?;
+        self.provision_inbox(record.team_id, &record.user_id, &record.persona_seed.name)
+            .await
     }
 
     #[tracing::instrument(
@@ -788,7 +1003,7 @@ where
 
 /// hosted_runtimes takes back the agent of a computer released after a failed
 /// first start through here.
-impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
+impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices, Inboxes>
     hosted_runtimes::domain::ports::AgentInvites
     for TeamAgentServiceImpl<
         Repository,
@@ -799,8 +1014,10 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         Creators,
         Flags,
         Notices,
+        Inboxes,
     >
 where
+    Inboxes: AgentInboxes,
     Repository: TeamAgentRepository,
     Membership: TeamMembership,
     ApiKeys: AgentApiKeys,
