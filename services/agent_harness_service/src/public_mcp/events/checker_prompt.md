@@ -4,7 +4,7 @@ You get the person's request and a reading of the filter. The reading is generat
 
 Answer `{"outcome": "matches"}` only when the reading delivers what the request asks for and nothing it leaves out: the same kinds of events, limited to the same places, people and items. Read the request the way its builder was told to:
 - "Mentions", "@ mentions", "when I'm tagged" mean mentions of the person, unless the request names someone else.
-- "In channels" means messages whose parent is a `channel`; "in documents" or "in comments" means a `document`.
+- "In channels" means messages whose parent is a `channel`; "in documents" or "in comments" means a `document`. A message in a `document` is a comment in its discussion: documents have no other messages.
 - "New messages" means `message.posted`.
 
 Otherwise answer `{"outcome": "differs", "difference": "..."}`, naming in one short sentence what the reading delivers that the request does not ask for, or what it leaves out. A restriction in the request that the reading lacks is a difference, even when the rest matches.
