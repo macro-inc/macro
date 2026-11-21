@@ -1896,6 +1896,47 @@ fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) ->
     )
 }
 
+/// [`bound_access_semi_join`] for a caller with many sources but few grants
+/// ([`DocumentGrants::CountedManySources`]): one index probe per source
+/// through `idx_entity_access_source_type_entity_plain`, then one item lookup
+/// per grant. `entity_access.source_id` statistics cost every source outside
+/// the most-common values at the column average, so 16k private channels
+/// holding 30k grants were planned as millions of rows, with sequential scans
+/// of `entity_access` and the item table. The `OFFSET 0` keeps the probe from
+/// being flattened back into a join planned from those statistics.
+fn per_source_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+    format!(
+        r#"{id_sql} IN (
+                    SELECT grants.entity_id::text
+                    FROM unnest(${source_ids}::text[]) AS caller(source_id)
+                    CROSS JOIN LATERAL (
+                        SELECT ea.entity_id
+                        FROM entity_access ea
+                        WHERE ea.source_id = caller.source_id
+                            AND ea.entity_type = '{entity_type}'
+                        OFFSET 0
+                    ) grants
+                )"#
+    )
+}
+
+/// The chat or project arm's access gate.
+fn chat_or_project_access_semi_join(
+    id_sql: &str,
+    entity_type: &str,
+    source_ids: usize,
+    grants: DocumentGrants,
+) -> String {
+    match grants {
+        DocumentGrants::CountedManySources(_) => {
+            per_source_access_semi_join(id_sql, entity_type, source_ids)
+        }
+        DocumentGrants::Estimated | DocumentGrants::Counted(_) => {
+            bound_access_semi_join(id_sql, entity_type, source_ids)
+        }
+    }
+}
+
 /// The document arm's access gate for a caller whose grants were counted
 /// ([`DocumentGrants::Counted`]): the semi-join over their distinct granted
 /// ids, with the count as its `LIMIT`. Postgres estimates every source it has
@@ -1935,8 +1976,17 @@ fn counted_document_access_semi_join(source_ids: usize, grants: u32) -> String {
 /// same count.
 const COUNTED_DOCUMENT_GRANTS: u32 = 50_000;
 
+/// Counted callers with more sources than this also probe each source for
+/// their chat and project grants ([`per_source_access_semi_join`]). Measured
+/// on synthetic data shaped like production, a caller in 16k private channels
+/// listed in 0.37-0.39 s instead of 0.54-0.59 s; a caller in 300 channels was
+/// slightly slower probing (9 ms against 7 ms). Production has no caller
+/// between 1k and 5k sources; 15 hold more.
+const MANY_SOURCES: usize = 1_000;
+
 /// How many document grants the caller's sources hold, as far as the
-/// document arm's access gate needs to know.
+/// access gates need to know: the document arm's, and for callers with many
+/// sources the chat and project arms' too.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::outbound::pg_soup_repo) enum DocumentGrants {
     /// Not counted: the document arm does not gate on the count
@@ -1946,6 +1996,10 @@ pub(in crate::outbound::pg_soup_repo) enum DocumentGrants {
     /// The grant rows the caller's sources hold, counted in the query's
     /// snapshot.
     Counted(u32),
+    /// [`Self::Counted`] for a caller with more than [`MANY_SOURCES`]
+    /// sources: the chat and project arms probe each source too
+    /// ([`per_source_access_semi_join`]).
+    CountedManySources(u32),
 }
 
 impl DocumentGrants {
@@ -1961,6 +2015,7 @@ impl DocumentGrants {
         }
         let span = tracing::info_span!(
             "soup.sql.count_document_grants",
+            sources = source_ids.len(),
             grants = tracing::field::Empty
         );
         let counted = sqlx::query_scalar!(
@@ -1985,7 +2040,13 @@ impl DocumentGrants {
         Ok(u32::try_from(counted)
             .ok()
             .filter(|&grants| grants <= COUNTED_DOCUMENT_GRANTS)
-            .map_or(Self::Estimated, Self::Counted))
+            .map_or(Self::Estimated, |grants| {
+                if source_ids.len() > MANY_SOURCES {
+                    Self::CountedManySources(grants)
+                } else {
+                    Self::Counted(grants)
+                }
+            }))
     }
 }
 
@@ -2088,7 +2149,9 @@ impl DocumentArmAccess {
     fn new(document_filter: Option<&Expr<DocumentLiteral>>, grants: DocumentGrants) -> Self {
         match grants {
             _ if names_few_documents(document_filter) => Self::AfterFilters,
-            DocumentGrants::Counted(grants) => Self::Counted(grants),
+            DocumentGrants::Counted(grants) | DocumentGrants::CountedManySources(grants) => {
+                Self::Counted(grants)
+            }
             DocumentGrants::Estimated => Self::Joined,
         }
     }
@@ -2183,21 +2246,21 @@ fn document_top_where_clause(
     )
 }
 
-fn chat_top_where_clause(source_ids: usize) -> String {
+fn chat_top_where_clause(source_ids: usize, grants: DocumentGrants) -> String {
     format!(
         r#"                WHERE c."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("c.id", "chat", source_ids)
+        chat_or_project_access_semi_join("c.id", "chat", source_ids, grants)
     )
 }
 
-fn project_top_where_clause(source_ids: usize) -> String {
+fn project_top_where_clause(source_ids: usize, grants: DocumentGrants) -> String {
     format!(
         r#"                WHERE p."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("p.id", "project", source_ids)
+        chat_or_project_access_semi_join("p.id", "project", source_ids, grants)
     )
 }
 
@@ -2499,7 +2562,7 @@ fn build_query_from<'a>(
         if optimized_notification_predicate.is_some() && chat_notification.is_some() {
             builder.push(build_notification_join("c", "chat"));
         }
-        builder.push(chat_top_where_clause(source_ids));
+        builder.push(chat_top_where_clause(source_ids, document_grants));
         builder.push(build_chat_filter(chat_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2514,7 +2577,7 @@ fn build_query_from<'a>(
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             builder.push(build_notification_join("p", "project"));
         }
-        builder.push(project_top_where_clause(source_ids));
+        builder.push(project_top_where_clause(source_ids, document_grants));
         builder.push(build_project_filter(project_filter));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3401,7 +3464,7 @@ fn build_grouped_query<'a>(
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_chat_top_clause(sort_method, name_sort));
-        builder.push(chat_top_where_clause(source_ids));
+        builder.push(chat_top_where_clause(source_ids, document_grants));
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -3412,7 +3475,7 @@ fn build_grouped_query<'a>(
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_project_top_clause(sort_method, name_sort));
-        builder.push(project_top_where_clause(source_ids));
+        builder.push(project_top_where_clause(source_ids, document_grants));
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
