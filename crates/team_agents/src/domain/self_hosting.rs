@@ -216,6 +216,9 @@ pub enum InstallFailure {
     /// The engine couldn't confine the teammate's network, so it wasn't
     /// started.
     NetworkIsolationUnavailable,
+    /// The machine has no route to the internet, so the agent couldn't
+    /// reach anything it is allowed to; it wasn't started.
+    EgressBlocked,
 }
 
 impl From<TeammateRunFailure> for InstallFailure {
@@ -229,6 +232,7 @@ impl From<TeammateRunFailure> for InstallFailure {
             TeammateRunFailure::CrashLoop => Self::CrashLoop,
             TeammateRunFailure::HostUnsupported => Self::HostUnsupported,
             TeammateRunFailure::NetworkIsolationUnavailable => Self::NetworkIsolationUnavailable,
+            TeammateRunFailure::EgressBlocked => Self::EgressBlocked,
         }
     }
 }
@@ -290,6 +294,20 @@ pub struct TeammateInstallRecord {
     /// The runtime image id the latest delivery carried; `None` before the
     /// first.
     pub image_id: Option<String>,
+    /// Since when the agent is parked: its machine may no longer host it, so
+    /// it is stopped there and runs nowhere until an admin moves it to a
+    /// machine of theirs. It keeps its account, seat and repository.
+    pub parked_at: Option<DateTime<Utc>>,
+    /// Its credentials must still be revoked; nothing is delivered until
+    /// they are.
+    pub revoke_pending: bool,
+}
+
+impl TeammateInstallRecord {
+    /// Whether the agent is parked (see [`Self::parked_at`]).
+    pub fn parked(&self) -> bool {
+        self.parked_at.is_some()
+    }
 }
 
 /// An install to create, generation 1.

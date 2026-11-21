@@ -135,6 +135,7 @@ where
         let status = match install.checkpoint {
             Some((Checkpoint::Moving { .. }, _)) => TeamAgentStatus::Provisioning,
             Some((Checkpoint::Removing, _)) => TeamAgentStatus::Paused,
+            None if install.parked() => TeamAgentStatus::Paused,
             None => {
                 TeamAgentStatus::of_install(install.run_state, record.first_online_at.is_some())
             }
@@ -154,9 +155,9 @@ where
         }
     }
 
-    /// After a checkpoint began: finish at once when the old machine is
-    /// offline (it can't push anything more) or the wait already timed out;
-    /// otherwise ask the replica holding its socket to stop it, which
+    /// After a checkpoint began: finish at once when the agent is parked
+    /// (it runs nowhere), the old machine is offline (it can't push anything
+    /// more) or the wait already timed out; otherwise ask the replica holding its socket to stop it, which
     /// finishes the checkpoint when the machine reports it stopped.
     async fn checkpoint_began(
         &self,
@@ -171,34 +172,46 @@ where
             chrono::Utc::now().signed_duration_since(since)
                 >= chrono::Duration::from_std(CHECKPOINT_TIMEOUT).unwrap_or(chrono::Duration::MAX)
         });
-        if !connected || timed_out {
+        if install.parked() || !connected || timed_out {
             return self.finish_installed_checkpoint(install.install_id).await;
         }
         self.runtimes.installs_changed(install.harness_id).await;
         Ok(())
     }
 
-    /// Take an agent off a machine that may no longer host it: void its
-    /// credentials now, then remove it once the machine stops it.
+    /// Take an agent off a machine that may no longer host it: park it
+    /// (stopped there, its account, seat and repository kept, for an admin
+    /// to move to a machine of theirs), then void its credentials. Parking
+    /// first waits for a delivery in flight and stops any later one, so the
+    /// revoke voids every key the machine was given.
     pub(super) async fn offboard(
         &self,
         install: &TeammateInstallRecord,
     ) -> Result<(), TeamAgentError> {
-        self.revoke_credentials(&install.agent).await?;
-        let Some(removing) = self
-            .installs
-            .begin_checkpoint(&install.agent, Checkpoint::Removing)
-            .await?
-        else {
+        let Some(parked) = self.installs.park(&install.agent).await? else {
             return Ok(());
         };
-        tracing::info!(install_id = %install.install_id, "taking an agent teammate off a machine that may no longer host it");
-        self.checkpoint_began(&removing).await
+        tracing::info!(install_id = %parked.install_id, "parking an agent teammate off a machine that may no longer host it");
+        // The machine stops it as no longer its own.
+        self.runtimes.installs_changed(parked.harness_id).await;
+        self.finish_revoke(&parked).await
     }
 
-    /// Offboard every install on a machine that may no longer host it, a
-    /// page at a time; one failure doesn't stop the rest.
-    pub(super) async fn offboard_unentitled(&self) -> Result<usize, TeamAgentError> {
+    /// Revoke an install's pending credentials, then let deliveries resume
+    /// (nudging its machine, unless it is parked).
+    async fn finish_revoke(&self, install: &TeammateInstallRecord) -> Result<(), TeamAgentError> {
+        self.revoke_credentials(&install.agent).await?;
+        self.installs.revoked(&install.agent).await?;
+        if !install.parked() {
+            self.runtimes.installs_changed(install.harness_id).await;
+        }
+        Ok(())
+    }
+
+    /// Offboard every install on a machine that may no longer host it, and
+    /// retry every revoke that failed, a page at a time; one failure doesn't
+    /// stop the rest. How many were offboarded and revoked.
+    pub(super) async fn offboard_unentitled(&self) -> Result<(usize, usize), TeamAgentError> {
         let installs = self.installs.unentitled_installs(OFFBOARD_PAGE).await?;
         let mut offboarded = 0;
         for install in &installs {
@@ -209,7 +222,17 @@ where
                 }
             }
         }
-        Ok(offboarded)
+        let pending = self.installs.revoke_pending(OFFBOARD_PAGE).await?;
+        let mut revoked = 0;
+        for install in &pending {
+            match self.finish_revoke(install).await {
+                Ok(()) => revoked += 1,
+                Err(error) => {
+                    tracing::error!(install_id = %install.install_id, error = ?error, "could not revoke an agent's credentials");
+                }
+            }
+        }
+        Ok((offboarded, revoked))
     }
 
     /// Start removing an agent on its owner's own machine.
@@ -245,12 +268,14 @@ where
         if matches!(current.checkpoint, Some((Checkpoint::Removing, _))) {
             return Err(TeamAgentError::NotFound);
         }
-        // Already there, and not leaving: nothing to do.
-        if current.harness_id == harness && current.checkpoint.is_none() {
+        // Already there, running, and not leaving: nothing to do.
+        if current.harness_id == harness && current.checkpoint.is_none() && !current.parked() {
             return Ok(Self::installed_agent(record, &current));
         }
         // Whoever runs the agent's machine could act as the agent, so only
-        // its inviter or that machine's owner may send it somewhere else.
+        // its inviter or that machine's owner may send it somewhere else. A
+        // parked agent runs nowhere and has no machine owner: any admin may
+        // host it.
         let invited_it = record.created_by.as_ref() == Some(&caller);
         let hosts_it = || async {
             Ok::<_, TeamAgentError>(
@@ -261,7 +286,7 @@ where
                     .any(|host| host.harness_id == current.harness_id),
             )
         };
-        if !invited_it && !hosts_it().await? {
+        if !current.parked() && !invited_it && !hosts_it().await? {
             return Err(TeamAgentError::Forbidden(
                 "only the agent's inviter or its machine's owner can move it",
             ));
@@ -299,21 +324,23 @@ where
                 // A new install id per machine: a move back never reuses a
                 // stale volume. The old machine's credentials die here, not
                 // at the new machine's first delivery, which may never come.
-                // Only the call that finished the move revokes, so a racing
-                // finisher can't revoke what the new machine was just given.
+                // The finished move marks them due for revoking, and nothing
+                // is delivered until they are, so a revoke never voids what
+                // the new machine is given; a failed one is retried by the
+                // offboarding sweep.
                 if let Some(moved) = self
                     .installs
                     .finish_move(install_id, Uuid::now_v7())
                     .await?
                 {
-                    self.revoke_credentials(&install.agent).await?;
                     tracing::info!(
                         previous_install_id = %install_id,
                         install_id = %moved.install_id,
                         generation = moved.generation,
+                        target = %to,
                         "an agent teammate moved to another machine"
                     );
-                    self.runtimes.installs_changed(to).await;
+                    self.finish_revoke(&moved).await?;
                 }
                 Ok(())
             }
@@ -324,19 +351,7 @@ where
     /// Void every credential the agent's machine holds: its API keys, and
     /// its repository token, by issuing a fresh one nobody receives.
     async fn revoke_credentials(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
-        let Some(record) = self
-            .repository
-            .get(agent)
-            .await
-            .map_err(TeamAgentError::internal)?
-        else {
-            return Ok(());
-        };
-        self.api_keys.revoke_all(&record.user_id).await?;
-        self.repos
-            .create(&record.user_id, record.team_id, &record.persona_seed)
-            .await?;
-        Ok(())
+        revoke_credentials(&self.repository, &self.api_keys, &self.repos, agent).await
     }
 
     /// Remove the agent as removing one on a Macro computer does, with its
@@ -418,15 +433,16 @@ where
             "agent_user_id",
             tracing::field::display(agent_credentials::telemetry_id(install.agent.as_ref())),
         );
-        if install.harness_id != harness || install.checkpoint.is_some() {
+        if install.harness_id != harness || install.checkpoint.is_some() || install.parked() {
             tracing::info!(
                 pending_checkpoint = install.checkpoint.is_some(),
+                parked = install.parked(),
                 "the install isn't to run on this machine now; nothing to issue"
             );
             return Ok(None);
         }
         // A machine whose owner left the team, lost admin or unpaired it gets
-        // nothing more, and the agent comes off it.
+        // nothing more, and the agent is parked off it.
         let entitled = self
             .installs
             .host_entitled(harness, install.team_id)
@@ -512,12 +528,37 @@ where
     }
 }
 
+/// Void every credential an agent's machine holds: its API keys, and its
+/// repository token, by issuing a fresh one nobody receives.
+pub(super) async fn revoke_credentials(
+    repository: &impl TeamAgentRepository,
+    api_keys: &impl AgentApiKeys,
+    repos: &impl AgentRepos,
+    agent: &MacroUserIdStr<'_>,
+) -> Result<(), TeamAgentError> {
+    let Some(record) = repository
+        .get(agent)
+        .await
+        .map_err(TeamAgentError::internal)?
+    else {
+        return Ok(());
+    };
+    api_keys.revoke_all(&record.user_id).await?;
+    repos
+        .create(&record.user_id, record.team_id, &record.persona_seed)
+        .await?;
+    Ok(())
+}
+
 /// What went wrong with `install`'s current generation, as the machine said.
 /// Nothing during a move or removal: what the old machine said no longer
 /// describes where the agent is going.
 fn install_problem(install: &TeammateInstallRecord) -> Option<InstallProblem> {
     if install.checkpoint.is_some() {
         return None;
+    }
+    if install.parked() {
+        return Some(InstallProblem::HostRemoved);
     }
     match (install.run_state, install.failure) {
         (InstallRunState::Failed, Some(reason)) => Some(InstallProblem::Failed { reason }),

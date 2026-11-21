@@ -345,6 +345,36 @@ pub trait TeammateInstalls: Send + Sync + 'static {
         &self,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Park the agent's install: no machine hosts it, nothing is delivered,
+    /// any move is cancelled, and its credentials are due for revoking
+    /// ([`TeammateInstallRecord::revoke_pending`]). Waits for a delivery in
+    /// flight to be released, so a revoke after it voids that key too.
+    /// `None` when it has no install or is being removed.
+    fn park(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// The agent's credentials were revoked: deliveries may resume.
+    fn revoked(&self, agent: &MacroUserIdStr<'_>)
+    -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// Up to `limit` installs whose credentials are still due for revoking.
+    fn revoke_pending(
+        &self,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Every install of `team_id`'s agents.
+    fn of_team(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
+    /// Delete the agent's install; a missing one is success.
+    fn delete(&self, agent: &MacroUserIdStr<'_>)
+    -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
 /// Telling the machines' service that a machine's installs changed, so the
@@ -468,9 +498,11 @@ pub trait TeamAgentService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// Take every agent off machines that may no longer host it: the
-    /// owner left the team or lost admin, or unpaired the machine. Each
-    /// loses its credentials at once and is removed once its machine stops
-    /// it (or the wait gives up). How many were taken off.
+    /// owner left the team or lost admin, or unpaired the machine. Each is
+    /// parked: it loses its credentials at once and its machine stops it,
+    /// and it keeps its account, seat and repository until an admin moves
+    /// it to a machine of theirs. Also retries every revoke that failed
+    /// before. How many were taken off.
     fn offboard_unentitled_hosts(
         &self,
     ) -> impl Future<Output = Result<usize, TeamAgentError>> + Send;

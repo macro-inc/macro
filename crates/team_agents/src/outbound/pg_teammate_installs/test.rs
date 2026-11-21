@@ -270,6 +270,7 @@ async fn a_move_waits_on_its_checkpoint_then_makes_a_new_install_on_the_target(p
     assert_eq!(moved.generation, 2);
     assert_eq!(moved.delivery, 0);
     assert_eq!(moved.checkpoint, None);
+    assert!(moved.revoke_pending);
     // Finishing again changes nothing.
     assert_eq!(
         installs
@@ -278,6 +279,12 @@ async fn a_move_waits_on_its_checkpoint_then_makes_a_new_install_on_the_target(p
             .unwrap(),
         None
     );
+    // The old machine's credentials are due for revoking: nothing is
+    // delivered until they are.
+    assert_eq!(deliver(&installs, new_id, desktop, (0, 0)).await, None);
+    assert_eq!(installs.revoke_pending(10).await.unwrap(), vec![moved]);
+    installs.revoked(&user(AGENT)).await.unwrap();
+    assert!(installs.revoke_pending(10).await.unwrap().is_empty());
     assert_eq!(
         deliver(&installs, new_id, desktop, (0, 0)).await,
         Some((2, 1))
@@ -777,5 +784,165 @@ async fn a_move_targets_hard_delete_is_refused_instead_of_dropping_the_install(p
         .await;
 
     assert!(deleted.is_err(), "{deleted:?}");
+    assert!(installs.by_id(INSTALL).await.unwrap().is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn parking_waits_for_a_delivery_in_flight_and_stops_every_later_one(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    let laptop = HarnessId::new_from_uuid(LAPTOP);
+    let in_flight = installs
+        .next_delivery(INSTALL, laptop, (0, 0), IMAGE)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let racing = installs.clone();
+    let park = tokio::spawn(async move { racing.park(&user(AGENT)).await });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    // Still minting: the park waits, so the revoke after it voids this key.
+    assert!(!park.is_finished());
+    in_flight.release().await.unwrap();
+    let parked = park.await.unwrap().unwrap().unwrap();
+    assert!(parked.parked());
+    assert!(parked.revoke_pending);
+    assert_eq!(parked.delivery, 1);
+    assert_eq!(deliver(&installs, INSTALL, laptop, (0, 0)).await, None);
+    // Revoked, still parked: still nothing, and the machine no longer
+    // counts it among its own, so it stops it.
+    installs.revoked(&user(AGENT)).await.unwrap();
+    assert_eq!(deliver(&installs, INSTALL, laptop, (0, 0)).await, None);
+    assert!(installs.installs_on(laptop).await.unwrap().is_empty());
+    // The agent keeps its seat.
+    let seats = sqlx::query_scalar!(
+        "SELECT COUNT(*) AS \"seats!\" FROM team_agents WHERE user_id = $1",
+        AGENT
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(seats, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn parking_cancels_a_move_and_leaves_a_removal_alone(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    let desktop = HarnessId::new_from_uuid(DESKTOP);
+    installs
+        .begin_checkpoint(&user(AGENT), Checkpoint::Moving { to: desktop })
+        .await
+        .unwrap();
+
+    let parked = installs.park(&user(AGENT)).await.unwrap().unwrap();
+
+    assert_eq!(parked.checkpoint, None);
+    assert_eq!(parked.harness_id, HarnessId::new_from_uuid(LAPTOP));
+    installs
+        .begin_checkpoint(&user(AGENT), Checkpoint::Removing)
+        .await
+        .unwrap();
+    assert_eq!(installs.park(&user(AGENT)).await.unwrap(), None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_move_of_a_parked_agent_hosts_it_again(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    installs.park(&user(AGENT)).await.unwrap();
+    installs.revoked(&user(AGENT)).await.unwrap();
+    let laptop = HarnessId::new_from_uuid(LAPTOP);
+    installs
+        .begin_checkpoint(&user(AGENT), Checkpoint::Moving { to: laptop })
+        .await
+        .unwrap();
+
+    let new_id = Uuid::from_u128(0x05);
+    let moved = installs.finish_move(INSTALL, new_id).await.unwrap().unwrap();
+
+    assert!(!moved.parked());
+    assert_eq!(moved.harness_id, laptop);
+    installs.revoked(&user(AGENT)).await.unwrap();
+    assert_eq!(installs.installs_on(laptop).await.unwrap().len(), 1);
+    assert_eq!(
+        deliver(&installs, new_id, laptop, (0, 0)).await,
+        Some((2, 1))
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn every_way_a_host_loses_its_right_lists_its_agent_until_it_is_parked(pool: PgPool) {
+    const OTHER_USER_ROW: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0013);
+    let theirs = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0d03);
+    fixture(&pool).await;
+    insert_user(&pool, OTHER_ADMIN, "other-admin@example.com", OTHER_USER_ROW).await;
+    insert_harness(&pool, theirs, "Theirs", OTHER_ADMIN).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, theirs))
+        .await
+        .unwrap();
+    let unentitled = || async { installs.unentitled_installs(10).await.unwrap().len() };
+    let reset = || async {
+        make_admin(&pool, OTHER_ADMIN, "admin").await;
+        sqlx::query!(
+            "UPDATE harnesses SET deleted_at = NULL WHERE id = $1",
+            theirs
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(unentitled().await, 0);
+    };
+
+    reset().await;
+    // Removed from the team.
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", OTHER_ADMIN)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(unentitled().await, 1);
+
+    reset().await;
+    // Demoted.
+    make_admin(&pool, OTHER_ADMIN, "member").await;
+    assert_eq!(unentitled().await, 1);
+
+    reset().await;
+    // Unpaired.
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        theirs
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(unentitled().await, 1);
+
+    reset().await;
+    // Their account deleted: the membership cascades, the harness stays.
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, OTHER_ADMIN)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(unentitled().await, 1);
+
+    // Parked, it is no longer listed, and keeps its seat.
+    installs.park(&user(AGENT)).await.unwrap().unwrap();
+    assert_eq!(unentitled().await, 0);
     assert!(installs.by_id(INSTALL).await.unwrap().is_some());
 }

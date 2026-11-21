@@ -53,6 +53,8 @@ struct InstallRow {
     move_to_harness_id: Option<Uuid>,
     checkpoint_started_at: Option<DateTime<Utc>>,
     delivered_image_id: Option<String>,
+    parked_at: Option<DateTime<Utc>>,
+    revoke_pending: bool,
 }
 
 fn generation(value: i64) -> Result<u64, TeamAgentError> {
@@ -110,6 +112,8 @@ impl TryFrom<InstallRow> for TeammateInstallRecord {
             },
             checkpoint,
             image_id: row.delivered_image_id,
+            parked_at: row.parked_at,
+            revoke_pending: row.revoke_pending,
         })
     }
 }
@@ -195,7 +199,7 @@ impl TeammateInstalls for PgTeammateInstalls {
             RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,
                       failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                      checkpoint_started_at, delivered_image_id
+                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             "#,
             install.agent.as_ref(),
             install.install_id,
@@ -229,7 +233,7 @@ impl TeammateInstalls for PgTeammateInstalls {
             SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
                    failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                   checkpoint_started_at, delivered_image_id
+                   checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             FROM team_agent_installs
             WHERE agent_user_id = $1
             "#,
@@ -254,7 +258,7 @@ impl TeammateInstalls for PgTeammateInstalls {
             SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
                    failure, delivery, applied_generation, applied_delivery, checkpoint,
                    move_to_harness_id,
-                   checkpoint_started_at, delivered_image_id
+                   checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             FROM team_agent_installs
             WHERE agent_user_id = ANY($1::TEXT[])
             "#,
@@ -279,7 +283,7 @@ impl TeammateInstalls for PgTeammateInstalls {
             SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
                    failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                   checkpoint_started_at, delivered_image_id
+                   checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             FROM team_agent_installs
             WHERE install_id = $1
             "#,
@@ -313,7 +317,7 @@ impl TeammateInstalls for PgTeammateInstalls {
             RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,
                       failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                      checkpoint_started_at, delivered_image_id
+                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             "#,
             agent.as_ref(),
             kind,
@@ -348,12 +352,14 @@ impl TeammateInstalls for PgTeammateInstalls {
                 checkpoint = NULL,
                 move_to_harness_id = NULL,
                 checkpoint_started_at = NULL,
+                parked_at = NULL,
+                revoke_pending = TRUE,
                 updated_at = now()
             WHERE install_id = $1 AND checkpoint = 'moving'
             RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,
                       failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                      checkpoint_started_at, delivered_image_id
+                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             "#,
             install_id,
             new_install_id,
@@ -383,6 +389,8 @@ impl TeammateInstalls for PgTeammateInstalls {
             WHERE install_id = $1
               AND harness_id = $2
               AND checkpoint IS NULL
+              AND parked_at IS NULL
+              AND NOT revoke_pending
               AND (generation, delivery) > ($3::BIGINT, $4::BIGINT)
             RETURNING generation, delivery
             "#,
@@ -503,10 +511,11 @@ impl TeammateInstalls for PgTeammateInstalls {
             SELECT i.install_id, i.agent_user_id, i.team_id, i.harness_id, i.generation,
                    i.run_state, i.failure, i.delivery, i.applied_generation, i.applied_delivery,
                    i.checkpoint, i.move_to_harness_id, i.checkpoint_started_at,
-                   i.delivered_image_id
+                   i.delivered_image_id, i.parked_at, i.revoke_pending
             FROM team_agent_installs i
             JOIN team t ON t.id = i.team_id
             WHERE i.checkpoint IS DISTINCT FROM 'removing'
+              AND i.parked_at IS NULL
               AND EXISTS (
                   SELECT 1
                   FROM harnesses h
@@ -537,11 +546,121 @@ impl TeammateInstalls for PgTeammateInstalls {
             .map(TeammateInstallRecord::try_from)
             .collect()
     }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn park(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        sqlx::query_as!(
+            InstallRow,
+            r#"
+            UPDATE team_agent_installs
+            SET parked_at = COALESCE(parked_at, now()),
+                revoke_pending = TRUE,
+                checkpoint = NULL,
+                move_to_harness_id = NULL,
+                checkpoint_started_at = NULL,
+                updated_at = now()
+            WHERE agent_user_id = $1 AND checkpoint IS DISTINCT FROM 'removing'
+            RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,
+                      failure, delivery, applied_generation, applied_delivery, checkpoint,
+                      move_to_harness_id, checkpoint_started_at, delivered_image_id, parked_at,
+                      revoke_pending
+            "#,
+            agent.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?
+        .map(TeammateInstallRecord::try_from)
+        .transpose()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn revoked(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        sqlx::query!(
+            r#"
+            UPDATE team_agent_installs
+            SET revoke_pending = FALSE, updated_at = now()
+            WHERE agent_user_id = $1 AND revoke_pending
+            "#,
+            agent.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn revoke_pending(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        // A whole-table read of a small table: one row per own-machine agent.
+        let rows = sqlx::query_as!(
+            InstallRow,
+            r#"
+            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
+                      failure, delivery, applied_generation, applied_delivery, checkpoint,
+                      move_to_harness_id, checkpoint_started_at, delivered_image_id, parked_at,
+                      revoke_pending
+            FROM team_agent_installs
+            WHERE revoke_pending
+            ORDER BY install_id
+            LIMIT $1
+            "#,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        rows.into_iter()
+            .map(TeammateInstallRecord::try_from)
+            .collect()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn of_team(&self, team_id: Uuid) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        let rows = sqlx::query_as!(
+            InstallRow,
+            r#"
+            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
+                      failure, delivery, applied_generation, applied_delivery, checkpoint,
+                      move_to_harness_id, checkpoint_started_at, delivered_image_id, parked_at,
+                      revoke_pending
+            FROM team_agent_installs
+            WHERE team_id = $1
+            ORDER BY install_id
+            "#,
+            team_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        rows.into_iter()
+            .map(TeammateInstallRecord::try_from)
+            .collect()
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn delete(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        sqlx::query!(
+            "DELETE FROM team_agent_installs WHERE agent_user_id = $1",
+            agent.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        Ok(())
+    }
 }
 
 /// Delivery's side, for the replica holding a machine's socket.
 impl PgTeammateInstalls {
-    /// The installs that run on `harness` or are leaving it.
+    /// The installs that run on `harness` or are leaving it; a parked one
+    /// runs nowhere, so the machine stops it as no longer its own.
     #[tracing::instrument(skip(self), err)]
     pub async fn installs_on(
         &self,
@@ -553,9 +672,9 @@ impl PgTeammateInstalls {
             SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
                    failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                   checkpoint_started_at, delivered_image_id
+                   checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             FROM team_agent_installs
-            WHERE harness_id = $1
+            WHERE harness_id = $1 AND parked_at IS NULL
             ORDER BY install_id
             "#,
             harness.as_uuid(),
@@ -620,7 +739,7 @@ impl PgTeammateInstalls {
             RETURNING install_id, agent_user_id, team_id, harness_id, generation, run_state,
                       failure, delivery, applied_generation, applied_delivery, checkpoint,
                       move_to_harness_id,
-                      checkpoint_started_at, delivered_image_id
+                      checkpoint_started_at, delivered_image_id, parked_at, revoke_pending
             "#,
             install_id,
             stored_generation(generation)?,

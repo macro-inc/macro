@@ -33,6 +33,8 @@ fn row(generation: u64, delivery: u64) -> TeammateInstallRecord {
         applied: None,
         checkpoint: None,
         image_id: Some(CURRENT_IMAGE.to_owned()),
+        parked_at: None,
+        revoke_pending: false,
     }
 }
 
@@ -462,6 +464,8 @@ async fn a_new_runtime_image_is_a_new_generation_delivered_on_connect() {
     let machine = machine(
         vec![TeammateInstallRecord {
             image_id: Some(format!("sha256:{}", "b".repeat(64))),
+            parked_at: None,
+            revoke_pending: false,
             ..row(1, 1)
         }],
         true,
@@ -483,6 +487,8 @@ async fn an_install_never_delivered_gets_its_first_delivery_not_a_new_generation
     let machine = machine(
         vec![TeammateInstallRecord {
             image_id: None,
+            parked_at: None,
+            revoke_pending: false,
             ..row(1, 0)
         }],
         true,

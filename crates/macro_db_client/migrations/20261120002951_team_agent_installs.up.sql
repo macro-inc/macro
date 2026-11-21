@@ -26,7 +26,7 @@ CREATE TABLE team_agent_installs (
         failure IN (
             'image_unavailable', 'image_mismatch', 'engine_refused',
             'bad_configuration', 'incompatible_runtime', 'crash_loop', 'host_unsupported',
-            'network_isolation_unavailable'
+            'network_isolation_unavailable', 'egress_blocked'
         )
     ),
     -- The runtime image id the latest delivery carried. When the image for
@@ -48,6 +48,15 @@ CREATE TABLE team_agent_installs (
     -- the move is finished or cancelled first.
     move_to_harness_id UUID REFERENCES harnesses (id) ON DELETE RESTRICT,
     checkpoint_started_at TIMESTAMPTZ,
+    -- Set when the machine may no longer host the agent (its owner left the
+    -- team, lost admin, or unpaired it): the agent is stopped there and keeps
+    -- its account, seat and repository until an admin moves it to a machine
+    -- of theirs. A parked install gets no deliveries and runs nowhere.
+    parked_at TIMESTAMPTZ,
+    -- The agent's credentials must be revoked (a finished move, a park) and
+    -- no revoke has succeeded yet. Nothing is delivered while it is set, so a
+    -- late revoke can't void a fresh key; the offboarding sweep retries it.
+    revoke_pending BOOLEAN NOT NULL DEFAULT FALSE,
     created_by TEXT REFERENCES "User" (id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

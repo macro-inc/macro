@@ -579,16 +579,47 @@ async fn a_finished_move_revokes_the_old_machines_credentials_before_the_new_one
     );
 }
 
-#[tokio::test]
-async fn a_machine_whose_owner_lost_admin_gets_nothing_and_its_agent_comes_off() {
-    let (service, journal, _) = self_hosted_service();
-    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
-    let install = service
+fn install_of(service: &Service, agent: &TeamAgent) -> TeammateInstallRecord {
+    service
         .installs
-        .for_agent(&agent.user_id)
+        .rows
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|row| row.agent == agent.user_id)
+        .cloned()
+        .expect("the agent has an install")
+}
+
+/// What an admin sees of `agent` in Members.
+async fn listed(service: &Service, agent: &TeamAgent) -> TeamAgent {
+    service
+        .list(receipt())
         .await
         .unwrap()
-        .unwrap();
+        .agents
+        .into_iter()
+        .find(|listed| listed.user_id == agent.user_id)
+        .expect("the agent is still listed")
+}
+
+/// The agent kept its account, seat and repository: nothing took it back.
+fn assert_kept(service: &Service, journal: &Journal) {
+    assert_eq!(service.repository.records().len(), 1);
+    let entries = journal.entries();
+    for gone in ["team.take_back", "seat.remove", "repo.delete", "account.delete"] {
+        assert!(
+            !entries.iter().any(|entry| entry.starts_with(gone)),
+            "{gone}: {entries:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_machine_whose_owner_lost_admin_gets_nothing_and_its_agent_is_parked() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let install = install_of(&service, &agent);
     service.installs.unentitled.lock().unwrap().push(LAPTOP);
     let before = journal.entries().len();
 
@@ -598,33 +629,41 @@ async fn a_machine_whose_owner_lost_admin_gets_nothing_and_its_agent_comes_off()
         .unwrap();
 
     assert!(issued.is_none());
-    let after = &journal.entries()[before..];
-    assert!(
-        !after.iter().any(|entry| entry == "api_key.mint"),
-        "{after:?}"
+    // Parked first, so a delivery in flight is done before the revoke.
+    assert_eq!(
+        journal.entries()[before..],
+        [
+            "install.park".to_owned(),
+            format!("runtimes.changed {LAPTOP}"),
+            "api_key.revoke_all".to_owned(),
+            "repo.create Sam Rivera".to_owned(),
+            "install.revoked".to_owned(),
+        ]
     );
-    assert!(
-        after.iter().any(|entry| entry == "api_key.revoke_all"),
-        "{after:?}"
+    let parked = install_of(&service, &agent);
+    assert!(parked.parked(), "{parked:?}");
+    assert!(!parked.revoke_pending);
+    assert_eq!(parked.checkpoint, None);
+    assert_kept(&service, &journal);
+    let shown = listed(&service, &agent).await;
+    assert_eq!(shown.status, TeamAgentStatus::Paused);
+    assert_eq!(
+        shown.install_problem,
+        Some(crate::domain::models::InstallProblem::HostRemoved)
     );
+    // Parked, it gets nothing, whoever asks.
     assert!(
-        after.iter().any(|entry| entry == "repo.create Sam Rivera"),
-        "{after:?}"
+        service
+            .issue_install(LAPTOP, install.install_id, None)
+            .await
+            .unwrap()
+            .is_none()
     );
-    let removing = service
-        .installs
-        .for_agent(&agent.user_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(
-        matches!(removing.checkpoint, Some((Checkpoint::Removing, _))),
-        "{removing:?}"
-    );
+    assert!(!journal.entries().contains(&"api_key.mint".to_owned()));
 }
 
 #[tokio::test]
-async fn the_sweep_takes_agents_off_only_the_machines_that_may_no_longer_host_them() {
+async fn the_sweep_parks_agents_only_on_the_machines_that_may_no_longer_host_them() {
     let (service, journal, _) = self_hosted_service();
     let leaving = service.create(receipt(), own(LAPTOP)).await.unwrap();
     let staying = service
@@ -644,18 +683,8 @@ async fn the_sweep_takes_agents_off_only_the_machines_that_may_no_longer_host_th
     let offboarded = service.offboard_unentitled_hosts().await.unwrap();
 
     assert_eq!(offboarded, 1);
-    let checkpoint = |agent: &TeamAgent| {
-        service
-            .installs
-            .rows
-            .lock()
-            .unwrap()
-            .iter()
-            .find(|row| row.agent == agent.user_id)
-            .and_then(|row| row.checkpoint.map(|(checkpoint, _)| checkpoint))
-    };
-    assert_eq!(checkpoint(&leaving), Some(Checkpoint::Removing));
-    assert_eq!(checkpoint(&staying), None);
+    assert!(install_of(&service, &leaving).parked());
+    assert!(!install_of(&service, &staying).parked());
     assert_eq!(
         journal.entries()[before..]
             .iter()
@@ -663,6 +692,200 @@ async fn the_sweep_takes_agents_off_only_the_machines_that_may_no_longer_host_th
             .count(),
         1
     );
-    // Already being removed: the next round leaves it alone.
+    assert_eq!(service.repository.records().len(), 2);
+    // Already parked: the next round leaves it alone.
     assert_eq!(service.offboard_unentitled_hosts().await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn any_admin_may_host_a_parked_agent_on_a_machine_of_theirs() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    service.offboard_unentitled_hosts().await.unwrap();
+    let parked = install_of(&service, &agent);
+
+    // Neither its inviter nor its machine's owner; LAPTOP is still
+    // connected, but runs nothing, so nothing is waited for.
+    let moved = service
+        .move_install(
+            other_admin(),
+            &agent.user_id,
+            MoveTeammate { harness_id: THEIRS },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(moved.harness_id, Some(THEIRS));
+    assert_eq!(moved.install_problem, None);
+    let install = install_of(&service, &agent);
+    assert!(!install.parked());
+    assert!(!install.revoke_pending);
+    assert_ne!(install.install_id, parked.install_id);
+    assert_eq!(
+        journal.entries().last().unwrap(),
+        &format!("runtimes.changed {THEIRS}")
+    );
+    let issued = service
+        .issue_install(THEIRS, install.install_id, None)
+        .await
+        .unwrap()
+        .expect("the new machine gets the agent");
+    assert_eq!(issued.generation, parked.generation + 1);
+    assert_kept(&service, &journal);
+}
+
+#[tokio::test]
+async fn a_brief_demotion_loses_nothing_and_the_agent_can_be_hosted_on_the_same_machine_again() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    service.offboard_unentitled_hosts().await.unwrap();
+    // Promoted back.
+    service.installs.unentitled.lock().unwrap().clear();
+    let parked = install_of(&service, &agent);
+
+    // Still parked until someone hosts it again: nothing restarts by itself.
+    assert!(
+        service
+            .issue_install(LAPTOP, parked.install_id, None)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let moved = service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate { harness_id: LAPTOP },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(moved.harness_id, Some(LAPTOP));
+    let install = install_of(&service, &agent);
+    assert_ne!(install.install_id, parked.install_id, "a fresh volume");
+    assert!(
+        service
+            .issue_install(LAPTOP, install.install_id, None)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_kept(&service, &journal);
+    assert_eq!(listed(&service, &agent).await.install_problem, None);
+}
+
+#[tokio::test]
+async fn an_unpaired_and_repaired_machine_loses_nothing_and_hosts_the_agent_again() {
+    const REPAIRED: HarnessId = HarnessId::new_from_uuid(Uuid::from_u128(0x0d04));
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    // Unpaired: LAPTOP is gone.
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    set_connected(&service, LAPTOP, false);
+    service.offboard_unentitled_hosts().await.unwrap();
+    assert!(install_of(&service, &agent).parked());
+    // Paired again, as a new machine.
+    service.installs.hosts.lock().unwrap().push((
+        user(ADMIN),
+        host(REPAIRED, "Laptop", true, Some(docker_linux())),
+    ));
+
+    service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate {
+                harness_id: REPAIRED,
+            },
+        )
+        .await
+        .unwrap();
+
+    let install = install_of(&service, &agent);
+    assert_eq!(install.harness_id, REPAIRED);
+    assert!(
+        service
+            .issue_install(REPAIRED, install.install_id, None)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_kept(&service, &journal);
+}
+
+#[tokio::test]
+async fn removing_a_parked_agent_finishes_at_once() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    service.offboard_unentitled_hosts().await.unwrap();
+
+    service.delete(receipt(), &agent.user_id).await.unwrap();
+
+    assert!(service.repository.records().is_empty());
+    assert!(
+        journal
+            .entries()
+            .contains(&format!("team.take_back {TEAM} by {ADMIN}"))
+    );
+}
+
+#[tokio::test]
+async fn a_failed_revoke_at_a_finished_move_holds_deliveries_until_the_sweep_retries_it() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let old = install_of(&service, &agent);
+    service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate {
+                harness_id: DESKTOP,
+            },
+        )
+        .await
+        .unwrap();
+    service.api_keys.fail_revokes(true);
+
+    let finished = service.finish_checkpoint(old.install_id).await;
+
+    assert!(finished.is_err(), "{finished:?}");
+    let moved = install_of(&service, &agent);
+    assert_eq!(moved.harness_id, DESKTOP);
+    assert!(moved.revoke_pending);
+    // The old machine's key may still be live, so the new machine gets
+    // nothing a late revoke could void.
+    assert!(
+        service
+            .issue_install(DESKTOP, moved.install_id, None)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // A retry of the stop finds nothing to finish.
+    service.finish_checkpoint(old.install_id).await.unwrap();
+    assert!(install_of(&service, &agent).revoke_pending);
+
+    service.api_keys.fail_revokes(false);
+    let before = journal.entries().len();
+    service.offboard_unentitled_hosts().await.unwrap();
+
+    assert_eq!(
+        journal.entries()[before..],
+        [
+            "api_key.revoke_all".to_owned(),
+            "repo.create Sam Rivera".to_owned(),
+            "install.revoked".to_owned(),
+            format!("runtimes.changed {DESKTOP}"),
+        ]
+    );
+    assert!(
+        service
+            .issue_install(DESKTOP, moved.install_id, None)
+            .await
+            .unwrap()
+            .is_some()
+    );
 }

@@ -104,6 +104,11 @@ pub enum InstallProblem {
         /// Why.
         reason: InstallFailure,
     },
+    /// Its machine may no longer host it (the machine's owner left the team,
+    /// lost admin, or unpaired it), so it was stopped there and its
+    /// credentials revoked. It keeps its account, seat and repository; an
+    /// admin moves it to a machine of theirs to run it again.
+    HostRemoved,
 }
 
 /// A team's agents.

@@ -234,10 +234,21 @@ impl TeamMembership for FakeMembership {
     }
 }
 
-struct FakeApiKeys(Journal);
+/// Keys, journaled; revoking fails while the flag is set.
+struct FakeApiKeys(Journal, Arc<AtomicBool>);
+
+impl FakeApiKeys {
+    fn fail_revokes(&self, failing: bool) {
+        self.1.store(failing, Ordering::SeqCst);
+    }
+}
 
 impl AgentApiKeys for FakeApiKeys {
     async fn revoke_all(&self, _: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        if self.1.load(Ordering::SeqCst) {
+            self.0.record("api_key.revoke_all failed");
+            return Err(TeamAgentError::internal(FakeError));
+        }
         self.0.record("api_key.revoke_all");
         Ok(())
     }
@@ -538,6 +549,8 @@ impl TeammateInstalls for FakeInstalls {
             applied: None,
             checkpoint: None,
             image_id: None,
+            parked_at: None,
+            revoke_pending: false,
         };
         rows.push(row.clone());
         Ok(CreatedInstall::Created(row))
@@ -624,6 +637,8 @@ impl TeammateInstalls for FakeInstalls {
                 row.applied = None;
                 row.run_state = InstallRunState::Pending;
                 row.checkpoint = None;
+                row.parked_at = None;
+                row.revoke_pending = true;
             },
         ))
     }
@@ -641,6 +656,8 @@ impl TeammateInstalls for FakeInstalls {
                     row.install_id == install_id
                         && row.harness_id == harness
                         && row.checkpoint.is_none()
+                        && row.parked_at.is_none()
+                        && !row.revoke_pending
                         && (row.generation, row.delivery) > reported
                 },
                 |row| {
@@ -678,6 +695,7 @@ impl TeammateInstalls for FakeInstalls {
             .iter()
             .filter(|row| {
                 unentitled.contains(&row.harness_id)
+                    && row.parked_at.is_none()
                     && !matches!(row.checkpoint, Some((Checkpoint::Removing, _)))
             })
             .take(limit as usize)
@@ -693,6 +711,68 @@ impl TeammateInstalls for FakeInstalls {
             .iter()
             .find(|(_, host)| host.harness_id == harness)
             .map(|(_, host)| host.clone()))
+    }
+
+    async fn park(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        self.journal.record("install.park");
+        Ok(self.update(
+            |row| {
+                row.agent.as_ref() == agent.as_ref()
+                    && !matches!(row.checkpoint, Some((Checkpoint::Removing, _)))
+            },
+            |row| {
+                row.parked_at.get_or_insert_with(chrono::Utc::now);
+                row.revoke_pending = true;
+                row.checkpoint = None;
+            },
+        ))
+    }
+
+    async fn revoked(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        self.journal.record("install.revoked");
+        self.update(
+            |row| row.agent.as_ref() == agent.as_ref(),
+            |row| row.revoke_pending = false,
+        );
+        Ok(())
+    }
+
+    async fn revoke_pending(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|row| row.revoke_pending)
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    async fn of_team(&self, team_id: Uuid) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|row| row.team_id == team_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn delete(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        self.journal.record("install.delete");
+        self.rows
+            .lock()
+            .unwrap()
+            .retain(|row| row.agent.as_ref() != agent.as_ref());
+        Ok(())
     }
 }
 
@@ -757,7 +837,7 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
     let service = TeamAgentServiceImpl::new(
         repository.clone(),
         FakeMembership(journal.clone()),
-        FakeApiKeys(journal.clone()),
+        FakeApiKeys(journal.clone(), Arc::default()),
         FakeRepos(journal.clone()),
         computers,
         repository,
