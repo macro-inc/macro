@@ -94,7 +94,7 @@ if has quiet || has load || has mutants; then
   start_vites on
   has quiet && run quiet "${SEEDS[0]}" on --fuzz "$FUZZ" --seq-lanes "$SEQ_LANES" --seqs "$SEQS" --steps "$STEPS"
   has load && run load "${SEEDS[1]}" on --load --fuzz "$FUZZ" --seq-lanes "$SEQ_LANES" --seqs "$SEQS" --steps "$STEPS"
-  has mutants && run mutants "${SEEDS[3]}" on --fuzz 0 --no-callers --seq-lanes 0 --mutants
+  has mutants && run mutants "${SEEDS[3]}" on --scale small --fuzz 0 --no-callers --seq-lanes 0 --mutants
   stop_vites
 fi
 if has cache-off; then
@@ -106,7 +106,7 @@ if has aa; then
   # Main on both sides: one Vite, reached as two origins so each side keeps
   # its own browser storage and GraphQL cache.
   start_vites on old-only
-  NEW_CHECKOUT=$OLD_CHECKOUT NEW_REF=$OLD_REF NEW_ORIGIN="http://127.0.0.1:$OLD_PORT" run aa "${SEEDS[4]}" on --aa --fuzz 0 --no-callers \
+  NEW_CHECKOUT=$OLD_CHECKOUT NEW_REF=$OLD_REF NEW_ORIGIN="http://127.0.0.1:$OLD_PORT" run aa "${SEEDS[4]}" on --aa --scale small --fuzz 0 --no-callers \
     --seq-lanes "${AA_LANES:-8}" --seqs "${AA_SEQS:-48}" --steps "$STEPS"
   stop_vites
 fi
