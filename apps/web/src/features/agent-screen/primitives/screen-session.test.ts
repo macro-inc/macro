@@ -997,7 +997,11 @@ describe('createScreenSession', () => {
     vi.restoreAllMocks();
   });
 
-  it('reconnects at once when it was closed for going unwatched while shown', async () => {
+  it('reconnects at once when it was closed as idle for having been hidden, and is shown again by then', async () => {
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+      () => visibility
+    );
     const connections: FakeConnection[] = [];
     const capabilities: ScreenCapabilities = {
       requestTicket: async () =>
@@ -1016,10 +1020,65 @@ describe('createScreenSession', () => {
       session.attach(document.createElement('div'));
       await settle();
 
+      visibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      // The end for the hidden spell arrives after the tab is back.
       connections[0].handlers.onEnded('idle');
       await settle();
       expect(connections).toHaveLength(2);
       expect(session.store.status).toEqual({ kind: 'live' });
+      dispose();
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('retries with backoff and a cap, then offers Try again, when a tab shown all along keeps being closed as idle', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => false,
+        accessKnown: () => true,
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+
+      // Shown, yet closed as idle: not at once, but after a backoff.
+      connections[0].handlers.onEnded('idle');
+      await settle();
+      expect(connections).toHaveLength(1);
+      expect(session.store.status).toEqual({
+        kind: 'reconnecting',
+        attempt: 1,
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(connections).toHaveLength(2);
+
+      // Each new socket is closed as idle right away: the retries run out.
+      for (let round = 0; round < 10; round += 1) {
+        const last = connections[connections.length - 1];
+        last.handlers.onEnded('idle');
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+      expect(session.store.status).toEqual({ kind: 'ended', reason: 'failed' });
+      const made = connections.length;
+      expect(made).toBeLessThanOrEqual(8);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(connections).toHaveLength(made);
+
+      session.retry();
+      await settle();
+      expect(connections).toHaveLength(made + 1);
       dispose();
     });
   });

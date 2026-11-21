@@ -109,6 +109,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
   let leaseCarriedAway = false;
   /** Stop already handed back; closing must not do it twice. */
   let handedBackOnLeaving = false;
+  /** The tab was hidden at some point since the current connection opened. */
+  let hiddenSinceOpen = false;
   /** This tab let go of its drive itself: the lease leaving isn't a loss. */
   let handedBackHere = false;
   /**
@@ -305,7 +307,16 @@ export function createScreenSession(options: ScreenSessionOptions) {
             // A session that stayed live a while starts its retries afresh; one
             // that keeps dropping right after going live counts on.
             if (connected && flapping()) connected = false;
-            const step = afterSessionEnded(reason, connected ? 0 : attempt);
+            // `idle` waits for the tab to be shown only when it went unseen.
+            // Shown all along, the heartbeat didn't get through (a blocked
+            // page): a failure like any other, retried with backoff and a cap
+            // rather than at once and forever.
+            const unseen =
+              hiddenSinceOpen || document.visibilityState !== 'visible';
+            const step = afterSessionEnded(
+              reason === 'idle' && !unseen ? 'error' : reason,
+              connected ? 0 : attempt
+            );
             // One update: nothing (the keyboard, the controls) may see the
             // in-between of "ended" before "reconnecting".
             batch(() => {
@@ -325,6 +336,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       session = opened;
       connected = true;
       liveSince = Date.now();
+      hiddenSinceOpen = document.visibilityState !== 'visible';
       batch(() => {
         setStore({ status: { kind: 'live' }, notice: undefined });
         resumeDriving();
@@ -351,7 +363,11 @@ export function createScreenSession(options: ScreenSessionOptions) {
     record('computer.screen.reconnect_shown');
     retry();
   }
-  document.addEventListener('visibilitychange', reconnectIfShown);
+  function onVisibilityChange() {
+    if (document.visibilityState !== 'visible') hiddenSinceOpen = true;
+    reconnectIfShown();
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   // Closing or reloading the browser tab never runs `onCleanup`: hand back
   // on the way out too, so the agent needn't wait out the lease.
@@ -365,7 +381,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
   }
 
   onCleanup(() => {
-    document.removeEventListener('visibilitychange', reconnectIfShown);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pagehide', handBackOnPageHide);
     handBackIfDriving();
     disposed = true;
@@ -558,8 +574,9 @@ export function createScreenSession(options: ScreenSessionOptions) {
       });
       setStore('controlLost', undefined);
       releaseInput();
-      // Nothing to hand back once the lease is gone (Esc held after a
-      // lapse): letting go is all that's left.
+      // Nothing to hand back once the lease is gone (a hand-back racing a
+      // lapse): letting go is all that's left. (Holding Esc only hands back
+      // while driving; after a lapse the banner's buttons let go.)
       if (!ownLease()) return;
       handedBackHere = true;
       session?.handBack(note);
