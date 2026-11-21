@@ -231,10 +231,14 @@ pub async fn ensure_dm_in(
 /// Discover an exact pair without modifying it.
 ///
 /// A DM is any channel both people have a row in, active or left, with no
-/// third row. The two people's rows are intersected first, through the
-/// partial `(user_id, channel_id)` indexes on active and on left rows, behind
-/// an `OFFSET 0` fence; only the channels they share are then checked. The
-/// read is bounded by the two people's memberships, never by the table.
+/// third row. A bot that was removed does not count as one: the DM is the
+/// pair's again, as every channel list shows it, so get-or-create keeps
+/// reusing it instead of starting a second DM between the same two people.
+/// A bot still in the channel does count. The two people's rows are
+/// intersected first, through the partial `(user_id, channel_id)` indexes on
+/// active and on left rows, behind an `OFFSET 0` fence; only the channels they
+/// share are then checked. The read is bounded by the two people's
+/// memberships, never by the table.
 pub async fn find_dm(connection: &mut PgConnection, pair: &DmPair) -> anyhow::Result<Option<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
@@ -255,7 +259,9 @@ pub async fn find_dm(connection: &mut PgConnection, pair: &DmPair) -> anyhow::Re
         ) shared
         JOIN comms_channels c ON c.id = shared.channel_id
         WHERE c.channel_type = 'direct_message'
-          AND (SELECT COUNT(*) FROM comms_channel_participants p WHERE p.channel_id = c.id) = 2
+          AND (SELECT COUNT(*) FROM comms_channel_participants p
+               WHERE p.channel_id = c.id
+                 AND (p.left_at IS NULL OR p.user_id NOT LIKE 'bot|%')) = 2
         ORDER BY c.created_at, c.id
         LIMIT 1
         "#,
