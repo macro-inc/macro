@@ -188,6 +188,12 @@ export function cacheEventsBetween(page: Page, from: number, to: number): CacheE
 export async function ensurePage(page: Page): Promise<boolean> {
   const healthy = await page.evaluate(() => Boolean((window as any).__probe)).catch(() => false);
   if (healthy) return false;
+  await rebootPage(page);
+  return true;
+}
+
+/** Loads a page into the app again, signed in, with its probe, whatever state it is in. */
+export async function rebootPage(page: Page): Promise<void> {
   const home = pageHome.get(page);
   if (!home) throw new Error('page has no registered home');
   for (let attempt = 0; ; attempt++) {
@@ -195,7 +201,7 @@ export async function ensurePage(page: Page): Promise<boolean> {
       await login(page, home.origin, home.email);
       await page.waitForFunction(() => document.readyState === 'complete');
       await importProbe(page, home.probePath);
-      return true;
+      return;
     } catch (error) {
       if (attempt >= 2) throw error;
       await Bun.sleep(5_000);

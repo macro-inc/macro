@@ -21,7 +21,7 @@
  */
 import type { ApiUser } from './api';
 import { AstGen } from './ast-gen';
-import { cacheEventsBetween, ensurePage, loadProbe, registerPage, watchCacheErrors, type CacheEvent, type ExportedSpan, type UserSession } from './browser';
+import { cacheEventsBetween, ensurePage, loadProbe, rebootPage, registerPage, watchCacheErrors, type CacheEvent, type ExportedSpan, type UserSession } from './browser';
 import { CALLERS } from './callers';
 import { compareCaller, compareData, DATA_RULES, type Diff, PREVIEW_DROPS_NOTIFICATIONS } from './compare';
 import { login } from './login';
@@ -38,6 +38,43 @@ const POLL_MS = 250;
 /** How much longer a branch reader main beat is watched, to tell late from never. */
 export const LATE_MS = 30_000;
 const SETTLE = { timeoutMs: 40_000, stableMs: 500 };
+/**
+ * The longest a sequence step (write, comparisons and any reload) may run.
+ * Reloads took up to 5 minutes on a loaded machine; a dev-server page that
+ * never finishes loading a module leaves an in-page await pending forever,
+ * and with it the lane. Past this the attempt is abandoned and run again on
+ * freshly loaded pages.
+ */
+// DIFFTEST_STEP_DEADLINE_MS overrides it, to exercise the recovery in a short run.
+const STEP_DEADLINE_MS = Number(process.env.DIFFTEST_STEP_DEADLINE_MS ?? 15 * 60_000);
+
+export class StepTimeout extends Error {}
+
+async function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new StepTimeout(`${what} still running after ${Math.round(ms / 1000)} s`)), ms);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** What each page showed when a step ran out of time: where it was and whether the probe answered. */
+async function describePages(ctx: SeqContext): Promise<{ page: string; url: string; probe: string }[]> {
+  const pages: [string, Page][] = [['old', ctx.session.pages.old], ['new', ctx.session.pages.new], ['truth', ctx.truth]];
+  return await Promise.all(
+    pages.map(async ([name, page]) => {
+      const probe = await Promise.race([
+        page.evaluate(() => JSON.stringify({ probe: Boolean((window as any).__probe), ready: document.readyState, text: (document.body?.innerText ?? '').trim().length })).catch((e) => `evaluate failed: ${String(e).slice(0, 80)}`),
+        Bun.sleep(10_000).then(() => 'evaluate did not answer in 10 s'),
+      ]);
+      return { page: name, url: page.url().replace(/^https?:\/\/[^/]+/, ''), probe };
+    })
+  );
+}
 
 const PREVIEW_READERS = new Set(['qa.agentSessions', 'qa.initiatives', 'qa.skills', 'qa.snippets', 'crm.suggestions', 'slash.prs', 'email.recent']);
 
@@ -91,6 +128,8 @@ export type SeqResult = {
   ruleHits: Record<string, number>;
   /** Pages put back in the app, and sequences the harness broke and ran again. */
   repairs: { where: string; error: string }[];
+  /** Steps that ran past STEP_DEADLINE_MS, with what each page showed then. */
+  hangs: { seq: number; step: number; kind: string; pages: { page: string; url: string; probe: string }[] }[];
   aborted: { seq: number; attempt: number; error: string; droppedFailures: number }[];
   /**
    * A reader stale on both sides after an earlier step, which this step's own
@@ -104,7 +143,7 @@ export type SeqResult = {
 };
 
 export function emptySeqResult(): SeqResult {
-  return { sequences: 0, steps: 0, stepKinds: {}, writeErrors: {}, live: {}, raw: {}, reloads: 0, comparisons: 0, failures: [], newOnly: [], ruleHits: {}, incidental: {}, conflictRetries: 0, repairs: [], aborted: [], liveData: { equal: 0, bothStale: 0, branchFresher: 0, branchStaler: 0, skipped: 0, fresherBy: {}, fresherFields: {} } };
+  return { sequences: 0, steps: 0, stepKinds: {}, writeErrors: {}, live: {}, raw: {}, reloads: 0, comparisons: 0, failures: [], newOnly: [], ruleHits: {}, incidental: {}, conflictRetries: 0, repairs: [], hangs: [], aborted: [], liveData: { equal: 0, bothStale: 0, branchFresher: 0, branchStaler: 0, skipped: 0, fresherBy: {}, fresherFields: {} } };
 }
 
 /**
@@ -827,9 +866,20 @@ export async function runSequence(ctx: SeqContext, seq: number) {
     ...rng.sample(pool.filter((e) => e.kind === 'crm' || e.kind === 'initiative'), 2),
   ];
   const readers = readersFor(ctx, focus, seq);
-  await Promise.all([resetQueries(session.pages.old), resetQueries(session.pages.new)]);
-  await Promise.all([mountAll(session.pages.old, readers, 'old'), mountAll(session.pages.new, readers, 'new')]);
-  const [, , initial] = await Promise.all([settleAll(session.pages.old, readers), settleAll(session.pages.new, readers), truthRead(ctx.truth, readers)]);
+  const hung = async (step: number, kind: string, error: unknown) => {
+    if (error instanceof StepTimeout) result.hangs.push({ seq, step, kind, pages: await describePages(ctx) });
+    throw error;
+  };
+  const initial = await withDeadline(
+    (async () => {
+      await Promise.all([resetQueries(session.pages.old), resetQueries(session.pages.new)]);
+      await Promise.all([mountAll(session.pages.old, readers, 'old'), mountAll(session.pages.new, readers, 'new')]);
+      const [, , snaps] = await Promise.all([settleAll(session.pages.old, readers), settleAll(session.pages.new, readers), truthRead(ctx.truth, readers)]);
+      return snaps;
+    })(),
+    STEP_DEADLINE_MS,
+    `seq ${seq} setup`
+  ).catch((error) => hung(-1, 'setup', error));
   let prevTruthSnaps = initial;
   let prevTruth = truthViews(readers, initial);
 
@@ -839,6 +889,7 @@ export async function runSequence(ctx: SeqContext, seq: number) {
     result.stepKinds[step.kind] = (result.stepKinds[step.kind] ?? 0) + 1;
     ctx.coverage.hit('seq-step', step.kind);
     const t0 = Date.now();
+    await withDeadline((async () => {
     let wrote = true;
     try {
       if (step.app) {
@@ -879,6 +930,7 @@ export async function runSequence(ctx: SeqContext, seq: number) {
       prevTruth = truthViews(readers, truth);
       prevTruthSnaps = truth;
     }
+    })(), STEP_DEADLINE_MS, `seq ${seq} step ${i} ${step.kind}`).catch((error) => hung(i, step.kind, error));
     // One line per step, so a slow or stuck lane shows where it is.
     ctx.log(`seq ${seq} step ${i} ${step.kind}: ${Date.now() - t0} ms`);
   }
@@ -925,6 +977,13 @@ export async function runSequenceLane(ctx: Omit<SeqContext, 'stage'> & { count: 
       // left the app: drop them and run the sequence again, once.
       const dropped = ctx.result.failures.splice(before);
       ctx.result.steps = steps;
+      if (error instanceof StepTimeout) {
+        // The pages are stuck in an await that will never settle: load them again.
+        for (const page of [ctx.session.pages.old, ctx.session.pages.new, ctx.truth]) {
+          const why = await withDeadline(rebootPage(page), 5 * 60_000, 'reloading a stuck page').then(() => 'reloaded after a step ran out of time', (e) => `reload failed: ${String(e).slice(0, 150)}`);
+          ctx.result.repairs.push({ where: `after seq ${s} timed out`, error: why });
+        }
+      }
       ctx.result.aborted.push({ seq: s, attempt, error: String(error).slice(0, 300), droppedFailures: dropped.length });
       if (attempt >= 1) {
         ctx.result.failures.push({ seq: s, step: -1, kind: 'harness-error', detail: String(error).slice(0, 500) });

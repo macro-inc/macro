@@ -73,6 +73,8 @@ function summarize(r: Json) {
         }, {}),
       repairs: seq.repairs?.length ?? 0,
       aborted: seq.aborted?.length ?? 0,
+      /** Steps that ran past the step deadline; their attempts were run again. */
+      hangs: seq.hangs?.length ?? 0,
       incidental: Object.fromEntries(Object.entries((seq.incidental ?? {}) as Record<string, Json>).map(([k, v]) => [k, v.count])),
       liveData: seq.liveData,
       writeErrors: seq.writeErrors,
