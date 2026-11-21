@@ -1,7 +1,11 @@
 use crate::outbound::email_api::GmailApi;
+use crate::outbound::inbox_source::inbox_source;
 use crate::pubsub::util::publish_email_event;
 use anyhow::{Context, anyhow};
-use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use contacts::domain::{
+    models::messages::ContactConnection,
+    ports::{ContactListIngress, ContactsIngress},
+};
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
@@ -23,7 +27,7 @@ use uuid::Uuid;
 mod test;
 
 /// Syncs user's contacts with gmail
-pub async fn sync_contacts<B: MacroEventBroker, I: ContactsIngress>(
+pub async fn sync_contacts<B: MacroEventBroker, I: ContactsIngress + ContactListIngress>(
     link: &Link,
     db: &PgPool,
     email_api: &GmailApi,
@@ -67,9 +71,8 @@ pub async fn sync_contacts<B: MacroEventBroker, I: ContactsIngress>(
     Ok(())
 }
 
-/// The connections from the link's owner to each distinct, non-automated
-/// address in `contacts`.
-fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactConnection> {
+/// Each distinct, non-automated address in `contacts` other than the link's own.
+fn address_book_contacts(link: &Link, contacts: &[Contact]) -> Vec<MacroUserIdStr<'static>> {
     let own_email = link.email_address.0.as_ref().to_ascii_lowercase();
     let mut seen: HashSet<String> = HashSet::new();
     contacts
@@ -83,7 +86,7 @@ fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactCon
                 && seen.insert(email.clone())
         })
         .filter_map(|email| match MacroUserIdStr::try_from_email(&email) {
-            Ok(contact) => Some(ContactConnection::new(link.macro_id.clone(), contact)),
+            Ok(contact) => Some(contact),
             // One malformed address must not drop the rest of the address book.
             // The parse error quotes its input, an address, so it stays out of the log.
             Err(_) => {
@@ -96,8 +99,9 @@ fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactCon
 
 /// Connects the link's owner to everyone in their synced address book, so the
 /// people they know, not only the people they have emailed, show up wherever
-/// Macro suggests or @mentions a contact.
-async fn connect_address_book<I: ContactsIngress>(
+/// Macro suggests or @mentions a contact: the legacy connections, and the
+/// owner's Gmail list for this inbox once list writes are on.
+async fn connect_address_book<I: ContactsIngress + ContactListIngress>(
     contacts_ingress: &I,
     link: &Link,
     contacts: &[Contact],
@@ -105,15 +109,28 @@ async fn connect_address_book<I: ContactsIngress>(
     if cfg!(not(feature = "contacts_sync")) {
         return Ok(());
     }
+    let contacts = address_book_contacts(link, contacts);
+    if contacts.is_empty() {
+        return Ok(());
+    }
+    let failed = |error: rootcause::Report| {
+        anyhow!("{error:?}").context(format!(
+            "Unable to connect address book contacts for link_id: {}",
+            link.id
+        ))
+    };
+    let connections = contacts
+        .iter()
+        .map(|contact| ContactConnection::new(link.macro_id.clone(), contact.clone()))
+        .collect();
     contacts_ingress
-        .enqueue_contact_connections(address_book_connections(link, contacts))
+        .enqueue_contact_connections(connections)
         .await
-        .map_err(|error| {
-            anyhow!("{error:?}").context(format!(
-                "Unable to connect address book contacts for link_id: {}",
-                link.id
-            ))
-        })
+        .map_err(failed)?;
+    contacts_ingress
+        .record_inbox_contacts(inbox_source(link), contacts)
+        .await
+        .map_err(failed)
 }
 
 /// Retrieves the current contact and other_contact sync tokens from the database for a given link.

@@ -361,6 +361,7 @@ where
 {
     async fn handle(&self, event: ChannelEvent) {
         let contact_sync_users = contact_sync_users_for_event(&event);
+        let interactions = interactions_for_event(&event);
         let broker_events = broker_events_for_event(&event);
         let mention_broker_events = mention_broker_events_for_event(&event);
 
@@ -463,6 +464,7 @@ where
                 }
             }
             ChannelEvent::ParticipantJoined { .. } => {}
+            ChannelEvent::MembersAutoJoined { .. } => {}
             ChannelEvent::AccessRequested {
                 request,
                 participant_user_ids,
@@ -502,6 +504,19 @@ where
         {
             let err: anyhow::Error = err.into();
             tracing::error!(error=?err, "unable to enqueue channel contact sync");
+        }
+        if let Some(Interactions { users, peers }) = interactions {
+            let user_count = users.len();
+            let peer_count = peers.len();
+            if let Err(err) = self.contacts.record_interactions(users, peers).await {
+                let err: anyhow::Error = err.into();
+                tracing::error!(
+                    error=?err,
+                    user_count,
+                    peer_count,
+                    "unable to record channel interactions"
+                );
+            }
         }
 
         // Published after the other side effects so broker latency never
@@ -1172,6 +1187,94 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
     }
 }
 
+/// People who gained each other as "interacted on Macro" contacts: every user
+/// with every peer, both ways.
+#[derive(Debug, PartialEq, Eq)]
+struct Interactions {
+    users: Vec<MacroUserIdStr<'static>>,
+    peers: Vec<MacroUserIdStr<'static>>,
+}
+
+impl Interactions {
+    /// `None` when the event pairs nobody with anyone but themselves.
+    fn between(
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Option<Self> {
+        let pairs_someone = users
+            .iter()
+            .any(|user| peers.iter().any(|peer| peer != user));
+        pairs_someone.then_some(Self { users, peers })
+    }
+}
+
+/// Who the event makes "interacted on Macro" contacts.
+///
+/// Sharing a channel counts from the moment two people are both in it, so
+/// creation pairs everyone and each later arrival pairs the newcomers with
+/// the active members, who are already paired with each other. A DM counts
+/// only once a person posts in it: Macro opens DMs on its own (teammates,
+/// inbox contacts), so an empty one is never something two people did
+/// together. The Macro system bot's channels (the signup support channel)
+/// never count. Bots, call guests and other non-person ids never become
+/// contacts.
+fn interactions_for_event(event: &ChannelEvent) -> Option<Interactions> {
+    match event {
+        ChannelEvent::ChannelCreated {
+            channel_type,
+            actor,
+            participant_user_ids,
+            ..
+        } => {
+            let system_created = actor
+                .as_bot()
+                .is_some_and(|bot| bot.bot_id() == bot_id::MACRO_SYSTEM_BOT_ID);
+            if *channel_type == ChannelType::DirectMessage || system_created {
+                return None;
+            }
+            Interactions::between(participant_user_ids.clone(), participant_user_ids.clone())
+        }
+        ChannelEvent::ParticipantsAdded {
+            channel_type,
+            recipient_user_ids,
+            active_participant_user_ids,
+            ..
+        } if *channel_type != ChannelType::DirectMessage => Interactions::between(
+            recipient_user_ids.clone(),
+            active_participant_user_ids.clone(),
+        ),
+        ChannelEvent::ParticipantJoined {
+            channel_type,
+            user_id,
+            active_participant_user_ids,
+            ..
+        } if *channel_type != ChannelType::DirectMessage => {
+            let joiner = user_id.as_user()?.clone();
+            Interactions::between(vec![joiner], active_participant_user_ids.clone())
+        }
+        ChannelEvent::MembersAutoJoined {
+            added_user_ids,
+            active_participant_user_ids,
+            ..
+        } => Interactions::between(added_user_ids.clone(), active_participant_user_ids.clone()),
+        ChannelEvent::MessagePosted {
+            metadata,
+            participants,
+            message,
+            ..
+        } if metadata.channel_type == ChannelType::DirectMessage => {
+            let sender = message.sender_id.as_user()?.clone();
+            let others = recipients_excluding(
+                participants.iter().map(|p| p.user_id.as_str()),
+                [sender.as_ref()],
+            )
+            .collect();
+            Interactions::between(vec![sender], others)
+        }
+        _ => None,
+    }
+}
+
 /// Map an internal channel event to the wire events published to the
 /// `macro.channels` topic.
 fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
@@ -1284,7 +1387,8 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         }
         ChannelEvent::EntityMentionCreated { .. }
         | ChannelEvent::EntityMentionDeleted { .. }
-        | ChannelEvent::AccessRequestResolved { .. } => Vec::new(),
+        | ChannelEvent::AccessRequestResolved { .. }
+        | ChannelEvent::MembersAutoJoined { .. } => Vec::new(),
     }
 }
 

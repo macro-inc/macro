@@ -58,7 +58,6 @@ impl<R: ContactsPageRepository, N: UserPictureNotifier> UserPictureFanout<R, N> 
     pub async fn fan_out(&self, user_id: &MacroUserIdStr<'_>) -> Result<FanoutSummary, Report> {
         let span = tracing::info_span!(
             "contacts.user_picture_fanout",
-            user_id = %user_id.as_ref(),
             pages = tracing::field::Empty,
             recipients = tracing::field::Empty,
             outcome = tracing::field::Empty,

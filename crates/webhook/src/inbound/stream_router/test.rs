@@ -1,6 +1,8 @@
 use super::{WebhookStreamRouterState, webhook_stream_router};
 use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters, WebhookScope};
-use crate::domain::stream::{StreamCursor, WebhookEventStreamService, WebhookStreamError};
+use crate::domain::stream::{
+    StreamCursor, StreamItem, WebhookEventStreamService, WebhookStreamError,
+};
 use axum::{
     body::Body,
     http::{Request, StatusCode, header},
@@ -31,10 +33,71 @@ impl WebhookEventStreamService for RecordingStreams {
         _scope: WebhookScope,
         _filters: WebhookFilters,
         after: Option<StreamCursor>,
-    ) -> Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError> {
+    ) -> Result<BoxStream<'static, StreamItem>, WebhookStreamError> {
         self.opened.lock().unwrap().push(after);
         Ok(Box::pin(futures::stream::empty()))
     }
+}
+
+/// Yields fixed items, then ends.
+#[derive(Clone)]
+struct FixedStream(Vec<StreamItem>);
+
+impl WebhookEventStreamService for FixedStream {
+    async fn open_stream(
+        &self,
+        _subscriber: MacroUserIdStr<'static>,
+        _scope: WebhookScope,
+        _filters: WebhookFilters,
+        _after: Option<StreamCursor>,
+    ) -> Result<BoxStream<'static, StreamItem>, WebhookStreamError> {
+        Ok(Box::pin(futures::stream::iter(self.0.clone())))
+    }
+}
+
+/// The stream advertises its heartbeat interval, and writes a heartbeat as
+/// `event: heartbeat` with `{}` data and no id, so it never moves a client's
+/// cursor and SDK listeners can parse it.
+#[tokio::test]
+async fn the_stream_advertises_and_encodes_heartbeats() {
+    let event = NormalizedWebhookEvent {
+        event_id: uuid::Uuid::now_v7().to_string(),
+        schema_version: 1,
+        event_name: "document.updated".to_string(),
+        entity_type: "document".to_string(),
+        entity_id: "doc".to_string(),
+        ordering_key: "doc".to_string(),
+        occurred_at: chrono::Utc::now(),
+        broker_envelope: serde_json::json!({ "event_type": "document.updated" }),
+    };
+    let router = webhook_stream_router::<_, _, ()>(WebhookStreamRouterState::new(
+        FixedStream(vec![
+            StreamItem::Event(event.clone()),
+            StreamItem::Heartbeat,
+        ]),
+        MacroAuthorizationState::new(Arc::new(SignedIn)),
+    ));
+    let filters = "%5B%7B%22events%22%3A%5B%22document.updated%22%5D%7D%5D";
+    let request = Request::builder()
+        .uri(format!("/events/stream?scope=user&filters={filters}"))
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get("x-macro-stream-heartbeat").unwrap(),
+        "20"
+    );
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    let (first, heartbeat) = body.split_once("\n\n").unwrap();
+    assert!(first.contains(&format!("id: {}", event.event_id)), "{body}");
+    assert_eq!(heartbeat, "event: heartbeat\ndata: {}\n\n");
 }
 
 #[derive(Clone, Default)]

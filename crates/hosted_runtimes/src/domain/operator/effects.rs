@@ -401,7 +401,7 @@ where
                     .deliver_agent(harness_id, computer_id, computer.enrollment_generation)
                     .await
                     .map_err(internal)?;
-                Ok(None)
+                Ok(Some(Event::AgentDelivered))
             }
             Effect::PageOperator { reason } => {
                 // Alerting keys on this event; see the crate's AGENTS.md.

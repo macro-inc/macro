@@ -105,7 +105,8 @@ function Row(props: ToolRowProps) {
         class="min-w-0 overflow-hidden"
         classList={{
           'flex-1': !grouped(),
-          '*:gap-1.5 [--color-ink:var(--color-ink-disabled)]': grouped(),
+          '*:gap-1.5 [--color-ink:var(--color-ink-disabled)] selection-root':
+            grouped(),
           'magic-chip-shimmer': props.active,
         }}
       >
@@ -212,7 +213,8 @@ function List(props: ToolListProps) {
       classList={{
         '-mx-3 -my-2': !grouped(),
         // Results read in the row's tone, not as brighter content under it.
-        '[--color-ink:currentColor]': grouped(),
+        // A new ink restarts the selection tint (see index.css).
+        '[--color-ink:currentColor] selection-root': grouped(),
       }}
     >
       {props.children}

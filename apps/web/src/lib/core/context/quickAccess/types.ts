@@ -208,6 +208,9 @@ export type QuickAccessListOptions<
   readsCache?: Accessor<boolean>;
   /** Person scoring policy, applied before the native window limit. */
   peopleMode?: PeopleSearch['mode'];
+  /** How long the people window's first page waits for the local cache
+   * before listing the server's people instead. Unset, it waits. */
+  peopleLocalBudgetMs?: number;
   excludeSelf?: boolean;
   /** Explicit scoped participants/guests excluded from personal suggestions. */
   excludedPeople?: Accessor<ReadonlySet<string>>;
