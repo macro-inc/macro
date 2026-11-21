@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   pushesStored: vi.fn(),
   catchUpAndRefresh: vi.fn(async () => {}),
   channelCacheAnswered: vi.fn(() => true),
+  withUnsettledThreadReplies: vi.fn(),
+  listQueuedReplies: vi.fn(),
 }));
 
 vi.mock('../flag', () => ({
@@ -33,6 +35,11 @@ vi.mock('../pages', () => ({
 vi.mock('../thread', () => ({
   loadChannelThread: mocks.loadChannelThread,
   loadChannelMessage: vi.fn(),
+}));
+vi.mock('../unsettled-replies', () => ({
+  listQueuedReplies: mocks.listQueuedReplies,
+  pageHasQueuedReplies: vi.fn(async () => false),
+  withUnsettledThreadReplies: mocks.withUnsettledThreadReplies,
 }));
 vi.mock('../catch-up', () => ({
   MAX_PUSH_REREADS: 3,
@@ -53,11 +60,16 @@ const devicePage = (name: string, storedSeq: string) => ({
 });
 const thread = (name: string) => ({ name }) as unknown as MessageThread;
 const read = { channelId: CHANNEL_ID, limit: 50 };
+const QUEUED = Promise.resolve(new Map<string, string>());
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.channelCacheHost.mockReturnValue(host);
   mocks.catchUpAndRefresh.mockResolvedValue(undefined);
+  mocks.listQueuedReplies.mockReturnValue(QUEUED);
+  mocks.withUnsettledThreadReplies.mockImplementation(
+    async (_host, _channelId, read) => read
+  );
   mocks.channelCacheAnswered.mockReturnValue(true);
   localStorage.clear();
   resetUnheldReads();
@@ -155,6 +167,36 @@ describe('loadLocalChannelThread', () => {
       thread('server')
     );
     expect(mocks.pushesStored).not.toHaveBeenCalled();
+  });
+
+  it('answers a thread with the replies still waiting put into it', async () => {
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('server'),
+      source: 'server',
+    });
+    mocks.withUnsettledThreadReplies.mockResolvedValue(thread('with waiting'));
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toEqual(
+      thread('with waiting')
+    );
+    expect(mocks.withUnsettledThreadReplies).toHaveBeenCalledExactlyOnceWith(
+      host,
+      CHANNEL_ID,
+      thread('server'),
+      QUEUED
+    );
+  });
+
+  it('answers the thread as read when the waiting replies cannot be put in', async () => {
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('server'),
+      source: 'server',
+    });
+    mocks.withUnsettledThreadReplies.mockRejectedValue(new Error('retired'));
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toEqual(
+      thread('server')
+    );
   });
 
   it('leaves a thread to REST while the host starts, and has the device hold it too', async () => {

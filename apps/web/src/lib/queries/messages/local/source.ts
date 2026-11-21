@@ -8,6 +8,7 @@ import type {
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { onlineManager } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import {
   catchUpAndRefresh,
   catchUpChannel,
@@ -31,7 +32,11 @@ import {
   type UnheldRead,
   unheldReadsLeft,
 } from './unheld-reads';
-import { pageHasQueuedReplies } from './unsettled-replies';
+import {
+  listQueuedReplies,
+  pageHasQueuedReplies,
+  withUnsettledThreadReplies,
+} from './unsettled-replies';
 import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
@@ -269,6 +274,8 @@ export async function loadLocalChannelThread(
     return undefined;
   }
   try {
+    // Listed beside the read, not after it.
+    const queued = listQueuedReplies(host, channelId);
     let loaded = await loadChannelThread(host, channelId, rootId);
     // The views may already show a push this device thread is older than.
     for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
@@ -279,7 +286,16 @@ export async function loadLocalChannelThread(
     if (loaded?.source === 'device') {
       fireAndForget(catchUpAndRefresh(host, channelId), SYNC_SURFACE);
     }
-    return loaded?.thread;
+    if (!loaded) return undefined;
+    const { thread } = loaded;
+    // The server's thread cannot carry a reply still waiting to be sent.
+    const overlaid = await ResultAsync.fromPromise(
+      withUnsettledThreadReplies(host, channelId, thread, queued),
+      (error) => error
+    );
+    // The thread that was read still answers.
+    if (overlaid.isErr()) reportDeviceFault(overlaid.error);
+    return overlaid.unwrapOr(thread);
   } catch (error) {
     reportDeviceFault(error);
     return undefined;

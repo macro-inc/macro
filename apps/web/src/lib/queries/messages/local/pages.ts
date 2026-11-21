@@ -290,6 +290,8 @@ interface LoadChannelPageOptions {
   now?: () => number;
   /** Idle work: wait on the device and never race the server against it. */
   background?: boolean;
+  /** How long `background` work waits on a host that has not answered yet. */
+  hostWaitMs?: number;
 }
 
 type RacedRead =
@@ -417,7 +419,10 @@ async function loadPage(
   ) {
     device = await read;
   } else if (options.background) {
-    const early = await withinCacheHeadStart(read, CHANNEL_CACHE_HEAD_START_MS);
+    const early = await withinCacheHeadStart(
+      read,
+      options.hostWaitMs ?? CHANNEL_CACHE_HEAD_START_MS
+    );
     if (early === 'not-ready') {
       span.setAttr('page.source', 'not-ready');
       return 'not-ready';

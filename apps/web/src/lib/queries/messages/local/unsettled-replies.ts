@@ -6,6 +6,7 @@ import {
 import { ChannelMessageFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
 import type {
   Message,
+  MessageThread,
   MessageTimelineEntry,
   MessageTimelinePage,
 } from '@service-storage/messages';
@@ -25,6 +26,10 @@ import { channelMessageKey, timestampMicros } from './sort-key';
  * read from the device in between would draw the root without the reply, and
  * take a reply already on screen off it. Such replies are put into the page
  * as it is read.
+ *
+ * A thread read has the same gap: the server's copy of a thread cannot carry
+ * a reply still waiting, and one fetched while the reply was on its way
+ * lacks it. Such replies are put into the thread as it is read, too.
  */
 
 export type UnsettledRepliesHost = Pick<
@@ -239,6 +244,66 @@ export async function withUnsettledReplies(
         : { ...entry, message: { ...entry.message, thread } };
     }),
   };
+}
+
+/** Where a reply the server has placed goes among a thread's replies. */
+function placeAmong(replies: readonly Message[], reply: Message): number {
+  const index = replies.findIndex((shown) => byTimeWritten(reply, shown) < 0);
+  return index === -1 ? replies.length : index;
+}
+
+/**
+ * The thread with the replies to its root that it does not hold yet: the ones
+ * waiting in the device queue, from any window, and the ones this window sent
+ * that the thread was read too early to carry. A thread lists every reply, so
+ * one it already holds is never added twice.
+ */
+export async function withUnsettledThreadReplies(
+  host: UnsettledRepliesHost,
+  channelId: string,
+  thread: MessageThread,
+  /** The queue as it was listed while the thread was being read. */
+  queued: Promise<Map<string, string>> = queuedReplies(host, channelId)
+): Promise<MessageThread> {
+  const rootId = thread.root.id;
+  const shown = new Set(thread.replies.map((reply) => reply.id));
+  const missing = new Set<string>();
+  for (const [id, queuedRootId] of await queued) {
+    if (queuedRootId === rootId && !shown.has(id)) missing.add(id);
+  }
+  for (const [id, note] of ownReplies) {
+    if (note.channelId !== channelId || note.rootId !== rootId) continue;
+    if (!shown.has(id)) missing.add(id);
+  }
+  if (missing.size === 0) return thread;
+
+  const { records } = await readRecordsByKeys(
+    host,
+    messageSelection,
+    [...missing].map(channelMessageKey)
+  );
+  const held = new Map(records.map(({ record }) => [record.id, record]));
+  const waiting: Message[] = [];
+  let replies = thread.replies;
+  for (const id of missing) {
+    const record = held.get(id);
+    const note = ownReplies.get(id);
+    const noted = note && !note.delivered ? note.reply : undefined;
+    const stored = record ? mapChannelMessage(record) : noted;
+    // Delivered and no longer held, or deleted: the page read drops its note.
+    if (!stored || stored.deleted_at) continue;
+    if (note?.delivered) {
+      // The record may still hold the time the reply was written with.
+      const reply = { ...stored, created_at: note.reply.created_at };
+      const at = placeAmong(replies, reply);
+      replies = [...replies.slice(0, at), reply, ...replies.slice(at)];
+    } else {
+      waiting.push(stored);
+    }
+  }
+  if (replies === thread.replies && waiting.length === 0) return thread;
+  // A reply still waiting sorts after every reply the server has placed.
+  return { ...thread, replies: [...replies, ...waiting.sort(byTimeWritten)] };
 }
 
 /** Forgets every note: they belong to the account and cache they were made for. */

@@ -147,6 +147,41 @@ describe('runChannelPrewarm', () => {
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
+  it('waits on a host that is still starting instead of ending the pass', async () => {
+    // Answered well past the second a background read otherwise allows.
+    const host = fakeHost(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve(devicePage([], { covered: false })), 1_200)
+        ) as unknown as ReturnType<typeof devicePage>
+    );
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: { entries: [], olderCursor: null, newerCursor: null, seq: '1' },
+      cached: Promise.resolve(),
+    }));
+    const outcome = await runChannelPrewarm(host, ['a'], {
+      signal: signal(),
+      delayMs: 0,
+      fetchPage,
+    });
+    expect(outcome).toMatchObject({ fetched: 1, unavailable: false });
+    expect(host.reads).toHaveLength(1);
+  });
+
+  it('gives up on a host that does not start in time', async () => {
+    const host = fakeHost(
+      () => new Promise(() => {}) as unknown as ReturnType<typeof devicePage>
+    );
+    const outcome = await runChannelPrewarm(host, ['a', 'b'], {
+      signal: signal(),
+      delayMs: 0,
+      hostWaitMs: 20,
+      fetchPage: vi.fn(),
+    });
+    expect(outcome.unavailable).toBe(true);
+    expect(host.reads).toHaveLength(1);
+  });
+
   it('does nothing once aborted', async () => {
     const abort = new AbortController();
     abort.abort();

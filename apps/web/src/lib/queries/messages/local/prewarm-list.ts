@@ -35,14 +35,15 @@ export type FetchChannelListIds = (
 
 /**
  * One page of a channel list, filtered, ordered and cut off by the server.
- * The cache answers it without a request when it already maintains the list.
+ * Always asked of the server: the list the device kept is as an earlier page
+ * left it, without the channels that became unread while the app was closed.
  */
 const fetchChannelListIds: FetchChannelListIds = async (list) => {
   const result = await getGraphqlSoupClient()
     .query(
       ChannelListSoupDocument,
       { input: makeGraphqlSoupInput(list) },
-      { requestPolicy: 'cache-first' }
+      { requestPolicy: 'network-only' }
     )
     .toPromise();
   if (result.error) throw result.error;

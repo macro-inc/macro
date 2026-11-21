@@ -77,7 +77,7 @@ impl ToolAnnotated for ImportFromNotion {
 impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromNotion {
     type Output = ImportFromNotionResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, action = ?self.action, roots = self.roots.len(), sharing = ?self.sharing), err)]
+    #[tracing::instrument(skip_all, fields(action = ?self.action, roots = self.roots.len(), sharing = ?self.sharing), err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,

@@ -8,6 +8,11 @@ import { type FetchChannelServerPage, loadChannelPage } from './pages';
 /** The page a channel opens with. */
 export const PREWARM_PAGE_SIZE = 50;
 const CHANNEL_DELAY_MS = 500;
+/**
+ * How long a pass waits on a host that is still starting before it gives up
+ * on it: the next pass is minutes away.
+ */
+const HOST_WAIT_MS = 45_000;
 /** Channels not opened for this long leave the device. */
 export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;
 const MAX_EVICTION_PASSES = 10;
@@ -52,6 +57,7 @@ export async function runChannelPrewarm(
   options: {
     signal: AbortSignal;
     delayMs?: number;
+    hostWaitMs?: number;
     /** Resolves when the next channel may start: the person is not using the app. */
     ready?: (signal: AbortSignal) => Promise<void>;
     fetchPage?: FetchChannelServerPage;
@@ -83,8 +89,10 @@ export async function runChannelPrewarm(
             fetchPage: options.fetchPage,
             now: options.now,
             background: true,
+            hostWaitMs: options.hostWaitMs ?? HOST_WAIT_MS,
           }
         );
+        if (signal.aborted) break;
         if (loaded === 'unsupported' || loaded === 'not-ready') {
           outcome.unavailable = true;
           break;
