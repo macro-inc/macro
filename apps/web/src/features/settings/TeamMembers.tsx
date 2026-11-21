@@ -3,10 +3,7 @@ import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableAgentTeammates,
-  enableCrmMemberAccessChanges,
-} from '@core/constant/featureFlags';
+import { enableCrmMemberAccessChanges } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -35,10 +32,7 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
-import {
-  useRemoveTeamAgentMutation,
-  useTeamAgentsQuery,
-} from '@queries/team-agents/team-agents';
+import { useRemoveTeamAgentMutation } from '@queries/team-agents/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
@@ -68,6 +62,13 @@ import {
 } from './primitives';
 import { useRetryTeamAgentSetup } from './primitives/team-agent-status';
 import {
+  hasCrmAccess,
+  memberEmail,
+  memberName,
+  sortTeamMembers,
+  useTeamAgents,
+} from './primitives/team-roster';
+import {
   type InviteKind,
   InviteToTeamDialog,
   useCanInviteAgents,
@@ -94,12 +95,6 @@ import {
 import { TeamAgentClaude } from './views/team-agent-claude';
 import { TeamAgentMenu, TeamMemberMenu } from './views/team-member-menu';
 
-const roleOrder: Record<string, number> = {
-  [TeamRole.owner]: 0,
-  [TeamRole.admin]: 1,
-  [TeamRole.member]: 2,
-};
-
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
  * schema carries `plan`, read it defensively; every seat starts on Pro.
@@ -107,17 +102,6 @@ const roleOrder: Record<string, number> = {
 function memberPlan(member: TeamMember): PaidPlan {
   const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
   return plan === 'max' ? 'max' : 'premium';
-}
-
-function memberName(member: TeamMember) {
-  return getDisplayName(tryMacroId(member.user_id));
-}
-
-/** The member's email, when their name is something else. */
-function memberEmail(member: TeamMember) {
-  const id = tryMacroId(member.user_id);
-  const email = id ? macroIdToEmail(id) : undefined;
-  return email && email !== memberName(member) ? email : undefined;
 }
 
 /** A person's ⋯: a menu on desktop, a sheet on touch, as Machines does. */
@@ -177,13 +161,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   // Agent teammates: listed with their status once the flag is on. Loading
   // is not on, and off leaves the roster exactly as it was.
-  const agentFlag = useFeatureFlag(enableAgentTeammates);
   const canInviteAgents = useCanInviteAgents(isAdminOrOwner);
-  const agentsOn = () => !agentFlag().loading && agentFlag().enabled;
-  const agentsQuery = useTeamAgentsQuery(() => props.team.id, agentsOn);
+  const { enabled: agentsOn, agents } = useTeamAgents(() => props.team.id);
   const removeAgentMutation = useRemoveTeamAgentMutation();
-  const agents = () =>
-    agentsOn() && agentsQuery.isSuccess ? agentsQuery.data.agents : [];
   const agentUserIds = () => agents().map((agent) => agent.userId);
   // The step a new agent's computer is on, read while one is being set up
   // or has failed; any member can read the team's computers.
@@ -210,14 +190,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
     if (!canChangeVoice()) setVoiceAgent(undefined);
   });
 
-  const members = createMemo(() => {
-    const unsorted = teamQuery.data?.members ?? [];
-    return [...unsorted].sort((a, b) => {
-      const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
-      if (roleCompare !== 0) return roleCompare;
-      return a.user_id.localeCompare(b.user_id);
-    });
-  });
+  const members = createMemo(() =>
+    sortTeamMembers(teamQuery.data?.members ?? [])
+  );
 
   const [memberQuery, setMemberQuery] = createSignal('');
   // The input stays live (`memberQuery`); filtering reads this debounced view so
@@ -312,8 +287,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const planMovePending = () => setMemberPlanMutation.isPending;
 
   const crmAccessOf = (member: TeamMember) =>
-    member.role !== TeamRole.member ||
-    teamQuery.data?.crm_member_access?.[member.user_id] !== false;
+    hasCrmAccess(member, teamQuery.data?.crm_member_access);
   const pendingDowngradeOf = (member: TeamMember) =>
     teamQuery.data?.scheduled_seat_plans?.[member.user_id]?.plan === 'premium';
 

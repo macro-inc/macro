@@ -10,6 +10,7 @@ mod import_reads;
 mod live_pass;
 mod lock_timeouts;
 mod no_mailbox;
+mod notified_reads;
 mod outlook_import;
 mod outlook_subscriptions;
 mod projection_retries;

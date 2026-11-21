@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,notified_at,notified_traceparent,from_notification)\n            SELECT $1,$2,$3,false,clock_timestamp(),$4,true\n            WHERE NOT EXISTS (\n                SELECT 1 FROM email_sync_streams s\n                WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder' AND NOT s.initial_complete\n            ) AND (\n                SELECT count(*) FROM (\n                    SELECT 1 FROM email_message_reconciliation q\n                    WHERE q.link_id = $1 AND q.generation = $2 AND NOT q.is_import AND q.available_at <> 'infinity'\n                        AND q.available_at <= now()\n                    LIMIT $5\n                ) due\n            ) < $5\n            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET\n                revision = email_message_reconciliation.revision + 1,\n                is_import = false,\n                notified_at = EXCLUDED.notified_at,\n                notified_traceparent = EXCLUDED.notified_traceparent,\n                available_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0a0a83bc95a222051d01feb4224a4bbe0ed65f364f20bc4b5466cbc71f2b67e"
+}

@@ -235,6 +235,7 @@ deny = [
     "channels",                  # Dev logging only
     "code_execution",            # Deno exit span field tests only (dev-dependency)
     "coding_agent_worker",       # Standalone daemon logging setup
+    "contacts",                  # Worker-round trace and no-email span tests only (dev-dependency)
     "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only

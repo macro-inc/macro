@@ -114,6 +114,8 @@ where
         self.refresh
             .link_removed(link.macro_id.as_ref(), link.id)
             .await;
+        // The purge removed the inbox's Gmail or Outlook contacts with its row.
+        self.refresh.directory_changed(&link.macro_id).await;
 
         let _ = self
             .broker

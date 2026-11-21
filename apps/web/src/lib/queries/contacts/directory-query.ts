@@ -88,6 +88,9 @@ export function createContactDirectoryWindow(
     /** Wait this long after the last search edit before reading. Callers
      * whose search text is already debounced pass 0. */
     debounceMs?: number;
+    /** Lets a first page read the server when the cache has not answered in
+     * this long; see `ContactDirectoryRequest.localBudgetMs`. */
+    localBudgetMs?: number;
   } = {}
 ) {
   const owner = createUniqueId();
@@ -146,6 +149,9 @@ export function createContactDirectoryWindow(
           ? current.value
           : undefined,
       ...(policy ? { policy } : {}),
+      ...(options.localBudgetMs === undefined
+        ? {}
+        : { localBudgetMs: options.localBudgetMs }),
     };
   });
   /** Who the query reads for: nobody until the window is open and its text
@@ -192,6 +198,27 @@ export function createContactDirectoryWindow(
     });
     onCleanup(() => release?.());
   });
+  const budgeted = options.localBudgetMs !== undefined;
+  const rereadAfterCacheChange = () => {
+    // Rows the server listed because the cache was late keep their order
+    // until the input changes, on every page: the cache answering afterwards
+    // would rank them differently under the cursor.
+    const continuation = untrack(request).cursor;
+    if (
+      untrack(data)?.localLate ||
+      (continuation?.source === 'server' && continuation.localLate)
+    )
+      return;
+    const error = untrack(() => query.error);
+    if (!error || error instanceof ContactDirectoryUnavailableError) {
+      // A reply from before this write must not publish under the same
+      // input again. Restart keyset paging against the new local version.
+      batch(() => {
+        setCursor(undefined);
+        invalidate();
+      });
+    }
+  };
   createEffect(() => {
     const host = scope().host;
     if (!host) return;
@@ -201,15 +228,13 @@ export function createContactDirectoryWindow(
         () => {
           // Re-read locally as synchronization/context publication progresses.
           if (!enabled()) return;
-          const error = untrack(() => query.error);
-          if (!error || error instanceof ContactDirectoryUnavailableError) {
-            // A reply from before this write must not publish under the same
-            // input again. Restart keyset paging against the new local version.
-            batch(() => {
-              setCursor(undefined);
-              invalidate();
-            });
-          }
+          // A read with a budget is not restarted while it runs: a cache busy
+          // enough to be late also reports changes, and each restart would
+          // give it a new budget and never reach the server. Its page is
+          // refreshed by the next change after it lands; re-reading the
+          // moment it lands would take its rows away again as they appear.
+          if (budgeted && untrack(() => query.isFetching)) return;
+          rereadAfterCacheChange();
         },
         { searchBuckets: () => ['person'] }
       )

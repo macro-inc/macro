@@ -2,7 +2,8 @@
 
 CRM access and email contribution are separate permissions. Existing and new
 members start with CRM access. Admins and owners can deny or restore a plain
-member in team member settings or through the API; admins and owners always retain access. A member
+member in Team > Members, in CRM settings' Who can use CRM, or through the API;
+admins and owners always retain access. A member
 can use company and contact records without contributing a mailbox. Optional CRM product surfaces retain their own rollout gates.
 Existing record hiding remains a separate admin action; blocking email never
 hides or deletes a company or contact.

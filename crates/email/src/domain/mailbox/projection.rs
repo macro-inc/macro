@@ -1,15 +1,19 @@
 //! Durable downstream projection and live-mail notification policy.
 
+use super::retry::message_retry;
 use super::telemetry::{
     claim_failed, elapsed_ms, record_deferred, record_done, record_failed,
     record_projection_abandoned, span_int,
 };
-use super::{MailboxError, MailboxKey, MessageRetry, UNFINISHED_CLAIM_LIMIT, message_retry};
+use super::{MailboxError, MailboxKey, MessageRetry, UNFINISHED_CLAIM_LIMIT};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
 use email_api_client::domain::models::{CalendarPart, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{link::Link, message::Message};
+use models_email::service::{
+    link::{Link, UserProvider},
+    message::Message,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, future::Future, time::Instant};
 use tracing::{Instrument, Span};
@@ -136,6 +140,8 @@ pub struct CorrespondenceContact {
 pub struct CorrespondenceProjection {
     pub link_id: Uuid,
     pub owner: MacroUserIdStr<'static>,
+    /// The inbox's provider, which names the contacts list its people join.
+    pub provider: UserProvider,
     pub is_sent: bool,
     pub contacts: Vec<CorrespondenceContact>,
     pub connections: Vec<MacroUserIdStr<'static>>,
@@ -699,6 +705,7 @@ fn correspondence(context: &ProjectionContext) -> CorrespondenceProjection {
     let mut result = CorrespondenceProjection {
         link_id: context.link.id,
         owner: context.link.macro_id.clone(),
+        provider: context.link.provider,
         is_sent: false,
         contacts: Vec::new(),
         connections: Vec::new(),

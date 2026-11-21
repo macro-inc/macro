@@ -840,6 +840,12 @@ It changes in place; for owners and admins it shows on and fixed, with the
 reason, and one note under the list says they always have CRM access. A member
 whose access is off reads **No CRM access** on their row's summary line.
 A failed save keeps the previous state and can be retried; members do not see these controls.
+CRM settings (Settings > CRM, and the CRM sidebar's settings entry) opens with
+**Who can use CRM**, the same switch for every person Members shows as a person
+row, in the same order, each named `CRM access for <name>`. Owners and admins show
+it on and disabled, with **Owner · Always has CRM access** or **Admin · Always has
+CRM access** on their row. Both places write the same team setting, so a change in
+one shows in the other; members, and everyone while the flag is off, see no section.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
 drop retired snapshots when the cache generation changes. A CRM deep
