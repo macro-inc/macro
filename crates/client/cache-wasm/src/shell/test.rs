@@ -2978,8 +2978,9 @@ fn write_soup(engine: &CacheEngine, document_id: &str) -> js_sys::Promise {
     )
 }
 
-/// Both queries, the predicate index over the user's documents, and the
-/// revision, as JSON.
+/// Both queries, the predicate index over the user's documents, the
+/// backfilled document's record and projections by key, and the revision,
+/// as JSON.
 async fn hydrated_state(engine: &CacheEngine) -> serde_json::Value {
     let mut owned = documents_preset_filter(
         serde_json::json!({"literal": {"owner": "macro|user@example.com"}}),
@@ -3001,6 +3002,15 @@ async fn hydrated_state(engine: &CacheEngine) -> serde_json::Value {
                 .await
         ),
         "owned": from_js::<serde_json::Value>(resolved(engine.entity_filter(js(owned))).await),
+        "record": from_js::<serde_json::Value>(
+            resolved(engine.read_records_by_keys(
+                RECORD_FRAGMENT.into(),
+                "CachedDocument".into(),
+                js(serde_json::json!([format!("GraphqlSoupDocument:{BACKFILL_ITEM}")])),
+            ))
+            .await
+        ),
+        "projections": projection_rows(engine, &[BACKFILL_ITEM]).await,
         "revision": from_js::<String>(resolved(engine.current_revision()).await),
     })
 }
@@ -3077,6 +3087,13 @@ async fn a_staged_hydrate_lets_reads_run_then_commits_as_hydrate_query_does() {
         };
         let before = hydrated_state(&engine).await;
         assert_ne!(before, whole_state, "bound {bound}");
+        // The hydrate adds the backfilled record and its projections, so
+        // the comparisons below see them by key.
+        assert_ne!(before["record"], whole_state["record"], "bound {bound}");
+        assert_ne!(
+            before["projections"], whole_state["projections"],
+            "bound {bound}"
+        );
         resolved(prepare_backfill(&engine)).await;
         resolved(read()).await;
         resolved(engine.stage_hydrate()).await;
