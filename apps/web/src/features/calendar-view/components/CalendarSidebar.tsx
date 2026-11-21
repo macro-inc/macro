@@ -8,6 +8,7 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import { useSetCalendarColor } from '@app/features/calendar/hooks/use-calendar-color';
 import {
   type TeamOooWindow,
   useHasTeammates,
@@ -105,6 +106,7 @@ function UpcomingEventsSection() {
 
 function CalendarSourcesSection() {
   const calendarView = useCalendarView();
+  const setCalendarColor = useSetCalendarColor();
   const [open, setOpen] = createSignal(true);
 
   return (
@@ -128,6 +130,7 @@ function CalendarSourcesSection() {
             isVisible={calendarView.isSourceVisible}
             onVisibilityChange={calendarView.setSourceVisibility}
             onGroupVisibilityChange={calendarView.setSourcesVisibility}
+            onColorChange={setCalendarColor}
           />
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>

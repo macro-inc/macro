@@ -32,7 +32,6 @@ export function ConnectedCalendars(props: {
   isVisible: (id: string) => boolean;
   onVisibilityChange: (ids: string[], visible: boolean) => void;
   accountColor: (id: string) => string | undefined;
-  sourceColor: (id: string) => string | undefined;
   onAccountColor: (id: string, color: string | undefined) => void;
   onSourceColor: (id: string, color: string | undefined) => void;
   /** Whether a calendar counts toward availability, unknown until loaded. */
@@ -209,7 +208,7 @@ export function ConnectedCalendars(props: {
                         <CalendarColorPicker
                           label={`Color for ${calendar().name} (${account().email})`}
                           color={calendar().color}
-                          overridden={!!props.sourceColor(calendar().id)}
+                          overridden={calendar().hasCustomColor === true}
                           onChange={(color) =>
                             props.onSourceColor(calendar().id, color)
                           }
@@ -246,7 +245,8 @@ export function ConnectedCalendars(props: {
       </SettingsCard>
       <Show when={props.accounts.some((account) => account.calendars.length)}>
         <p class="px-6 text-xs text-ink-extra-muted">
-          Visibility and colors are saved in this browser. Busy is saved to your
+          Calendar colors follow your account. Visibility and the account
+          default color are saved in this browser. Busy is saved to your
           account: events on a Busy calendar block your booking links and your
           availability, shown or hidden. Turn Busy off for a calendar that isn't
           your schedule, such as a coworker's you follow. Meetings you're

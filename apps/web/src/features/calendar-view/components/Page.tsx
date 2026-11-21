@@ -217,10 +217,12 @@ export function Page(props: {
   );
   const [range, setRange] = createSignal<CalendarOccurrenceQueryRange>();
   const [selectionColor, setSelectionColor] = createSignal<string>();
-  const effectiveSelectionColor = () =>
-    selectionColor() ??
-    firstWritableCalendar()?.color ??
+  // The calendar's color as every surface shows it: the person's own first.
+  const calendarColor = (calendarId: string | undefined) =>
+    (calendarId && calendarView.sourceById().get(calendarId)?.color) ||
     DEFAULT_CALENDAR_SOURCE.color;
+  const effectiveSelectionColor = () =>
+    selectionColor() ?? calendarColor(firstWritableCalendar()?.id);
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     props.useNarrowDayHeaders && !isMobile();
@@ -262,7 +264,7 @@ export function Page(props: {
       return;
     }
     const calendar = firstWritableCalendar();
-    setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
+    setSelectionColor(calendarColor(calendar?.id));
     openEventComposer({
       initialValues: {
         ...calendarSelectionToEditorInitialValues(selection, true),

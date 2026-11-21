@@ -18,6 +18,12 @@ export const AVAILABILITY_CALENDAR_MUTATION_KEY = [
   'set-availability-calendar',
 ] as const;
 
+/** Saves of a person's own calendar colors; a refresh waits for them to settle. */
+export const CALENDAR_COLOR_MUTATION_KEY = [
+  'calendar',
+  'set-calendar-color',
+] as const;
+
 /**
  * Cache-backed reads nest under the REST keys, so invalidations and the
  * optimistic patches applied to `occurrences._def` reach both.

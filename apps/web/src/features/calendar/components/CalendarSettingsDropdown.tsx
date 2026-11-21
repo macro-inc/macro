@@ -25,7 +25,11 @@ import {
 } from '../utils/calendar-source-groups';
 import { useCalendarView } from './CalendarViewContext';
 import { MobilePeriodControls } from './PeriodSelector';
-import { CalendarAccountLabel, CalendarSourceLabel } from './SourceControls';
+import {
+  CalendarAccountLabel,
+  CalendarSourceLabel,
+  CalendarSwatch,
+} from './SourceControls';
 import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
@@ -423,6 +427,7 @@ function MobileCalendarVisibility(props: {
                         }
                       >
                         <span class="flex min-w-0 flex-1 items-center gap-2">
+                          <CalendarSwatch color={source.color} />
                           <CalendarSourceLabel source={source} />
                         </span>
                       </MobileFilterDrawer.Option>

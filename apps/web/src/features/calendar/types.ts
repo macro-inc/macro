@@ -38,6 +38,11 @@ export interface CalendarSource {
   name: string;
   /** Semantic CSS color used for events from this source. */
   color: string;
+  /**
+   * Whether `color` is the person's own choice for this calendar, not the
+   * account default or the provider's.
+   */
+  hasCustomColor?: boolean;
   /** Connected inbox address, when the source came from a visible calendar. */
   emailAddress?: string;
   /** Connected inbox link that syncs this calendar, for grouping by account. */

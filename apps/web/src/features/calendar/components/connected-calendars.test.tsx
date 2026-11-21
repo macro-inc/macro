@@ -38,7 +38,6 @@ it('shows partial account visibility and toggles every calendar in the account',
         )
       }
       accountColor={() => undefined}
-      sourceColor={() => undefined}
       onAccountColor={() => {}}
       onSourceColor={() => {}}
       countsAsBusy={() => true}
@@ -72,7 +71,12 @@ it('keeps the color control mounted across updates and supports resetting the ov
           canManage: true,
           needsPermission: false,
           calendars: [
-            { id: 'primary', name: 'Work', color: color() ?? '#123456' },
+            {
+              id: 'primary',
+              name: 'Work',
+              color: color() ?? '#123456',
+              hasCustomColor: color() !== undefined,
+            },
           ],
         },
       ]}
@@ -87,7 +91,6 @@ it('keeps the color control mounted across updates and supports resetting the ov
       isVisible={() => true}
       onVisibilityChange={() => {}}
       accountColor={() => undefined}
-      sourceColor={() => color()}
       onAccountColor={() => {}}
       onSourceColor={(_, next) => setColor(next)}
       countsAsBusy={() => undefined}
@@ -151,7 +154,6 @@ it('saves Busy per calendar apart from showing it, and waits for the setting bef
         )
       }
       accountColor={() => undefined}
-      sourceColor={() => undefined}
       onAccountColor={() => {}}
       onSourceColor={() => {}}
       countsAsBusy={(id) => busy()[id]}

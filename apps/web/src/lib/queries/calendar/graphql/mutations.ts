@@ -33,6 +33,8 @@ import {
   type InviteCalendarEventGuestsMutationVariables,
   RespondToCalendarEventDocument,
   type RespondToCalendarEventMutation,
+  SetCalendarColorDocument,
+  type SetCalendarColorMutation,
   UpdateCalendarEventDocument,
   type UpdateCalendarEventMutation,
 } from '@service-storage/graphql/generated/graphql';
@@ -94,8 +96,11 @@ export type CalendarMutationOutcome =
 const EVENT_TYPENAME = 'GraphqlCalendarEvent';
 const OCCURRENCE_TYPENAME = 'GraphqlCalendarOccurrence';
 const PAYLOAD_TYPENAME = 'GraphqlCalendarMutationPayload';
+const CALENDAR_TYPENAME = 'GraphqlCalendar';
 /** Namespaces RSVP coalescing keys; a newer answer replaces a queued one. */
 const RSVP_NAMESPACE = '1b671a64-40d5-491e-99b0-da01ff1f3341';
+/** Namespaces calendar color keys; a newer color replaces a queued one. */
+const CALENDAR_COLOR_NAMESPACE = '94d6174a-d3d7-4365-8700-6539281e48a4';
 /** Every cached occurrence of one event, whatever its date. */
 const ALL_TIME = {
   startMs: Date.UTC(1970, 0, 1),
@@ -321,6 +326,35 @@ export async function executeGraphqlRsvp(
 }
 
 /** Adds guests to the series or one occurrence through the durable queue. */
+/**
+ * Sets or clears the viewer's own color for a calendar. The cache shows the
+ * color on the calendar's record at once, and the server's answer replaces
+ * it, so every reader of the calendar list updates through the cache.
+ */
+export async function executeGraphqlSetCalendarColor(
+  args: { calendarId: string; color: string | null },
+  client: Client = getGraphqlSoupClient()
+): Promise<CalendarMutationOutcome> {
+  const result = await executeOptimisticMutation(
+    client,
+    SetCalendarColorDocument,
+    { input: { calendarId: args.calendarId, color: args.color } },
+    {
+      setCalendarColor: {
+        __typename: CALENDAR_TYPENAME,
+        id: args.calendarId,
+        customColor: args.color,
+      },
+    } as OptimisticResponse<SetCalendarColorMutation>,
+    { uuid: uuidv5(args.calendarId, CALENDAR_COLOR_NAMESPACE) }
+  ).toPromise();
+  if (optimisticMutationDispositionOf(result)?.kind === 'queued') {
+    return { kind: 'queued' };
+  }
+  if (result.error) throw graphqlError(result);
+  return { kind: 'committed' };
+}
+
 export async function executeGraphqlInviteGuests(
   host: CalendarMutationHost,
   args: InviteCalendarEventGuestsArgs,

@@ -9,6 +9,7 @@ import {
   type CalendarAccountGroup,
   groupCalendarSourcesByAccount,
 } from '../utils/calendar-source-groups';
+import { CalendarColorPicker } from './calendar-color-picker';
 
 interface SourceControlsProps {
   ref?: (element: HTMLUListElement) => void;
@@ -16,12 +17,15 @@ interface SourceControlsProps {
   isVisible: (sourceId: string) => boolean;
   onVisibilityChange: (sourceId: string, visible: boolean) => void;
   onGroupVisibilityChange: (sourceIds: string[], visible: boolean) => void;
+  /** Saves the person's own color for a calendar; `undefined` resets it. */
+  onColorChange: (sourceId: string, color: string | undefined) => void;
 }
 
 /**
  * Controls which calendar sources are visible, folded under a collapsible
  * header per connected account. The header checkbox shows or hides all of the
- * account's calendars at once.
+ * account's calendars at once. A calendar's swatch opens its color picker;
+ * the checkbox and the name beside it still show or hide it.
  */
 export function SourceControls(props: SourceControlsProps) {
   const groups = () => groupCalendarSourcesByAccount(props.sources);
@@ -95,7 +99,18 @@ export function SourceControls(props: SourceControlsProps) {
                         class="flex h-(--sidebar-row-height) w-full min-w-0 gap-3 rounded-lg px-(--sidebar-item-inset) text-sm text-ink-muted hover:bg-hover hover:text-ink touch:h-auto touch:min-h-11 touch:py-1"
                       >
                         <Checkbox.Control />
-                        <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
+                        <span class="-mx-[5px] flex shrink-0 touch:-mx-[11px]">
+                          <CalendarColorPicker
+                            compact
+                            label={`Color for ${source.name} (${source.emailAddress ?? ''})`}
+                            color={source.color}
+                            overridden={source.hasCustomColor === true}
+                            onChange={(color) =>
+                              props.onColorChange(source.id, color)
+                            }
+                          />
+                        </span>
+                        <Checkbox.Label class="-ml-1 flex min-w-0 flex-1 items-center gap-2">
                           <CalendarSourceLabel source={source} />
                         </Checkbox.Label>
                       </Checkbox>
@@ -129,8 +144,19 @@ export function CalendarAccountLabel(props: { group: CalendarAccountGroup }) {
   );
 }
 
+/** A calendar's color, as the small square its rows show beside its name. */
+export function CalendarSwatch(props: { color: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      class="size-2.5 shrink-0 rounded-sm"
+      style={{ 'background-color': props.color }}
+    />
+  );
+}
+
 /**
- * A calendar's swatch and name, with its sync-failure and subscription marks.
+ * A calendar's name, with its sync-failure and subscription marks.
  * A pointer reads the sync error from the warning mark's tooltip; touch has
  * no hover, so there it is written out under the name, as a menu item's
  * disabled reason is.
@@ -141,11 +167,6 @@ export function CalendarSourceLabel(props: { source: CalendarSource }) {
 
   return (
     <>
-      <span
-        aria-hidden="true"
-        class="size-2.5 shrink-0 rounded-sm"
-        style={{ 'background-color': props.source.color }}
-      />
       <span class="flex min-w-0 flex-1 flex-col">
         <span class="truncate">{props.source.name}</span>
         <Show when={syncFailure()}>
