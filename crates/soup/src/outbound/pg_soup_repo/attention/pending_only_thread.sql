@@ -45,11 +45,18 @@
         -- reaches the thread's notifications, whoever received them, and one
         -- primary-key probe per notification finds the viewer's pending row,
         -- so the read follows the thread's notifications, not the viewer's.
+        -- The fence keeps the channel check out of that scan: with it inside,
+        -- a stale plan also read every channel notification through
+        -- notification_channel_message_id_idx (partial on channel rows).
         SELECT keys.entity_type, keys.entity_id, viewer.created_at
         FROM only_keys keys
-        JOIN notification n
-          ON n.secondary_event_item_type = 'channel_message'
-         AND n.secondary_event_item_id = keys.entity_id
+        CROSS JOIN LATERAL (
+            SELECT n.id, n.event_item_type
+            FROM notification n
+            WHERE n.secondary_event_item_type = 'channel_message'
+            AND n.secondary_event_item_id = keys.entity_id
+            OFFSET 0
+        ) n
         CROSS JOIN LATERAL (
             SELECT un.created_at
             FROM user_notification un

@@ -920,19 +920,19 @@ async fn notify_on_channel(
     channel_id: &str,
     at: &str,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    sqlx::query!(
         "WITH n AS (
             INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, created_at)
-            VALUES ($2::uuid, 'channel_message_send', $3, 'channel', 'test', $4::timestamp)
+            VALUES ($2::text::uuid, 'channel_message_send', $3, 'channel', 'test', $4::text::timestamp)
             RETURNING id, created_at
         )
         INSERT INTO user_notification (user_id, notification_id, created_at, sent, state, event_item_type, event_item_id, notification_event_type)
         SELECT $1, id, created_at, TRUE, 'unseen', 'channel', $3, 'channel_message_send' FROM n",
+        USER_1,
+        id,
+        channel_id,
+        at,
     )
-    .bind(USER_1)
-    .bind(id)
-    .bind(channel_id)
-    .bind(at)
     .execute(pool)
     .await?;
     Ok(())
@@ -1057,6 +1057,84 @@ async fn the_whole_feed_holds_own_work_and_thread_scoped_items(
     Ok(())
 }
 
+/// The shared buffers the attention query of `request` reads when it runs.
+async fn blocks_read(pool: &Pool<Postgres>, request: &AttentionCandidateRequest<'_>) -> i64 {
+    let types = requested_types(request);
+    let only = request.only.unwrap_or_default();
+    let only_types: Vec<&str> = only.iter().map(|e| e.entity_type.into()).collect();
+    let only_ids: Vec<&str> = only.iter().map(|e| e.entity_id.as_ref()).collect();
+    let plan: serde_json::Value = sqlx::QueryBuilder::<Postgres>::new(format!(
+        "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {}",
+        build_query(request)
+    ))
+    .build_query_scalar()
+    .bind(request.user_id.as_ref())
+    .bind(&types)
+    .bind(None::<chrono::DateTime<chrono::Utc>>)
+    .bind(None::<String>)
+    .bind(request.link_ids)
+    .bind(request.limit as i64)
+    .bind(Vec::<&str>::new())
+    .bind(Vec::<&str>::new())
+    .bind(request.own_work)
+    .bind(request.only.map(|_| only_types))
+    .bind(request.only.map(|_| only_ids))
+    .persistent(false)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let top = &plan[0]["Plan"];
+    top["Shared Hit Blocks"].as_i64().unwrap() + top["Shared Read Blocks"].as_i64().unwrap()
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_recompute_of_a_busy_shared_item_reads_only_the_viewers_work_on_it(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The viewer's own history, so the planner expects their rows anywhere,
+    // and a document 200 other people edited 20,000 times since the viewer
+    // last did.
+    sqlx::query!(
+        "INSERT INTO activity_events (id, actor_id, subject_id, action, entity_type, entity_id, occurred_at)
+        SELECT gen_random_uuid(), $1, $1, 'edited', 'document', gen_random_uuid()::text,
+               timestamptz '2024-01-01' + i * interval '1 minute'
+        FROM generate_series(1, 50000) AS i",
+        USER_1,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO activity_events (id, actor_id, subject_id, action, entity_type, entity_id, occurred_at)
+        SELECT gen_random_uuid(), 'macro|busy-' || (i % 200) || '@example.com',
+               'macro|busy-' || (i % 200) || '@example.com', 'edited', 'document', $1,
+               timestamptz '2026-03-01' + i * interval '1 minute'
+        FROM generate_series(1, 20000) AS i",
+        DOC_F,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::Document.with_entity_string(DOC_F.to_string())];
+    for keying in [AttentionKeying::ThreadScoped, AttentionKeying::FiledEntity] {
+        let mut recompute = req(WORK, &link_ids, &sources);
+        recompute.keying = keying;
+        recompute.only = Some(&only);
+        let blocks = blocks_read(&pool, &recompute).await;
+        eprintln!("recompute {keying:?} of a busy document: {blocks} blocks");
+        assert!(
+            blocks < 500,
+            "{keying:?} recompute of a busy document read {blocks} blocks"
+        );
+    }
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("work_feed")),
     migrator = "MACRO_DB_MIGRATIONS"
@@ -1065,18 +1143,18 @@ async fn a_recompute_costs_the_same_however_much_the_viewer_holds(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     // A viewer with a long history of their own: 50,000 edits, one item each.
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO activity_events (id, actor_id, subject_id, action, entity_type, entity_id, occurred_at)
         SELECT gen_random_uuid(), $1, $1, 'edited', 'document', gen_random_uuid()::text,
                timestamptz '2024-01-01' + i * interval '1 minute'
         FROM generate_series(1, 50000) AS i",
+        USER_1,
     )
-    .bind(USER_1)
     .execute(&pool)
     .await?;
     // And a large inbox: 50,000 pending notifications, a fifth of them on
     // channels and naming a thread.
-    sqlx::query(
+    sqlx::query!(
         "WITH n AS (
             INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, secondary_event_item_id, secondary_event_item_type)
             SELECT gen_random_uuid(),
@@ -1091,11 +1169,11 @@ async fn a_recompute_costs_the_same_however_much_the_viewer_holds(
         )
         INSERT INTO user_notification (user_id, notification_id, state, event_item_type, event_item_id, notification_event_type)
         SELECT $1, id, 'unseen', event_item_type, event_item_id, notification_event_type FROM n",
+        USER_1,
     )
-    .bind(USER_1)
     .execute(&pool)
     .await?;
-    sqlx::query("ANALYZE").execute(&pool).await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
 
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();

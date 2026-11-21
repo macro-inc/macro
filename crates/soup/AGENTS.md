@@ -55,10 +55,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
-  `keying.rs`. A read of known items (`only`) under `FiledEntity` keying
-  takes its pending notifications from `attention/pending_only.sql`, by key;
-  every other read, and every probe (which empties it), takes them from
-  `attention/pending.sql`. Change both.
+  `keying.rs`. A read of known items (`only`) reads by key: pending
+  notifications from `attention/pending_only.sql` (`FiledEntity`) or
+  `attention/pending_only_thread.sql` (`ThreadScoped`), own work from
+  `attention/own_work_latest_only.sql`. A whole page reads
+  `attention/pending.sql` and `attention/own_work_latest.sql`, and a probe
+  (which empties pending) reads `pending.sql`. Change them together; the
+  `a_read_of_known_items_matches_the_whole_feed_for_every_item` test checks
+  that a read of known items returns what the whole feed has for them.
 - Find where a viewer's unread rows may be without paging a feed:
   `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
   filtered and runs for every signed-in viewer; its two reads are bounded by
