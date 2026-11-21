@@ -367,3 +367,23 @@ async fn a_request_that_opted_out_records_no_tool_span() {
     let spans = finished(&exporter, &provider);
     assert!(tool_spans(&spans).is_empty(), "{spans:#?}");
 }
+
+#[test]
+fn image_pixels_are_recorded_as_a_byte_count() {
+    let result = json!({
+        "status": "succeeded",
+        "modelMedia": [{"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo="}],
+    });
+
+    assert_eq!(
+        *without_image_pixels(&result),
+        json!({
+            "status": "succeeded",
+            "modelMedia": [{"type": "image", "mediaType": "image/png", "dataBytes": 12}],
+        })
+    );
+    assert!(matches!(
+        without_image_pixels(&json!({"echo": "a"})),
+        std::borrow::Cow::Borrowed(_)
+    ));
+}

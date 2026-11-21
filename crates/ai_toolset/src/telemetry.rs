@@ -144,10 +144,39 @@ impl ToolCallSpan {
     }
 
     fn record_result(&self, value: &serde_json::Value) {
-        let (result, truncated) = bounded_json_string(value, &self.policy.limits);
+        let value = without_image_pixels(value);
+        let (result, truncated) = bounded_json_string(&value, &self.policy.limits);
         self.span.set_str(attr::TOOL_CALL_RESULT, result);
         if truncated {
             self.span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);
         }
     }
+}
+
+/// The result with each `modelMedia` image's base64 `data` replaced by its
+/// length in `dataBytes`: pixels are not content a trace can use.
+fn without_image_pixels(value: &serde_json::Value) -> std::borrow::Cow<'_, serde_json::Value> {
+    let Some(media) = value.get("modelMedia").and_then(serde_json::Value::as_array) else {
+        return std::borrow::Cow::Borrowed(value);
+    };
+    let media = media
+        .iter()
+        .map(|item| match item {
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, field)| match (key.as_str(), field) {
+                        ("data", serde_json::Value::String(data)) => {
+                            ("dataBytes".to_owned(), serde_json::Value::from(data.len()))
+                        }
+                        _ => (key.clone(), field.clone()),
+                    })
+                    .collect(),
+            ),
+            other => other.clone(),
+        })
+        .collect();
+    let mut value = value.clone();
+    value["modelMedia"] = serde_json::Value::Array(media);
+    std::borrow::Cow::Owned(value)
 }
