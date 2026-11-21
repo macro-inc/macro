@@ -205,6 +205,9 @@ export function AgentComposer(props: {
   // behind a running turn with the files still on them.
   const send = async (markdown: string, attachments: InputAttachmentData[]) => {
     if (readOnly() || configuring()) return;
+    // Read the session now: the answer can outlive a switch. A message that
+    // comes back goes ahead of anything typed meanwhile.
+    const sentTo = sessionId();
     const meta = metadata();
     const tiers = speedOption();
     const tier = speed();
@@ -213,7 +216,7 @@ export function AgentComposer(props: {
       try {
         await selectModel(meta.model, { configId: tiers.id, value: tier });
       } catch {
-        persistedDraft.setDraft(markdown);
+        persistedDraft.restore(sentTo, markdown);
         toast.failure('The speed setting could not be applied. Please retry.');
         return;
       } finally {
@@ -221,7 +224,7 @@ export function AgentComposer(props: {
       }
     }
     if (readOnly()) {
-      persistedDraft.setDraft(markdown);
+      persistedDraft.restore(sentTo, markdown);
       return;
     }
     // Queued review notes ride this send: taking them here marks them sent
@@ -234,7 +237,6 @@ export function AgentComposer(props: {
     // The composer clears at once, as a sent message reads as sent; the
     // fold shows it pending. A failed or refused send retracts any such
     // bubble, so the message comes back here rather than vanishing.
-    const sentTo = sessionId();
     attachmentTracker.clearAttachments();
     const sent = await act(
       promptActionOf(prompt, attachments),

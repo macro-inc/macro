@@ -268,6 +268,7 @@ it('retains the draft if editing access is revoked while applying speed', async 
       })
   );
   render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('');
   mocks.input?.onSend('Keep after permission change', []);
   expect(mocks.selectModel).toHaveBeenCalledWith('openai/gpt-6-astra', {
     configId: 'speed',
@@ -280,6 +281,58 @@ it('retains the draft if editing access is revoked while applying speed', async 
   );
   expect(mocks.issue).not.toHaveBeenCalled();
   expect(mocks.consumeNotes).not.toHaveBeenCalled();
+});
+
+it('keeps text typed while a rejected speed change was out', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.metadata = () => ({
+    model: 'openai/gpt-6-astra',
+    configOptions: [speedOption(['standard', 'priority', 'ultrafast'])],
+  });
+  let fail!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((_, reject) => {
+        fail = () => reject(new Error('Unavailable'));
+      })
+  );
+  render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('');
+  mocks.input?.onSend('First message', []);
+  mocks.input?.onDraftChange?.('Typed meanwhile');
+  fail();
+
+  await vi.waitFor(() =>
+    expect(mocks.input?.draft).toBe('First message\n\nTyped meanwhile')
+  );
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
+
+it('keeps text typed while access was revoked during a speed change', async () => {
+  const [canEdit, setCanEdit] = createSignal(true);
+  mocks.session = () => ({ canEdit: canEdit(), harness: 'in-memory' });
+  mocks.metadata = () => ({
+    model: 'openai/gpt-6-astra',
+    configOptions: [speedOption(['standard', 'priority', 'ultrafast'])],
+  });
+  let finish!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('');
+  mocks.input?.onSend('First message', []);
+  mocks.input?.onDraftChange?.('Typed meanwhile');
+  setCanEdit(false);
+  finish();
+
+  await vi.waitFor(() =>
+    expect(mocks.input?.draft).toBe('First message\n\nTyped meanwhile')
+  );
+  expect(mocks.issue).not.toHaveBeenCalled();
 });
 
 it('allows another prompt after a failed turn', () => {
