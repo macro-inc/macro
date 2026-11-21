@@ -144,6 +144,14 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         self.validated_link_access_token(&link).await
     }
 
+    /// Records on its span whether GitHub was asked (`checked`, `rejected`)
+    /// or a token it accepted within [`TOKEN_VALIDATION_WINDOW`] was reused
+    /// (`cached`).
+    #[tracing::instrument(
+        name = "github.link_access_token",
+        skip_all,
+        fields(token_check = tracing::field::Empty)
+    )]
     async fn validated_link_access_token(
         &self,
         link: &GithubLink,
@@ -159,7 +167,9 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             .map_err(Into::into)?
             .ok_or(GithubError::ReauthenticationRequired)?;
 
+        let span = tracing::Span::current();
         if self.validated.is_fresh(access_token.as_str()) {
+            span.record("token_check", "cached");
             return Ok(access_token);
         }
 
@@ -170,9 +180,11 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             .map_err(Into::into)?;
 
         if token_is_expired {
+            span.record("token_check", "rejected");
             return Err(GithubError::ReauthenticationRequired);
         }
 
+        span.record("token_check", "checked");
         self.validated.accept(access_token.as_str());
         Ok(access_token)
     }
