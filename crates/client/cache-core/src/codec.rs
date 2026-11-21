@@ -102,28 +102,41 @@ thread_local! {
 
 /// `raw` deflated and tagged, when that is smaller than `raw`.
 fn deflate_smaller(raw: &[u8]) -> Option<Vec<u8>> {
-    DEFLATER.with(|cell| {
-        let Deflater { stream, output } = &mut *cell.borrow_mut();
-        // Room for one byte less than `raw`: a stream that doesn't end within
-        // it isn't smaller.
-        let room = raw.len() - 1;
-        if output.len() < room {
-            output.resize(room, 0);
+    // A thread's deflater is gone once its locals are being destroyed; a record
+    // encoded from a destructor then gets a fresh one.
+    DEFLATER
+        .try_with(|cell| deflate_with(&mut cell.borrow_mut(), raw))
+        .unwrap_or_else(|_| {
+            let mut deflater = Deflater {
+                stream: zlib_rs::Deflate::new(RECORD_DEFLATE_LEVEL, false, 15),
+                output: Vec::new(),
+            };
+            deflate_with(&mut deflater, raw)
+        })
+}
+
+fn deflate_with(deflater: &mut Deflater, raw: &[u8]) -> Option<Vec<u8>> {
+    let Deflater { stream, output } = deflater;
+    // Room for all of `raw`: a stream that fills it isn't smaller. One byte
+    // less would turn away a stream that saves exactly one, because zlib-rs
+    // reports a stream whose last byte fills the room as unfinished.
+    let room = raw.len();
+    if output.len() < room {
+        output.resize(room, 0);
+    }
+    stream.reset();
+    let status = stream.compress(raw, &mut output[..room], zlib_rs::DeflateFlush::Finish);
+    let length = usize::try_from(stream.total_out()).unwrap_or(usize::MAX);
+    let compressed = match status {
+        Ok(zlib_rs::Status::StreamEnd) if length < room => {
+            Some(tagged(RECORD_ENCODING_DEFLATE, &output[..length]))
         }
-        stream.reset();
-        let status = stream.compress(raw, &mut output[..room], zlib_rs::DeflateFlush::Finish);
-        let length = usize::try_from(stream.total_out()).unwrap_or(usize::MAX);
-        let compressed = match status {
-            Ok(zlib_rs::Status::StreamEnd) if length <= room => {
-                Some(tagged(RECORD_ENCODING_DEFLATE, &output[..length]))
-            }
-            _ => None,
-        };
-        if output.len() > RETAINED_OUTPUT_BYTES {
-            *output = Vec::new();
-        }
-        compressed
-    })
+        _ => None,
+    };
+    if output.capacity() > RETAINED_OUTPUT_BYTES {
+        *output = Vec::new();
+    }
+    compressed
 }
 
 /// Whether a record of `len` encoded bytes may be stored deflated: the reader
@@ -199,7 +212,7 @@ fn inflate_record<T>(
                 Err(error) => break Err(CodecError::Inflate(format!("{error:?}"))),
             }
         };
-        if output.len() > RETAINED_OUTPUT_BYTES {
+        if output.capacity() > RETAINED_OUTPUT_BYTES {
             *output = Vec::new();
         }
         result
@@ -426,6 +439,71 @@ mod tests {
         })
         .unwrap();
         assert_eq!(inflated, text.as_bytes());
+    }
+
+    #[test]
+    fn deflated_whenever_the_stream_is_smaller_even_by_one_byte() {
+        // Mostly two-byte UTF-8 characters, which deflate to about their own size.
+        let mut state = 1_u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let mut saved_one = 0;
+        for _ in 0..400 {
+            let mut body = String::new();
+            while body.len() < 556 {
+                let choice = next() as u8;
+                let bits = (next() >> 8) as u32;
+                let code = if u32::from(choice) * 100 / 256 < 75 {
+                    128 + bits % 1920
+                } else {
+                    bits % 128
+                };
+                body.push(char::from_u32(code).unwrap());
+            }
+            let raw = encode(&record_with_body(&body));
+            let mut whole = Deflater {
+                stream: zlib_rs::Deflate::new(RECORD_DEFLATE_LEVEL, false, 15),
+                output: vec![0; raw.len() * 2],
+            };
+            let status =
+                whole
+                    .stream
+                    .compress(&raw, &mut whole.output, zlib_rs::DeflateFlush::Finish);
+            assert_eq!(status, Ok(zlib_rs::Status::StreamEnd));
+            let length = usize::try_from(whole.stream.total_out()).unwrap();
+            let expected = (length < raw.len())
+                .then(|| tagged(RECORD_ENCODING_DEFLATE, &whole.output[..length]));
+            saved_one += usize::from(length + 1 == raw.len());
+            assert_eq!(deflate_smaller(&raw), expected);
+        }
+        assert!(saved_one > 0, "no input saved exactly one byte");
+    }
+
+    #[test]
+    fn records_encoded_while_thread_locals_are_destroyed_still_deflate() {
+        struct EncodeOnDrop;
+        impl Drop for EncodeOnDrop {
+            fn drop(&mut self) {
+                let record = record_with_body(&"x".repeat(4_096));
+                let bytes = encode_record(&record);
+                assert_eq!(bytes.first(), Some(&RECORD_ENCODING_DEFLATE));
+                assert_eq!(decode_record(&bytes).unwrap(), record);
+            }
+        }
+        thread_local! {
+            static ENCODE_ON_DROP: RefCell<Option<EncodeOnDrop>> = const { RefCell::new(None) };
+        }
+        std::thread::spawn(|| {
+            ENCODE_ON_DROP.with(|cell| *cell.borrow_mut() = Some(EncodeOnDrop));
+            // Starts the deflater after the drop guard, so it is destroyed first.
+            encode_record(&record_with_body(&"x".repeat(4_096)));
+        })
+        .join()
+        .unwrap();
     }
 
     /// A record as builds before zlib-rs stored it: miniz_oxide at level 3.
