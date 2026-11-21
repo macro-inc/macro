@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{
+    calendar_color::CalendarColor,
     copies::{CopyChange, CopyRefusal},
     join_requests::CalendarJoinRequest,
     meeting_links::{
@@ -96,6 +97,10 @@ where
 {
     Router::new()
         .route("/calendars", get(list_calendars::<S, L, Auth>))
+        .route(
+            "/calendars/{calendar_id}/color",
+            put(set_calendar_color::<S, L, Auth>),
+        )
         .route("/events", post(create_calendar_event::<S, L, Auth>))
         .route(
             "/events/{event_id}",
@@ -756,6 +761,60 @@ where
         .list_visible_calendars(user.authorization.user.macro_user_id.as_ref())
         .await?;
     Ok(Json(ListCalendarsResponse { calendars }))
+}
+
+/// The requester's own color for one of their calendars.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetCalendarColorBody {
+    /// `#rrggbb`, or `null` to show the provider's color again.
+    #[schema(pattern = "^#[0-9a-fA-F]{6}$")]
+    pub color: Option<String>,
+}
+
+/// Set the requester's own color for one of their calendars, or clear it to
+/// show the provider's color again. Macro keeps it; the provider never sees it.
+#[tracing::instrument(skip_all, fields(calendar_id = %calendar_id), err)]
+#[utoipa::path(
+    put,
+    path = "/calendars/{calendar_id}/color",
+    tag = "calendar_events",
+    params(("calendar_id" = Uuid, Path, description = "Calendar id")),
+    request_body = SetCalendarColorBody,
+    responses(
+        (status = 204, description = "The color was saved"),
+        (status = 400, description = "The color is not #rrggbb", body = CalendarMutationApiError),
+        (status = 401, description = "Authentication required"),
+        (status = 404, description = "Calendar not found", body = CalendarMutationApiError),
+        (status = 503, description = "Transient failure", body = CalendarMutationApiError),
+    )
+)]
+pub async fn set_calendar_color<S, L, Auth>(
+    State(state): State<CalendarMutationRouterState<S, L, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(calendar_id): Path<Uuid>,
+    Json(body): Json<SetCalendarColorBody>,
+) -> Result<StatusCode, CalendarMutationApiError>
+where
+    S: CalendarMutationService,
+    L: MeetingLinkProvider,
+    Auth: MacroAuthorizationService,
+{
+    let color = body
+        .color
+        .as_deref()
+        .map(CalendarColor::parse)
+        .transpose()
+        .map_err(|error| CalendarMutationError::InvalidInput(error.to_string()))?;
+    state
+        .service
+        .set_calendar_color(
+            user.authorization.user.macro_user_id.as_ref(),
+            calendar_id,
+            color,
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Resolve an update's scope from its transport pair. An omitted scope

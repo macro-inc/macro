@@ -7756,6 +7756,7 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
     assert_primary_content(&entity_content(&pool, event_id).await);
 }
 
+mod calendar_color;
 mod changes;
 mod channel_grants;
 mod details;

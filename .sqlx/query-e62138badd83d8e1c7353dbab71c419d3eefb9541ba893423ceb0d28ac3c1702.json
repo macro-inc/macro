@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT link.id\n            FROM calendars calendar\n            JOIN calendar_accounts account ON account.id = calendar.account_id\n            JOIN email_links link ON link.id = account.email_link_id\n            WHERE calendar.id = $2\n              AND NOT calendar.is_deleted\n              AND account.sync_status <> 'disabled'\n              AND (\n                    link.macro_id = $1\n                    OR EXISTS (\n                        SELECT 1\n                        FROM macro_user_links delegation\n                        WHERE delegation.link_id = link.id\n                          AND delegation.primary_macro_id = $1\n                    )\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e62138badd83d8e1c7353dbab71c419d3eefb9541ba893423ceb0d28ac3c1702"
+}

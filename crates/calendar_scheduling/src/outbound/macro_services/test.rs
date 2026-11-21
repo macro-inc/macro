@@ -67,6 +67,7 @@ fn calendar(id: Uuid, name: &str, is_primary: bool, counts: bool) -> VisibleCale
         email_address: HOST_EMAIL.to_owned(),
         name: name.to_owned(),
         color: None,
+        custom_color: None,
         is_primary,
         is_writable: is_primary,
         is_subscription: false,
@@ -270,6 +271,15 @@ impl calendar_events::domain::ports::CalendarMutationService for FakeMutations {
             .0
             .clone()
             .expect("busy time reads calendars in process"))
+    }
+
+    async fn set_calendar_color(
+        &self,
+        _requester_id: &str,
+        _calendar_id: Uuid,
+        _color: Option<calendar_events::domain::calendar_color::CalendarColor>,
+    ) -> Result<(), CalendarMutationError> {
+        unreachable!("calendar colors are not exercised here")
     }
 
     async fn update_event(

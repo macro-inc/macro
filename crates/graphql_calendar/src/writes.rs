@@ -1,11 +1,12 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use calendar_events::domain::{
+    calendar_color::CalendarColor,
     changes::{CalendarChangeQueryService, CalendarEventChange},
     meeting_links::MacroCallEventError,
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch,
+        CalendarEventPatch, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
@@ -79,6 +80,19 @@ pub(crate) trait CalendarGraphqlWrites: Send + Sync {
         viewer: String,
         event_id: Uuid,
     ) -> ReadFuture<'_, Option<CalendarEventChange>>;
+
+    fn set_calendar_color(
+        &self,
+        viewer: String,
+        calendar_id: Uuid,
+        color: Option<CalendarColor>,
+    ) -> WriteFuture<'_, ()>;
+
+    fn calendar(
+        &self,
+        viewer: String,
+        calendar_id: Uuid,
+    ) -> ReadFuture<'_, Option<VisibleCalendar>>;
 }
 
 /// Type-erased calendar mutation service stored in GraphQL request data.
@@ -216,5 +230,26 @@ where
         event_id: Uuid,
     ) -> ReadFuture<'_, Option<CalendarEventChange>> {
         Box::pin(async move { self.committed_changes.event_change(&viewer, event_id).await })
+    }
+
+    fn set_calendar_color(
+        &self,
+        viewer: String,
+        calendar_id: Uuid,
+        color: Option<CalendarColor>,
+    ) -> WriteFuture<'_, ()> {
+        Box::pin(async move {
+            self.mutations
+                .set_calendar_color(&viewer, calendar_id, color)
+                .await
+        })
+    }
+
+    fn calendar(
+        &self,
+        viewer: String,
+        calendar_id: Uuid,
+    ) -> ReadFuture<'_, Option<VisibleCalendar>> {
+        Box::pin(async move { self.committed_changes.calendar(&viewer, calendar_id).await })
     }
 }

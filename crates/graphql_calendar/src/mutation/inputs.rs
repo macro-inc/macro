@@ -1,5 +1,6 @@
 use async_graphql::{Enum, ID, InputObject, OneofObject};
 use calendar_events::domain::{
+    calendar_color::CalendarColor,
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEventDraft, CalendarEventPatch,
         ConferenceChange, EventReminderOverride, EventReminders, EventTime, EventTransparency,
@@ -608,4 +609,33 @@ impl InviteCalendarEventGuestsInput {
 
 fn optional_id(id: Option<ID>, field: &str) -> async_graphql::Result<Option<Uuid>> {
     id.map(|id| parse_id(id, field)).transpose()
+}
+
+/// The viewer's own color for one of their calendars.
+#[derive(InputObject, Clone, Debug)]
+pub struct SetCalendarColorInput {
+    /// Calendar to color.
+    pub calendar_id: ID,
+    /// `#rrggbb`, or `null` to show the provider's color again.
+    pub color: Option<String>,
+}
+
+pub(crate) struct SetColorRequest {
+    pub(crate) calendar_id: Uuid,
+    pub(crate) color: Option<CalendarColor>,
+}
+
+impl SetCalendarColorInput {
+    pub(crate) fn into_request(self) -> async_graphql::Result<SetColorRequest> {
+        let color = self
+            .color
+            .as_deref()
+            .map(CalendarColor::parse)
+            .transpose()
+            .map_err(|error| bad_input(error.to_string()))?;
+        Ok(SetColorRequest {
+            calendar_id: parse_id(self.calendar_id, "calendarId")?,
+            color,
+        })
+    }
 }

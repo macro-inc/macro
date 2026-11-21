@@ -481,6 +481,12 @@ type CompleteMutationRoot {
 	"""
 	inviteCalendarEventGuests(input: InviteCalendarEventGuestsInput!): GraphqlCalendarMutationPayload!
 	"""
+	Set the viewer's own color for one of their calendars, or clear it to
+	show the provider's color again. Macro keeps it; the provider never
+	sees it. Answers with the calendar as the viewer now sees it.
+	"""
+	setCalendarColor(input: SetCalendarColorInput!): GraphqlCalendar!
+	"""
 	Mark work feed items done for the authenticated user: acknowledge the
 	notifications each entry showed and archive inbox email.
 	Notifications newer than an entry's `revision` stay active. Own work
@@ -2405,6 +2411,11 @@ type GraphqlCalendar {
 	Provider color.
 	"""
 	color: String
+	"""
+	The viewer's own color for this calendar, as lowercase `#rrggbb`,
+	shown instead of `color`. Provider sync never changes it.
+	"""
+	customColor: String
 	"""
 	Whether this is its account's primary calendar.
 	"""
@@ -12447,6 +12458,20 @@ type SendEmailMessagePayload {
 	End of the undo-send window, in RFC 3339 format.
 	"""
 	sendTime: String
+}
+
+"""
+The viewer's own color for one of their calendars.
+"""
+input SetCalendarColorInput {
+	"""
+	Calendar to color.
+	"""
+	calendarId: ID!
+	"""
+	`#rrggbb`, or `null` to show the provider's color again.
+	"""
+	color: String
 }
 
 """

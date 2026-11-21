@@ -409,6 +409,7 @@ fn a_calendar_listing_without_the_availability_setting_counts_it() {
         email_address: "host@example.com".into(),
         name: "Coworker".into(),
         color: None,
+        custom_color: None,
         is_primary: false,
         is_writable: false,
         is_subscription: false,

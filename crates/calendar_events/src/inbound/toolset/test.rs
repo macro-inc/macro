@@ -234,6 +234,15 @@ impl CalendarMutationService for MockMutations {
         Ok(self.calendars.lock().unwrap().clone())
     }
 
+    async fn set_calendar_color(
+        &self,
+        _requester_id: &str,
+        _calendar_id: Uuid,
+        _color: Option<crate::domain::calendar_color::CalendarColor>,
+    ) -> Result<(), CalendarMutationError> {
+        unreachable!("calendar colors are not exercised here")
+    }
+
     async fn update_event(
         &self,
         _requester_id: &str,
@@ -1583,6 +1592,7 @@ async fn list_calendars_maps_visible_calendars() {
             email_address: "gab@example.com".to_string(),
             name: "Work".to_string(),
             color: None,
+            custom_color: None,
             is_primary: true,
             is_writable: true,
             is_subscription: false,
@@ -1641,6 +1651,7 @@ fn visible_calendar(id: u128, email_link_id: u128, inbox: &str, name: &str) -> V
         email_address: inbox.to_string(),
         name: name.to_string(),
         color: None,
+        custom_color: None,
         is_primary: true,
         is_writable: true,
         is_subscription: false,
