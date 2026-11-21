@@ -36,6 +36,7 @@ table inet macro_teammate {
 \t\tudp dport 53 drop
 \t\ttcp dport 53 drop
 \t\tip daddr 10.20.0.5/32 tcp dport { 8101, 8102 } accept
+\t\tip6 daddr { fe80::/10, ff02::/16 } icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } accept
 \t\tip daddr @blocked4 drop
 \t\tip6 daddr @blocked6 drop
 \t}
@@ -173,4 +174,22 @@ fn a_readback_missing_a_rule_or_a_blocked_prefix_is_refused() {
         verify("not json", &allow, &facts),
         Err(Mismatch::Unreadable)
     ));
+}
+
+#[test]
+fn ipv6_neighbour_discovery_is_allowed_on_link_only() {
+    let text = ruleset(&[], &NetworkFacts::default());
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let position = |line: &str| {
+        lines
+            .iter()
+            .position(|candidate| *candidate == line)
+            .unwrap()
+    };
+    let discovery = position(
+        "ip6 daddr { fe80::/10, ff02::/16 } icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } accept",
+    );
+    // Before the drops (which keep every other fe80::/10 and ff00::/8).
+    assert!(discovery < position("ip6 daddr @blocked6 drop"));
+    assert!(text.contains("fe80::/10") && text.contains("ff00::/8"));
 }

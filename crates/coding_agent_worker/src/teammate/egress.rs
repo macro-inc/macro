@@ -9,10 +9,11 @@
 //! 2. DNS (port 53) only to the exact resolvers; any other port 53 dropped;
 //! 3. the explicit `[[teammates.allow]]` entries (and a local stack's
 //!    service host:port pairs);
-//! 4. every private, link-local, metadata, multicast and reserved range,
+//! 4. IPv6 neighbour discovery to link-local and link-scope multicast;
+//! 5. every private, link-local, metadata, multicast and reserved range,
 //!    the host's own addresses and on-link prefixes, the gateways and the
 //!    install network's own prefixes: dropped, whatever the protocol;
-//! 5. everything else (the public internet) accepted.
+//! 6. everything else (the public internet) accepted.
 //!
 //! The filter is on the destination address after DNS, so rebinding,
 //! redirects, a proxy's CONNECT and odd IP spellings all end in a dropped
@@ -59,6 +60,10 @@ pub const BLOCKED_IPV6: [&str; 8] = [
     "fe80::/10",
     "ff00::/8",
 ];
+
+/// IPv6 router and neighbour discovery (ICMPv6 133 to 137), to link-local
+/// and link-scope multicast only.
+const NEIGHBOUR_DISCOVERY: &str = "ip6 daddr { fe80::/10, ff02::/16 } icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } accept";
 
 /// The metadata addresses no allow entry may cover.
 const METADATA: [&str; 2] = ["169.254.0.0/16", "fd00:ec2::254/128"];
@@ -206,6 +211,9 @@ pub fn ruleset(allow: &[Allow], facts: &NetworkFacts) -> String {
             ports.join(", ")
         );
     }
+    // IPv6 neighbour discovery on the link only, so v6 works on a bridge
+    // that has it; every other fe80::/10 and ff00::/8 stays dropped.
+    let _ = writeln!(text, "\t\t{NEIGHBOUR_DISCOVERY}");
     let _ = writeln!(text, "\t\tip daddr @blocked4 drop");
     let _ = writeln!(text, "\t\tip6 daddr @blocked6 drop");
     let _ = writeln!(text, "\t}}");
@@ -369,6 +377,28 @@ fn expected_rules(allow: &[Allow], facts: &NetworkFacts) -> Vec<serde_json::Valu
             { "accept": null },
         ]));
     }
+    rules.push(json!([
+        matches(
+            "ip6",
+            "daddr",
+            json!({ "set": [
+                { "prefix": { "addr": "fe80::", "len": 10 } },
+                { "prefix": { "addr": "ff02::", "len": 16 } },
+            ] })
+        ),
+        matches(
+            "icmpv6",
+            "type",
+            json!({ "set": [
+                "nd-router-solicit",
+                "nd-router-advert",
+                "nd-neighbor-solicit",
+                "nd-neighbor-advert",
+                "nd-redirect",
+            ] })
+        ),
+        { "accept": null },
+    ]));
     rules.push(json!([matches("ip", "daddr", json!("@blocked4")), { "drop": null }]));
     rules.push(json!([matches("ip6", "daddr", json!("@blocked6")), { "drop": null }]));
     rules
