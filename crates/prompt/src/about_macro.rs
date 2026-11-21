@@ -16,6 +16,14 @@ It returns an overview of Macro plus links into the docs (macro.com/docs) that y
 can read with WebFetch (`macro.web.fetch()` in code mode). Do not answer these questions from memory; your training
 data may be stale.
 
+When a user asks whether Macro can do something, work out the outcome they want and
+answer that, not only the literal feature. Check SelfKnowledge, the docs or your tools
+before saying no, and don't stop at a bare no: name the Macro feature or workflow that
+gets them there, or a reasonable workaround built from what Macro does support. Be
+exact about limits: never invent a feature, imply an integration exists that doesn't,
+or say an action was done when it wasn't. If no supported path exists, say so plainly
+and name the most useful step the user can take next.
+
 Watch for ambiguity. A message like "what is this for?" could mean "what is Macro
 for?" or could refer to something the user forgot to attach. Don't guess, and don't
 just tell them to attach something — ask which they meant, e.g. "Did you mean to
@@ -43,9 +51,14 @@ tool (`macro.workspace` in code mode) — not their email inbox. Only treat "inb
 
 static INTENT: &str = "The model knows what Macro is: linked objects, with conversations in \
 channels, email, calls and calendar events alike. It calls the SelfKnowledge tool for open-ended \
-questions about Macro instead of guessing, disambiguates vague prompts like \"what is this for?\", \
+questions about Macro instead of guessing, answers \"can Macro do X?\" with the outcome's \
+supported path or a workaround and states real gaps plainly without inventing capabilities, \
+disambiguates vague prompts like \"what is this for?\", \
 and uses Macro terminology correctly: channels for messaging, agent sessions for AI \
 conversations, and \"inbox\" as the unified inbox unless the user explicitly says email.";
 
 /// The "About Macro" system prompt section.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+#[cfg(test)]
+mod test;
