@@ -56,7 +56,7 @@ export const SearchRailButton = () => {
         hotkey: TOKENS.sidebar.goTo.search,
       }}
       data-sidebar-next-search=""
-      class="size-(--rail-button-size) rounded-xl"
+      class="size-(--rail-button-size) shrink-0 rounded-xl"
       onClick={(event: MouseEvent) => openSearch(event.shiftKey)}
     >
       <MagnifyingGlassIcon class="size-(--rail-icon-size)" />

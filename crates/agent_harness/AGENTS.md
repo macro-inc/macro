@@ -187,10 +187,20 @@ different replica than the socket it replaced, and a stalled replica can notice
 that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
 dial and reports it to `HarnessPresence`; a close removes only its own row, and
 each replica renews the leases of what it holds, so a crash reads offline within
-the lease. To debug a harness in Datadog, search `@harness:<id>` for
+the lease. A renewal that restores the row of a connection the registry no
+longer holds (it closed after the renewal's snapshot) closes it again through
+`HarnessPresence::disconnected`, so a Macro computer still gets its disconnect.
+To debug a harness in Datadog, search `@harness:<id>` for
 `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
-harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
-disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
+harness_runtime_lease_restored OR harness_runtime_lease_restore_undone)`: each
+carries `connection`, all but the undo carry `replica` (the undo's own close
+follows as a `harness_runtime_disconnected` that does, in the same trace), and a disconnect's
+`other_live_connections` above 0 is a stale close that changed nothing. A
+restore just before a connection's `harness_runtime_connected` is a renewal
+that beat the attach write, and harmless. Each renewal is one trace: a
+`harness.registry.renew` span (`connections`, `restored`, `undone`) around the
+adapter's `harness.presence.renew` (`replica`, `renewed`, `restored`, `error`),
+with each undo's `harness.presence.disconnected` under it.
 When recording a dial bound an agent (`HarnessPresence::connected` returns
 `ConnectionRecorded::AgentBound`: a Macro computer gets its first agent on its
 first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`,

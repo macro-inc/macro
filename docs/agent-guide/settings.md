@@ -312,8 +312,10 @@ link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
-expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy or unreachable). The harness
+expired, code rejected, including the CLI's own "Invalid code", or the
+computer's sign-in timed out), **Try again** (couldn't get a link), or send
+the code again (malformed code, computer busy or unreachable, or the service
+timed out waiting for the computer, which may still have finished). The harness
 tells its two 403s apart: `rollout_disabled` reads "Computers aren't
 available for this account yet." with **Try again** before a link exists;
 after a code was sent the sign-in still waits, so the field stays open to
@@ -749,7 +751,9 @@ Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
 until then.
 **Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
+scheduled plans show no retry notice). CRM (for owners and admins while
+`enable-crm-member-access-changes` is on, **Who can use CRM** first: each person's
+CRM access switch, the same setting as their ⋯ in Members; individual email contribution, gated selective sharing rules with JSON,
 count preview and history subpages, and team/personal domain exclusions;
 a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow

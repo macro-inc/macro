@@ -6,8 +6,13 @@ async function confirmAndRecover(page: Page) {
     .getByRole('button', { name: 'Replace event…', exact: true })
     .click();
   await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Review replacement' }).click();
-  await expect(page.getByTestId('replacement-actions')).toHaveText('preview');
+  // The preview shows the unsaved edits the replacement carries.
+  await expect(
+    page.getByText('Weekly review, moved', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByTestId('replacement-actions')).toHaveText(
+    'preview:Weekly review, moved'
+  );
   const confirm = page.getByRole('button', {
     name: 'Replace event',
     exact: true,
@@ -23,19 +28,20 @@ async function confirmAndRecover(page: Page) {
     .check();
   await confirm.click();
   await expect(page.getByRole('alert')).toContainText('interrupted');
-  await expect(
-    page.getByRole('button', { name: 'Change options' })
-  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
+  // Reopening asks how the confirmed operation is doing instead of
+  // preparing another.
   await page
     .getByRole('button', { name: 'Replace event…', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Check progress' }).click();
-  await expect(page.getByRole('dialog').getByRole('status')).toContainText(
-    'Replacement complete'
-  );
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('status')
+      .filter({ hasText: 'Replacement complete' })
+  ).toBeVisible();
   await expect(page.getByTestId('replacement-actions')).toHaveText(
-    'preview,confirm:saved-operation,check:saved-operation'
+    'preview:Weekly review, moved,confirm:saved-operation,check:saved-operation'
   );
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

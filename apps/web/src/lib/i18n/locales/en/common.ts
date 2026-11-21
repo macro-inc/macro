@@ -20,6 +20,8 @@ export default {
   addingTasks: 'Adding tasks…',
   showMore: 'Show more',
   showLess: 'Show less',
+  showSecret: 'Show what you typed',
+  hideSecret: 'Hide what you typed',
   dropToAdd: 'Drop to add',
   addingItem: 'Adding item…',
   cannotAddDraggedItem: 'Can’t add this item',

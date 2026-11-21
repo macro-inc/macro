@@ -5,12 +5,16 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
   createEffect,
+  createMemo,
+  createSignal,
   For,
   type JSX,
   Match,
+  on,
   onCleanup,
   Suspense,
   Switch,
@@ -30,6 +34,11 @@ import { ListNav, type ListNavProps } from './list-nav';
 import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
+import {
+  RAIL_NAV_PADDING_START,
+  railNavFitCount,
+  railNavRoom,
+} from './rail-fit';
 import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
@@ -92,24 +101,6 @@ function publishDockInsets() {
   });
 }
 
-/**
- * A top or bottom dock that overflows the window scrolls sideways. Scrollbars
- * are hidden app-wide and a mouse wheel scrolls vertically, so turn vertical
- * wheel movement into horizontal scrolling.
- */
-function scrollHorizontallyOnWheel(event: WheelEvent) {
-  const nav = event.currentTarget;
-  if (!(nav instanceof HTMLElement)) return;
-  if (!isDockHorizontal()) return;
-  // Ctrl+wheel (and trackpad pinch, which arrives as one) zooms the page.
-  if (event.ctrlKey) return;
-  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-  if (nav.scrollWidth <= nav.clientWidth) return;
-
-  event.preventDefault();
-  nav.scrollLeft += event.deltaY;
-}
-
 const isDockCentered = () => dockAlignment() === 'center';
 
 /**
@@ -120,6 +111,7 @@ const isDockCentered = () => dockAlignment() === 'center';
  */
 function RailGroup(props: {
   place: 'start' | 'apps' | 'end';
+  ref?: (element: HTMLDivElement) => void;
   children: JSX.Element;
 }) {
   const horizontal = isDockHorizontal;
@@ -149,6 +141,7 @@ function RailGroup(props: {
 
   return (
     <div
+      ref={props.ref}
       class={cn(
         'flex items-center gap-1',
         horizontal() ? 'flex-row' : 'flex-col',
@@ -162,6 +155,29 @@ function RailGroup(props: {
   );
 }
 
+/** The length of `element` along the dock: its width on a top or bottom dock. */
+const lengthAlongDock = (element: Element) => {
+  const box = element.getBoundingClientRect();
+  return isDockHorizontal() ? box.width : box.height;
+};
+
+/** The rail's length inside its padding, along the dock. */
+const innerLengthAlongDock = (rail: HTMLElement) => {
+  const style = getComputedStyle(rail);
+  if (isDockHorizontal()) {
+    return (
+      rail.clientWidth -
+      parseFloat(style.paddingLeft) -
+      parseFloat(style.paddingRight)
+    );
+  }
+  return (
+    rail.clientHeight -
+    parseFloat(style.paddingTop) -
+    parseFloat(style.paddingBottom)
+  );
+};
+
 /**
  * The app sidebar (the dock): a single always-narrow bar of icon buttons,
  * labels in tooltips. It sits against the left, right, top or bottom edge, in
@@ -173,6 +189,10 @@ function RailGroup(props: {
  * nav shortcuts are registered by `GoToHotkeys`, which `Layout` mounts
  * separately. Each button's tooltip carries its shortcut, and after `g` is
  * pressed each button shows its destination key in a corner badge.
+ *
+ * Apps that don't fit along the rail (the window's height, or its width on a
+ * top or bottom dock) move into the More menu, so the rail never cuts one in
+ * half.
  */
 export const SidebarRail = () => {
   const gates = useNavItemGates();
@@ -181,6 +201,46 @@ export const SidebarRail = () => {
   const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
   publishDockInsets();
+
+  // Measure the room the nav has along the rail: the rail's length less the
+  // start group, the end group and More (see `railNavRoom`). Re-measure when
+  // any of them resizes (the window, the dock's edge or size, footer buttons
+  // appearing) and when the alignment changes, which moves the groups without
+  // resizing them. Apps past what fits go to the More menu.
+  let rail: HTMLDivElement | undefined;
+  let startGroup: HTMLDivElement | undefined;
+  let endGroup: HTMLDivElement | undefined;
+  const [fitCount, setFitCount] = createSignal(Number.POSITIVE_INFINITY);
+  const measureFit = () => {
+    const more = rail?.querySelector('[data-sidebar-next-item="more"]');
+    if (!rail || !startGroup || !endGroup || !more) return;
+    const moreLength = lengthAlongDock(more);
+    const room = railNavRoom(
+      {
+        inner: innerLengthAlongDock(rail),
+        start: lengthAlongDock(startGroup),
+        end: lengthAlongDock(endGroup),
+        more: moreLength,
+      },
+      isDockCentered()
+    );
+    // Nav buttons share More's size, which follows the dock's size setting.
+    setFitCount(
+      railNavFitCount(
+        room,
+        moreLength,
+        isDockCentered() ? 0 : RAIL_NAV_PADDING_START
+      )
+    );
+  };
+  createResizeObserver(() => [rail, startGroup, endGroup], measureFit);
+  createEffect(on([dockAlignment, dockPosition, dockSize], measureFit));
+
+  // Memoized so a fit change only re-slices: Home is rebuilt on every call,
+  // and a new object would remount its button.
+  const navItems = createMemo(() => visibleNavItems(gates()));
+  const railItems = () => navItems().slice(0, fitCount());
+  const overflowItems = () => navItems().slice(fitCount());
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -197,6 +257,7 @@ export const SidebarRail = () => {
 
   return (
     <div
+      ref={rail}
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
       style={DOCK_SIZE_VARIABLES[dockSize()]}
@@ -217,20 +278,19 @@ export const SidebarRail = () => {
         !isDockCentered() && (isDockHorizontal() ? 'flex-row' : 'flex-col')
       )}
     >
-      <RailGroup place="start">
+      <RailGroup place="start" ref={(element) => (startGroup = element)}>
         <SidebarRailCreateButton />
         <SearchRailButton />
       </RailGroup>
 
       <RailGroup place="apps">
         <nav
-          onWheel={scrollHorizontallyOnWheel}
           class={cn(
             isDockHorizontal()
               ? 'min-w-0 overflow-x-auto'
               : 'min-h-0 overflow-y-auto',
-            // Inside the scroller, so scrolled apps pass under the space
-            // after Search rather than being cut off at its edge.
+            // The space after Search; `railNavFitCount` counts it as part of
+            // the nav, so keep the two in step.
             !isDockCentered() && (isDockHorizontal() ? 'pl-4' : 'pt-4')
           )}
         >
@@ -240,7 +300,7 @@ export const SidebarRail = () => {
               isDockHorizontal() ? 'flex-row' : 'flex-col'
             )}
           >
-            <For each={visibleNavItems(gates())}>
+            <For each={railItems()}>
               {(item) => (
                 <li class="flex">
                   <Switch
@@ -287,10 +347,10 @@ export const SidebarRail = () => {
           </ul>
         </nav>
 
-        <MoreMenu gates={gates()} />
+        <MoreMenu gates={gates()} overflowItems={overflowItems()} />
       </RailGroup>
 
-      <RailGroup place="end">
+      <RailGroup place="end" ref={(element) => (endGroup = element)}>
         <ReturnToCallButton />
         <FooterActions />
       </RailGroup>

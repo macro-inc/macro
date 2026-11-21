@@ -1,10 +1,19 @@
 import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { For, type JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   calendars: [] as VisibleCalendar[],
@@ -68,6 +77,7 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
       <output aria-label="Macro calls enabled">
         {String(props.macroCallsEnabled)}
       </output>
+      <output aria-label="Time format">{props.timeFormat}</output>
       <output aria-label="Conference">
         {props.controller.state().conference}
       </output>
@@ -327,6 +337,16 @@ describe('AI calendar draft guest permissions', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
     expect(mocks.execute).toHaveBeenCalledOnce();
     expect(mocks.execute.mock.calls[0][0].guestPolicy).toBeUndefined();
+  });
+});
+
+describe('AI calendar draft time format', () => {
+  it('shows the times on the calendar’s clock', () => {
+    const [, setPreferences] = useCalendarPreferences();
+    setPreferences('timeFormat', '24-hour');
+    onTestFinished(() => setPreferences('timeFormat', '12-hour'));
+    showDraft();
+    expect(screen.getByLabelText('Time format').textContent).toBe('24-hour');
   });
 });
 

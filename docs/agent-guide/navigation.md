@@ -631,8 +631,7 @@ section is the same show, hide and reorder list as **More → Customize sidebar*
 Edge, size and alignment are saved per device (`macro:dock` in localStorage,
 read by the boot shell in `index.html`) and apply at once. Tooltips and rail menus open away from the
 dock's edge; on the top or bottom edge the apps run left to right, with the
-footer actions at the far end, and a mouse wheel scrolls apps that don't fit.
-The rail sets `--dock-inset-left|right|bottom` on the root to its thickness on
+footer actions at the far end. The rail sets `--dock-inset-left|right|bottom` on the root to its thickness on
 its edge, so corner overlays (toasts, incoming calls) stay clear of it. Verify
 each edge and size, a rail tooltip, the More menu, and a toast with a bottom
 or right dock.
@@ -642,8 +641,12 @@ hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
 cannot be hidden. Verify that hovering within a destination row keeps the drag
-preview stable, dropping saves the order, and reopening retains it. In short
-desktop windows, the app list scrolls while More and the footer remain reachable.
+preview stable, dropping saves the order, and reopening retains it. When the
+rail is too short for its apps (a short window, or a narrow one with the dock on
+the top or bottom edge), it shows only whole app buttons: apps that don't fit
+move to the top of More in rail order, and More and the footer remain reachable.
+The room is measured along the dock for each size and alignment
+(`rail-fit.ts`).
 Touch devices retain the flag-gated Reviews tab in Tasks.
 Scheduling appears in Customize sidebar only when the calendar-scheduling flag is
 on. It starts hidden in More, including for existing sidebar preferences. Enable
