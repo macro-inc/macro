@@ -3,6 +3,7 @@
 // one judge and were scored against the same answer keys, and (for `noise`)
 // ran one build, before any number of one is set beside the other's.
 
+import type { Persona } from './personas';
 import type { RunFile } from './score';
 
 /** The digest a run recorded for a persona's workspace and mail, if it recorded one. */
@@ -32,6 +33,9 @@ const flagsOf = (run: RunFile) =>
  * and scored it against the same answer keys.
  */
 export function joinRuns(arg: string, runs: RunFile[]): RunFile {
+  // Two runs of unknown builds, or of unrecorded flags, may be two builds.
+  if (runs.length > 1 && runs.some((run) => !run.commit || run.commit === 'unknown')) throw new Error(`${arg} joins a run with no commit recorded: a side is one build`);
+  if (runs.length > 1 && runs.some((run) => !run.flags)) throw new Error(`${arg} joins a run with no flags recorded: a side is one build`);
   for (const field of ['section', 'set', 'judge', 'commit'] as const) {
     if (new Set(runs.map((run) => run[field])).size > 1) throw new Error(`${arg} mixes ${field}s: a side is one build`);
   }
@@ -91,7 +95,25 @@ export function comparable(a: RunFile, b: RunFile) {
 export function sameBuild(a: RunFile, b: RunFile) {
   for (const side of [a, b]) {
     if (!side.commit || side.commit === 'unknown') throw new Error(`${side.label} has no commit recorded: noise measures one build against itself`);
+    if (!side.flags) throw new Error(`${side.label} has no flags recorded: noise measures one build against itself`);
   }
   if (a.commit !== b.commit) throw new Error(`${a.label} ran ${a.commit} and ${b.label} ran ${b.commit}: noise measures one build against itself`);
   if (flagsOf(a) !== flagsOf(b)) throw new Error(`${a.label} and ${b.label} ran with different flags (${flagsOf(a) || 'none'}; ${flagsOf(b) || 'none'}): noise measures one build against itself`);
+}
+
+/**
+ * How many of `people` a rescore of `run` can't score from the marks it
+ * has. Marks name the key's entries by id, so they hold only for the keys
+ * their judge read: a run that recorded its keys must be scored against the
+ * same keys (`keys`, as they are now), and one from before keys were
+ * recorded only where the person's files were last written before it
+ * started. Any other is rejudged.
+ */
+export function staleKeys(run: RunFile, people: Persona[], keys: Record<string, string>): number {
+  const started = Date.parse(run.startedAt);
+  return people.filter((persona) => {
+    const recorded = run.keys?.[persona.name];
+    if (recorded) return recorded !== keys[persona.name];
+    return !(persona.writtenAt !== undefined && Number.isFinite(started) && persona.writtenAt <= started);
+  }).length;
 }

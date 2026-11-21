@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fixKeys, unnamed } from './heldout';
 import { type Persona, keyDigest, unnamedPersona, who } from './personas';
 import type { Generation } from './run';
 import type { Attempt, RunFile } from './score';
-import { comparable, joinRuns, sameBuild } from './sides';
+import { comparable, joinRuns, sameBuild, staleKeys } from './sides';
 
 const attempt = (persona: string, rep: number, heldout = false): Attempt => ({
   section: 'routines',
@@ -50,6 +50,13 @@ describe('one side of a comparison', () => {
     expect(joinRuns('a,b', [run(), run({ flags: { 'enable-routine-suggestions': true, other: false } })]).attempts).toHaveLength(4);
   });
 
+  test('joins no runs of an unknown build: no commit, or no flags, recorded', () => {
+    expect(() => joinRuns('a,b', [run({ commit: 'unknown' }), run({ commit: 'unknown' })])).toThrow('no commit recorded');
+    expect(() => joinRuns('a,b', [run({ flags: undefined }), run({ flags: undefined })])).toThrow('no flags recorded');
+    // One run is its own side, whatever it recorded.
+    expect(joinRuns('a', [run({ commit: 'unknown', flags: undefined })]).attempts).toHaveLength(2);
+  });
+
   test('refuses runs scored against different answer keys, or one without them', () => {
     expect(() => joinRuns('a,b', [run(), run({ keys: { ana: 'changed', bo: 'kb' } })])).toThrow("different answer keys for ana");
     expect(() => joinRuns('a,b', [run(), run({ keys: undefined })])).toThrow('rescore it');
@@ -83,6 +90,7 @@ describe('two sides set side by side', () => {
     expect(() => sameBuild(run(), run({ label: 'cand', commit: 'def' }))).toThrow('one build against itself');
     expect(() => sameBuild(run(), run({ label: 'cand', flags: { 'routine-suggestions-find-work': true } }))).toThrow('different flags');
     expect(() => sameBuild(run({ commit: 'unknown' }), run({ commit: 'unknown' }))).toThrow('no commit recorded');
+    expect(() => sameBuild(run({ flags: undefined }), run({ flags: undefined }))).toThrow('no flags recorded');
   });
 });
 
@@ -118,6 +126,51 @@ describe("a held-out set's answer keys", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test('are written by one command at a time, and a lock left by a dead one is taken over', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'keys-'));
+    try {
+      mkdirSync(join(dir, 'set'));
+      const lock = join(dir, 'set', 'keys.json.lock');
+      writeFileSync(lock, '');
+      expect(() => fixKeys('set', { ana: 'ka' }, dir, 50)).toThrow('held by another bench command');
+      expect(existsSync(join(dir, 'set', 'keys.json'))).toBe(false);
+      // A minute old: its holder died.
+      const old = new Date(Date.now() - 120_000);
+      utimesSync(lock, old, old);
+      fixKeys('set', { ana: 'ka' }, dir, 50);
+      fixKeys('set', { bo: 'kb' }, dir, 50);
+      expect(JSON.parse(readFileSync(join(dir, 'set', 'keys.json'), 'utf8')).keys).toEqual({ ana: 'ka', bo: 'kb' });
+      // Nothing left beside the keys: no lock, no partial copy.
+      expect(readdirSync(join(dir, 'set'))).toEqual(['keys.json']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('a rescore', () => {
+  const persona = (name: string, writtenAt?: number) => ({ name, writtenAt }) as Persona;
+  const started = '2026-11-21T03:45:56.043Z';
+  const before = Date.parse(started) - 60_000;
+  const after = Date.parse(started) + 60_000;
+
+  test('keeps marks judged against the keys as they are now', () => {
+    expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana', after), persona('bo', after)], { ana: 'ka', bo: 'kb' })).toBe(0);
+  });
+
+  test('refuses marks judged against other keys than the ones it would score against', () => {
+    expect(staleKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [persona('ana', before), persona('bo', before)], { ana: 'ka', bo: 'changed' })).toBe(1);
+  });
+
+  test('takes a run without recorded keys only where its people were last written before it started', () => {
+    const old = run({ keys: undefined, startedAt: started });
+    expect(staleKeys(old, [persona('ana', before), persona('bo', before)], { ana: 'ka', bo: 'kb' })).toBe(0);
+    expect(staleKeys(old, [persona('ana', before), persona('bo', after)], { ana: 'ka', bo: 'kb' })).toBe(1);
+    // Unknown times, either side's, are never taken on trust.
+    expect(staleKeys(old, [persona('ana'), persona('bo', before)], { ana: 'ka', bo: 'kb' })).toBe(1);
+    expect(staleKeys(run({ keys: undefined, startedAt: '' }), [persona('ana', before)], { ana: 'ka' })).toBe(1);
   });
 });
 

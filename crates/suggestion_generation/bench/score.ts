@@ -274,6 +274,9 @@ export function quantile(values: number[], q: number) {
 
 const avg = (values: number[]) => values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
 
+/** A summary's stream jobs measure: its numbers, or how few held-out people it would show. */
+type JobsSummary = { jobDrafts?: number; jobPicks?: number; jobStreams?: number; fiveJobDrafts?: number; jobScored?: number; jobErrors?: number; jobWithheld?: number };
+
 export function summary(attempts: Attempt[]) {
   const done = scored(attempts);
   const wrong: Record<string, number> = {};
@@ -294,6 +297,23 @@ export function summary(attempts: Attempt[]) {
   const listErrors = done.filter((a) => a.findingError).length;
   const jobbed = done.filter((a) => a.score.jobDrafts !== undefined);
   const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
+  // Runs judged before the stream jobs judgement (v5) have none of these. Each is over the
+  // attempts that have it: a failed build counts 0, an attempt whose jobs judgement failed is
+  // left out (`jobErrors`), as a bench error is left out of every measure. A held-out measure
+  // shows only over two held-out people or more, like every other (`jobWithheld` counts them).
+  const jobErrors = done.filter((a) => a.jobError).length;
+  const jobs: JobsSummary = !jobbed.length
+    ? {}
+    : !aggregate(jobbed, attempts)
+      ? { jobWithheld: new Set(jobbed.filter((a) => a.heldout).map((a) => a.persona)).size, jobErrors }
+      : {
+          jobDrafts: avg(jobbed.map((a) => a.score.jobDrafts!)),
+          jobPicks: avg(jobbed.map((a) => a.score.jobPicks!)),
+          jobStreams: avg(jobbed.map((a) => a.score.jobStreams!)),
+          fiveJobDrafts: jobbed.filter((a) => a.score.jobDrafts! >= 5).length,
+          jobScored: jobbed.length,
+          jobErrors,
+        };
   return {
     attempts: attempts.length,
     scored: done.length,
@@ -321,19 +341,7 @@ export function summary(attempts: Attempt[]) {
     ...(done.length && done.every((a) => a.score.aimed !== undefined)
       ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
       : {}),
-    // Runs judged before the stream jobs judgement (v5) have none of these. Each is over the
-    // attempts that have it: a failed build counts 0, an attempt whose jobs judgement failed is
-    // left out (`jobErrors`), as a bench error is left out of every measure.
-    ...(jobbed.length && done.some((a) => a.jobMarks)
-      ? {
-          jobDrafts: avg(jobbed.map((a) => a.score.jobDrafts!)),
-          jobPicks: avg(jobbed.map((a) => a.score.jobPicks!)),
-          jobStreams: avg(jobbed.map((a) => a.score.jobStreams!)),
-          fiveJobDrafts: jobbed.filter((a) => a.score.jobDrafts! >= 5).length,
-          jobScored: jobbed.length,
-          jobErrors: done.filter((a) => a.jobError).length,
-        }
-      : {}),
+    ...jobs,
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
     // Generations run to find the work: how many drafting sessions read a list, what share of the key's work streams the lists named (none where no list was read), and how many entries named none.
     // Where every judgement failed, `lists` is 0 and the shares are NaN: the report says none could be judged.
@@ -452,8 +460,28 @@ const goodGet: Record<GoodPart, (attempt: Done) => number | undefined> = {
 /** Whether `attempt` is scored for good part `part`: one whose jobs judgement failed isn't for `jobDrafts`. */
 const hasGood = (part: GoodPart) => (attempt: Attempt) => scored([attempt]).length === 1 && goodGet[part](attempt as Done) !== undefined;
 
+/**
+ * Whether two sides' attempts share people enough to be set side by side:
+ * one at least, and where either holds held-out people, as many held-out
+ * people as an aggregate needs, so no comparison shows one person's result.
+ */
+export function shareEnough(a: Attempt[], b: Attempt[]): boolean {
+  const inA = new Set(scored(a).map((attempt) => attempt.persona));
+  const common = scored(b).filter((attempt) => inA.has(attempt.persona));
+  if (!common.length) return false;
+  if (![...a, ...b].some((attempt) => attempt.heldout)) return true;
+  return new Set(common.filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
+}
+
 /** The good parts both sides have, each over the attempts scored for it. */
 const goodParts = (a: Attempt[], b: Attempt[]) => (Object.keys(GOOD_PARTS) as GoodPart[]).filter((part) => a.some(hasGood(part)) && b.some(hasGood(part)));
+
+/** The good parts both sides have and share people enough for (`shareEnough`); the rest are `unshared`. */
+const sharedGoodParts = (a: Attempt[], b: Attempt[]) => {
+  const parts = goodParts(a, b);
+  const shared = parts.filter((part) => shareEnough(a.filter(hasGood(part)), b.filter(hasGood(part))));
+  return { shared, unshared: parts.filter((part) => !shared.includes(part)) };
+};
 
 /** B against A for good part `part`, over the attempts of each side scored for it. */
 const goodContrast = (a: Attempt[], b: Attempt[], part: GoodPart) => contrast(a.filter(hasGood(part)), b.filter(hasGood(part)), (attempt) => goodGet[part](attempt)!);
@@ -468,6 +496,8 @@ export type Verdict = {
   parts: Record<Part, PartVerdict>;
   /** Good drafts of each measure both sides have; without a margin, `unmeasured`. */
   good: Partial<Record<GoodPart, ReturnType<typeof contrast> & { margin?: number; verdict: 'better' | 'worse' | 'noise' | 'unmeasured' }>>;
+  /** Good parts both sides have but share too few people scored for (`shareEnough`): not compared. */
+  unshared: GoodPart[];
   usd: [number, number];
   usdInterval: [number, number];
   wallRatio: number;
@@ -496,8 +526,9 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
       return [part, { ...c, margin, verdict: better ? 'better' : worse ? 'worse' : 'noise' }];
     }),
   ) as Record<Part, PartVerdict>;
+  const { shared, unshared } = sharedGoodParts(a, b);
   const good = Object.fromEntries(
-    goodParts(a, b).map((part) => {
+    shared.map((part) => {
       const c = goodContrast(a, b, part);
       const margin = margins[part];
       if (margin === undefined) return [part, { ...c, verdict: 'unmeasured' as const }];
@@ -522,7 +553,7 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
   const common = (attempts: Attempt[]) => timed(attempts).filter((attempt) => both.has(attempt.persona));
   // A side's median shows only over two held-out people's times or more.
   const median = (attempts: Attempt[]) => (aggregate(common(attempts), attempts) ? quantile(common(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
-  return { verdict: result, why, parts, good, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
+  return { verdict: result, why, parts, good, unshared, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
 }
 
 /**
@@ -567,6 +598,6 @@ export function noiseMargins(a: Attempt[], b: Attempt[]) {
   const margin = (c: ReturnType<typeof contrast>) => ({ ...c, margin: Math.max(Math.abs(c.interval[0]), Math.abs(c.interval[1])) });
   return {
     ...(Object.fromEntries((Object.keys(PARTS) as Part[]).map((part) => [part, margin(contrast(a, b, get[part]))])) as Record<Part, ReturnType<typeof margin>>),
-    ...(Object.fromEntries(goodParts(a, b).map((part) => [part, margin(goodContrast(a, b, part))])) as Partial<Record<GoodPart, ReturnType<typeof margin>>>),
+    ...(Object.fromEntries(sharedGoodParts(a, b).shared.map((part) => [part, margin(goodContrast(a, b, part))])) as Partial<Record<GoodPart, ReturnType<typeof margin>>>),
   };
 }

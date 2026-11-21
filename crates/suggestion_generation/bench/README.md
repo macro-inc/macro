@@ -114,10 +114,14 @@ since, or one from before the digest was kept, so the judge reads what the
 generation read: run that one again instead. A run records a digest of each
 persona's answer keys too, and `compare` and `noise` refuse two sides scored
 against different keys, or one without the digest: `rescore` the older one,
-which scores it against the keys as they are and records them. `noise`
-measures one build against itself, so it also refuses two runs of different
-or unrecorded commits, or with different flags, and a side is one build: its
-runs share a commit and flags.
+which records the keys it scores against. A judge's marks name the key's
+entries by id, so `rescore` keeps them only for the keys they were judged
+against: the keys the run recorded, or, for a run from before keys were
+recorded, keys whose files were last written before the run started. Any
+other run is rejudged. `noise` measures one build against itself, so it
+also refuses two runs of different or unrecorded commits, or with different
+or unrecorded flags, and a side is one build: its runs share a known commit
+and flags.
 
 ## Running it
 
@@ -139,7 +143,7 @@ bun $B/bench.ts run feed --label main --seats 1 --reps 1   # a quick look: one a
 bun $B/bench.ts all --label main                    # every section
 bun $B/bench.ts compare <main run.json> <mine run.json> --margins <score,found,bad>
 bun $B/bench.ts report <run.json>...
-bun $B/bench.ts rescore <run.json>...               # after changing an answer key: free, no model calls
+bun $B/bench.ts rescore <run.json>...               # after changing the scoring: free, no model calls
 ```
 
 A section's default size is 3 personas × 3 seats × 3 reps: 27 attempts. A
@@ -165,7 +169,8 @@ the run's reading stands too, and a run with neither a list nor an error
 has an unknown list. The harness sends a brief to its
 runtime as Markdown, which backslash-escapes characters such as `_` outside
 code; the bench reads a list in a fenced `json` block as written and undoes
-those escapes in a bare one (briefs before the fence). A brief that says it carries a list (the
+those escapes in a bare one (briefs before the fence), with the links the
+round trip made of addresses, domains and URLs. A brief that says it carries a list (the
 drafting brief's words at the start of a line, outside the mail's
 `<untrusted>` block) the bench still can't parse is that attempt's list
 error, as is an unknown list: counted as not judged, by `rescore` too, never
@@ -190,7 +195,9 @@ test against margins of their own, and show a change in one before the
 score can. On a month set judged for stream jobs, good drafts and good
 drafts by stream job get it too, with two margins more (`--margins
 score,found,bad,goodDrafts,jobDrafts`, as `noise` prints them); given three,
-`compare` reports their change as unmeasured. Measure the margins again after changing the personas, the
+`compare` reports their change as unmeasured. Each is compared over the
+people both sides have scores for it, and not at all where they share none
+(or, on a held-out set, fewer than two). Measure the margins again after changing the personas, the
 judge or the default size:
 
 ```sh
@@ -236,13 +243,15 @@ side; timed, rated, or with a work list read, for those measures), and say
 why where they show none. A set written before keys placed every catalog routine (`h2`
 and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
-says so: make a new one. The first run, rejudge or rescore of a held-out
-person writes down the answer keys it scored them against (`keys.json` in the
-set), and every later one must score against the same keys, so no key changes
-after a build has run on its person; one that changed stops the bench, saying
-how many people's keys changed but not whose. Nothing the bench prints names a
+says so: make a new one. The first run, rejudge, rescore or `find` of a
+held-out person writes down the answer keys it scored them against
+(`keys.json` in the set, written by one bench command at a time), and every
+later one must score against the same keys, so no key changes after a build
+has run on its person; one that changed stops the bench, saying how many
+people's keys changed but not whose. Nothing the bench prints names a
 held-out person: their slugs, names and domains are left out of its errors and
-progress lines.
+progress lines, and a measure (the stream jobs one too) shows only over two
+held-out people or more.
 
 ### A month of mail
 
@@ -516,7 +525,7 @@ cost nothing beyond the model calls.
   every other catalog routine in `fine` or `misfit`.
 - A catalog routine added, renamed or removed in `catalog.rs` stops the
   `routines` section until every answer key places it again (the run says
-  which); `rescore` then scores earlier runs with the new keys.
+  which); `rejudge` then judges earlier runs against the new keys.
 - A section is an entry in `SECTIONS` (`bench.ts`): its trigger, flags,
   persona copy and judge. The weekly routines review would be manual with
   both flags on and routines due, a persona copy with last week's routine

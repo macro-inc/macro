@@ -178,6 +178,36 @@ describe('the jobs measure over a run', () => {
     expect(s).toMatchObject({ scored: 2, goodDrafts: 2, jobDrafts: 4, jobScored: 1, jobErrors: 1 });
   });
 
+  test('shows a held-out jobs measure only over two held-out people or more', () => {
+    const held = (attempt: Attempt): Attempt => ({ ...attempt, heldout: true });
+    const s = summary([held(judged('p', 1, 4)), held(jobless('q', 1)), held(jobless('q', 2))]);
+    expect(s.goodDrafts).toBeDefined();
+    expect(s).toMatchObject({ jobWithheld: 1, jobErrors: 2 });
+    expect(s.jobDrafts).toBeUndefined();
+    expect(summary([held(judged('p', 1, 4)), held(judged('q', 1, 2))])).toMatchObject({ jobDrafts: 3, jobScored: 2 });
+  });
+
+  test('leaves out, and never stops on, a jobs measure the sides share no person for', () => {
+    const a = [judged('p', 1, 1), judged('p', 2, 1), jobless('q', 1), jobless('q', 2)];
+    const b = [jobless('p', 1), jobless('p', 2), judged('q', 1, 4), judged('q', 2, 4)];
+    const v = verdict(a, b, marginsOf('10,1,1,1,1'));
+    expect(v.good.jobDrafts).toBeUndefined();
+    expect(v.unshared).toEqual(['jobDrafts']);
+    expect(v.good.goodDrafts?.attempts).toEqual([4, 4]);
+    expect(noiseMargins(a, b).jobDrafts).toBeUndefined();
+  });
+
+  test('compares a held-out jobs measure only over two held-out people both sides share', () => {
+    const held = (attempt: Attempt): Attempt => ({ ...attempt, heldout: true });
+    const a = [judged('p', 1, 1), judged('p', 2, 1), jobless('q', 1), judged('q', 2, 2)].map(held);
+    const b = [judged('p', 1, 4), judged('p', 2, 4), judged('q', 1, 3), jobless('q', 2)].map(held);
+    expect(verdict(a, b, marginsOf('10,1,1,1,1')).good.jobDrafts?.people).toBe(2);
+    const onlyP = [judged('p', 1, 4), judged('p', 2, 4), jobless('q', 1), jobless('q', 2)].map(held);
+    const v = verdict(a, onlyP, marginsOf('10,1,1,1,1'));
+    expect(v.good.jobDrafts).toBeUndefined();
+    expect(v.unshared).toEqual(['jobDrafts']);
+  });
+
   test('compares good drafts by stream job over the attempts that have them', () => {
     const a = [judged('p', 1, 1), judged('p', 2, 0), judged('q', 1, 1), judged('q', 2, 1)];
     const b = [judged('p', 1, 5), jobless('p', 2), judged('q', 1, 4), judged('q', 2, 5)];

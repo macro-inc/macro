@@ -112,7 +112,7 @@ export const inInbox = (labels: string[]) => (labels.includes('INBOX') ? labels 
  * routine the catalog has meets on its own.
  */
 export function draftableNeeds(needs: { id: string; drafted?: string; catalog?: string[] }[]): number {
-  return new Set(needs.filter((need) => need.drafted?.trim() && !(need.catalog ?? []).some((key) => CATALOG[key])).map((need) => need.id)).size;
+  return new Set(needs.filter((need) => need.drafted?.trim() && !(need.catalog ?? []).some((key) => Object.hasOwn(CATALOG, key))).map((need) => need.id)).size;
 }
 
 /** The fewest needs only a drafted routine can meet, so five good drafts are a fair target (5 for sets written before sent mail). */

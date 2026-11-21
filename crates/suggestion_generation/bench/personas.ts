@@ -9,7 +9,7 @@
 // The tune personas live in `personas/`; held-out ones live outside the
 // repository (see heldout.ts).
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -134,6 +134,8 @@ export type Persona = {
   routinesTruth?: RoutinesTruth;
   /** A month persona's streams key. */
   streamsTruth?: StreamsTruth;
+  /** When the newest of its files was last written (ms since the epoch): a run that started later read these keys. */
+  writtenAt?: number;
 };
 
 // A held-out writer makes addresses from first names, so one may carry an
@@ -210,6 +212,7 @@ function load(dir: string, name: string, heldout: boolean): Persona {
     feedTruth: spellAddresses(feedTruth, spelled),
     routinesTruth: spellAddresses(routinesTruth, spelled),
     streamsTruth: spellAddresses(streamsTruth, spelled),
+    writtenAt: Math.max(...readdirSync(dir).map((file) => statSync(join(dir, file)).mtimeMs)),
   };
 }
 

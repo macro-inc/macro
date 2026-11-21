@@ -17,8 +17,8 @@ import { shiftDays } from './clock';
 import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines, withheld, withheldAcross } from './report';
 import { CACHE, type Trigger, generate, prepare, rereadList } from './run';
-import { type Attempt, type RunFile, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
-import { comparable, joinRuns, sameBuild } from './sides';
+import { type Attempt, type RunFile, type Score, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, shareEnough, summary, unreadList, verdict, wholeCount } from './score';
+import { comparable, joinRuns, sameBuild, staleKeys } from './sides';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -357,6 +357,13 @@ async function unnamedErrors<T>(persona: Persona, work: () => Promise<T>): Promi
   }
 }
 
+/** A failed build's 0, as `run` scores one: with 0 stream jobs where its judge judges jobs (v5 on) and its person has a streams key. */
+function rescoredFailure(run: RunFile, persona: Persona): Score {
+  const needs = run.section === 'routines' ? persona.routinesTruth!.needs.length : persona.feedTruth!.planted.length;
+  const judgesJobs = Number(/ v(\d+)$/.exec(run.judge ?? '')?.[1] ?? 0) >= 5;
+  return failedScore(needs, run.section === 'routines' && judgesJobs ? persona.streamsTruth : undefined);
+}
+
 /** One side of a comparison: a run file, or several of one build joined with commas (sides.ts `joinRuns`). */
 const readSide = (arg: string): RunFile => joinRuns(arg, arg.split(',').map(readRun));
 
@@ -398,7 +405,8 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   for (const attempt of run.attempts) {
     if (!attempt.generation.transcript || !listsScored(run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), findsWork)) continue;
     const gone = rereadList(attempt.generation, path);
-    if (gone) console.warn(`${attempt.heldout ? 'a held-out generation' : `${attempt.persona} rep ${attempt.rep}`}: ${gone}`);
+    // Its reason can hold a path with a held-out person's slug.
+    if (gone) console.warn(attempt.heldout ? "a held-out generation: its work list couldn't be read again" : `${attempt.persona} rep ${attempt.rep}: ${gone}`);
   }
   // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
   await exclusive(at.instance, 'suggestions bench rejudge', async () => {
@@ -406,7 +414,8 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
     await Promise.all(
       run.attempts.map(async (attempt) => {
         const persona = seatOf(people.get(attempt.persona)!, attempt.seat ?? 1);
-        // A build failure keeps its 0: only its work list is judged again, where the run scores one.
+        // A build failure keeps its 0, with 0 stream jobs where its person has a streams key: only its work list is judged again, where the run scores one.
+        if (attempt.generation.buildFailed) attempt.score = rescoredFailure({ ...run, judge: JUDGE }, persona);
         if (attempt.generation.buildFailed ? !listsScored(run.section, persona, findsWork) : attempt.generation.error) {
           // Nothing to judge again; a list judgement its key no longer backs goes.
           if (!listsScored(run.section, persona, findsWork)) dropList(attempt);
@@ -426,7 +435,11 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   console.log(reportLines([run]).join('\n'));
 }
 
-/** Score a run again from the marks it has, with the answer keys as they are now: for a changed key or scoring, at no cost. */
+/**
+ * Score a run again from the marks it has: for a changed scoring, at no
+ * cost. Its marks must have been judged against the answer keys as they are
+ * now (sides.ts `staleKeys`); a changed key needs a rejudge.
+ */
 function rescore(path: string) {
   const run = readRun(path);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
@@ -439,12 +452,16 @@ function rescore(path: string) {
     const gaps = scoredHere.flatMap((persona) => keyGaps(persona.routinesTruth!).map((gap) => `${who(persona)}'s routines answer key ${gap}`));
     if (gaps.length) throw new Error(gaps.join('\n'));
   }
-  const keys = keysNow(run, scoredHere);
+  const keys = keyDigests(scoredHere);
+  const stale = staleKeys(run, scoredHere, keys);
+  if (stale) throw new Error(`${path}: ${stale} of ${scoredHere.length} people's answer keys changed since its marks were judged, or may have, so the run file is left as it was: rejudge it`);
+  if (run.set !== 'tune') fixKeys(run.set, keys);
   const findsWork = !!run.flags?.[FIND_WORK_FLAG];
   for (const attempt of run.attempts) {
     const persona = people.get(attempt.persona)!;
     if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth, attempt.jobMarks);
     else if (attempt.feedMarks) attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
+    else if (attempt.generation.buildFailed) attempt.score = rescoredFailure(run, persona);
     // A list its person's key no longer backs keeps no score from it.
     if (!listsScored(run.section, persona, findsWork || !!attempt.findingMarks)) {
       dropList(attempt);
@@ -504,6 +521,7 @@ async function main() {
         console.log(`- ${part}: ${c.a.toFixed(digits)} → ${c.b.toFixed(digits)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(digits)} (95% ${c.interval[0].toFixed(digits)} to ${c.interval[1].toFixed(digits)}), margin ${c.margin}: ${c.verdict}`);
       }
       // Good drafts of each measure, against the margins `noise` measured for them where given.
+      for (const part of v.unshared) console.log(`- ${part}: not compared, the sides share too few people scored for it`);
       for (const [part, c] of Object.entries(v.good)) {
         console.log(`- ${part}: ${c.a.toFixed(2)} → ${c.b.toFixed(2)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(2)} (95% ${c.interval[0].toFixed(2)} to ${c.interval[1].toFixed(2)}), ${c.margin === undefined ? 'no margin given' : `margin ${c.margin}: ${c.verdict}`}`);
       }
@@ -515,6 +533,10 @@ async function main() {
         // Over the attempts scored for it: one whose jobs judgement failed has no picks by stream job.
         const having = (attempts: Attempt[]) => attempts.filter((attempt) => get(attempt) !== undefined);
         if (!having(a.attempts).length || !having(b.attempts).length) continue;
+        if (!shareEnough(having(a.attempts), having(b.attempts))) {
+          console.log(`- ${part}: not compared, the sides share too few people scored for it`);
+          continue;
+        }
         const c = contrast(having(a.attempts), having(b.attempts), (attempt) => get(attempt)!);
         console.log(`- ${part}: ${c.a.toFixed(2)} → ${c.b.toFixed(2)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(2)} (95% ${c.interval[0].toFixed(2)} to ${c.interval[1].toFixed(2)}), no margin`);
       }
@@ -555,6 +577,8 @@ async function main() {
       if (!people.length) throw new Error(`no persona in set ${values.set} is named ${values.personas}`);
       const reps = wholeCount('--reps', values.reps ?? 2);
       const concurrency = wholeCount('--concurrency', values.concurrency ?? 6);
+      // Its lists are judged against the streams key: a held-out set's keys are the ones fixed at its first use.
+      if (values.set !== 'tune') fixKeys(values.set!, keyDigests(people));
       // The step's cost is the author's usage while it runs: nothing else on the instance may write meanwhile.
       // A held-out use is recorded once the instance is held, so a find stopped while it waits spends none.
       await exclusive(values.instance!, 'suggestions bench find', () => {

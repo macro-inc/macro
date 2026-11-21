@@ -5,7 +5,7 @@
 // next confirmation needs a fresh set: `heldout make <name>`.
 
 import { SQL } from 'bun';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
@@ -32,8 +32,47 @@ const ledgerPath = (set: string) => join(HELDOUT_DIR, set, 'ledger.jsonl');
  * against the same keys, so no key is changed after a build has run on its
  * person. Throws, naming no one, when one changed.
  */
-export function fixKeys(set: string, keys: Record<string, string>, dir = HELDOUT_DIR) {
+export function fixKeys(set: string, keys: Record<string, string>, dir = HELDOUT_DIR, waitMs = 10_000) {
   const path = join(dir, set, 'keys.json');
+  // Bench commands on two instances may fix keys of one set at once: one reads and writes at a time.
+  withLock(`${path}.lock`, waitMs, () => fixKeysHeld(set, keys, path));
+}
+
+/** A lock older than this was left by a command that died holding it. */
+const STALE_LOCK_MS = 60_000;
+
+/** Run `then` holding the lock file `lock`, waiting up to `waitMs` for another holder. */
+function withLock(lock: string, waitMs: number, then: () => void) {
+  const until = Date.now() + waitMs;
+  for (;;) {
+    try {
+      closeSync(openSync(lock, 'wx'));
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      const age = (() => {
+        try {
+          return Date.now() - statSync(lock).mtimeMs;
+        } catch {
+          return 0;
+        }
+      })();
+      if (age > STALE_LOCK_MS) {
+        rmSync(lock, { force: true });
+        continue;
+      }
+      if (Date.now() > until) throw new Error(`${lock} is held by another bench command; run this one again when it ends`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  try {
+    then();
+  } finally {
+    unlinkSync(lock);
+  }
+}
+
+function fixKeysHeld(set: string, keys: Record<string, string>, path: string) {
   const fixed = existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { keys: Record<string, string> }).keys : {};
   const changed = Object.entries(keys).filter(([name, digest]) => Object.hasOwn(fixed, name) && fixed[name] !== digest).length;
   if (changed) {
@@ -44,8 +83,9 @@ export function fixKeys(set: string, keys: Record<string, string>, dir = HELDOUT
   const added = Object.keys(keys).filter((name) => !Object.hasOwn(fixed, name));
   if (!added.length) return;
   // Written whole or not at all, so a reader never finds half the keys.
-  writeFileSync(`${path}.partial`, `${JSON.stringify({ keys: { ...fixed, ...Object.fromEntries(added.map((name) => [name, keys[name]])) } }, null, 1)}\n`);
-  renameSync(`${path}.partial`, path);
+  const partial = `${path}.${process.pid}.partial`;
+  writeFileSync(partial, `${JSON.stringify({ keys: { ...fixed, ...Object.fromEntries(added.map((name) => [name, keys[name]])) } }, null, 1)}\n`);
+  renameSync(partial, path);
 }
 
 /** Record a run on `set`, and say so loudly once the set is spent. */
@@ -325,14 +365,11 @@ export function rosterProblem(sketch: Pick<Sketch, 'owner_first' | 'colleagues'>
   return undefined;
 }
 
-/** Every sketched person whose workspace can't be written, with why, in one line; undefined when all can. */
-const rosterProblems = (people: (Sketch | MonthSketch)[]) =>
-  people
-    .flatMap((person) => {
-      const problem = rosterProblem(person);
-      return problem ? [`${person.slug}: ${problem}`] : [];
-    })
-    .join('; ') || undefined;
+/** How many sketched people's workspaces can't be written, and why, in one line naming none of them; undefined when all can. */
+export function rosterProblems(people: Pick<Sketch, 'owner_first' | 'colleagues'>[]): string | undefined {
+  const problems = people.flatMap((person) => rosterProblem(person) ?? []);
+  return problems.length ? `${problems.length} of ${people.length} sketched people: ${[...new Set(problems)].join('; ')}` : undefined;
+}
 
 /** Who a person is, as a new one must not repeat: slug, full name and mail domain, lowercased. */
 type Identity = { slug: string; name: string; domain: string };

@@ -54,6 +54,7 @@ export function lines(runs: RunFile[]): string[] {
       }
       out.push(`${run.section} (${run.label}): good drafts per generation ${s.goodDrafts.toFixed(2)} of ${s.drafts!.toFixed(2)} drafted, 5 or more in ${s.fiveGoodDrafts} of ${s.scored}; good catalog picks ${s.goodPicks!.toFixed(2)}${aimed}`);
       // The second measure, beside the first, where the run was judged for stream jobs.
+      if (s.jobWithheld !== undefined) out.push(`${run.section} (${run.label}): ${s.jobWithheld} held-out people judged for stream jobs, fewer than ${MIN_HELDOUT_PEOPLE}: good drafts by stream job not shown${s.jobErrors ? ` (${s.jobErrors} whose jobs judgement failed)` : ''}`);
       if (s.jobDrafts !== undefined) out.push(`${run.section} (${run.label}): good drafts by stream job per generation ${s.jobDrafts.toFixed(2)}, 5 or more in ${s.fiveJobDrafts} of ${s.jobScored}, doing the jobs of ${s.jobStreams!.toFixed(2)} work streams; good catalog picks by stream job ${s.jobPicks!.toFixed(2)}${s.jobErrors ? `; ${s.jobErrors} more whose jobs judgement failed` : ''}`);
     }
     // A held-out person's error can name them: only that it happened is shown.

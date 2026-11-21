@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RoutineMark } from './judge';
 import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, variantOf, windowMessages } from './personas';
-import { type Generation, readWorkList, rereadList, type RoutineRow, workListOf } from './run';
+import { type Generation, readWorkList, rereadList, type RoutineRow, unlinkMarkdown, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
 import { draftableNeeds, inInbox, pooled } from './month';
 import { CATALOG } from './catalog';
-import { repeatsEarlier, rosterProblem } from './heldout';
+import { repeatsEarlier, rosterProblem, rosterProblems } from './heldout';
 import { lines, withheldAcross } from './report';
 import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, unreadList, verdict, wholeCount } from './score';
 import { ANCHOR } from './clock';
@@ -229,6 +229,16 @@ describe('workListOf', () => {
       .replace('https://mill.example/po', '[https://mill.example/po](https://mill.example/po)');
     const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(linked).replace(JSON.stringify(linked), text) }] } } };
     expect(workListOf([row])).toEqual(linked);
+  });
+
+  test("undoes the link elements a bare list's round trip made of domains and URLs", () => {
+    const element = (url: string, text: string) => `<m-link>${JSON.stringify({ url, text, title: '' })}</m-link>`;
+    const linked = { ...list, streams: [{ ...list.streams[0], what: 'Submissions from mill.example and https://mill.example/po' }] };
+    const text = JSON.stringify(linked).replace('mill.example and', `${element('https://mill.example', 'mill.example')} and`).replace('https://mill.example/po', element('https://mill.example/po', 'https://mill.example/po'));
+    const row = { direction: 'to_runtime', created_at: '2026-11-20 10:00:00+00', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(linked).replace(JSON.stringify(linked), text) }] } } };
+    expect(workListOf([row])).toEqual(linked);
+    // An element that isn't one stays as it was.
+    expect(unlinkMarkdown('<m-link>{not json}</m-link>')).toBe('<m-link>{not json}</m-link>');
   });
 
   test('reads a list in a fenced block as written, escapes and all', () => {
@@ -611,6 +621,8 @@ describe('writing a month', () => {
   test('counts no need a catalog routine meets on its own, whatever its drafted text', () => {
     const known = Object.keys(CATALOG)[0];
     expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice', catalog: [known] }, { id: 'r2', drafted: 'a lead log', catalog: ['not_in_the_catalog'] }, { id: 'r3', drafted: 'a digest', catalog: [] }])).toBe(2);
+    // A name every object answers to is no catalog routine.
+    expect(draftableNeeds([{ id: 'r1', drafted: 'a lead log', catalog: ['constructor', 'toString', '__proto__'] }])).toBe(1);
   });
 
   test('starts no job after one fails, and throws once the running ones end', async () => {
@@ -650,6 +662,14 @@ describe('writing a month', () => {
     expect(rosterProblem(roster('Ana', 'Bo', 'BO'))).toContain('share a first name');
     expect(rosterProblem(roster('Ana', 'Bo', 'owner'))).toContain('named Owner');
     expect(rosterProblem(roster('Owen', 'Bo', 'Cy'))).toBeUndefined();
+  });
+
+  test("says how many sketched people can't be written, naming none", () => {
+    const roster = (slug: string, owner: string, ...firsts: string[]) => ({ slug, owner_first: owner, colleagues: firsts.map((first) => ({ first, last: 'A', role: '' })) });
+    const problems = rosterProblems([roster('ana-lopez', 'Ana', 'ana'), roster('bo-stone', 'Bo', 'Cy'), roster('cy-reed', 'Cy', 'owner')]);
+    expect(problems).toStartWith('2 of 3 sketched people:');
+    for (const name of ['ana', 'bo', 'cy-reed', 'lopez']) expect(problems!.toLowerCase()).not.toContain(name);
+    expect(rosterProblems([roster('bo-stone', 'Bo', 'Cy')])).toBeUndefined();
   });
 });
 
