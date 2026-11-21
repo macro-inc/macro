@@ -5,7 +5,10 @@
  */
 
 import type { LineRange } from '@app/components/diff-view/model/lines';
-import type { AppLinkOpener } from '@core/component/LexicalMarkdown/component/core/app-link-opener';
+import type {
+  AppLinkOpener,
+  AppLinkPreview,
+} from '@core/component/LexicalMarkdown/component/core/app-link-opener';
 import type { ChangedFile } from './core/changeset';
 import {
   type CodeReference,
@@ -64,6 +67,27 @@ export function createCodeLinkOpener(
       'failure'
     );
     return true;
+  };
+}
+
+/**
+ * A code link's hover card: the file and its lines, then the folder it is in
+ * (`a.ts, line 2` over `apps/web/src`), rather than the path twice.
+ */
+export function describeCodeLink(url: string): AppLinkPreview | undefined {
+  const reference = parseCodeReference(url);
+  if (!reference || !namesFile(reference)) return undefined;
+  const slash = reference.path.lastIndexOf('/');
+  const name = reference.path.slice(slash + 1);
+  const lines = reference.lines;
+  const where = !lines
+    ? ''
+    : lines.start === lines.end
+      ? `, line ${lines.start}`
+      : `, lines ${lines.start}-${lines.end}`;
+  return {
+    title: `${name}${where}`,
+    subtitle: slash === -1 ? '' : reference.path.slice(0, slash),
   };
 }
 

@@ -11,6 +11,7 @@
 
 import {
   createCodeLinkOpener,
+  describeCodeLink,
   linkChangedCode,
 } from '@app/features/changes/code-links';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
@@ -481,6 +482,7 @@ export function Message(props: {
         // and its links to changed code open the Changes pane.
         <AgentReplyLinks
           openOther={changes ? createCodeLinkOpener(changes) : undefined}
+          describeOther={changes ? describeCodeLink : undefined}
         >
           <div class="flex flex-col gap-1 min-w-0">
             {/* Segments are positional, and a run at the tail grows as calls

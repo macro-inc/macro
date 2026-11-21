@@ -1,6 +1,10 @@
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import { createCodeLinkOpener, linkChangedCode } from './code-links';
+import {
+  createCodeLinkOpener,
+  describeCodeLink,
+  linkChangedCode,
+} from './code-links';
 import type { DiffStyle, PaneLayout } from './core/layout';
 import { createChanges } from './primitives/create-changes';
 import { createMockChangesContext, mockChangeset } from './tests/mock-context';
@@ -86,5 +90,27 @@ describe('createCodeLinkOpener', () => {
       );
       dispose();
     });
+  });
+});
+
+describe('describeCodeLink', () => {
+  it('names the file and its lines, with the folder beneath', () => {
+    expect(describeCodeLink('apps/web/src/a.ts#L2')).toEqual({
+      title: 'a.ts, line 2',
+      subtitle: 'apps/web/src',
+    });
+    expect(describeCodeLink('crates/x/src/lib.rs#L3-L9')).toEqual({
+      title: 'lib.rs, lines 3-9',
+      subtitle: 'crates/x/src',
+    });
+    expect(describeCodeLink('package.json')).toEqual({
+      title: 'package.json',
+      subtitle: '',
+    });
+  });
+
+  it('leaves links that are not to a file as they are', () => {
+    expect(describeCodeLink('https://example.com/a.ts')).toBeUndefined();
+    expect(describeCodeLink('apps/web/src')).toBeUndefined();
   });
 });
