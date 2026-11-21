@@ -30,8 +30,9 @@ use crate::domain::{
         finish_timer, may_change_entry, timer_start,
     },
     ports::{
-        Clock, EntryWriteOutcome, InsertEntryOutcome, RepositoryError, StartTimerOutcome,
+        Clock, DeleteEntryOutcome, InsertEntryOutcome, RepositoryError, StartTimerOutcome,
         StopTimerOutcome, SystemClock, TimeTrackingRepository, TimeTrackingRollout,
+        UpdateEntryOutcome,
     },
 };
 
@@ -41,9 +42,9 @@ pub type TaskViewReceipt = EntityAccessReceipt<ViewAccessLevel>;
 /// Edit access to a task document.
 pub type TaskEditReceipt = EntityAccessReceipt<EditAccessLevel>;
 
-/// How many times a start re-reads the person's timer when another device
-/// changed it in between.
-const START_ATTEMPTS: u8 = 3;
+/// How many times a start or an edit re-reads what it changes when another
+/// device changed it in between.
+const WRITE_ATTEMPTS: u8 = 3;
 
 /// The time tracking use cases, called by the HTTP adapter.
 pub trait TimeTrackingService: Send + Sync + 'static {
@@ -370,25 +371,44 @@ where
             })?;
         tracing::Span::current().record("task_id", entry.task_id.as_str());
 
-        let values = EntryValues::edited(&entry, changes, self.clock.now().date_naive())?;
-        let outcome = self
-            .repo
-            .update_entry(entry_id, user_id, &values)
-            .await
-            .map_err(repository)?;
-        match outcome {
-            EntryWriteOutcome::Written(logged) => {
-                tracing::Span::current().record("outcome", "updated");
-                self.events
-                    .publish(TimeEntryMacroEvent::updated(TimeEntryChange::new(
-                        &logged.entry,
-                        logged.total_minutes,
-                    )));
-                Ok(logged)
+        // The changes merge onto the entry as read; when another edit of it
+        // commits first, the repository refuses and the changes merge again
+        // onto the newer entry, so an omitted field never restores an old value.
+        let mut entry = entry;
+        for _ in 0..WRITE_ATTEMPTS {
+            let values =
+                EntryValues::edited(&entry, changes.clone(), self.clock.now().date_naive())?;
+            let outcome = self
+                .repo
+                .update_entry(entry_id, user_id, &values, entry.updated_at)
+                .await
+                .map_err(repository)?;
+            match outcome {
+                UpdateEntryOutcome::Written(logged) => {
+                    tracing::Span::current().record("outcome", "updated");
+                    self.events
+                        .publish(TimeEntryMacroEvent::updated(TimeEntryChange::new(
+                            &logged.entry,
+                            logged.total_minutes,
+                        )));
+                    return Ok(logged);
+                }
+                UpdateEntryOutcome::Changed => {
+                    entry = self.own_entry(user_id, entry_id).await?;
+                }
+                UpdateEntryOutcome::EntryMissing => {
+                    return Err(TimeTrackingError::NotFound("time entry"));
+                }
+                UpdateEntryOutcome::TaskUnavailable => {
+                    return Err(TimeTrackingError::NotFound("task"));
+                }
             }
-            EntryWriteOutcome::EntryMissing => Err(TimeTrackingError::NotFound("time entry")),
-            EntryWriteOutcome::TaskUnavailable => Err(TimeTrackingError::NotFound("task")),
         }
+
+        tracing::Span::current().record("outcome", "contended");
+        Err(TimeTrackingError::Conflict(
+            "the entry changed on another device while saving this edit; try again",
+        ))
     }
 
     #[tracing::instrument(
@@ -419,7 +439,7 @@ where
             .await
             .map_err(repository)?;
         match outcome {
-            EntryWriteOutcome::Written(total_minutes) => {
+            DeleteEntryOutcome::Deleted(total_minutes) => {
                 tracing::Span::current().record("outcome", "deleted");
                 self.events
                     .publish(TimeEntryMacroEvent::deleted(TimeEntryChange::new(
@@ -428,8 +448,8 @@ where
                     )));
                 Ok(TaskTimeTotal { total_minutes })
             }
-            EntryWriteOutcome::EntryMissing => Err(TimeTrackingError::NotFound("time entry")),
-            EntryWriteOutcome::TaskUnavailable => Err(TimeTrackingError::NotFound("task")),
+            DeleteEntryOutcome::EntryMissing => Err(TimeTrackingError::NotFound("time entry")),
+            DeleteEntryOutcome::TaskUnavailable => Err(TimeTrackingError::NotFound("task")),
         }
     }
 
@@ -475,7 +495,7 @@ where
         // Each attempt reads the person's timer and asks the repository to
         // replace exactly that one; another device changing it in between
         // makes the repository refuse, and the next attempt reads it again.
-        for _ in 0..START_ATTEMPTS {
+        for _ in 0..WRITE_ATTEMPTS {
             let current = self.repo.timer(user_id).await.map_err(repository)?;
             if let Some(current) = current.as_ref().filter(|current| current.id == timer.id) {
                 if current.task_id != timer.task_id {
@@ -490,10 +510,17 @@ where
                 });
             }
 
+            let stopped_at = self.clock.now();
             let previous = current
                 .as_ref()
                 .map(|previous| {
-                    finish_timer(previous, user_id, now, TimerEnding::Now, start.time_zone)
+                    finish_timer(
+                        previous,
+                        user_id,
+                        stopped_at,
+                        TimerEnding::Now,
+                        start.time_zone,
+                    )
                 })
                 .transpose()
                 .inspect_err(|error| {

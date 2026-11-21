@@ -28,8 +28,8 @@ use crate::domain::{
         TimeEntrySource,
     },
     ports::{
-        EntryWriteOutcome, InsertEntryOutcome, RepositoryError, StartTimerOutcome,
-        StopTimerOutcome, TimeTrackingRepository,
+        DeleteEntryOutcome, InsertEntryOutcome, RepositoryError, StartTimerOutcome,
+        StopTimerOutcome, TimeTrackingRepository, UpdateEntryOutcome,
     },
 };
 
@@ -53,13 +53,16 @@ pub enum PgTimeTrackingError {
     InvalidRow(String),
 }
 
+fn is_lock_timeout(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|database| database.code())
+        .is_some_and(|code| code == LOCK_NOT_AVAILABLE)
+}
+
 impl From<sqlx::Error> for PgTimeTrackingError {
     fn from(error: sqlx::Error) -> Self {
-        let lock_timeout = error
-            .as_database_error()
-            .and_then(|database| database.code())
-            .is_some_and(|code| code == LOCK_NOT_AVAILABLE);
-        if lock_timeout {
+        if is_lock_timeout(&error) {
             return Self::Contended(error);
         }
         Self::Database(error)
@@ -68,7 +71,13 @@ impl From<sqlx::Error> for PgTimeTrackingError {
 
 impl RepositoryError for PgTimeTrackingError {
     fn is_contended(&self) -> bool {
-        matches!(self, Self::Contended(_))
+        match self {
+            Self::Contended(_) => true,
+            Self::Total(system_properties::SystemPropertyError::Database(report)) => report
+                .downcast_current_context::<sqlx::Error>()
+                .is_some_and(is_lock_timeout),
+            Self::Database(_) | Self::Total(_) | Self::InvalidRow(_) => false,
+        }
     }
 }
 
@@ -388,7 +397,8 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         id: Uuid,
         user_id: &MacroUserIdStr<'_>,
         values: &EntryValues,
-    ) -> Result<EntryWriteOutcome<LoggedTime>, Self::Err> {
+        read_updated_at: DateTime<Utc>,
+    ) -> Result<UpdateEntryOutcome, Self::Err> {
         let mut tx = self.begin().await?;
         let Some(task_id) = sqlx::query_scalar!(
             "SELECT task_id FROM time_entry WHERE id = $1 AND user_id = $2",
@@ -398,12 +408,15 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         .fetch_optional(&mut *tx)
         .await?
         else {
-            return Ok(EntryWriteOutcome::EntryMissing);
+            return Ok(UpdateEntryOutcome::EntryMissing);
         };
         if !is_live_task(&mut tx, &task_id).await? {
-            return Ok(EntryWriteOutcome::TaskUnavailable);
+            return Ok(UpdateEntryOutcome::TaskUnavailable);
         }
 
+        // Every write of this entry holds the task's lock, so under it the
+        // entry is as the last writer left it: unchanged since the caller's
+        // read, changed (the caller merges again), or gone.
         lock_task(&mut tx, &task_id).await?;
         let updated = sqlx::query_as!(
             EntryRow,
@@ -411,7 +424,7 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
             UPDATE time_entry
             SET entry_date = $3, minutes = $4, note = $5, started_at = $6, ended_at = $7,
                 updated_at = now()
-            WHERE id = $1 AND user_id = $2
+            WHERE id = $1 AND user_id = $2 AND updated_at = $8
             RETURNING id, task_id, user_id, entry_date, minutes, note, started_at, ended_at,
                       source AS "source: TimeEntrySource", created_at, updated_at
             "#,
@@ -422,17 +435,28 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
             values.note,
             values.span.map(|span| span.started_at),
             values.span.map(|span| span.ended_at),
+            read_updated_at,
         )
         .fetch_optional(&mut *tx)
         .await?;
         let Some(updated) = updated else {
-            return Ok(EntryWriteOutcome::EntryMissing);
+            let still_there = sqlx::query_scalar!(
+                "SELECT task_id FROM time_entry WHERE id = $1 AND user_id = $2",
+                id,
+                user_id.as_ref(),
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+            return Ok(match still_there {
+                Some(_) => UpdateEntryOutcome::Changed,
+                None => UpdateEntryOutcome::EntryMissing,
+            });
         };
         let entry = TimeEntry::try_from(updated)?;
         let total_minutes = self.rewrite_total(&mut tx, &task_id).await?;
         tx.commit().await?;
 
-        Ok(EntryWriteOutcome::Written(LoggedTime {
+        Ok(UpdateEntryOutcome::Written(LoggedTime {
             entry,
             total_minutes,
         }))
@@ -443,7 +467,7 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         &self,
         id: Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<EntryWriteOutcome<u32>, Self::Err> {
+    ) -> Result<DeleteEntryOutcome, Self::Err> {
         let mut tx = self.begin().await?;
         let Some(task_id) = sqlx::query_scalar!(
             "SELECT task_id FROM time_entry WHERE id = $1 AND user_id = $2",
@@ -453,10 +477,10 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         .fetch_optional(&mut *tx)
         .await?
         else {
-            return Ok(EntryWriteOutcome::EntryMissing);
+            return Ok(DeleteEntryOutcome::EntryMissing);
         };
         if !is_live_task(&mut tx, &task_id).await? {
-            return Ok(EntryWriteOutcome::TaskUnavailable);
+            return Ok(DeleteEntryOutcome::TaskUnavailable);
         }
 
         lock_task(&mut tx, &task_id).await?;
@@ -469,12 +493,12 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         .await?
         .rows_affected();
         if deleted == 0 {
-            return Ok(EntryWriteOutcome::EntryMissing);
+            return Ok(DeleteEntryOutcome::EntryMissing);
         }
         let total_minutes = self.rewrite_total(&mut tx, &task_id).await?;
         tx.commit().await?;
 
-        Ok(EntryWriteOutcome::Written(total_minutes))
+        Ok(DeleteEntryOutcome::Deleted(total_minutes))
     }
 
     #[tracing::instrument(name = "time.read_timer_row", skip_all, err)]
@@ -504,16 +528,6 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         if !is_live_task(&mut tx, &timer.task_id).await? {
             return Ok(StartTimerOutcome::TaskUnavailable);
         }
-        let id_taken = sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM time_entry WHERE id = $1) AS "taken!""#,
-            timer.id,
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        if id_taken {
-            return Ok(StartTimerOutcome::IdTaken);
-        }
-
         let stopped = match previous {
             None => None,
             Some(previous) => {
@@ -549,6 +563,19 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         .rows_affected();
         if inserted == 0 {
             return Ok(StartTimerOutcome::TimerChanged);
+        }
+
+        // Checked after the insert, which holds the person's timer row: a stop
+        // of this id that committed before it is visible here, and one that
+        // has not committed yet cannot remove a row it does not see.
+        let id_taken = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM time_entry WHERE id = $1) AS "taken!""#,
+            timer.id,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if id_taken {
+            return Ok(StartTimerOutcome::IdTaken);
         }
         tx.commit().await?;
 
@@ -586,13 +613,15 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
         user_id: &MacroUserIdStr<'_>,
         timer_id: Uuid,
     ) -> Result<(), Self::Err> {
+        let mut tx = self.begin().await?;
         sqlx::query!(
             "DELETE FROM time_timer WHERE user_id = $1 AND id = $2",
             user_id.as_ref(),
             timer_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(())
     }
 }

@@ -64,11 +64,24 @@ pub enum InsertEntryOutcome {
     TaskUnavailable,
 }
 
-/// Result of changing or deleting an entry.
+/// Result of changing an entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EntryWriteOutcome<T> {
-    /// Written, with what the write returns.
-    Written(T),
+pub enum UpdateEntryOutcome {
+    /// Written, with the task's new Time logged.
+    Written(LoggedTime),
+    /// The entry changed since the caller read it; nothing was written.
+    Changed,
+    /// The entry no longer exists.
+    EntryMissing,
+    /// The entry's task is not a live task.
+    TaskUnavailable,
+}
+
+/// Result of deleting an entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteEntryOutcome {
+    /// Deleted, with the task's new Time logged.
+    Deleted(u32),
     /// The entry no longer exists.
     EntryMissing,
     /// The entry's task is not a live task.
@@ -129,13 +142,15 @@ pub trait TimeTrackingRepository: Send + Sync + 'static {
         row: &NewEntryRow,
     ) -> impl Future<Output = Result<InsertEntryOutcome, Self::Err>> + Send;
 
-    /// Replace the values of `user_id`'s entry `id`. Only a live task's entries change.
+    /// Replace the values of `user_id`'s entry `id`, unless it changed since
+    /// the caller read it at `read_updated_at`. Only a live task's entries change.
     fn update_entry(
         &self,
         id: Uuid,
         user_id: &MacroUserIdStr<'_>,
         values: &EntryValues,
-    ) -> impl Future<Output = Result<EntryWriteOutcome<LoggedTime>, Self::Err>> + Send;
+        read_updated_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<UpdateEntryOutcome, Self::Err>> + Send;
 
     /// Delete `user_id`'s entry `id`, returning the task's new Time logged.
     /// Only a live task's entries are deleted.
@@ -143,7 +158,7 @@ pub trait TimeTrackingRepository: Send + Sync + 'static {
         &self,
         id: Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<EntryWriteOutcome<u32>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DeleteEntryOutcome, Self::Err>> + Send;
 
     /// The person's running timer.
     fn timer(

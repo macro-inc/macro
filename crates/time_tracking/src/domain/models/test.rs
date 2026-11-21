@@ -357,3 +357,43 @@ fn only_the_author_may_change_an_entry() {
     assert!(may_change_entry(&entry, &user()));
     assert!(!may_change_entry(&entry, &someone_else));
 }
+
+#[test]
+fn a_span_must_stay_ordered_at_the_precision_it_is_stored() {
+    let start = at(10, 0, 0) + TimeDelta::nanoseconds(100);
+    let end = at(10, 0, 0) + TimeDelta::nanoseconds(200);
+
+    assert!(matches!(
+        EntrySpan::from_parts(Some(start), Some(end)),
+        Err(TimeTrackingError::InvalidInput(_))
+    ));
+    assert_eq!(
+        EntrySpan::from_parts(Some(start), Some(at(10, 0, 1))).unwrap(),
+        Some(EntrySpan {
+            started_at: at(10, 0, 0),
+            ended_at: at(10, 0, 1),
+        })
+    );
+}
+
+#[test]
+fn a_note_with_a_nul_character_is_refused() {
+    let today = day(2026, 11, 20);
+
+    assert!(matches!(
+        EntryValues::validate(today, 30, Some("a\0b".to_string()), None, today),
+        Err(TimeTrackingError::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn a_clock_behind_the_start_ends_the_span_just_after_it() {
+    let timer = timer_started_at(at(10, 0, 0));
+
+    for ending in [TimerEnding::Now, TimerEnding::LogAll] {
+        let row = finish_timer(&timer, &user(), at(9, 59, 59), ending, None).unwrap();
+        let span = row.values.span.unwrap();
+        assert!(span.ended_at > span.started_at, "{ending:?}");
+        assert_eq!(row.values.minutes, 1);
+    }
+}

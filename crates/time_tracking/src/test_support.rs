@@ -25,8 +25,8 @@ use crate::domain::{
     events::{TimeEntryEventPublisher, TimeEntryMacroEvent, TimeEntryTopicEvent},
     models::{EntryValues, LoggedTime, NewEntryRow, RunningTimer, TimeEntry, TimeEntryCursor},
     ports::{
-        Clock, EntryWriteOutcome, InsertEntryOutcome, StartTimerOutcome, StopTimerOutcome,
-        TimeTrackingRepository, TimeTrackingRollout,
+        Clock, DeleteEntryOutcome, InsertEntryOutcome, StartTimerOutcome, StopTimerOutcome,
+        TimeTrackingRepository, TimeTrackingRollout, UpdateEntryOutcome,
     },
 };
 
@@ -53,6 +53,7 @@ struct RepoState {
     timers: HashMap<String, RunningTimer>,
     live_tasks: HashSet<String>,
     timer_changes_before_start: u8,
+    edit_before_next_update: Option<u16>,
 }
 
 /// An in-memory repository that keeps each task's total as the sum of its entries.
@@ -80,6 +81,11 @@ impl FakeRepo {
             .unwrap()
             .timers
             .insert(user_id.to_string(), timer);
+    }
+
+    /// Another device sets the entry's minutes just before the next update.
+    pub(crate) fn edit_elsewhere_before_next_update(&self, minutes: u16) {
+        self.0.lock().unwrap().edit_before_next_update = Some(minutes);
     }
 
     /// The next `count` starts find the person's timer changed.
@@ -182,18 +188,28 @@ impl TimeTrackingRepository for FakeRepo {
         id: Uuid,
         user_id: &MacroUserIdStr<'_>,
         values: &EntryValues,
-    ) -> Result<EntryWriteOutcome<LoggedTime>, Infallible> {
+        read_updated_at: DateTime<Utc>,
+    ) -> Result<UpdateEntryOutcome, Infallible> {
         let mut state = self.0.lock().unwrap();
+        if let Some(minutes) = state.edit_before_next_update.take()
+            && let Some(entry) = state.entries.get_mut(&id)
+        {
+            entry.minutes = minutes;
+            entry.updated_at += chrono::TimeDelta::seconds(1);
+        }
         let Some(entry) = state
             .entries
             .get(&id)
             .filter(|entry| entry.user_id.as_ref() == user_id.as_ref())
             .cloned()
         else {
-            return Ok(EntryWriteOutcome::EntryMissing);
+            return Ok(UpdateEntryOutcome::EntryMissing);
         };
         if !state.live_tasks.contains(&entry.task_id) {
-            return Ok(EntryWriteOutcome::TaskUnavailable);
+            return Ok(UpdateEntryOutcome::TaskUnavailable);
+        }
+        if entry.updated_at != read_updated_at {
+            return Ok(UpdateEntryOutcome::Changed);
         }
         let updated = TimeEntry {
             date: values.date,
@@ -201,10 +217,11 @@ impl TimeTrackingRepository for FakeRepo {
             note: values.note.clone(),
             started_at: values.span.map(|span| span.started_at),
             ended_at: values.span.map(|span| span.ended_at),
+            updated_at: entry.updated_at + chrono::TimeDelta::seconds(1),
             ..entry
         };
         state.entries.insert(id, updated.clone());
-        Ok(EntryWriteOutcome::Written(LoggedTime {
+        Ok(UpdateEntryOutcome::Written(LoggedTime {
             total_minutes: total_of(&state, &updated.task_id),
             entry: updated,
         }))
@@ -214,7 +231,7 @@ impl TimeTrackingRepository for FakeRepo {
         &self,
         id: Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<EntryWriteOutcome<u32>, Infallible> {
+    ) -> Result<DeleteEntryOutcome, Infallible> {
         let mut state = self.0.lock().unwrap();
         let Some(task_id) = state
             .entries
@@ -222,13 +239,13 @@ impl TimeTrackingRepository for FakeRepo {
             .filter(|entry| entry.user_id.as_ref() == user_id.as_ref())
             .map(|entry| entry.task_id.clone())
         else {
-            return Ok(EntryWriteOutcome::EntryMissing);
+            return Ok(DeleteEntryOutcome::EntryMissing);
         };
         if !state.live_tasks.contains(&task_id) {
-            return Ok(EntryWriteOutcome::TaskUnavailable);
+            return Ok(DeleteEntryOutcome::TaskUnavailable);
         }
         state.entries.remove(&id);
-        Ok(EntryWriteOutcome::Written(total_of(&state, &task_id)))
+        Ok(DeleteEntryOutcome::Deleted(total_of(&state, &task_id)))
     }
 
     async fn timer(

@@ -283,6 +283,33 @@ async fn the_author_edits_their_entry_and_the_total_follows() {
 }
 
 #[tokio::test]
+async fn an_edit_that_loses_a_race_merges_onto_the_other_devices_change() {
+    let harness = harness();
+    log(&harness, AUTHOR, 1, 45).await;
+    harness.repo.edit_elsewhere_before_next_update(75);
+
+    let edited = harness
+        .service
+        .update_entry(
+            &user(AUTHOR),
+            Uuid::from_u128(1),
+            TimeEntryChanges {
+                note: FieldEdit::Set("reviewed".to_string()),
+                ..TimeEntryChanges::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        edited.entry.minutes, 75,
+        "the other device's length is kept"
+    );
+    assert_eq!(edited.entry.note.as_deref(), Some("reviewed"));
+    assert_eq!(edited.total_minutes, 75);
+}
+
+#[tokio::test]
 async fn someone_who_can_see_the_task_cannot_change_another_persons_entry() {
     let harness = harness();
     log(&harness, AUTHOR, 1, 45).await;
@@ -563,7 +590,7 @@ async fn a_start_rereads_the_timer_another_device_changed_in_between() {
 #[tokio::test]
 async fn a_start_that_keeps_losing_the_race_gives_up_with_a_conflict() {
     let harness = harness();
-    harness.repo.change_timer_before_next_starts(START_ATTEMPTS);
+    harness.repo.change_timer_before_next_starts(WRITE_ATTEMPTS);
 
     let error = harness
         .service

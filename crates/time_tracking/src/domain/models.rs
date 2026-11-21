@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use chrono::{DateTime, Months, NaiveDate, TimeDelta, Utc};
+use chrono::{DateTime, Months, NaiveDate, SubsecRound, TimeDelta, Utc};
 use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,15 @@ pub const DEFAULT_PAGE_LIMIT: u8 = 50;
 
 /// The most entries one page may list.
 pub const MAX_PAGE_LIMIT: u8 = 200;
+
+/// The finest instant the tables store: Postgres keeps microseconds.
+const STORED_PRECISION: u16 = 6;
+
+/// An instant as the tables store it, so a comparison made before a write
+/// still holds after it.
+fn stored(instant: DateTime<Utc>) -> DateTime<Utc> {
+    instant.trunc_subsecs(STORED_PRECISION)
+}
 
 /// How far ahead of today an entry may be dated.
 const LATEST_ENTRY_MONTHS_AHEAD: Months = Months::new(12);
@@ -151,12 +160,13 @@ pub struct EntrySpan {
 }
 
 impl EntrySpan {
-    /// Pair a start and an end, both or neither, the end after the start.
+    /// Pair a start and an end, both or neither, the end after the start at
+    /// the precision the table stores.
     pub fn from_parts(
         started_at: Option<DateTime<Utc>>,
         ended_at: Option<DateTime<Utc>>,
     ) -> Result<Option<Self>, TimeTrackingError> {
-        match (started_at, ended_at) {
+        match (started_at.map(stored), ended_at.map(stored)) {
             (None, None) => Ok(None),
             (Some(started_at), Some(ended_at)) if ended_at > started_at => Ok(Some(Self {
                 started_at,
@@ -317,6 +327,11 @@ fn validate_note(note: Option<String>) -> Result<Option<String>, TimeTrackingErr
     if trimmed.is_empty() {
         return Ok(None);
     }
+    if trimmed.contains('\0') {
+        return Err(TimeTrackingError::InvalidInput(
+            "a note cannot contain the NUL character".to_string(),
+        ));
+    }
     if trimmed.chars().count() > MAX_NOTE_CHARS {
         return Err(TimeTrackingError::InvalidInput(format!(
             "a note is at most {MAX_NOTE_CHARS} characters"
@@ -451,6 +466,8 @@ pub fn parse_time_zone(name: Option<&str>) -> Result<Option<Tz>, TimeTrackingErr
 /// A timer past [`TIMER_LIMIT`] is refused unless the person said what to log.
 /// The entry is at least one minute, rounded to the nearest minute, dated by
 /// the start in `time_zone`, so work begun before midnight stays on its day.
+/// A clock that reads at or before the start (another server's clock, a few
+/// milliseconds behind) ends the span just after it.
 pub fn finish_timer(
     timer: &RunningTimer,
     user_id: &MacroUserIdStr<'static>,
@@ -462,8 +479,12 @@ pub fn finish_timer(
         TimerEnding::Now if now - timer.started_at > TIMER_LIMIT => {
             return Err(TimeTrackingError::TimerOverLimit(timer.clone()));
         }
-        TimerEnding::Now | TimerEnding::LogAll => now,
-        TimerEnding::At(ended_at) if ended_at > timer.started_at && ended_at <= now => ended_at,
+        TimerEnding::Now | TimerEnding::LogAll => {
+            stored(now).max(timer.started_at + TimeDelta::microseconds(1))
+        }
+        TimerEnding::At(ended_at) if stored(ended_at) > timer.started_at && ended_at <= now => {
+            stored(ended_at)
+        }
         TimerEnding::At(_) => {
             return Err(TimeTrackingError::InvalidInput(
                 "the stop time must be after the timer started and not in the future".to_string(),
@@ -510,8 +531,8 @@ pub fn timer_start(
     requested: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
 ) -> Result<DateTime<Utc>, TimeTrackingError> {
-    match requested {
-        None => Ok(now),
+    match requested.map(stored) {
+        None => Ok(stored(now)),
         Some(started_at) if started_at <= now && now - started_at <= STARTED_AT_LOOKBACK => {
             Ok(started_at)
         }

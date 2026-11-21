@@ -160,7 +160,7 @@ async fn a_replayed_create_stores_one_entry(pool: PgPool) -> anyhow::Result<()> 
 )]
 async fn the_total_is_the_sum_after_create_edit_and_delete(pool: PgPool) -> anyhow::Result<()> {
     let repo = PgTimeTrackingRepository::new(pool.clone());
-    inserted(repo.insert_entry(&typed(1, AUTHOR, TASK, 45)).await?);
+    let first = inserted(repo.insert_entry(&typed(1, AUTHOR, TASK, 45)).await?);
     let second = inserted(repo.insert_entry(&typed(2, EDITOR, TASK, 30)).await?);
     assert_eq!(second.total_minutes, 75);
 
@@ -177,9 +177,10 @@ async fn the_total_is_the_sum_after_create_edit_and_delete(pool: PgPool) -> anyh
                     ended_at: at(10, 0),
                 }),
             },
+            first.entry.updated_at,
         )
         .await?;
-    let EntryWriteOutcome::Written(edited) = edited else {
+    let UpdateEntryOutcome::Written(edited) = edited else {
         panic!("expected the edit to be written");
     };
     assert_eq!(edited.total_minutes, 90);
@@ -189,12 +190,12 @@ async fn the_total_is_the_sum_after_create_edit_and_delete(pool: PgPool) -> anyh
     assert!(edited.entry.updated_at >= edited.entry.created_at);
 
     let deleted = repo.delete_entry(Uuid::from_u128(2), &user(EDITOR)).await?;
-    assert_eq!(deleted, EntryWriteOutcome::Written(60));
+    assert_eq!(deleted, DeleteEntryOutcome::Deleted(60));
     assert_eq!(stored_sum(&pool, TASK).await, 60);
     assert_eq!(stored_total(&pool, TASK).await, 60);
 
     let last = repo.delete_entry(Uuid::from_u128(1), &user(AUTHOR)).await?;
-    assert_eq!(last, EntryWriteOutcome::Written(0));
+    assert_eq!(last, DeleteEntryOutcome::Deleted(0));
     assert_eq!(stored_total(&pool, TASK).await, 0);
     Ok(())
 }
@@ -206,16 +207,60 @@ async fn the_total_is_the_sum_after_create_edit_and_delete(pool: PgPool) -> anyh
 async fn only_the_author_row_is_changed_or_deleted(pool: PgPool) -> anyhow::Result<()> {
     let repo = PgTimeTrackingRepository::new(pool.clone());
     let row = typed(1, AUTHOR, TASK, 45);
-    inserted(repo.insert_entry(&row).await?);
+    let stored = inserted(repo.insert_entry(&row).await?);
 
     let edit = repo
-        .update_entry(row.id, &user(EDITOR), &row.values)
+        .update_entry(row.id, &user(EDITOR), &row.values, stored.entry.updated_at)
         .await?;
     let delete = repo.delete_entry(row.id, &user(EDITOR)).await?;
 
-    assert_eq!(edit, EntryWriteOutcome::EntryMissing);
-    assert_eq!(delete, EntryWriteOutcome::EntryMissing);
+    assert_eq!(edit, UpdateEntryOutcome::EntryMissing);
+    assert_eq!(delete, DeleteEntryOutcome::EntryMissing);
     assert_eq!(stored_sum(&pool, TASK).await, 45);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("time_tracking"))
+)]
+async fn an_edit_of_an_entry_changed_since_it_was_read_writes_nothing(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = PgTimeTrackingRepository::new(pool.clone());
+    let row = typed(1, AUTHOR, TASK, 45);
+    let stored = inserted(repo.insert_entry(&row).await?);
+    let other_device = EntryValues {
+        minutes: 75,
+        ..row.values.clone()
+    };
+    let UpdateEntryOutcome::Written(newer) = repo
+        .update_entry(
+            row.id,
+            &user(AUTHOR),
+            &other_device,
+            stored.entry.updated_at,
+        )
+        .await?
+    else {
+        panic!("expected the first edit to be written");
+    };
+
+    let stale = repo
+        .update_entry(
+            row.id,
+            &user(AUTHOR),
+            &EntryValues {
+                note: Some("reviewed".to_string()),
+                ..row.values.clone()
+            },
+            stored.entry.updated_at,
+        )
+        .await?;
+
+    assert_eq!(stale, UpdateEntryOutcome::Changed);
+    assert_eq!(repo.entry(row.id).await?, Some(newer.entry));
+    assert_eq!(stored_total(&pool, TASK).await, 75);
     Ok(())
 }
 
@@ -322,7 +367,7 @@ async fn trashed_tasks_and_documents_that_are_not_tasks_take_no_time(
 ) -> anyhow::Result<()> {
     let repo = PgTimeTrackingRepository::new(pool.clone());
     let row = typed(1, AUTHOR, TASK, 45);
-    inserted(repo.insert_entry(&row).await?);
+    let stored = inserted(repo.insert_entry(&row).await?);
 
     for task_id in [
         TRASHED_TASK,
@@ -349,13 +394,13 @@ async fn trashed_tasks_and_documents_that_are_not_tasks_take_no_time(
     .execute(&pool)
     .await?;
     assert_eq!(
-        repo.update_entry(row.id, &user(AUTHOR), &row.values)
+        repo.update_entry(row.id, &user(AUTHOR), &row.values, stored.entry.updated_at)
             .await?,
-        EntryWriteOutcome::TaskUnavailable
+        UpdateEntryOutcome::TaskUnavailable
     );
     assert_eq!(
         repo.delete_entry(row.id, &user(AUTHOR)).await?,
-        EntryWriteOutcome::TaskUnavailable
+        DeleteEntryOutcome::TaskUnavailable
     );
     assert_eq!(stored_total(&pool, TASK).await, 45);
     Ok(())
