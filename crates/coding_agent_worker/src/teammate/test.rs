@@ -94,6 +94,7 @@ struct FakeState {
 enum FakeGuard {
     Loads,
     Refuses,
+    RefusesOnce,
     ReadsBack(String),
 }
 
@@ -373,6 +374,12 @@ impl Engine for FakeEngine {
                 "nft: Operation not permitted".to_owned(),
             )),
             FakeGuard::ReadsBack(table) => Ok(table.clone()),
+            FakeGuard::RefusesOnce => {
+                state.guard = FakeGuard::Loads;
+                Err(super::engine::GuardError::Refused(
+                    "nft: Operation not permitted".to_owned(),
+                ))
+            }
         }
     }
 }
@@ -592,7 +599,11 @@ fn the_host_report_names_each_problem_in_the_order_to_fix_it() {
         os: HostOs::Macos,
         arch: HostArch::Arm64,
     };
-    assert_eq!(problem(macos, Ok(docker_info()), None), None);
+    // The policy can't be rendered off Linux yet.
+    assert_eq!(
+        problem(macos, Ok(docker_info()), None),
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
+    );
 }
 
 #[tokio::test]
@@ -1253,7 +1264,15 @@ async fn the_real_engine_runs_the_container_confined_and_deletes_it_on_stop() {
     let inspected: serde_json::Value = serde_json::from_slice(&inspected.stdout).unwrap();
     let host_config = &inspected["HostConfig"];
     assert_eq!(host_config["ReadonlyRootfs"], true);
-    assert_eq!(host_config["CapDrop"], serde_json::json!(["ALL"]));
+    // No capability left in its bounding set (Docker lists the drop as
+    // ALL, Podman as each default it dropped: the process says it alike).
+    let status = std::process::Command::new(program)
+        .args(["exec", &name, "cat", "/proc/1/status"])
+        .output()
+        .unwrap();
+    let status = String::from_utf8_lossy(&status.stdout);
+    let bounding = status.lines().find(|line| line.starts_with("CapBnd:"));
+    assert_eq!(bounding, Some("CapBnd:\t0000000000000000"), "{status}");
     assert_eq!(host_config["Privileged"], false);
     assert_eq!(host_config["PidsLimit"], 512);
     assert_eq!(host_config["Memory"], 4_i64 * 1024 * 1024 * 1024);
@@ -1738,6 +1757,9 @@ macro_env_var::maybe_env_vars! { struct MacroTeammateTestEngine; }
 fn real_engine() -> super::cli::CliEngine {
     use crate::config::EngineChoice;
 
+    // The supervisor's warnings say why a real start was refused.
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+
     let choice = match MacroTeammateTestEngine::new()
         .map(|engine| engine.to_string())
         .as_deref()
@@ -1787,7 +1809,23 @@ fn test_image(program: &str, role: &str, command: &str) -> String {
     .unwrap();
     let output = build.wait_with_output().unwrap();
     assert!(output.status.success(), "could not build {tag}");
-    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    // Podman prints the id without its algorithm.
+    let id = String::from_utf8(output.stdout).unwrap().trim().to_owned();
+    if id.starts_with("sha256:") {
+        id
+    } else {
+        format!("sha256:{id}")
+    }
+}
+
+/// An image id as macrod compares them: Podman prints it without its
+/// algorithm.
+fn with_algorithm(id: String) -> String {
+    if id.is_empty() || id.starts_with("sha256:") {
+        id
+    } else {
+        format!("sha256:{id}")
+    }
 }
 
 fn inspect(program: &str, object: &str, name: &str, format: &str) -> String {
@@ -1878,7 +1916,10 @@ async fn the_real_engine_swaps_images_rolls_back_and_keeps_the_volume() {
             },
         ]
     );
-    assert_eq!(inspect(program, "container", &name, "{{.Image}}"), up_id);
+    assert_eq!(
+        with_algorithm(inspect(program, "container", &name, "{{.Image}}")),
+        up_id
+    );
 
     // A new image that can't be fetched: the settled one again.
     let missing = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
@@ -1893,7 +1934,10 @@ async fn the_real_engine_swaps_images_rolls_back_and_keeps_the_volume() {
             },
         ]
     );
-    assert_eq!(inspect(program, "container", &name, "{{.Image}}"), up_id);
+    assert_eq!(
+        with_algorithm(inspect(program, "container", &name, "{{.Image}}")),
+        up_id
+    );
     assert_eq!(
         inspect(
             program,
@@ -2361,38 +2405,75 @@ async fn the_agent_starts_only_after_its_holder_and_a_checked_guard() {
     assert_eq!(spec.holder_id, "holder-1");
 }
 
-#[tokio::test]
-async fn a_guard_that_cant_load_the_policy_refuses_the_start() {
+#[tokio::test(start_paused = true)]
+async fn a_guard_that_cant_load_the_policy_is_retried_then_given_up() {
     let mut fixture = fixture().await;
     fixture.engine.state().guard = FakeGuard::Refuses;
 
     fixture.teammates.handle(run_request(1));
 
+    // Never started open; tried again with backoff, then given up.
+    let mut states = next_states(&mut fixture.statuses, 2).await;
     assert_eq!(
-        next_states(&mut fixture.statuses, 3).await,
-        [
-            TeammateRunState::Downloading,
-            TeammateRunState::Starting,
-            TeammateRunState::Failed {
-                reason: TeammateRunFailure::NetworkIsolationUnavailable
-            }
-        ]
+        states,
+        [TeammateRunState::Downloading, TeammateRunState::Starting]
+    );
+    for attempt in 1..u32::from(super::supervisor::ISOLATION_ATTEMPTS) {
+        states = next_states(&mut fixture.statuses, 2).await;
+        assert_eq!(
+            states,
+            [
+                TeammateRunState::Restarting { attempt },
+                TeammateRunState::Starting
+            ]
+        );
+    }
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Failed {
+            reason: TeammateRunFailure::NetworkIsolationUnavailable
+        }]
     );
     assert_eq!(fixture.engine.runs(), 0);
 }
 
-#[tokio::test]
-async fn a_policy_that_reads_back_wrong_refuses_the_start() {
+#[tokio::test(start_paused = true)]
+async fn a_guard_that_fails_once_is_retried_and_the_agent_starts() {
+    let mut fixture = fixture().await;
+    fixture.engine.state().guard = FakeGuard::RefusesOnce;
+
+    fixture.teammates.handle(run_request(1));
+
+    assert_eq!(
+        next_states(&mut fixture.statuses, 5).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Restarting { attempt: 1 },
+            TeammateRunState::Starting,
+            TeammateRunState::Running,
+        ]
+    );
+    assert_eq!(fixture.engine.runs(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_policy_that_reads_back_wrong_never_starts_the_agent() {
     let mut fixture = fixture().await;
     fixture.engine.state().guard = FakeGuard::ReadsBack(r#"{"nftables": []}"#.to_owned());
 
     fixture.teammates.handle(run_request(1));
 
+    let states = next_states(
+        &mut fixture.statuses,
+        2 * usize::from(super::supervisor::ISOLATION_ATTEMPTS) + 1,
+    )
+    .await;
     assert_eq!(
-        next_states(&mut fixture.statuses, 3).await[2],
-        TeammateRunState::Failed {
+        states.last(),
+        Some(&TeammateRunState::Failed {
             reason: TeammateRunFailure::NetworkIsolationUnavailable
-        }
+        })
     );
     assert_eq!(fixture.engine.runs(), 0);
 }
@@ -2488,6 +2569,18 @@ async fn an_adopted_teammate_without_a_holder_is_restarted_with_one() {
     };
     // holder-1 was the isolation probe's.
     assert_eq!(spec.holder_id, "holder-2");
+}
+
+#[test]
+fn a_host_other_than_linux_cant_enforce_isolation_yet() {
+    let macos = Platform {
+        os: HostOs::Macos,
+        arch: HostArch::Arm64,
+    };
+    assert_eq!(
+        host_report(macos, Ok(docker_info()), None, Vec::new(), Vec::new()).problem,
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
+    );
 }
 
 #[test]
@@ -2762,6 +2855,9 @@ async fn the_real_engine_enforces_the_egress_policy() {
         "--ip",
         "44.31.250.10",
         "nginx:alpine",
+        "nginx",
+        "-g",
+        "daemon off; worker_processes 1;",
     ]);
     let up_id = test_image(program, "egress-up", RUNS_UNTIL_STOPPED);
 
@@ -2932,6 +3028,9 @@ async fn the_real_engine_allows_only_a_local_stacks_named_services() {
         "--network-alias",
         "svc",
         "nginx:alpine",
+        "nginx",
+        "-g",
+        "daemon off; worker_processes 1;",
     ]);
     // Another container on the shared network (another teammate, say).
     run(&[
@@ -2942,6 +3041,9 @@ async fn the_real_engine_allows_only_a_local_stacks_named_services() {
         "--network",
         &stack,
         "nginx:alpine",
+        "nginx",
+        "-g",
+        "daemon off; worker_processes 1;",
     ]);
     let other_address = inspect(
         program,

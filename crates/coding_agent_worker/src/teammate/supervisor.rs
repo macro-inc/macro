@@ -27,6 +27,12 @@ use super::engine::{
 use super::isolation::{self, Isolation, IsolationError};
 use super::store::Lifecycle;
 
+/// Starts in a row whose egress policy couldn't be put in place before the
+/// supervisor gives up (`failed: networkIsolationUnavailable`); each waits
+/// the policy's backoff, since a guard can fail for a passing reason (an
+/// engine restarting, the image being replaced).
+pub const ISOLATION_ATTEMPTS: u8 = 5;
+
 /// How long an agent whose network is gone (its holder ended, or its
 /// policy didn't check out) has to stop: it can't sync anyway.
 const HOLDER_LOST_GRACE: Duration = Duration::from_secs(10);
@@ -187,6 +193,7 @@ pub async fn supervise<EngineImpl: Engine>(
     };
 
     let mut holder: Option<String>;
+    let mut isolation_failures: u8 = 0;
     let mut attempt = 0;
     let mut announce_restart = supervision.resume && exited_before && !adopted;
     let mut first_start = true;
@@ -220,13 +227,29 @@ pub async fn supervise<EngineImpl: Engine>(
                 keep(&lifecycle);
                 match started {
                     Ok((previous_exit, started_holder)) => {
+                        isolation_failures = 0;
                         span.record("previous_exit", tracing::field::display(previous_exit));
                         holder = Some(started_holder);
                     }
                     Err(StartError::Isolation(reason)) => {
                         // Never an open fallback: the agent doesn't start.
-                        tracing::warn!(install_id = install.install_id.as_str(), generation = install.generation, reason = %reason, "the teammate's egress policy is not in place");
-                        return failed(&report, TeammateRunFailure::NetworkIsolationUnavailable);
+                        // Tried again with the policy's backoff, a few times.
+                        isolation_failures += 1;
+                        tracing::warn!(install_id = install.install_id.as_str(), generation = install.generation, reason = %reason, attempt = isolation_failures, "the teammate's egress policy is not in place");
+                        if isolation_failures >= ISOLATION_ATTEMPTS {
+                            return failed(
+                                &report,
+                                TeammateRunFailure::NetworkIsolationUnavailable,
+                            );
+                        }
+                        let lost = ExitEvent {
+                            code: None,
+                            requested: false,
+                        };
+                        action = lifecycle.policy.exited(lost, clock.now());
+                        keep(&lifecycle);
+                        announce_restart = true;
+                        continue;
                     }
                     Err(StartError::Engine(error)) => {
                         // Usually passing (an engine restarting, its socket

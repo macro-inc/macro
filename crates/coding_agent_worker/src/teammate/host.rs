@@ -98,6 +98,11 @@ pub fn host_report(
         .is_some_and(|free| free < MINIMUM_DISK_FREE_MIB)
     {
         below(HostResource::Disk)
+    } else if !matches!(platform.os, HostOs::Linux) {
+        // The host's addresses and routes are read with Linux's `ip`, so a
+        // policy can't be rendered elsewhere yet (Docker Desktop, Podman
+        // machine).
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
     } else if engines.iter().any(|engine| {
         engine.kind == info.kind && matches!(engine.isolation, EngineIsolation::Unavailable { .. })
     }) {
