@@ -4,6 +4,7 @@
 mod test;
 
 use crate::domain::mcp::filter::McpEventFilter;
+use crate::domain::mcp::live_subscribers::LIVE_SUBSCRIBERS_MAX_ROWS;
 use crate::domain::mcp::models::{
     McpEventSubscription, McpMatchCandidate, McpSecretCiphertext, McpSubscriptionId,
 };
@@ -13,6 +14,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+// `list_live_subscriber_ids` writes this limit as a literal.
+const _: () = assert!(LIVE_SUBSCRIBERS_MAX_ROWS + 1 == 10_001);
 
 /// PostgreSQL-backed [`McpSubscriptionRepo`].
 #[derive(Clone)]
@@ -296,6 +300,27 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         .await
     }
 
+    // Not spanned: it runs every few seconds in every replica, outside any
+    // request, and a trace per round would be noise.
+    async fn list_live_subscriber_ids(&self) -> Result<Vec<String>, Self::Err> {
+        // An index-only range over the live end of the expiry index, which
+        // carries the user: expired rows waiting for the sweep are never read.
+        // The order keeps the planner on that range. The limit is
+        // `LIVE_SUBSCRIBERS_MAX_ROWS` plus one, written as a literal so a
+        // generic plan knows it.
+        sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM mcp_event_subscription
+            WHERE expires_at > now()
+            ORDER BY expires_at
+            LIMIT 10001
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(audience_count = user_ids.len()), err)]
     async fn list_match_candidates(
         &self,
@@ -303,8 +328,9 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         event_name: &str,
     ) -> Result<Vec<McpMatchCandidate>, Self::Err> {
         // Bounded by the audience the caller passes (at most 50 rows per
-        // user), and under a timeout: ingestion retries the event rather than
-        // holding a connection.
+        // user), and under a timeout, so a slow match fails this try rather
+        // than hold a connection; fan-out retries it within its time budget,
+        // then drops the event's MCP deliveries.
         let mut transaction = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '5s'")
             .execute(&mut *transaction)

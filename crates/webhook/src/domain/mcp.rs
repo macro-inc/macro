@@ -7,6 +7,8 @@
 pub mod catalog;
 /// The filter language subscriptions compile into.
 pub mod filter;
+/// Which users hold a live subscription, known without a query per event.
+pub mod live_subscribers;
 /// Subscriptions, ids, lifetimes and delivery payloads.
 pub mod models;
 /// Ports.

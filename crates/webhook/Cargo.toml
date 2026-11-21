@@ -50,6 +50,7 @@ ingestion = [
   "ports",
 ]
 outbound = [
+  "dep:genai_telemetry",
   "dep:webhook_signature",
   "dep:macro_uuid",
   "dep:reqwest",
@@ -81,7 +82,7 @@ stream = [
   "inbound",
   "macro_event_broker/outbound",
 ]
-worker = ["dep:tokio", "ports"]
+worker = ["dep:genai_telemetry", "dep:tokio", "ports"]
 
 [dependencies]
 messages = { path = "../messages", features = ["broker"] }
@@ -101,6 +102,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ], optional = true }
 futures = { workspace = true, optional = true }
+genai_telemetry = { path = "../genai_telemetry", optional = true }
 hex = { workspace = true, optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [

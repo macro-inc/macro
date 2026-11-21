@@ -7,6 +7,7 @@
 mod test;
 
 use std::time::Duration;
+use tracing::Instrument as _;
 
 use crate::domain::delivery::MAX_HTTP_ATTEMPTS;
 use crate::domain::{
@@ -184,8 +185,20 @@ where
             );
             MAX_HTTP_ATTEMPTS
         });
-        let disposition = self.mcp.deliver(mcp_message, receive_count).await;
-        self.settle(receipt_handle, disposition).await;
+        // Each attempt joins the trace of the fan-out that queued it.
+        let span = tracing::info_span!(
+            "mcp_events.receive",
+            mcp_subscription_id = %mcp_message.mcp_subscription_id,
+            event_id = %mcp_message.event.event_id,
+            attempt = receive_count,
+        );
+        genai_telemetry::propagation::set_parent_from_mcp(&span, &mcp_message.trace_context);
+        async {
+            let disposition = self.mcp.deliver(mcp_message, receive_count).await;
+            self.settle(receipt_handle, disposition).await;
+        }
+        .instrument(span)
+        .await;
     }
 
     async fn settle(&self, receipt_handle: &str, disposition: WebhookWorkerDisposition) {

@@ -23201,6 +23201,7 @@ dependencies = [
  "documents",
  "entity_access",
  "futures",
+ "genai_telemetry",
  "hex",
  "kafka_util",
  "macro_authorization",
