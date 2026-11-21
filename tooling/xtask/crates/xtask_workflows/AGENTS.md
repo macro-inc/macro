@@ -47,6 +47,8 @@ to YAML, plus the files derived from them (`checks.lock`,
 - Keep the web Typecheck job free of the removed standalone facade (`typecheck_excludes_the_deferred_lexical_facade`).
 - Build agent-fold and the production document-session WASM before web unit-test shards; package tests must not depend on external artifact manifests.
 - Clear prior result artifacts before accepting per-pipeline coverage evidence.
+- Keep reusable-workflow permissions within the caller's permissions.
+- Use `if_condition` for step conditions and `cond` for job conditions.
 - Never edit `src/workflows/actions.rs` or anything under `.github/` it
   generates; `--check` fails.
 - Long shell scripts go in `.sh` files via `include_str!`: rustfmt re-indents
