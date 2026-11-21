@@ -29,22 +29,42 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   markers back and stops the run if a side runs the wrong modules.
 - Each write runs through the real mutation hooks on NEW; its requests and
   responses are recorded and replayed to OLD, so the server sees it once and
-  both sides get the same answer. A replay that differs from the recording, a
-  recorded write OLD never sent, or a write outside the tap is a `diff` at
-  level `write-replay`.
+  both sides get the same answer. Every write either page sends is watched:
+  a replay that differs from the recording, a recorded write OLD never sent,
+  a hook that succeeded without sending any request, a GraphQL mutation
+  (comments stripped, batches and persisted queries included), a write to
+  another service during a write window, any write OLD sends on its own, or a
+  late NEW write after its window closed is a `diff` at level
+  `write-replay`, checked before each window and at every comparison. The
+  runner's own setup writes (accounts, teams, volume, load) run in a separate
+  `setup` mode; `otherWrites` in the results counts every non-catalog write
+  by side and mode.
 - After every step: read-after-write (old and new raw readers right after the
   write returns, and after out-of-band SQL changes and team membership
-  changes), whether a created or deleted definition is visible to both, the
+  changes), whether a created or deleted definition is listed by both (level
+  `visibility`, a `diff` when either is wrong or its listing fails), the
+  mutation's result, live readers and callers OLD vs NEW after settling
+  (bound `SETTLE_MS`; a side that does not settle in time is a `state`
+  difference at level `settle`, and its snapshot is not compared), a fresh
+  cold mount OLD vs NEW, live vs fresh staleness per side, and only then the
   property editor's imperative read (`fetchPropertyDefinitionWithOptions`),
-  the mutation's result, live readers and callers OLD vs NEW after settling
-  (bound `SETTLE_MS`), a fresh cold mount OLD vs NEW, and live vs fresh
-  staleness per side. Each sequence ends with a real page reload of every side.
+  which fetches into the live cache and would otherwise repair a stale
+  reader before it was compared. Each sequence ends with a real page reload
+  of every side. An out-of-band SQL write that fails or changes no rows fails
+  the run.
 - Differences are classed `equal`; `timestamp-format` (the same instant to the
   nanosecond, only on a row's `created_at`/`updated_at`); `tie-order` (only
   rows whose server sort key is equal swap: definitions by lowercased name,
   options by display order then value, and caller rows only when both sides'
-  catalogs give them the same key); `error-shape` (the same retry decision, a
-  different error object; each old→new pair is its own signature); `state`
+  catalogs give them the same key; an option without a key never ties). Tie
+  keys lowercase like JavaScript; at the end the run asks PostgreSQL to
+  lowercase every string a key was built from and fails if any differs from
+  JavaScript's, since plain definitions and option values sort by SQL
+  `LOWER`. Timestamps normalize to a NUL-prefixed instant, so no literal can
+  pass for one. `error-shape` (the same retry decision, a different error
+  object; the retry decision is the app's own, computed in the page with
+  `thrownResultErrorHasCode`, and each old→new pair, message included, is its
+  own signature); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
   errors are compared whatever the data did.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
@@ -54,13 +74,16 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   against OLD.
 - `LOAD=n` adds `n` other accounts writing and reading on the server, and has
   each fuzzed account's NEW page read both catalogs in the background.
+- An uncaught page error seen on one side only is a `diff` at level
+  `page-errors`.
 - `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`.
 
 ## Limits of the local stack
 
 - The auth service lets one address create 50 users an hour. Account pairs are
-  reused for `ROTATE` (25) sequences, and a refused signup waits five minutes
-  and retries, so a full run spends some of its time waiting.
+  reused for `ROTATE` (25) sequences, and a refused signup clears the sign-up
+  counter in the instance's own Redis (`$REDIS_CONTAINER`, as the email e2e
+  tier does) and retries; with `REDIS_CONTAINER=` it waits five minutes instead.
 - The dev server now and then serves a reloaded page without its modules
   (`ERR_NETWORK_CHANGED` on a machine with many network interfaces). The
   harness retries the load and records it in `harnessErrors`; a write the dev

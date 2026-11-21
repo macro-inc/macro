@@ -17,6 +17,9 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     if (level.startsWith('raw:')) return `raw read cases (${level.slice(4)})`;
     if (level === 'write-replay') return 'write replay';
     if (level === 'imperative') return 'imperative read';
+    if (level === 'visibility') return 'visibility after create/delete';
+    if (level === 'settle') return 'live-update bound';
+    if (level === 'page-errors') return 'uncaught page errors';
     if (level === 'mutation-result') return 'mutation results';
     if (level.endsWith(':staleness')) return 'live vs fresh staleness';
     if (level.endsWith(':caller')) return `callers (${level.split(':').at(-2)})`;
@@ -30,7 +33,8 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     }
   const byPhase = {};
   for (const [level, classes] of Object.entries(r.classes)) {
-    const phase = level.split(':')[0];
+    // raw read cases keep their phase (sweep, random-read, read-after-write, ...)
+    const phase = level.startsWith('raw:') ? level : level.split(':')[0];
     const total = Object.values(classes).reduce((a, b) => a + b, 0);
     byPhase[phase] = (byPhase[phase] ?? 0) + total;
   }
@@ -53,6 +57,10 @@ for (const dir of fs.readdirSync(OUT).sort()) {
     staleness: r.staleness,
     visibility: r.visibility,
     traffic: r.traffic,
+    otherWrites: r.otherWrites,
+    pageErrors: r.pageErrors,
+    sqlFailures: r.sqlFailures,
+    collation: r.collation && { strings: r.collation.strings, skippedWithNul: r.collation.skippedWithNul, mismatches: r.collation.mismatches?.length ?? null, error: r.collation.error ?? null },
     load: r.load,
     volume: r.volume ?? null,
     ops: r.ops,
