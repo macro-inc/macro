@@ -15,7 +15,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{EditAccessLevel, ViewAccessLevel},
+        models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
@@ -242,6 +242,7 @@ pub async fn create_review<Access: EntityAccessService, Auth: MacroAuthorization
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     body: Bytes,
 ) -> Result<Json<ReviewRecord>, CodeExecutionApiError> {
+    refuse_another_sessions_job(&access.entity_access_receipt)?;
     let input: CreateReview = decode(&body).map_err(CodeExecutionApiError)?;
     state
         .reviews
@@ -262,6 +263,7 @@ pub async fn present_view<Access: EntityAccessService, Auth: MacroAuthorizationS
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Json(input): Json<PresentView>,
 ) -> Result<StatusCode, CodeExecutionApiError> {
+    refuse_another_sessions_job(&access.entity_access_receipt)?;
     state
         .reviews
         .present_view(
@@ -540,3 +542,21 @@ pub async fn search_connected_app_tools<
 
 #[cfg(test)]
 mod test;
+
+/// A background job's credential drafts reviews and presents views only in
+/// its own session: never in another session its owner can edit, a
+/// teammate's included, whose audience and agent would read them.
+fn refuse_another_sessions_job(
+    access: &EntityAccessReceipt<EditAccessLevel>,
+) -> Result<(), CodeExecutionApiError> {
+    if agent_correlation::context::current_scope()
+        != Some(agent_correlation::scope::SessionScope::Job)
+    {
+        return Ok(());
+    }
+    let own = agent_correlation::context::current_session();
+    match Uuid::parse_str(&access.entity().entity_id) {
+        Ok(path) if own == Some(path) => Ok(()),
+        _ => Err(CodeExecutionApiError(CodeModeError::Forbidden)),
+    }
+}

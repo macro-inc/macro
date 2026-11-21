@@ -106,3 +106,36 @@ fn a_rate_limited_connected_app_is_too_many_requests_with_retry_after() {
         "Retry-After rounds up to whole seconds"
     );
 }
+
+/// A background job drafts reviews and presents views only in its own
+/// session: its credential naming another session the owner can edit is
+/// refused; outside a job nothing changes.
+#[tokio::test]
+async fn a_job_reviews_and_presents_only_in_its_own_session() {
+    let own = Uuid::from_u128(7);
+    let other = Uuid::from_u128(8);
+    let owner = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let receipt = |session: Uuid| {
+        EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
+            owner.clone(),
+            &session.to_string(),
+            entity_access::domain::models::EntityType::AgentSession,
+        )
+    };
+    let job = agent_correlation::context::Attribution {
+        scope: Some(agent_correlation::scope::SessionScope::Job),
+        session_id: Some(own),
+        ..Default::default()
+    };
+    agent_correlation::context::scope_attribution(job, async {
+        assert!(refuse_another_sessions_job(&receipt(own)).is_ok());
+        assert!(matches!(
+            refuse_another_sessions_job(&receipt(other)),
+            Err(CodeExecutionApiError(CodeModeError::Forbidden))
+        ));
+    })
+    .await;
+    assert!(refuse_another_sessions_job(&receipt(other)).is_ok());
+}
