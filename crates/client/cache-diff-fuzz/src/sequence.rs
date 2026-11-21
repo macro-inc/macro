@@ -189,6 +189,9 @@ pub struct Gen<'a> {
     uuids: Vec<String>,
     registered: Vec<String>,
     next_register: usize,
+    /// Keys the sequence wrote that are no longer in the pools: deleted, dropped
+    /// by the server, or only ever optimistic. The final probe reads them too.
+    departed: Vec<String>,
     /// Input nodes one filter may still grow, so a deep, wide filter stays bounded.
     filter_budget: u32,
     /// Connectives a filter still nests before its first literal: a chain this
@@ -321,6 +324,7 @@ impl<'a> Gen<'a> {
             uuids: Vec::new(),
             registered: Vec::new(),
             next_register: 0,
+            departed: Vec::new(),
             filter_budget: 0,
             filter_chain: 0,
             ops: Vec::new(),
@@ -487,13 +491,26 @@ impl<'a> Gen<'a> {
                     .iter()
                     .map(|contact| format!("GraphqlContact:{}", self.contact_id(contact))),
             )
+            .collect::<Vec<_>>()
+            .into_iter()
+            .chain(self.departed.iter().cloned())
             .collect();
         let mail: Vec<String> = self
             .pools
             .threads
             .iter()
             .map(|spec| format!("{}:{}", spec.typename, spec.id))
+            .chain(
+                self.departed
+                    .iter()
+                    .filter(|key| key.starts_with("GraphqlSoupEmailThread:"))
+                    .cloned(),
+            )
             .collect();
+        let mut seen = BTreeSet::new();
+        let soup: Vec<String> = soup.into_iter().filter(|key| seen.insert(key.clone())).collect();
+        let mut seen = BTreeSet::new();
+        let mail: Vec<String> = mail.into_iter().filter(|key| seen.insert(key.clone())).collect();
         probe_keys.insert("SoupItemFields".into(), soup);
         probe_keys.insert("MailItemFields".into(), mail);
         Generated {
@@ -823,10 +840,15 @@ impl<'a> Gen<'a> {
                 spec.revision += 1;
             }
         }
-        if drop_one && let Some(position) = pool.iter().position(|spec| ids.contains(&spec.id)) {
-            pool.remove(position);
-        }
+        let dropped = match pool.iter().position(|spec| ids.contains(&spec.id)) {
+            Some(position) if drop_one => {
+                let spec = pool.remove(position);
+                Some(format!("{}:{}", spec.typename, spec.id))
+            }
+            _ => None,
+        };
         let typename = pool.first().map(|spec| spec.typename.clone());
+        self.departed.extend(dropped);
         if add && let Some(typename) = typename {
             let mut spec = self.spec(&typename);
             spec.messages = 2;
@@ -952,7 +974,9 @@ impl<'a> Gen<'a> {
                 let count = self.rng.range(1, 3) as usize;
                 self.pools.contacts[index].name = Some(words(&mut self.rng, count));
             } else {
-                self.pools.contacts.remove(index);
+                let contact = self.pools.contacts.remove(index);
+                let key = format!("GraphqlContact:{}", self.contact_id(&contact));
+                self.departed.push(key);
             }
             if self.rng.chance(0.5) {
                 let contact = self.contact();
@@ -1094,6 +1118,7 @@ impl<'a> Gen<'a> {
     /// Deleted keys leave the server too, so later pages stop carrying them.
     fn forget(&mut self, keys: &[String]) {
         let keys: BTreeSet<&String> = keys.iter().collect();
+        self.departed.extend(keys.iter().map(|key| (*key).clone()));
         for pool in [
             &mut self.pools.core,
             &mut self.pools.channels,
@@ -1135,6 +1160,7 @@ impl<'a> Gen<'a> {
                 let mut spec = self.spec(typename);
                 spec.time_ms = self.clock;
                 spec.messages = 1;
+                self.departed.push(format!("{}:{}", spec.typename, spec.id));
                 items.push(spec);
             }
         }
