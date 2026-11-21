@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailbox_sweep_claims\n            SET next_run_at = $1 + $2::interval\n            WHERE name = 'orphans' AND next_run_at <= $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe9e4d930ba6e450f32d018ba125048d0fd087047535cc1269882cead26d19e0"
+}
