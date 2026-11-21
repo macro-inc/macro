@@ -732,6 +732,10 @@ export class CacheWorkerCore {
    * meanwhile used to wait for both halves; now it waits for one.
    */
   private async runReadsBeforeHydrateCommit(): Promise<void> {
+    // A failed request forgets the authority so the next one checks it
+    // again, in case it committed a transition. A read commits nothing, so
+    // the hydrate's notifications keep the authority it ran under.
+    const authority = this.executingAuthority;
     for (let yields = 0; yields < MAX_ARRIVAL_YIELDS; yields += 1) {
       try {
         await new Promise<void>((resume) => this.afterArrivedMessages(resume));
@@ -752,6 +756,7 @@ export class CacheWorkerCore {
           const result = await this.dispatch(queued.request);
           for (const waiter of queued.waiters) waiter.resolve(result);
         } catch (error) {
+          this.executingAuthority = authority;
           for (const waiter of queued.waiters) waiter.reject(error);
         }
       }

@@ -3716,6 +3716,39 @@ describe('CacheWorkerCore', () => {
       ]);
     });
 
+    it('stamps the hydrate notice with its authority after a read between fails', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      engine.commitHydrate.mockImplementationOnce(async () => {
+        order.push('commit');
+        return {
+          ...written,
+          revision: '1',
+          revisionAdvanced: true,
+          searchChangedBuckets: ['document'],
+          data: null,
+        };
+      });
+      const { core, port } = await start(engine);
+      const posted: unknown[] = [];
+      port.postMessage = (message) => posted.push(message);
+      core.addPort(port);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(core.handleRequest(port, read(3, 'client:fails')));
+      release();
+      await Promise.all(sent);
+
+      expect(order).toEqual(['prepare:first', 'read:client:fails', 'commit']);
+      expect(posted).toContainEqual({
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
+        kind: 'cache-hydrated',
+        revision: '1',
+        searchChangedBuckets: ['document'],
+      });
+    });
+
     it('answers a read that fails between the halves and still writes the hydrate', async () => {
       const order: string[] = [];
       const { engine, prepareStarted, release } = splitEngine(order);
