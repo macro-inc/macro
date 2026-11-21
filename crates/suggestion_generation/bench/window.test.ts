@@ -333,6 +333,12 @@ describe('rereadList', () => {
       const none = generation({ transcript: file });
       expect(rereadList(none, join(dir, 'run.json'))).toContain('holds no brief');
       expect(none.listError).toContain('unknown');
+      // Prompts without text are no brief either.
+      const blank = (params: unknown) => JSON.stringify({ ...row, content: { method: 'session/prompt', ...(params === undefined ? {} : { params }) } });
+      writeFileSync(file, `${blank(undefined)}\n${blank({ prompt: [{ type: 'text', text: '  ' }] })}\n`);
+      const malformed = generation({ transcript: file });
+      expect(rereadList(malformed, join(dir, 'run.json'))).toContain('holds no brief');
+      expect(malformed.listError).toContain('unknown');
       // Only the picking session's brief: the run's list stands; with none, none was read.
       writeFileSync(file, `${JSON.stringify(picking)}\n`);
       const partial = generation({ transcript: file, workList: list });
