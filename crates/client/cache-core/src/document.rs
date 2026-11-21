@@ -108,8 +108,9 @@ pub struct Document {
 
 impl Document {
     /// Parses executable document text into the IR. Fragment spreads are
-    /// inlined (cycles rejected by the parser's recursion limit; fragments
-    /// must be defined in the same document, which urql guarantees).
+    /// inlined, each fragment converted once and shared by every spread of it
+    /// (cycles rejected by the nesting limit; fragments must be defined in the
+    /// same document, which urql guarantees).
     pub fn parse(text: &str) -> Result<Document, DocumentError> {
         let tree = apollo_parser::Parser::new(text).parse();
         if tree.errors().len() > 0 {
@@ -147,6 +148,7 @@ impl Document {
             return Err(DocumentError::NoOperation);
         }
 
+        let mut converted = HashMap::new();
         let mut operations = Vec::new();
         for op in operations_cst {
             // Shorthand (no operation type keyword) is a query.
@@ -160,10 +162,11 @@ impl Document {
                     return Err(DocumentError::UnsupportedOperationType(label));
                 }
             };
-            let selection_set = convert_selection_set(
+            let (selection_set, _) = convert_selection_set(
                 op.selection_set()
                     .ok_or(DocumentError::Malformed("operation without selection set"))?,
                 &fragments,
+                &mut converted,
                 0,
             )?;
             let mut variable_defaults = serde_json::Map::new();
@@ -207,13 +210,8 @@ impl Document {
                 .ok_or(DocumentError::Malformed("fragment without type condition"))?
                 .text()
                 .to_string();
-            let selection_set = convert_selection_set(
-                definition
-                    .selection_set()
-                    .ok_or(DocumentError::Malformed("fragment without selections"))?,
-                &fragments,
-                0,
-            )?;
+            let selection_set =
+                convert_fragment(&name, definition, &fragments, &mut converted, 0)?.selection_set;
             converted_fragments.push(Fragment {
                 name,
                 type_condition,
@@ -259,17 +257,66 @@ impl Document {
 
 const MAX_FRAGMENT_DEPTH: usize = 32;
 
+/// A fragment definition converted once per document and shared by every
+/// spread of it.
+#[derive(Clone)]
+struct ConvertedFragment {
+    selection_set: SelectionSet,
+    /// How many levels its deepest nested selection set lies below its own,
+    /// so a later spread at another depth fails exactly as converting it there
+    /// would.
+    height: usize,
+}
+
+fn too_deep() -> DocumentError {
+    DocumentError::Malformed("fragment nesting too deep (cycle?)")
+}
+
+/// Converts a fragment's selections at `depth`, or reuses its first successful
+/// conversion: it has no errors except depth, so the result differs only when
+/// the deepest selection would now pass the limit.
+fn convert_fragment(
+    name: &str,
+    definition: &cst::FragmentDefinition,
+    fragments: &HashMap<String, cst::FragmentDefinition>,
+    converted: &mut HashMap<String, ConvertedFragment>,
+    depth: usize,
+) -> Result<ConvertedFragment, DocumentError> {
+    if let Some(fragment) = converted.get(name) {
+        if depth + fragment.height > MAX_FRAGMENT_DEPTH {
+            return Err(too_deep());
+        }
+        return Ok(fragment.clone());
+    }
+    let (selection_set, height) = convert_selection_set(
+        definition
+            .selection_set()
+            .ok_or(DocumentError::Malformed("fragment without selections"))?,
+        fragments,
+        converted,
+        depth,
+    )?;
+    let fragment = ConvertedFragment {
+        selection_set,
+        height,
+    };
+    converted.insert(name.to_owned(), fragment.clone());
+    Ok(fragment)
+}
+
+/// Returns the selections and how many levels their deepest nested selection
+/// set lies below them.
 fn convert_selection_set(
     set: cst::SelectionSet,
     fragments: &HashMap<String, cst::FragmentDefinition>,
+    converted: &mut HashMap<String, ConvertedFragment>,
     depth: usize,
-) -> Result<SelectionSet, DocumentError> {
+) -> Result<(SelectionSet, usize), DocumentError> {
     if depth > MAX_FRAGMENT_DEPTH {
-        return Err(DocumentError::Malformed(
-            "fragment nesting too deep (cycle?)",
-        ));
+        return Err(too_deep());
     }
     let mut out = Vec::new();
+    let mut height = 0;
     for sel in set.selections() {
         match sel {
             cst::Selection::Field(f) => {
@@ -305,7 +352,12 @@ fn convert_selection_set(
                     })
                 });
                 let selection_set = match f.selection_set() {
-                    Some(s) => convert_selection_set(s, fragments, depth + 1)?,
+                    Some(s) => {
+                        let (selection_set, below) =
+                            convert_selection_set(s, fragments, converted, depth + 1)?;
+                        height = height.max(below + 1);
+                        selection_set
+                    }
                     None => SelectionSet::default(),
                 };
                 out.push(Selection::Field(FieldNode {
@@ -323,13 +375,15 @@ fn convert_selection_set(
                     .and_then(|tc| tc.named_type())
                     .and_then(|nt| nt.name())
                     .map(|n| n.text().to_string());
-                let selection_set = convert_selection_set(
+                let (selection_set, below) = convert_selection_set(
                     frag.selection_set().ok_or(DocumentError::Malformed(
                         "inline fragment without selections",
                     ))?,
                     fragments,
+                    converted,
                     depth + 1,
                 )?;
+                height = height.max(below + 1);
                 out.push(Selection::Fragment {
                     type_condition,
                     conditions: prepare::conditions(frag.directives())?,
@@ -351,22 +405,18 @@ fn convert_selection_set(
                     .and_then(|tc| tc.named_type())
                     .and_then(|nt| nt.name())
                     .map(|n| n.text().to_string());
-                let selection_set = convert_selection_set(
-                    def.selection_set()
-                        .ok_or(DocumentError::Malformed("fragment without selections"))?,
-                    fragments,
-                    depth + 1,
-                )?;
+                let fragment = convert_fragment(&name, def, fragments, converted, depth + 1)?;
+                height = height.max(fragment.height + 1);
                 prepare::conditions(def.directives())?;
                 out.push(Selection::Fragment {
                     type_condition,
                     conditions: prepare::conditions(spread.directives())?,
-                    selection_set,
+                    selection_set: fragment.selection_set,
                 });
             }
         }
     }
-    Ok(out.into())
+    Ok((out.into(), height))
 }
 
 fn convert_value(value: cst::Value) -> Result<ArgValue, DocumentError> {
@@ -578,5 +628,38 @@ mod tests {
     fn rejects_unknown_fragment() {
         let err = Document::parse("query Q { a { ...Nope } }").unwrap_err();
         assert!(matches!(err, DocumentError::UnknownFragment(_)));
+    }
+
+    #[test]
+    fn a_shared_fragment_keeps_the_nesting_limit_of_each_spread() {
+        // F's deepest selection set lies two levels below its own. Spread first
+        // at the top, then again inside `levels` nested fields: its deepest set
+        // sits at depth levels + 3, and the limit is 32.
+        let fragment = "fragment F on T { a { b { c } } }";
+        let document = |levels: usize| {
+            let nested = (0..levels).fold("...F".to_string(), |inner, level| {
+                format!("w{level} {{ {inner} }}")
+            });
+            format!("query Q {{ ...F {nested} }} {fragment}")
+        };
+        let doc = Document::parse(&document(29)).unwrap();
+        let Selection::Fragment {
+            selection_set: first,
+            ..
+        } = &doc.operations[0].selection_set[0]
+        else {
+            panic!("expected the spread");
+        };
+        assert!(Arc::ptr_eq(
+            first,
+            &doc.fragment("F").unwrap().selection_set
+        ));
+        let too_deep = document(30);
+        assert!(matches!(
+            Document::parse(&too_deep),
+            Err(DocumentError::Malformed(
+                "fragment nesting too deep (cycle?)"
+            ))
+        ));
     }
 }
