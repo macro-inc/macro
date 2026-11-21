@@ -41,6 +41,8 @@ export default {
   moveTitle: 'Move {{name}}',
   moveBody:
     '{{name}} saves its memory and stops on {{from}}, then starts on the computer you choose. Its browser sign-ins and its Claude sign-in stay behind.',
+  moveBodyParked:
+    '{{name}} is stopped. It starts on the computer you choose, with its chats and memory. Its browser sign-ins and its Claude sign-in stayed behind.',
   moveConfirm: 'Move',
   moveFailed: "Couldn't move {{name}}. Try again.",
   runsOn: '· on {{host}}',

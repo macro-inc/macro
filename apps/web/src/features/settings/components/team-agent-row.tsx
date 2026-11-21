@@ -18,6 +18,8 @@ export function TeamAgentRow(props: {
   runsOn?: JSX.Element;
   /** Why its own machine couldn't run it, under its status. */
   problem?: string;
+  /** A problem the owner caused on purpose (a parked agent) reads muted, not as a failure. */
+  problemTone?: 'failure' | 'muted';
   /** Which Claude its computer runs on, for viewers who manage it. */
   claude?: JSX.Element;
   /** The step its computer's setup is on, while it is being set up. */
@@ -53,7 +55,14 @@ export function TeamAgentRow(props: {
           </div>
           <Show when={props.problem}>
             {(problem) => (
-              <div data-agent-problem class="text-xs text-failure">
+              <div
+                data-agent-problem
+                class="text-xs"
+                classList={{
+                  'text-failure': props.problemTone !== 'muted',
+                  'text-ink-muted': props.problemTone === 'muted',
+                }}
+              >
                 {problem()}
               </div>
             )}

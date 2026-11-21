@@ -607,6 +607,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             )
                           : undefined
                       }
+                      problemTone={
+                        agent.installProblem?.kind === 'hostRemoved'
+                          ? 'muted'
+                          : 'failure'
+                      }
                       setupStep={agentSetupStep(agent)}
                       onRetry={
                         isAdminOrOwner() &&

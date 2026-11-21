@@ -40,7 +40,7 @@ function MoveTeammate(props: {
     (hosts.isSuccess &&
       hosts.data.hosts.find((host) => host.harnessId === props.agent.harnessId)
         ?.name) ||
-    t('teammateHosts.ownComputer');
+    t('teamAgents.ownersComputer');
   const target = () =>
     candidates()?.find(
       (host) => host.harnessId === chosen() && host.eligibility.ok
@@ -91,10 +91,12 @@ function MoveTeammate(props: {
         <Panel.Body>
           <div class="flex flex-col gap-4 px-5 py-5">
             <p class="text-sm text-ink-muted">
-              {t('teammateHosts.moveBody', {
-                name: props.agent.name,
-                from: from(),
-              })}
+              {parked()
+                ? t('teammateHosts.moveBodyParked', { name: props.agent.name })
+                : t('teammateHosts.moveBody', {
+                    name: props.agent.name,
+                    from: from(),
+                  })}
             </p>
             <TeammateHostPicker
               hosts={candidates()}

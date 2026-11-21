@@ -346,7 +346,7 @@ export function ChoiceRow(props: {
         disabled={props.disabled}
         onChange={props.onChange}
         aria-label={props.title}
-        class="mt-0.5 accent-accent"
+        class="mt-0.5 accent-accent dark-mode:[color-scheme:dark]"
         classList={{ 'opacity-50': props.disabled }}
       />
       <span class="min-w-0 flex-1">
