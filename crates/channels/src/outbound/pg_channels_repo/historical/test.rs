@@ -288,6 +288,80 @@ async fn malformed_dm_is_not_reused_and_exact_duplicates_choose_oldest_then_id(p
     );
 }
 
+/// A bot added to a DM and removed again leaves the DM the pair's: every
+/// channel list shows it with the two people only, so get-or-create and the
+/// lookup keep answering it. A bot still in the DM makes it a group. An import
+/// keeps the stored roster, so it still maps the pair's conversation onto a
+/// channel of its own, as it did before.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_removed_bot_leaves_the_dm_the_pairs(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let dm = repo
+        .ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+        .await
+        .unwrap();
+    let bot = format!("bot|{}", macro_uuid::generate_uuid_v7());
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        dm.id,
+        bot,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        None,
+        "a bot in the DM makes it a group"
+    );
+
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+        dm.id,
+        bot,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.maybe_get_dm(pair().hi().clone(), pair().lo().clone())
+            .await
+            .unwrap(),
+        Some(dm.id)
+    );
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().hi().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: dm.id,
+            created: false
+        }
+    );
+
+    let mut connection = pool.acquire().await.unwrap();
+    assert_eq!(
+        find_dm(&mut connection, &pair(), DmRoster::Stored)
+            .await
+            .unwrap(),
+        None,
+        "an import's lookup still counts the removed bot"
+    );
+    drop(connection);
+    let reserved = macro_uuid::generate_uuid_v7();
+    assert_eq!(
+        repo.ensure_dm(pair(), historical_dm(reserved))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: reserved,
+            created: true
+        }
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn importing_a_live_dm_preserves_owner_and_creates_no_additional_activity(pool: PgPool) {
     let repo = PgChannelsRepo::new(pool.clone());

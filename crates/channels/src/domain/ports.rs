@@ -58,6 +58,14 @@ pub trait ChannelListRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
 
+    /// Fetch the user's activity on each of `channels`, for the channels a
+    /// list page returns.
+    fn get_channel_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channels: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
+
     /// Fetch top-level channel messages for Soup thread rendering.
     fn get_thread_messages(
         &self,
@@ -424,6 +432,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: String,
     ) -> impl Future<Output = Result<Vec<Activity>, Self::Err>> + Send;
 
+    /// When the user last viewed the channel, from their activity row:
+    /// `None` when they never did.
+    fn get_viewed_at<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
     /// Upsert the user's activity for a channel with the given type, returning the row.
     fn set_activity(
         &self,
@@ -608,6 +624,36 @@ pub trait ChannelService: Send + Sync + 'static {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),
             ))
+        }
+    }
+
+    /// The direct message between `user_id` and `recipient_id` that
+    /// [`Self::get_or_create_dm`] would reuse, without creating one: `None`
+    /// when they have none, or when they are the same person.
+    fn find_direct_message(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _recipient_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send {
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "find_direct_message is not configured"
+            )))
+        }
+    }
+
+    /// When `user_id` last viewed `channel_id`, whether or not they are
+    /// still in it: `None` when they never did. A viewer's own activity row
+    /// needs no access check, as the activity list needs none.
+    fn channel_viewed_at(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ChannelMessagesErr>> + Send {
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "channel_viewed_at is not configured"
+            )))
         }
     }
 

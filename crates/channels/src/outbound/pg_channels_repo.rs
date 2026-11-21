@@ -493,6 +493,50 @@ static CHANNEL_LIST_PREFIX: &str = r#"
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
 "#;
 
+/// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]
+/// without requiring it and admits only channels it names by id (a by-id read):
+/// every channel the user can open, as entity access decides. That is the
+/// channels they participate in, team channels of their teams (view-only until
+/// they join), and public channels. A by-id read then answers like the REST
+/// channel read, while lists, favorites and CRM associations, which do not
+/// mention participation, stay bounded by membership.
+///
+/// The named ids bound the rows, so the viewer's activity is looked up per
+/// candidate behind an `OFFSET 0` fence. A plain join lets a generic plan on
+/// stale statistics hash or nested-loop the viewer's whole activity against
+/// every candidate (1.9 s at 4,000 ids for a viewer in 15,000 channels).
+#[cfg(feature = "list")]
+static CHANNEL_LIST_PREFIX_NAMED_CHANNELS: &str = r#"
+    WITH user_channels AS (
+        SELECT c.*, a.viewed_at
+        FROM comms_channels c
+        LEFT JOIN LATERAL (
+            SELECT a.viewed_at
+            FROM comms_activity a
+            WHERE a.channel_id = c.id AND a.user_id = $1
+            OFFSET 0
+        ) a ON TRUE
+        WHERE (
+            c.channel_type = 'public'
+            OR EXISTS (
+                SELECT 1
+                FROM comms_channel_participants cp
+                WHERE cp.channel_id = c.id
+                  AND cp.user_id = $1
+                  AND cp.left_at IS NULL
+            )
+            OR (
+                c.channel_type = 'team'
+                AND EXISTS (
+                    SELECT 1
+                    FROM team_user tu
+                    WHERE tu.team_id = c.team_id
+                      AND tu.user_id = $1
+                )
+            )
+        )
+"#;
+
 /// Candidate set used when the filter mentions [`ChannelLiteral::IsParticipant`]:
 /// channels the user actively participates in, plus team channels of their teams
 /// they have not joined (so `IsParticipant(false)` has rows to match).
@@ -772,6 +816,19 @@ fn channel_filter_mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
     })
 }
 
+/// Whether every channel the filter can match is one it names with
+/// [`ChannelLiteral::ChannelId`], so the read is bounded by its ids.
+#[cfg(feature = "list")]
+fn channel_filter_names_channels(expr: &Expr<ChannelLiteral>) -> bool {
+    expr.collapse_frames(|frame: filter_ast::ExprFrame<bool, _>| match frame {
+        filter_ast::ExprFrame::And(a, b) => a || b,
+        filter_ast::ExprFrame::Or(a, b) => a && b,
+        filter_ast::ExprFrame::Not(_) => false,
+        filter_ast::ExprFrame::Literal(ChannelLiteral::ChannelId(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 /// Whether `IsParticipant(true)` is on the top-level AND chain, so only
 /// channels the user participates in can match.
 #[cfg(feature = "list")]
@@ -786,26 +843,61 @@ fn channel_filter_requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
     }
 }
 
+/// Which channels a channel list reads before its filter applies.
+#[cfg(feature = "list")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ChannelCandidates {
+    /// Channels the user participates in ([`CHANNEL_LIST_PREFIX`]).
+    Joined,
+    /// Joined channels and their teams' channels
+    /// ([`CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS`]).
+    WithTeamChannels,
+    /// Every channel the user can open, bounded by the ids the filter names
+    /// ([`CHANNEL_LIST_PREFIX_NAMED_CHANNELS`]).
+    Named,
+}
+
+#[cfg(feature = "list")]
+impl ChannelCandidates {
+    fn for_filter(filter: Option<&Expr<ChannelLiteral>>) -> Self {
+        match filter {
+            Some(expr)
+                if channel_filter_mentions_participation(expr)
+                    && !channel_filter_requires_participation(expr) =>
+            {
+                if channel_filter_names_channels(expr) {
+                    Self::Named
+                } else {
+                    Self::WithTeamChannels
+                }
+            }
+            _ => Self::Joined,
+        }
+    }
+
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Joined => CHANNEL_LIST_PREFIX,
+            Self::WithTeamChannels => CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS,
+            Self::Named => CHANNEL_LIST_PREFIX_NAMED_CHANNELS,
+        }
+    }
+}
+
 #[cfg(feature = "list")]
 fn build_channel_list_query(
     filter_ast: &LiteralTree<ChannelLiteral>,
-) -> QueryBuilder<'static, Postgres> {
+) -> (ChannelCandidates, QueryBuilder<'static, Postgres>) {
     // QueryBuilder is required because the channel filter is an AST with arbitrary
     // AND/OR/NOT shape. Dynamic literals are constrained to parsed domain types.
     let filter = filter_ast
         .as_deref()
         .map(|expr| drop_implied_notification_conjuncts(expr, channel_literal_state));
-    let prefix = if filter.as_ref().is_some_and(|expr| {
-        channel_filter_mentions_participation(expr) && !channel_filter_requires_participation(expr)
-    }) {
-        CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS
-    } else {
-        CHANNEL_LIST_PREFIX
-    };
-    let mut builder = QueryBuilder::new(prefix);
+    let candidates = ChannelCandidates::for_filter(filter.as_ref());
+    let mut builder = QueryBuilder::new(candidates.prefix());
     builder.push(build_channel_list_filter(filter.as_ref()));
     builder.push(CHANNEL_LIST_SELECT);
-    builder
+    (candidates, builder)
 }
 
 #[cfg(feature = "list")]
@@ -1658,7 +1750,8 @@ impl ChannelListRepo for PgChannelsRepo {
         let (cursor_id, cursor_timestamp) = cursor.vals();
         let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
 
-        Ok(build_channel_list_query(cursor.filter())
+        let (candidates, mut builder) = build_channel_list_query(cursor.filter());
+        let query = builder
             .build()
             .bind(user_id.as_ref())
             .bind(sort_method_str)
@@ -1684,9 +1777,20 @@ impl ChannelListRepo for PgChannelsRepo {
                     is_participant: row.try_get("is_participant")?,
                 }
                 .into_channel_with_participants()
-            })
-            .fetch_all(&self.pool)
-            .await?)
+            });
+        if candidates != ChannelCandidates::Named {
+            return Ok(query.fetch_all(&self.pool).await?);
+        }
+        // A by-id read reaches channels the user never joined, so its cost
+        // follows the ids a client sends: bound it a little above Soup's 12 s
+        // client timeout.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        let channels = query.fetch_all(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(channels)
     }
 
     async fn get_latest_channel_messages_batch(
@@ -1866,6 +1970,53 @@ impl ChannelListRepo for PgChannelsRepo {
         LIMIT 100
         "#,
             user_id.as_ref()
+        )
+        .map(|row| Activity {
+            id: row.id,
+            user_id: row.user_id,
+            channel_id: row.channel_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            viewed_at: row.viewed_at,
+            interacted_at: row.interacted_at,
+        })
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    async fn get_channel_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channels: &[Uuid],
+    ) -> Result<Vec<Activity>, rootcause::Report> {
+        // One `(user_id, channel_id)` probe per listed channel. A plain
+        // `channel_id = ANY($2)` beside `user_id = $1` gets a generic plan
+        // that reads every activity row the user has and tests each against
+        // the whole array (120 ms at 4,000 ids for a user in 15,000
+        // channels); the fenced lateral keeps it to the ids passed in.
+        Ok(sqlx::query!(
+            r#"
+        SELECT
+            a.id as "id!: Uuid",
+            a.user_id as "user_id!: String",
+            a.channel_id as "channel_id!: Uuid",
+            a.viewed_at as "viewed_at?: DateTime<Utc>",
+            a.interacted_at as "interacted_at?: DateTime<Utc>",
+            a.created_at as "created_at!: DateTime<Utc>",
+            a.updated_at as "updated_at!: DateTime<Utc>"
+        FROM unnest($2::uuid[]) AS listed(channel_id)
+        CROSS JOIN LATERAL (
+            SELECT
+                a.id, a.user_id, a.channel_id, a.viewed_at, a.interacted_at,
+                a.created_at, a.updated_at
+            FROM comms_activity a
+            WHERE a.user_id = $1
+              AND a.channel_id = listed.channel_id
+            OFFSET 0
+        ) a
+        "#,
+            user_id.as_ref(),
+            channels,
         )
         .map(|row| Activity {
             id: row.id,
@@ -2794,7 +2945,15 @@ impl ChannelRepo for PgChannelsRepo {
         recipient_id: MacroUserIdStr<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
         let pair = crate::domain::dm::DmPair::new(user_id, recipient_id)?;
-        historical::find_dm(&mut *self.pool.acquire().await?, &pair).await
+        // The read follows both people's memberships; bound it a little above
+        // the 12 s timeout of the GraphQL clients that ask.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        let channel_id = historical::find_dm(&mut tx, &pair, historical::DmRoster::Listed).await?;
+        tx.commit().await?;
+        Ok(channel_id)
     }
 
     async fn maybe_get_private_channel(
@@ -3146,6 +3305,28 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn get_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channel_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        // One row of the (user_id, channel_id) unique index. The column is a
+        // timestamp without zone, read as UTC as `get_activities` reads it:
+        // `query!` decodes an overridden column without the zone check.
+        let row = sqlx::query!(
+            r#"
+        SELECT a.viewed_at as "viewed_at?: DateTime<Utc>"
+        FROM comms_activity a
+        WHERE a.user_id = $1 AND a.channel_id = $2
+        "#,
+            user_id.as_ref(),
+            channel_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|row| row.viewed_at))
     }
 
     async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, Self::Err> {

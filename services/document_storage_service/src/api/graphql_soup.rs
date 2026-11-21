@@ -202,6 +202,9 @@ fn insert_graphql_context_data(
         state.projects_state.service.clone(),
     )));
     data.insert(state.channel_service.clone());
+    data.insert(complete_graph::ChannelQueryContext::new(
+        state.channel_service.clone(),
+    ));
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_database_rows_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());

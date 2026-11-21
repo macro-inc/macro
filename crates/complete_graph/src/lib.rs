@@ -30,8 +30,8 @@ pub use graphql_activity::{
 };
 pub use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
-    GraphqlChannelActivity, GraphqlChannelActivityType, NoOpChannelActivityMutationService,
-    RecordChannelActivityInput,
+    ChannelQueryContext, ChannelUserReads, GraphqlChannelActivity, GraphqlChannelActivityType,
+    GraphqlChannelUserQuery, NoOpChannelActivityMutationService, RecordChannelActivityInput,
 };
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{

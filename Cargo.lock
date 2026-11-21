@@ -9644,6 +9644,7 @@ dependencies = [
  "graphql_common",
  "macro_user_id",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

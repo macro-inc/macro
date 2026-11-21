@@ -21,6 +21,11 @@ viewer pattern), which apply to every type defined here.
   inbox. Spam-only and trash-only threads render as their folder rows; the
   mutation reply reader (`mutation_thread.rs`) reads through the same rule
   with the email service's ownership check.
+- `SoupItemLoader` reads channels by id with a filter that mentions
+  `isParticipant` both ways (`channel_tree`), so a by-id read returns every
+  named channel the viewer can open, a public or team channel they never
+  joined included, as the REST channel read does; `isParticipant` on the
+  record says which. Joined-only lists must still filter on it.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's

@@ -201,7 +201,11 @@ pub async fn ensure_dm_in(
     .await?;
     // This must be a separate statement after acquiring the lock: READ COMMITTED
     // then observes a concurrent creator that committed while we were waiting.
-    if let Some(id) = find_dm(tx, &pair).await? {
+    let roster = match &creation {
+        DmCreation::Live(_) => DmRoster::Listed,
+        DmCreation::Historical { .. } => DmRoster::Stored,
+    };
+    if let Some(id) = find_dm(tx, &pair, roster).await? {
         return Ok(EnsuredChannel { id, created: false });
     }
     let inserted_at = sqlx::query_scalar!(
@@ -228,22 +232,61 @@ pub async fn ensure_dm_in(
     Ok(EnsuredChannel { id, created: true })
 }
 
+/// Which rows make a direct-message channel a pair's DM in [`find_dm`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DmRoster {
+    /// Every row counts, a removed bot's too. An import maps a conversation
+    /// onto the channel it reserved for it, so it keeps the rule that channel
+    /// was chosen by.
+    Stored,
+    /// A removed bot's row does not count: the DM is the pair's again, as
+    /// every channel list shows it. Live get-or-create and the read-only
+    /// lookup use this, so messaging the other person reopens that DM instead
+    /// of starting a second one.
+    Listed,
+}
+
 /// Discover an exact pair without modifying it.
-pub async fn find_dm(connection: &mut PgConnection, pair: &DmPair) -> anyhow::Result<Option<Uuid>> {
+///
+/// A DM is any channel both people have a row in, active or left, with no
+/// third row; `roster` says whether a removed bot's row is one. A bot still in
+/// the channel always is. The two people's rows are intersected first, through
+/// the partial `(user_id, channel_id)` indexes on active and on left rows,
+/// behind an `OFFSET 0` fence; only the channels they share are then checked.
+/// The read is bounded by the two people's memberships, never by the table.
+pub async fn find_dm(
+    connection: &mut PgConnection,
+    pair: &DmPair,
+    roster: DmRoster,
+) -> anyhow::Result<Option<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
-        SELECT c.id FROM comms_channels c
+        SELECT c.id
+        FROM (
+            (SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $1 AND p.left_at IS NULL
+             UNION ALL
+             SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $1 AND p.left_at IS NOT NULL)
+            INTERSECT
+            (SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $2 AND p.left_at IS NULL
+             UNION ALL
+             SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $2 AND p.left_at IS NOT NULL)
+            OFFSET 0
+        ) shared
+        JOIN comms_channels c ON c.id = shared.channel_id
         WHERE c.channel_type = 'direct_message'
-          AND EXISTS (SELECT 1 FROM comms_channel_participants p
-                      WHERE p.channel_id = c.id AND p.user_id = $1)
-          AND EXISTS (SELECT 1 FROM comms_channel_participants p
-                      WHERE p.channel_id = c.id AND p.user_id = $2)
-          AND (SELECT COUNT(*) FROM comms_channel_participants p WHERE p.channel_id = c.id) = 2
+          AND (SELECT COUNT(*) FROM comms_channel_participants p
+               WHERE p.channel_id = c.id
+                 AND ($3 OR p.left_at IS NULL OR p.user_id NOT LIKE 'bot|%')) = 2
         ORDER BY c.created_at, c.id
         LIMIT 1
         "#,
         pair.lo().as_ref(),
         pair.hi().as_ref(),
+        roster == DmRoster::Stored,
     )
     .fetch_optional(connection)
     .await?)

@@ -3535,7 +3535,8 @@ input GraphqlChannelLiteral @oneOf {
 	"""
 	The is participant option. Filters by whether the requesting user is an
 	active participant; its presence widens the candidate set to team channels
-	of the user's teams they have not joined.
+	of the user's teams they have not joined, and, when the filter admits only
+	channels it names by id, to public channels too.
 	"""
 	isParticipant: Boolean
 	"""
@@ -8859,6 +8860,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupChannelParticipant!]!
 	"""
+	The bots that participate in the channel. `participants` lists users only.
+	"""
+	botParticipants: [GraphqlSoupChannelBotParticipant!]!
+	"""
 	The latest message.
 	"""
 	latestMessage: GraphqlSoupChannelMessagePreview
@@ -8912,6 +8917,32 @@ type GraphqlSoupChannelAgentDm {
 	The persona's avatar URL, when it has one.
 	"""
 	avatarUrl: String
+}
+
+"""
+A bot that participates in a soup channel.
+"""
+type GraphqlSoupChannelBotParticipant {
+	"""
+	The identifier of the channel.
+	"""
+	channelId: ID!
+	"""
+	The identifier of the bot.
+	"""
+	botId: ID!
+	"""
+	The role.
+	"""
+	role: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """
@@ -11040,6 +11071,19 @@ type GraphqlUser {
 		"""
 		matching: GraphqlContactMatching
 	): GraphqlContactPage!
+	"""
+	The id of the authenticated user's direct message with `userId`, the
+	one a first message to them would reuse: the oldest channel of the two
+	of them alone. Null when they have none, or when `userId` is the
+	authenticated user. Asking never creates one.
+	"""
+	directMessageChannelId(userId: ID!): ID
+	"""
+	When the authenticated user last viewed the channel, in RFC 3339
+	format, whether or not they are still in it. Null when they never
+	viewed it. Their own activity row needs no access to the channel.
+	"""
+	channelViewedAt(channelId: ID!): String
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.

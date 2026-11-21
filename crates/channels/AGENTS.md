@@ -79,6 +79,40 @@ DMs, and the shared message store other domains discuss things on.
   viewer's channels in a nested loop, seconds for a viewer in thousands of
   channels. Its plan test runs custom and generic plans.
 
+- `historical::find_dm` (get-or-create, the read-only
+  `ChannelService::find_direct_message`, the Slack importer) intersects the two
+  people's participant rows behind an `OFFSET 0` fence, through the partial
+  `(user_id, channel_id)` indexes on active rows and on left rows
+  (`idx_comms_cp_left_by_user_channel`), then checks the shared channels. Left
+  rows count: an imported DM both people left is still the one to reuse. A
+  bot still in it makes it a group. A bot that was removed counts only for
+  the Slack importer (`DmRoster::Stored`), which maps a conversation onto the
+  channel it reserved by that rule; live get-or-create and the lookup
+  (`DmRoster::Listed`) skip its row, so the DM is the pair's again, as
+  channel lists show it. So when a pair's only DM had a bot removed, a Slack
+  import of that pair creates a DM of its own while live messages keep
+  reusing the first, as they did when the web opener picked the DM from the
+  channel list. Keep that shape; checking every direct-message channel for
+  both people reads the whole table.
+
+- The channel list picks its candidates from the filter
+  (`ChannelCandidates::for_filter`): joined channels by default, plus the
+  user's team channels when the filter mentions `IsParticipant`, plus public
+  channels when it also names only channels by id (the soup item loader's
+  by-id read). The by-id read looks activity up per named channel behind an
+  `OFFSET 0` fence and runs under a 15 s statement timeout, since its cost
+  follows the ids a client sends.
+
+- A list page takes each listed channel's viewed and interacted times from
+  that channel's own activity row (`get_channel_activities`, one fenced probe
+  per id). The SQL sorted the page on them, and Soup and REST build the next
+  cursor from them: a channel left without its row moves the cursor, and the
+  next page skips channels. `get_channel_list_activities` (the user's latest
+  100) is only the legacy `/activity` read.
+  `ChannelService::channel_viewed_at` reads one row of that table by its
+  unique `(user_id, channel_id)` key, with no access check: it is the
+  caller's own row, kept after they leave the channel.
+
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
 - A person's first top-level message with the default notification policy invites the channel's recipients who are not mentioned in it. In a DM or unnamed group chat (`ChannelMetadata::is_dm_or_group_chat`) that message creates the conversation, so those recipients with an account get the ordinary channel message notification instead, which counts as unread; only people without an account get the invite. Bot first messages and mentions-only posts never invite.
 - Channel access requests are separate from `crates/access_requests`: access is
