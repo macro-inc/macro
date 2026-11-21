@@ -27,7 +27,8 @@ code, not in its prompt. The harness also signs the scope into the credential
   someone else, carry data out (web fetch and search), or start work with
   the person's full access (agent sessions, session control, tool
   approvals, review decisions, explicit memory writes, skill creation and
-  skill-description writes, running or rewriting
+  skill-description writes, MCP server configuration and OAuth-start writes,
+  running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
   credentials); `dry_run` (a routine step's dry run, signed with no
   correlation): reads by method and `POST_READS`, nothing else, held to the

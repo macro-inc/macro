@@ -202,6 +202,9 @@ const SENDS: &[(&str, &str)] = &[
     ("PUT", "/scheduling/settings"),
     ("POST", "/github_pull_requests/draft"),
     ("POST", "/mcp/servers"),
+    ("PUT", "/mcp/servers"),
+    ("DELETE", "/mcp/servers"),
+    ("POST", "/mcp/servers/auth/start"),
 ];
 
 /// Requests that run any of a service's writes behind one path, outside

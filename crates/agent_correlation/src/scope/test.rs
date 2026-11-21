@@ -358,6 +358,9 @@ fn audit_no_send_refuses_persistence_that_later_runs_can_execute() {
         ("POST", "/agent-sessions"),
         ("PATCH", "/agents/fixture"),
         ("POST", "/mcp/servers"),
+        ("PUT", "/mcp/servers"),
+        ("DELETE", "/mcp/servers"),
+        ("POST", "/mcp/servers/auth/start"),
     ] {
         assert!(
             !SessionScope::NoSend.allows(method, path),
