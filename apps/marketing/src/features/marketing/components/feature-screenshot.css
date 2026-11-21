@@ -68,6 +68,10 @@
   .feature-screenshot[data-narrow] .feature-screenshot-wide { display: none; }
   .feature-screenshot[data-narrow] .feature-screenshot-narrow { display: block; }
   .feature-screenshot-narrow .feature-screenshot-canvas { width: 100%; }
+}
+
+/* Three 220px phones and their gaps need 716px; below that the row scrolls. */
+@media (max-width: 759px) {
   .feature-phone-screens {
     justify-content: flex-start;
     gap: 16px;
