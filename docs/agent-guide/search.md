@@ -65,7 +65,19 @@ window. An offline picker waiting for local context should recover when that
 context arrives. Partial caches stay local even online; Refresh schedules background
 sync rather than remote search. A tab with no usable local cache (unsupported
 browser, or a cache taken over by a newer build) lists server contact pages while
-online instead of showing options as unavailable. Hydration/context changes restart stale windows and
+online instead of showing options as unavailable. The server does not rank those
+pages, so the first page of a typed search also reads the people the text names
+and lists them first: the server's exact name matches, a whole typed address,
+the viewer's teammates (the roster is looked up by ID, so a teammate is found
+in a directory of any size), and anyone on the page itself, when a word of
+their name starts with each typed word. They are ordered direct-message
+partners (most recent first), then teammates, then everyone else, exact matches
+before word-start ones; the server's looser matches follow in the same three
+groups. Recipient and filter pickers have no direct-message facts there and
+order by teammates only. Later pages are listed below in server order. If one
+of the extra reads fails, or has not answered two seconds in when the page's
+own rows have landed, the page lists without the people that read would have
+added and still ranks the rows it has. Hydration/context changes restart stale windows and
 must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
 person target. Resolving 500 selected people keeps all 500 and looks up self
 separately when that would otherwise overflow the batch.

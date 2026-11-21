@@ -217,9 +217,6 @@ export function NotificationsView(props: NotificationsViewProps) {
   const isUnfolded = (id: string) => !condensed() && stacks.isExpanded(id);
   const listItems = createInboxListItems(rows, isUnfolded);
   const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
-  const anyStackOpen = createMemo(() =>
-    rows().some((row) => row.count > 1 && isUnfolded(row.id))
-  );
   const rowsById = createMemo(
     () => new Map(rows().map((row) => [row.id, row] as const))
   );
@@ -678,11 +675,6 @@ export function NotificationsView(props: NotificationsViewProps) {
           unseen={card.row().unseen}
           highlighted={highlighted()}
           endsSection={sectionEnds().has(card.row().id)}
-          receded={
-            anyStackOpen() &&
-            !stacks.isExpanded(card.row().id) &&
-            !highlighted()
-          }
           onHover={() => list.focus.set(card.row().id, { reason: 'hover' })}
           onClick={(event) =>
             list.activate.key(card.row().id, {

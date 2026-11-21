@@ -166,7 +166,7 @@ fn a_scope_is_stored_by_name() {
 }
 
 /// A run that sends nothing changes the person's own items but never sends,
-/// posts, shares, invites, sets up a routine, or starts work with the
+/// posts, shares, invites, pings, sets up a routine, or starts work with the
 /// person's full access.
 #[test]
 fn a_run_that_sends_nothing_reaches_nobody() {
@@ -253,6 +253,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         // A bearer token for a document, valid an hour after the run.
         ("POST", "/dss/documents/permissions_token/01a1"),
         ("POST", "/v1/documents/permissions_token/01a1"),
+        ("POST", "/notification/v1/user_notifications/send"),
+        ("POST", "/notification/user_notifications/send"),
+        ("POST", "/user_notifications/send"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }

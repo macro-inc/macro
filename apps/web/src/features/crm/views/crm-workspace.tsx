@@ -721,8 +721,8 @@ export function CrmWorkspaceView(props: {
                 <CrmNavigationControls />
                 <Tooltip label="Back">
                   <Button
-                    aria-label="Close CRM settings"
-                    tooltip="Close CRM settings"
+                    aria-label="Close settings"
+                    tooltip="Close settings"
                     variant="ghost"
                     size="icon-sm"
                     onClick={settings.close}
@@ -731,7 +731,7 @@ export function CrmWorkspaceView(props: {
                   </Button>
                 </Tooltip>
                 <ViewSidebar.Title caret={false} class="h-7 flex-1">
-                  CRM settings
+                  Settings
                 </ViewSidebar.Title>
               </div>
               {/* The header above already clears the status bar on touch. */}

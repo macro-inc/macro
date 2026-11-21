@@ -13,11 +13,21 @@ axum = [
   "dep:utoipa",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
-inbound = ["axum", "dep:aws-sdk-sqs", "dep:sqs_worker", "ports"]
+inbound = [
+  "axum",
+  "dep:aws-sdk-sqs",
+  "dep:opentelemetry",
+  "dep:sqs_worker",
+  "dep:tracing-opentelemetry",
+  "ports",
+]
 outbound = [
   "dep:aws-sdk-sqs",
+  "dep:macro_tower_layers",
+  "dep:opentelemetry",
   "dep:reqwest",
   "dep:sqlx",
+  "dep:tracing-opentelemetry",
   "dep:urlencoding",
   "ports",
 ]
@@ -49,9 +59,14 @@ macro_event_broker = { path = "../macro_event_broker", features = [
 model-entity = { path = "../model-entity", optional = true }
 rdkafka = { workspace = true, optional = true }
 user_events = { path = "../user_events", optional = true }
+chrono = { workspace = true }
+feature_flags = { path = "../feature_flags" }
+macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id" }
 macro_db_client = { path = "../macro_db_client", optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 non_empty = { path = "../non_empty", optional = true }
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
 rootcause = { workspace = true }
 subsequence_match = { path = "../subsequence_match" }
 rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
@@ -59,8 +74,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 sqs_worker = { path = "../sqs_worker", optional = true }
+strum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
@@ -68,7 +85,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 futures = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 http-body-util = { workspace = true }
 rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }

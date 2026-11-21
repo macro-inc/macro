@@ -34,7 +34,7 @@ import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import { requestContactRefresh } from '@queries/contacts/refresh';
+import { handleContactsInvalidation } from '@queries/contacts/refresh';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
@@ -122,7 +122,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        requestContactRefresh();
+        handleContactsInvalidation(
+          parseWebsocketPayload(data.type, data.data),
+          data.trace
+        );
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(

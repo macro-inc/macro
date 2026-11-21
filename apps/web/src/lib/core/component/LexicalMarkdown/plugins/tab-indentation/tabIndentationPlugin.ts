@@ -3,7 +3,12 @@
  * TODO (seamus): implement contextual max indent depth per node in the selection.
  */
 
-import { $findMatchingParent, mergeRegister } from '@lexical/utils';
+import {
+  $findMatchingParent,
+  $getNearestBlockElementAncestorOrThrow,
+  mergeRegister,
+} from '@lexical/utils';
+import { $isSelectionInsideCode } from '@macro-inc/lexical-core';
 import type { ElementNode, LexicalCommand, LexicalEditor } from 'lexical';
 import {
   $getSelection,
@@ -71,6 +76,21 @@ function $handleIndentWithLimit(): boolean {
     indent(parentBlock);
   }
   return alreadyHandled.size > 0;
+}
+
+/**
+ * Whether Shift+Tab would outdent something: the selection is in code, or a
+ * block it touches is indented.
+ */
+export function $canOutdentSelection(): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return false;
+  if ($isSelectionInsideCode(selection)) return true;
+  return selection
+    .getNodes()
+    .some(
+      (node) => $getNearestBlockElementAncestorOrThrow(node).getIndent() > 0
+    );
 }
 
 function registerTabIndentation(editor: LexicalEditor) {

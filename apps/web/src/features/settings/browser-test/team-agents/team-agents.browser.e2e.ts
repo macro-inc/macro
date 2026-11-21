@@ -1563,3 +1563,118 @@ test('CRM access controls are absent while the server write flag is off', async 
   await expect(page.getByText(/always have/)).toHaveCount(0);
   expect(backend.crmSaves).toEqual([]);
 });
+
+/** A person's switch in CRM settings' Who can use CRM. */
+function crmSettingsSwitch(page: Page, name: string) {
+  return page.getByRole('switch', { name: `CRM access for ${name}` });
+}
+
+/** Flips a Who can use CRM switch where a person presses it: a click, or a tap. */
+async function toggleCrmSettingsSwitch(
+  page: Page,
+  testInfo: TestInfo,
+  name: string
+) {
+  const control = page
+    .getByRole('group')
+    .filter({ has: crmSettingsSwitch(page, name) });
+  if (onTouch(testInfo)) await control.tap();
+  else await control.click();
+}
+
+async function showPage(page: Page, name: 'members' | 'crm') {
+  await page.evaluate(
+    (shown) => window.teamAgentsFixture.showPage(shown),
+    name
+  );
+}
+
+test("CRM settings' Who can use CRM changes the same access as Members' ⋯", async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 2, {
+    failedCrmSaves: 1,
+    extraMembers: [{ user_id: ADMIN, role: 'admin' }],
+    agents: [ada('running')],
+  });
+  await page.goto('/?crm');
+  await expect(page.getByText('Who can use CRM')).toBeVisible();
+  // The agent teammate is on the team but, as in Members, gets no switch.
+  await expect(page.getByRole('switch')).toHaveCount(3);
+  await expect(page.locator(`[data-team-member="${ADA}"]`)).toHaveCount(0);
+
+  // Owners and admins stay on, with the reason on their row.
+  for (const [id, name, summary] of [
+    [OWNER, 'maya@example.com', 'Owner · Always has CRM access'],
+    [ADMIN, 'lee@example.com', 'Admin · Always has CRM access'],
+  ] as const) {
+    await expect(crmSettingsSwitch(page, name)).toBeChecked();
+    await expect(crmSettingsSwitch(page, name)).toBeDisabled();
+    await expect(summaryOf(page, id)).toHaveText(summary);
+  }
+
+  // A failed save leaves the switch as it was, ready to try again.
+  const sam = crmSettingsSwitch(page, 'sam@example.com');
+  await expect(sam).toBeChecked();
+  await toggleCrmSettingsSwitch(page, testInfo, 'sam@example.com');
+  await expect.poll(() => backend.crmSaves.length).toBe(1);
+  await expect(sam).toBeEnabled();
+  await expect(sam).toBeChecked();
+  await toggleCrmSettingsSwitch(page, testInfo, 'sam@example.com');
+  await expect(sam).not.toBeChecked();
+  expect(backend.crmSaves).toEqual([
+    { user_id: MEMBER, enabled: false },
+    { user_id: MEMBER, enabled: false },
+  ]);
+  expect(backend.crmAccess[MEMBER]).toBe(false);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth)
+  ).toBeLessThanOrEqual(testInfo.project.use.viewport!.width);
+  await screenshot(page, testInfo, 'crm-settings-access-off');
+
+  // Members reads the same setting, and its ⋯ turns it back on.
+  await showPage(page, 'members');
+  await expect(summaryOf(page, MEMBER)).toHaveText('Member · No CRM access');
+  const menu = await openRowMenu(page, testInfo, 'sam@example.com');
+  await expect(crmAccessIn(menu, testInfo)).not.toBeChecked();
+  await toggleCrmAccess(menu, testInfo);
+  await expect(crmAccessIn(menu, testInfo)).toBeChecked();
+  await closeRowMenu(page, menu);
+  await showPage(page, 'crm');
+  await expect(sam).toBeChecked();
+  expect(backend.crmSaves.at(-1)).toEqual({ user_id: MEMBER, enabled: true });
+});
+
+test('admins also change CRM access in CRM settings', async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page, 2, {
+    extraMembers: [{ user_id: ADMIN, role: 'admin' }],
+  });
+  await page.goto(`/?crm&viewer=${encodeURIComponent(ADMIN)}`);
+  await toggleCrmSettingsSwitch(page, testInfo, 'sam@example.com');
+  await expect(crmSettingsSwitch(page, 'sam@example.com')).not.toBeChecked();
+  expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
+});
+
+for (const [who, query] of [
+  ['members', `viewer=${encodeURIComponent(MEMBER)}`],
+  ['owners while the rollout is off', 'crmAccessChanges=off'],
+] as const)
+  test(`CRM settings lists no one's CRM access for ${who}`, async ({
+    page,
+  }, testInfo) => {
+    await scriptAuthService(page);
+    await page.goto(`/?crm&${query}`);
+    // Members has the roster loaded, so CRM settings has had its answer too.
+    await showPage(page, 'members');
+    await expect(page.locator(`[data-team-member="${OWNER}"]`)).toBeVisible();
+    await showPage(page, 'crm');
+    await expect(page.getByText('Who can use CRM')).toHaveCount(0);
+    await expect(page.getByRole('switch')).toHaveCount(0);
+    await screenshot(
+      page,
+      testInfo,
+      `crm-settings-hidden-${who.split(' ')[0]}`
+    );
+  });

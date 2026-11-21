@@ -1,4 +1,4 @@
-use contacts::domain::ports::ContactsIngress;
+use contacts::domain::ports::{ContactListIngress, ContactsIngress};
 use email::domain::mailbox::{MailboxError, health::*};
 use email_api_client::domain::{
     models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
@@ -83,8 +83,8 @@ pub struct ProviderInboxHealth<T, B, C> {
     pub broker: B,
     pub contacts: std::sync::Arc<C>,
 }
-impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress> InboxHealthGateway
-    for ProviderInboxHealth<T, B, C>
+impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress + ContactListIngress>
+    InboxHealthGateway for ProviderInboxHealth<T, B, C>
 {
     async fn acquire(
         &self,
