@@ -592,7 +592,8 @@ export class CacheWorkerCore {
     this.cancelIdleCheckpoint = undefined;
     if (!this.checkpointPending || !this.acceptingRequests) return;
     const engine = this.engine;
-    if (typeof engine?.checkpointIfDue !== 'function') {
+    const checkpointIfDue = engine?.checkpointIfDue?.bind(engine);
+    if (!checkpointIfDue) {
       // An engine without it keeps Turso's own checkpoint.
       this.checkpointPending = false;
       return;
@@ -612,7 +613,7 @@ export class CacheWorkerCore {
       this.checkpointPending = false;
       this.running = true;
       fireAndForget(
-        this.runIdleCheckpoint(engine.checkpointIfDue.bind(engine)),
+        this.runIdleCheckpoint(checkpointIfDue),
         'graphql_cache.wal_checkpoint'
       );
     });

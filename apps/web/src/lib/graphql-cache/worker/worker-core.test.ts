@@ -3234,7 +3234,7 @@ describe('CacheWorkerCore', () => {
     const port = { postMessage: vi.fn() };
     const quiet = quietTimer();
     const core = new CacheWorkerCore({
-      telemetry: { record },
+      telemetry: { record, flush: vi.fn() },
       afterArrivedMessages: (resume) => queueMicrotask(resume),
       afterQuiet: quiet.afterQuiet,
     });
@@ -3347,7 +3347,7 @@ describe('CacheWorkerCore', () => {
     const port = { postMessage: vi.fn() };
     const quiet = quietTimer();
     const core = new CacheWorkerCore({
-      telemetry: { record },
+      telemetry: { record, flush: vi.fn() },
       onStorageResetRequired,
       afterArrivedMessages: (resume) => queueMicrotask(resume),
       afterQuiet: quiet.afterQuiet,
