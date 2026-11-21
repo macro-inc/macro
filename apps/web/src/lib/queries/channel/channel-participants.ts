@@ -66,6 +66,8 @@ type SettledChange = {
   watched: boolean;
   /** Whether the server said it holds once that time ran out. */
   confirmed: boolean;
+  /** The check whose answer said so (0 until one does). */
+  confirmedBy: number;
   /**
    * People it no longer decides: a change here that finished later touched
    * them, or the server said it does not hold for them.
@@ -95,7 +97,7 @@ type ServerSays =
   | { kind: 'unasked' }
   | { kind: 'waiting' }
   | { kind: 'failed' }
-  | { kind: 'members'; members: ReadonlySet<string> };
+  | { kind: 'members'; members: ReadonlySet<string>; sent: number };
 
 /** What one reader remembers about the changes it showed. */
 type Overlay = {
@@ -308,9 +310,32 @@ function serverSays(
   for (const question of asked) {
     if (!question.answer) return { kind: 'waiting' };
     const { members } = question.answer;
-    if (members) return { kind: 'members', members: new Set(members) };
+    if (members)
+      return {
+        kind: 'members',
+        members: new Set(members),
+        sent: question.sent,
+      };
   }
   return { kind: 'failed' };
+}
+
+/**
+ * Who the newest answer naming members, from checks sent after `after`, says
+ * is in the channel, whatever newer checks are still waiting or failed.
+ */
+function latestMembers(
+  questions: readonly ServerQuestion[],
+  channelId: string,
+  after: number
+): ReadonlySet<string> | undefined {
+  const [newest] = questions
+    .filter(
+      (q) => q.channelId === channelId && q.sent > after && q.answer?.members
+    )
+    .sort((a, b) => b.seq - a.seq);
+  const members = newest?.answer?.members;
+  return members ? new Set(members) : undefined;
 }
 
 /** How long a channel's first by-id read may go unanswered before its reader asks REST too. */
@@ -431,6 +456,7 @@ function firstSeen(
     rechecking: false,
     watched: context.now < since + CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
     confirmed: false,
+    confirmedBy: 0,
     released: [],
   };
 }
@@ -440,16 +466,32 @@ function firstSeen(
  * showed it all that time and the server, asked since then, says it holds,
  * for the people it says so; until the server answers, it waits. A confirmed
  * change keeps showing unless a later answer says otherwise. A change asked
- * about early (started over, or rechecked) keeps its time to show when the
- * server does not answer, and asks again once it runs out.
+ * about early (started over) keeps its time to show when the server does not
+ * answer, and asks again once it runs out. While the reader rechecks a
+ * confirmed change, any answer since the one that confirmed it can say it no
+ * longer holds: record changes that keep coming must not hold that off.
  */
 function afterExpiry(
-  shown: ParticipantChange,
-  seen: SettledChange,
+  judgedShown: ParticipantChange,
+  judgedSeen: SettledChange,
   expires: number,
   context: SettledContext
 ): Judged | undefined {
-  if (!seen.watched) return undefined;
+  if (!judgedSeen.watched) return undefined;
+  let [shown, seen] = [judgedShown, judgedSeen];
+  if (seen.rechecking) {
+    const members = latestMembers(
+      context.questions,
+      shown.channelId,
+      seen.confirmedBy
+    );
+    const refuted = members
+      ? shown.userIds.filter((userId) => !holdsFor(shown.kind, userId, members))
+      : [];
+    if (refuted.length === shown.userIds.length) return undefined;
+    seen = { ...seen, released: [...seen.released, ...refuted] };
+    shown = stillShown(shown, refuted);
+  }
   const says = serverSays(
     context.questions,
     shown.channelId,
@@ -460,7 +502,11 @@ function afterExpiry(
   const unanswered = (): Judged | undefined => {
     if (seen.confirmed) return { seen, shown, askAt: undefined };
     const until = showsUntil(seen);
-    return context.now < until ? { seen, shown, askAt: until } : undefined;
+    if (context.now < until) return { seen, shown, askAt: until };
+    // Asked early: it asks again, with a check sent once its time ran out.
+    return expires < until
+      ? afterExpiry(shown, seen, until, context)
+      : undefined;
   };
   return (
     match(says)
@@ -471,7 +517,7 @@ function afterExpiry(
       }))
       .with({ kind: 'waiting' }, () => ({ seen, shown, askAt: undefined }))
       .with({ kind: 'failed' }, unanswered)
-      .with({ kind: 'members' }, ({ members }) => {
+      .with({ kind: 'members' }, ({ members, sent }) => {
         const refuted = shown.userIds.filter(
           (userId) => !holdsFor(shown.kind, userId, members)
         );
@@ -480,6 +526,7 @@ function afterExpiry(
           seen: {
             ...seen,
             confirmed: true,
+            confirmedBy: sent,
             rechecking: false,
             released: [...seen.released, ...refuted],
           },
@@ -608,8 +655,7 @@ export function overlayParticipantChanges(
     questions,
     sent,
   };
-  let expiresAt: number | undefined;
-  let askAfter = 0;
+  const asks: { at: number; after: number }[] = [];
   let data = participants;
   const own: ParticipantChange[] = [];
   for (const change of changes) {
@@ -637,13 +683,20 @@ export function overlayParticipantChanges(
       continue;
     }
     settled.set(change.id, judged.seen);
-    if (judged.askAt !== undefined) {
-      expiresAt = Math.min(expiresAt ?? judged.askAt, judged.askAt);
-      askAfter = Math.max(askAfter, judged.seen.checkAfter);
-    }
+    if (judged.askAt !== undefined)
+      asks.push({ at: judged.askAt, after: judged.seen.checkAfter });
     data = applyChange(channelId, data, judged.shown);
   }
   for (const change of inFlight) data = applyChange(channelId, data, change);
+  // The next question, and the check it must come after: that of the changes
+  // due then, so a change due later cannot keep a due one from sharing a check.
+  const expiresAt = asks.length
+    ? Math.min(...asks.map((ask) => ask.at))
+    : undefined;
+  const askAfter = Math.max(
+    0,
+    ...asks.filter((ask) => ask.at === expiresAt).map((ask) => ask.after)
+  );
   return {
     data,
     seenPending,
