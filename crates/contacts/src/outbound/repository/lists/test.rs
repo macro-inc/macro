@@ -445,11 +445,19 @@ async fn an_invite_joins_only_the_inviters_directory(pool: PgPool) {
     assert_eq!(edges[0].user1, "macro|a@example.com");
     assert_eq!(edges[0].user2, "macro|b@example.com");
 
+    // A retry writes nothing new but still notifies, in case the first
+    // notification failed.
     service
         .invite_contact(mid("macro|a@example.com"), mid("macro|b@example.com"))
         .await
         .unwrap();
-    assert_eq!(notified(&service), []);
+    assert_eq!(
+        notified(&service),
+        [(
+            "macro|a@example.com".to_owned(),
+            Some(vec!["macro|b@example.com".to_owned()])
+        )]
+    );
     assert_eq!(list_rows(&pool).await.len(), 1);
 }
 

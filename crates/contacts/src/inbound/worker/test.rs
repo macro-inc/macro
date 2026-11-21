@@ -60,6 +60,13 @@ impl ContactListRepository for CountingRepository {
         Ok(false)
     }
 
+    async fn missing_profiles(
+        &self,
+        _ids: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+
     async fn delete_user_lists(
         &self,
         _user: &MacroUserIdStr<'static>,

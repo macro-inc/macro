@@ -60,9 +60,16 @@ pub trait ContactListRepository: Send + Sync + 'static {
         contact: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
 
+    /// The ids among `ids` that have no profile (deleted accounts).
+    fn missing_profiles(
+        &self,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
     /// Remove the user's own lists and every list entry naming them. Returns
     /// the other owners who lost them. Fails while the user's profile still
-    /// exists, so the deletion is retried once nothing can add them back.
+    /// exists, so a queued deletion is received again once nothing can add
+    /// them back.
     fn delete_user_lists(
         &self,
         user: &MacroUserIdStr<'static>,

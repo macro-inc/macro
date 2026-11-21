@@ -362,8 +362,10 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
 - Keep account deletion and membership compensation independent of vault items;
   team items retain their immutable creator after a person leaves.
 - Account deletion queues contacts `user_deleted` just before deleting each
-  profile (a retry no longer lists a deleted profile); the contacts worker
-  redelivers it until the profile is gone. It, the teams `directory_changed`
+  profile (a retry no longer lists a deleted profile). The contacts worker
+  refuses it while the profile exists; after 5 receives it moves to
+  `contacts-dlq-<stack>` with no replay, which happens only when the profile
+  was never deleted, and a retried deletion queues it again. It, the teams `directory_changed`
   sends and the channel interactions share one `ListWritesGate`
   (`contacts-list-writes`, service context `contacts-list-writes`), so they are
   no-ops until the flag is on; legacy contacts messages are not gated.

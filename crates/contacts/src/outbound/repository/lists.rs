@@ -108,6 +108,31 @@ impl ContactListRepository for DbContactsRepository {
     }
 
     #[tracing::instrument(
+        name = "contacts.lists.missing_profiles",
+        skip_all,
+        fields(ids = ids.len() as i64, missing = tracing::field::Empty),
+        err
+    )]
+    async fn missing_profiles(
+        &self,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let ids = id_strings(ids);
+        let missing = sqlx::query_file_scalar!(
+            "src/outbound/repository/lists/missing_profiles.sql",
+            &ids as &[&str],
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        tracing::Span::current().record("missing", missing.len() as i64);
+        missing
+            .into_iter()
+            .map(|id| Ok(MacroUserIdStr::try_from(id)?))
+            .collect()
+    }
+
+    #[tracing::instrument(
         name = "contacts.lists.delete_user",
         skip_all,
         fields(owners = tracing::field::Empty),
