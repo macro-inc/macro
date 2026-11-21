@@ -1,7 +1,7 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
 //! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
 //! `graphql_favorite`, `graphql_entity_mutation`, `graphql_work_feed`,
-//! `graphql_notification_inbox`, `graphql_registered_work`) into the
+//! `graphql_notification_inbox`, `graphql_registered_work`, `graphql_bots`) into the
 //! complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
@@ -18,8 +18,8 @@ mod schema;
 mod sdl_test;
 
 pub use edges::{
-    AgentSessionBotDataLoader, AgentSessionBotLoader, GraphqlSessionBot, SoupAgentSessionEdges,
-    SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader, agent_session_log_loader,
+    GraphqlSessionBot, SoupAgentSessionEdges, SoupEdges, SoupEmailThreadEdges,
+    agent_session_log_loader,
 };
 pub use graphql_activity::{
     ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader, ActivityFeedScope,

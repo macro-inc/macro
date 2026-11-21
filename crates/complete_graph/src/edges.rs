@@ -5,14 +5,12 @@ use agent_session::domain::{
     ports::{AgentSessionLogRepo, AgentSessionRepo},
 };
 use async_graphql::{Context, ID, Json, Object, SimpleObject, dataloader::DataLoader};
-use bots::domain::{
-    models::{BotId, BotProfile},
-    ports::BotRepo,
-};
+use bots::domain::models::{BotId, BotIdentity};
 use graphql_activity::{
     ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
     parse_activity_edge_limit,
 };
+use graphql_bots::{BotIdentityDataLoader, GraphqlBot, resolve_bot};
 use graphql_crm::{CrmRecord, GraphqlCrmPipelineEntry, load_pipeline_entries};
 use graphql_email::{
     EmailContentKey, GraphqlEmailThreadFocus, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
@@ -203,6 +201,9 @@ where
 }
 
 /// Bot fields presented through an agent-session edge.
+///
+/// Deprecated with the `bot` edge; read `GraphqlBot` through `botProfile`.
+/// Remove after 2026-12-17.
 #[derive(Clone, SimpleObject)]
 pub struct GraphqlSessionBot {
     /// Stable global bot identity.
@@ -213,65 +214,14 @@ pub struct GraphqlSessionBot {
     avatar_url: Option<String>,
 }
 
-impl From<BotProfile> for GraphqlSessionBot {
-    fn from(profile: BotProfile) -> Self {
+impl From<BotIdentity> for GraphqlSessionBot {
+    fn from(identity: BotIdentity) -> Self {
         Self {
-            id: ID(profile.id.to_string()),
-            name: profile.name,
-            avatar_url: profile.avatar_url,
+            id: ID(identity.id.to_string()),
+            name: identity.name,
+            avatar_url: identity.avatar_url,
         }
     }
-}
-
-/// Owned future returned by the erased bot-profile batch reader.
-type BotProfileBatchFuture = Pin<
-    Box<
-        dyn Future<Output = Result<HashMap<BotId, BotProfile>, Arc<anyhow::Error>>>
-            + Send
-            + 'static,
-    >,
->;
-
-/// Type-erased batch reader kept in the concrete GraphQL DataLoader.
-type BotProfileBatchReader = dyn Fn(Vec<BotId>) -> BotProfileBatchFuture + Send + Sync + 'static;
-
-/// DataLoader implementation for bot profiles referenced by agent sessions.
-pub struct AgentSessionBotLoader {
-    /// Erased bots-domain repository call.
-    load_batch: Arc<BotProfileBatchReader>,
-}
-
-impl async_graphql::dataloader::Loader<BotId> for AgentSessionBotLoader {
-    type Value = BotProfile;
-    type Error = Arc<anyhow::Error>;
-
-    async fn load(&self, keys: &[BotId]) -> Result<HashMap<BotId, Self::Value>, Self::Error> {
-        (self.load_batch)(keys.to_vec()).await
-    }
-}
-
-/// Concrete request-scoped DataLoader for agent-session bot edges.
-pub type AgentSessionBotDataLoader = DataLoader<AgentSessionBotLoader>;
-
-/// Build a request-scoped DataLoader backed by the bots domain repository.
-pub fn agent_session_bot_loader<R>(repo: R) -> AgentSessionBotDataLoader
-where
-    R: BotRepo + Clone,
-{
-    let load_batch = move |bot_ids: Vec<BotId>| {
-        let repo = repo.clone();
-        Box::pin(async move {
-            repo.get_bot_profiles(&bot_ids)
-                .await
-                .map_err(|error| Arc::new(error.into()))
-        }) as BotProfileBatchFuture
-    };
-    DataLoader::new(
-        AgentSessionBotLoader {
-            load_batch: Arc::new(load_batch),
-        },
-        |batch| tokio::spawn(batch.in_current_span()),
-    )
 }
 
 /// Agent-session-specific fields composed from the bots and agent-session domains.
@@ -287,13 +237,20 @@ pub struct SoupAgentSessionEdges {
 #[Object]
 impl SoupAgentSessionEdges {
     /// The bot running this session, when its profile still exists.
+    #[graphql(deprecation = "Use botProfile. Remove after 2026-12-17.")]
     async fn bot(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSessionBot>> {
-        let loader = ctx.data::<AgentSessionBotDataLoader>()?;
-        let profile = loader
+        let identity = ctx
+            .data::<BotIdentityDataLoader>()?
             .load_one(self.bot_id)
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        Ok(profile.map(Into::into))
+            .map_err(|error| (*error).clone())?;
+        Ok(identity.map(Into::into))
+    }
+
+    /// The bot the session runs as, as it is now: the sender of every agent
+    /// message. Null only when no bot has the session's `botId`.
+    async fn bot_profile(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlBot>> {
+        resolve_bot(ctx, self.bot_id).await
     }
 
     /// The session's raw protocol log: what the client folds into messages.
@@ -313,6 +270,7 @@ impl SoupAgentSessionEdges {
 #[derive(Clone, SimpleObject)]
 pub struct GraphqlAgentSessionLog {
     /// The bot the session runs as: the sender of every agent message.
+    #[graphql(deprecation = "Use the session's botProfile. Remove after 2026-12-17.")]
     bot: GraphqlAgentSessionLogBot,
     /// Effective history in ascending `(createdAt, id)` order. The first row
     /// is the inclusive history boundary; a reader reconciles overlap by id.

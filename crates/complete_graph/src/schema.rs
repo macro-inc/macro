@@ -24,6 +24,7 @@ use graphql_activity::{
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
     resolve_form_activity,
 };
+use graphql_bots::GraphqlBotsQuery;
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -976,6 +977,12 @@ where
     #[graphql(flatten)]
     async fn contact_directory(&self) -> graphql_contacts::GraphqlContactsQuery {
         graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
+    }
+
+    /// Bot lookups and lists supplied by `graphql_bots`.
+    #[graphql(flatten)]
+    async fn bot_fields(&self) -> GraphqlBotsQuery {
+        GraphqlBotsQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user calendar fields supplied by `graphql_calendar`.

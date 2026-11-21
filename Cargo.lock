@@ -5051,6 +5051,7 @@ dependencies = [
  "entity_mutation",
  "favorites",
  "graphql_activity",
+ "graphql_bots",
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
@@ -6915,6 +6916,7 @@ dependencies = [
  "github",
  "github_pull_requests",
  "gmail_client",
+ "graphql_bots",
  "graphql_calendar",
  "graphql_contacts",
  "graphql_crm",
@@ -9613,6 +9615,22 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_bots"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "bots",
+ "chrono",
+ "entity_access",
+ "graphql_common",
+ "macro_user_id",
+ "tokio",
  "tracing",
  "uuid",
  "workspace-hack",

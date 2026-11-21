@@ -9,6 +9,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Start here
 
 - `src/domain/service.rs` + `src/domain/models.rs`: bot CRUD policy and model.
+  `BotIdentity` (name, handle, picture) is what every view shows for a bot;
+  `get_identities` and `list_mentionable_bots` back the GraphQL reads in
+  `crates/graphql_bots`.
   Team admins may delete team agents; other team bots require the creator or
   team owner.
 - `src/domain/events.rs`: `bot.created`/`bot.updated`/`bot.deleted` events published
@@ -35,7 +38,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 - Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
   `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
   `connection_gateway_client` and `kafka_util` (`realtime`).
-- Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
+- Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `graphql_bots`, `agent_session`.
 
 ## Recipes
 

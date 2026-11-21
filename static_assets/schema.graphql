@@ -2068,7 +2068,7 @@ type GraphqlAgentSessionLog {
 	"""
 	The bot the session runs as: the sender of every agent message.
 	"""
-	bot: GraphqlAgentSessionLogBot!
+	bot: GraphqlAgentSessionLogBot! @deprecated(reason: "Use the session's botProfile. Remove after 2026-12-17.")
 	"""
 	Effective history in ascending `(createdAt, id)` order. The first row
 	is the inclusive history boundary; a reader reconciles overlap by id.
@@ -2357,6 +2357,40 @@ type GraphqlBooleanPropertyValue {
 	The stored Boolean.
 	"""
 	value: Boolean!
+}
+
+"""
+A bot (an agent or an integration) as every view presents it: its name,
+handle and picture as they are now. Keyed by the bot's id, so every view
+that shows the bot shares one record. A message the bot sent has
+`"bot|{id}"` as its sender.
+"""
+type GraphqlBot {
+	"""
+	The bot's id, without the `bot|` prefix.
+	"""
+	id: ID!
+	"""
+	Display name.
+	"""
+	name: String!
+	"""
+	Stable `@` handle, without a leading `@`.
+	"""
+	handle: String!
+	"""
+	Avatar, when it has one.
+	"""
+	avatarUrl: String
+	"""
+	When the bot was deleted, in RFC 3339 format. A deleted bot keeps its
+	identity so older messages and sessions still name it.
+	"""
+	deletedAt: String
+	"""
+	Whether this is a first-party Macro bot.
+	"""
+	isSystem: Boolean!
 }
 
 """
@@ -8156,6 +8190,9 @@ type GraphqlSelectOptionPropertyValue {
 
 """
 Bot fields presented through an agent-session edge.
+
+Deprecated with the `bot` edge; read `GraphqlBot` through `botProfile`.
+Remove after 2026-12-17.
 """
 type GraphqlSessionBot {
 	"""
@@ -8391,7 +8428,12 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	The bot running this session, when its profile still exists.
 	"""
-	bot: GraphqlSessionBot
+	bot: GraphqlSessionBot @deprecated(reason: "Use botProfile. Remove after 2026-12-17.")
+	"""
+	The bot the session runs as, as it is now: the sender of every agent
+	message. Null only when no bot has the session's `botId`.
+	"""
+	botProfile: GraphqlBot
 	"""
 	The session's raw protocol log: what the client folds into messages.
 	Served whole, in log order, the same rows the harness's REST log
@@ -11040,6 +11082,19 @@ type GraphqlUser {
 		"""
 		matching: GraphqlContactMatching
 	): GraphqlContactPage!
+	"""
+	The bots with these ids, in request order, each once. Any signed-in
+	user may read the identity of a bot id they hold; ids no bot has are
+	left out. At most 100 ids.
+	"""
+	bots(ids: [ID!]!): [GraphqlBot!]!
+	"""
+	Bots the user can `@` mention. In a channel (`channelId`, which the
+	user must belong to): its installed bots, then the user's agents
+	available in every channel. Elsewhere: every agent the user can
+	start. Each bot once.
+	"""
+	mentionableBots(channelId: ID): [GraphqlBot!]!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.

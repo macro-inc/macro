@@ -235,9 +235,10 @@ fn insert_graphql_context_data(
     data.insert(email_mutation_thread_loader(
         state.soup_router_state.email_service(),
     ));
-    data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
-        state.readonly_db.0.clone(),
-    )));
+    data.insert(state.graphql_bots_context.clone());
+    data.insert(graphql_bots::bot_identity_loader(
+        state.graphql_bots_context.clone(),
+    ));
     // Read right after the session is created and after its subscription
     // starts, so the log must hold every committed row: the primary.
     data.insert(complete_graph::agent_session_log_loader(

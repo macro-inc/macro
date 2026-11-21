@@ -193,6 +193,21 @@ impl BotService for TestBotService {
             .collect())
     }
 
+    async fn get_identities(
+        &self,
+        _ids: &[BotId],
+    ) -> Result<Vec<crate::domain::models::BotIdentity>, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_mentionable_bots(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _channel: Option<EntityAccessReceipt<MemberParticipantRole>>,
+    ) -> Result<Vec<Bot>, BotError> {
+        unimplemented!()
+    }
+
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
         self.result()?;
         self.self_bot
