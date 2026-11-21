@@ -14,6 +14,7 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
 };
+use models_email::email::service::pubsub::LinkManagerLane;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
@@ -103,6 +104,7 @@ async fn main() -> anyhow::Result<()> {
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
 
@@ -116,7 +118,8 @@ async fn main() -> anyhow::Result<()> {
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
-        .email_link_manager_queue(&link_manager_queue);
+        .email_link_manager_queue(&link_manager_queue)
+        .email_link_maintenance_queue(&link_maintenance_queue);
 
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
@@ -146,6 +149,14 @@ async fn main() -> anyhow::Result<()> {
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         link_manager_queue.to_string(),
+        1,
+        config.queue_wait_time_seconds,
+    );
+    // The maintenance lane gets consumers of its own, so the daily removal sweep's
+    // purges never hold the consumer a person's removal waits for.
+    let link_maintenance_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        link_maintenance_queue.to_string(),
         1,
         config.queue_wait_time_seconds,
     );
@@ -824,37 +835,44 @@ async fn main() -> anyhow::Result<()> {
         "crm cleanup workers started"
     );
 
-    let db_link_manager = db.clone();
-    let email_api_link_manager = email_api_live.clone();
-    let auth_service_client_link_manager = auth_service_client.clone();
-    let redis_client_link_manager = redis_client.clone();
-    let sqs_client_link_manager = sqs_client.clone();
-    let crm_service_link_manager = crm_service.clone();
-    let connection_gateway_client_link_manager = connection_gateway_client.clone();
-    let notification_ingress_service_link_manager = notification_ingress_service.clone();
-    let macro_event_broker_link_manager = macro_event_broker.clone();
-    let imap_gateway_link_manager = imap_gateway.clone();
-    let contacts_ingress_link_manager = contacts_ingress.clone();
-    let cancellation_token = worker_cancellation_token.clone();
-    // daily link_manager operations for user contacts and inbox subscriptions
-    worker_tracker.spawn(async move {
-        email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
-            link_manager_worker,
-            db_link_manager,
-            email_api_link_manager,
-            imap_gateway_link_manager,
-            auth_service_client_link_manager,
-            redis_client_link_manager,
-            sqs_client_link_manager,
-            crm_service_link_manager,
-            connection_gateway_client_link_manager,
-            notification_ingress_service_link_manager,
-            macro_event_broker_link_manager,
-            contacts_ingress_link_manager,
-            cancellation_token,
-        )
-        .await;
-    });
+    // link_manager operations: removals, health probes, inbox subscriptions and
+    // contacts, one consumer per lane
+    for (lane, worker) in [
+        (LinkManagerLane::Interactive, link_manager_worker),
+        (LinkManagerLane::Maintenance, link_maintenance_worker),
+    ] {
+        let db_link_manager = db.clone();
+        let email_api_link_manager = email_api_live.clone();
+        let imap_gateway_link_manager = imap_gateway.clone();
+        let auth_service_client_link_manager = auth_service_client.clone();
+        let redis_client_link_manager = redis_client.clone();
+        let sqs_client_link_manager = sqs_client.clone();
+        let crm_service_link_manager = crm_service.clone();
+        let connection_gateway_client_link_manager = connection_gateway_client.clone();
+        let notification_ingress_service_link_manager = notification_ingress_service.clone();
+        let macro_event_broker_link_manager = macro_event_broker.clone();
+        let contacts_ingress_link_manager = contacts_ingress.clone();
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
+                lane,
+                worker,
+                db_link_manager,
+                email_api_link_manager,
+                imap_gateway_link_manager,
+                auth_service_client_link_manager,
+                redis_client_link_manager,
+                sqs_client_link_manager,
+                crm_service_link_manager,
+                connection_gateway_client_link_manager,
+                notification_ingress_service_link_manager,
+                macro_event_broker_link_manager,
+                contacts_ingress_link_manager,
+                cancellation_token,
+            )
+            .await;
+        });
+    }
 
     let db_scheduled = db.clone();
     let email_api_scheduled = email_api_live;

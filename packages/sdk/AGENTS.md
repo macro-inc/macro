@@ -89,7 +89,9 @@ enforced by the ordinary backend APIs.
   fields with optional defaults, and revision-guarded writes. Team membership and
   creator/admin management stay server-authorized.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
-  ranks the caller's contacts and current team (teammates first, at most 20)
+  ranks the caller's contacts and current team (teammates first, then, for a
+  caller on the list-aware directory, `interacted`/`invited` and then email
+  contacts; at most 20; each person carries `lists`)
   and the SDK seeds User handles with each name and agent flag, keeping that
   order. It is not a global directory, and the full `GET /contacts` list stays
   out of the SDK.

@@ -5,6 +5,9 @@
     reason = "test support: database DDL and seed rows are not checked against the query cache"
 )]
 
+use activity::{SeenLog, outbound::pg_activity_repo::PgActivityRepo};
+use chrono::Utc;
+use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::Method;
 use rootcause::prelude::*;
 use serde_json::{Value, json};
@@ -61,7 +64,7 @@ impl User {
             .await
             .context("could not create the Macro user's profile")?;
 
-        Ok(Self {
+        let user = Self {
             email: email.to_owned(),
             api: ApiClient {
                 http: stack.http().clone(),
@@ -76,7 +79,11 @@ impl User {
             outlook: stack.outlook().clone(),
             imap: stack.imap_lab().ok(),
             calendar_urls: stack.calendar_urls(),
-        })
+        };
+        // Everyone a scenario makes is using Macro, as a person with the app
+        // open is: the Focus worker works only the inboxes of such people.
+        user.opens_macro().await?;
+        Ok(user)
     }
 
     /// Runs a GraphQL operation as the user, as the web app does, and
@@ -99,6 +106,36 @@ impl User {
     /// The user's id at the identity provider.
     pub fn fusion_id(&self) -> Uuid {
         self.api.fusion_user_id
+    }
+
+    /// The user opens Macro: what the connection gateway records when a
+    /// signed-in tab of theirs connects, so jobs that ask whether someone
+    /// uses Macro (`activity::UserActivity`) count them in again.
+    pub async fn opens_macro(&self) -> Result<(), Report> {
+        let id = MacroUserIdStr::try_from_email(&self.email)
+            .map_err(|error| report!("{error}"))
+            .context("the user's address makes no Macro id")?;
+        PgActivityRepo::new(self.db.clone())
+            .record_seen(&[id], Utc::now())
+            .await
+            .context("could not record that the user has Macro open")?;
+        Ok(())
+    }
+
+    /// The user last had Macro open `ago` and has done nothing in it since,
+    /// for a scenario about someone who stopped using it. This rewrites the
+    /// time the gateway records, which recording itself only moves forward.
+    pub async fn away_for(&self, ago: chrono::Duration) -> Result<(), Report> {
+        let updated = sqlx::query("UPDATE user_last_seen SET seen_at = $2 WHERE user_id = $1")
+            .bind(&self.api.macro_user_id)
+            .bind(Utc::now() - ago)
+            .execute(&self.db)
+            .await
+            .context("could not move back when the user last had Macro open")?;
+        if updated.rows_affected() != 1 {
+            bail!("the user was never seen with Macro open");
+        }
+        Ok(())
     }
 
     /// Links the Gmail mailbox with the user's own address and waits for its

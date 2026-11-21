@@ -1,3 +1,8 @@
+import {
+  fetchContactDirectoryByIds,
+  fetchContactDirectoryPage,
+  fetchContactReferencePage,
+} from '@service-storage/graphql-contacts';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
   hashKey,
@@ -12,6 +17,8 @@ import { createContactRecipientSource } from './recipient-window';
 vi.mock('./backfill', () => ({ loadContactCheckpoint: vi.fn() }));
 vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryPage: vi.fn(),
+  fetchContactReferencePage: vi.fn(),
+  fetchContactDirectoryByIds: vi.fn(),
 }));
 afterEach(() => {
   cleanup();
@@ -206,3 +213,94 @@ it.each(['secondary', 'notifications'])(
     client.clear();
   }
 );
+
+it('lists a typed address, then a typed teammate, first when a recipient picker reads the server', async () => {
+  vi.useFakeTimers();
+  const viewer = 'macro|viewer@example.com';
+  const contact = (email: string, name: string | null) => ({
+    __typename: 'GraphqlContact' as const,
+    id: `contact-${email}`,
+    userId: `macro|${email}`,
+    email,
+    name,
+  });
+  // Loose matches for either search, in contact-ID order; the person typed is
+  // further down the directory than the page reaches.
+  vi.mocked(fetchContactDirectoryPage).mockResolvedValue({
+    user: {
+      id: viewer,
+      contacts: {
+        nodes: [
+          contact('compare@example.com', null),
+          contact('connect+review@example.com', null),
+        ],
+        nextCursor: 'next',
+      },
+    },
+  });
+  vi.mocked(fetchContactReferencePage).mockResolvedValue({
+    user: {
+      id: viewer,
+      contacts: {
+        nodes: [contact('teo.adams@example.com', 'Teo Adams')],
+        nextCursor: null,
+      },
+    },
+  });
+  const byId = [
+    contact('teo.adams@example.com', 'Teo Adams'),
+    contact('teo.nys@example.com', 'Teo Nys'),
+  ];
+  vi.mocked(fetchContactDirectoryByIds).mockImplementation(async (ids) => ({
+    user: {
+      id: viewer,
+      contactsByUserIds: byId.filter((row) => ids.includes(row.userId)),
+    },
+  }));
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('teo.adams@example.com');
+  let source: ReturnType<typeof createContactRecipientSource> | undefined;
+  function Harness() {
+    source = createContactRecipientSource(
+      // No cache host: this tab reads the server.
+      () => ({ userId: viewer }),
+      {
+        search,
+        enabled: () => true,
+        selfId: () => viewer,
+        senderDomain: () => undefined,
+        includeSelf: () => false,
+      },
+      () => false,
+      undefined,
+      () => new Set(['macro|teo.nys@example.com'])
+    );
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const emails = () => source?.items().map((item) => item.data.email);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(emails()).toEqual([
+    'teo.adams@example.com',
+    'compare@example.com',
+    'connect+review@example.com',
+  ]);
+
+  // By name, the teammate leads the stranger with the same first name.
+  setSearch('teo');
+  await vi.advanceTimersByTimeAsync(200);
+  expect(emails()).toEqual([
+    'teo.nys@example.com',
+    'teo.adams@example.com',
+    'compare@example.com',
+    'connect+review@example.com',
+  ]);
+
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
+});

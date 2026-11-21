@@ -55,6 +55,7 @@ import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
+import { useTeammateIds } from '@queries/team/roster';
 import {
   ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
   intervalWhileRead,
@@ -1141,13 +1142,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       },
       () => (options?.excludeSelf ? directoryScope().userId : undefined)
     );
+    const listsPeople = () =>
+      projectedBuckets().includes('person') && options?.enabled?.() !== false;
     const personList = createPersonList({
       scope: directoryScope,
       resetKey: personExclusions.key,
       localBudgetMs: options?.peopleLocalBudgetMs,
       search: () => options?.searchTerm?.() ?? '',
-      enabled: () =>
-        projectedBuckets().includes('person') && options?.enabled?.() !== false,
+      enabled: listsPeople,
+      teammates: useTeammateIds(listsPeople),
       policy: () => {
         const viewer = directoryScope().userId;
         return {
@@ -1157,6 +1160,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               ? viewer?.split('@')[1]
               : undefined,
           excluded: personExclusions.native(),
+          listPriority: options?.peopleListPriority?.(),
         };
       },
       activity: dmActivityByUserId,

@@ -132,6 +132,11 @@ impl Queue {
                 (QueueAttributeName::DelaySeconds, "10".to_string()),
             ]
             .into(),
+            // The deployed link-manager queues' visibility timeout: a purge
+            // outlasts SQS's 30 s default before its first renewal at 60 s.
+            macro_queues::LinkManagerQueue::LOCAL | macro_queues::LinkMaintenanceQueue::LOCAL => {
+                [(QueueAttributeName::VisibilityTimeout, "300".to_string())].into()
+            }
             _ => Default::default(),
         }
     }
@@ -250,6 +255,15 @@ pub const QUEUES: &[Queue] = &[
     Queue {
         name: macro_queues::LinkManagerQueue::LOCAL,
         bindings: &[("LINK_MANAGER_QUEUE", Name)],
+    },
+    Queue {
+        // Consumed by email_service's link-maintenance consumers; the refresh
+        // handler sends its periodic work here.
+        name: macro_queues::LinkMaintenanceQueue::LOCAL,
+        bindings: &[(
+            macro_queues::LinkMaintenanceQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
     },
     Queue {
         name: macro_queues::SearchEventQueue::LOCAL,

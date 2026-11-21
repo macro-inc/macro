@@ -5235,6 +5235,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent_correlation",
  "anyhow",
  "async-trait",
@@ -5278,6 +5279,7 @@ dependencies = [
  "stream",
  "strum 0.27.2",
  "tokio",
+ "tokio-util",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -5407,6 +5409,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "chrono",
  "connection_gateway_client",
  "feature_flags",
  "futures",
@@ -5455,9 +5458,12 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "chrono",
+ "clap",
  "contacts",
  "database_env_vars",
  "doppler-config",
+ "feature_flags",
  "http-body-util",
  "macro_auth",
  "macro_authorization",
@@ -5472,6 +5478,7 @@ dependencies = [
  "macro_user_id",
  "rate_limit",
  "redis",
+ "rootcause",
  "secretsmanager_client",
  "serde_json",
  "sqlx",
@@ -7732,6 +7739,7 @@ dependencies = [
 name = "email_e2e"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "aws-sdk-sqs",
  "axum",
@@ -7778,6 +7786,7 @@ dependencies = [
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_usage",
  "aws-sdk-cloudwatch",
  "calendar_events",
@@ -11490,6 +11499,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
