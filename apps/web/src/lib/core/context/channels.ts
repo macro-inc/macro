@@ -5,7 +5,6 @@ import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   type ChannelDirectory,
   type ChannelLookup,
-  createAppChannelDirectory,
   sameChannelLookup,
 } from '@queries/channel/directory';
 import {
@@ -150,8 +149,9 @@ function askWhileOpen(
 }
 
 type ChannelDirectoryProviderProps = {
-  /** A directory to provide instead of the app's, for tests and fixtures. */
-  directory?: ChannelDirectory;
+  /** The directory to provide: the app entry passes
+   * `createAppChannelDirectory()`, tests and fixtures their own. */
+  directory: ChannelDirectory;
 };
 
 /**
@@ -161,8 +161,7 @@ type ChannelDirectoryProviderProps = {
 export const [ChannelDirectoryProvider, useChannelDirectory] =
   createAssertedContextProvider(
     'ChannelDirectory',
-    (props: ChannelDirectoryProviderProps): ChannelDirectory =>
-      props.directory ?? createAppChannelDirectory()
+    (props: ChannelDirectoryProviderProps): ChannelDirectory => props.directory
   );
 
 /** One channel the viewer joined: `pending` while a cold directory cannot

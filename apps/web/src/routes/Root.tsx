@@ -40,6 +40,7 @@ import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
 import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
+import { createAppChannelDirectory } from '@queries/channel/directory';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -236,7 +237,9 @@ export function Root() {
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
-                  <ChannelDirectoryProvider>
+                  <ChannelDirectoryProvider
+                    directory={createAppChannelDirectory()}
+                  >
                     <CallProvider>
                       <CallKitSync />
                       <CallStartedNotifier />
