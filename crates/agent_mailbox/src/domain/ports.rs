@@ -368,10 +368,9 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Take this round of the orphan check for the whole cluster: true for
-    /// exactly one caller per `every`.
+    /// exactly one caller per `every`, timed by the store's clock.
     fn claim_orphan_check(
         &self,
-        now: DateTime<Utc>,
         every: chrono::Duration,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }

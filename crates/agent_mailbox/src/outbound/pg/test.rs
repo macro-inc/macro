@@ -1023,19 +1023,22 @@ async fn the_orphan_check_pages_through_live_mailboxes_by_id(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn one_replica_claims_each_hourly_orphan_check(pool: PgPool) {
-    let repository = PgAgentMailboxRepository::new(pool);
-    let now = Utc::now();
+    let repository = PgAgentMailboxRepository::new(pool.clone());
 
     let first = repository
-        .claim_orphan_check(now, Duration::hours(1))
+        .claim_orphan_check(Duration::hours(1))
         .await
         .unwrap();
     let rival = repository
-        .claim_orphan_check(now + Duration::minutes(1), Duration::hours(1))
+        .claim_orphan_check(Duration::hours(1))
+        .await
+        .unwrap();
+    sqlx::query!("UPDATE agent_mailbox_sweep_claims SET next_run_at = now() - interval '1 second'")
+        .execute(&pool)
         .await
         .unwrap();
     let next = repository
-        .claim_orphan_check(now + Duration::minutes(61), Duration::hours(1))
+        .claim_orphan_check(Duration::hours(1))
         .await
         .unwrap();
 
@@ -1062,4 +1065,25 @@ async fn a_stored_reserved_name_still_reads_back(pool: PgPool) {
     let read = repository.mailbox(mailbox.id).await.unwrap().unwrap();
 
     assert_eq!(read.requested_local_part.unwrap().as_str(), "support");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_orphan_check_claim_survives_a_missing_seed_row(pool: PgPool) {
+    sqlx::query!("DELETE FROM agent_mailbox_sweep_claims")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repository = PgAgentMailboxRepository::new(pool);
+
+    let first = repository
+        .claim_orphan_check(Duration::hours(1))
+        .await
+        .unwrap();
+    let rival = repository
+        .claim_orphan_check(Duration::hours(1))
+        .await
+        .unwrap();
+
+    assert!(first);
+    assert!(!rival);
 }

@@ -939,18 +939,16 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    async fn claim_orphan_check(
-        &self,
-        now: DateTime<Utc>,
-        every: Duration,
-    ) -> Result<bool, Self::Err> {
+    async fn claim_orphan_check(&self, every: Duration) -> Result<bool, Self::Err> {
+        // The database's clock, so replicas with skewed clocks still take
+        // one round each; an upsert, so a missing row can't stop the check.
         let claimed = sqlx::query!(
             r#"
-            UPDATE agent_mailbox_sweep_claims
-            SET next_run_at = $1 + $2::interval
-            WHERE name = 'orphans' AND next_run_at <= $1
+            INSERT INTO agent_mailbox_sweep_claims (name, next_run_at)
+            VALUES ('orphans', now() + $1::interval)
+            ON CONFLICT (name) DO UPDATE SET next_run_at = EXCLUDED.next_run_at
+            WHERE agent_mailbox_sweep_claims.next_run_at <= now()
             "#,
-            now,
             sqlx::postgres::types::PgInterval::try_from(every)
                 .map_err(|_| PgAgentMailboxError::Corrupt("orphan check interval"))?,
         )

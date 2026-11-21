@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_mailbox_sweep_claims",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "eb15c12897c44fe55de4cfd2d3f7e3101aa0af507474cfac4408fd8ed06705ab"
+}

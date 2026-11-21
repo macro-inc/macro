@@ -456,7 +456,8 @@ struct RepositoryState {
     /// Put this agent back on its team right after the orphan scan reads
     /// its page, as a person re-adding it between the read and the pause would.
     readd_after_orphan_scan: Option<(String, TeamId)>,
-    orphan_check_next: Option<DateTime<Utc>>,
+    /// The hourly orphan check's round is taken; cleared when the hour passes.
+    orphan_check_claimed: bool,
     /// Resume this mailbox right after the sweep reads its batch, as a
     /// person resuming it between the read and the release would.
     resume_after_sweep_read: Option<AgentMailboxId>,
@@ -1021,17 +1022,9 @@ impl AgentMailboxRepository for FakeRepository {
         Ok(true)
     }
 
-    async fn claim_orphan_check(
-        &self,
-        now: DateTime<Utc>,
-        every: Duration,
-    ) -> Result<bool, FakeError> {
+    async fn claim_orphan_check(&self, _every: Duration) -> Result<bool, FakeError> {
         let mut state = self.0.lock().unwrap();
-        if state.orphan_check_next.is_some_and(|next| next > now) {
-            return Ok(false);
-        }
-        state.orphan_check_next = Some(now + every);
-        Ok(true)
+        Ok(!std::mem::replace(&mut state.orphan_check_claimed, true))
     }
 }
 
@@ -2518,16 +2511,10 @@ async fn the_orphan_check_runs_once_an_hour_across_replicas() {
 
     let first = world.service.sweep_orphans(now).await.unwrap();
     world.members.lock().unwrap().remove(ADA);
-    let same_hour = world
-        .service
-        .sweep_orphans(now + Duration::minutes(1))
-        .await
-        .unwrap();
-    let next_hour = world
-        .service
-        .sweep_orphans(now + Duration::minutes(61))
-        .await
-        .unwrap();
+    let same_hour = world.service.sweep_orphans(now).await.unwrap();
+    // The hour passes.
+    world.repository.0.lock().unwrap().orphan_check_claimed = false;
+    let next_hour = world.service.sweep_orphans(now).await.unwrap();
 
     assert!(first.is_some());
     assert!(
@@ -2576,5 +2563,30 @@ async fn a_reply_counts_the_recipients_it_goes_to() {
     assert_eq!(
         audit[1].recipients, 3,
         "a reply to an outbound message goes to its recipients"
+    );
+}
+
+#[tokio::test]
+async fn a_reserved_names_taken_suffix_is_retried_with_a_fresh_one() {
+    let world = world();
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+
+    let support = world
+        .service
+        .provision(request(ADA, 1, "support"))
+        .await
+        .unwrap();
+
+    assert_eq!(support.state, MailboxState::Active);
+    let address = support.address.unwrap();
+    assert!(address.starts_with("support-"), "{address}");
+    let row = world.repository.row(support.id);
+    let own_suffix = LocalPart::parse("support").unwrap().with_suffix(row.id);
+    assert_ne!(
+        address,
+        format!("{}@fake-vendor.invalid", own_suffix.as_str()),
+        "the retry takes a fresh suffix"
     );
 }

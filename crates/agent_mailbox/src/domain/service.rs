@@ -389,10 +389,17 @@ where
                 let Some(local_part) = &mailbox.requested_local_part else {
                     return Err(ProviderError::AddressTaken);
                 };
+                // A reserved name already tried the mailbox's own suffix, so
+                // its retry takes a fresh one.
+                let retry = if local_part.is_reserved() {
+                    local_part.with_suffix(AgentMailboxId(provider_key(mailbox.id, b"suffix")))
+                } else {
+                    local_part.with_suffix(mailbox.id)
+                };
                 // A different idempotency key: the first one is bound to the taken address.
                 let suffixed = CreateMailbox {
                     idempotency_key: provider_key(mailbox.id, b"create-suffixed"),
-                    local_part: Some(local_part.with_suffix(mailbox.id)),
+                    local_part: Some(retry),
                     ..request
                 };
                 self.vendor.create_mailbox(&suffixed).await
@@ -680,20 +687,27 @@ where
     /// mailbox's team, or whose team is gone. Pausing keeps the mail; the
     /// usual [`PAUSED_RETENTION`] releases it later. One replica runs it per
     /// [`ORPHAN_CHECK_EVERY`]; `None` when another has this round.
-    #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.paused, agent_mailbox.orphans.failed), err)]
     pub async fn sweep_orphans(
         &self,
         now: DateTime<Utc>,
     ) -> Result<Option<SweepReport>, AgentMailboxError> {
+        // Taken before any span opens, so the replicas that skip a round
+        // leave no trace of it.
         let claimed = self
             .repository
-            .claim_orphan_check(now, ORPHAN_CHECK_EVERY)
+            .claim_orphan_check(ORPHAN_CHECK_EVERY)
             .await
             .map_err(internal)?;
         if !claimed {
             return Ok(None);
         }
+        self.check_orphans(now).await.map(Some)
+    }
 
+    /// The orphan check for a round this replica claimed.
+    #[tracing::instrument(skip_all, fields(agent_mailbox.orphans.claimed, agent_mailbox.orphans.paused, agent_mailbox.orphans.failed), err)]
+    async fn check_orphans(&self, now: DateTime<Utc>) -> Result<SweepReport, AgentMailboxError> {
+        tracing::Span::current().record("agent_mailbox.orphans.claimed", true);
         let mut report = SweepReport::default();
         let mut after = None;
         loop {
@@ -724,7 +738,7 @@ where
         let span = tracing::Span::current();
         span.record("agent_mailbox.orphans.paused", report.advanced);
         span.record("agent_mailbox.orphans.failed", report.failed);
-        Ok(Some(report))
+        Ok(report)
     }
 
     /// Release a mailbox paused past retention, unless it was resumed since
