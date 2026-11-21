@@ -288,6 +288,7 @@ const source = (
     readonly url: string;
     readonly token: string;
     readonly claude: Readonly<Record<string, string>>;
+    readonly webApp?: string;
   };
 }> => {
   const from = startup.credentials;
@@ -299,7 +300,12 @@ const source = (
           "a script's process reaches Macro only through its relay"
         );
       },
-      relay: { url: from.url, token: from.token, claude: from.claude },
+      relay: {
+        url: from.url,
+        token: from.token,
+        claude: from.claude,
+        ...(from.webApp === undefined ? {} : { webApp: from.webApp }),
+      },
     });
   if (from.kind === 'file') {
     const text = readText(from.file);
@@ -398,13 +404,18 @@ export const base = (
     given === undefined
       ? claudeAccess(await held(credentials, claudeKeys), await ownRelay())
       : given.claude;
+  // A script's links to people open where the agent's do.
+  const webApp = async (): Promise<string | undefined> =>
+    given === undefined ? (await addresses()).webApp : given.webApp;
   const relayed = async () => {
     const { url, token } = given ?? (await ownRelay());
+    const app = await webApp();
     return {
       [variables.workspace]: root,
       [variables.relayUrl]: url,
       [variables.relayToken]: token,
       [variables.credentialNames]: (await credentials.names()).join(','),
+      ...(app === undefined ? {} : { [variables.webAppUrl]: app }),
       ...(await claude()),
     };
   };
@@ -423,6 +434,9 @@ export const base = (
             new Macro({
               auth: { type: 'user', apiKey: given.token },
               hosts: relayHosts(given.url),
+              ...(given.webApp === undefined
+                ? {}
+                : { webAppUrl: given.webApp }),
             })
           );
     return macro;

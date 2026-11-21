@@ -100,6 +100,25 @@ describe('startup', () => {
     });
   });
 
+  test("a script's process gets the web app its parent was enrolled with", () => {
+    expect(
+      startup(
+        {
+          AGENT_WORKSPACE: '/w',
+          MUPPET_RELAY_URL: 'http://127.0.0.1:4000',
+          MUPPET_RELAY_TOKEN: 'capability',
+          MUPPET_WEB_APP_URL: 'http://localhost:3005',
+        },
+        reserved
+      )
+    ).toMatchObject({
+      kind: 'configured',
+      value: {
+        credentials: { kind: 'relayed', webApp: 'http://localhost:3005' },
+      },
+    });
+  });
+
   test('names the variable that is missing', () => {
     expect(startup({ MUPPET_CREDENTIALS_FILE: '/f' }, reserved)).toEqual({
       kind: 'invalid',

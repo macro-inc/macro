@@ -90,6 +90,8 @@ export const variables = {
   relayUrl: 'MUPPET_RELAY_URL',
   relayToken: 'MUPPET_RELAY_TOKEN',
   credentialNames: 'MUPPET_CREDENTIAL_NAMES',
+  /** Set only in a script's process: Macro's web app, for links to people (enrollment's app URL). */
+  webAppUrl: 'MUPPET_WEB_APP_URL',
   /** The computer's Chromium's DevTools, which the browser capability drives. */
   browser: 'MUPPET_BROWSER_CDP_URL',
 } as const;
@@ -110,6 +112,8 @@ export type CredentialSource =
       readonly names: readonly string[];
       /** How Claude Code reaches Anthropic from here: through the parent's relay, in Macro-credits mode. */
       readonly claude: Readonly<Record<string, string>>;
+      /** Macro's web app, when enrollment named one. */
+      readonly webApp?: string;
     };
 
 export type McpServer = {
@@ -215,6 +219,9 @@ const credentialSource = (
         url,
         token,
         names,
+        ...(given(environment, variables.webAppUrl) === undefined
+          ? {}
+          : { webApp: given(environment, variables.webAppUrl) }),
         claude: Object.fromEntries(
           claudeKeys.flatMap((name) => {
             const value = given(environment, name);
