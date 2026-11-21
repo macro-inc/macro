@@ -34,6 +34,18 @@ past it is recorded in `sequences.hangs` with what each page showed, the pages
 are loaded again, and the sequence runs again once with its earlier failures
 dropped (`sequences.aborted`).
 
+The driver and its browser run in a network namespace of their own
+(`netns.sh`, with pasta forwarding the stack's and the two Vites' ports).
+Chromium fails every request in flight with `net::ERR_NETWORK_CHANGED` when an
+interface or address appears or goes, and on a machine where other containers
+start and stop that is about every second; dev-server pages then came up blank
+or failed a dynamic import. `repro/reload-blank.ts` shows it: 16 pages reloaded
+at once outside the namespace all came up blank with that error; inside it, 96
+of 96 rendered. At most four pages load at once (`DIFFTEST_PAGE_LOADS`), every
+page's open requests are tracked so a stuck one says what it waits on, and a
+lane whose pages fail to open is opened again in a new context, up to three
+times (`meta.openRetries`).
+
 `bun run against-aa.ts results/aa.json results/quiet.json ...` puts each
 sequence failure bucket next to the A/A's rate for the same bucket, per 100
 steps of that kind.
@@ -49,6 +61,7 @@ what it shows and how to run it at the top:
 | `rename-writes.ts` | How many times a rename writes an entity's `updated_at`. |
 | `qa-rename.ts` | Whether each side's live Quick Access skills or snippets list reaches what a reload shows after a rename. |
 | `session-rename.ts` | When each side's Quick Access sessions list shows a rename, with the app's spans per phase. |
+| `reload-blank.ts` | How often pages reloaded together come up blank, and what a blank one waits on. |
 | `replay.ts` | One reader on both apps as an existing synthetic user, with every failed response. |
 
 ## Pieces
@@ -64,6 +77,7 @@ what it shows and how to run it at the top:
 | `lib/load.ts` | Concurrent REST/GraphQL reads and writes from a separate world. |
 | `lib/compare.ts` | Field-by-field comparison and the named rules for differences callers can't see. |
 | `probe/` | Mounts the real callers inside each app and exposes their output. |
+| `netns.sh` | Runs a command in its own network namespace with the given localhost ports forwarded. |
 | `summarize.ts` | Folds result files into one summary. |
 | `against-aa.ts` | Each run's failure buckets against the A/A control's rates. |
 

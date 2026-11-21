@@ -37,8 +37,14 @@ export function trackRequests(page: Page) {
 /** The page's requests still open after `olderThanMs`: method, path, type, age. */
 export function pendingRequests(page: Page, olderThanMs = 15_000): string[] {
   const now = Date.now();
-  return [...(inflight.get(page) ?? [])]
-    .filter(([, at]) => now - at >= olderThanMs)
+  const open = [...(inflight.get(page) ?? [])].filter(([, at]) => now - at >= olderThanMs);
+  // A page sees its shared worker's script request start but never finish,
+  // one per load: count those, and list the rest, newest first.
+  const worker = open.filter(([r]) => /shared-worker/.test(r.url()));
+  const rest = open
+    .filter(([r]) => !/shared-worker/.test(r.url()))
+    .reverse()
     .map(([r, at]) => `${r.method()} ${new URL(r.url()).pathname.slice(0, 100)} ${r.resourceType()} ${Math.round((now - at) / 1000)}s`)
     .slice(0, 12);
+  return worker.length ? [...rest, `${worker.length} shared-worker script requests`] : rest;
 }

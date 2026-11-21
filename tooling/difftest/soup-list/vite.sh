@@ -24,4 +24,4 @@ env PORT="$port" \
   VITE_OTEL_ENV=local \
   VITE_ENABLE_BROWSER_OTEL=true \
   VITE_DISABLE_BROWSER_TURSO_CACHE="$([ "$cache" = off ] && echo true || echo false)" \
-  node "$checkout/node_modules/vite/bin/vite.js" -c vite.config.ts --clearScreen false
+  node "$checkout/node_modules/vite/bin/vite.js" -c vite.config.ts --clearScreen false --host 127.0.0.1

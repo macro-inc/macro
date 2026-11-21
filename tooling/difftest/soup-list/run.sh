@@ -85,7 +85,8 @@ run() { # <label> <seed> <cache> [args...]
   local label=$1 seed=$2 cache=$3
   shift 3
   reset_user_limit
-  (cd "$here" && bun run run.ts --seed "$seed" --label "$label" --cache "$cache" \
+  # The driver and its browser run in their own network namespace (netns.sh).
+  (cd "$here" && "$here/netns.sh" "${STACK##*:},$NEW_PORT,$OLD_PORT" bun run run.ts --seed "$seed" --label "$label" --cache "$cache" \
     --out "$OUT/$label.json" --new "http://localhost:$NEW_PORT" --old "http://localhost:$OLD_PORT" \
     --stack "$STACK" --instance "$INSTANCE" --new-ref "$(git -C "$NEW_CHECKOUT" rev-parse "$NEW_REF")" \
     --old-ref "$(git -C "$OLD_CHECKOUT" rev-parse "$OLD_REF")" --lanes "${LANES:-8}" "$@") 2>&1 | tee "$OUT/$label.log"
