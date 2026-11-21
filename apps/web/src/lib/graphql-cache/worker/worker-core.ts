@@ -580,7 +580,7 @@ export class CacheWorkerCore {
 
   /**
    * Turso copies the WAL into the database file inside the COMMIT that takes
-   * it past 1,000 frames, so one write pays for the others. After a request
+   * it to 1,000 frames, so one write pays for the others. After a request
    * that can write, once the engine has been quiet for a moment, it copies
    * the WAL here from 500 frames instead. Each request that runs re-arms the
    * wait, so the requests a page sends on an answer run before the copy. One
@@ -633,6 +633,7 @@ export class CacheWorkerCore {
           errorCode: 'none',
           durationMs: this.now() - startedAt,
           count: checkpoint.backfilledFrames,
+          walFrames: checkpoint.walFrames,
         });
       }
     } catch (error) {
@@ -646,6 +647,7 @@ export class CacheWorkerCore {
         durationMs: this.now() - startedAt,
       });
       this.reportResetRequired(error);
+      if (isStorageBusy(error)) this.options.onStorageBusy?.();
     } finally {
       this.running = false;
       this.collectArrivalsThenDrain();

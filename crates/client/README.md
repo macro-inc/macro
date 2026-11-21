@@ -527,9 +527,10 @@ waited for the write that used to carry it; a drain cancels a copy not yet
 started and waits for one under way.
 
 A copy that ran is reported as `graphql_cache.wal_checkpoint` with
-`cache.duration_ms` and `cache.count` (frames copied). A failed copy is reported
-with its error class and retried at the next idle point; it leaves the WAL
-whole and does not reset the cache.
+`cache.duration_ms`, `cache.count` (frames copied) and `cache.wal_frames` (frames
+in the WAL when it ran; a count below it is a partial copy). A failed copy is
+reported with its error class and retried once the next request has run; it
+leaves the WAL whole and resets the cache only when the error means corruption.
 
 ## Key policy
 

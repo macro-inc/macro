@@ -3288,6 +3288,7 @@ describe('CacheWorkerCore', () => {
         operationCategory: 'storage',
         outcome: 'success',
         count: 640,
+        walFrames: 640,
       })
     );
   });
@@ -3393,6 +3394,32 @@ describe('CacheWorkerCore', () => {
     });
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(quiet.armed()).toBe(0);
+  });
+
+  it('reports a WAL checkpoint that found the database files busy', async () => {
+    const busyError = Object.assign(
+      new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
+      { cacheStorageBusy: true as const }
+    );
+    const checkpointIfDue = vi.fn().mockRejectedValue(busyError);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ checkpointIfDue }),
+    });
+    const onStorageBusy = vi.fn();
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      onStorageBusy,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(onStorageBusy).toHaveBeenCalledOnce());
   });
 
   it('arms no WAL checkpoint when the engine cannot copy one', async () => {

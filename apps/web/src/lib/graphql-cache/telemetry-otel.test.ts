@@ -36,6 +36,7 @@ describe('cache OpenTelemetry sink', () => {
       resetAttempt: 'wipe-before-open',
       queueDepth: 4,
       oldestAgeMs: 25,
+      walFrames: 512,
       durationMs: 12,
     });
 
@@ -56,6 +57,7 @@ describe('cache OpenTelemetry sink', () => {
       'cache.duration_ms': 12,
       'cache.queue_depth': 4,
       'cache.oldest_age_ms': 25,
+      'cache.wal_frames': 512,
     });
     expect(span.end).toHaveBeenCalledOnce();
   });
