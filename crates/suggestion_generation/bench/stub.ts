@@ -12,14 +12,17 @@
 //   the read the finding step makes) with it from `window/{email}.json`, and
 //   refuses any other window for that person, since the file holds that month
 //   alone: the routines brief reads mail from Gmail or Outlook, which seeded
-//   mail never reaches. Every other request, and a person with no file, goes
-//   to the real email_service.
+//   mail never reaches. The month of their sent mail
+//   (`&folder=sent`, at most `SENT_MESSAGES` with text for the newest
+//   `SENT_TEXTS`) comes from `sent/{email}.json`, empty for a person written
+//   without it, and any other folder or sent window is refused. Every other
+//   request, and a person with no file, goes to the real email_service.
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { WINDOW_DAYS, WINDOW_MESSAGES, WINDOW_SNIPPET_CHARS, WINDOW_TEXTS } from './personas';
+import { SENT_MESSAGES, SENT_TEXTS, WINDOW_DAYS, WINDOW_MESSAGES, WINDOW_SNIPPET_CHARS, WINDOW_TEXTS } from './personas';
 
 const ALIAS = 'suggestions-bench-stub';
 const IMAGE = 'caddy:2-alpine';
@@ -45,6 +48,23 @@ const CADDYFILE = `{
 	@recent path_regexp user ^/internal/recent_messages/macro\\|(.+)$
 	handle @recent {
 		root * /srv
+		# A sent read matches the inbox window's keys too: it goes first.
+		@sent {
+			query days=${WINDOW_DAYS} limit=${SENT_MESSAGES} texts=${SENT_TEXTS} snippet_chars=${WINDOW_SNIPPET_CHARS} folder=sent
+			file /sent/{re.user.1}.json
+		}
+		handle @sent {
+			rewrite * /sent/{re.user.1}.json
+			header Content-Type application/json
+			file_server
+		}
+		@otherFolder {
+			query folder=*
+			file /window/{re.user.1}.json
+		}
+		handle @otherFolder {
+			respond "the bench's stand-in serves only folder=sent with days=${WINDOW_DAYS}&limit=${SENT_MESSAGES}&texts=${SENT_TEXTS}&snippet_chars=${WINDOW_SNIPPET_CHARS}" 400
+		}
 		@window {
 			query days=${WINDOW_DAYS} limit=${WINDOW_MESSAGES} texts=${WINDOW_TEXTS} snippet_chars=${WINDOW_SNIPPET_CHARS}
 			file /window/{re.user.1}.json
@@ -98,6 +118,7 @@ export function startStub(instance: string) {
   const dir = stubDir(instance);
   mkdirSync(join(dir, 'inbox'), { recursive: true });
   mkdirSync(join(dir, 'window'), { recursive: true });
+  mkdirSync(join(dir, 'sent'), { recursive: true });
   writeFileSync(join(dir, 'Caddyfile'), CADDYFILE);
   if (!existsSync(join(dir, 'flags.json'))) writeFlags(instance, {});
   const name = container(instance);
@@ -130,16 +151,17 @@ export function writeFlags(instance: string, on: Record<string, boolean>) {
   writeFileSync(join(stubDir(instance), 'flags.json'), JSON.stringify({ flags, errorsWhileComputingFlags: false }));
 }
 
-/** Serve `newest` as `email`'s newest mail, and `month` as their mail of a window of days. */
-export function writeInbox(instance: string, email: string, newest: unknown, month: unknown) {
-  // A stand-in started before the month read has no folder for it.
-  mkdirSync(join(stubDir(instance), 'window'), { recursive: true });
+/** Serve `newest` as `email`'s newest mail, `month` as their mail of a window of days, and `sent` as what they sent in it. */
+export function writeInbox(instance: string, email: string, newest: unknown, month: unknown, sent: unknown) {
+  // A stand-in started before the month or sent read has no folder for it.
+  for (const folder of ['window', 'sent']) mkdirSync(join(stubDir(instance), folder), { recursive: true });
   writeFileSync(join(stubDir(instance), 'inbox', `${email}.json`), JSON.stringify(newest));
   writeFileSync(join(stubDir(instance), 'window', `${email}.json`), JSON.stringify(month));
+  writeFileSync(join(stubDir(instance), 'sent', `${email}.json`), JSON.stringify(sent));
 }
 
 export function clearInbox(instance: string, email: string) {
-  for (const folder of ['inbox', 'window']) rmSync(join(stubDir(instance), folder, `${email}.json`), { force: true });
+  for (const folder of ['inbox', 'window', 'sent']) rmSync(join(stubDir(instance), folder, `${email}.json`), { force: true });
 }
 
 /** Ask the stand-in, from inside the network, what it serves for `path` on `port`. */

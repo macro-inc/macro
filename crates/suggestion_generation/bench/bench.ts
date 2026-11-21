@@ -10,7 +10,7 @@ import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '.
 import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
 import { NO_LIST, judgeList, marksProblem, runFinding, scoreWorkList } from './finding';
-import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
+import { JUDGE, asGrader, judgeCost, judgeFeed, judgeJobs, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
 import { shiftDays } from './clock';
@@ -188,7 +188,9 @@ const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: A
       if (section === 'routines') {
         if (!attempt.generation.buildFailed) {
           attempt.routineMarks = await judgeRoutines(at, grader, persona, attempt.generation);
-          attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
+          // A month persona's suggestions are judged a second time, for the stream jobs they do.
+          attempt.jobMarks = persona.streamsTruth ? await judgeJobs(at, grader, persona, attempt.generation) : undefined;
+          attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth, attempt.jobMarks);
         }
         if (listsScored(section, persona, findsWork)) await judgeWorkList(at, persona, attempt);
         else dropList(attempt);
@@ -445,7 +447,7 @@ function rescore(path: string) {
   const findsWork = !!run.flags?.[FIND_WORK_FLAG];
   for (const attempt of run.attempts) {
     const persona = people.get(attempt.persona)!;
-    if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
+    if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth, attempt.jobMarks);
     else if (attempt.feedMarks) attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
     // A list its person's key no longer backs keeps no score from it.
     if (!listsScored(run.section, persona, findsWork || !!attempt.findingMarks)) {
@@ -493,7 +495,7 @@ async function main() {
       if (hidden) throw new Error(hidden);
       // Margins `noise` measured on these runs' kind of set and judge: score,found,bad.
       // Margins measured on another kind of set or by another judge would decide nothing: there are none by default.
-      if (values.margins === undefined) throw new Error('compare needs --margins score,found,bad: measure them with `noise` on two runs of main on this kind of set, judged by this judge (README, Noise)');
+      if (values.margins === undefined) throw new Error('compare needs --margins score,found,bad[,goodDrafts,jobDrafts]: measure them with `noise` on two runs of main on this kind of set, judged by this judge (README, Noise)');
       const measured = marginsOf(values.margins);
       const v = verdict(a.attempts, b.attempts, measured);
       const s = v.parts.score;
@@ -503,10 +505,14 @@ async function main() {
         const digits = part === 'score' ? 1 : 2;
         console.log(`- ${part}: ${c.a.toFixed(digits)} → ${c.b.toFixed(digits)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(digits)} (95% ${c.interval[0].toFixed(digits)} to ${c.interval[1].toFixed(digits)}), margin ${c.margin}: ${c.verdict}`);
       }
-      // Good suggestions are reported, not judged against a margin: none has been measured for them.
+      // Good drafts of each measure, against the margins `noise` measured for them where given.
+      for (const [part, c] of Object.entries(v.good)) {
+        console.log(`- ${part}: ${c.a.toFixed(2)} → ${c.b.toFixed(2)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(2)} (95% ${c.interval[0].toFixed(2)} to ${c.interval[1].toFixed(2)}), ${c.margin === undefined ? 'no margin given' : `margin ${c.margin}: ${c.verdict}`}`);
+      }
+      // Good catalog picks are reported, not judged against a margin: none has been measured for them.
       for (const [part, get] of [
-        ['good drafts', (attempt: Attempt) => attempt.score?.goodDrafts],
         ['good catalog picks', (attempt: Attempt) => attempt.score?.goodPicks],
+        ['good catalog picks by stream job', (attempt: Attempt) => attempt.score?.jobPicks],
       ] as const) {
         if (![...a.attempts, ...b.attempts].every((attempt) => attempt.benchError || get(attempt) !== undefined)) continue;
         const c = contrast(a.attempts, b.attempts, (attempt) => get(attempt)!);

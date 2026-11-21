@@ -6,7 +6,7 @@
 // nothing scores 0, and noise drives it below 0.
 
 import { CATALOG } from './catalog';
-import type { CardMark, FeedMarks, RoutineMark } from './judge';
+import type { CardMark, FeedMarks, JobMark, RoutineMark } from './judge';
 import type { FeedTruth, RoutinesTruth, StreamsTruth } from './personas';
 import type { EntryMark, ListScore } from './finding';
 import type { Generation } from './run';
@@ -51,6 +51,16 @@ export type Score = {
   /** A month persona: work streams of its key that some suggestion acts on, of how many. */
   aimed?: number;
   workStreams?: number;
+  /**
+   * The second measure of good, for a month persona judged for stream jobs:
+   * suggestions of each kind with nothing wrong (the same flags as good drafts
+   * and picks) that do at least one work stream's real job right, whether or
+   * not a need of the key bundles that stream with others; and the work
+   * streams whose jobs the good drafts do.
+   */
+  jobDrafts?: number;
+  jobPicks?: number;
+  jobStreams?: number;
 };
 
 export type Attempt = {
@@ -63,6 +73,8 @@ export type Attempt = {
   rep: number;
   generation: Generation;
   routineMarks?: RoutineMark[];
+  /** A month persona's stream jobs judgement, beside `routineMarks`. */
+  jobMarks?: JobMark[];
   feedMarks?: FeedMarks;
   /** The work list its drafting session read, matched to the persona's streams key. */
   findingMarks?: EntryMark[];
@@ -123,15 +135,18 @@ export function catalogFlags(generation: Generation, i: number, mark: RoutineMar
   };
 }
 
-export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth, streams?: StreamsTruth): Score {
+export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth, streams?: StreamsTruth, jobs?: JobMark[]): Score {
   const needIds = new Set(truth.needs.map((need) => need.id));
   const work = new Set(streams?.streams.filter((stream) => stream.kind === 'work').map((stream) => stream.id));
   const found = new Set<string>();
   const aimed = new Set<string>();
+  const jobStreams = new Set<string>();
   const wrong: Record<string, number> = {};
   let bad = 0;
   let goodDrafts = 0;
   let goodPicks = 0;
+  let jobDrafts = 0;
+  let jobPicks = 0;
   generation.routines.forEach((row, i) => {
     const mark = marks[i];
     // A catalog routine is scored by its key (catalogFlags); a drafted one is the judge's call.
@@ -162,6 +177,15 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
       else goodDrafts++;
     }
     for (const id of mark.streams ?? []) if (work.has(id)) aimed.add(id);
+    // The second measure: a work stream's job done right, and nothing wrong.
+    const done = (jobs?.[i]?.jobs ?? []).filter((id) => work.has(id));
+    if (jobs && done.length && !flawed) {
+      if (key) jobPicks++;
+      else {
+        jobDrafts++;
+        for (const id of done) jobStreams.add(id);
+      }
+    }
   });
   const needs = truth.needs.length;
   return {
@@ -178,6 +202,7 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
     goodDrafts,
     goodPicks,
     ...(streams ? { aimed: aimed.size, workStreams: work.size } : {}),
+    ...(streams && jobs ? { jobDrafts, jobPicks, jobStreams: jobStreams.size } : {}),
   };
 }
 
@@ -280,6 +305,15 @@ export function summary(attempts: Attempt[]) {
     ...(done.length && done.every((a) => a.score.aimed !== undefined)
       ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
       : {}),
+    // Runs judged before the stream jobs judgement (v5) have none of these.
+    ...(done.length && done.every((a) => a.score.jobDrafts !== undefined)
+      ? {
+          jobDrafts: avg(done.map((a) => a.score.jobDrafts!)),
+          jobPicks: avg(done.map((a) => a.score.jobPicks!)),
+          jobStreams: avg(done.map((a) => a.score.jobStreams!)),
+          fiveJobDrafts: done.filter((a) => a.score.jobDrafts! >= 5).length,
+        }
+      : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
     // Generations run to find the work: how many drafting sessions read a list, what share of the key's work streams the lists named (none where no list was read), and how many entries named none.
     // Where every judgement failed, `lists` is 0 and the shares are NaN: the report says none could be judged.
@@ -381,7 +415,28 @@ export function contrast(a: Attempt[], b: Attempt[], get: (attempt: Done) => num
   };
 }
 
-export type Margins = Record<Part, number>;
+/**
+ * Good suggestions, each a part of its own beside the score: good drafts
+ * (they meet a need of the key) and good drafts by stream job (they do a work
+ * stream's job right). Each is judged against a margin `noise` measured, or
+ * reported without one.
+ */
+export const GOOD_PARTS = { goodDrafts: 1, jobDrafts: 1 } as const;
+export type GoodPart = keyof typeof GOOD_PARTS;
+
+const goodGet: Record<GoodPart, (attempt: Done) => number | undefined> = {
+  goodDrafts: (attempt) => attempt.score.goodDrafts,
+  jobDrafts: (attempt) => attempt.score.jobDrafts,
+};
+
+/** The good parts every scored attempt of both sides has. */
+const goodParts = (a: Attempt[], b: Attempt[]) =>
+  (Object.keys(GOOD_PARTS) as GoodPart[]).filter((part) => {
+    const done = scored([...a, ...b]);
+    return done.length > 0 && done.every((attempt) => goodGet[part](attempt) !== undefined);
+  });
+
+export type Margins = Record<Part, number> & Partial<Record<GoodPart, number>>;
 
 export type PartVerdict = ReturnType<typeof contrast> & { margin: number; verdict: 'better' | 'worse' | 'noise' };
 
@@ -389,6 +444,8 @@ export type Verdict = {
   verdict: 'win' | 'loss' | 'noise';
   why: string;
   parts: Record<Part, PartVerdict>;
+  /** Good drafts of each measure both sides have; without a margin, `unmeasured`. */
+  good: Partial<Record<GoodPart, ReturnType<typeof contrast> & { margin?: number; verdict: 'better' | 'worse' | 'noise' | 'unmeasured' }>>;
   usd: [number, number];
   usdInterval: [number, number];
   wallRatio: number;
@@ -417,6 +474,16 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
       return [part, { ...c, margin, verdict: better ? 'better' : worse ? 'worse' : 'noise' }];
     }),
   ) as Record<Part, PartVerdict>;
+  const good = Object.fromEntries(
+    goodParts(a, b).map((part) => {
+      const c = contrast(a, b, (attempt) => goodGet[part](attempt)!);
+      const margin = margins[part];
+      if (margin === undefined) return [part, { ...c, verdict: 'unmeasured' as const }];
+      const better = c.delta > margin && c.interval[0] > 0;
+      const worse = c.delta < -margin && c.interval[1] < 0;
+      return [part, { ...c, margin, verdict: better ? ('better' as const) : worse ? ('worse' as const) : ('noise' as const) }];
+    }),
+  ) as Verdict['good'];
   const s = parts.score;
   if (s.attempts[0] < 3 || s.attempts[1] < 3) throw new Error(`only ${s.attempts.join(' and ')} scored attempts; run both sides with the same personas`);
   const signed = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
@@ -433,20 +500,21 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
   const common = (attempts: Attempt[]) => timed(attempts).filter((attempt) => both.has(attempt.persona));
   // A side's median shows only over two held-out people's times or more.
   const median = (attempts: Attempt[]) => (aggregate(common(attempts), attempts) ? quantile(common(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
-  return { verdict: result, why, parts, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
+  return { verdict: result, why, parts, good, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
 }
 
 /**
- * `compare`'s `--margins score,found,bad`, as `noise` prints them: three
- * finite margins of 0 or more. A margin of 0 is a measurement (two runs that
- * never moved); one that isn't finite would call every change noise.
+ * `compare`'s `--margins score,found,bad[,goodDrafts,jobDrafts]`, as `noise`
+ * prints them: three or five finite margins of 0 or more. A margin of 0 is a
+ * measurement (two runs that never moved); one that isn't finite would call
+ * every change noise.
  */
 export function marginsOf(text: string): Margins {
   const margins = text.split(',').map((margin) => (margin.trim() ? Number(margin) : NaN));
-  if (margins.length !== 3 || margins.some((margin) => !Number.isFinite(margin) || margin < 0)) {
-    throw new Error(`--margins takes score,found,bad: three finite margins of 0 or more, not ${text}`);
+  if ((margins.length !== 3 && margins.length !== 5) || margins.some((margin) => !Number.isFinite(margin) || margin < 0)) {
+    throw new Error(`--margins takes score,found,bad or score,found,bad,goodDrafts,jobDrafts: three or five finite margins of 0 or more, not ${text}`);
   }
-  return { score: margins[0], found: margins[1], bad: margins[2] };
+  return { score: margins[0], found: margins[1], bad: margins[2], ...(margins.length === 5 ? { goodDrafts: margins[3], jobDrafts: margins[4] } : {}) };
 }
 
 /** Most of anything the bench counts out (reps, seats, people, calls at once). */
@@ -474,10 +542,9 @@ export function unreadList(attempt: Attempt): boolean {
  * two identical builds land at this size.
  */
 export function noiseMargins(a: Attempt[], b: Attempt[]) {
-  return Object.fromEntries(
-    (Object.keys(PARTS) as Part[]).map((part) => {
-      const c = contrast(a, b, get[part]);
-      return [part, { ...c, margin: Math.max(Math.abs(c.interval[0]), Math.abs(c.interval[1])) }];
-    }),
-  ) as Record<Part, ReturnType<typeof contrast> & { margin: number }>;
+  const margin = (c: ReturnType<typeof contrast>) => ({ ...c, margin: Math.max(Math.abs(c.interval[0]), Math.abs(c.interval[1])) });
+  return {
+    ...(Object.fromEntries((Object.keys(PARTS) as Part[]).map((part) => [part, margin(contrast(a, b, get[part]))])) as Record<Part, ReturnType<typeof margin>>),
+    ...(Object.fromEntries(goodParts(a, b).map((part) => [part, margin(contrast(a, b, (attempt) => goodGet[part](attempt)!))])) as Partial<Record<GoodPart, ReturnType<typeof margin>>>),
+  };
 }

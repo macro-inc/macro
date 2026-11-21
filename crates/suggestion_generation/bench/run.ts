@@ -10,7 +10,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { SQL } from 'bun';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
-import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName, windowMessages } from './personas';
+import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName, sentMessages, windowMessages } from './personas';
 import { clearInbox, writeInbox } from './stub';
 import type { WorkList } from './finding';
 
@@ -482,7 +482,7 @@ export async function generate(
   const transcript = new Map<string, unknown>();
   let asked: number | undefined;
   try {
-    writeInbox(at.instance, email, recentMessages(persona, variant, now), windowMessages(persona, variant, now));
+    writeInbox(at.instance, email, recentMessages(persona, variant, now), windowMessages(persona, variant, now), sentMessages(persona, variant, now));
     const token = await login(at, email);
     const route = trigger === 'onboarding' ? 'generate' : 'regenerate';
     asked = Date.now();
