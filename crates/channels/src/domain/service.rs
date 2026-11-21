@@ -840,10 +840,9 @@ where
         })
     }
 
-    /// Tell contacts that team auto-join added these members to a channel.
-    /// The memberships are already stored, so a failed participant read is
-    /// logged rather than failing the mutation; the contacts backfill repairs
-    /// the missed pairs.
+    /// Announce that team auto-join added these members to a channel. The
+    /// memberships are already stored, so a failed participant read is
+    /// logged rather than failing the mutation.
     async fn dispatch_members_auto_joined(
         &self,
         channel_id: Uuid,

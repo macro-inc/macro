@@ -120,8 +120,9 @@ pub enum ChannelEvent {
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
     /// Team auto-join added members to a channel: someone joined a team with
-    /// auto-join channels, or a channel turned auto-join on. It only updates
-    /// contacts; nobody is notified and nothing reaches the event broker.
+    /// auto-join channels, or a channel turned auto-join on. Nobody is
+    /// notified, nothing reaches the event broker, and no contacts are
+    /// written: teammates come from the live team roster.
     MembersAutoJoined {
         /// Channel the members were added to.
         channel_id: Uuid,

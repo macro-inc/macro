@@ -1215,6 +1215,22 @@ fn contact_sync_ignores_public_channel_created() {
 }
 
 #[test]
+fn contact_sync_ignores_public_channel_joined() {
+    let event = ChannelEvent::ParticipantJoined {
+        channel_id: Uuid::nil(),
+        channel_type: ChannelType::Public,
+        user_id: Sender::new_from_user(user("carol@example.com")),
+        active_participant_user_ids: users(&[
+            "alice@example.com",
+            "bob@example.com",
+            "carol@example.com",
+        ]),
+    };
+
+    assert!(contact_sync_users_for_event(&event).is_none());
+}
+
+#[test]
 fn contact_sync_ignores_bot_actor() {
     let event = ChannelEvent::ParticipantsAdded {
         channel_id: Uuid::nil(),
