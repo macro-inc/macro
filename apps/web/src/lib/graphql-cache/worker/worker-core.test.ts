@@ -3787,12 +3787,9 @@ describe('CacheWorkerCore', () => {
         true,
         ['prepare:first', 'stage', 'read:client:visible', 'commit', 'write'],
       ],
-      // A failed stage may have marked storage for reset: the commit reports
-      // it before any read runs, and the rest keep their order.
-      [
-        false,
-        ['prepare:first', 'stage', 'commit', 'write', 'read:client:visible'],
-      ],
+      // A failed stage may have marked storage for reset: it fails the
+      // hydrate before any read runs, and the rest keep their order.
+      [false, ['prepare:first', 'stage', 'write', 'read:client:visible']],
     ])(
       'runs the reads sent while a hydrate stages its write before the write (staged: %s)',
       async (stagedOk, expected) => {
@@ -3806,7 +3803,7 @@ describe('CacheWorkerCore', () => {
             order.push('stage');
             stageStarted.resolve();
             await releaseStage.promise;
-            return stagedOk;
+            if (!stagedOk) throw new Error('stage failed');
           }),
         };
         const { core, port, messages } = await start(staged);
@@ -3828,7 +3825,9 @@ describe('CacheWorkerCore', () => {
         await Promise.all(sent);
 
         expect(order).toEqual(expected);
-        expect(messages.filter((message) => !message.ok)).toEqual([]);
+        expect(
+          messages.filter((message) => !message.ok).map((message) => message.id)
+        ).toEqual(stagedOk ? [] : [2]);
       }
     );
 

@@ -193,11 +193,11 @@ export interface CacheEngine {
   ): Promise<void>;
   /**
    * Optional, between the halves: computes the kept hydrate's write without
-   * writing, so `commitHydrate` only writes. Reads may run before and after,
-   * unless it resolves false: staging failed, so a read could see storage the
-   * failed read marked for reset before the commit reports it.
+   * writing, so `commitHydrate` only writes. Reads may run before and after.
+   * Rejects when staging fails, keeping nothing to commit: the hydrate fails
+   * with that error.
    */
-  stageHydrate?(): Promise<boolean>;
+  stageHydrate?(): Promise<void>;
   commitHydrate?(): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(

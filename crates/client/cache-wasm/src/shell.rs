@@ -676,14 +676,13 @@ impl CacheState {
 
     /// Computes a prepared hydrate's write while it only reads. It stages
     /// nothing when storage changed since the prepare, or the engine says the
-    /// hydrate must run whole; the commit then does what it always did.
-    /// Returns false when staging failed: a failed read may already have
-    /// marked storage for reset, so nothing should run before the commit,
-    /// which meets and reports the same failure.
-    async fn stage_hydrate(&mut self, prepared: &mut PreparedHydrate) -> bool {
+    /// hydrate must run whole; the commit then does what it always did. A
+    /// failed read fails the hydrate with the error the whole hydrate
+    /// reports, reset marker included.
+    async fn stage_hydrate(&mut self, prepared: &mut PreparedHydrate) -> Result<(), JsValue> {
         prepared.staged = None;
         if prepared.wal_position.is_none() || self.wal_position() != prepared.wal_position {
-            return true;
+            return Ok(());
         }
         let request = &prepared.request;
         let write = NetworkWrite {
@@ -694,14 +693,12 @@ impl CacheState {
             identity: request.identity.as_deref(),
         };
         let Some(engine) = self.engine.as_mut() else {
-            return true;
+            return Ok(());
         };
-        let Ok(staged) = engine
+        let staged = engine
             .stage_hydrate(write, request.scope.as_ref(), &prepared.projections)
-            .await
-        else {
-            return false;
-        };
+            .await;
+        let staged = self.engine_result(staged)?;
         // Staging only reads, so the WAL cannot have moved; check anyway.
         if self.wal_position() == prepared.wal_position {
             #[cfg(test)]
@@ -710,7 +707,7 @@ impl CacheState {
             }
             prepared.staged = staged;
         }
-        true
+        Ok(())
     }
 
     /// Writes a prepared hydrate. When a write committed since its
@@ -2102,21 +2099,21 @@ impl CacheEngine {
     /// before and after it. A write since the prepare leaves nothing staged,
     /// and a staged write the commit can't use (anything changed since) is
     /// dropped: the commit then writes the hydrate whole, as it always did.
-    /// Resolves false when staging failed; the host then runs nothing before
-    /// the commit, which reports the failure.
+    /// Rejects, keeping nothing to commit, when staging fails: the hydrate
+    /// fails with the error it would have met whole.
     #[wasm_bindgen(js_name = stageHydrate)]
     pub fn stage_hydrate(&self) -> js_sys::Promise {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            state.ensure_callable()?;
             let mut prepared = state
                 .prepared_hydrate
                 .take()
                 .ok_or_else(|| err_js("no prepared hydrate to stage"))?;
-            let reads_may_run = state.stage_hydrate(&mut prepared).await;
+            state.ensure_callable()?;
+            state.stage_hydrate(&mut prepared).await?;
             state.prepared_hydrate = Some(prepared);
-            Ok(JsValue::from_bool(reads_may_run))
+            Ok(JsValue::UNDEFINED)
         })
     }
 

@@ -794,9 +794,10 @@ export class CacheWorkerCore {
     const stage = engine.stageHydrate?.bind(engine);
     if (stage) {
       // Most of the write is reading what it merges into: done here, it
-      // leaves the commit short for the reads that wait on it. When staging
-      // failed, the commit reports it before any read runs.
-      if ((await stage()) !== false) await this.runReadsBeforeHydrateCommit();
+      // leaves the commit short for the reads that wait on it. A failed stage
+      // fails the hydrate before any read runs.
+      await stage();
+      await this.runReadsBeforeHydrateCommit();
     }
     return await commit();
   }
