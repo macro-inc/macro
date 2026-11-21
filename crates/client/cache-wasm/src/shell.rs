@@ -1658,14 +1658,32 @@ impl CacheEngine {
             .map_err(err_js)?;
             let reuse_stored_identity =
                 state.can_reuse_stored_identity(identity.as_deref()).await?;
-            // The passes below share one normalization of the response.
+            let input = NetworkWrite {
+                query: &query,
+                operation_name: operation_name.as_deref(),
+                variables: &vars,
+                data: &data,
+                identity: identity.as_deref(),
+            };
+            // One normalization serves the passes below and the write.
+            let normalized = state.engine_mut()?.normalize_network(
+                registration
+                    .as_ref()
+                    .map(|(op_id, entity_resolvers)| QueryRegistration {
+                        op_id: *op_id,
+                        entity_resolvers,
+                    }),
+                input,
+            );
+            let normalized = state.engine_result(normalized)?;
             let response_schema = state.engine_mut()?.schema_snapshot();
-            let response = WriteResponse::new(
+            let response = WriteResponse::with_updates(
                 &response_schema,
                 &query,
                 operation_name.as_deref(),
                 &vars,
                 &data,
+                normalized.updates(),
             );
             if reuse_stored_identity {
                 projections.extend(
@@ -1692,25 +1710,10 @@ impl CacheEngine {
                 )
                 .await
                 .map_err(|error| state.mail_projection_error(error))?;
+            drop(response);
             let result = state
                 .engine_mut()?
-                .write_query_with_registration_and_projections(
-                    origin,
-                    registration
-                        .as_ref()
-                        .map(|(op_id, entity_resolvers)| QueryRegistration {
-                            op_id: *op_id,
-                            entity_resolvers,
-                        }),
-                    NetworkWrite {
-                        query: &query,
-                        operation_name: operation_name.as_deref(),
-                        variables: &vars,
-                        data: &data,
-                        identity: identity.as_deref(),
-                    },
-                    projections,
-                )
+                .write_normalized_query(origin, input, normalized, projections)
                 .await;
             let result = state.engine_result(result)?;
 

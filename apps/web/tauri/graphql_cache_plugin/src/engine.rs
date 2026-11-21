@@ -723,6 +723,25 @@ impl EngineHandle {
             let op_id = ops.intern(&registration.op_id);
             (op_id, registration.entity_resolvers)
         });
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        // One normalization serves the projection passes and the write.
+        let normalized = engine
+            .normalize_network(
+                registration
+                    .as_ref()
+                    .map(|(op_id, entity_resolvers)| QueryRegistration {
+                        op_id: *op_id,
+                        entity_resolvers,
+                    }),
+                input,
+            )
+            .map_err(|e| e.to_string())?;
         let projections = soup::write_projections(
             engine,
             &query,
@@ -730,26 +749,11 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            Some(normalized.updates()),
         )
         .await?;
         let result = engine
-            .write_query_with_registration_and_projections(
-                origin,
-                registration
-                    .as_ref()
-                    .map(|(op_id, entity_resolvers)| QueryRegistration {
-                        op_id: *op_id,
-                        entity_resolvers,
-                    }),
-                NetworkWrite {
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    identity: identity.as_deref(),
-                },
-                projections,
-            )
+            .write_normalized_query(origin, input, normalized, projections)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -771,6 +775,17 @@ impl EngineHandle {
     ) -> Result<HydrationWriteResultWire, String> {
         let mut state = self.snapshot_hydration().await?;
         let EngineState { engine, ops, .. } = &mut *state;
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        // One normalization serves the projection passes and the write.
+        let normalized = engine
+            .normalize_network(None, input)
+            .map_err(|error| error.to_string())?;
         let projections = soup::write_projections(
             engine,
             &query,
@@ -778,34 +793,18 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            Some(normalized.updates()),
         )
         .await?;
         let result = match hydration_scope {
             Some(scope) => {
                 engine
-                    .hydrate_query_in_scope(
-                        NetworkWrite {
-                            query: &query,
-                            operation_name: operation_name.as_deref(),
-                            variables: &variables,
-                            data: &data,
-                            identity: identity.as_deref(),
-                        },
-                        &scope,
-                        projections,
-                    )
+                    .hydrate_normalized_query_in_scope(input, normalized, &scope, projections)
                     .await
             }
             None => {
                 engine
-                    .hydrate_query_with_projections(
-                        &query,
-                        operation_name.as_deref(),
-                        &variables,
-                        &data,
-                        identity.as_deref(),
-                        projections,
-                    )
+                    .hydrate_normalized_query(input, normalized, projections)
                     .await
             }
         }
@@ -1022,6 +1021,7 @@ impl EngineHandle {
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                None,
                 None,
             )
             .await?
