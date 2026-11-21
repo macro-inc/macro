@@ -1,6 +1,6 @@
 //! Entity-from-argument resolver behavior against the real Soup schema.
 
-use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
+use cache_core::engine::{Engine, EngineError, NetworkWrite, QueryRegistration, ReadResult};
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::store::InMemoryStorage;
 use cache_core::value::EntityKey;
@@ -524,6 +524,30 @@ fn a_write_normalized_beforehand_registers_what_a_normalizing_write_does() {
             writes.push(format!("{first:?}\n{second:?}"));
         }
         assert_eq!(writes[0], writes[1]);
+    });
+}
+
+#[test]
+fn a_response_normalized_before_a_schema_install_is_refused() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let variables = direct_variables(json!("thread-1"));
+        let data = json!({ "viewer": { "id": "user-1", "thread": null } });
+        let input = NetworkWrite {
+            query: DIRECT_EMAIL_QUERY,
+            operation_name: Some("EmailThread"),
+            variables: &variables,
+            data: &data,
+            identity: None,
+        };
+        let normalized = engine.normalize_network(None, input).unwrap();
+        let schema = engine.schema_snapshot();
+        engine.install_schema(&schema).unwrap();
+        let error = engine
+            .write_normalized_query(None, input, normalized, Vec::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, EngineError::StaleNormalization), "{error}");
     });
 }
 

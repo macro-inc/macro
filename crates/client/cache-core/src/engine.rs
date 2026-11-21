@@ -136,6 +136,10 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// Membership may only be written after a captured, scoped network read.
     #[error("contact writes require a scoped read fence")]
     UnfencedContactWrite,
+    /// A response normalized by [`Engine::normalize_network`] before another
+    /// schema was installed; normalize it again.
+    #[error("response was normalized under a schema that has since changed")]
+    StaleNormalization,
 }
 
 /// Result of a cache read.
@@ -169,6 +173,8 @@ pub struct NetworkWrite<'a> {
 pub struct NormalizedResponse {
     result: NormalizeResult,
     registered: Option<OpId>,
+    /// The schema it was normalized under; a write under another refuses it.
+    schema: std::sync::Arc<crate::meta::Schema>,
 }
 
 impl NormalizedResponse {
@@ -1485,11 +1491,13 @@ impl<S: Storage> Engine<S> {
         Ok(NormalizedResponse {
             result,
             registered: registration.map(|registration| registration.op_id),
+            schema: std::sync::Arc::clone(&self.schema),
         })
     }
 
     /// Writes a response [`Self::normalize_network`] normalized, installing the
-    /// dependencies of the registration it was normalized for.
+    /// dependencies of the registration it was normalized for. Refuses one
+    /// normalized before the current schema was installed.
     pub async fn write_normalized_query(
         &mut self,
         origin_op: Option<OpId>,
@@ -1529,7 +1537,12 @@ impl<S: Storage> Engine<S> {
         self.hydrate_optimistic().await?;
         let normalized = match normalization {
             Normalization::Pending(registration) => self.normalize_network(registration, input)?,
-            Normalization::Done(normalized) => normalized,
+            Normalization::Done(normalized) => {
+                if !std::sync::Arc::ptr_eq(&normalized.schema, &self.schema) {
+                    return Err(EngineError::StaleNormalization);
+                }
+                normalized
+            }
         };
         let registered = normalized.registered;
         let normalized = normalized.result;
