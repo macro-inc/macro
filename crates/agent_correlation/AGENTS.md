@@ -35,7 +35,10 @@ code, not in its prompt. The harness also signs the scope into the credential
   are typed (`job_matches`): an id placeholder takes only an id-like
   segment, so an unannotated route that differs by a literal word isn't
   admitted. OPTIONS is refused to a job (a preflight carries no
-  credential). Under `job`,
+  credential). Each list entry is bound to its spec's service: a service
+  declares the specs it serves (`CorrelationState::serving`), and an entry
+  counts only there (`allows_on`; signed-scope-only services bind none).
+  Under `job`,
   `entity_access`'s `EntityPermission::satisfies` makes a change need owner
   access, and no scope shares. Signed-scope services
   (`enforce_signed_scope`) hold a job to the same lists. `generation`:

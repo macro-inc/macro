@@ -26,12 +26,11 @@ pub enum SessionScope {
     Job,
 }
 
-/// A background job's requests, read once from its lists.
-static JOB_REQUESTS: std::sync::LazyLock<Vec<(&'static str, &'static str)>> =
+/// A background job's requests, by spec, read once from its lists.
+static JOB_REQUESTS: std::sync::LazyLock<Vec<(&'static str, &'static str, &'static str)>> =
     std::sync::LazyLock::new(|| {
         job_list(include_str!("scope/job_reads.txt"))
             .chain(job_list(include_str!("scope/job_writes.txt")))
-            .map(|(_, method, path)| (method, path))
             .collect()
     });
 
@@ -444,6 +443,14 @@ impl SessionScope {
     /// credential is a `ScopedMacroApiJwt`, which `AccountHolderOrInternal`
     /// refuses on every route that issues one.
     pub fn allows(self, method: &str, path: &str) -> bool {
+        self.allows_on(None, method, path)
+    }
+
+    /// [`Self::allows`] on a service that serves `specs` (the OpenAPI specs
+    /// a job's lists name entries by): a job's entry counts only on the
+    /// service its spec belongs to, so a template can't admit the same path
+    /// on another service. `None` doesn't bind entries to a service.
+    pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
         if listed(ANY_WRITE, method, path) {
             return false;
         }
@@ -453,9 +460,11 @@ impl SessionScope {
         // could reach a handler mounted for any method.
         if self == Self::Job {
             let method = if method == "HEAD" { "GET" } else { method };
-            return JOB_REQUESTS
-                .iter()
-                .any(|(listed, template)| *listed == method && job_matches(path, template));
+            return JOB_REQUESTS.iter().any(|(spec, listed, template)| {
+                specs.is_none_or(|specs| specs.contains(spec))
+                    && *listed == method
+                    && job_matches(path, template)
+            });
         }
         if reads_by_method(method) {
             return true;
@@ -505,9 +514,15 @@ impl SignedScope {
 
     /// Whether a request with `method` to `path` is inside the signed scope.
     pub fn allows(self, method: &str, path: &str) -> bool {
+        self.allows_on(None, method, path)
+    }
+
+    /// [`Self::allows`] on a service that serves `specs`
+    /// ([`SessionScope::allows_on`]).
+    pub fn allows_on(self, specs: Option<&[&str]>, method: &str, path: &str) -> bool {
         match self {
             Self::Unscoped => true,
-            Self::Known(scope) => scope.allows(method, path),
+            Self::Known(scope) => scope.allows_on(specs, method, path),
             Self::Unknown => reads_by_method(method) && !listed(ANY_WRITE, method, path),
         }
     }

@@ -133,7 +133,8 @@ async fn main() -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
     let port = config.port;
 
-    let correlation = agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args);
+    let correlation = agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args)
+        .serving(&["contacts"]);
     let app = mount_at_root_and_prefix(
         contacts_router(ContactsRouterState {
             contacts_service: service,

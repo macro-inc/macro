@@ -2275,7 +2275,8 @@ pub async fn run() -> anyhow::Result<()> {
     let correlation = agent_correlation::inbound::CorrelationState::new(
         pool.clone(),
         JwtValidationArgs::new_with_secret_manager(config.environment, &secrets).await?,
-    );
+    )
+    .serving(&["agent-harness", "cognition", "scheduled-action"]);
     let agent_activity = agent_session::inbound::axum_router::activity::router(
         agent_session::inbound::axum_router::activity::AgentActivityState::new(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone()),

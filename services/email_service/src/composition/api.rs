@@ -450,7 +450,8 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             CalendarInvitationResolver::new(PgCalendarRepository::new(db.clone())),
             calendar_mutation_service,
         )),
-        correlation: agent_correlation::inbound::CorrelationState::new(db, jwt_args),
+        correlation: agent_correlation::inbound::CorrelationState::new(db, jwt_args)
+            .serving(&["email"]),
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
         authorization_state: authorization_state.clone(),

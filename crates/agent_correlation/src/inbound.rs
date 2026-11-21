@@ -29,6 +29,20 @@ pub struct CorrelationState {
     pub jwt: JwtValidationArgs,
     /// Primary-database mapping lookup.
     pub repository: Arc<dyn CorrelationRepository>,
+    /// The OpenAPI specs (as `packages/sdk/specs` names them) this service
+    /// serves, so a background job's list entries count only here
+    /// ([`SessionScope::allows_on`]); `None` binds them to no service.
+    pub specs: Option<&'static [&'static str]>,
+}
+
+impl CorrelationState {
+    /// The same state, serving `specs`.
+    pub fn serving(self, specs: &'static [&'static str]) -> Self {
+        Self {
+            specs: Some(specs),
+            ..self
+        }
+    }
 }
 
 #[cfg(feature = "postgres")]
@@ -38,6 +52,7 @@ impl CorrelationState {
         Self {
             jwt,
             repository: Arc::new(crate::outbound::PgCorrelationRepository(pool)),
+            specs: None,
         }
     }
 }
@@ -56,11 +71,11 @@ where
         let tokens = verified_api_tokens(parts, &state.jwt)?;
         other_tokens_scope(Some(&state), &tokens.others, parts).await?;
         let token = tokens.authenticating;
-        checked_signed_scope(token.as_ref(), parts)?;
+        checked_signed_scope(token.as_ref(), parts, state.specs)?;
         let correlation = accept_correlation(&state, token.as_ref()).await?;
         if let Some((_, correlation)) = correlation
             && let Some(scope) = correlation.scope
-            && !scope.allows(parts.method.as_str(), parts.uri.path())
+            && !scope.allows_on(state.specs, parts.method.as_str(), parts.uri.path())
         {
             return Err(CorrelationRejection(CorrelationError::OutOfScope));
         }
@@ -157,7 +172,7 @@ async fn other_tokens_scope(
 ) -> Result<Option<SessionScope>, CorrelationRejection> {
     let mut scope = None;
     for token in others {
-        let signed = checked_signed_scope(Some(token), parts)?;
+        let signed = checked_signed_scope(Some(token), parts, state.and_then(|state| state.specs))?;
         scope = narrowest(scope, signed.known());
         let Some(state) = state else {
             continue;
@@ -165,7 +180,7 @@ async fn other_tokens_scope(
         if let Some((_, correlation)) = accept_correlation(state, Some(token)).await?
             && let Some(stored) = correlation.scope
         {
-            if !stored.allows(parts.method.as_str(), parts.uri.path()) {
+            if !stored.allows_on(state.specs, parts.method.as_str(), parts.uri.path()) {
                 return Err(CorrelationRejection(CorrelationError::OutOfScope));
             }
             scope = narrowest(scope, Some(stored));
@@ -179,9 +194,10 @@ async fn other_tokens_scope(
 fn checked_signed_scope(
     token: Option<&MacroApiToken>,
     parts: &Parts,
+    specs: Option<&[&str]>,
 ) -> Result<SignedScope, CorrelationRejection> {
     let scope = SignedScope::from_claim(token.and_then(|token| token.agent_scope.as_deref()));
-    if !scope.allows(parts.method.as_str(), parts.uri.path()) {
+    if !scope.allows_on(specs, parts.method.as_str(), parts.uri.path()) {
         tracing::warn!(
             ?scope,
             method = %parts.method,
@@ -307,7 +323,7 @@ async fn propagate_request(
         Err(rejection) => return rejection.into_response(),
     };
     let token = tokens.authenticating;
-    let signed = match checked_signed_scope(token.as_ref(), &parts) {
+    let signed = match checked_signed_scope(token.as_ref(), &parts, state.specs) {
         Ok(signed) => signed,
         Err(rejection) => return rejection.into_response(),
     };
@@ -320,7 +336,7 @@ async fn propagate_request(
     // scope, so this refuses only a credential that doesn't sign one.
     if let Some((id, correlation)) = correlation
         && let Some(scope) = correlation.scope
-        && !scope.allows(parts.method.as_str(), parts.uri.path())
+        && !scope.allows_on(state.specs, parts.method.as_str(), parts.uri.path())
     {
         tracing::warn!(
             scope = scope.as_str(),
@@ -383,7 +399,7 @@ async fn enforce_signed_scope_request(
         return rejection.into_response();
     }
     let token = tokens.authenticating;
-    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts) {
+    if let Err(rejection) = checked_signed_scope(token.as_ref(), &parts, None) {
         return rejection.into_response();
     }
     next.run(Request::from_parts(parts, body)).await

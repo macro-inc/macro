@@ -765,3 +765,33 @@ fn a_job_writes_only_its_session_and_its_owners_inbox() {
         );
     }
 }
+
+/// A job's list entry counts only on the service its spec belongs to: the
+/// same path on another service is refused, so a template can't reach a
+/// route of another service that happens to share its shape.
+#[test]
+fn a_jobs_entries_count_only_on_their_own_service() {
+    let scope = SessionScope::Job;
+    let document = "/documents/0192f1a0-0000-7000-8000-000000000001";
+    assert!(scope.allows_on(Some(&["storage", "properties", "search"]), "GET", document));
+    assert!(!scope.allows_on(Some(&["notification"]), "GET", document));
+    assert!(!scope.allows_on(
+        Some(&["agent-harness", "cognition", "scheduled-action"]),
+        "GET",
+        document
+    ));
+    let review = "/agent-sessions/0192f1a0-0000-7000-8000-000000000001/reviews";
+    assert!(scope.allows_on(Some(&["agent-harness"]), "POST", review));
+    assert!(!scope.allows_on(Some(&["storage"]), "POST", review));
+    // A signed job scope is held to the same binding.
+    assert!(!SignedScope::Known(scope).allows_on(Some(&["notification"]), "GET", document));
+    // Every entry is allowed on its own spec.
+    for (spec, method, path) in
+        job_list(include_str!("job_reads.txt")).chain(job_list(include_str!("job_writes.txt")))
+    {
+        assert!(
+            scope.allows_on(Some(&[spec]), method, &concrete_typed(path)),
+            "{spec} {method} {path}"
+        );
+    }
+}

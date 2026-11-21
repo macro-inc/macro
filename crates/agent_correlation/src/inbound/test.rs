@@ -74,6 +74,7 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     for bearer in [None, Some(token(None, None))] {
         let mut request = Request::builder()
@@ -145,6 +146,7 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -213,6 +215,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let ran = Arc::new(AtomicUsize::new(0));
     let handler = {
@@ -269,6 +272,7 @@ async fn a_scoped_session_is_refused_outside_its_scope() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let refused = AgentCorrelationExtractor::from_request_parts(&mut parts, &state).await;
     assert_eq!(
@@ -290,6 +294,7 @@ async fn a_signed_scope_is_refused_outside_it_without_a_lookup() {
     let state = CorrelationState {
         jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
         repository: repository.clone(),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -346,6 +351,7 @@ async fn a_handler_reads_the_signed_scope_when_none_is_stored() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -639,6 +645,7 @@ async fn propagate_refuses_tokens_of_different_users() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let handled = Arc::new(AtomicUsize::new(0));
     let app = axum::Router::new()
@@ -732,6 +739,7 @@ async fn a_refused_sharing_change_is_answered_as_a_refusal() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
@@ -797,6 +805,7 @@ async fn ordinary_agents_reach_policy_put_while_restricted_agents_do_not() {
         repository: Arc::new(Repository {
             calls: AtomicUsize::new(0),
         }),
+        specs: None,
     };
     let app = axum::Router::new()
         .route(
