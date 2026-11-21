@@ -1630,6 +1630,11 @@ pub struct VisibleCalendar {
     pub name: String,
     /// Provider color.
     pub color: Option<String>,
+    /// The requester's own color for this calendar, as lowercase `#rrggbb`,
+    /// shown instead of [`Self::color`]. Each viewer chooses their own, and
+    /// provider sync never changes it.
+    #[serde(default)]
+    pub custom_color: Option<String>,
     /// Whether this is its account's primary calendar.
     pub is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.

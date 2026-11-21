@@ -658,6 +658,9 @@ pub struct GraphqlCalendar {
     name: String,
     /// Provider color.
     color: Option<String>,
+    /// The viewer's own color for this calendar, as lowercase `#rrggbb`,
+    /// shown instead of `color`. Provider sync never changes it.
+    custom_color: Option<String>,
     /// Whether this is its account's primary calendar.
     is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
@@ -680,6 +683,7 @@ impl From<VisibleCalendar> for GraphqlCalendar {
             capabilities: calendar.capabilities.into(),
             name: calendar.name,
             color: calendar.color,
+            custom_color: calendar.custom_color,
             is_primary: calendar.is_primary,
             is_writable: calendar.is_writable,
             is_subscription: calendar.is_subscription,

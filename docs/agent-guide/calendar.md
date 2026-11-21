@@ -284,9 +284,16 @@ mixed. Individual calendars can also be shown/hidden. The account color is the
 default for its calendars; a child color overrides it. Click a color dot to open
 the theme-matched picker: drag the color field and hue slider, choose a named
 swatch, or enter a three- or six-digit hex value. Arrow keys adjust the focused
-color field (Shift makes larger steps). **Reset to default** clears the override.
-Visibility and colors share the calendar sidebar's browser-local preferences,
-survive reload, and do not change the Google calendar or booking conflict checks.
+color field (Shift makes larger steps). A drag or key press saves once, on
+release. **Reset to default** clears the override. A calendar's own color is
+saved for the person's account (`calendar_color_preferences`, `PUT
+/calendar/calendars/{id}/color`, GraphQL `setCalendarColor`), so it follows them
+to every device, and each viewer of a delegated inbox picks their own; the calendar
+list returns it as `customColor` beside the provider's `color`, which sync keeps
+updating underneath. Colors this browser saved before are uploaded once and
+dropped locally only after the server confirms them. The account default color
+and visibility stay in the calendar's browser-local preferences. None of it
+changes the Google or Outlook calendar or booking conflict checks.
 
 Each calendar row also has a **Busy** switch (`<name> counts as busy`), right of
 its color dot: the saved, per-user `calendar_availability_preferences` choice
@@ -607,13 +614,20 @@ wording; touch has no hover, so on phones and tablets that line is written under
 calendar's name instead (the row grows to fit), as a menu item's disabled reason is. The
 account keeps syncing its other calendars and the badge clears on its own once that
 calendar syncs again.
+A calendar's color dot is its own button beside the checkbox and opens the same
+color picker as Settings → Calendar (`Color for <name> (<address>)`); the checkbox
+and the name still show or hide the calendar. The choice recolors the calendar's
+events on the grid, in Upcoming, in event details and search, in the new-event
+editor's draft and the agent's draft preview, all read through `useCalendarSources`.
 Phones have no sidebar, so the header gear's settings sheet carries the same list under
 `Calendars`, between Period and Display, laid out like the mobile filter drawer's
 groups (Tasks → Filters): each account is its own card whose header row shows or hides
 all of its calendars (a minus when only some show) with its selection filling the whole
-row, caret included. The trailing caret (`Expand <address>`) opens one
-`MobileFilterDrawer.Option` per calendar with the same swatch, warning and RSS marks, so
-neighbouring shown calendars join into one selection. Period, Week starts on and Time
+row, caret included. The trailing caret (`Expand <address>`) opens one row per
+calendar, built like the account header: its color dot opens the color picker, the
+rest of the row (name, warning and RSS marks, check) shows or hides the calendar,
+the selection fills the whole row, and neighbouring shown calendars join into one
+selection. Period, Week starts on and Time
 format use the same options as single choices, and Show weekends as a checkbox. Accounts
 start collapsed each time the sheet opens. The rows write the same browser-local
 visibility as the sidebar and Settings → Calendar, so all three agree. With accounts

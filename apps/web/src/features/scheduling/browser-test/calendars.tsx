@@ -71,6 +71,7 @@ export function FixtureCalendars(props: { notify: (message: string) => void }) {
             preferences.sourceColors[calendar.id] ??
             preferences.accountColors[account.id] ??
             calendar.color,
+          hasCustomColor: preferences.sourceColors[calendar.id] !== undefined,
         })),
       }))}
       loading={false}
@@ -90,7 +91,6 @@ export function FixtureCalendars(props: { notify: (message: string) => void }) {
         }
         setPreferences('hiddenSourceIds', [...hidden]);
       }}
-      sourceColor={(id) => preferences.sourceColors[id]}
       accountColor={(id) => preferences.accountColors[id]}
       onSourceColor={(id, color) => setPreferences('sourceColors', id, color)}
       onAccountColor={(id, color) => setPreferences('accountColors', id, color)}

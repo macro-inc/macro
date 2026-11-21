@@ -3,7 +3,8 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Slider } from '@kobalte/core/slider';
-import { createSignal, For } from 'solid-js';
+import { cn } from '@ui/utils/classname';
+import { createSignal, For, Show } from 'solid-js';
 import {
   type CalendarColor,
   calendarColorHex,
@@ -26,11 +27,29 @@ const SWATCHES = [
   { name: 'Slate', color: '#8d9aa9' },
 ];
 
+/** Keys that move a slider; the color saves once the key is released. */
+const SLIDER_KEYS = [
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+];
+
+/**
+ * Picks a calendar's color. Dragging previews in the picker and saves once on
+ * release, so a drag is one save. `compact` draws the trigger as the small
+ * square calendar rows show beside a calendar's name.
+ */
 export function CalendarColorPicker(props: {
   label: string;
   color: string;
   overridden: boolean;
   onChange: (color: string | undefined) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
   const [color, setColor] = createSignal<CalendarColor>({
@@ -44,11 +63,15 @@ export function CalendarColorPicker(props: {
   let dragging: number | undefined;
   const hex = () => calendarColorHex(color());
   const hueColor = () => `hsl(${color().hue} 100% 50%)`;
-  const change = (next: CalendarColor) => {
+  const preview = (next: CalendarColor) => {
     setColor(next);
     setDraft(undefined);
     setInvalid(false);
-    props.onChange(calendarColorHex(next));
+  };
+  const commit = () => props.onChange(hex());
+  const change = (next: CalendarColor) => {
+    preview(next);
+    commit();
   };
   const changeHex = (value: string) => {
     const next = parseCalendarColor(value);
@@ -66,12 +89,12 @@ export function CalendarColorPicker(props: {
     }
     changeHex(normalized);
   };
-  const atPointer = (
+  const colorAtPointer = (
     event: PointerEvent & { currentTarget: HTMLDivElement }
-  ) => {
+  ): CalendarColor | undefined => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    change({
+    return {
       ...color(),
       saturation: Math.max(
         0,
@@ -79,12 +102,18 @@ export function CalendarColorPicker(props: {
       ),
       brightness:
         1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
-    });
+    };
+  };
+  const previewAtPointer = (
+    event: PointerEvent & { currentTarget: HTMLDivElement }
+  ) => {
+    const next = colorAtPointer(event);
+    if (next) preview(next);
   };
   return (
     <Popover
-      placement="bottom-end"
-      gutter={10}
+      placement={props.compact ? 'bottom-start' : 'bottom-end'}
+      gutter={props.compact ? 6 : 10}
       open={open()}
       onOpenChange={(value) => {
         if (value) {
@@ -103,13 +132,29 @@ export function CalendarColorPicker(props: {
       <Popover.Trigger
         aria-label={props.label}
         title={props.label}
-        class="flex size-8 shrink-0 items-center justify-center rounded-full outline-none hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent data-expanded:bg-ink/5"
+        class={cn(
+          'flex shrink-0 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          props.compact
+            ? 'size-5 rounded-md not-touch:hover:bg-ink/10 data-expanded:bg-ink/10 touch:size-11 touch:rounded-full'
+            : 'size-8 rounded-full hover:bg-ink/5 data-expanded:bg-ink/5'
+        )}
       >
-        <span
-          ref={swatch}
-          class="size-5 rounded-full border border-ink/10 transition-transform hover:scale-110"
-          style={{ 'background-color': props.color }}
-        />
+        <Show
+          when={props.compact}
+          fallback={
+            <span
+              ref={swatch}
+              class="size-5 rounded-full border border-ink/10 transition-transform hover:scale-110"
+              style={{ 'background-color': props.color }}
+            />
+          }
+        >
+          <span
+            ref={swatch}
+            class="size-2.5 rounded-sm"
+            style={{ 'background-color': props.color }}
+          />
+        </Show>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content class="menu-surface z-action-menu w-72 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3 outline-none menu-open-animation">
@@ -150,14 +195,15 @@ export function CalendarColorPicker(props: {
               event.currentTarget.focus({ preventScroll: true });
               event.currentTarget.setPointerCapture(event.pointerId);
               dragging = event.pointerId;
-              atPointer(event);
+              previewAtPointer(event);
             }}
             onPointerMove={(event) => {
-              if (dragging === event.pointerId) atPointer(event);
+              if (dragging === event.pointerId) previewAtPointer(event);
             }}
             onPointerUp={(event) => {
               if (dragging !== event.pointerId) return;
-              atPointer(event);
+              previewAtPointer(event);
+              commit();
               dragging = undefined;
               event.currentTarget.releasePointerCapture(event.pointerId);
             }}
@@ -187,7 +233,10 @@ export function CalendarColorPicker(props: {
                   return;
               }
               event.preventDefault();
-              change(next);
+              preview(next);
+            }}
+            onKeyUp={(event) => {
+              if (SLIDER_KEYS.includes(event.key)) commit();
             }}
           >
             <span
@@ -207,7 +256,11 @@ export function CalendarColorPicker(props: {
             step={1}
             value={[color().hue]}
             aria-label="Hue"
-            onChange={([hue]) => change({ ...color(), hue: hue ?? 0 })}
+            onChange={([hue]) => preview({ ...color(), hue: hue ?? 0 })}
+            onChangeEnd={commit}
+            onKeyUp={(event) => {
+              if (SLIDER_KEYS.includes(event.key)) commit();
+            }}
             class="my-4 flex h-5 touch-none items-center px-1.5"
           >
             <Slider.Track

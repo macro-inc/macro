@@ -20,6 +20,7 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from './components/TurnOffCalendarDialog';
+import { useSetCalendarColor } from './hooks/use-calendar-color';
 import { useCalendarSources } from './hooks/use-calendar-sources';
 import { groupCalendarSourcesByAccount } from './utils/calendar-source-groups';
 import { useCalendarPreferences } from './utils/preferences';
@@ -32,6 +33,7 @@ function CalendarSettingsContent() {
   const [preferences, setPreferences] = useCalendarPreferences();
   const availability = useAvailabilityCalendarsQuery(userId);
   const setAvailability = useSetAvailabilityCalendarMutation();
+  const setCalendarColor = useSetCalendarColor();
   const countsAsBusy = createMemo(
     () =>
       new Map(
@@ -133,11 +135,10 @@ function CalendarSettingsContent() {
           setPreferences('hiddenSourceIds', [...hidden]);
         }}
         accountColor={(id) => preferences.accountColors[id]}
-        sourceColor={(id) => preferences.sourceColors[id]}
         onAccountColor={(id, color) =>
           setPreferences('accountColors', id, color)
         }
-        onSourceColor={(id, color) => setPreferences('sourceColors', id, color)}
+        onSourceColor={setCalendarColor}
         countsAsBusy={(id) => countsAsBusy().get(id)}
         onCountsAsBusyChange={(id, counts) => {
           const user = userId();

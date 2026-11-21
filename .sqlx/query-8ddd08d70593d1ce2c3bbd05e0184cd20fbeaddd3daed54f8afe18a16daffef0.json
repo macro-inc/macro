@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM calendar_color_preferences\n                WHERE user_id = $1 AND calendar_id = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ddd08d70593d1ce2c3bbd05e0184cd20fbeaddd3daed54f8afe18a16daffef0"
+}

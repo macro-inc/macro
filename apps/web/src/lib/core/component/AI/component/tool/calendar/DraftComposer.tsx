@@ -12,6 +12,7 @@ import { createCalendarEventFormController } from '@app/features/calendar/compon
 import { EventForm } from '@app/features/calendar/components/composer/EventForm';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
+import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import {
@@ -99,6 +100,7 @@ function CalendarDraftComposerFallback() {
 
 function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const calendarsQuery = useVisibleCalendarsQuery();
+  const { sourceById } = useCalendarSources();
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   const startAddInbox = useAddInboxFlow();
@@ -159,7 +161,8 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       provider: calendar.provider,
       capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, calendarsSpanInboxes()),
-      color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      color:
+        sourceById().get(calendar.id)?.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
       isPrimary: calendar.isPrimary,
     }))

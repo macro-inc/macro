@@ -529,6 +529,15 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+A calendar's color, picked from the Calendar sidebar's dot over the real
+calendar list, occurrence and color queries, has a backend-free regression: it
+saves for the account, recolors the calendar's events on the grid, holds after
+a fresh load, resets to the provider's color, and leaves showing and hiding to
+the row's checkbox and name:
+`bunx playwright test --config src/features/calendar/browser-test/playwright.config.ts colors.browser.e2e.ts`.
+Key calendar rows by calendar id: the source list is rebuilt on every color
+change, and a remounted row closes its open picker.
+
 Email invitation cards have a backend-free desktop/phone regression for long
 descriptions wrapping inside the card, collapsed and expanded, the guest row
 lining up with its icon, and `+N more` keeping a 44px tap target on touch:

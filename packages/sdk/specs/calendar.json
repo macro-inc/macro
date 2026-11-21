@@ -93,6 +93,73 @@
         }
       }
     },
+    "/calendars/{calendar_id}/color": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Set the requester's own color for one of their calendars, or clear it to\nshow the provider's color again. Macro keeps it; the provider never sees it.",
+        "operationId": "set_calendar_color",
+        "parameters": [
+          {
+            "name": "calendar_id",
+            "in": "path",
+            "description": "Calendar id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCalendarColorBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The color was saved"
+          },
+          "400": {
+            "description": "The color is not #rrggbb",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Calendar not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/events": {
       "post": {
         "tags": ["calendar_events"],
@@ -3668,6 +3735,17 @@
         "description": "Team host assignment policy.",
         "enum": ["individual", "collective", "roundRobin"]
       },
+      "SetCalendarColorBody": {
+        "type": "object",
+        "description": "The requester's own color for one of their calendars.",
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "`#rrggbb`, or `null` to show the provider's color again.",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        }
+      },
       "SlotsResponse": {
         "type": "object",
         "description": "Available start times.",
@@ -3900,6 +3978,10 @@
           "contributesToAvailability": {
             "type": "boolean",
             "description": "Whether this calendar counts toward the requester's busy time: their\nsetting in Settings → Calendar, on by default for every calendar.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
+          },
+          "customColor": {
+            "type": ["string", "null"],
+            "description": "The requester's own color for this calendar, as lowercase `#rrggbb`,\nshown instead of [`Self::color`]. Each viewer chooses their own, and\nprovider sync never changes it."
           },
           "defaultReminders": {
             "type": "array",

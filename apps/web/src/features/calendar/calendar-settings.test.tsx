@@ -33,6 +33,9 @@ vi.mock('@queries/calendar/availability', () => ({
     mutate: mocks.setAvailability,
   }),
 }));
+vi.mock('./hooks/use-calendar-color', () => ({
+  useSetCalendarColor: () => () => {},
+}));
 vi.mock('./hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
     sources: () => mocks.sources,

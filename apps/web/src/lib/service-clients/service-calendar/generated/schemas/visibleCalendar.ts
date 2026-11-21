@@ -8,6 +8,7 @@ import type { CalendarCapabilities } from './calendarCapabilities';
 import type { CalendarProvider } from './calendarProvider';
 import type { EventReminderOverride } from './eventReminderOverride';
 import type { VisibleCalendarColor } from './visibleCalendarColor';
+import type { VisibleCalendarCustomColor } from './visibleCalendarCustomColor';
 import type { VisibleCalendarSyncError } from './visibleCalendarSyncError';
 
 /**
@@ -23,6 +24,10 @@ setting in Settings → Calendar, on by default for every calendar.
 The nearest thing to "this is the requester's own": a provider's
 access role only says what they may do, on a colleague's calendar too. */
   contributesToAvailability?: boolean;
+  /** The requester's own color for this calendar, as lowercase `#rrggbb`,
+shown instead of [`Self::color`]. Each viewer chooses their own, and
+provider sync never changes it. */
+  customColor?: VisibleCalendarCustomColor;
   /** Default reminders applied to events that keep `useDefault`. */
   defaultReminders: EventReminderOverride[];
   /** Connected inbox address, for grouping in multi-inbox pickers. */

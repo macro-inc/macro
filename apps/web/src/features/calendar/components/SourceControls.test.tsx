@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarSource } from '../types';
@@ -54,6 +60,8 @@ function renderControls() {
   const onVisibilityChange = vi.fn<(id: string, visible: boolean) => void>();
   const onGroupVisibilityChange =
     vi.fn<(ids: string[], visible: boolean) => void>();
+  const onColorChange =
+    vi.fn<(id: string, color: string | undefined) => void>();
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
   const changeVisibility = (ids: readonly string[], visible: boolean) =>
     setHidden((current) => {
@@ -76,6 +84,7 @@ function renderControls() {
         onGroupVisibilityChange(ids, visible);
         changeVisibility(ids, visible);
       }}
+      onColorChange={onColorChange}
     />
   ));
   const expandAccount = (email: string) =>
@@ -95,6 +104,7 @@ function renderControls() {
     ...result,
     onVisibilityChange,
     onGroupVisibilityChange,
+    onColorChange,
     headerFor,
     expandAccount,
   };
@@ -209,5 +219,34 @@ describe('SourceControls', () => {
     expect(queryByText('Holidays in United States')).toBeTruthy();
     fireEvent.click(getByRole('button', { name: 'Collapse gab@macro.com' }));
     expect(queryByText('Holidays in United States')).toBeNull();
+  });
+
+  it("opens a calendar's color picker from its swatch, leaving its visibility to the checkbox and name", async () => {
+    const {
+      getByRole,
+      getByText,
+      expandAccount,
+      onColorChange,
+      onVisibilityChange,
+    } = renderControls();
+    expandAccount('gab@macro.com');
+
+    fireEvent.click(
+      getByRole('button', { name: 'Color for gab@macro.com (gab@macro.com)' })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Iris' }));
+
+    expect(onColorChange).toHaveBeenCalledExactlyOnceWith(
+      'gab-primary',
+      '#9382e8'
+    );
+    expect(onVisibilityChange).not.toHaveBeenCalled();
+
+    fireEvent.click(getByText('Holidays in United States'));
+
+    expect(onVisibilityChange).toHaveBeenCalledExactlyOnceWith(
+      'gab-holidays',
+      false
+    );
   });
 });

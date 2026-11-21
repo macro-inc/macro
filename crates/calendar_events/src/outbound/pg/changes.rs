@@ -316,6 +316,7 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 link.email_address,
                 calendar.name,
                 calendar.color,
+                color_preference.color AS "custom_color?",
                 calendar.is_primary,
                 calendar.access_role,
                 calendar.provider_calendar_id,
@@ -337,6 +338,8 @@ impl CalendarChangeRepository for PgCalendarRepository {
             JOIN calendars calendar ON calendar.account_id = account.id
             LEFT JOIN calendar_availability_preferences preference
                 ON preference.calendar_id = calendar.id AND preference.user_id = $1
+            LEFT JOIN calendar_color_preferences color_preference
+                ON color_preference.calendar_id = calendar.id AND color_preference.user_id = $1
             WHERE calendar.id = ANY($2::uuid[])
               AND NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'

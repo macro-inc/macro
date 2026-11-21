@@ -1,5 +1,6 @@
 import { useAccessRequestInvalidations } from '@app/features/access-requests/use-access-request-invalidations';
 import { AgentNavigationProvider } from '@app/features/agent-navigation/views/agent-navigation';
+import { useUploadBrowserCalendarColors } from '@app/features/calendar/hooks/use-calendar-color';
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
 import { quietHoursMute } from '@app/features/notification-sounds/core/quiet-hours';
 import { readNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
@@ -129,6 +130,7 @@ export function AppProviders(props: ParentProps) {
   useQuerySync(userId);
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
+  useUploadBrowserCalendarColors();
   useWarmPromptDismissals(userId);
   useResumeFolderUploads(userId);
   useInterfaceLanguageSync();

@@ -116,6 +116,15 @@ impl CalendarMutationService for FakeMutations {
         unreachable!("creating with a Macro call lists no calendars")
     }
 
+    async fn set_calendar_color(
+        &self,
+        _requester_id: &str,
+        _calendar_id: Uuid,
+        _color: Option<crate::domain::calendar_color::CalendarColor>,
+    ) -> Result<(), CalendarMutationError> {
+        unreachable!("calendar colors are not exercised here")
+    }
+
     async fn update_event(
         &self,
         _requester_id: &str,

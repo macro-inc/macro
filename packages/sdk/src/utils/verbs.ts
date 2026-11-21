@@ -132,7 +132,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     deleted: 'deleteCalendarEvent',
     edited: `
       setAvailabilityCalendar updateCalendarEvent changeBooking editBookingLink saveBookingSettings
-      setTeamSharing
+      setCalendarColor setTeamSharing
     `,
     invited: 'inviteCalendarEventGuests',
     confirmed: 'rsvpCalendarEvent confirmCalendarReplacement',
