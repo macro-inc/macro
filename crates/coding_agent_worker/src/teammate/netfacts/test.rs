@@ -97,3 +97,23 @@ fn getent_ahosts_gives_each_address_once() {
         ]
     );
 }
+
+#[test]
+fn the_destinations_of_every_route_but_the_default_are_dropped() {
+    // A VPN's route to a public-address internal network, a host route, a
+    // v6 route, and the defaults (which are the internet: kept).
+    let v4 = r#"[{"dst":"default","gateway":"192.168.1.1","dev":"eth0"},{"dst":"44.31.0.0/16","dev":"wg0"},{"dst":"100.65.55.109","dev":"tailscale0","table":"52"},{"type":"local","dst":"192.168.1.5","dev":"eth0","table":"local"}]"#;
+    let v6 = r#"[{"dst":"default","gateway":"fe80::1","dev":"eth0"},{"dst":"2a0a:e5c0:fff::/48","dev":"wg0"}]"#;
+    let mut routes = route_destinations(v4).unwrap();
+    routes.extend(route_destinations(v6).unwrap());
+    assert_eq!(
+        routes,
+        [
+            "44.31.0.0/16".parse::<IpNet>().unwrap(),
+            "100.65.55.109/32".parse().unwrap(),
+            "192.168.1.5/32".parse().unwrap(),
+            "2a0a:e5c0:fff::/48".parse().unwrap(),
+        ]
+    );
+    assert!(route_destinations("{}").is_err());
+}

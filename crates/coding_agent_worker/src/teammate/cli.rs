@@ -507,8 +507,23 @@ impl Engine for CliEngine {
         if !output.status.success() {
             return Err(failure(&output));
         }
-        netfacts::host_prefixes(&String::from_utf8_lossy(&output.stdout))
-            .map_err(|error| EngineError(format!("the host's addresses: {error}")))
+        let mut prefixes = netfacts::host_prefixes(&String::from_utf8_lossy(&output.stdout))
+            .map_err(|error| EngineError(format!("the host's addresses: {error}")))?;
+        // And every route's destination but the defaults, v4 and v6.
+        for family in [None, Some("-6")] {
+            let mut arguments = vec!["-j"];
+            arguments.extend(family);
+            arguments.extend(["route", "show", "table", "all"]);
+            let output = run(Path::new("ip"), arguments, QUICK_COMMAND).await?;
+            if !output.status.success() {
+                return Err(failure(&output));
+            }
+            prefixes.extend(
+                netfacts::route_destinations(&String::from_utf8_lossy(&output.stdout))
+                    .map_err(|error| EngineError(format!("the host's routes: {error}")))?,
+            );
+        }
+        Ok(prefixes)
     }
 
     async fn guard(

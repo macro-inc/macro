@@ -154,6 +154,35 @@ pub fn host_prefixes(json: &str) -> Result<Vec<IpNet>, String> {
     Ok(prefixes)
 }
 
+/// The destinations of every route but the defaults, from `ip -j route
+/// show table all` (v4) or `ip -j -6 route show table all`: a VPN's or a
+/// static route's network can be an internal one on public addresses, and
+/// the host's own and broadcast routes are its addresses. A destination
+/// without a length is one address.
+pub fn route_destinations(json: &str) -> Result<Vec<IpNet>, String> {
+    let routes: Value = serde_json::from_str(json).map_err(|error| error.to_string())?;
+    let routes = routes.as_array().ok_or("not a list of routes")?;
+    let mut destinations = Vec::new();
+    for route in routes {
+        let Some(destination) = route.get("dst").and_then(Value::as_str) else {
+            continue;
+        };
+        if destination == "default" {
+            continue;
+        }
+        let net = match destination.parse::<IpNet>() {
+            Ok(net) => net,
+            Err(_) => IpNet::from(
+                destination
+                    .parse::<IpAddr>()
+                    .map_err(|_| format!("{destination} is not a destination"))?,
+            ),
+        };
+        destinations.push(net.trunc());
+    }
+    Ok(destinations)
+}
+
 /// The service address and port pairs an agent environment names: the
 /// host and port of every URL value (`http`, `https`, `ws`, `wss`), the
 /// scheme's port when none is given. On a local stack these, and nothing
