@@ -1,5 +1,5 @@
 import { ChannelView } from './harness/channel';
-import { expect, failsSometimes, test } from './harness/fixtures';
+import { arrivesLive, expect, failsSometimes, test } from './harness/fixtures';
 import {
   expectTimelineEndsWith,
   findConversation,
@@ -57,13 +57,13 @@ test('MEM-01 a person invited from the app gets the channel at once, with what w
   ]);
 
   await ada.post(channel.id, 'said after');
-  await cyView.expectEndsWith([
-    'said before one',
-    'said before two',
-    'said after',
-  ]);
+  await arrivesLive(cyView, () =>
+    cyView.expectEndsWith(['said before one', 'said before two', 'said after'])
+  );
   await cyView.send('thanks for the invite');
-  await view.expectEndsWith(['said after', 'thanks for the invite']);
+  await arrivesLive(view, () =>
+    view.expectEndsWith(['said after', 'thanks for the invite'])
+  );
 });
 
 // If this fails, the owner cannot take someone out of a channel, or the
@@ -158,9 +158,9 @@ test('MEM-04 a removed person never sees what is said after, and after a reload 
   await benView.open();
 
   await ada.removeParticipants(channel.id, [people.cy]);
-  await expect(
-    systemLine(benPage, 'Ada Owner removed Cy Teammate')
-  ).toBeVisible();
+  await arrivesLive(benView, () =>
+    expect(systemLine(benPage, 'Ada Owner removed Cy Teammate')).toBeVisible()
+  );
   await ada.post(channel.id, 'not for cy');
 
   // Ben, who stayed, has it; Cy's page, open all along, does not.

@@ -509,8 +509,16 @@ jobs:
           ) &
           watch=$!
           trap 'kill "$watch" 2>/dev/null || true' EXIT
-          just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
-            --env-file "$stack_env"
+          # One more try when bring-up fails: a build of the stack has failed once on
+          # main for a reason of the runner (a linker error), with no test run.
+          stack_up() {
+            just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
+              --env-file "$stack_env"
+          }
+          if ! stack_up; then
+            echo "Local stack: the first bring-up failed, trying once more" | tee -a "$GITHUB_STEP_SUMMARY"
+            stack_up
+          fi
           kill "$watch" 2>/dev/null || true
           echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 

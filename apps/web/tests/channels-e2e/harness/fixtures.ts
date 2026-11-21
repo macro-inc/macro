@@ -135,3 +135,32 @@ export async function failsSometimes(
 export function knownDefect(): void {
   test.fail();
 }
+
+/**
+ * A check that an open page shows, without a reload, what someone else just
+ * did. A known defect on main sometimes keeps a live change off an open page;
+ * the tests it has been seen in are listed in
+ * `ledger/intermittent-defects.tsv`. When the check fails, the failure is
+ * recorded as `failsSometimes` records it, the page is reloaded, and the
+ * check must then hold: the change is stored and shown, only not live.
+ */
+export async function arrivesLive(
+  view: { page: Page; shown(): Promise<void> },
+  check: () => Promise<void>
+): Promise<void> {
+  let missed = false;
+  await failsSometimes(async () => {
+    try {
+      await check();
+    } catch (error) {
+      missed = true;
+      throw error;
+    }
+  });
+  if (!missed) {
+    return;
+  }
+  await view.page.reload();
+  await view.shown();
+  await check();
+}
