@@ -35,7 +35,10 @@ use super::task_duplicates::spawn_task_duplicate_detection;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, optional_team, project))]
+#[tracing::instrument(
+    skip(state, optional_team, project),
+    fields(app_links_chipped, app_links_skipped_oversize)
+)]
 pub async fn create_task_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
@@ -48,7 +51,15 @@ pub async fn create_task_handler<
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
     let task_name = req.task_name.clone();
-    let markdown = req.markdown.clone().unwrap_or_default();
+    // Agents paste links to the message or document a task came from; the
+    // app links those with chips, so the task body does too.
+    let rewritten = state
+        .app_links
+        .rewrite(req.markdown.as_deref().unwrap_or_default());
+    let span = tracing::Span::current();
+    span.record("app_links_chipped", rewritten.chips);
+    span.record("app_links_skipped_oversize", rewritten.skipped_oversize);
+    let markdown = rewritten.markdown.into_owned();
 
     let mut metadata = NewDocumentMetadata::builder(task_name.clone());
     if let Some(project_id) = req.project_id {

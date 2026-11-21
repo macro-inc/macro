@@ -2884,6 +2884,9 @@ async fn run_server() -> anyhow::Result<()> {
             ),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
+            app_links: mention_utils::app_link::AppLinkChips::new(
+                macro_service_urls::AppServiceUrl::new()?.as_str(),
+            )?,
         },
         config: Arc::new(config),
         channel_service: channels_service.clone(),

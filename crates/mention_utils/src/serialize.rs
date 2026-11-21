@@ -167,3 +167,22 @@ pub fn document_mention(
         "<m-document-mention>{payload}</m-document-mention>"
     ))
 }
+
+/// Serialize an item of the web app (its route's block and query parameters)
+/// as an in-app mention node with no stored name; the app looks the name up.
+pub fn app_item_mention(
+    document_id: &str,
+    block_name: &str,
+    block_params: &std::collections::BTreeMap<String, String>,
+) -> Result<String, serde_json::Error> {
+    let payload = tag_json(&DocumentMention {
+        document_id,
+        block_name,
+        document_name: "",
+        block_params,
+        collapsed: false,
+    })?;
+    Ok(format!(
+        "<m-document-mention>{payload}</m-document-mention>"
+    ))
+}

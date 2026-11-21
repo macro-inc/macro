@@ -289,6 +289,8 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
     pub non_user_owners: NonUserOwners,
+    /// Turns links to this app's items in new task bodies into mention chips.
+    pub app_links: mention_utils::app_link::AppLinkChips,
 }
 
 /// What the canvas routes need beyond the document service: the editing
@@ -341,6 +343,7 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             illustrator_documents: self.illustrator_documents.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
+            app_links: self.app_links.clone(),
         }
     }
 }

@@ -643,7 +643,7 @@ export {
   type TaskTemplateProperty,
   type UpdateTaskTemplateOptions,
 } from './entities/task-templates/task-template';
-export type { TaskSummary } from './entities/tasks/task';
+export type { TaskSource, TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export {
   ExternalProfilePicture,
