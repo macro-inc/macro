@@ -135,7 +135,7 @@ pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
 
     /// The current [`WritePosition`], or `None` when this storage does not
-    /// track one. Engines skip a refetch they already hydrated only while it
+    /// track one. Engines reuse what they read for a write only while it
     /// holds still, so `None` turns that off.
     fn write_position(&self) -> Option<WritePosition> {
         None

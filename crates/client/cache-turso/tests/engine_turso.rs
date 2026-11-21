@@ -556,7 +556,10 @@ fn reads_kept_for_a_write_are_dropped_when_another_connection_commits_while_they
         let property = EntityKey("GraphqlProperty:property-1".into());
         let position = engine.storage().write_position();
         let reads = engine.pass_reads();
-        let read = reads.read_records(&[property.clone()]).await.unwrap();
+        let read = reads
+            .read_records(std::slice::from_ref(&property))
+            .await
+            .unwrap();
         assert!(read[0].is_none());
         let original = page("Status", "todo", "user-1");
         other
@@ -573,6 +576,50 @@ fn reads_kept_for_a_write_are_dropped_when_another_connection_commits_while_they
             .await
             .unwrap();
         assert!(!result.changed.contains(&property), "{:?}", result.changed);
+        drop(other);
+    });
+}
+
+#[test]
+fn pass_reads_come_from_storage_not_from_a_stale_hot_tier() {
+    use cache_core::store::DurableRead;
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut engine = Engine::new(database.open("engine-pass-reads-hot").unwrap());
+        let mut other = Engine::new(database.open("engine-pass-reads-hot").unwrap());
+        engine
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        // Another connection changes the property this engine holds hot.
+        other
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Stage", "done", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let reads = engine.pass_reads();
+        let read = reads.read_records(&[property]).await.unwrap();
+        let record = read[0].as_ref().unwrap();
+        assert_eq!(
+            record.fields.get("displayName"),
+            Some(&CacheValue::String("Stage".into()))
+        );
         drop(other);
     });
 }
