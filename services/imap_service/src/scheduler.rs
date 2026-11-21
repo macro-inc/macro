@@ -1,5 +1,4 @@
 //! Composition-level scheduling and shutdown of fenced per-account actors.
-use feature_flags::{ServiceContext, ServiceFeatureFlags, outbound::posthog::PostHogFeatureFlags};
 use imap_engine::domain::{models::Binding, service::Engine};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
@@ -13,12 +12,7 @@ struct RunningAccount {
     task: JoinHandle<()>,
 }
 
-pub(crate) async fn run(
-    engine: Arc<Engine>,
-    flags: Option<PostHogFeatureFlags>,
-    cancellation: CancellationToken,
-    tasks: TaskTracker,
-) {
+pub(crate) async fn run(engine: Arc<Engine>, cancellation: CancellationToken, tasks: TaskTracker) {
     let mut interval = tokio::time::interval(Duration::from_secs(30));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut owners = HashMap::<Uuid, RunningAccount>::new();
@@ -28,7 +22,7 @@ pub(crate) async fn run(
             _ = cancellation.cancelled() => break,
             _ = interval.tick() => {},
         }
-        schedule_round(&engine, flags.as_ref(), &cancellation, &tasks, &mut owners).await;
+        schedule_round(&engine, &cancellation, &tasks, &mut owners).await;
     }
     for owner in owners.into_values() {
         owner.cancellation.cancel();
@@ -38,30 +32,10 @@ pub(crate) async fn run(
 #[tracing::instrument(skip_all, name = "imap.schedule_accounts")]
 async fn schedule_round(
     engine: &Arc<Engine>,
-    flags: Option<&PostHogFeatureFlags>,
     cancellation: &CancellationToken,
     tasks: &TaskTracker,
     owners: &mut HashMap<Uuid, RunningAccount>,
 ) {
-    if let Some(flags) = flags {
-        let snapshot = tokio::select! {
-            biased;
-            _ = cancellation.cancelled() => return,
-            result = flags.load_service(ServiceContext::new("imap-mailbox-sync")) => result,
-        };
-        match snapshot {
-            Ok(snapshot) => engine.set_runtime(
-                snapshot.is_enabled("enable-imap-sync"),
-                snapshot.is_enabled("enable-imap-writes"),
-            ),
-            Err(error) => {
-                engine.set_runtime(false, false);
-                tracing::warn!(?error, "IMAP rollout unavailable");
-            }
-        }
-    } else {
-        engine.set_runtime(false, false);
-    }
     let retained_links = owners
         .iter()
         .filter(|(_, owner)| !owner.task.is_finished())

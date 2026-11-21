@@ -32,13 +32,6 @@ impl PgMailboxSync {
         lease_id: Uuid,
         kind: StreamKind,
     ) -> Result<Option<StreamLease>, MailboxError> {
-        if self
-            .runtime
-            .as_ref()
-            .is_some_and(|runtime| !runtime.sync_enabled())
-        {
-            return Ok(None);
-        }
         let mut tx = self.begin_claim().await?;
         let row = match kind {
             // The longest-due import round goes ahead as if it had come due
@@ -477,13 +470,6 @@ impl PgMailboxSync {
         &self,
         lease_id: Uuid,
     ) -> Result<Option<MessageLease>, MailboxError> {
-        if self
-            .runtime
-            .as_ref()
-            .is_some_and(|runtime| !runtime.sync_enabled())
-        {
-            return Ok(None);
-        }
         // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
         // Without it, Postgres before 18 reads every backed-off row on each poll.
         // Paused imports name `false` twice, so only live rows are claimed.

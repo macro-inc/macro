@@ -87,9 +87,6 @@ async fn main() -> Result<(), rootcause::Report> {
                 config.imap_credential_kms_key_id.to_string(),
             )),
             Arc::new(ProtocolTransport::new(connector).with_settings(repository.clone())),
-            true,
-            false,
-            false,
         )
         .with_settings(repository)
         .with_notifier(Arc::new(notifier))
@@ -97,17 +94,6 @@ async fn main() -> Result<(), rootcause::Report> {
             macro_service_urls::ThunderbirdAutoconfigUrl::new_for_environment(config.environment)?,
         ))),
     );
-    let flags = match (config.posthog_host.value(), config.posthog_api_key.value()) {
-        (Some(host), Some(key)) if !host.trim().is_empty() && !key.trim().is_empty() => {
-            Some(feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                host,
-                key.to_string(),
-                Duration::from_secs(5),
-                config.environment,
-            )?)
-        }
-        _ => None,
-    };
     let cancel = CancellationToken::new();
     let tasks = TaskTracker::new();
     tasks.spawn(scheduler::configuration_notifications(
@@ -116,12 +102,7 @@ async fn main() -> Result<(), rootcause::Report> {
         cancel.clone(),
     ));
     let actor_tasks = tasks.clone();
-    tasks.spawn(scheduler::run(
-        engine.clone(),
-        flags,
-        cancel.clone(),
-        actor_tasks,
-    ));
+    tasks.spawn(scheduler::run(engine.clone(), cancel.clone(), actor_tasks));
     let state = ApiState {
         engine,
         internal_key: config.internal_auth_key.to_string(),

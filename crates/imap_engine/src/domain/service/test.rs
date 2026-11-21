@@ -1,5 +1,6 @@
 use super::*;
 use chrono::TimeZone;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn moving_and_uidvalidity_reset_preserve_identity_and_emit_folder_removals() {
@@ -488,14 +489,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(
-        repository.clone(),
-        Arc::new(TestCipher),
-        transport.clone(),
-        true,
-        true,
-        true,
-    );
+    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
     let correlation = Uuid::now_v7();
     let input = DraftInput {
         correlation,
@@ -546,14 +540,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
     )
     .unwrap();
     assert_eq!(first, SubmissionOutcome::Unknown);
-    let restarted = Engine::new(
-        repository,
-        Arc::new(TestCipher),
-        transport.clone(),
-        true,
-        true,
-        true,
-    );
+    let restarted = Engine::new(repository, Arc::new(TestCipher), transport.clone());
     let second: SubmissionOutcome = serde_json::from_value(
         restarted
             .execute(
@@ -629,14 +616,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         sync_generation: 1,
         grant_generation: 1,
     };
-    let engine = Engine::new(
-        repository.clone(),
-        Arc::new(TestCipher),
-        transport.clone(),
-        true,
-        true,
-        true,
-    );
+    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();
     for correlation in [first, second] {
@@ -890,14 +870,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         state.drafts.insert(id.clone(), draft);
         state.messages.insert(id.clone(), fallback.clone());
     }
-    let engine = Engine::new(
-        repository.clone(),
-        Arc::new(TestCipher),
-        transport.clone(),
-        true,
-        true,
-        true,
-    );
+    let engine = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
     let credentials = TestCipher
         .decrypt(binding.link_id, "owner", &[])
         .await
@@ -918,14 +891,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
             state.messages.insert(later.id.clone(), later);
         }
     }
-    let restarted = Engine::new(
-        repository.clone(),
-        Arc::new(TestCipher),
-        transport.clone(),
-        true,
-        true,
-        true,
-    );
+    let restarted = Engine::new(repository.clone(), Arc::new(TestCipher), transport.clone());
     let mut account = repository.acquire(binding).await.unwrap();
     restarted
         .reconcile_sent(&mut account, &credentials)
@@ -957,14 +923,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         deadline: AtomicBool::new(false),
         sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
     });
-    let engine = Engine::new(
-        repository,
-        Arc::new(TestCipher),
-        transport.clone(),
-        true,
-        true,
-        true,
-    );
+    let engine = Engine::new(repository, Arc::new(TestCipher), transport.clone());
     let binding = Binding {
         link_id: Uuid::now_v7(),
         sync_generation: 1,

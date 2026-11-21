@@ -10,10 +10,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
 };
 use uuid::Uuid;
 
@@ -32,19 +29,13 @@ pub struct Engine {
     operation_capacity: tokio::sync::Semaphore,
     wakeups: std::sync::Mutex<BTreeMap<Uuid, (Uuid, Arc<tokio::sync::Notify>)>>,
     synchronization_capacity: tokio::sync::Semaphore,
-    connections_enabled: bool,
-    sync_enabled: AtomicBool,
-    writes_enabled: AtomicBool,
 }
 impl Engine {
-    /// Construct with explicit provider gates and replaceable infrastructure ports.
+    /// Construct with replaceable infrastructure ports.
     pub fn new(
         repository: Arc<dyn Repository>,
         cipher: Arc<dyn CredentialCipher>,
         transport: Arc<dyn MailTransport>,
-        connections_enabled: bool,
-        sync_enabled: bool,
-        writes_enabled: bool,
     ) -> Self {
         Self {
             repository,
@@ -57,9 +48,6 @@ impl Engine {
             idle_policy: std::sync::Mutex::new(super::adaptive_idle::IdlePolicy::new()),
             cipher,
             transport,
-            connections_enabled,
-            sync_enabled: AtomicBool::new(sync_enabled),
-            writes_enabled: AtomicBool::new(writes_enabled),
         }
     }
 
@@ -107,12 +95,6 @@ impl Engine {
         self
     }
 
-    /// Update service rollout from a successfully loaded feature-flag snapshot.
-    pub fn set_runtime(&self, sync: bool, writes: bool) {
-        self.sync_enabled.store(sync, Ordering::Release);
-        self.writes_enabled.store(writes, Ordering::Release);
-    }
-
     /// Attach password-free live discovery at the composition root.
     pub fn with_discovery(
         mut self,
@@ -135,9 +117,6 @@ impl Engine {
     /// Probe and encrypt credentials, bound to an authenticated owner and expiry.
     #[tracing::instrument(skip_all, err)]
     pub async fn verify(&self, input: VerifyRequest) -> Result<Verification, Error> {
-        if !self.connections_enabled {
-            return Err(Error::Forbidden);
-        }
         if input.user_id.is_empty()
             || input.imap.password.0.len() > 1024
             || input.smtp.password.0.len() > 1024
@@ -206,9 +185,6 @@ impl Engine {
     /// Promote only the original owner's verification and re-encrypt under the permanent link context.
     #[tracing::instrument(skip_all,fields(link_id=%link),err)]
     pub async fn connect(&self, link: Uuid, input: ConnectRequest) -> Result<Binding, Error> {
-        if !self.connections_enabled {
-            return Err(Error::Forbidden);
-        }
         let v = self.repository.verification(input.verification_id).await?;
         if v.user_id != input.owner_user_id
             || (v.verification.expires_at <= Utc::now() && v.consumed_by != Some(link))
@@ -251,18 +227,12 @@ impl Engine {
     /// Current scheduler work, already filtered to active links.
     pub async fn bindings(&self, retained_links: &[Uuid]) -> Result<Vec<Binding>, Error> {
         self.transport.maintenance().await;
-        if !self.sync_enabled.load(Ordering::Acquire) {
-            return Ok(Vec::new());
-        }
         self.repository.bindings(2000, retained_links).await
     }
 
     /// Execute one account-scoped operation under a distributed fence.
     #[tracing::instrument(skip_all,fields(link_id=%binding.link_id),err)]
     pub async fn execute(&self, binding: Binding, operation: Operation) -> Result<Value, Error> {
-        if !self.connections_enabled {
-            return Err(Error::Forbidden);
-        }
         // Admit before loading the account index so a reconnect wave cannot buffer thousands of mailboxes.
         let _capacity = self
             .operation_capacity
@@ -297,9 +267,6 @@ impl Engine {
         }
     }
     async fn refresh(&self, a: &mut Account) -> Result<(), Error> {
-        if !self.sync_enabled.load(Ordering::Acquire) {
-            return Err(Error::ConnectionUnavailable);
-        }
         let c = self
             .cipher
             .decrypt(a.binding.link_id, &a.user_id, &a.ciphertext)
@@ -467,9 +434,6 @@ impl Engine {
                     .collect::<Vec<_>>(),
             ),
             Operation::CreateDraft { input } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 let id = format!("m:{}", input.correlation);
                 if let Some(existing) = a.state.drafts.get(&id) {
                     return value(&existing.draft);
@@ -481,9 +445,6 @@ impl Engine {
                 Ok(output)
             }
             Operation::UpdateDraft { id, version, input } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 let existing = a.state.drafts.get(&id).ok_or(Error::NotFound)?;
                 if existing.draft.version != version
                     || !existing.draft.is_draft
@@ -502,9 +463,6 @@ impl Engine {
                 Ok(output)
             }
             Operation::DeleteDraft { id, version } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 if let Some(draft) = a.state.drafts.get(&id)
                     && (draft.draft.version != version || draft.submission.is_some())
                 {
@@ -526,9 +484,6 @@ impl Engine {
                 )
             }
             Operation::AddAttachment { id, input } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 let metadata = attachment_metadata(&input)?;
                 let draft = editable(&mut a.state, &id)?;
                 if let Some(existing) = draft.attachments.get(&input.content_id)
@@ -541,17 +496,11 @@ impl Engine {
                 value(metadata)
             }
             Operation::DeleteAttachment { id, attachment } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 editable(&mut a.state, &id)?.attachments.remove(&attachment);
                 self.repository.save(a).await?;
                 Ok(Value::Null)
             }
             Operation::CreateUpload { id, input } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 editable(&mut a.state, &id)?;
                 let _ = attachment_metadata(&input)?;
                 let session = UploadSession {
@@ -585,9 +534,6 @@ impl Engine {
                 total,
                 bytes,
             } => {
-                if !self.writes_enabled.load(Ordering::Acquire) {
-                    return Err(Error::ConnectionUnavailable);
-                }
                 let data = STANDARD.decode(bytes).map_err(|_| Error::Invalid)?;
                 if total > u64::try_from(MAX_ATTACHMENT).map_err(|_| Error::Invalid)? {
                     return Err(Error::Invalid);

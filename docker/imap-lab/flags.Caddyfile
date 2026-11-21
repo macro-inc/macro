@@ -10,7 +10,7 @@
 	}
 	handle @evaluation {
 		header Content-Type application/json
-		respond `{"flags":{"enable-imap-connections":{"key":"enable-imap-connections","enabled":true},"enable-imap-sync":{"key":"enable-imap-sync","enabled":true},"enable-imap-writes":{"key":"enable-imap-writes","enabled":true},"enable-outlook":{"key":"enable-outlook","enabled":true}},"errorsWhileComputingFlags":false}` 200
+		respond `{"flags":{"enable-imap-connections":{"key":"enable-imap-connections","enabled":true},"enable-outlook":{"key":"enable-outlook","enabled":true}},"errorsWhileComputingFlags":false}` 200
 	}
 	respond 404
 }

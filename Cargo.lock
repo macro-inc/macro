@@ -11394,7 +11394,6 @@ dependencies = [
  "axum",
  "database_env_vars",
  "doppler-config",
- "feature_flags",
  "imap_engine",
  "log",
  "macro_aws_config",

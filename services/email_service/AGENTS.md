@@ -12,8 +12,8 @@ the gateway `/email` prefix.
   `/email/links`; `outbound/imap_connection.rs` stores retry-safe promotion
   attempts. `outbound/email_api/imap.rs` implements the existing mailbox,
   command, attachment and draft ports through the internal engine client.
-  `imap_runtime.rs` refreshes independent IMAP sync/write flags and resumes
-  interrupted promotions.
+  `imap_runtime.rs` resumes interrupted credential-free connection promotions.
+  Established IMAP work has no service-wide rollout polling.
 
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.

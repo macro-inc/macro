@@ -22,14 +22,7 @@ async fn actual_router_rejects_missing_wrong_and_empty_keys() {
             deadline: AtomicBool::new(false),
             sent_found: std::sync::Mutex::new(std::collections::BTreeSet::new()),
         });
-        let engine = Arc::new(Engine::new(
-            repository,
-            Arc::new(TestCipher),
-            transport,
-            true,
-            true,
-            true,
-        ));
+        let engine = Arc::new(Engine::new(repository, Arc::new(TestCipher), transport));
         let app = router(ApiState {
             engine,
             internal_key: configured.into(),

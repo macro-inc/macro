@@ -62,13 +62,6 @@ impl PgMailboxSync {
 
 impl MailboxCommandRepository for PgMailboxSync {
     async fn claim_command(&self, lease_id: Uuid) -> Result<Option<CommandLease>, MailboxError> {
-        if self
-            .runtime
-            .as_ref()
-            .is_some_and(|runtime| !runtime.writes_enabled())
-        {
-            return Ok(None);
-        }
         let mut tx = self.mutation_claim_transaction().await?;
         let row = sqlx::query!(
             r#"

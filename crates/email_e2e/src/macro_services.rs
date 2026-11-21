@@ -584,7 +584,7 @@ fn stand_in_answer(
 }
 
 /// PostHog's flag evaluation, in the shape `feature_flags::outbound::posthog`
-/// reads. IMAP rollouts are active only for stacks running the IMAP lab.
+/// reads. IMAP enrollment is active only for stacks running the IMAP lab.
 async fn flags(State(routes): State<Routes>) -> axum::Json<Value> {
     let mut flags = serde_json::Map::new();
     flags.insert(
@@ -592,16 +592,11 @@ async fn flags(State(routes): State<Routes>) -> axum::Json<Value> {
         serde_json::json!({ "key": LIVE_IMPORT_PASS_FLAG, "enabled": true }),
     );
     if routes.imap {
-        for key in [
-            "enable-imap-connections",
-            "enable-imap-sync",
-            "enable-imap-writes",
-        ] {
-            flags.insert(
-                key.to_owned(),
-                serde_json::json!({ "key": key, "enabled": true }),
-            );
-        }
+        let key = "enable-imap-connections";
+        flags.insert(
+            key.to_owned(),
+            serde_json::json!({ "key": key, "enabled": true }),
+        );
     }
     axum::Json(serde_json::json!({ "flags": flags, "errorsWhileComputingFlags": false }))
 }

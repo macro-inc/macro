@@ -7,9 +7,6 @@ impl Engine {
         id: String,
         request: ActionRequest,
     ) -> Result<Value, Error> {
-        if !self.writes_enabled.load(Ordering::Acquire) {
-            return Err(Error::ConnectionUnavailable);
-        }
         let previous = a.state.messages.get(&id).cloned().ok_or(Error::NotFound)?;
         let location = a
             .state

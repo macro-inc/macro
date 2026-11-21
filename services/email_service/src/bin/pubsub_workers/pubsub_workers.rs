@@ -546,15 +546,8 @@ async fn main() -> anyhow::Result<()> {
         },
         worker_cancellation_token.clone(),
     ));
-    let imap_runtime = email::domain::mailbox::runtime::MailboxRuntime::default();
     let imap_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
-        .with_provider(email::domain::models::UserProvider::Imap)
-        .with_runtime(imap_runtime.clone());
-    worker_tracker.spawn(email_service::imap_runtime::refresh(
-        imap_flags.0.clone(),
-        imap_runtime,
-        worker_cancellation_token.clone(),
-    ));
+        .with_provider(email::domain::models::UserProvider::Imap);
     worker_tracker.spawn(email_service::mailbox_sync_worker::run(
         email::domain::mailbox::MailboxSyncService::new(
             imap_repository.clone(),

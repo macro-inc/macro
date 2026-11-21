@@ -68,11 +68,12 @@ interruption; no passwords are retained in the email service. Completed request
 receipts cannot recreate a disconnected inbox. Gmail, Outlook and IMAP
 initialization serialize address collisions through the same advisory lock.
 
-`enable-imap-connections` gates new connection requests and their offer.
-`enable-imap-sync` and `enable-imap-writes` gate independent IMAP workers through
-an atomic snapshot refreshed from `feature_flags`; missing evaluations pause new
-work. Uncertain send outcomes remain observable while new writes are paused.
-Outlook's existing rollout does not enable or disable IMAP.
+`enable-imap-connections` is the single user-scoped IMAP enrollment flag for
+suggestion, discovery, verification and connection requests. Established IMAP
+sync and authorized sends, moves and deletes have no PostHog polling or runtime
+rollout snapshot. Ownership, active/reauth state, generation and lease fences,
+and explicit pause/disconnect/delete controls continue to apply. Uncertain send
+outcomes remain observable without resubmission. Outlook's rollout is separate.
 
 The IMAP gateway adapts the internal engine's stable message ids and journal
 positions to the mailbox ports. It decodes MIME, sanitizes HTML, exposes decoded

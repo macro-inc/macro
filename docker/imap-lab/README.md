@@ -43,7 +43,7 @@ docker compose -p macro-imap-lab -f docker/imap-lab/compose.yaml stop
 Run `bash docker/imap-lab/prepare.sh` and supply `--env-file
 docker/imap-lab/browser-profile` to `just run_local --no-doppler --instance imap-mail`.
 This explicit local profile starts Dovecot on the instance's services network,
-relays submission to a dedicated Mailpit, and serves the mail rollout flags on an
+relays submission to a dedicated Mailpit, and serves the connection enrollment and Outlook flags on an
 internal Caddy listener. The ordinary application Mailpit retains its authentication
 settings for sign-up mail. No other local stack needs to turn on the profile.
 Connect your verified sign-in address in Email. For manual settings, use

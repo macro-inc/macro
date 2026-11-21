@@ -75,7 +75,7 @@ impl Engine {
         let mut credential_refusals = 0u8;
         let mut healthy_since = tokio::time::Instant::now();
         loop {
-            if cancellation.is_cancelled() || !self.sync_enabled.load(Ordering::Acquire) {
+            if cancellation.is_cancelled() {
                 return Ok(());
             }
             let work = async {

@@ -146,10 +146,12 @@ pub fn generate(
                     | "imap_service"
             )
         {
-            environment.extend([
-                ("POSTHOG_HOST", "http://imap-lab-flags:8080"),
-                ("POSTHOG_API_KEY", "local-posthog-project-key"),
-            ]);
+            if svc.compose_name != "imap_service" {
+                environment.extend([
+                    ("POSTHOG_HOST", "http://imap-lab-flags:8080"),
+                    ("POSTHOG_API_KEY", "local-posthog-project-key"),
+                ]);
+            }
             if svc.compose_name == "imap_service"
                 && let Some(ca) = imap_lab_ca.as_deref()
             {

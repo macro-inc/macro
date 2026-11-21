@@ -1,9 +1,7 @@
 use super::*;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_independent_switches(
-    db: PgPool,
-) {
+async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evaluation(db: PgPool) {
     use crate::domain::mailbox::progress::MailboxProgressRepository;
 
     let (outlook, outlook_link) = fixture(&db).await;
@@ -26,16 +24,15 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
     .execute(&db)
     .await
     .unwrap();
-    let runtime = runtime::MailboxRuntime::default();
-    let imap = PgMailboxSync::new(db.clone())
-        .with_provider(crate::domain::models::UserProvider::Imap)
-        .with_runtime(runtime.clone());
-    assert!(
-        imap.claim_stream(Uuid::from_u128(44), StreamKind::MailFolder)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    let imap =
+        PgMailboxSync::new(db.clone()).with_provider(crate::domain::models::UserProvider::Imap);
+    let immediate = imap
+        .claim_stream(Uuid::from_u128(44), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(immediate.mailbox.link_id, imap_link);
+    imap.release_stream(&immediate, 0).await.unwrap();
     let lease = outlook
         .claim_stream(Uuid::from_u128(45), StreamKind::MailFolder)
         .await
@@ -64,7 +61,6 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
     .execute(&db)
     .await
     .unwrap();
-    runtime.set(true, false);
     let lease = imap
         .claim_stream(Uuid::from_u128(47), StreamKind::MailFolder)
         .await

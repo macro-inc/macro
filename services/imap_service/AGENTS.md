@@ -15,7 +15,8 @@ shutdown. User-facing routes live in email_service.
 
 ## Gotchas
 
-- Keep all three IMAP gates explicit and false by default.
+- Keep rollout admission at the user-scoped email enrollment boundary;
+  established sync and writes run without PostHog polling.
 - Reject IMAP test endpoint/trust-root overrides outside Environment::Local.
 - The service requires a dedicated KMS key and internal key. It has no public
   gateway route and cannot decrypt credentials owned by another link or user.

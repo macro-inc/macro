@@ -267,10 +267,6 @@ impl MailboxSettingsRepository for PgMailboxSync {
         outlook_sync: bool,
         outlook_writes: bool,
     ) -> Result<Option<SettingsLease>, MailboxError> {
-        let (outlook_sync, outlook_writes) = match &self.runtime {
-            Some(runtime) => (runtime.sync_enabled(), runtime.writes_enabled()),
-            None => (outlook_sync, outlook_writes),
-        };
         let row = sqlx::query!(
             r#"
             WITH candidate AS (

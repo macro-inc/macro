@@ -456,9 +456,6 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         repository.clone(),
         cipher.clone(),
         Arc::new(proxy.transport()),
-        true,
-        true,
-        true,
     );
     let correlation = uuid::Uuid::now_v7();
     let input = DraftInput {
@@ -510,14 +507,7 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
         serde_json::json!("unknown")
     );
     assert_eq!(proxy.accepted.load(Ordering::Acquire), 1);
-    let restarted = Engine::new(
-        repository,
-        cipher,
-        Arc::new(proxy.transport()),
-        true,
-        true,
-        true,
-    );
+    let restarted = Engine::new(repository, cipher, Arc::new(proxy.transport()));
     assert_eq!(
         restarted
             .execute(binding, Operation::Submit { id: draft.id })

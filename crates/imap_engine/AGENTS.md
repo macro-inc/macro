@@ -88,3 +88,7 @@ borrow its validated Email through catalog, DNS and XML discovery. Keep raw
 provider logins and SMTP envelope/MIME addresses as protocol strings: Macro's
 ASCII sign-in parser cannot represent every SMTPUTF8 sender. Never normalize
 case or plus suffixes when deriving a protocol username.
+
+The engine accepts authenticated, lifecycle-fenced bindings without rollout
+switches. The email host owns the existing user-scoped enrollment flag; sync,
+send and organization operations never depend on a PostHog response.

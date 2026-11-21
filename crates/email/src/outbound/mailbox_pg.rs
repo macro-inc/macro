@@ -33,7 +33,6 @@ pub struct PgMailboxSync {
     pub(super) db: PgPool,
     imports_paused: bool,
     provider: crate::domain::models::UserProvider,
-    runtime: Option<runtime::MailboxRuntime>,
 }
 
 impl PgMailboxSync {
@@ -42,19 +41,12 @@ impl PgMailboxSync {
             db,
             imports_paused: false,
             provider: crate::domain::models::UserProvider::Outlook,
-            runtime: None,
         }
     }
 
     /// Bind every claim to one provider so workers never send another provider's work to this gateway.
     pub fn with_provider(mut self, provider: crate::domain::models::UserProvider) -> Self {
         self.provider = provider;
-        self
-    }
-
-    /// Bind runtime admission to the provider-specific feature flag snapshot.
-    pub fn with_runtime(mut self, runtime: runtime::MailboxRuntime) -> Self {
-        self.runtime = Some(runtime);
         self
     }
 
@@ -170,13 +162,6 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(())
     }
     async fn claim_catalog(&self, lease_id: Uuid) -> Result<Option<CatalogLease>, MailboxError> {
-        if self
-            .runtime
-            .as_ref()
-            .is_some_and(|runtime| !runtime.sync_enabled())
-        {
-            return Ok(None);
-        }
         self.claim_catalog_lease(lease_id).await
     }
     async fn commit_catalog(

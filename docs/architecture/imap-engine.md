@@ -76,8 +76,11 @@ out of these spans.
 
 ## Configuration and operation
 
-- `enable-imap-connections` gates the public offer, connect and reconnect.
-- `enable-imap-sync` and `enable-imap-writes` independently gate background work.
+- `enable-imap-connections` is the single user-scoped rollout flag for the
+  public offer, discovery, verification, connect and reconnect.
+- Established synchronization and authorized sends, moves and deletes run
+  independently of PostHog. Ownership, active/reauth state, generations,
+  leases and explicit pause/disconnect/delete controls remain authoritative.
 - `INTERNAL_AUTH_KEY` authenticates private engine HTTP calls.
 - `IMAP_CREDENTIAL_KMS_KEY_ID` selects the dedicated credential key.
 - `IMAP_TEST_ENDPOINT_MAP` and `IMAP_TEST_TRUST_ROOT_PEM` support local verified

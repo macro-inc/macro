@@ -10,8 +10,8 @@ tools — hexagonal, heavily feature-gated.
 
 - `domain/mailbox/imap_connection.rs`: verified-address IMAP connection policy,
   durable promotion recovery and enrollment; its ports keep credentials and SQL
-  outside the email domain. `domain/mailbox/runtime.rs` separates sync and
-  write admission per provider.
+  outside the email domain. Provider-bound repositories isolate IMAP and
+  Outlook work without a shared rollout snapshot.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
@@ -807,3 +807,8 @@ IMAP enrollment inputs and durable promotion attempts carry EmailStr identities.
 After ownership comparison, discovery retains the submitted spelling and
 verification uses the actor's canonical email part; catalog domains are case-folded. Do not normalize mailbox identity
 or replace raw IMAP/SMTP protocol usernames with sign-in address types.
+
+IMAP uses only the existing user-scoped connection enrollment flag. Once linked,
+sync, authorized sends and organization writes run independently of PostHog.
+Keep ownership, active/reauth state, generation/lease fences and explicit
+pause, disconnect and deletion admission. Outlook's rollout remains separate.

@@ -40,9 +40,6 @@ impl Engine {
         a: &mut Account,
         credentials: &Credentials,
     ) -> Result<(), Error> {
-        if !self.writes_enabled.load(Ordering::Acquire) {
-            return Ok(());
-        }
         let ids = a
             .state
             .drafts
@@ -142,9 +139,6 @@ impl Engine {
         Ok(())
     }
     pub(super) async fn submit(&self, a: &mut Account, id: &str) -> Result<Value, Error> {
-        if !self.writes_enabled.load(Ordering::Acquire) {
-            return Err(Error::ConnectionUnavailable);
-        }
         let draft = a.state.drafts.get(id).ok_or(Error::NotFound)?;
         if let Some(outcome) = &draft.submission {
             return value(outcome);

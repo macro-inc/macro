@@ -103,15 +103,6 @@ impl DraftRepository for PgMailboxSync {
         lease_id: Uuid,
         mode: DraftClaimMode,
     ) -> Result<Option<DraftLease>, MailboxError> {
-        let mode = if self
-            .runtime
-            .as_ref()
-            .is_some_and(|runtime| !runtime.writes_enabled())
-        {
-            DraftClaimMode::Reconciliation
-        } else {
-            mode
-        };
         let mut tx = self.mutation_claim_transaction().await?;
         // Inspect one ordered head per provider link without locking unrelated mailboxes.
         // Normal and recovery branches expose their constant partial-index predicates even
