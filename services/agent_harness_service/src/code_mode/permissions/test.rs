@@ -757,9 +757,11 @@ async fn a_js_tools_ask_operation_holds_naming_the_language_and_runs_on_approval
         )
         .await
         .unwrap();
-    let held = parts.holds.held.lock().unwrap();
-    assert_eq!(held[0].operations, ["email.send_message"]);
-    assert_eq!(held[0].arguments["permission"]["language"], "js_tools");
+    {
+        let held = parts.holds.held.lock().unwrap();
+        assert_eq!(held[0].operations, ["email.send_message"]);
+        assert_eq!(held[0].arguments["permission"]["language"], "js_tools");
+    }
 
     // Declined: the program does not run.
     let parts = gate(
