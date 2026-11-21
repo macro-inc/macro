@@ -1,0 +1,19 @@
+infra/stacks/website/index.ts
+  s_32308e057c13cf::t_cbe922becd74b5 502-503
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c1c21a9055119aa995f6a957acc0b43b5baf7b83",
+  "prompts": {},
+  "sessions": {
+    "s_32308e057c13cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38d7d665-6ac1-41e5-9d8c-b888bc6eaaf6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
