@@ -170,6 +170,10 @@ The counts measure work attempted, not successes, and are not interchangeable:
   takes at most 200,000 distinct strings, skips strings with a NUL, and lists
   at most 50 mismatches. An uncaught error on a load page (`LOAD`) counts in
   `harnessErrors` only.
+- The lists are capped: `harnessErrors` keeps its first 200 messages (its
+  count in `totals` is whole), `diffs` the first 400 differences, and
+  `examples` the first five per level and class; `diffSignatures` and
+  `classes` count everything.
 
 ## What it does not check
 
