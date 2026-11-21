@@ -28,12 +28,19 @@ dwarf-debug-info = true
 [dependencies]
 cache-core = { path = "../cache-core" }
 
+# The build script parses the bundled schema into the tables the engine
+# decodes at startup (shell.rs `runtime_schema`).
+[build-dependencies]
+cache-core = { path = "../cache-core" }
+postcard = { workspace = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 async-lock = { workspace = true }
 cache-turso = { path = "../cache-turso" }
 predicate-index = { path = "../../predicate_index" }
 soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }
 js-sys = { workspace = true }
+postcard = { workspace = true }
 serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }

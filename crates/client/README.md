@@ -22,11 +22,16 @@ Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
 Desktop and mobile keep the cache engine and Turso storage in the native binary.
 The frontend bundle supplies the original `static_assets/schema.graphql` SDL as
-text. Native startup and browser workers pass it to the same Rust
-`Schema::from_sdl` parser, which validates it with `apollo-compiler` and derives
-the cache's internal lookup tables. There is no TypeScript schema generator or
-intermediate JSON asset. Browser workers configure SDL through
-`configureCacheSchema` before opening storage.
+text, and native startup passes it to the Rust `Schema::from_sdl` parser, which
+validates it with `apollo-compiler` and derives the cache's internal lookup
+tables. There is no TypeScript schema generator or intermediate JSON asset.
+
+The browser engine is built together with the web bundle, so `cache-wasm`'s
+`build.rs` runs the same parser when the engine is compiled and embeds the
+resulting tables (postcard). A browser worker decodes them in under a
+millisecond instead of parsing about 270 KB of SDL each time it starts.
+`configureCacheSchema` still installs a different SDL before storage opens, but
+the app's worker does not call it.
 
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that

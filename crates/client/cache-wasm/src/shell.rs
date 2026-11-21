@@ -595,7 +595,13 @@ thread_local! {
     static RUNTIME_SCHEMA: std::cell::RefCell<Option<std::sync::Arc<cache_core::meta::Schema>>> = const { std::cell::RefCell::new(None) };
 }
 
-/// Parses bundle SDL once per worker, before opening its engine.
+/// The bundled schema's tables, parsed from its SDL when this engine was built.
+static BUNDLED_SCHEMA_TABLES: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/bundled_schema.postcard"));
+
+/// Installs a schema other than the bundled one, once per worker, before
+/// opening its engine. The app's own worker needs no call: engines use the
+/// bundled schema, decoded from tables built with this binary.
 #[wasm_bindgen(js_name = configureCacheSchema)]
 pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
     let schema = cache_core::meta::Schema::from_sdl(schema_sdl).map_err(err_js)?;
@@ -612,13 +618,32 @@ pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
     })
 }
 
-fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
+/// The schema this worker's engines use: the one `configureCacheSchema`
+/// installed, or else the bundled one. Decoding its tables costs a fraction of
+/// parsing its SDL, which was a large part of starting an engine.
+fn runtime_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
+    RUNTIME_SCHEMA.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if let Some(schema) = slot.as_ref() {
+            return Ok(schema.clone());
+        }
+        let schema = decode_bundled_schema()?;
+        *slot = Some(schema.clone());
+        Ok(schema)
+    })
+}
+
+fn decode_bundled_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
+    let tables = postcard::from_bytes(BUNDLED_SCHEMA_TABLES).map_err(err_js)?;
+    cache_core::meta::Schema::from_artifact(tables).map_err(err_js)
+}
+
+fn build_engine(
+    storage: TursoStorage,
+    hot_capacity: Option<u32>,
+    schema: std::sync::Arc<cache_core::meta::Schema>,
+) -> BrowserEngine {
     let storage = wrap_storage(storage);
-    let schema = RUNTIME_SCHEMA.with(|slot| {
-        slot.borrow_mut()
-            .get_or_insert_with(cache_core::meta::bundled_schema)
-            .clone()
-    });
     Engine::with_schema(
         storage,
         hot_capacity.map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
@@ -791,13 +816,14 @@ async fn open_cache_inner(
     if_available: bool,
 ) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
     validate_hot_capacity(hot_capacity)?;
+    let schema = runtime_schema()?;
     let OpenedStorage { storage, outcome } =
         acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
                 selections: RecordSelectionCache::default(),
-                engine: Some(build_engine(storage, hot_capacity)),
+                engine: Some(build_engine(storage, hot_capacity, schema)),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
@@ -2480,6 +2506,8 @@ impl CacheEngine {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
+            // The engine being reset was built with it, so it is already decoded.
+            let schema = runtime_schema()?;
             let engine = state.engine.take().ok_or_else(|| {
                 if state.reset_required {
                     err_js("cache engine requires worker replacement")
@@ -2503,7 +2531,7 @@ impl CacheEngine {
                     return Err(error);
                 }
             };
-            state.engine = Some(build_engine(storage, hot_capacity));
+            state.engine = Some(build_engine(storage, hot_capacity, schema));
             state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)

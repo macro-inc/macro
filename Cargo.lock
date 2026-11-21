@@ -3943,6 +3943,7 @@ dependencies = [
  "cache-core",
  "cache-turso",
  "js-sys",
+ "postcard",
  "predicate-index",
  "serde",
  "serde-wasm-bindgen",
