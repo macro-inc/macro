@@ -110,8 +110,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Whether a mounted Soup list is a notified list. Grouped ones count too:
  * they sort each group by update time, but which rows they hold and the
- * notification times on them still change with each new notification, and
- * on REST they refetch for it.
+ * notification times on them still change with each new notification, which
+ * REST grouped lists follow (the entity refetch patches or reloads them).
  */
 function isNotifiedList(body: unknown): boolean {
   if (!isRecord(body) || !isRecord(body.params)) return false;
@@ -144,9 +144,13 @@ const rereadAfterReplicaLag = debounce(
  * the notified-at floor only applies when a row is mapped again. Grouped
  * notified lists project by update time, which a notification leaves alone.
  * They read their loaded pages again instead, which carries the new stamps.
- * Each read runs the notified page query, whose cost grows with the viewer's
- * notifications, for every loaded page: a burst reads at most once per
- * interval, and a hidden tab reads once when it is shown.
+ * A flat list's read runs the notified page query, whose cost grows with the
+ * viewer's notifications, for every loaded page; a grouped list's runs the
+ * grouped query by update time for its first page and each loaded
+ * continuation page, as every write to it already does. A notification marks
+ * the lists for a read, and so does the replica lag timer after the last one;
+ * a read starts at once unless one started within the interval or is still
+ * running, and then after it. A hidden tab keeps the mark and reads when shown.
  */
 function revalidateNotifiedGraphqlSoupLists(): void {
   notifiedListRereader().markDirty();
