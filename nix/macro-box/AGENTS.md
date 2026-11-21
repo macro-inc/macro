@@ -83,6 +83,12 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   See *The teammate runtime image* below.
 - `nix run .#teammate-runtime-test` runs that image in the local Docker
   engine with macrod's flags and asserts its contract.
+- `nix run .#teammate-egress-test -- docker|podman` (with
+  `MACROD=<macrod>` to render with `macrod teammate ruleset`) checks
+  enforced egress adversarially: holder, guard and teammate as macrod makes
+  them, every blocked target with an unguarded control, per engine (rootless
+  podman: netavark bridges in the rootless-netns). It opens exactly its two
+  host test ports in `nixos-fw` with sudo and deletes those rules on exit.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
 - `nix build .#macro-box-harnessd` → the harnessd binary (and
   `.#macro-box-macrod` → macrod) the images bake in.

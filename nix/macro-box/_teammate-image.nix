@@ -90,6 +90,16 @@ let
       pkgs.ripgrep
       pkgs.jq
       pkgs.curl
+      # Enforced egress: macrod's holder runs `sleep`, its guard
+      # `sh -c "nft -f - && nft -j list table inet macro_teammate"` in the
+      # holder's network namespace; ip, capsh and ping are what the egress
+      # test (files/teammate-egress-test) probes with.
+      pkgs.nftables
+      pkgs.iproute2
+      pkgs.libcap
+      pkgs.iputils
+      # macrod resolves a local stack's service names in the holder with it.
+      pkgs.getent
     ];
   };
 

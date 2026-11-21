@@ -147,6 +147,29 @@ in
             ''
             + builtins.readFile ./files/teammate-runtime-test;
           };
+          # Enforced egress, adversarially, in the local Docker or rootless
+          # Podman (`-- docker|podman`; files/teammate-egress-test).
+          teammate-egress-test = teammatePkgs.writeShellApplication {
+            name = "teammate-egress-test";
+            runtimeInputs = [
+              teammatePkgs.podman
+              teammatePkgs.nftables
+              teammatePkgs.iproute2
+              teammatePkgs.jq
+              teammatePkgs.gawk
+              teammatePkgs.gnugrep
+              teammatePkgs.gnused
+              teammatePkgs.coreutils
+              teammatePkgs.findutils
+            ];
+            text = ''
+              image=${teammateImage}
+              seccomp=${./files/teammate-seccomp.json}
+              helper=${./files/teammate-egress-helper.py}
+              python=${lib.getExe teammatePkgs.python3}
+            ''
+            + builtins.readFile ./files/teammate-egress-test;
+          };
         }
         // lib.optionalAttrs (system == "x86_64-linux") {
         macro-box-claude-code = box.claudeCode;

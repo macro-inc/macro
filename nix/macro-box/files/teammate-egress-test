@@ -1,0 +1,488 @@
+# `nix run .#teammate-egress-test -- docker|podman`: enforced egress for a
+# self-hosted teammate (/home/wolf/tmp/bind-runtime/egress-plan.md), against
+# real containers in the local engine: a holder that owns the install's
+# network namespace, a one-shot guard that loads the ruleset there with
+# NET_ADMIN and is removed, and a teammate in that namespace with the
+# container contract's flags (uid 1000, no capabilities, no new privileges,
+# read-only, the shipped seccomp). The teammate runs the image with `sleep`:
+# what is probed is its network, not its runtime.
+#
+# Until macrod's CliEngine lands, this script makes the containers with the
+# same commands. With MACROD=<macrod binary> it renders the ruleset with
+# `macrod teammate ruleset` from the facts it gathers; without, with its own
+# stand-in (`render_ruleset`) of the same policy.
+#
+# Every probe that must fail has a control: the same probe from an unguarded
+# container on the same networks must succeed, or the check reports
+# "untested" instead of passing. Results are per engine; nothing here claims
+# the other engine.
+#
+# `macro-box.nix` prepends `image` (the stream script), `seccomp`, `helper`
+# (files/teammate-egress-helper.py) and `python`.
+engine=${1:?usage: teammate-egress-test docker|podman}
+load_options=()
+case $engine in
+docker | podman) ;;
+*)
+  echo "usage: teammate-egress-test docker|podman" >&2
+  exit 2
+  ;;
+esac
+E=$engine
+umask 077
+suffix=$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n')
+prefix=egress-$suffix
+work=$(mktemp -d "${TMPDIR:-/tmp}/teammate-egress.XXXXXX")
+passed=0 failed=0 untested=0
+port=18080
+host_port=18081
+proxy_port=18082
+# Unprivileged ICMP (ping) for the agent's group in the netns: Docker's
+# default allows every group, rootless podman none, and refuses a range
+# beyond the user namespace's mapped groups ("0 2147483647" is EINVAL there).
+ping=(--sysctl "net.ipv4.ping_group_range=1000 1000")
+
+# Every container carries this label: `run` is mostly called in a
+# subshell, so cleanup finds them by it.
+label=macro.egress-test=$suffix
+networks=() host_pids=() firewall=()
+cleanup() {
+  for pid in "${host_pids[@]}"; do kill "$pid" 2>/dev/null || true; done
+  # Exactly the host firewall rules this run inserted.
+  for rule in "${firewall[@]}"; do
+    read -ra words <<<"$rule"
+    sudo -n "${words[@]/#-I/-D}" 2>/dev/null || true
+  done
+  # Teammates first: podman won't remove a holder with dependents.
+  for _ in 1 2; do
+    $E ps -aq --filter "label=$label" | xargs -r "$E" rm -f >/dev/null 2>&1 || true
+  done
+  for network in "${networks[@]}"; do $E network rm "$network" >/dev/null 2>&1 || true; done
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+pass() {
+  echo "ok        [$engine] $*"
+  passed=$((passed + 1))
+}
+fail() {
+  echo "FAIL      [$engine] $*"
+  failed=$((failed + 1))
+}
+untested() {
+  echo "untested  [$engine] $*"
+  untested=$((untested + 1))
+}
+# check <name> <command...>: the command must succeed.
+check() {
+  local name=$1
+  shift
+  if "$@" >/dev/null 2>&1; then pass "$name"; else fail "$name"; fi
+}
+# blocked <name> <probe> <args...>: the probe (a function taking a container
+# first) must succeed from the control and fail from the teammate.
+blocked() {
+  local name=$1 probe=$2
+  shift 2
+  if ! "$probe" "$control" "$@" >/dev/null 2>&1; then
+    untested "$name (the control can't reach it either)"
+  elif "$probe" "$teammate" "$@" >/dev/null 2>&1; then
+    fail "$name (the teammate reached it)"
+  else
+    pass "$name"
+  fi
+}
+
+# Probes, run in a container (an id).
+tcp() { $E exec "$1" bash -c "timeout 4 bash -c 'exec 3<>/dev/tcp/$2/$3' 2>/dev/null"; }
+http() { $E exec "$1" curl -sS -o /dev/null -m 6 "${@:2}"; }
+icmp() { $E exec "$1" ping -c 1 -W 3 "$2"; }
+# udp <container> <target listener> <address>: true if the listener logged it.
+udp() {
+  local token=$RANDOM$RANDOM
+  $E exec "$1" bash -c "echo $token > /dev/udp/$3/$port" 2>/dev/null || true
+  sleep 1
+  $E logs "$2" 2>&1 | grep -q "$token"
+}
+
+# A container from the image; `--python` runs the helper with the image's
+# Python (the host's store, read-only), never in a teammate.
+run() {
+  $E run -d --label "$label" "$@"
+}
+helper_run() {
+  local name=$1
+  shift
+  run --name "$prefix-$name" --user 1000:1000 -v /nix/store:/nix/store:ro "$@"
+}
+helper_args() { echo --entrypoint "$python" "$id" "$helper"; }
+address_of() { # address_of <container> <network> [v6]
+  if [[ ${3:-} == v6 ]]; then
+    $E inspect -f "{{(index .NetworkSettings.Networks \"$2\").GlobalIPv6Address}}" "$1"
+  else
+    $E inspect -f "{{(index .NetworkSettings.Networks \"$2\").IPAddress}}" "$1"
+  fi
+}
+network() { # network <name> <subnet>... : a bridge network with these subnets
+  local name=$prefix-$1 arguments=()
+  shift
+  for subnet in "$@"; do
+    arguments+=(--subnet "$subnet")
+    [[ $subnet == *:* ]] && arguments+=(--ipv6)
+  done
+  $E network create "${arguments[@]}" "$name" >/dev/null
+  networks+=("$name")
+}
+
+echo "# $engine"
+if [[ $engine == podman ]]; then
+  # A host without virtualisation.podman has no /etc/containers: this run's
+  # own policy for loading the local image, not the user's config.
+  echo '{"default":[{"type":"insecureAcceptAnything"}]}' >"$work/policy.json"
+  load_options=(--signature-policy "$work/policy.json")
+  echo "mode: rootless podman $(podman version -f '{{.Client.Version}}'), networks by 'podman network create': netavark bridges in the user's rootless-netns (not pasta)"
+  [[ "$(podman info -f '{{.Host.Security.Rootless}}')" == true ]] || {
+    echo "podman isn't rootless here" >&2
+    exit 1
+  }
+else
+  echo "mode: docker $(docker version -f '{{.Server.Version}}'), bridge networks"
+fi
+# podman can't load the stream from a pipe: a file for both.
+"$image" >"$work/image.tar"
+$E load -q "${load_options[@]}" -i "$work/image.tar" >"$work/load" 2>&1 || {
+  cat "$work/load" >&2
+  exit 1
+}
+id=$(sed -n 's/^Loaded image[^:]*: //p' "$work/load" | tail -n 1)
+echo "image: $id"
+
+echo "# networks and peers"
+network install 10.253.1.0/24 fd5e:1::/64
+network other10 10.253.2.0/24
+network other172 172.29.250.0/24
+network other192 192.168.253.0/24
+# A LAN peer on a public/global address (not a documentation range, which
+# the policy drops anyway): a host on-link prefix.
+network lan 44.31.250.0/24 2a0a:e5c0:fff::/64
+network shared 10.253.3.0/24
+network allowed 10.253.4.0/24
+
+# shellcheck disable=SC2046 # helper_args is meant to split
+{
+  target10=$(helper_run t10 --network "$prefix-other10" --ip 10.253.2.10 $(helper_args) listen $port)
+  helper_run t172 --network "$prefix-other172" --ip 172.29.250.10 $(helper_args) listen $port >/dev/null
+  helper_run t192 --network "$prefix-other192" --ip 192.168.253.10 $(helper_args) listen $port >/dev/null
+  helper_run tlan --network "$prefix-lan" --ip 44.31.250.10 --ip6 2a0a:e5c0:fff::10 $(helper_args) listen $port >/dev/null
+  target_ula=$(helper_run tula --network "$prefix-install" --ip 10.253.1.20 --ip6 fd5e:1::20 $(helper_args) listen $port)
+  # A LAN-router resolver on the install's network: names under .test are
+  # a private address, everything else is forwarded upstream.
+  # Port 53 as uid 1000: Docker allows low ports in containers, rootless
+  # podman only with this sysctl.
+  helper_run dns --network "$prefix-install" --ip 10.253.1.53 --sysctl net.ipv4.ip_unprivileged_port_start=0 \
+    $(helper_args) dns 53 10.253.2.10 >/dev/null
+  helper_run redirect --network "$prefix-allowed" --ip 10.253.4.10 $(helper_args) redirect 8080 "http://10.253.2.10:$port/" >/dev/null
+}
+link_local=$($E exec "$target_ula" ip -6 -o addr show scope link | awk '{print $4}' | cut -d/ -f1 | head -n 1)
+
+# The host's own listeners: a test port and a CONNECT proxy, on every address.
+# The host's firewall (NixOS's nixos-fw) drops them from container bridges,
+# so the control could never reach them: this run accepts exactly these two
+# ports from bridges, and its cleanup deletes exactly those rules.
+if sudo -n iptables -S nixos-fw >/dev/null 2>&1; then
+  for tables in iptables ip6tables; do
+    rule="$tables -I nixos-fw -i br-+ -p tcp -m multiport --dports $host_port,$proxy_port -j nixos-fw-accept"
+    read -ra words <<<"$rule"
+    sudo -n "${words[@]}" && firewall+=("$rule")
+  done
+fi
+"$python" "$helper" listen "$host_port" >"$work/host-listener.log" 2>&1 &
+host_pids+=($!)
+"$python" "$helper" proxy "$proxy_port" >"$work/host-proxy.log" 2>&1 &
+host_pids+=($!)
+
+# The unguarded control, on every network the teammate could try.
+control=$(run --name "$prefix-control" --network "$prefix-install" --user 1000:1000 "${ping[@]}" \
+  --dns 10.253.1.53 --add-host "private.test:10.253.2.10" --entrypoint sleep "$id" infinity)
+for name in other10 other172 other192 lan shared allowed; do
+  $E network connect "$prefix-$name" "$control"
+done
+sleep 2
+
+echo "# the policy (rendered by ${MACROD:+macrod teammate ruleset}${MACROD:-this script\'s stand-in, render_ruleset})"
+# The host's addresses and on-link prefixes, re-read at each apply (as
+# macrod will at each start). Lines are CIDRs.
+host_addresses() {
+  ip -o addr show | awk '$2 != "lo" {print $4}' | while read -r cidr; do
+    if [[ $cidr == *:* ]]; then echo "${cidr%/*}/128"; else echo "${cidr%/*}/32"; fi
+  done
+}
+host_prefixes() {
+  {
+    ip -o -4 route show scope link | awk '{print $1}' | grep -v '^default'
+    ip -o -6 route show | awk '$1 != "default" && $1 !~ /^(fe80|ff00|unreachable|anycast|local|multicast)/ {print $1}' |
+      grep ':' || true
+  } | while read -r route; do
+    # A host route has no length.
+    if [[ $route == */* ]]; then echo "$route"; elif [[ $route == *:* ]]; then echo "$route/128"; else echo "$route/32"; fi
+  done
+}
+# The host's own interfaces' addresses, not the container bridges' (those are
+# the gateways, probed above), and one link-local.
+own_addresses() {
+  ip -o addr show | awk '$2 != "lo" && $2 !~ /^(br-|docker|veth|podman|cni)/ {print $4}' |
+    grep -v '^fe80:' | sed 's|/.*||'
+  ip -o -6 addr show scope link | awk '$2 !~ /^(br-|docker|veth|podman|cni)/ {print $4}' | head -n 1 | sed 's|/.*||'
+}
+blocked4=(0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12
+  192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4)
+blocked6=(::1/128 ::ffff:0:0/96 64:ff9b::/96 64:ff9b:1::/48 fc00::/7 fe80::/10 ff00::/8)
+# render_ruleset <resolvers> <allows> <extra blocked>: one `inet` table.
+# Resolvers: addresses to which DNS (53) is accepted. Allows: address:port.
+render_ruleset() {
+  local -a resolvers rule_allows extra four=() six=()
+  read -ra resolvers <<<"$1"
+  read -ra rule_allows <<<"$2"
+  read -ra extra <<<"$3"
+  for cidr in "${blocked4[@]}" "${blocked6[@]}" "${extra[@]}"; do
+    if [[ $cidr == *:* ]]; then six+=("$cidr"); else four+=("$cidr"); fi
+  done
+  join() { local IFS=,; echo "$*"; }
+  echo "table inet macro_teammate {"
+  echo "  set blocked4 { type ipv4_addr; flags interval; auto-merge; elements = { $(join "${four[@]}") } }"
+  echo "  set blocked6 { type ipv6_addr; flags interval; auto-merge; elements = { $(join "${six[@]}") } }"
+  echo "  chain output {"
+  echo "    type filter hook output priority filter; policy accept;"
+  echo "    oif \"lo\" accept"
+  echo "    ct state established,related accept"
+  for resolver in "${resolvers[@]}"; do
+    if [[ $resolver == *:* ]]; then family=ip6; else family=ip; fi
+    echo "    $family daddr $resolver meta l4proto { tcp, udp } th dport 53 accept"
+  done
+  # DNS to anything but those resolvers is dropped.
+  echo "    meta l4proto { tcp, udp } th dport 53 drop"
+  for allow in "${rule_allows[@]}"; do
+    echo "    ip daddr ${allow%:*} tcp dport ${allow##*:} accept"
+  done
+  echo "    ip daddr @blocked4 drop"
+  echo "    ip6 daddr @blocked6 drop"
+  echo "  }"
+  echo "}"
+}
+
+# The guard: shares the holder's netns only, NET_ADMIN and nothing else,
+# no mounts, the ruleset on stdin; exits and is removed.
+guard() { # guard <holder> <nft arguments...> (stdin: a ruleset for -f -)
+  $E run --rm -i --label "$label" --network "container:$1" --user 0:0 --cap-drop ALL --cap-add NET_ADMIN \
+    --read-only --security-opt no-new-privileges --entrypoint nft "$id" "${@:2}"
+}
+# What macrod reads back before every start: the table's sets and rules.
+readback() { guard "$1" -j list table inet macro_teammate </dev/null | jq -S '[.nftables[] | select(.rule or .set) | (.rule.expr // .set.elem)]'; }
+
+holder_for() { # holder_for <name> <network> [run options...]
+  run --name "$prefix-$1-net" --network "$prefix-$2" --user 1000:1000 --cap-drop ALL --read-only "${ping[@]}" \
+    --security-opt no-new-privileges "${@:3}" --entrypoint sleep "$id" infinity
+}
+teammate_for() { # teammate_for <name> <holder id>
+  run --name "$prefix-$1" --network "container:$2" --user 1000:1000 --cap-drop ALL --read-only \
+    --security-opt no-new-privileges --security-opt "seccomp=$seccomp" --tmpfs /tmp \
+    --entrypoint sleep "$id" infinity
+}
+# apply <holder>: render with the holder's resolvers and gateway, load, verify.
+upstream=10.253.1.53
+allows="10.253.4.10:8080"
+apply() {
+  local holder=$1 resolvers gateway
+  # shellcheck disable=SC2016 # awk's own $2
+  resolvers=$($E exec "$holder" awk '/^nameserver/ && $2 !~ /^127\./ {print $2}' /etc/resolv.conf | tr '\n' ' ')
+  # Docker's embedded DNS forwards from inside the netns to the holder's
+  # configured upstream; podman's aardvark answers on the gateway.
+  resolvers="$resolvers $upstream"
+  gateway=$($E exec "$holder" ip -o route show default | awk '{print $3}' | head -n 1)
+  # The prefixes of the networks the holder joins (on rootless podman they
+  # are in the rootless-netns, not the host's routes).
+  local network_prefixes
+  # Every network the engine has (as macrod gathers them): on rootless podman
+  # the rootless-netns routes between them.
+  network_prefixes=$($E network ls --format '{{.Name}}' |
+    while read -r name; do
+      $E network inspect "$name" | jq -r '.[0] | (.IPAM.Config // .subnets // [])[] | (.Subnet // .subnet)'
+    done | tr '\n' ' ')
+  if [[ -n ${MACROD:-} ]]; then
+    # macrod's own renderer (`macrod teammate ruleset`), from the same facts.
+    jq -n --arg resolvers "$resolvers" --arg allows "$allows" --arg gateway "$gateway" \
+      --arg host "$(host_addresses | tr '\n' ' ') $(host_prefixes | tr '\n' ' ')" --arg networks "$network_prefixes" '
+      def words: split(" ") | map(select(length > 0));
+      {allow: ($allows | words | map(split(":") | {network: "\(.[0])/32", ports: [(.[1] | tonumber)]})),
+       facts: {resolvers: ($resolvers | words), hostPrefixes: ($host | words),
+               gateways: ($gateway | words), networkPrefixes: ($networks | words)}}' |
+      "$MACROD" teammate ruleset >"$work/ruleset" || return 1
+  else
+    render_ruleset "$resolvers" "$allows" "$(host_addresses | tr '\n' ' ') $(host_prefixes | tr '\n' ' ') $network_prefixes ${gateway:+$gateway/32}" >"$work/ruleset"
+  fi
+  guard "$holder" -f - <"$work/ruleset" || {
+    echo "the ruleset the guard refused:" >&2
+    cat "$work/ruleset" >&2
+    return 1
+  }
+  readback "$holder" >"$work/applied.json" || return 1
+  [[ -s $work/applied.json ]] && [[ "$(jq length "$work/applied.json")" -gt 3 ]]
+}
+
+echo "# install A: holder, guard, teammate"
+holderA=$(holder_for a install --dns "$upstream" --add-host "private.test:10.253.2.10")
+# The shared network (teammate B) and the allowed peer's network: reachable
+# as far as the engine goes, so only the rules decide.
+$E network connect "$prefix-shared" "$holderA"
+$E network connect "$prefix-allowed" "$holderA"
+check "no abstract unix sockets in the holder's netns before the teammate" \
+  sh -c "! $E exec $holderA grep -q ' @' /proc/net/unix"
+if apply "$holderA"; then pass "the guard loaded the ruleset and the readback has it"; else
+  fail "the guard loaded the ruleset"
+  cat "$work/ruleset"
+  exit 1
+fi
+# Nothing else is in A's netns yet: the guard has exited and is gone.
+in_netns() { $E ps -aq | xargs -r "$E" inspect -f '{{.HostConfig.NetworkMode}}' | grep -cF "container:$1" || true; }
+check "the guard is removed before the teammate starts" test "$(in_netns "$holderA")" = 0
+teammate=$(teammate_for a "$holderA")
+echo "# install B: a second teammate on the shared network"
+holderB=$(holder_for b shared)
+apply "$holderB" || fail "B's guard"
+# B's listener shares B's netns, as B's teammate does.
+run --name "$prefix-b" --network "container:$holderB" --user 1000:1000 -v /nix/store:/nix/store:ro \
+  --entrypoint "$python" "$id" "$helper" listen $port >/dev/null
+sleep 2
+addressB=$(address_of "$holderB" "$prefix-shared")
+
+echo "# the teammate's own containment"
+check "the teammate joins the holder by id" \
+  sh -c "[ \"\$($E inspect -f '{{.HostConfig.NetworkMode}}' $teammate)\" = container:$holderA ]"
+check "the teammate shares the netns only, not the pid namespace" \
+  sh -c "[ \"\$($E exec $teammate readlink /proc/1/ns/pid)\" != \"\$($E exec $holderA readlink /proc/1/ns/pid)\" ]"
+check "the teammate shares the netns only, not the ipc namespace" \
+  sh -c "[ \"\$($E exec $teammate readlink /proc/self/ns/ipc)\" != \"\$($E exec $holderA readlink /proc/self/ns/ipc)\" ]"
+check "no host-gateway entry in the holder" \
+  sh -c "! $E inspect -f '{{.HostConfig.ExtraHosts}}' $holderA | grep -q host-gateway"
+check "nft flush ruleset fails as uid 1000" sh -c "! $E exec $teammate nft flush ruleset"
+check "nft list ruleset fails as uid 1000" sh -c "! $E exec $teammate nft list ruleset"
+check "ip route changes fail as uid 1000" sh -c "! $E exec $teammate ip route add 198.51.100.0/24 dev lo && ! $E exec $teammate ip route del default"
+# No capabilities at all, so neither NET_ADMIN nor NET_RAW, effective or bounding.
+check "capsh: no NET_ADMIN or NET_RAW, effective or bounding" \
+  sh -c "$E exec $teammate capsh --print | grep -qx 'Current: =' && $E exec $teammate capsh --print | grep -qx 'Bounding set ='"
+
+echo "# allowed"
+# Once, before the first check: one run in five, the very first connections
+# right after the start timed out (allowed and public alike) and then worked;
+# say so when it happens rather than hide it in a retry.
+if ! http "$teammate" https://example.com >/dev/null 2>&1; then
+  echo "note: the first connection after the start timed out; checking again in 5 s"
+  sleep 5
+fi
+check "public HTTPS" http "$teammate" https://example.com
+if ! http "$teammate" https://example.com >/dev/null 2>&1; then
+  echo "the teammate's routes and the loaded rules, for the failure above:"
+  $E exec "$holderA" ip route
+  guard "$holderA" list ruleset </dev/null
+fi
+check "DNS lookups (through the upstream resolver only)" \
+  sh -c "[ -n \"\$($E exec $teammate curl -s -o /dev/null -m 6 -w '%{remote_ip}' https://example.com)\" ]"
+check "an allow entry (10.253.4.10:8080)" http "$teammate" http://10.253.4.10:8080/
+
+echo "# blocked"
+blocked "DNS to a resolver that isn't the upstream (1.1.1.1:53)" tcp 1.1.1.1 53
+blocked "metadata 169.254.169.254" http http://169.254.169.254/
+# Not reachable on this host either way (not GCE's v6 metadata, no NAT64):
+# the drop must be in the loaded rules, and a connect must fail.
+in_readback() { jq -e --arg net "$1" 'tostring | contains($net)' "$work/applied.json" >/dev/null; }
+check "metadata [fd00:ec2::254]: fc00::/7 is in the loaded drops and a connect fails (not reachable on this host either way)" \
+  sh -c "$(declare -f in_readback); work=$work; in_readback fc00:: && ! $E exec $teammate curl -s -m 4 -o /dev/null 'http://[fd00:ec2::254]/'"
+gatewayA=$($E exec "$holderA" ip -o route show default | awk '{print $3}' | head -n 1)
+blocked "the gateway ($gatewayA)" tcp "$gatewayA" "$host_port"
+while read -r address; do
+  [[ -n $address ]] || continue
+  blocked "a host address ($address), a host listener on 0.0.0.0" tcp "$address" "$host_port"
+done < <(own_addresses)
+blocked "10/8 (another network)" tcp 10.253.2.10 $port
+blocked "172.16/12 (another network)" tcp 172.29.250.10 $port
+blocked "192.168/16 (another network)" tcp 192.168.253.10 $port
+tailnet=$(ip -o -4 addr show | awk '{print $4}' | cut -d/ -f1 | grep -E '^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.' | head -n 1)
+if [[ -n $tailnet ]]; then blocked "100.64/10 (the host's tailnet address)" tcp "$tailnet" "$host_port"; else
+  untested "100.64/10 (no tailnet address on this host)"
+fi
+blocked "another teammate (B, on the shared network)" tcp "$addressB" $port
+blocked "a LAN peer on a public address (44.31.250.10, on-link)" tcp 44.31.250.10 $port
+blocked "a LAN peer on a global v6 address (2a0a:e5c0:fff::10, on-link)" tcp 2a0a:e5c0:fff::10 $port
+blocked "ULA (fd5e:1::20)" tcp fd5e:1::20 $port
+icmp6() { $E exec "$1" ping -6 -c 1 -W 3 "$2%eth0"; }
+blocked "link-local ($link_local, ICMPv6 on the install's link)" icmp6 "$link_local"
+blocked "v4-mapped (::ffff:10.253.2.10)" tcp ::ffff:10.253.2.10 $port
+check "NAT64 (64:ff9b::a9fe:a9fe): 64:ff9b::/96 is in the loaded drops and a connect fails (not reachable on this host either way)" \
+  sh -c "$(declare -f in_readback); work=$work; in_readback 64:ff9b:: && ! $E exec $teammate curl -s -m 4 -o /dev/null 'http://[64:ff9b::a9fe:a9fe]/'"
+
+echo "# bypasses"
+blocked "a name resolving to a private IP (an /etc/hosts entry)" tcp private.test $port
+blocked "a name resolving to a private IP (a test resolver)" tcp anything.test $port
+if http "$teammate" --max-redirs 0 http://10.253.4.10:8080/ && ! http "$teammate" -L http://10.253.4.10:8080/; then
+  pass "an HTTP redirect to a private IP (the first hop works, the second is dropped)"
+else fail "an HTTP redirect to a private IP"; fi
+blocked "proxy CONNECT through a host proxy" http -x "http://${gatewayA}:$proxy_port" https://example.com
+blocked "a decimal IP spelling (2852039166)" http http://2852039166/
+blocked "an octal IP spelling (0251.0376.0251.0376)" http http://0251.0376.0251.0376/
+if ! udp "$control" "$target10" 10.253.2.10; then untested "UDP to a private address (the control's datagram didn't arrive)"
+elif udp "$teammate" "$target10" 10.253.2.10; then fail "UDP to a private address (it arrived)"
+else pass "UDP to a private address"; fi
+blocked "ICMP to a private address" icmp 10.253.2.10
+blocked "ICMP to the metadata address" icmp 169.254.169.254
+
+echo "# fails closed"
+broken=$(holder_for broken install)
+if echo 'table inet macro_teammate { chain output { type filter hook output priority filter; ip daddr nonsense drop; } }' |
+  guard "$broken" -f - >/dev/null 2>&1; then
+  fail "a guard that fails exits non-zero"
+elif guard "$broken" list table inet macro_teammate </dev/null >/dev/null 2>&1; then
+  fail "a failed guard loads nothing (nft -f is all or nothing)"
+else
+  pass "a guard that fails exits non-zero and loads nothing, so the start is refused"
+fi
+recreated=$(holder_for recreated install)
+if readback "$recreated" 2>/dev/null | jq -e 'length > 3' >/dev/null; then
+  fail "a holder recreated without the guard has rules"
+else
+  pass "a holder recreated without the guard fails the readback, so the next start is refused"
+fi
+$E kill "$holderA" >/dev/null
+sleep 2
+check "the holder killed, the teammate has no network (fails closed)" sh -c "! $E exec $teammate curl -sS -o /dev/null -m 6 https://example.com"
+$E rm -f "$teammate" >/dev/null
+$E rm -f "$holderA" >/dev/null
+holderA=$(holder_for a2 install --dns "$upstream")
+$E network connect "$prefix-allowed" "$holderA"
+if apply "$holderA"; then
+  teammate=$(teammate_for a2 "$holderA")
+  check "rebuilt (holder, guard, teammate): public HTTPS again" http "$teammate" https://example.com
+  blocked "rebuilt: metadata still blocked" http http://169.254.169.254/
+else fail "the rebuilt holder's guard"; fi
+# The rules live in the install's netns only: the host's tables have none.
+# sudo's own PATH has no nft: the test's.
+nft=$(command -v nft)
+if sudo -n "$nft" list ruleset >/dev/null 2>&1; then
+  check "the rules live only in the container netns (the host's nftables has no macro_teammate)" \
+    sh -c "! sudo -n $nft list ruleset | grep -q macro_teammate"
+  check "the rules live only in the container netns (the host's iptables has none of the blocked sets)" \
+    sh -c "! sudo -n iptables-save | grep -q 'blocked4\|macro_teammate'"
+else
+  untested "the rules live only in the container netns (no sudo to list the host's tables)"
+fi
+if [[ $engine == docker ]] && sudo -n systemctl reload docker 2>/dev/null; then
+  sleep 3
+  blocked "after a dockerd reload (SIGHUP): metadata still blocked" http http://169.254.169.254/
+  check "after a dockerd reload: public HTTPS still works" http "$teammate" https://example.com
+else
+  untested "a daemon reload ($engine has no daemon to reload, or no sudo)"
+fi
+untested "an 'iptables -F' on the host netns (not run: it would flush this shared box's firewall; the rules aren't in the host's tables, checked above)"
+
+echo "# $engine: $passed passed, $failed failed, $untested untested"
+((failed == 0))
