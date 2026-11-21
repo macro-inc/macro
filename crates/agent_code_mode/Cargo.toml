@@ -53,6 +53,9 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_correlation = { path = "../agent_correlation", features = ["http"] }
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+tower = { workspace = true, features = ["util"] }
 tempfile = { workspace = true }
 jev = { path = "../jev", features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

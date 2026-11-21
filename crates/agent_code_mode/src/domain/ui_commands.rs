@@ -1,11 +1,12 @@
 //! A running program showing the person who prompted its turn something in
 //! the Macro app tab they typed in (`macro.ui.open`).
 //!
-//! Only a turn a person prompted from a tab can do this, and only that
+//! Only the unscoped credential issued for the recorded execution may request
+//! navigation. A turn a person prompted from a tab can show things only in that
 //! person's tab: the command is addressed to the tab the prompt came from and
 //! sent to that person's own connections, which ignore it unless the tab is
-//! theirs. Routines, triggers and channel mentions have no tab, so they are
-//! answered `no_client` and nothing is sent. What to show is an app path that
+//! theirs. Admitted turns without a tab answer `no_client` and send nothing.
+//! Scoped, uncorrelated and foreign credentials are refused before navigation. What to show is an app path that
 //! must match a route the web app opened to agents, checked here and again by
 //! the tab against its real route table. Each turn and each person has a
 //! budget, so a program that reads an instruction in an email cannot flood
@@ -26,6 +27,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use utoipa::ToSchema;
 
+use super::execution_access::{Refusal, check_binding, credential_for_session};
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
 
 mod routes;
@@ -250,6 +252,7 @@ impl UiCommandService {
     /// Admit only a running execution of the session's current turn, called
     /// by the account that execution was approved to act as, as connected
     /// apps do: a finished, replayed or foreign program cannot send.
+    #[tracing::instrument(skip_all, err(level = tracing::Level::WARN), fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty, refusal = tracing::field::Empty))]
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -258,17 +261,20 @@ impl UiCommandService {
     ) -> Result<Admitted, CodeModeError> {
         let session =
             super::reviews::session_id(access.entity().entity_type, &access.entity().entity_id)?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(session));
+        let correlation = credential_for_session(session)?;
         if access.acting_user_id() != Some(caller) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
 
         let record = self.store.get(session, execution).await?;
+        check_binding(&record, correlation)?;
         let active = self.active.active(session).await?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         };
         if record.status != ExecutionStatus::Running || active != Some(turn) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         }
 
         let turn_facts = self.turns.turn(session).await?;
@@ -276,9 +282,10 @@ impl UiCommandService {
             .prompter
             .as_ref()
             .and_then(TurnPrompter::acting_user);
-        let acts_as = resolve(&acting_as, &turn_facts.owner, requester)?;
+        let acts_as = resolve(&acting_as, &turn_facts.owner, requester)
+            .map_err(|_| Refusal::WrongAccount.error())?;
         if acts_as != caller {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
 
         Ok(Admitted {
@@ -300,8 +307,7 @@ impl UiCommandService {
             ui.route = tracing::field::Empty,
             ui.client.count = tracing::field::Empty,
             outcome = tracing::field::Empty,
-        ),
-        err
+        )
     )]
     pub async fn open(
         &self,

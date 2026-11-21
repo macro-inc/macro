@@ -358,6 +358,7 @@ dependencies = [
  "import",
  "jev",
  "lazy-regex",
+ "macro_auth",
  "macro_authorization",
  "macro_db_migrator",
  "macro_tower_layers",

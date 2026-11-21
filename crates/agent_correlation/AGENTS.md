@@ -48,8 +48,10 @@ code, not in its prompt. The harness also signs the scope into the credential
 - `src/context.rs`: async context (`Attribution`: correlation, routine, the
   display verb sent with a correlated SDK call, the validated session
   (`current_session`), and the scope stored with it, else the one the
-  credential signs (`current_scope`)); capture before spawning,
-  scope each message. `current_routine()` feeds
+  credential signs (`current_scope`)); `is_scoped` also retains an unknown
+  signed scope, so a domain gate that refuses every scoped credential cannot
+  mistake the read-only fallback for an unscoped request. Capture before
+  spawning and scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
   on routine writes. `may_share` says whether the request may change who can
   see an item. `entity_access_db_utils::scoped_grants` checks it wherever
@@ -94,6 +96,8 @@ code, not in its prompt. The harness also signs the scope into the credential
 
 - Never read correlation or a routine from an unsigned header or use them as
   authority.
+- Preserve signed scope presence from every verified credential, including
+  unknown scopes on secondary tokens, when refusing all scoped callers.
 - `scope` sets only a correlation and clears any routine; use
   `scope_attribution` to carry both. A bare `tokio::spawn` drops both; wrap
   request work in `capture`.
