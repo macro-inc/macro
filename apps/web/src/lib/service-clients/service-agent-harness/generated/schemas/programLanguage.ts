@@ -6,10 +6,9 @@
  */
 
 /**
- * The language of a session program. OCaml is offered only to sessions
-whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),
-JavaScript tools programs only to sessions whose owner has agent
-permissions, which gate them.
+ * The language of a session program. JavaScript tools programs are offered
+only to sessions whose owner has agent permissions
+([`OwnerRollout`](super::OwnerRollout)), which gate them.
  */
 export type ProgramLanguage =
   (typeof ProgramLanguage)[keyof typeof ProgramLanguage];
@@ -17,6 +16,5 @@ export type ProgramLanguage =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ProgramLanguage = {
   javascript: 'javascript',
-  ocaml: 'ocaml',
   js_tools: 'js_tools',
 } as const;

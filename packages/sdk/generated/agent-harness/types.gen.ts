@@ -2033,6 +2033,10 @@ export type ExecutionReceipt = {
      * Reference to the session's durable rendering record.
      */
     executionId: ExecutionId;
+    /**
+     * Pixels of the images `main` returned in `images`, for the model.
+     */
+    modelMedia?: Array<ModelImage>;
     permission?: null | ExecutionPermission;
     /**
      * Only the value explicitly returned by the program.
@@ -2072,8 +2076,8 @@ export type ExecutionRecord = {
     executionId: ExecutionId;
     /**
      * The language `source` is written in; historical records are JavaScript.
-     * JavaScript, the default, is left out, so records of sessions without
-     * OCaml serialize as they did before languages.
+     * JavaScript, the default, is left out, so records of JavaScript
+     * programs serialize as they did before languages.
      */
     language?: ProgramLanguage;
     permission?: null | ExecutionPermission;
@@ -2082,14 +2086,12 @@ export type ExecutionRecord = {
      */
     result?: unknown;
     /**
-     * For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-     * against (SDK version plus a hash of its interfaces); for a JavaScript
-     * tools program, of the interpreter and catalog it ran with.
+     * For a JavaScript tools program, the fingerprint of the interpreter and
+     * catalog it ran with.
      */
     sdkFingerprint?: string | null;
     /**
-     * The submitted program: a JavaScript module, an OCaml `main.ml` or a
-     * JavaScript tools script.
+     * The submitted program: a JavaScript module or a JS tools script.
      */
     source: string;
     /**
@@ -2535,6 +2537,34 @@ export type MessageSuggestions = {
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
+ * Base64 PNG pixels the model sees as an image block, never a URL.
+ */
+export type ModelImage = {
+    /**
+     * Base64 PNG bytes.
+     */
+    data: string;
+    /**
+     * Always a PNG.
+     */
+    mediaType: ModelImageMediaType;
+    /**
+     * Always an image.
+     */
+    type: ModelMediaType;
+};
+
+/**
+ * The media type of a model image; only PNG.
+ */
+export type ModelImageMediaType = 'image/png';
+
+/**
+ * The kind of model media; only images.
+ */
+export type ModelMediaType = 'image';
+
+/**
  * Monthly ordinal weekday, such as the first Friday.
  */
 export type MonthlyWeekday = {
@@ -2643,12 +2673,11 @@ export type PreviewAgentSessionsResponse = {
 };
 
 /**
- * The language of a session program. OCaml is offered only to sessions
- * whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),
- * JavaScript tools programs only to sessions whose owner has agent
- * permissions, which gate them.
+ * The language of a session program. JavaScript tools programs are offered
+ * only to sessions whose owner has agent permissions
+ * ([`OwnerRollout`](super::OwnerRollout)), which gate them.
  */
-export type ProgramLanguage = 'javascript' | 'ocaml' | 'js_tools';
+export type ProgramLanguage = 'javascript' | 'js_tools';
 
 /**
  * A file the prompt refers to, by where the agent can fetch it.
@@ -5424,7 +5453,7 @@ export type AnswerAgentSessionToolApprovalData = {
 export type AnswerAgentSessionToolApprovalErrors = {
     401: string;
     /**
-     * Agent run approving, not the owner for approve or deny, or no edit access
+     * Agent run approving, not the owner for approve or deny, or no edit access; or, for a hold on the agent's permissions, not a person's own session
      */
     403: string;
     404: string;

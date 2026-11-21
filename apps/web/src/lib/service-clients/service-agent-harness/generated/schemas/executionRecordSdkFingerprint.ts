@@ -6,8 +6,7 @@
  */
 
 /**
- * For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-against (SDK version plus a hash of its interfaces); for a JavaScript
-tools program, of the interpreter and catalog it ran with.
+ * For a JavaScript tools program, the fingerprint of the interpreter and
+catalog it ran with.
  */
 export type ExecutionRecordSdkFingerprint = string | null;

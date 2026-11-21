@@ -3489,7 +3489,7 @@
             }
           },
           "403": {
-            "description": "Agent run approving, not the owner for approve or deny, or no edit access",
+            "description": "Agent run approving, not the owner for approve or deny, or no edit access; or, for a hold on the agent's permissions, not a person's own session",
             "content": {
               "text/plain": {
                 "schema": {
@@ -7455,6 +7455,13 @@
             "$ref": "#/components/schemas/ExecutionId",
             "description": "Reference to the session's durable rendering record."
           },
+          "modelMedia": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelImage"
+            },
+            "description": "Pixels of the images `main` returned in `images`, for the model."
+          },
           "permission": {
             "oneOf": [
               {
@@ -7519,7 +7526,7 @@
           },
           "language": {
             "$ref": "#/components/schemas/ProgramLanguage",
-            "description": "The language `source` is written in; historical records are JavaScript.\nJavaScript, the default, is left out, so records of sessions without\nOCaml serialize as they did before languages."
+            "description": "The language `source` is written in; historical records are JavaScript.\nJavaScript, the default, is left out, so records of JavaScript\nprograms serialize as they did before languages."
           },
           "permission": {
             "oneOf": [
@@ -7537,11 +7544,11 @@
           },
           "sdkFingerprint": {
             "type": ["string", "null"],
-            "description": "For an OCaml program, the fingerprint of the OCaml SDK bundle it ran\nagainst (SDK version plus a hash of its interfaces); for a JavaScript\ntools program, of the interpreter and catalog it ran with."
+            "description": "For a JavaScript tools program, the fingerprint of the interpreter and\ncatalog it ran with."
           },
           "source": {
             "type": "string",
-            "description": "The submitted program: a JavaScript module, an OCaml `main.ml` or a\nJavaScript tools script."
+            "description": "The submitted program: a JavaScript module or a JS tools script."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",
@@ -8201,6 +8208,35 @@
         "description": "Harness names accepted by the model discovery endpoint.",
         "enum": ["in-memory", "cursor", "macrod"]
       },
+      "ModelImage": {
+        "type": "object",
+        "description": "Base64 PNG pixels the model sees as an image block, never a URL.",
+        "required": ["type", "mediaType", "data"],
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Base64 PNG bytes."
+          },
+          "mediaType": {
+            "$ref": "#/components/schemas/ModelImageMediaType",
+            "description": "Always a PNG."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ModelMediaType",
+            "description": "Always an image."
+          }
+        }
+      },
+      "ModelImageMediaType": {
+        "type": "string",
+        "description": "The media type of a model image; only PNG.",
+        "enum": ["image/png"]
+      },
+      "ModelMediaType": {
+        "type": "string",
+        "description": "The kind of model media; only images.",
+        "enum": ["image"]
+      },
       "MonthlyWeekday": {
         "type": "object",
         "description": "Monthly ordinal weekday, such as the first Friday.",
@@ -8343,8 +8379,8 @@
       },
       "ProgramLanguage": {
         "type": "string",
-        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),\nJavaScript tools programs only to sessions whose owner has agent\npermissions, which gate them.",
-        "enum": ["javascript", "ocaml", "js_tools"]
+        "description": "The language of a session program. JavaScript tools programs are offered\nonly to sessions whose owner has agent permissions\n([`OwnerRollout`](super::OwnerRollout)), which gate them.",
+        "enum": ["javascript", "js_tools"]
       },
       "PromptAttachment": {
         "type": "object",

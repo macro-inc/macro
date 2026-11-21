@@ -9,6 +9,7 @@ import type { ExecutionId } from './executionId';
 import type { ExecutionReceiptError } from './executionReceiptError';
 import type { ExecutionReceiptPermission } from './executionReceiptPermission';
 import type { ExecutionStatus } from './executionStatus';
+import type { ModelImage } from './modelImage';
 
 /**
  * Compact model result with an identity the UI uses to load the durable record.
@@ -20,6 +21,8 @@ export interface ExecutionReceipt {
   error?: ExecutionReceiptError;
   /** Reference to the session's durable rendering record. */
   executionId: ExecutionId;
+  /** Pixels of the images `main` returned in `images`, for the model. */
+  modelMedia?: ModelImage[];
   permission?: ExecutionReceiptPermission;
   /** Only the value explicitly returned by the program. */
   result?: unknown;
