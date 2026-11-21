@@ -1280,6 +1280,30 @@ async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
     (root, service)
 }
 
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn code_context_can_be_imported_from_the_sdk() {
+    let (_root, service) = checked_service().await;
+    for import in ["import type { CodeContext }", "import { CodeContext }"] {
+        let source = format!(
+            "{import} from '@macro-inc/sdk';\nexport async function main({{ webAppUrl }}: CodeContext) {{\n  return {{ data: typeof webAppUrl }};\n}}\n"
+        );
+        let (_, outcome) = run(&service, &source, 10_000).await;
+        assert!(
+            matches!(&outcome, Outcome::Succeeded { value } if value["data"] == "string"),
+            "{import}: {outcome:?}"
+        );
+    }
+    // The import is the ambient type, not `any`.
+    let source = "import type { CodeContext } from '@macro-inc/sdk';\nexport async function main({ webAppUrl }: CodeContext) {\n  const count: number = webAppUrl;\n  return { data: count };\n}\n";
+    let (_, outcome) = run(&service, source, 10_000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Compile && error.message.contains("TS2322")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
 /// A server answering every request with `body`, counting them.
 async fn counting_server(body: &'static str) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
