@@ -1341,20 +1341,30 @@ the pass would never return it.
 
 The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
 what a pass proves stale. When a pass that started at its first page finishes,
-each cached channel it did not return is read again by id; the ones the server
-no longer returns are deleted. A by-id page is evidence only when it lists
-entity ids and either ends or returned every id it was asked for (a page that
-reaches its limit carries a cursor). Its reads are tried three times. A
-cached id the server could not parse as a channel id is gone without a read:
-one such id would fail the whole read. The deletes carry the cache session
-taken before the reads, so the cache refuses them after a session transition,
-and a channel whose cached record changed while it was read (the viewer was
-added back) is read again instead of deleted, three rounds in all. The recheck
-and the delete are still two cache calls, so a write landing between them is
-deleted too: every deleted channel is read once more with the next round's
-reads (a round of its own after the last), and one the viewer can read again
-is written back by that read. A failed second look keeps the pass, whose
-evidence stands (`channel_directory.restored`, `reread_failed`).
+each cached channel it did not return is read again by id, a hundred at a
+time, from the replica the list reads. A by-id page is evidence only when it
+lists entity ids and either ends or returned every id it was asked for (a page
+that reaches its limit carries a cursor). The replica can lag an update the
+cache already holds (the viewer was added back, and the cache read that from
+the primary), so each channel it no longer returns is read on the primary
+(`ChannelDirectoryReconcileEntity`, the `user.soupEntity` read, four at a
+time) before it is deleted, and one the primary shows is kept and written back
+(`channel_directory.kept_by_primary`). At most 500 are confirmed on the
+primary in a pass: the rest wait, and the pass fails (`deferred`) so the next
+one goes on, rather than send the whole cache to the primary when the replica
+answers with nothing. Its reads are tried three times. A cached id the server
+could not parse as a channel id is gone without a read: one such id would fail
+the whole read. The deletes carry the cache session taken before the reads, so
+the cache refuses them after a session transition, and a channel whose cached
+record changed while it was read (the viewer was added back) is read again
+instead of deleted, three rounds in all. The recheck and the delete are still
+two cache calls, so a write landing between them is deleted too: every deleted
+channel is read on the primary once more at the start of the next round (a
+round of its own after the last), and one the viewer can read again is written
+back by that read (`channel_directory.restored`). A failed read fails the
+attempt. The page fetcher keeps the channels still to look at again, so the
+next attempt, or the lane's retry of the last page, reads them first, and a
+pass never completes with a deleted channel it has not looked at again.
 A pass that cannot reconcile (it resumed from a cursor, a page lacked entity
 ids, or the cache belongs to another viewer) deletes nothing; one whose cache
 changed hands or generation, or whose reads or records kept failing or

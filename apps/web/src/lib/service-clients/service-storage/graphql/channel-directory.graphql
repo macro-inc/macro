@@ -72,6 +72,22 @@ query ChannelDirectoryPage($input: SoupInput!) {
 	}
 }
 
+# One channel read from the primary by reconciliation, before it deletes a
+# channel a by-id read of the replica no longer returned and after the delete:
+# the replica can lag an update the cache already holds. A readable channel is
+# written back whole, as the lane writes it. Null when the viewer can no longer
+# read it.
+query ChannelDirectoryReconcileEntity($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			__typename
+			id
+			...SoupItemFields
+		}
+	}
+}
+
 # The viewer's DM with one person, the one a first message to them would reuse.
 # Asking never creates one.
 query DirectMessageChannelId($userId: ID!) {

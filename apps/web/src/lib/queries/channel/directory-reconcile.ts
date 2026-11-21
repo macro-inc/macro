@@ -3,6 +3,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
+  ChannelDirectoryReconcileEntityDocument,
   type GraphqlChannelExpr,
   SoupChannelDirectoryBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
@@ -12,6 +13,7 @@ import {
   type GraphqlSoupInitialInput,
   type GraphqlSoupInput,
   getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
 import {
@@ -36,12 +38,27 @@ const RECONCILE_RETRY_MS = 1_000;
 // A channel the cache rewrote after a by-id read found it gone is read again,
 // in at most this many rounds in all, before the pass gives up on it.
 const VERIFY_ROUNDS = 3;
+// Channels read from the primary at once, one read each.
+const PRIMARY_READ_CONCURRENCY = 4;
+// At most this many channels the replica no longer returned are confirmed on
+// the primary in one pass. The rest wait for the next pass, which this one
+// fails, so a replica that answers with nothing cannot send the whole cache
+// to the primary, and a larger removal still finishes over several passes.
+const PRIMARY_CONFIRM_LIMIT = 500;
 const NEVER_ABORTED = new AbortController().signal;
 
 type FetchPage = (
   input: GraphqlSoupInput,
   options?: Pick<FetchGraphqlSoupOptions, 'signal'>
 ) => Promise<GraphqlSoupHydrationPage>;
+
+/** Whether the primary database shows the viewer the channel. A readable
+ * channel is written back to the cache by the read. Throws when the read
+ * fails. */
+type ReadFromPrimary = (
+  channelId: string,
+  signal: AbortSignal | undefined
+) => Promise<'readable' | 'unreadable'>;
 
 type ReconcileHost = Pick<
   CacheHost,
@@ -55,6 +72,24 @@ type ReconcileHost = Pick<
 
 const fetchDirectoryPage: FetchPage = (input, options) =>
   hydrateGraphqlSoup(SoupChannelDirectoryBackfillDocument, { input }, options);
+
+const readChannelOnPrimary: ReadFromPrimary = async (channelId, signal) => {
+  const result = await getGraphqlSoupClient()
+    .query(
+      ChannelDirectoryReconcileEntityDocument,
+      { input: { entityType: 'CHANNEL', entityId: channelId } },
+      {
+        requestPolicy: 'network-only',
+        ...(signal ? { fetchOptions: { signal } } : {}),
+      }
+    )
+    .toPromise();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('primary channel read returned no data');
+  return result.data.user.soupEntity?.__typename === 'GraphqlSoupChannel'
+    ? 'readable'
+    : 'unreadable';
+};
 
 function chunks<T>(items: readonly T[], size: number): T[][] {
   const result: T[][] = [];
@@ -138,6 +173,31 @@ async function unreadableChannels(
   return gone;
 }
 
+/** Which of `ids` the primary shows the viewer can no longer read, a few
+ * reads at a time, each sent in `trace`. A failed read throws. */
+async function unreadableOnPrimary(
+  ids: readonly string[],
+  read: ReadFromPrimary,
+  signal: AbortSignal | undefined,
+  trace: TraceContext
+): Promise<Set<string>> {
+  // An id the server cannot parse names no channel anyone can read.
+  const gone = new Set(ids.filter((id) => !isChannelId(id)));
+  for (const batch of chunks(
+    ids.filter(isChannelId),
+    PRIMARY_READ_CONCURRENCY
+  )) {
+    signal?.throwIfAborted();
+    const answers = await trace.run(() =>
+      Promise.all(batch.map((id) => read(id, signal)))
+    );
+    batch.forEach((id, index) => {
+      if (answers[index] === 'unreadable') gone.add(id);
+    });
+  }
+  return gone;
+}
+
 type Reconciliation = {
   host: ReconcileHost;
   userId: string;
@@ -145,6 +205,7 @@ type Reconciliation = {
   lane: GraphqlSoupInitialInput;
   candidates: readonly string[];
   fetch: FetchPage;
+  readFromPrimary: ReadFromPrimary;
   /** The cache session a removal is made in; the cache refuses a removal
    * made in a session that has since ended. */
   session: () => string;
@@ -172,7 +233,19 @@ type ReconcileOutcome =
   | 'incomplete'
   | 'scope_changed'
   | 'unsettled'
+  | 'deferred'
   | 'complete';
+
+/** What reconciliation carries past a failed attempt. */
+type ReconcileProgress = {
+  /** Deleted, and not read on the primary since. The pass's fetcher keeps
+   * them, so the next attempt, or a retry of the last page, reads them
+   * first. */
+  deleted: string[];
+  /** Channels confirmed on the primary in this reconciliation, against
+   * `PRIMARY_CONFIRM_LIMIT`. */
+  confirmed: number;
+};
 
 /** The search source hash of each of `ids` the cache holds a record of. */
 async function cachedHashes(
@@ -195,65 +268,89 @@ async function cachedHashes(
  * Deletes the cached channels the viewer can no longer read: channels they
  * were removed from or that were deleted while no event reached them.
  *
- * A by-id read that found a channel gone is as of the moment it answered. A
- * record the cache rewrote since (the viewer was added back, and the update
- * landed before the delete) is read again instead of deleted. The check and
- * the delete are separate cache calls, so a write can land between them and
- * be deleted too: every deleted channel is read once more after its delete,
- * with the next round's reads, and one the viewer can read again is written
- * back by that read.
+ * A by-id read of the replica decides which candidates are still readable,
+ * a hundred at a time. The replica can lag an update the cache already holds
+ * (the viewer was added back, and the cache read that from the primary), so
+ * each channel it no longer returns is read on the primary before it is
+ * deleted, and one the primary shows is kept and written back.
+ *
+ * A read that found a channel gone is as of the moment it answered. A record
+ * the cache rewrote since is read again instead of deleted. The check and the
+ * delete are separate cache calls, so a write can land between them and be
+ * deleted too: every deleted channel is read on the primary once more after
+ * its delete, and one the viewer can read again is written back by that
+ * read. A failed read fails the attempt, and the next attempt starts with
+ * that second look.
  */
 async function removeUnreadableChannels(
-  input: Reconciliation
+  input: Reconciliation,
+  progress: ReconcileProgress
 ): Promise<ReconcileOutcome> {
   return Telemetry.span('channel_directory.reconcile', async (span) => {
     span.setAttr('channel_directory.candidates', input.candidates.length);
     let pending = input.candidates;
-    // Deleted in the last round, and not read since.
-    let deleted: string[] = [];
     let removed = 0;
     let restored = 0;
+    // The replica no longer returned them; the primary did.
+    let kept = 0;
+    let deferred = 0;
     let round = 0;
     const finish = (outcome: ReconcileOutcome) => {
       span.setAttr('channel_directory.removed', removed);
       span.setAttr('channel_directory.restored', restored);
+      span.setAttr('channel_directory.kept_by_primary', kept);
+      span.setAttr('channel_directory.deferred', deferred);
+      span.setAttr('channel_directory.primary_confirmed', progress.confirmed);
       span.setAttr('channel_directory.reconcile_rounds', round);
       span.setAttr('channel_directory.reconcile_outcome', outcome);
       return outcome;
     };
-    while (pending.length > 0 || deleted.length > 0) {
-      // Only channels still to decide count against the rounds: a read of
-      // those already deleted decides nothing about the pass.
-      if (pending.length > 0 && round === VERIFY_ROUNDS)
-        return finish('unsettled');
+    for (;;) {
+      // The second look at what the last round (or a failed attempt)
+      // deleted comes first, so no later outcome skips it.
+      const rereading = progress.deleted;
+      if (rereading.length > 0) {
+        // Each step starts after an await, outside the span.
+        const gone = await unreadableOnPrimary(
+          rereading,
+          input.readFromPrimary,
+          input.signal,
+          span
+        );
+        progress.deleted = [];
+        restored += rereading.filter((id) => !gone.has(id)).length;
+      }
+      if (pending.length === 0) break;
+      if (round === VERIFY_ROUNDS) return finish('unsettled');
       round += 1;
       // Taken before the evidence, so a removal it proves is refused once the
       // session it was read in has ended.
       const session = input.session();
-      // Each round starts after an await, outside the span.
       const before = await span.run(() =>
         cachedHashes(input.host, pending, input.signal)
       );
       // A channel no longer cached needs no read.
       const deciding = pending.filter((id) => before.has(id));
-      const rereading = deleted;
-      deleted = [];
-      const gone = await unreadableChannels(
+      const replicaGone = await unreadableChannels(
         input.lane,
-        [...deciding, ...rereading],
+        deciding,
         input.fetch,
         input.signal,
         span
       );
-      if (!gone) {
-        if (deciding.length > 0) return finish('incomplete');
-        // The pass proved what it deleted; only this second look failed.
-        span.setAttr('channel_directory.reread_failed', rereading.length);
-        return finish('complete');
-      }
-      const goneIds = new Set(gone);
-      restored += rereading.filter((id) => !goneIds.has(id)).length;
-      const decided = deciding.filter((id) => goneIds.has(id));
+      if (!replicaGone) return finish('incomplete');
+      const room = Math.max(0, PRIMARY_CONFIRM_LIMIT - progress.confirmed);
+      const confirming = replicaGone.slice(0, room);
+      deferred += replicaGone.length - confirming.length;
+      const primaryGone = await unreadableOnPrimary(
+        confirming,
+        input.readFromPrimary,
+        input.signal,
+        span
+      );
+      progress.confirmed += confirming.length;
+      kept += confirming.filter((id) => !primaryGone.has(id)).length;
+      const decided = confirming.filter((id) => primaryGone.has(id));
       if (decided.length === 0) {
         pending = [];
         continue;
@@ -275,12 +372,12 @@ async function removeUnreadableChannels(
         );
       }
       removed += stale.length;
-      deleted = stale;
+      progress.deleted = stale;
       pending = decided.filter(
         (id) => after.has(id) && after.get(id) !== before.get(id)
       );
     }
-    return finish('complete');
+    return finish(deferred > 0 ? 'deferred' : 'complete');
   });
 }
 
@@ -335,10 +432,14 @@ type StagedPage = {
 };
 
 /** Reconciles, again after a failed read, until the cache is proven. */
-async function reconcile(input: Reconciliation): Promise<void> {
+async function reconcile(
+  input: Reconciliation,
+  progress: ReconcileProgress
+): Promise<void> {
+  progress.confirmed = 0;
   for (let attempt = 1; ; attempt += 1) {
     try {
-      const outcome = await removeUnreadableChannels(input);
+      const outcome = await removeUnreadableChannels(input, progress);
       if (outcome === 'complete') return;
       throw new ChannelDirectoryPassUnproven(outcome);
     } catch (error) {
@@ -358,23 +459,27 @@ async function reconcile(input: Reconciliation): Promise<void> {
  * Page fetcher for the channel backfill lane that also removes what the lane
  * proves stale. The lane lists every channel the viewer joined. When a pass
  * that started at its first page finishes, each cached channel it did not
- * return is read again by id; the ones the server no longer returns are
- * deleted from the cache. A pass that cannot do so (it resumed from a cursor,
- * a page listed no ids, or the cache is another viewer's) deletes nothing; one
- * whose cache changed hands or whose reads kept failing stops before its next
- * round of deletes. Either fails on its last page, so the lane never records
- * it complete. Without a cache there is nothing to reconcile.
+ * return is read again by id; the ones neither the replica nor the primary
+ * returns are deleted from the cache. A pass that cannot do so (it resumed
+ * from a cursor, a page listed no ids, or the cache is another viewer's)
+ * deletes nothing; one whose cache changed hands or whose reads kept failing
+ * stops before its next round of deletes, and one with more channels to
+ * confirm than `PRIMARY_CONFIRM_LIMIT` leaves the rest to the next pass.
+ * Each fails on its last page, so the lane never records it complete.
+ * Without a cache there is nothing to reconcile.
  *
  * A page counts once the lane asks for the page after it. The lane saves a
  * page's cursor only after the checks that follow its read, and a retry
  * reads from the cursor it saved, so a page whose checks failed is read
- * again and only that answer counts.
+ * again and only that answer counts. A retry of the last page also reads on
+ * the primary, first, the channels a failed attempt deleted.
  */
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
   host: ReconcileHost | undefined = getGraphqlSoupCacheHost(),
   fetch: FetchPage = fetchDirectoryPage,
-  session: () => string = cacheSessionGeneration.capture
+  session: () => string = cacheSessionGeneration.capture,
+  readFromPrimary: ReadFromPrimary = readChannelOnPrimary
 ): Promise<FetchPage> {
   // Listed as the pass begins: a channel cached later by an event is not one
   // the pass could have missed.
@@ -384,6 +489,7 @@ export async function createChannelDirectoryBackfillFetcher(
   let firstPage = true;
   let completeEvidence = true;
   let staged: StagedPage | undefined;
+  const progress: ReconcileProgress = { deleted: [], confirmed: 0 };
 
   return async (input, options) => {
     if (firstPage) {
@@ -418,17 +524,21 @@ export async function createChannelDirectoryBackfillFetcher(
     const candidates = scope.previous.filter(
       (id) => !seen.has(id) && !last.has(id)
     );
-    if (candidates.length > 0)
-      await reconcile({
-        host: scope.host,
-        userId,
-        generation: scope.generation,
-        lane,
-        candidates,
-        fetch,
-        session,
-        signal: options?.signal,
-      });
+    if (candidates.length > 0 || progress.deleted.length > 0)
+      await reconcile(
+        {
+          host: scope.host,
+          userId,
+          generation: scope.generation,
+          lane,
+          candidates,
+          fetch,
+          readFromPrimary,
+          session,
+          signal: options?.signal,
+        },
+        progress
+      );
     return page;
   };
 }
