@@ -29,8 +29,13 @@ pub(crate) enum HerdrError {
     #[error("herdr command timed out")]
     Timeout,
     /// The binary could not be started.
-    #[error("could not run herdr")]
-    Spawn(#[source] std::io::Error),
+    #[error("could not run herdr ({})", bin.display())]
+    Spawn {
+        /// The binary that would not start.
+        bin: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     /// herdr ran and refused.
     #[error("herdr {command} failed: {stderr}")]
     Refused {
@@ -276,7 +281,10 @@ async fn run<Arg: AsRef<str>>(bin: &Path, args: &[Arg]) -> Result<String, HerdrE
     )
     .await
     .map_err(|_| HerdrError::Timeout)?
-    .map_err(HerdrError::Spawn)?;
+    .map_err(|source| HerdrError::Spawn {
+        bin: bin.to_owned(),
+        source,
+    })?;
     if !output.status.success() {
         return Err(HerdrError::Refused {
             command: describe(args),

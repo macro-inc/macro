@@ -258,6 +258,29 @@ fn a_log_path_on_the_next_line_is_kept() {
 
 #[cfg(unix)]
 #[test]
+fn a_herdr_core_terminal_runs_herdr_agents_through_the_hc_it_names() {
+    let agent = herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Claude);
+    let terminal = crate::herdr::HerdrSession::Core {
+        bin: PathBuf::from("/opt/herdr-core/bin/hc"),
+        terminal: "t3".to_owned(),
+    };
+
+    // `hc` is not on PATH: herdr-core's terminal environment names it.
+    let available = agent.availability(Ok(Some(terminal)), &Commands::new(&["claude"]));
+    assert!(
+        matches!(available, Availability::Available(_)),
+        "{available:?}"
+    );
+
+    let unnamed = agent.availability(Err(crate::herdr::HcBinMissing), &Commands::new(&["claude"]));
+    assert!(
+        matches!(&unnamed, Availability::Unavailable { missing } if missing == &["HC_BIN"]),
+        "{unnamed:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn a_root_owned_npm_cache_reports_the_fix_npm_suggests() {
     use std::os::unix::process::ExitStatusExt as _;
     // npm 11's output in macOS 14 with a cache it cannot write, as captured

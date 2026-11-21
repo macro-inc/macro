@@ -585,7 +585,7 @@ the shimmer.
   counts describe loaded rows, not a server total. Phone has its own Archived view.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
-  conversations** menu, which counts it on the filter badge and unchecks it with
+  conversations** menu, which adds it to the count in the filter button and unchecks it with
   **Clear filters**; runs of routines with it on are always listed. Every
   routine run keeps its clock icon in the desktop row. The list starts without
   hidden runs each time the Agents view opens.
@@ -867,7 +867,7 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
-  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  This works in herdr 0.9 and in the herdr app (herdr-core, which names its `hc` in each terminal's `HC_BIN`),
   where session tabs open in macrod's space. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
   versions" in `crates/coding_agent_worker/README.md`.

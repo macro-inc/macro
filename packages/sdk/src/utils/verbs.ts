@@ -207,6 +207,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     enabled: 'enableNotificationType',
     edited: 'updateChannelNotificationSettings',
+    sent: 'sendPing',
   },
   properties: {
     labeled: 'ensureTagSet',

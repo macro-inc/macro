@@ -241,7 +241,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
         }
     });
 
-    let herdr = HerdrSession::detect();
+    let herdr = HerdrSession::detect()?;
     let home = environment::Home::new().and_then(|home| home.value().map(PathBuf::from));
     let state_dir = options
         .state_dir

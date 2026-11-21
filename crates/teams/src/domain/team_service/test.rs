@@ -71,6 +71,7 @@ use crate::domain::{
 
 mod crm_member_access;
 mod delete_team;
+mod directory_changes;
 mod invite_link;
 mod team_agent;
 mod team_logo;
@@ -1877,10 +1878,13 @@ impl MacroEventBroker for RecordingEventBroker {
 
 type ContactPair = (MacroUserIdStr<'static>, MacroUserIdStr<'static>);
 type ContactBatches = Arc<Mutex<Vec<Vec<ContactPair>>>>;
+/// One `directory_changed` call: (users, changed).
+type DirectoryChange = (Vec<String>, Vec<String>);
 
 #[derive(Clone, Default)]
 struct RecordingContactsEnqueuer {
     batches: ContactBatches,
+    directory_changes: Arc<Mutex<Vec<DirectoryChange>>>,
     fail: bool,
 }
 
@@ -1901,6 +1905,23 @@ impl ContactsEnqueuer for RecordingContactsEnqueuer {
         connections: Vec<ContactPair>,
     ) -> Result<(), Self::Err> {
         self.batches.lock().unwrap().push(connections);
+        if self.fail {
+            Err("contacts enqueue failed")
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn directory_changed(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        let ids = |ids: Vec<MacroUserIdStr<'static>>| ids.iter().map(|id| id.to_string()).collect();
+        self.directory_changes
+            .lock()
+            .unwrap()
+            .push((ids(users), ids(changed)));
         if self.fail {
             Err("contacts enqueue failed")
         } else {
@@ -2170,12 +2191,18 @@ fn assert_no_enterprise_join_team_billing_calls(
     );
 }
 
+/// `roster_reads` counts `get_team_by_id`: billing never reads the team, but a
+/// completed removal reads the remaining roster once for the directory change.
 fn assert_no_enterprise_remove_user_billing_calls(
     team_repository: &MockTeamRepository,
     customer_repository: &MockCustomerRepository,
+    roster_reads: usize,
 ) {
     assert_no_enterprise_join_team_billing_calls(team_repository, customer_repository);
-    assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 0);
+    assert_eq!(
+        *team_repository.get_team_by_id_calls.lock().unwrap(),
+        roster_reads
+    );
 }
 
 fn build_service(
@@ -7482,7 +7509,7 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
     );
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 1);
     assert_eq!(
         *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
@@ -7567,7 +7594,7 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_when_channel_rem
     assert!(event_broker.events().is_empty());
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 0);
     assert_eq!(
         *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
@@ -7631,7 +7658,7 @@ async fn remove_user_from_team_enterprise_rolls_back_membership_and_channels_whe
     ));
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 1);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 0);
     assert_eq!(
         *channels_repository.leave_calls.lock().unwrap(),
         vec![(team_id, member_id.as_ref().to_string())]
@@ -7698,7 +7725,7 @@ async fn remove_user_from_team_enterprise_status_read_precedes_membership_remova
     );
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
-    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository);
+    assert_no_enterprise_remove_user_billing_calls(&team_repository, &customer_repository, 0);
     assert!(channels_repository.leave_calls.lock().unwrap().is_empty());
     assert!(
         channels_repository

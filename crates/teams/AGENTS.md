@@ -81,6 +81,14 @@ event contract (schema, sanitization, delivery semantics).
   `traced(stripe_span!("stripe.<object>.<verb>", <object>_id = …), …)`.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
+- `src/domain/contacts_enqueuer.rs` (`ContactsEnqueuer`, adapter
+  `outbound/contacts_enqueuer.rs`): the contacts side effects of membership,
+  best-effort after the change commits. A join also enqueues legacy edges
+  joiner ↔ teammates. Joins and removals send `directory_changed` both ways
+  (the roster re-reads the member; the member re-reads the roster), and team
+  deletion sends every member the whole roster. Teammates are computed from the
+  roster, so nothing is written; a roster over 500 is sent as unknown.
+  `authentication_service` wires it through the `contacts-list-writes` gate.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
 - `src/domain/team_repo.rs`: reuse `get_user_teams` for viewer teams and `get_all_team_members` for team membership, including owners.
 

@@ -12,7 +12,7 @@ use crate::domain::models::{
     RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitOk, RateLimitResult,
     TokenBucketConfig, TokenBucketResult,
 };
-use crate::domain::ports::{RateLimitPort, TokenBucketPort};
+use crate::domain::ports::{RateBudgetPort, RateLimitPort, TokenBucketPort};
 
 /// Redis key prefix for rate limit counters.
 const KEY_PREFIX: &str = "rtl";
@@ -77,14 +77,17 @@ pub trait RedisTokenBucketOps {
     ) -> impl std::future::Future<Output = Result<(bool, u64, u64), Report>> + Send;
 }
 
-impl RedisTokenBucketOps for redis::Client {
+/// Every take goes over the manager's one multiplexed connection, which it
+/// reconnects when it drops. A connection per take made a burst of concurrent
+/// takes open a connection each and wait hundreds of milliseconds for them.
+impl RedisTokenBucketOps for redis::aio::ConnectionManager {
     async fn take_token(
         &self,
         key: &str,
         capacity: u64,
         refill_ms: u64,
     ) -> Result<(bool, u64, u64), Report> {
-        let mut conn = self.get_multiplexed_async_connection().await?;
+        let mut conn = self.clone();
         let (taken, tokens, retry_after_ms): (i64, i64, i64) = TOKEN_BUCKET_SCRIPT
             .key(key)
             .arg(capacity)
@@ -157,6 +160,101 @@ impl RedisRateLimitOps for redis::Client {
         script.key(key).invoke_async::<i64>(&mut conn).await?;
 
         Ok(())
+    }
+}
+
+/// Redis operations for limits whose actions cost more than one each.
+///
+/// Separate from [`RedisRateLimitOps`] so clients that only count single
+/// actions need not provide it.
+pub trait RedisRateBudgetOps {
+    /// Atomically add `cost` to the counter when the sum stays within
+    /// `max_count`.
+    ///
+    /// Uses a Lua script to avoid TOCTOU races between reading the count and
+    /// adding to it. Returns `(allowed, current_count, ttl_seconds_if_denied)`.
+    fn check_and_add(
+        &self,
+        key: &str,
+        max_count: u64,
+        expiry_seconds: u64,
+        cost: u64,
+    ) -> impl std::future::Future<Output = Result<(bool, u64, Option<u64>), Report>> + Send;
+}
+
+impl RedisRateBudgetOps for redis::Client {
+    async fn check_and_add(
+        &self,
+        key: &str,
+        max_count: u64,
+        expiry_seconds: u64,
+        cost: u64,
+    ) -> Result<(bool, u64, Option<u64>), Report> {
+        let mut conn = self.get_multiplexed_async_connection().await?;
+
+        // A counter without an expiry starts a window; one that has an expiry
+        // keeps it, so the window is fixed from its first spend.
+        let script = redis::Script::new(
+            r"
+            local key = KEYS[1]
+            local max_count = tonumber(ARGV[1])
+            local window = tonumber(ARGV[2])
+            local cost = tonumber(ARGV[3])
+            local current = tonumber(redis.call('GET', key) or '0')
+            if current + cost > max_count then
+                return {0, current, redis.call('TTL', key)}
+            end
+            local new_count = redis.call('INCRBY', key, cost)
+            if redis.call('TTL', key) < 0 then
+                redis.call('EXPIRE', key, window)
+            end
+            return {1, new_count, 0}
+            ",
+        );
+
+        let (allowed, count, ttl): (i64, i64, i64) = script
+            .key(key)
+            .arg(max_count)
+            .arg(expiry_seconds)
+            .arg(cost)
+            .invoke_async(&mut conn)
+            .await?;
+
+        // `TTL` is 0 for a live key under a second from expiry, so that still
+        // waits a second; -1 (no expiry) and -2 (gone) fall back to the window.
+        let ttl = u64::try_from(ttl).ok().map(|ttl| ttl.max(1));
+        Ok((allowed == 1, count as u64, ttl))
+    }
+}
+
+impl<R: RedisRateBudgetOps + Send + Sync + 'static> RateBudgetPort for RedisRateLimitAdapter<R> {
+    async fn spend(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+        cost: u64,
+    ) -> Result<Result<u64, RateLimitExceeded>, Report> {
+        let (allowed, current_count, ttl) = self
+            .redis
+            .check_and_add(
+                &redis_key(&key),
+                config.max_count,
+                config.window.as_secs(),
+                cost,
+            )
+            .await?;
+
+        if allowed {
+            Ok(Ok(current_count))
+        } else {
+            let retry_after =
+                std::time::Duration::from_secs(ttl.unwrap_or(config.window.as_secs()));
+            Ok(Err(RateLimitExceeded {
+                current_count,
+                max_count: config.max_count,
+                retry_after,
+            }))
+        }
     }
 }
 

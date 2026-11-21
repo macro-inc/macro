@@ -40,7 +40,7 @@ export const SidebarRailCreateButton = () => {
       }}
       ref={createMenuTarget}
       variant="ghost"
-      class="size-(--rail-button-size)"
+      class="size-(--rail-button-size) shrink-0"
       size="icon-md"
       aria-haspopup="dialog"
       aria-expanded={createMenuOpen()}

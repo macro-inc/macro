@@ -241,6 +241,7 @@ readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
+  "connection-manager",
   "tokio-rustls-comp",
 ] }
 reminders = { path = "../../crates/reminders", features = [

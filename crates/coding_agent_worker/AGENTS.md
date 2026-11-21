@@ -41,9 +41,17 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `src/daemon/position.rs` drops repeats by event id, and events minted
   before their agent was bound here (before the last agents read that did not
   list it), which belonged to another runtime.
+  A service that sends `x-macro-stream-heartbeat` heartbeats the stream only
+  while its event source progresses; three heartbeats missed in a row with no
+  event (70 s at 20 s) end the stream as stalled, and it reopens from the
+  cursor. Without
+  the header (older service) there is no such deadline. `Daemon::trigger_stream_health`
+  publishes the stream's state (`src/daemon/health.rs`) for the panel.
   A failed runtime dial and a dropped event stream retry after 250 ms,
   doubling to 30 s, each delay jittered (`src/retry_delay.rs`); a runtime
-  connection that held 10 s is redialed at once. The ACP agent starts before
+  connection that held 10 s is redialed at once, and an event stream that
+  held 10 s reopens at the first delay (one closed sooner keeps backing off).
+  The ACP agent starts before
   each dial (and stays ready across failed ones), so a session that arrives
   with the connection does not also wait for the agent's startup.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
@@ -101,9 +109,29 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   which maps it to the 256 or 16-color palette when `COLORTERM`,
   `TERM_PROGRAM` and `TERM` say the terminal has no truecolor (macOS
   Terminal.app misreads RGB escapes). New draw calls must fit their frame too.
+- `src/tui/logging.rs`: the panel's logs. The Logs tab renders the last 500
+  lines; from startup (once the config lock is held) every line is also
+  appended to `logs/<config name>.log` beside the config (lines from before
+  the lock are written then), so `~/.macrod/logs/macrod.log` by default and
+  `~/.macrod/profiles/logs/<profile>.log` for a profile (`src/log_file.rs`, shared with the
+  update log; 0600, rotated at 10 MB to `.1`). Each run logs `macrod started`
+  (version, pid, config, handoff), the daemon's harness id, and why it ended:
+  quit, input closed, update restart, error, SIGHUP or SIGTERM. A panic is
+  logged as `macrod panicked`; in a spawned task the process keeps running. A
+  `macrod started` with no exit line before it means the previous process was
+  killed (SIGKILL, OOM). The file uses the Logs tab's filter (`RUST_LOG`,
+  default `info`); `RUST_LOG=trace` adds per-message ACP traces (direction
+  and size only).
+- `src/outbound/stream.rs`: the owner, bound-agent and presence lookups and
+  the event stream's response head each get `ANSWER_TIMEOUT` (10 s), so a
+  stalled request fails instead of holding up trigger processing. A failed
+  bound-agent refresh keeps the open stream and tries again on the next one.
+  `src/outbound/agent_session.rs` gives the session create and control calls a
+  trigger awaits inline `CALL_TIMEOUT` (60 s).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
-  (`hc`) by environment; both stay supported.
+  (`hc`, the binary the terminal's `HC_BIN` names; never `PATH`) by
+  environment; both stay supported.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`) and
   never npm's extensionless shell script beside them. The Claude Code adapter
@@ -242,8 +270,18 @@ workspace on session start. The enrollment deployment's egress URL is
 stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
-Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
-with the marker's computer UUID as a resource attribute. Enrollment joins the
-setup trace from `Enrollment.traceparent`; its claim sends the setup
-`traceparent`. stdout remains the daemon protocol.
+Service telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, the default, or `http/protobuf`).
+`macrod enroll` exports to the enrollment's `deployment.telemetry_url`
+(OTLP/HTTP) and writes those two variables to `/var/lib/macrod/telemetry.env`,
+which a computer's `macrod.service` loads, with `OTEL_EXPORTER_OTLP_HEADERS`
+naming the computer (`x-macro-computer-id`). The analytics proxy does not
+honour it yet: it is unauthenticated, so the proxy still limits by client IP
+until the id is signed. Only setup spans (`run_enroll`,
+`macrod.enroll.*`, `macrod.agent.apply`) export, with the marker's computer
+UUID as a resource attribute. Enrollment joins the setup trace from
+`Enrollment.traceparent`; its claim sends the setup `traceparent`.
+`ApplyAgent.traceparent` parents `macrod.agent.apply` and is staged once, beside
+the agent's environment and never in it (a redelivery's fresh one would rewrite
+agent.env and restart the agent), at `/run/macro-agent-inbox/setup-traceparent`. stdout remains the daemon
+protocol.

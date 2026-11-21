@@ -16,6 +16,58 @@ async fn guard(tx: &mut sqlx::PgConnection, lease: &WatchLease) -> Result<(), Ma
     }
     Ok(())
 }
+impl PgMailboxSync {
+    /// Queues the message a notification names as live work, as a live folder
+    /// page would (`is_import` false, the notification's time and trace), and
+    /// answers whether it did. A row already queued for it takes the newer
+    /// revision, so every change to one message is one row. Nothing is queued
+    /// while a folder of the mailbox is still in its import round, where its
+    /// folder pages queue import work, or while the mailbox has `queued_ahead`
+    /// live messages due: its folders' pages list the rest. The checks read
+    /// `email_sync_streams_link_import_rounds` and
+    /// `email_message_reconciliation_live_queued`, whose predicates they repeat.
+    async fn queue_notified_message(
+        tx: &mut sqlx::PgConnection,
+        link_id: Uuid,
+        generation: i64,
+        message: &ProviderId,
+        queued_ahead: u32,
+    ) -> Result<bool, MailboxError> {
+        let queued = sqlx::query!(
+            r#"
+            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,notified_at,notified_traceparent,from_notification)
+            SELECT $1,$2,$3,false,clock_timestamp(),$4,true
+            WHERE NOT EXISTS (
+                SELECT 1 FROM email_sync_streams s
+                WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder' AND NOT s.initial_complete
+            ) AND (
+                SELECT count(*) FROM (
+                    SELECT 1 FROM email_message_reconciliation q
+                    WHERE q.link_id = $1 AND q.generation = $2 AND NOT q.is_import AND q.available_at <> 'infinity'
+                        AND q.available_at <= now()
+                    LIMIT $5
+                ) due
+            ) < $5
+            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
+                revision = email_message_reconciliation.revision + 1,
+                is_import = false,
+                notified_at = EXCLUDED.notified_at,
+                notified_traceparent = EXCLUDED.notified_traceparent,
+                available_at = now()
+        "#,
+            link_id,
+            generation,
+            message.as_str(),
+            crate::trace_context::current(),
+            i64::from(queued_ahead)
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        Ok(queued.rows_affected() == 1)
+    }
+}
+
 impl MailboxWatchRepository for PgMailboxSync {
     async fn claim_watch(&self, lease_id: Uuid) -> Result<Option<WatchLease>, MailboxError> {
         let row=sqlx::query!(r#"WITH candidate AS(SELECT w.link_id FROM email_mailbox_watch_work w JOIN email_links l ON l.id=w.link_id
@@ -129,7 +181,9 @@ impl MailboxWatchRepository for PgMailboxSync {
         expected: &WatchAttempt,
         subscription: &str,
         hint: &WatchHint,
-    ) -> Result<Option<Uuid>, MailboxError> {
+        message: Option<&ProviderId>,
+        queued_ahead: u32,
+    ) -> Result<Option<NotificationAccepted>, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         let Some(binding)=sqlx::query!(r#"SELECT s.link_id,l.sync_generation FROM email_provider_subscriptions s JOIN email_links l ON l.id=s.link_id
             WHERE s.id=$1 AND s.generation=$2 AND s.client_state_hash=$3 AND l.is_sync_active AND l.sync_generation=s.generation
@@ -149,7 +203,23 @@ impl MailboxWatchRepository for PgMailboxSync {
             sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",binding.link_id)
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
+        let message_queued = match message {
+            Some(message) => {
+                Self::queue_notified_message(
+                    &mut tx,
+                    binding.link_id,
+                    binding.sync_generation,
+                    message,
+                    queued_ahead,
+                )
+                .await?
+            }
+            None => false,
+        };
         tx.commit().await.map_err(db_error)?;
-        Ok(Some(binding.link_id))
+        Ok(Some(NotificationAccepted {
+            link_id: binding.link_id,
+            message_queued,
+        }))
     }
 }
