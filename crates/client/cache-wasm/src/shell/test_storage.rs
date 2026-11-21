@@ -17,7 +17,7 @@ use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
 use predicate_index::{EffectiveOptimisticProjection, RecordKey, ValidatedIndexQuery};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 #[derive(Clone, Copy)]
 pub(super) enum TestStorageFault {
@@ -31,6 +31,9 @@ pub(super) enum TestStorageFault {
 pub(super) struct BrowserStorage {
     inner: TursoStorage,
     fault: AtomicU8,
+    /// Set once a fault fires: like a Turso file that latched a reset, the
+    /// storage then reports no write position.
+    failed: AtomicBool,
 }
 
 impl BrowserStorage {
@@ -38,6 +41,7 @@ impl BrowserStorage {
         Self {
             inner,
             fault: AtomicU8::new(0),
+            failed: AtomicBool::new(false),
         }
     }
 
@@ -55,6 +59,7 @@ impl BrowserStorage {
             .compare_exchange(fault as u8, 0, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
+            self.failed.store(true, Ordering::Release);
             Err(TursoStorageError::PhysicalResetRequired(
                 PhysicalResetReason::Codec,
             ))
@@ -68,6 +73,9 @@ impl Storage for BrowserStorage {
     type Error = TursoStorageError;
 
     fn write_position(&self) -> Option<cache_core::store::WritePosition> {
+        if self.failed.load(Ordering::Acquire) {
+            return None;
+        }
         self.inner.write_position()
     }
 

@@ -145,9 +145,12 @@ impl WritePasses {
         self.reads = reads.finish();
         // What the passes computed so far holds only if every key they read
         // still reads the same, i.e. storage committed nothing since. That
-        // goes for a pass that failed too: it may have failed on what it read
-        // before the commit.
-        if stepping && engine.storage().write_position() != self.position {
+        // goes for a pass that failed too, when storage still reports a
+        // position: it may have failed on what it read before the commit.
+        // Storage that stops reporting one after a failure has failed itself,
+        // so its error stands (a reset request must reach the host as is).
+        let now = engine.storage().write_position();
+        if stepping && now != self.position && (result.is_ok() || now.is_some()) {
             self.restart();
             return Ok(WritePassStep::Pending);
         }
