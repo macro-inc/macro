@@ -442,7 +442,9 @@ where
         );
         shared.sort();
         shared.dedup();
-        if shared.is_empty() {
+        // A background job changes only its owner's own items: a shared
+        // definition's options change wherever it is used.
+        if shared.is_empty() || !agent_correlation::context::may_share() {
             return Ok(Vec::new());
         }
         self.definitions

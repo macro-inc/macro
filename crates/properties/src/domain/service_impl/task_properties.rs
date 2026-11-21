@@ -41,6 +41,12 @@ where
         let Some(PropertyValue::EntityRef(references)) = value else {
             return Ok(());
         };
+        refuse_assigning_others(
+            references
+                .iter()
+                .map(|reference| reference.entity_id.as_str()),
+            access.acting_user_id().map(ToString::to_string).as_deref(),
+        )?;
         let mut assignee_ids = Vec::new();
         for reference in references {
             if reference.entity_type != EntityType::User {
@@ -252,6 +258,12 @@ where
             }
             return Ok(());
         };
+        refuse_assigning_others(
+            references
+                .iter()
+                .map(|reference| reference.entity_id.as_str()),
+            assigned_by_user_id.map(ToString::to_string).as_deref(),
+        )?;
 
         let mut assignee_ids = Vec::new();
         for reference in references {
@@ -384,4 +396,24 @@ where
 
         Ok(())
     }
+}
+
+/// Under a scope that may not share (a background job), assigning anyone
+/// but the acting user reaches them: it grants access, notifies them, or
+/// starts an agent's work. Refused, and recorded as a sharing refusal.
+fn refuse_assigning_others<'a>(
+    assignees: impl IntoIterator<Item = &'a str>,
+    acting_user: Option<&str>,
+) -> Result<(), PropertiesErr> {
+    if agent_correlation::context::may_share() {
+        return Ok(());
+    }
+    if assignees
+        .into_iter()
+        .any(|assignee| Some(assignee) != acting_user)
+    {
+        let _ = agent_correlation::context::refuse_sharing(true);
+        return Err(PropertiesErr::PermissionDenied);
+    }
+    Ok(())
 }

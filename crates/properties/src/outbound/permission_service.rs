@@ -187,12 +187,21 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             .get_access_level(Some(user_id), entity_id, entity_type)
             .await?
         {
-            Some(access_level @ (AccessLevel::Edit | AccessLevel::Owner)) => Ok(access_receipt(
-                caller_auth(Some(user_id)),
-                entity_id,
-                entity_type,
-                access_level,
-            )?),
+            // Through `satisfies`, so a background job's credential needs
+            // owner access here too.
+            Some(access_level)
+                if entity_access::domain::models::EntityPermission::AccessLevel {
+                    access_level,
+                }
+                .satisfies::<entity_access::domain::models::EditAccessLevel>() =>
+            {
+                Ok(access_receipt(
+                    caller_auth(Some(user_id)),
+                    entity_id,
+                    entity_type,
+                    access_level,
+                )?)
+            }
             Some(_) | None => anyhow::bail!("Access denied"),
         }
     }
