@@ -1340,7 +1340,7 @@ async function readAfterWrite(s, name, vars, result) {
   const keys = [{ k: 'defs', scope: 'all', includeOptions: true }, { k: 'tags' }];
   const defId = vars?.propertyDefinitionId ?? vars?.definitionId;
   // result is null for an out-of-band change, which happened when it returns
-  if (defId) keys.push({ k: 'opts', id: defId, why: result && !result.ok ? 'refused write' : 'just written' });
+  if (defId) keys.push({ k: 'opts', id: defId, why: result && !result.ok ? 'failed write' : 'just written' });
   const c = here();
   const prev = c.phase;
   c.phase = 'read-after-write';
