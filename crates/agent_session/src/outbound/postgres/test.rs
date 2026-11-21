@@ -1635,6 +1635,47 @@ async fn delete_removes_the_session_grants(pool: PgPool) {
     assert_eq!(entity_row_count(&pool, unregistered.id).await, 0);
 }
 
+/// A linked session is listed under its task's References; deleting the
+/// session takes that entry with it, and nothing else.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_removes_the_session_task_reference(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let source = session.id.as_uuid().to_string();
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id)
+        VALUES ($1, 'agent_session', $3, 'document', 'task-1'),
+               ($2, 'document', $3, 'document', 'task-1')
+        "#,
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        source,
+    )
+    .execute(&pool)
+    .await
+    .expect("list the session under a task");
+
+    AgentSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("delete agent session");
+
+    let remaining = sqlx::query_scalar!(
+        r#"
+        SELECT source_entity_type AS "source_entity_type!"
+        FROM comms_entity_mentions
+        WHERE source_entity_id = $1
+        "#,
+        source,
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read the remaining references");
+
+    assert_eq!(remaining, ["document"]);
+}
+
 fn cursor_external(agent: &str) -> ExternalSession {
     ExternalSession {
         provider: "cursor".to_string(),

@@ -174,6 +174,18 @@ pub trait TaskPullRequestLinker: Send + Sync {
     fn link(&self, github_key: &str, task: &TaskFacts) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// Where a task lists what refers to it: its References.
+pub trait SessionTaskReferences: Send + Sync {
+    /// Make `task` the one task the session is listed under, as a reference `owner` added.
+    /// Replaces the session's earlier entry, if any. Idempotent.
+    fn replace(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        task: &TaskDocumentId,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
 /// What replacing a session's task wrote.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionTaskWrite {
@@ -205,8 +217,8 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Session task operations used by the session MCP tools and by pull request recording.
 pub trait SessionTasks: Send + Sync {
-    /// Link the owner's session to a task, replacing any earlier one, and link the session's
-    /// pull request to it.
+    /// Link the owner's session to a task, replacing any earlier one, list the session under
+    /// the task's References, and link the session's pull request to it.
     fn link_task<'a>(
         &'a self,
         session: AgentSessionId,
@@ -229,19 +241,20 @@ pub trait SessionTasks: Send + Sync {
     ) -> BoxFuture<'a, Result<()>>;
 }
 
-/// [`SessionTasks`] over the session store, its realtime publisher, and the task and
-/// GitHub domains.
-pub struct SessionTaskService<Sessions, Links, Directory, Linker, Realtime> {
+/// [`SessionTasks`] over the session store, its realtime publisher, task references, and the
+/// task and GitHub domains.
+pub struct SessionTaskService<Sessions, Links, Directory, Linker, Realtime, References> {
     sessions: Sessions,
     links: Links,
     directory: Directory,
     linker: Linker,
     realtime: Realtime,
+    references: References,
     task_url_base: String,
 }
 
-impl<Sessions, Links, Directory, Linker, Realtime>
-    SessionTaskService<Sessions, Links, Directory, Linker, Realtime>
+impl<Sessions, Links, Directory, Linker, Realtime, References>
+    SessionTaskService<Sessions, Links, Directory, Linker, Realtime, References>
 {
     /// Build the service. Task links are `{app_url}/app/task/{id}`.
     pub fn new(
@@ -250,6 +263,7 @@ impl<Sessions, Links, Directory, Linker, Realtime>
         directory: Directory,
         linker: Linker,
         realtime: Realtime,
+        references: References,
         app_url: &str,
     ) -> Self {
         Self {
@@ -258,13 +272,14 @@ impl<Sessions, Links, Directory, Linker, Realtime>
             directory,
             linker,
             realtime,
+            references,
             task_url_base: format!("{}/app/task", app_url.trim_end_matches('/')),
         }
     }
 }
 
-impl<Sessions, Links, Directory, Linker, Realtime>
-    SessionTaskService<Sessions, Links, Directory, Linker, Realtime>
+impl<Sessions, Links, Directory, Linker, Realtime, References>
+    SessionTaskService<Sessions, Links, Directory, Linker, Realtime, References>
 where
     Sessions: AgentSessionRepo,
     Linker: TaskPullRequestLinker,
@@ -289,14 +304,15 @@ where
     }
 }
 
-impl<Sessions, Links, Directory, Linker, Realtime> SessionTasks
-    for SessionTaskService<Sessions, Links, Directory, Linker, Realtime>
+impl<Sessions, Links, Directory, Linker, Realtime, References> SessionTasks
+    for SessionTaskService<Sessions, Links, Directory, Linker, Realtime, References>
 where
     Sessions: AgentSessionRepo,
     Links: SessionTaskRepo,
     Directory: TaskDirectory,
     Linker: TaskPullRequestLinker,
     Realtime: AgentSessionRealtime + Send + Sync,
+    References: SessionTaskReferences,
 {
     fn link_task<'a>(
         &'a self,
@@ -323,6 +339,8 @@ where
                 if let Some(url) = &pull_request {
                     self.link_pull_request(url, &facts).await?;
                 }
+                // Idempotent, so a caller that sees this fail can link again.
+                self.references.replace(session, owner, &facts.id).await?;
                 let mention =
                     mention_utils::serialize::task_mention(facts.id.as_str(), &facts.title)
                         .map_err(|error| {

@@ -9,7 +9,7 @@ pub struct NewEntityMention {
     pub entity_id: String,
 }
 
-#[tracing::instrument(skip(executor, mentions), fields(mention_count = mentions.len()))]
+#[tracing::instrument(skip(executor, user_id, mentions), fields(mention_count = mentions.len()))]
 pub async fn create_entity_mentions<'e, E>(
     executor: E,
     source_entity_type: &str,

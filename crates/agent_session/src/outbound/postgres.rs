@@ -1462,6 +1462,20 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .await
         .context("failed to delete agent session history rows")?;
 
+        // And for References: the session's entry under the task it was
+        // linked to is keyed by the same polymorphic source id.
+        sqlx::query!(
+            r#"
+            DELETE FROM comms_entity_mentions
+            WHERE source_entity_type = $1 AND source_entity_id = $2
+            "#,
+            EntityType::AgentSession.as_ref(),
+            id.as_uuid().to_string(),
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to delete agent session task references")?;
+
         // A session old enough to have owned a dedicated channel leaves it
         // behind: it holds the history that channel renders, and is not this
         // operation's to destroy.

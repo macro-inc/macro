@@ -388,7 +388,11 @@ export function References(props: ReferenceProps) {
     item: PreviewItem,
     event?: KeyboardEvent | MouseEvent
   ) => {
-    if (isAccessiblePreviewItem(item) && item.type === 'document') {
+    // Documents mention other entities; agent sessions list the task they work on.
+    if (
+      isAccessiblePreviewItem(item) &&
+      (item.type === 'document' || item.type === 'agent_session')
+    ) {
       navigateToItem({
         event,
         blockName: itemToBlockName(item),

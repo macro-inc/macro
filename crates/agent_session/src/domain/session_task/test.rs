@@ -113,11 +113,45 @@ impl SessionTaskRepo for InMemorySessionTasks {
     }
 }
 
+/// The task each session is listed under, with the user the entry is attributed to; can be
+/// told to fail.
+#[derive(Clone, Default)]
+struct RecordingReferences {
+    listed: Arc<Mutex<Vec<(AgentSessionId, String, String)>>>,
+    down: bool,
+}
+
+impl RecordingReferences {
+    fn listed(&self) -> Vec<(AgentSessionId, String, String)> {
+        self.listed.lock().unwrap().clone()
+    }
+}
+
+impl SessionTaskReferences for RecordingReferences {
+    async fn replace(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        task: &TaskDocumentId,
+    ) -> Result<()> {
+        if self.down {
+            return Err(SessionTaskError::Unavailable(rootcause::report!(
+                "references unavailable"
+            )));
+        }
+        let mut listed = self.listed.lock().unwrap();
+        listed.retain(|(listed_session, _, _)| *listed_session != session);
+        listed.push((session, task.as_str().to_owned(), owner.as_ref().to_owned()));
+        Ok(())
+    }
+}
+
 struct Harness {
     sessions: InMemoryAgentSessionRepo,
     links: InMemorySessionTasks,
     linker: RecordingLinker,
     realtime: RecordingRealtime,
+    references: RecordingReferences,
     tasks: Arc<dyn SessionTasks>,
     pull_requests: SessionPullRequestService<InMemoryAgentSessionRepo, RecordingRealtime>,
 }
@@ -131,6 +165,15 @@ fn harness_publishing_to(
     directory: FakeDirectory,
     realtime: RecordingRealtime,
 ) -> Harness {
+    harness_with(linker, directory, realtime, RecordingReferences::default())
+}
+
+fn harness_with(
+    linker: RecordingLinker,
+    directory: FakeDirectory,
+    realtime: RecordingRealtime,
+    references: RecordingReferences,
+) -> Harness {
     let sessions = InMemoryAgentSessionRepo::new();
     let links = InMemorySessionTasks {
         sessions: sessions.clone(),
@@ -141,6 +184,7 @@ fn harness_publishing_to(
         directory,
         linker.clone(),
         realtime.clone(),
+        references.clone(),
         "https://macro.com/",
     ));
     let pull_requests =
@@ -150,6 +194,7 @@ fn harness_publishing_to(
         links,
         linker,
         realtime,
+        references,
         tasks,
         pull_requests,
     }
@@ -229,6 +274,116 @@ async fn links_a_task_and_answers_its_link_and_reference() {
         Some(TaskDocumentId(TASK.to_owned()))
     );
     assert!(harness.linker.links().is_empty());
+}
+
+#[tokio::test]
+async fn linking_lists_the_session_under_the_task_references_before_it_has_a_pull_request() {
+    let harness = harness(RecordingLinker::default(), FakeDirectory::default());
+    let session = seeded(&harness);
+    let owner = session.owner_user().unwrap();
+
+    harness
+        .tasks
+        .link_task(session.id, owner, TASK)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness.references.listed(),
+        [(session.id, TASK.to_owned(), owner.as_ref().to_owned())]
+    );
+    assert!(harness.linker.links().is_empty());
+}
+
+#[tokio::test]
+async fn relinking_moves_the_session_reference_to_the_new_task() {
+    let harness = harness(RecordingLinker::default(), FakeDirectory::default());
+    let session = seeded(&harness);
+    let owner = session.owner_user().unwrap();
+
+    harness
+        .tasks
+        .link_task(session.id, owner, TASK)
+        .await
+        .unwrap();
+    harness
+        .tasks
+        .link_task(session.id, owner, OTHER_TASK)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness.references.listed(),
+        [(session.id, OTHER_TASK.to_owned(), owner.as_ref().to_owned())]
+    );
+}
+
+#[tokio::test]
+async fn linking_with_a_pull_request_lists_the_session_and_links_the_pull_request() {
+    let harness = harness(RecordingLinker::default(), FakeDirectory::default());
+    let session = seeded(&harness);
+    let owner = session.owner_user().unwrap();
+
+    harness
+        .pull_requests
+        .set_pull_request(session.id, owner, PULL_REQUEST, None)
+        .await
+        .unwrap();
+    harness
+        .tasks
+        .link_task(session.id, owner, TASK)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness.references.listed(),
+        [(session.id, TASK.to_owned(), owner.as_ref().to_owned())]
+    );
+    assert_eq!(
+        harness.linker.links(),
+        [("org/repo/pull/7".to_owned(), "short-6f".to_owned())]
+    );
+}
+
+#[tokio::test]
+async fn linking_fails_when_the_reference_cannot_be_written() {
+    let harness = harness_with(
+        RecordingLinker::default(),
+        FakeDirectory::default(),
+        RecordingRealtime::new(),
+        RecordingReferences {
+            down: true,
+            ..Default::default()
+        },
+    );
+    let session = seeded(&harness);
+
+    assert!(matches!(
+        harness
+            .tasks
+            .link_task(session.id, session.owner_user().unwrap(), TASK)
+            .await,
+        Err(SessionTaskError::Unavailable(_))
+    ));
+}
+
+#[tokio::test]
+async fn refused_links_list_nothing() {
+    let harness = harness(RecordingLinker::default(), FakeDirectory::default());
+    let session = seeded(&harness);
+    let owner = session.owner_user().unwrap();
+
+    for task in [NOTE, HIDDEN, "ENG-42"] {
+        assert!(
+            harness
+                .tasks
+                .link_task(session.id, owner, task)
+                .await
+                .is_err()
+        );
+    }
+
+    assert!(harness.references.listed().is_empty());
 }
 
 #[tokio::test]

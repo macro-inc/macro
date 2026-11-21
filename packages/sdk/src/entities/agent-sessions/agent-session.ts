@@ -497,7 +497,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Link this session to the task it works on, replacing any earlier link.
    * Only the session's owner can link it, to a task they can view. The
-   * session's pull request, now or later, is linked to the task too.
+   * session shows under the task's References right away, and its pull
+   * request, now or later, is linked to the task too.
    *
    * @write
    */
