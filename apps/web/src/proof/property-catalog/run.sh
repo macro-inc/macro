@@ -17,7 +17,10 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../../.." && pwd)"
-export OLD_COMMIT="${OLD_COMMIT:-a03c481f726}"
+# Resolved to the full commit, so a branch name that later moves is never
+# mistaken for the same old side.
+OLD_COMMIT="$(git -C "$ROOT" rev-parse --verify "${OLD_COMMIT:-a03c481f726}^{commit}")"
+export OLD_COMMIT
 PROPS="$ROOT/apps/web/src/lib/queries/properties"
 MODES=("${@:-all}")
 # The run shape comes from each mode below, never from the caller's
@@ -47,10 +50,17 @@ for m in "${MODES[@]}"; do
   dirs=$(outs_for "$m") || exit 2
   PLANNED+=($dirs)
 done
+# Each one is attempted even after one fails, so no planned run keeps an old
+# verdict; then a failure stops the launch.
+UNCLEARED=()
 for d in "${PLANNED[@]}"; do
   { mkdir -p "$HERE/out/$d" && rm -f "$HERE/out/$d/results.json" && date -Is > "$HERE/out/$d/started"; } ||
-    { echo "cannot clear out/$d" >&2; exit 1; }
+    UNCLEARED+=("$d")
 done
+if ((${#UNCLEARED[@]})); then
+  echo "cannot clear out/: ${UNCLEARED[*]}" >&2
+  exit 1
+fi
 
 # The base commit's query modules, served beside the head's; the OLD side of
 # the harness swaps them in by URL. Each carries a marker the runner reads

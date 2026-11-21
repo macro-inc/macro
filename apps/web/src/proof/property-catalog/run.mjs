@@ -1266,7 +1266,7 @@ async function takeSkipped(...pages) {
 // One write, through the real mutation hooks: NEW performs it against the
 // server, OLD replays NEW's recorded requests and responses.
 // The answers the properties service gives a write it refuses on its merits.
-const REFUSAL_STATUSES = new Set([400, 403, 404, 409, 422]);
+const REFUSAL_STATUSES = new Set([400, 403, 409, 422]);
 // An option's value as written: the API returns `{ type, value }`.
 const optValue = (v) => (v && typeof v === 'object' ? v.value : v);
 async function write(pair, actor, name, vars) {

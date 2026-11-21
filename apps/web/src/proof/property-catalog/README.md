@@ -112,8 +112,9 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   results prints INCOMPLETE with the reason and no commit, and is an entry
   `{ verdict: null, incomplete }` in the JSON. A run deletes its old
   `results.json` when it starts and writes `verdict` only after its final
-  checks, so a crashed or killed run reads `INCOMPLETE` (with no results
-  file yet, from its `started` marker), never as passed. Results are written
+  checks, so a run killed or stopped before them reads `INCOMPLETE` (with no
+  results file yet, from its `started` marker), and none reads as passed
+  unless it passed this time. Results are written
   to a temporary file and renamed into place.
 
 ## What the counts mean
