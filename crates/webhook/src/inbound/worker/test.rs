@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mcp::models::McpEventQueueMessage;
 use crate::domain::models::{NormalizedWebhookEvent, WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION};
 use chrono::{DateTime, Utc};
 use std::{
@@ -210,6 +211,8 @@ fn raw_message(
         message_id: Some(message_id.to_string()),
         body,
         receipt_handle: receipt_handle.map(str::to_string),
+        receive_count: Some(1),
+        trace_context: serde_json::Map::new(),
     }
 }
 
@@ -388,4 +391,107 @@ async fn processes_each_batch_sequentially() {
             "delete:receipt-2",
         ]
     );
+}
+
+#[derive(Clone)]
+struct TestMcpDelivery {
+    disposition: WebhookWorkerDisposition,
+    received: Arc<Mutex<Vec<(McpEventQueueMessage, u32)>>>,
+}
+
+impl TestMcpDelivery {
+    fn new(disposition: WebhookWorkerDisposition) -> Self {
+        Self {
+            disposition,
+            received: Arc::default(),
+        }
+    }
+
+    fn received(&self) -> Vec<(McpEventQueueMessage, u32)> {
+        self.received.lock().expect("received lock").clone()
+    }
+}
+
+impl McpEventDeliveryService for TestMcpDelivery {
+    async fn deliver(
+        &self,
+        message: McpEventQueueMessage,
+        receive_count: u32,
+    ) -> WebhookWorkerDisposition {
+        self.received
+            .lock()
+            .expect("received lock")
+            .push((message, receive_count));
+        self.disposition
+    }
+}
+
+fn mcp_raw_message(
+    receipt_handle: &str,
+    receive_count: Option<u32>,
+) -> (McpEventQueueMessage, RawWebhookEventQueueMessage) {
+    let message = McpEventQueueMessage::new(uuid::Uuid::now_v7(), queue_message("event-1").event);
+    let mut raw = raw_message(
+        "mcp-1",
+        Some(serde_json::to_string(&message).expect("serializable mcp message")),
+        Some(receipt_handle),
+    );
+    raw.receive_count = receive_count;
+    (message, raw)
+}
+
+#[tokio::test]
+async fn mcp_messages_go_to_mcp_delivery_with_their_receive_count() {
+    let (message, raw) = mcp_raw_message("receipt-mcp", Some(4));
+    let queue = TestQueue::with_receive_result(Ok(vec![raw]));
+    let service = TestDeliveryService::new([]);
+    let mcp = TestMcpDelivery::new(WebhookWorkerDisposition::Acknowledge);
+    let worker =
+        WebhookEventWorker::new(queue.clone(), service.clone()).with_mcp_delivery(mcp.clone());
+
+    worker.poll_and_process_batch().await;
+
+    assert_eq!(mcp.received(), [(message, 4)]);
+    assert!(service.messages().is_empty());
+    assert_eq!(queue.delete_requests(), ["receipt-mcp"]);
+}
+
+#[tokio::test]
+async fn mcp_retries_change_visibility() {
+    let delay = Duration::from_secs(60);
+    let (message, raw) = mcp_raw_message("receipt-mcp", Some(1));
+    let queue = TestQueue::with_receive_result(Ok(vec![raw]));
+    let mcp = TestMcpDelivery::new(WebhookWorkerDisposition::RetryAfter(delay));
+    let worker = WebhookEventWorker::new(queue.clone(), TestDeliveryService::new([]))
+        .with_mcp_delivery(mcp.clone());
+
+    worker.poll_and_process_batch().await;
+
+    assert_eq!(mcp.received(), [(message, 1)]);
+    assert_eq!(queue.delay_requests(), [("receipt-mcp".to_string(), delay)]);
+}
+
+#[tokio::test]
+async fn a_missing_receive_count_is_the_last_attempt() {
+    let (message, raw) = mcp_raw_message("receipt-mcp", None);
+    let queue = TestQueue::with_receive_result(Ok(vec![raw]));
+    let mcp = TestMcpDelivery::new(WebhookWorkerDisposition::Acknowledge);
+    let worker = WebhookEventWorker::new(queue.clone(), TestDeliveryService::new([]))
+        .with_mcp_delivery(mcp.clone());
+
+    worker.poll_and_process_batch().await;
+
+    assert_eq!(mcp.received(), [(message, MAX_HTTP_ATTEMPTS)]);
+}
+
+#[tokio::test]
+async fn a_worker_without_mcp_delivery_leaves_mcp_messages_queued() {
+    let (_, raw) = mcp_raw_message("receipt-mcp", Some(1));
+    let queue = TestQueue::with_receive_result(Ok(vec![raw]));
+    let worker = WebhookEventWorker::new(queue.clone(), TestDeliveryService::new([]));
+
+    worker.poll_and_process_batch().await;
+
+    assert!(queue.delete_requests().is_empty());
+    assert_eq!(queue.delay_requests().len(), 1);
 }

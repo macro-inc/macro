@@ -79,12 +79,12 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 `macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
 `macro.agent_session_lifecycle`, and `macro.users`. It supports these event names:
 
-- Documents: `document.created`, `document.updated`, `document.deleted`, and
-  `document.copied`.
+- Documents: `document.created`, `document.updated`, `document.deleted`,
+  `document.copied`, and `document.interaction`.
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
-  `channel.participant_added`, `channel.participant_removed`, and
-  `channel.access_requested` (someone outside a private or team channel asked
-  to join; the payload carries the request id).
+  `channel.participant_added`, `channel.participant_removed`,
+  `channel.picture_changed`, and `channel.access_requested` (someone outside a
+  private or team channel asked to join; the payload carries the request id).
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries
@@ -93,6 +93,7 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
 - Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
+  `agent_session.command_rejected`, `agent_session.mentioned`,
   `agent_session.turn_ended`, `agent_session.settled`,
   `agent_session.waiting_for_input`, `agent_session.input_received`,
   `agent_session.stopped`, `agent_session.renamed`, and
@@ -106,6 +107,7 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
+- Passwords: `passwords.access_request.resolved`, addressed to one account.
 
 Call events use `entity_type = "call"` and the call ID as the entity and
 ordering key. Public events resolve the call's current accessor set before
@@ -356,6 +358,108 @@ prevents another request. There is still an unavoidable crash window: an
 endpoint can accept the HTTP request before the process records the result. A
 redelivery can then recover the interrupted attempt and call the endpoint again.
 Webhook receivers should use `X-Macro-Event-Id` as an idempotency key.
+
+## MCP Events subscriptions
+
+The Macro MCP server implements the MCP Events extension
+(`io.modelcontextprotocol/events`): an agent asks for Macro events, in
+plain words or as a webhook event name, and receives them at its own callback
+URL. This crate stores those subscriptions, matches events to them and
+delivers; the MCP server (`agent_harness_service`) compiles the filter and
+encrypts the secret before calling it.
+
+- **Storage.** `mcp_event_subscription`, one row per (user, endpoint URL,
+  event type, canonical arguments). The MCP subscription id (`sub_…`) is a
+  digest of that key, so subscribing again refreshes the row in place: a new
+  expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
+  1 min to 24 h) and are deleted outright on unsubscribe. Expired rows stop
+  matching at once and are deleted by `McpSubscriptionSweeper`, which
+  `document_storage_service` runs every minute (batches of 500, the limit
+  written into the SQL so a generic plan stops at it, at most 20 per round,
+  `FOR UPDATE SKIP LOCKED` so replicas share it). A user holds at most 50 live
+  rows: subscribe takes a per-user advisory lock, then counts and
+  writes in one transaction, so concurrent subscribes cannot pass the quota
+  together. Arguments and filters are each capped at 4 KiB of JSON.
+- **Match index.** `mcp_event_subscription_event` holds one row per
+  (subscription, event name), carrying the owner and the expiry, rewritten
+  with the filter and the expiry. Fan-out reads its `(user_id, event_name,
+  expires_at)` index for the event's audience and name, so an expired row
+  waiting for the sweep is never read, in chunks of 100 users (at most 5,000
+  candidates and 20 MiB of filters per query), fetching only each candidate's
+  id, owner and filter, under a 5 s statement timeout. Its foreign key is
+  the subscription's `(id, user_id)`, not `"User"`, so writes take no lock on
+  the user row and a renamed user id cascades through both tables. The
+  subscription id and the secret's KMS binding keep the old user id, so a
+  renamed user's subscriptions stop delivering (decryption fails, five
+  attempts) until they expire; nothing in production renames users. The quota
+  count and the endpoint check read the `(user_id, expires_at)` index, so a
+  backlog of expired rows costs them nothing.
+- **Live subscribers.** Most events reach no subscriber, so fan-out first
+  narrows the audience to the users with a live subscription, held in memory
+  by `McpLiveSubscribers`; an audience with none costs no query.
+  `document_storage_service` reloads the set every 2 s in each replica with
+  one index-only read of the live end of the `(expires_at) INCLUDE (user_id)`
+  index. A new subscription is matched from the first reload that starts after it
+  commits, in each replica, so its events until then (up to 2 s plus that
+  reload's time) pass unmatched. When a reload fails the replica forgets the
+  set, and past 10,000 live subscriptions, or when the set is 5 s old because a
+  reload hangs, fan-out matches every audience member by query instead.
+- **Filter.** `domain/mcp/filter.rs`: an OR of clauses, each exact event
+  names, optional parent ids (the webhook `ids` semantics) and an AND of
+  conditions on whitelisted message fields (`parent_type`, `parent_id`,
+  `actor`, `mentioned_type`, `mentioned_id`), where a value is literal text or
+  `me` (the subscriber). The MCP server compiles it from words, shows it to the
+  caller and stores only the filter the caller confirms, which delivery
+  evaluates deterministically; a request that does not fit is refused,
+  never approximated. `stream_groups` splits it for the live stream, which
+  applies `ids` itself but does not report an event's parent id: one stream per
+  distinct `ids`, matched without them.
+- **Access.** Fan-out receives the audience ingestion already computed for
+  the event (the users who can see it, as webhook workspaces) and only rows of
+  those users can match, so a subscription never sees more than its user's
+  webhooks would. A user who loses access stops receiving at the next event.
+- **Verification.** A new endpoint must echo a signed
+  `{"type":"verification","challenge"}` within the call; a user's live
+  subscription to the same URL counts as already verified. Failures map to
+  the spec's `CallbackEndpointError` reasons.
+- **Delivery.** Fan-out queues one message per matched row on the webhook FIFO
+  queue, 16 sends at a time (group `mcp:<row id>`, dedup
+  `mcp:<row id>:<event id>`). Ingestion runs it after queueing the event's
+  webhooks and tries it three times within 30 s; a fan-out that still fails
+  or runs out of time is dropped
+  for that event with an error log, so it never fails ingestion or queues the
+  webhooks again. The webhook
+  worker tells the two message kinds apart by shape. Each POST is a Standard
+  Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
+  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. Attempts follow the
+  webhook retry schedule, counted by SQS's receive count (5 attempts; a later receipt is acknowledged
+  without a POST). A receipt that fails inside this service (the database or
+  KMS) counts too, since nothing is stored per delivery: an outage longer than
+  the five receipts (about two minutes) drops the deliveries
+  waiting on it; `410` and
+  `413` are not retried and leave the subscription alone. Nothing is recorded
+  per delivery: a row that is gone by delivery time drops the event. Each
+  message carries the W3C context of the send that queued it as the SQS
+  message attributes `traceparent` and `tracestate`, outside the body, so a
+  worker that does not read them still parses it. Every attempt
+  (`mcp_events.receive` and `mcp_events.deliver`) joins the trace of the
+  ingested event.
+- **Secret.** The client supplies the `whsec_` secret. The MCP server
+  encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
+  bound to the user); this service only decrypts it, per delivery.
+- **Internal calls.** `inbound/mcp_router.rs`, nested under `/internal` in
+  `document_storage_service`: `PUT /mcp/event_subscriptions` and
+  `POST /mcp/event_subscriptions/unsubscribe`, internal key plus acting user.
+  Every subscribe carries its filter, which the MCP server derives from the
+  arguments (a `macro.events` filter is one the caller confirmed and sent
+  back), so a refresh sends the same one.
+- **Rolling deploys.** A worker from before this change acknowledges an MCP
+  queue message as malformed and deletes it. Rows are created only through the
+  internal subscribe call, whose one caller is the MCP server, so roll this
+  service out to every task before the MCP server: until a row exists, fan-out
+  queues nothing. Rolling this service back loses MCP deliveries queued while
+  old and new tasks overlap, including ones the remaining new tasks publish
+  during it; ordinary webhook messages are unaffected.
 
 ## Operations
 

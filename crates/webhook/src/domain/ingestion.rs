@@ -12,6 +12,7 @@ mod test;
 
 use crate::domain::{
     events::WebhookTopicEvent,
+    mcp::ports::{McpEventFanout, NoMcpFanout},
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
@@ -153,12 +154,21 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
+/// Attempts at queueing one event to MCP Events subscriptions.
+const MCP_FANOUT_ATTEMPTS: u32 = 3;
+/// The wait before the second attempt; the third waits twice as long.
+const MCP_FANOUT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+/// The most time one event's MCP Events fan-out may take, retries included,
+/// so a slow fan-out never holds ordinary events behind it for long.
+const MCP_FANOUT_BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Webhook event ingestion service implementation.
 #[derive(Clone)]
-pub struct WebhookEventIngestionServiceImpl<A, R, Q> {
+pub struct WebhookEventIngestionServiceImpl<A, R, Q, M = NoMcpFanout> {
     entity_access_service: Arc<A>,
     repository: R,
     enqueuer: Q,
+    mcp_fanout: M,
 }
 
 impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
@@ -168,15 +178,29 @@ impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q> {
             entity_access_service,
             repository,
             enqueuer,
+            mcp_fanout: NoMcpFanout,
         }
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, M> WebhookEventIngestionServiceImpl<A, R, Q, M> {
+    /// Also queue each event to the MCP Events subscriptions of its audience.
+    pub fn with_mcp_fanout<N>(self, mcp_fanout: N) -> WebhookEventIngestionServiceImpl<A, R, Q, N> {
+        WebhookEventIngestionServiceImpl {
+            entity_access_service: self.entity_access_service,
+            repository: self.repository,
+            enqueuer: self.enqueuer,
+            mcp_fanout,
+        }
+    }
+}
+
+impl<A, R, Q, M> WebhookEventIngestionServiceImpl<A, R, Q, M>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    M: McpEventFanout,
 {
     /// Resolve the users that currently have access to an entity.
     #[tracing::instrument(skip(self), err)]
@@ -232,6 +256,8 @@ where
             entity_id = %event.entity_id,
             workspace_count = workspace_ids.len(),
             match_count = tracing::field::Empty,
+            mcp_match_count = tracing::field::Empty,
+            mcp_fanout_outcome = tracing::field::Empty,
         ),
         err
     )]
@@ -243,14 +269,68 @@ where
         let webhooks = self
             .repository
             .list_active_webhooks_matching_event(
-                workspace_ids,
+                workspace_ids.clone(),
                 event.event_name.clone(),
                 event.entity_id.clone(),
             )
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
         tracing::Span::current().record("match_count", webhooks.len());
-        self.enqueue_all(webhooks, event).await
+        // MCP subscribers are users, so of this audience only the personal
+        // workspaces (user ids) can match: the same people webhooks reach.
+        self.enqueue_all(webhooks, event.clone()).await?;
+        self.fan_out_mcp(&event, &workspace_ids).await;
+        Ok(())
+    }
+
+    /// Queue the event to matching MCP Events subscriptions, retrying a
+    /// failure a few times within `MCP_FANOUT_BUDGET`. MCP Events delivery is
+    /// best effort: a fan-out that keeps failing or runs out of time is
+    /// dropped for this event (sends already accepted may still go out)
+    /// instead of failing ingestion, which would hold the partition and queue
+    /// the webhooks above again.
+    async fn fan_out_mcp(&self, event: &NormalizedWebhookEvent, audience: &[String]) {
+        if tokio::time::timeout(
+            MCP_FANOUT_BUDGET,
+            self.fan_out_mcp_with_retries(event, audience),
+        )
+        .await
+        .is_err()
+        {
+            tracing::error!(
+                budget_ms = MCP_FANOUT_BUDGET.as_millis(),
+                "dropping mcp events fan-out for this event: out of time"
+            );
+            tracing::Span::current().record("mcp_fanout_outcome", "timed_out");
+        }
+    }
+
+    async fn fan_out_mcp_with_retries(&self, event: &NormalizedWebhookEvent, audience: &[String]) {
+        let span = tracing::Span::current();
+        let mut attempt = 1;
+        loop {
+            match self.mcp_fanout.fan_out(event, audience).await {
+                Ok(count) => {
+                    span.record("mcp_match_count", count);
+                    span.record("mcp_fanout_outcome", "queued");
+                    return;
+                }
+                Err(error) if attempt < MCP_FANOUT_ATTEMPTS => {
+                    tracing::warn!(error = ?error, attempt, "retrying mcp events fan-out");
+                    tokio::time::sleep(MCP_FANOUT_RETRY_DELAY * attempt).await;
+                    attempt += 1;
+                }
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        attempts = attempt,
+                        "dropping mcp events fan-out for this event"
+                    );
+                    span.record("mcp_fanout_outcome", "dropped");
+                    return;
+                }
+            }
+        }
     }
 
     async fn enqueue_all(
@@ -714,11 +794,12 @@ pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> Lifecycl
     }
 }
 
-impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
+impl<A, R, Q, M> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q, M>
 where
     A: EntityAccessService,
     R: WebhookRepo + WebhookWorkspaceResolver,
     Q: WebhookEventEnqueuer,
+    M: McpEventFanout,
 {
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_document_event(

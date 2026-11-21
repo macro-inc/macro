@@ -70,6 +70,12 @@ threads, pins, recents, notifications, folders, activity.
   drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
+- `src/mcp_subscription_sweep.rs`: deletes expired MCP Events subscriptions
+  every minute through `webhook`'s `McpSubscriptionSweeper`. Runs on the
+  consumer tracker.
+- `src/mcp_live_subscribers.rs`: reloads, every 2 s, the set of users with a
+  live MCP Events subscription that ingestion's fan-out narrows each audience
+  to (`webhook`'s `McpLiveSubscribers`). Runs on the consumer tracker.
 - `src/released_attachments.rs`: drains `released_email_attachment_documents`
   on LISTEN `email_attachment_documents_released` and a one-minute sweep,
   through the documents domain's `ReleasedAttachmentService`, which trashes
