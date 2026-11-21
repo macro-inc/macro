@@ -18,9 +18,12 @@
 //!   whole batch) and pay for the same conversation once per model call.
 //!
 //! Work whose content must stay off traces whatever the switch says, such as
-//! a call that reads a person's mail, runs inside [`withhold_content`]; every
-//! recorder reads [`ContentPolicy::current`], which is the disabled policy
-//! there.
+//! a call that reads a person's mail, runs inside [`withhold_content`]:
+//! [`ContentPolicy::current`] is the disabled policy there, and the agent
+//! loop's recorders check the scope each time they record, so a context
+//! built before it records no content inside it. A recorder in another
+//! task can't see the scope: a session's turn is withheld by its prompt's
+//! `withhold_content` marker, which the harness sets.
 
 #[cfg(test)]
 mod test;

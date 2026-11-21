@@ -106,6 +106,41 @@ async fn a_structured_one_shot_inside_withhold_content_records_no_content() {
     }
 }
 
+/// A context built outside `withhold_content` with capture on records no
+/// content for a call made inside the scope, answered or failed: its
+/// recorders read the scope when they record.
+#[tokio::test]
+async fn a_context_built_before_withhold_content_records_no_content_inside_it() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    for turn in [
+        MockTurn::text(r#"{"private":"answer"}"#),
+        MockTurn::error("upstream refused the private prompt"),
+    ] {
+        let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::enabled(), true);
+        let model = TracedModel::new(MockCompletionModel::new([turn]), telemetry.clone());
+        let _ = genai_telemetry::withhold_content(prompt_with_history(
+            model,
+            "private instructions",
+            vec![Message::user("a private prompt")],
+            telemetry,
+            None,
+        ))
+        .await;
+    }
+
+    let spans = finished(&exporter, &provider);
+    assert_eq!(chat_spans(&spans).len(), 2, "{spans:#?}");
+    for span in &spans {
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(!value.contains("private"), "{} carries {value}", kv.key);
+        }
+        if let Status::Error { description } = &span.status {
+            assert!(!description.contains("private"), "{description}");
+        }
+    }
+}
+
 /// A provider that refuses the call leaves no turn for the hook to record, so
 /// the traced model itself marks the call as failed.
 #[tokio::test]

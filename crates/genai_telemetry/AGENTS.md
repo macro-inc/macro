@@ -18,8 +18,11 @@ agent loop.
   data with byte-count/source metadata before capture, including nested tool
   results; inline pixels stay excluded even when content capture is enabled.
   `withhold_content(work)` runs work under the disabled policy whatever the
-  switch says (a task-local; `ContentPolicy::current` is what every recorder
-  reads). A task spawned from withheld work carries it with
+  switch says (a task-local: `ContentPolicy::current` is the disabled policy
+  there, and `agent`'s `GenAiContext` checks the scope at each record, so a
+  context built before the scope withholds too). A session's projector runs
+  in its own task and follows the prompt's `withhold_content` marker
+  instead. A task spawned from withheld work carries it with
   `withhold_content_if(content_withheld(), fut)`.
   Error events inside the scope say only what kind of failure it was, since
   a tool's error or serde's refusal can quote the call: `ai_toolset`'s
