@@ -3109,6 +3109,9 @@ enum Step {
     Soup(&'static str, &'static str),
     /// The backfill page again, with its document updated at another time.
     Backfill(i64),
+    /// A Soup page holding one document with the moving notification, in a
+    /// state.
+    Notified(&'static str, &'static str),
     Clear,
     ExternalReset,
 }
@@ -3152,6 +3155,25 @@ async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
                 ))
                 .await;
             }
+            Step::Notified(document_id, state) => {
+                resolved(engine.hydrate_query(
+                    SOUP_WITH_PROJECTION_QUERY.into(),
+                    Some("SoupWithProjection".into()),
+                    js(serde_json::json!({ "input": { "limit": 100 } })),
+                    js(serde_json::json!({
+                        "user": {
+                            "id": "user-1",
+                            "soup": {
+                                "nextCursor": null,
+                                "items": [notified_document_item(document_id, state, 10)]
+                            }
+                        }
+                    })),
+                    Some("user-1".into()),
+                    JsValue::UNDEFINED,
+                ))
+                .await;
+            }
             Step::Clear => {
                 resolved(engine.clear()).await;
             }
@@ -3165,16 +3187,102 @@ async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
 /// Whatever runs between the halves, the commit answers and leaves the cache
 /// as `hydrateQuery` issued after it does.
 async fn assert_commit_is_hydrate_after(scope: &str, before: &[Step], between: &[Step]) {
+    assert_page_commit_is_hydrate_after(scope, before, between, backfill_page, &[]).await;
+}
+
+/// The moving notification and a document other than the backfill's.
+const MOVING_NOTIFICATION: &str = "00000000-0000-0000-0000-0000000000d1";
+const OTHER_DOCUMENT: &str = "00000000-0000-0000-0000-0000000000c1";
+
+fn notified_document_item(document_id: &str, state: &str, updated_at: i64) -> serde_json::Value {
+    let mut item = projected_document_item(
+        document_id,
+        "macro|user@example.com",
+        false,
+        None,
+        updated_at,
+    );
+    item["notifications"] = serde_json::json!([{
+        "id": MOVING_NOTIFICATION,
+        "entityId": document_id,
+        "entityType": "DOCUMENT",
+        "state": state,
+    }]);
+    item
+}
+
+fn notified_backfill_page() -> JsValue {
+    js(serde_json::json!({
+        "user": {
+            "id": "user-1",
+            "soup": {
+                "nextCursor": "next",
+                "items": [notified_document_item(BACKFILL_ITEM, "SEEN", 10)]
+            }
+        }
+    }))
+}
+
+/// The stored projection rows of documents, by id, as text.
+async fn projection_rows(engine: &CacheEngine, documents: &[&str]) -> Vec<String> {
+    let state = engine.state.lock().await;
+    let storage = state
+        .engine
+        .as_ref()
+        .expect("open cache has an engine")
+        .storage();
+    let keys: Vec<_> = documents
+        .iter()
+        .map(|id| RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap())
+        .collect();
+    storage
+        .load_projection_states(&keys)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|state| format!("{state:?}"))
+        .collect()
+}
+
+/// Runs `before`, `between` and a hydrate of `page` in order, then `before`,
+/// a prepare of `page`, `between` and the commit, and compares the two: the
+/// commit reads its projections again and stores what the hydrate stored.
+async fn assert_page_commit_is_hydrate_after(
+    scope: &str,
+    before: &[Step],
+    between: &[Step],
+    page: fn() -> JsValue,
+    documents: &[&str],
+) {
+    let hydrate = |engine: &CacheEngine| {
+        engine.hydrate_query(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            backfill_variables(),
+            page(),
+            Some("user-1".into()),
+            JsValue::UNDEFINED,
+        )
+    };
     let engine = fresh_engine(scope).await;
     run_steps(&engine, before).await;
     run_steps(&engine, between).await;
-    let whole: serde_json::Value = from_js(resolved(hydrate_backfill(&engine)).await);
+    let whole: serde_json::Value = from_js(resolved(hydrate(&engine)).await);
     let whole_state = hydrated_state(&engine).await;
+    let whole_rows = projection_rows(&engine, documents).await;
     close_and_destroy(&engine, scope).await;
 
     let engine = fresh_engine(scope).await;
     run_steps(&engine, before).await;
-    resolved(prepare_backfill(&engine)).await;
+    resolved(engine.prepare_hydrate(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        backfill_variables(),
+        page(),
+        Some("user-1".into()),
+        JsValue::UNDEFINED,
+    ))
+    .await;
     run_steps(&engine, between).await;
     let reads = engine.state.lock().await.projection_reads;
     let mut split: serde_json::Value = from_js(resolved(engine.commit_hydrate()).await);
@@ -3183,7 +3291,23 @@ async fn assert_commit_is_hydrate_after(scope: &str, before: &[Step], between: &
     split.as_object_mut().unwrap().remove("projectionsReread");
     assert_eq!(split, whole);
     assert_eq!(hydrated_state(&engine).await, whole_state);
+    assert_eq!(projection_rows(&engine, documents).await, whole_rows);
     close_and_destroy(&engine, scope).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_notification_moved_between_prepare_and_commit_leaves_its_old_document() {
+    // The hydrate moves the notification to its document. Only projections
+    // read after the write between know the old document holds it, and
+    // remove it there.
+    assert_page_commit_is_hydrate_after(
+        "cache-wasm-prepared-hydrate-moved-notification",
+        &[],
+        &[Step::Notified(OTHER_DOCUMENT, "UNSEEN")],
+        notified_backfill_page,
+        &[OTHER_DOCUMENT, BACKFILL_ITEM],
+    )
+    .await;
 }
 
 #[wasm_bindgen_test(async)]
