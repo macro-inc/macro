@@ -85,6 +85,11 @@ struct Args {
     /// idle point.
     #[arg(long)]
     no_idle_hook: bool,
+    /// Stage each hydrate before the op ahead of it and commit it at its own
+    /// turn, as the browser host stages one between `prepareHydrate` and
+    /// `commitHydrate` (a side built with STAGED_HYDRATE=1).
+    #[arg(long)]
+    stage_hydrates: bool,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -179,6 +184,7 @@ fn run(
     .map_err(|error| rootcause::report!("{error}"))?;
     exec.pause_ms = args.real_pause;
     exec.idle_hook = !args.no_idle_hook;
+    exec.stage_hydrates = args.stage_hydrates;
     let outcome = pollster::block_on(exec.run());
     let (lines, mut counters, path, mut normalizer) =
         exec.finish().map_err(|error| match &outcome {

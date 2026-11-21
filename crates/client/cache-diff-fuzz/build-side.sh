@@ -4,7 +4,8 @@
 #   build-side.sh NAME BASE [BRANCH...]
 #
 # IDLE_CHECKPOINT=1 builds the side with the host's idle point (the side must
-# have TursoStorage::checkpoint_if_due). TARGET=x builds in target-x instead of
+# have TursoStorage::checkpoint_if_due). STAGED_HYDRATE=1 builds it with the hooks that stage
+# hydrates as the browser host does (the side must have Engine::stage_hydrate). TARGET=x builds in target-x instead of
 # target-NAME, so sides that differ little share one; builds that share a target
 # take turns. The binary lands in $CACHE_DIFF_FUZZ_HOME/bin/NAME, and
 # $CACHE_DIFF_FUZZ_HOME/bin/NAME.side records the commits it was built from. A
@@ -87,13 +88,14 @@ fi
 # the lock out of long-lived children such as an sccache server.
 (
   cd "$tree"
-  export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
+  export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CACHE_DIFF_FUZZ_STAGED_HYDRATE=${STAGED_HYDRATE:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
   flock -o "$home/locks/target-${TARGET:-$name}" bash -c 'cargo build --quiet --release -p cache-diff-fuzz && cp "$CARGO_TARGET_DIR/release/cache-diff-fuzz" "$out"' 8>&-
 )
 {
   cat "$stamp"
   echo "tree $(git -C "$tree" rev-parse HEAD)"
   echo "idle-checkpoint ${IDLE_CHECKPOINT:-0}"
+  echo "staged-hydrate ${STAGED_HYDRATE:-0}"
   if [ -n "${MUTATE_FILE:-}" ]; then echo "mutate $MUTATE_FILE $MUTATE_PERL"; fi
   echo "fuzzer $fuzzer_commit $fuzzer_hash"
 } > "$home/bin/$name.side"

@@ -49,9 +49,25 @@ pub struct Exec<'a> {
     pub pause_ms: Option<u64>,
     /// Whether `idle` ops call the host's idle point directly.
     pub idle_hook: bool,
+    /// Whether each hydrate is staged ahead of the op before it (see `stage_ahead`).
+    pub stage_hydrates: bool,
+    /// Hydrates staged ahead, by op index.
+    #[cfg(staged_hydrate)]
+    staged: Vec<(usize, crate::host::engine::fuzz_hooks::FuzzStagedHydrate)>,
 }
 
 type Outcome = Result<Value, String>;
+
+/// A hydrate as the staging hooks take it.
+#[cfg(staged_hydrate)]
+pub struct HydrateRequest<'a> {
+    pub query: &'a str,
+    pub operation_name: Option<&'a str>,
+    pub variables: &'a serde_json::Map<String, Value>,
+    pub data: &'a Value,
+    pub identity: Option<&'a str>,
+    pub scope: Option<&'a HydrationScope>,
+}
 
 impl<'a> Exec<'a> {
     pub fn new(
@@ -94,6 +110,9 @@ impl<'a> Exec<'a> {
             counters: BTreeMap::new(),
             pause_ms: None,
             idle_hook: true,
+            stage_hydrates: false,
+            #[cfg(staged_hydrate)]
+            staged: Vec::new(),
         };
         exec.open(0)?;
         Ok(exec)
@@ -103,6 +122,10 @@ impl<'a> Exec<'a> {
     /// but records a reset in the trace: every case starts from an empty file,
     /// so a reset means a build could not read what it wrote.
     fn open(&mut self, index: usize) -> Result<(), String> {
+        // A staged hydrate belongs to the engine that staged it, as the
+        // browser host's prepared hydrate belongs to its engine.
+        #[cfg(staged_hydrate)]
+        self.staged.clear();
         let database =
             cache_turso::TursoFileDatabase::new(&self.path).map_err(|error| error.to_string())?;
         let storage = match database.open(SCOPE) {
@@ -209,10 +232,80 @@ impl<'a> Exec<'a> {
 
     pub async fn run(&mut self) -> Result<(), String> {
         let ops = self.generated.ops.clone();
+        if self.stage_hydrates && cfg!(not(staged_hydrate)) {
+            return Err("this build was made without STAGED_HYDRATE=1".into());
+        }
         for (index, op) in ops.iter().enumerate() {
+            #[cfg(staged_hydrate)]
+            if self.stage_hydrates
+                && let Some(next) = ops.get(index + 1)
+            {
+                self.stage_ahead(index + 1, next).await;
+            }
             self.step(index, op).await?;
         }
         Ok(())
+    }
+
+    /// Stages the hydrate at `index` before the op ahead of it runs, as the
+    /// browser host's `prepareHydrate` and `stageHydrate` would, so that op
+    /// (a write, a clear, an account switch, an authority change, another
+    /// hydrate) lands between the stage and the commit. The commit must then
+    /// answer as the hydrate would have, issued after that op: the other
+    /// side runs the case as it is.
+    #[cfg(staged_hydrate)]
+    async fn stage_ahead(&mut self, index: usize, op: &Op) {
+        let Op::Hydrate {
+            doc,
+            variables,
+            data,
+            identity,
+            contacts,
+            ..
+        } = op
+        else {
+            return;
+        };
+        let current = std::mem::replace(&mut self.identity, identity.clone());
+        let staged = self.stage(doc, variables, data, *contacts).await;
+        self.identity = current;
+        match staged {
+            Ok(staged) => {
+                self.count(match (staged.failed, staged.staged()) {
+                    (true, _) => "stage.failed",
+                    (false, true) => "stage.staged",
+                    (false, false) => "stage.whole",
+                });
+                self.staged.push((index, staged));
+            }
+            Err(_) => self.count("stage.refused"),
+        }
+    }
+
+    #[cfg(staged_hydrate)]
+    async fn stage(
+        &self,
+        doc: &str,
+        variables: &serde_json::Map<String, Value>,
+        data: &Value,
+        contacts: bool,
+    ) -> Result<crate::host::engine::fuzz_hooks::FuzzStagedHydrate, String> {
+        let handle = self.stamped().await?;
+        let scope = match contacts {
+            true => Some(self.scope(true).await?),
+            false => None,
+        };
+        let query = self.doc(doc)?;
+        handle
+            .fuzz_stage_hydrate(HydrateRequest {
+                query: &query,
+                operation_name: Some(doc),
+                variables,
+                data,
+                identity: Some(&self.identity),
+                scope: scope.as_ref(),
+            })
+            .await
     }
 
     pub async fn step(&mut self, index: usize, op: &Op) -> Result<(), String> {
@@ -227,7 +320,7 @@ impl<'a> Exec<'a> {
             } => {
                 self.identity.clone_from(identity);
                 self.count(format!("hydrate.{lane}"));
-                let outcome = self.hydrate(doc, variables, data, *contacts).await;
+                let outcome = self.hydrate(index, doc, variables, data, *contacts).await;
                 if let Ok(value) = &outcome {
                     if value["writeResult"]["revisionAdvanced"] == json!(false) {
                         self.count("hydrate.revision-unchanged");
@@ -594,6 +687,7 @@ impl<'a> Exec<'a> {
 
     async fn hydrate(
         &mut self,
+        index: usize,
         doc: &str,
         variables: &serde_json::Map<String, Value>,
         data: &Value,
@@ -605,6 +699,30 @@ impl<'a> Exec<'a> {
         } else {
             None
         };
+        #[cfg(staged_hydrate)]
+        let staged = self
+            .staged
+            .iter()
+            .position(|(at, _)| *at == index)
+            .map(|at| self.staged.remove(at).1);
+        #[cfg(staged_hydrate)]
+        if let Some(staged) = staged {
+            match handle.fuzz_commit_staged_hydrate(staged).await {
+                Some(result) => {
+                    self.count("stage.committed");
+                    let result = result?;
+                    return Ok(json!({
+                        "unchangedViews": result.unchanged_views,
+                        "searchChangedBuckets": result.search_changed_buckets,
+                        "writeResult": serde_json::to_value(result.write_result).map_err(|error| error.to_string())?,
+                        "data": result.data,
+                    }));
+                }
+                None => self.count("stage.whole-at-commit"),
+            }
+        }
+        #[cfg(not(staged_hydrate))]
+        let _ = index;
         let result = handle
             .hydrate_query(
                 self.doc(doc)?,

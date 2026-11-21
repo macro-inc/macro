@@ -11,7 +11,7 @@ fn main() {
     std::fs::create_dir_all(out.join("engine")).unwrap();
     let engine = read(&host.join("engine.rs"));
     // The plugin's own tests stay out; the fuzzer's hooks take their place.
-    let engine = engine.replace("#[cfg(test)]\nmod test;", "") + "\nmod fuzz_hooks;\n";
+    let engine = engine.replace("#[cfg(test)]\nmod test;", "") + "\npub(crate) mod fuzz_hooks;\n";
     // As a `mod.rs`, so its submodules resolve next to it.
     std::fs::write(out.join("engine/mod.rs"), engine).unwrap();
     // Every submodule but the tests, so a build of any checkout gets the ones it declares.
@@ -45,6 +45,13 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CACHE_DIFF_FUZZ_IDLE_CHECKPOINT");
     if std::env::var_os("CACHE_DIFF_FUZZ_IDLE_CHECKPOINT").is_some_and(|value| value == "1") {
         println!("cargo::rustc-cfg=idle_checkpoint");
+    }
+    // A side whose cache core stages hydrates (`Engine::stage_hydrate`) is built with
+    // CACHE_DIFF_FUZZ_STAGED_HYDRATE=1, so `--stage-hydrates` can stage one ahead of an op.
+    println!("cargo::rustc-check-cfg=cfg(staged_hydrate)");
+    println!("cargo:rerun-if-env-changed=CACHE_DIFF_FUZZ_STAGED_HYDRATE");
+    if std::env::var_os("CACHE_DIFF_FUZZ_STAGED_HYDRATE").is_some_and(|value| value == "1") {
+        println!("cargo::rustc-cfg=staged_hydrate");
     }
 }
 
