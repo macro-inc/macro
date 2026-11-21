@@ -198,6 +198,11 @@ fn a_fence_indented_past_its_opening_is_code() {
         prod().rewrite(&markdown).markdown,
         format!("```\n    ```\n{TASK_URL}\n```\n{TASK_CHIP}\n")
     );
+    let tabbed = format!("```\n\t```\n{TASK_URL}\n```\n{TASK_URL}\n");
+    assert_eq!(
+        prod().rewrite(&tabbed).markdown,
+        format!("```\n\t```\n{TASK_URL}\n```\n{TASK_CHIP}\n")
+    );
 }
 
 #[test]
@@ -219,10 +224,45 @@ fn a_fence_that_opens_a_list_item_is_code() {
 
 #[test]
 fn a_line_of_unmatched_backtick_runs_is_rewritten_in_one_pass() {
-    let runs: String = (1..=2000).map(|length| "`".repeat(length) + " ").collect();
+    // About 246 KB, under the rewrite cap.
+    let runs: String = (1..=700).map(|length| "`".repeat(length) + " ").collect();
     let markdown = format!("{runs}{TASK_URL}");
     assert_eq!(
         prod().rewrite(&markdown).markdown,
         format!("{runs}{TASK_CHIP}")
+    );
+}
+
+#[test]
+fn unclosed_tags_between_backticks_are_scanned_in_one_pass() {
+    let started = std::time::Instant::now();
+    let line = "<m-a>`".repeat(100_000);
+    assert_eq!(protected_spans(&line).len(), 50_000);
+    let markdown = format!("{} {TASK_URL}", "<m-a>`".repeat(40_000));
+    assert_eq!(
+        prod().rewrite(&markdown).markdown,
+        format!("{} {TASK_CHIP}", "<m-a>`".repeat(40_000))
+    );
+    // Milliseconds when linear; a rescan per token takes minutes.
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+}
+
+#[test]
+fn markdown_up_to_the_cap_is_rewritten_and_longer_is_kept() {
+    let at_cap = format!(
+        "{TASK_URL}{}",
+        " ".repeat(MAX_REWRITE_BYTES - TASK_URL.len())
+    );
+    let rewritten = prod().rewrite(&at_cap);
+    assert_eq!(rewritten.chips, 1);
+    assert!(!rewritten.skipped_oversize);
+    let over_cap = format!("{at_cap} ");
+    assert_eq!(
+        prod().rewrite(&over_cap),
+        Rewritten {
+            markdown: Cow::Borrowed(over_cap.as_str()),
+            chips: 0,
+            skipped_oversize: true,
+        }
     );
 }

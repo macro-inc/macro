@@ -59,6 +59,14 @@ const IGNORED_PARAMS: &[&str] = &["referral_code"];
 /// a fence indented further is code inside the block.
 const MAX_CLOSING_INDENT: usize = 3;
 
+/// The longest markdown, in bytes, the rewrite scans; a longer body is kept
+/// as written. Far above any real task body, it bounds the work one request
+/// can cause.
+pub const MAX_REWRITE_BYTES: usize = 256 * 1024;
+
+/// The column a tab advances to the next multiple of.
+const TAB_STOP: usize = 4;
+
 /// Characters that end a sentence after a bare URL rather than belong to it.
 const TRAILING_PUNCTUATION: &[char] = &['.', ',', ';', ':', '!', '?', '\'', '"'];
 
@@ -69,6 +77,9 @@ pub struct Rewritten<'a> {
     pub markdown: Cow<'a, str>,
     /// How many links became chips.
     pub chips: usize,
+    /// Whether the markdown was longer than [`MAX_REWRITE_BYTES`] and so kept
+    /// as written without a scan.
+    pub skipped_oversize: bool,
 }
 
 /// Rewrites links to items in one Macro web app into mention chips.
@@ -92,8 +103,16 @@ impl AppLinkChips {
     }
 
     /// Replace every link to an app item in `markdown` with its chip. Code
-    /// blocks, code spans and existing mention tags are left as written.
+    /// blocks, code spans and existing mention tags are left as written, and
+    /// so is markdown longer than [`MAX_REWRITE_BYTES`].
     pub fn rewrite<'a>(&self, markdown: &'a str) -> Rewritten<'a> {
+        if markdown.len() > MAX_REWRITE_BYTES {
+            return Rewritten {
+                markdown: Cow::Borrowed(markdown),
+                chips: 0,
+                skipped_oversize: true,
+            };
+        }
         let mut out = String::new();
         let mut chips = 0;
         let mut open_fence: Option<Fence> = None;
@@ -136,6 +155,7 @@ impl AppLinkChips {
                 Cow::Borrowed(markdown)
             },
             chips,
+            skipped_oversize: false,
         }
     }
 
@@ -231,7 +251,8 @@ struct Fence<'a> {
     /// How many `>` quote markers come before it: a fence closes only at the
     /// quote depth it opened at.
     quotes: usize,
-    /// Its column inside its quote, list marker included.
+    /// Its column inside its quote, list marker included, with tabs
+    /// advancing to the next tab stop.
     indent: usize,
     /// Whether a list item's marker comes before it; such a line opens a
     /// fence but never closes one.
@@ -259,54 +280,64 @@ fn fence(line: &str) -> Option<Fence<'_>> {
         return None;
     }
     let quoted = prefix.rfind('>').map_or(0, |at| at + 1);
+    let indent = prefix
+        .get(quoted..)
+        .unwrap_or_default()
+        .chars()
+        .chain(item.chars())
+        .fold(0, |column, c| {
+            if c == '\t' {
+                column + TAB_STOP - column % TAB_STOP
+            } else {
+                column + 1
+            }
+        });
     Some(Fence {
         quotes: prefix.matches('>').count(),
-        indent: prefix.len() - quoted + item.len(),
+        indent,
         item: !item.is_empty(),
         run,
         info,
     })
 }
 
-/// The byte ranges of `line` to leave as written: mention tags, and code
-/// spans, which close only on a backtick run as long as the one they open
-/// with. A run with no match is a literal backtick, not a span. Each run's
-/// closing run is found in one pass from the right, never by a rescan.
+/// The byte ranges of `line` to leave as written: mention tags, from an
+/// opening tag to the next closing one, and code spans, which close only on a
+/// backtick run as long as the one they open with. Whichever opens first wins;
+/// an opening with no close is literal text. Linear in the line: every token
+/// is short, and each one's close is found in one pass from the right.
 fn protected_spans(line: &str) -> Vec<std::ops::Range<usize>> {
-    let tokens: Vec<_> = lazy_regex::regex!(r"<m-[a-z-]+>.*?</m-[a-z-]+>|`+")
+    let tokens: Vec<_> = lazy_regex::regex!(r"</?m-[a-z-]+>|`+")
         .find_iter(line)
         .collect();
     let mut next_run_of_length = std::collections::HashMap::new();
-    let mut closing_run: Vec<Option<usize>> = tokens
+    let mut next_closing_tag = None;
+    let mut closes_at: Vec<Option<usize>> = tokens
         .iter()
         .enumerate()
         .rev()
-        .map(|(at, token)| {
-            token
-                .as_str()
-                .starts_with('`')
-                .then(|| next_run_of_length.insert(token.len(), at))
-                .flatten()
+        .map(|(at, token)| match token.as_str().as_bytes() {
+            [b'`', ..] => next_run_of_length.insert(token.len(), at),
+            [b'<', b'/', ..] => {
+                next_closing_tag = Some(at);
+                None
+            }
+            _ => next_closing_tag,
         })
         .collect();
-    closing_run.reverse();
+    closes_at.reverse();
     let mut spans = Vec::new();
     let mut at = 0;
     while let Some(token) = tokens.get(at) {
-        if !token.as_str().starts_with('`') {
-            spans.push(token.range());
-            at += 1;
-            continue;
-        }
-        match closing_run
+        let close = closes_at
             .get(at)
             .copied()
             .flatten()
-            .and_then(|closing| Some((closing, tokens.get(closing)?)))
-        {
-            Some((closing, closing_token)) => {
-                spans.push(token.start()..closing_token.end());
-                at = closing + 1;
+            .and_then(|close| Some((close, tokens.get(close)?)));
+        match close {
+            Some((close, close_token)) => {
+                spans.push(token.start()..close_token.end());
+                at = close + 1;
             }
             None => at += 1,
         }

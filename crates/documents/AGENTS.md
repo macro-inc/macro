@@ -127,7 +127,9 @@ word docs, Illustrator/Photoshop files).
   so an agent's pasted message or document URL links like the app's own. It
   applies to every caller, by design; the composer's links survive only
   because it exports them as `<m-link>` tags, which the rewrite leaves alone.
-  The handler span records `app_links_chipped`.
+  The handler span records `app_links_chipped`, and
+  `app_links_skipped_oversize` when a body over
+  `mention_utils::app_link::MAX_REWRITE_BYTES` is stored unchanged.
 - Create tasks with explicit title pins by passing property definition IDs through `MarkdownSubtype::Task`; `MarkdownInitializationOptions` carries optional pins across the domain ports, leaving omitted pins implicit and preserving explicit empty lists.
 - Persist explicitly pinned empty fields as task-owned null assignments so every authorized task viewer can resolve them.
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
