@@ -79,7 +79,7 @@ pub enum BackfillPass {
     Channels,
     /// `interacted` from DMs with a message.
     DirectMessages,
-    /// `gmail` and `outlook` from legacy edges and inboxes.
+    /// `gmail`, `outlook` and `imap` from legacy edges and inboxes.
     Inbox,
 }
 

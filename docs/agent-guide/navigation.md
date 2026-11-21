@@ -1775,6 +1775,11 @@ and many recent tasks containing “task”: the project should appear in the fi
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.
 
+Where list-aware contact reading is enabled, personal mention windows rank
+teammates first, then interacted or invited contacts, then connected Gmail,
+Outlook and IMAP inbox contacts. IMAP shares the inbox group in server search
+and local picker priority.
+
 Document, project and call discussion composers (including replies and edits)
 use the same paged personal directory. Channel people remain participant-scoped,
 and CRM discussions remain team-scoped; an empty or loading roster never opens

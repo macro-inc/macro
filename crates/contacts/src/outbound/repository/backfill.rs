@@ -7,20 +7,12 @@ use crate::domain::models::list::{ContactList, InboxProvider};
 use crate::domain::ports::{LegacyDirectorySource, OrphanedListRows};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use rootcause::{Report, report};
+use rootcause::Report;
 use std::str::FromStr;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
-
-fn provider(value: &str) -> Result<InboxProvider, Report> {
-    match value {
-        "GMAIL" => Ok(InboxProvider::Gmail),
-        "OUTLOOK" => Ok(InboxProvider::Outlook),
-        other => Err(report!("unknown inbox provider {other}")),
-    }
-}
 
 impl LegacyDirectorySource for DbContactsRepository {
     #[tracing::instrument(name = "contacts.backfill.channel_page", skip(self), err)]
@@ -145,7 +137,7 @@ impl LegacyDirectorySource for DbContactsRepository {
                     .map(|(link_id, value)| {
                         Ok(Inbox {
                             link_id,
-                            provider: provider(&value)?,
+                            provider: InboxProvider::from_str(&value)?,
                         })
                     })
                     .collect::<Result<_, Report>>()?;

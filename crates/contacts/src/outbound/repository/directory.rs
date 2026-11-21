@@ -59,7 +59,7 @@ fn parse_lists(keys: &[String]) -> Vec<ContactList> {
 const INTERACTED_GROUP: [ContactList; 2] = [ContactList::Interacted, ContactList::Invited];
 
 /// The list keys of people search's third group.
-const INBOX_GROUP: [ContactList; 2] = [ContactList::Gmail, ContactList::Outlook];
+const INBOX_GROUP: [ContactList; 3] = [ContactList::Gmail, ContactList::Outlook, ContactList::Imap];
 
 fn keys(lists: &[ContactList]) -> Vec<&str> {
     lists.iter().map(AsRef::as_ref).collect()
