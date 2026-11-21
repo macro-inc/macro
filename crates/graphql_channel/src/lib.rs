@@ -208,7 +208,8 @@ where
 /// Domain-facing capability behind the viewer's channel reads.
 pub trait ChannelUserReads: Send + Sync + 'static {
     /// The direct message between `user_id` and `recipient_id` that
-    /// get-or-create would reuse, without creating one.
+    /// get-or-create by `user_id` would reuse, while `user_id` is still in
+    /// it, without creating one: `None` when they have none `user_id` is in.
     fn find_direct_message(
         &self,
         user_id: MacroUserIdStr<'static>,
