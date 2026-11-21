@@ -841,6 +841,7 @@ fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
     let run = |staging: bool| {
         super::test_hooks::STAGING.with(|on| on.set(staging));
         super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+        super::test_hooks::YIELDS.with(|yields| yields.set(0));
         let handle = spawn_handle();
         let scope = HydrationScope {
             contact_fence: None,
@@ -889,13 +890,16 @@ fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
             results.push(data);
         }
         let staged = super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get);
+        let yields = super::test_hooks::YIELDS.with(std::cell::Cell::get);
         super::test_hooks::STAGING.with(|on| on.set(true));
-        (results, staged)
+        (results, staged, yields)
     };
-    let (whole, none_staged) = run(false);
-    let (staged, staged_commits) = run(true);
-    assert_eq!(none_staged, 0);
-    assert_eq!(staged_commits, 5);
+    let (whole, none_staged, no_yields) = run(false);
+    let (staged, staged_commits, yields) = run(true);
+    assert_eq!((none_staged, no_yields), (0, 0));
+    // Reads may run after the projections and after staging; the binding
+    // hydrate yields once, after its projections, and then runs whole.
+    assert_eq!((staged_commits, yields), (5, 11));
     assert_eq!(staged, whole);
 }
 

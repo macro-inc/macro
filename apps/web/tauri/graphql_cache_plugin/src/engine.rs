@@ -425,6 +425,7 @@ mod test_hooks {
         pub(super) static STAGED_COMMITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
         /// Set, the next staging read fails once.
         pub(super) static FAIL_STAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static YIELDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 }
 
@@ -907,6 +908,8 @@ impl EngineHandle {
         &'a self,
         state: AccessGuard<'a, EngineState>,
     ) -> AccessGuard<'a, EngineState> {
+        #[cfg(test)]
+        test_hooks::YIELDS.with(|yields| yields.set(yields.get() + 1));
         match state.yield_to_reads(&self.inner) {
             Ok(turn) => turn.resume().await,
             Err(state) => state,

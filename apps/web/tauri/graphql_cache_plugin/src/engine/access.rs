@@ -65,13 +65,18 @@ impl<T> EngineAccess<T> {
         {
             return None;
         }
-        // Wrapped only once both are held: dropping a bare turn after a
-        // failed try wakes no one, so a waiter cannot spin on its own wake.
-        let turn = self.turn.try_lock().ok()?;
+        // The turn wakes waiters when it drops, also after a failed engine try:
+        // a hydrate that found it held may have slept through the last
+        // release. Idle work never waits for that wake, so it cannot spin on it.
+        let turn = self.held(self.turn.try_lock().ok()?);
         let value = self.value.try_lock().ok()?;
+        // A hydrate that began waiting after the check above still goes first.
+        if self.hydrates_waiting.load(Ordering::SeqCst) > 0 {
+            return None;
+        }
         Some(AccessGuard {
             value,
-            _turn: Some(self.held(turn)),
+            _turn: Some(turn),
             _release: ReleaseNotice {
                 available: &self.available,
                 quiet: None,
@@ -156,12 +161,14 @@ impl<T> EngineAccess<T> {
                     "cache hydration superseded by a foreground write; refetch the page".into(),
                 );
             }
-            if let Ok(turn) = self.turn.try_lock()
-                && let Ok(value) = self.value.try_lock()
-            {
+            if let Ok(turn) = self.turn.try_lock() {
+                // With the turn, only a read can hold the engine: wait for it
+                // rather than give the turn back, which would wake this
+                // hydrate's own registration and spin.
+                let turn = self.held(turn);
                 let guard = AccessGuard {
-                    value,
-                    _turn: Some(self.held(turn)),
+                    value: self.value.lock().await,
+                    _turn: Some(turn),
                     _release: self.release_notice(),
                 };
                 if epoch != self.write_epoch.load(Ordering::SeqCst) {
@@ -715,6 +722,26 @@ mod test {
                 "releasing the turn wakes it"
             );
             assert!(warming.await.is_ok());
+        });
+    }
+
+    /// Idle work that takes the turn but finds the engine held gives the turn
+    /// back with a wake: a hydrate may have found it held and gone to sleep
+    /// after the release that freed the engine.
+    #[test]
+    fn idle_work_that_gives_the_turn_back_wakes_waiters() {
+        pollster::block_on(async {
+            let access = EngineAccess::new(0);
+            let read = access.read().await;
+            let notified = access.available.notified();
+            let mut notified = std::pin::pin!(notified);
+            notified.as_mut().enable();
+            assert!(access.try_idle().is_none());
+            assert!(
+                !pending(notified.as_mut()),
+                "giving the turn back woke waiters"
+            );
+            drop(read);
         });
     }
 
