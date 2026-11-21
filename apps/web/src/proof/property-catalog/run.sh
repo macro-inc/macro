@@ -41,12 +41,15 @@ outs_for() {
     *) echo "usage: $0 [all | smoke | quiet | load | seed4 | control | mutants ...]" >&2; return 2 ;;
   esac
 }
+# Every mode is checked before any result is removed.
+PLANNED=()
 for m in "${MODES[@]}"; do
   dirs=$(outs_for "$m") || exit 2
-  for d in $dirs; do
-    { mkdir -p "$HERE/out/$d" && rm -f "$HERE/out/$d/results.json" && date -Is > "$HERE/out/$d/started"; } ||
-      { echo "cannot clear out/$d" >&2; exit 1; }
-  done
+  PLANNED+=($dirs)
+done
+for d in "${PLANNED[@]}"; do
+  { mkdir -p "$HERE/out/$d" && rm -f "$HERE/out/$d/results.json" && date -Is > "$HERE/out/$d/started"; } ||
+    { echo "cannot clear out/$d" >&2; exit 1; }
 done
 
 # The base commit's query modules, served beside the head's; the OLD side of

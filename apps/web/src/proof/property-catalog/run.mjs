@@ -398,6 +398,7 @@ if (BASELINE_RESULT) {
   const off = BASELINE_SHAPE.filter((k) => J(BASELINE_RESULT.config?.[k]) !== J(CONFIG[k]));
   if (BASELINE_RESULT.config?.mutant) off.push('mutant');
   if (BASELINE_RESULT.commit !== git('rev-parse', 'HEAD')) off.push('commit');
+  if (BASELINE_RESULT.oldModulesFrom !== OLD_COMMIT) off.push('old modules commit');
   if (off.length) throw new Error(`baseline ${E.BASELINE} differs from this run in ${off.join(', ')}`);
 }
 const BASELINE = new Set(BASELINE_RESULT ? Object.keys(BASELINE_RESULT.diffSignatures) : []);
@@ -1264,6 +1265,8 @@ async function takeSkipped(...pages) {
 
 // One write, through the real mutation hooks: NEW performs it against the
 // server, OLD replays NEW's recorded requests and responses.
+// The answers the properties service gives a write it refuses on its merits.
+const REFUSAL_STATUSES = new Set([400, 403, 404, 409, 422]);
 // An option's value as written: the API returns `{ type, value }`.
 const optValue = (v) => (v && typeof v === 'object' ? v.value : v);
 async function write(pair, actor, name, vars) {
@@ -1306,9 +1309,10 @@ async function write(pair, actor, name, vars) {
   // created or changed (fetchPropertyDefinitionWithOptions), OLD vs NEW.
   const defId = name === 'createDef' ? (n.ok ? (n.value?.id ?? n.value?.definition?.id) : null) : (vars?.propertyDefinitionId ?? null);
   if (defId) (pair.imperative ??= []).push({ actor, id: defId });
-  // Both sides refused it on a client-error answer (every request answered
-  // 4xx, replayed one for one): a refusal, not a transport or server failure.
-  const refused = !n.ok && !o.ok && replay.requests > 0 && !replay.unused.length && !replay.mismatches.length && acct.neu.tap.rec.every((x) => !x.failed && x.status >= 400 && x.status < 500);
+  // Both sides refused it on the server's own refusal of the request (every
+  // request answered with one, replayed one for one): not a transport, auth,
+  // rate-limit or server failure.
+  const refused = !n.ok && !o.ok && replay.requests > 0 && !replay.unused.length && !replay.mismatches.length && acct.neu.tap.rec.every((x) => !x.failed && REFUSAL_STATUSES.has(x.status));
   return { n, refused };
 }
 const canonDefWithOptions = (x) => (x && Array.isArray(x.property_options) ? { ...x, property_options: canonOptions(x.property_options) } : x);

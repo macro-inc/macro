@@ -106,8 +106,11 @@ not run the base commit's modules, or a mutant was not applied or not caught.
 - An uncaught page error seen on one fuzzed side only is a `diff` at level
   `page-errors` (a load page's errors count in `harnessErrors`).
 - `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`
-  and prints each run's commit and verdict; a run with no readable results is an
-  entry `{ verdict: null, incomplete }` in the JSON too. A run deletes its old
+  and prints, for each run with readable results, its commit and verdict:
+  PASSED, FAILED (it reached its final checks, a lane crash included) or
+  INCOMPLETE (it stopped before writing a verdict). A run with no readable
+  results prints INCOMPLETE with the reason and no commit, and is an entry
+  `{ verdict: null, incomplete }` in the JSON. A run deletes its old
   `results.json` when it starts and writes `verdict` only after its final
   checks, so a crashed or killed run reads `INCOMPLETE` (with no results
   file yet, from its `started` marker), never as passed. Results are written
