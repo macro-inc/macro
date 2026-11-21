@@ -1665,26 +1665,38 @@ impl CacheEngine {
                 data: &data,
                 identity: identity.as_deref(),
             };
-            // One normalization serves the passes below and the write.
-            let normalized = state.engine_mut()?.normalize_network(
+            let registration =
                 registration
                     .as_ref()
                     .map(|(op_id, entity_resolvers)| QueryRegistration {
                         op_id: *op_id,
                         entity_resolvers,
-                    }),
-                input,
-            );
-            let normalized = state.engine_result(normalized)?;
+                    });
+            // One normalization serves the passes below and the write. A
+            // response that fails it takes the path that normalizes twice,
+            // which reports its error where it always has.
+            let normalized = state
+                .engine_mut()?
+                .normalize_network(registration, input)
+                .ok();
             let response_schema = state.engine_mut()?.schema_snapshot();
-            let response = WriteResponse::with_updates(
-                &response_schema,
-                &query,
-                operation_name.as_deref(),
-                &vars,
-                &data,
-                normalized.updates(),
-            );
+            let response = match &normalized {
+                Some(normalized) => WriteResponse::with_updates(
+                    &response_schema,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                    normalized.updates(),
+                ),
+                None => WriteResponse::new(
+                    &response_schema,
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                ),
+            };
             if reuse_stored_identity {
                 projections.extend(
                     notification_projection_updates_for(state.engine_mut()?.storage(), &response)
@@ -1711,10 +1723,24 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?;
             drop(response);
-            let result = state
-                .engine_mut()?
-                .write_normalized_query(origin, input, normalized, projections)
-                .await;
+            let engine = state.engine_mut()?;
+            let result = match normalized {
+                Some(normalized) => {
+                    engine
+                        .write_normalized_query(origin, input, normalized, projections)
+                        .await
+                }
+                None => {
+                    engine
+                        .write_query_with_registration_and_projections(
+                            origin,
+                            registration,
+                            input,
+                            projections,
+                        )
+                        .await
+                }
+            };
             let result = state.engine_result(result)?;
 
             to_js(&js_write_result(result, &ops.borrow()))
