@@ -4,6 +4,7 @@ import { useShareModal } from '@core/component/TopBar/shareModal';
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { getFileDocumentBlob } from '@queries/storage/file-document';
 import type { JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
@@ -83,6 +84,7 @@ export function UnknownDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="unknown"
       label="file"

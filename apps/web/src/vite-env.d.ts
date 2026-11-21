@@ -23,7 +23,9 @@ interface ImportMetaEnv {
   /** `true` logs each `perfMark` as a `[perf]` console line. */
   readonly VITE_PERF_LOG?: string;
   readonly VITE_ENABLE_REMINDERS?: string;
+  readonly VITE_ENABLE_TASK_TEMPLATES?: string;
   readonly VITE_ENABLE_ENTITY_APPEARANCE?: string;
+  readonly VITE_ENABLE_AGENT_NOTIFICATIONS?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
   readonly VITE_ENABLE_EVENT_ROUTINES?: string;
   readonly VITE_ENABLE_ROUTINE_STARTER_TEMPLATES?: string;
@@ -32,9 +34,12 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_ROUTINE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
+  readonly VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE?: string;
+  readonly VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
   readonly VITE_DISABLE_CRM_CONTACT_SEARCH?: string;
+  readonly VITE_ENABLE_CONTACT_LISTS?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
 }
 

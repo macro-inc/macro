@@ -123,7 +123,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         sender: &str,
         blocked: bool,
         important: Option<bool>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
     /// Revalidate actor and expected facts while committing a user-directed resolution.
     fn commit_message_resolution(
@@ -160,7 +160,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         actor: MacroUserIdStr<'_>,
         action: &crate::domain::models::mailbox_action::MailboxAction,
         targets: &[crate::domain::models::mailbox_action::MailboxActionTarget],
-    ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
     fn previews_for_view_cursor(
         &self,
         query: PreviewCursorQuery,
@@ -375,7 +375,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         actor: Option<&str>,
 
         expected_generation: i32,
-    ) -> impl Future<Output = Result<Option<DraftDeletion>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<DraftDeletion>, EmailErr>> + Send;
 
     /// Upsert contacts from the parsed addresses. Must be called outside a transaction
     /// to avoid deadlocks (contacts are shared across messages).

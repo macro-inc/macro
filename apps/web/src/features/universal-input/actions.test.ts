@@ -745,6 +745,12 @@ describe('destination adapters', () => {
       })
     );
   });
+  it('acknowledges an event whose committed identity is unavailable without an open action', async () => {
+    mocks.event.mockResolvedValueOnce(undefined);
+    const result = await execute(input('calendar'));
+    expect(result).toEqual({ message: 'Event created', open: undefined });
+    expect(mocks.event).toHaveBeenCalledOnce();
+  });
   it('resolves a DM only at submission and keeps the message retry ID', async () => {
     await execute(input('message'));
     expect(mocks.dm).toHaveBeenCalledWith({

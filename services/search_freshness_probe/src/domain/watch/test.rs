@@ -281,3 +281,25 @@ async fn a_change_shown_at_the_target_is_seen_not_late() {
 
     assert_eq!(watched.outcome, Outcome::Seen(Duration::from_secs(60)));
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_recall_round_polls_every_five_seconds() {
+    let token = Token::random();
+    let written_at = Instant::now();
+    let search = ScriptedSearch {
+        written_at,
+        answer: Arc::new(|_: &SearchQuery, _| Ok(vec![])),
+    };
+
+    let watched = watch(
+        &search,
+        &[check(&token, Presence::Present)],
+        Schedule::RECALL,
+        written_at,
+    )
+    .await;
+
+    // 0 s to 300 s every 5 s.
+    assert_eq!(watched.polls, 61);
+    assert_eq!(watched.outcome, Outcome::Unseen);
+}

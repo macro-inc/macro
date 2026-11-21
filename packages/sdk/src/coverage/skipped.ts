@@ -281,11 +281,15 @@ export const notificationExcluded = [
   'getTypedNotificationsByEventItemId',
   'getUnsubscribes',
   'healthHandler',
+  // Chat sidebar sections remain app-only navigation, like their storage
+  // endpoints; so do their notification settings.
+  'listSectionNotificationSettings',
   'removeUnsubscribeAll',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItems',
+  'updateSectionNotificationSettings',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =

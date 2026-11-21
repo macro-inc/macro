@@ -1,4 +1,8 @@
-import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import {
+  ViewShell,
+  type ViewShellRootProps,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
@@ -247,17 +251,39 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
     />
   );
 }
-function ChannelsViewRoot() {
+type ChannelsAsideList = ViewShellRootProps['asideList'];
+
+function ChannelsViewRoot(props: {
+  registerAsideList: (list: (() => ChannelsAsideList) | undefined) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const {
     state,
     tab,
+    setTab,
     mobileLayout,
     sectionsLoading,
     sectionsEnabled,
     selectedChannel,
+    setSelectedChannel,
   } = useChannelsView();
   const threadsTab = () => !isTouchDevice() && tab() === 'threads';
+  // Threads fill Main like a conversation, so going back leaves them first.
+  const returnToList = () => {
+    if (threadsTab()) setTab('browse');
+    else setSelectedChannel(undefined);
+  };
+  // Narrow desktop, the rail and the conversation take turns at full width.
+  // The loading spinner has no rail to take turns with.
+  props.registerAsideList(() =>
+    isTouchDevice() || sectionsLoading()
+      ? undefined
+      : {
+          open: selectedChannel() !== undefined || threadsTab(),
+          onBack: returnToList,
+        }
+  );
+  onCleanup(() => props.registerAsideList(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
   const localChannels = useChannelListSearchPool();
 
@@ -557,6 +583,8 @@ export function ChannelDetailRouteView() {
 /** Chat workspace with shared workspace navigation. */
 export function ChannelsView(props: ChannelsViewProps) {
   const inlinePreviewLayout = useInlinePreviewLayout();
+  // The selection lives in the provider, which needs the shell around it.
+  const [asideList, setAsideList] = createSignal<() => ChannelsAsideList>();
   return (
     <DebugSuspense name="ChannelsView.root">
       <SplitPanel.Root>
@@ -566,11 +594,14 @@ export function ChannelsView(props: ChannelsViewProps) {
             aside={
               inlinePreviewLayout() ? { preserveDuringResize: false } : false
             }
+            asideList={asideList()?.()}
             main={{ preferredWidth: 640 }}
             resizable
           >
             <ChannelsViewProvider initialState={props.initialState}>
-              <ChannelsViewRoot />
+              <ChannelsViewRoot
+                registerAsideList={(list) => setAsideList(() => list)}
+              />
             </ChannelsViewProvider>
           </ViewShell.Root>
         </SplitPanel.Body>

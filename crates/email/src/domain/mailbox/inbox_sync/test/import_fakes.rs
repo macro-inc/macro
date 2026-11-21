@@ -368,7 +368,7 @@ impl InboxSyncUploads for Fake {
 impl InboxSyncContacts for Fake {
     fn connect<'a>(
         &'a self,
-        _: &'a MacroUserIdStr<'static>,
+        _: &'a service::link::Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {

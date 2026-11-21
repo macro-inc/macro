@@ -72,6 +72,7 @@ async fn round<R: Rotation, S: Search>(
 ) -> Option<Round> {
     let span = tracing::Span::current();
     let entity_type = rotation.entity_type();
+    rotation.prepare().await;
     let started = Instant::now();
     let written = rotation.change().await;
     let written_at = Instant::now();

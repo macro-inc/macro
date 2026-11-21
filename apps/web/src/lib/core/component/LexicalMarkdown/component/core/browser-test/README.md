@@ -97,3 +97,15 @@ the text colour around the preview, as it did inline. Run just this case by
 adding `svg-preview.browser.e2e.ts` to the command above. On a machine with
 many network interfaces, run under `bwrap --dev-bind / / --unshare-net`, as
 `apps/web/AGENTS.md` explains.
+
+## Caret after a quick tap
+
+`caret.browser.e2e.ts` mounts a message composer (`MarkdownShell`) with padding
+and taps into a typed two-line draft with the press and release sent together
+(`quick-tap.ts`), as a trackpad tap-to-click or a quick touch tap arrives, then
+types and checks where the text landed. A click that reached the shell before
+Lexical had read the browser's selectionchange used to re-focus the editor and
+write the previous caret back. A tap on the padding must still focus the
+composer on desktop and tablet. Phones never re-focus the composer on a tap,
+so the phone run only checks that the tap lands. Other suites import
+`quick-tap.ts` for the same check (Universal Input's email body).

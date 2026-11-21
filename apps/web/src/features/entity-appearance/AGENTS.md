@@ -53,7 +53,7 @@ snippets, task projects (initiatives), forms, databases, and saved views.
 - Match lazy-loaded submenu content with a picker-shaped skeleton, not the branded logo loader.
 - Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
-- Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
+- Capture the cache generation before reading normalized appearance fields and retain it for optimistic, server, and rollback writes; unrelated preview fields can be absent on a loaded entity.
 - Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
 - Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.

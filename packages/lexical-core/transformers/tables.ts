@@ -58,6 +58,7 @@ import {
 } from './mentions';
 import {
   BR_TAG_TO_LINE_BREAK,
+  codeFenceLines,
   HTML_ENTITY_TRANSFORMERS,
   LINK_XML,
 } from './transformers';
@@ -503,6 +504,68 @@ function $alignToHeader(table: TableNode, rows: TableRowNode[]) {
         $alignCell(cell, headerCells[column]?.getFormatType() ?? '');
       });
   }
+}
+
+/**
+ * Limits `E_TABLE_NODE` to GitHub tables: a header row, a delimiter row with
+ * as many columns, then body rows, short ones padded with empty cells. `E_TABLE_NODE` alone reads any line between
+ * pipes as a row, and appends rows to a table on the line above. So every other
+ * run of pipe lines outside fenced code gets its leading pipe escaped and stays
+ * text, and a table gets a blank line above it, so it never joins the block
+ * before it. A run whose lines appear, in order, in one of `existingText` (the
+ * markdown of paragraphs already in the document) is that paragraph's text,
+ * not a new table, so it stays text too.
+ */
+export function isolatePipeTables(
+  markdown: string,
+  existingText: readonly string[] = []
+): string {
+  const lines = markdown.split('\n');
+  const inCode = codeFenceLines(lines);
+  const isRow = (index: number) =>
+    index < lines.length &&
+    !inCode[index] &&
+    REG_EXP_TABLE_ROW.test(lines[index]);
+
+  const output: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    if (!isRow(index)) {
+      output.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    let end = index;
+    while (isRow(end)) end += 1;
+    const run = lines.slice(index, end);
+    const header = run[0].match(REG_EXP_TABLE_ROW)?.[1] ?? '';
+    const columns = splitTableRow(header).length;
+    const runText = `\n${run.join('\n')}\n`;
+    const isTable =
+      run.length >= 2 &&
+      REG_EXP_TABLE_ROW_DIVIDER.test(run[1]) &&
+      columns === columnAlignments(run[1]).length &&
+      !existingText.some((text) => `\n${text}\n`.includes(runText));
+
+    if (isTable) {
+      if (output.length > 0 && output[output.length - 1].trim() !== '') {
+        output.push('');
+      }
+      // A short row gets empty cells, as in GFM; `E_TABLE_NODE` would start a
+      // new table at a row of another width.
+      output.push(
+        ...run.map((line) => {
+          const cells = splitTableRow(line.match(REG_EXP_TABLE_ROW)?.[1] ?? '');
+          return `${line.trimEnd()}${' |'.repeat(Math.max(0, columns - cells.length))}`;
+        })
+      );
+    } else {
+      output.push(...run.map((line) => `\\${line}`));
+    }
+    index = end;
+  }
+  return output.join('\n');
 }
 
 export const E_TABLE_NODE: ElementTransformer = {

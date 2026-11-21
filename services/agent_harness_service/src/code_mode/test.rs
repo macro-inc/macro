@@ -301,6 +301,9 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "notification.unsubscribeItem",
         "notification.unsubscribeItems",
         "notification.unsubscribeAll",
+        // A user's own notification settings for one channel reach nobody.
+        "notification.updateChannelNotificationSettings",
+        "notification.resetChannelNotificationSettings",
         "scheduled-action.dismissRoutineSuggestion",
         "scheduled-action.retireRoutineSuggestion",
         "scheduled-action.suggestRoutine",

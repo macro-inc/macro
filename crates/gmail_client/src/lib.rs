@@ -418,7 +418,7 @@ impl GmailClient {
     }
 
     /// Creates a new Gmail filter.
-    #[tracing::instrument(skip(self, access_token), err)]
+    #[tracing::instrument(skip(self, access_token, filter), err)]
     pub async fn create_filter(
         &self,
         access_token: &str,

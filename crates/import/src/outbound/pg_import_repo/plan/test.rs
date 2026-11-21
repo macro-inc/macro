@@ -337,3 +337,19 @@ async fn the_owners_sharing_changes_are_recorded_on_their_staged_rows(pool: PgPo
     let row = repo.get(&ana, anas).await.unwrap().unwrap();
     assert_eq!(row.metadata["plan"]["shared"], true);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stale_claim_cleanup_preserves_a_newer_personal_verdict(pool: PgPool) {
+    let repo = PgImportRepo::new(pool.clone());
+    let user = member(&pool, "review-owner", Uuid::now_v7()).await;
+    let id = roadmap_plan(&repo, &user).await;
+    // A writer retained the earlier Shared plan while a newer review chose Personal.
+    repo.set_plan_sharing(&user, &[], &[id]).await.unwrap();
+    repo.claim_importing(&user, &[id], &[], None).await.unwrap();
+    assert!(repo.clear_stale_link(&user, id).await.unwrap());
+    let current = repo.get(&user, id).await.unwrap().unwrap();
+    assert_eq!(
+        current.metadata["plan"]["shared"], false,
+        "claim cleanup must never rewrite a newer reviewed verdict"
+    );
+}

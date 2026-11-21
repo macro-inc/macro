@@ -2,11 +2,12 @@
 //! Classifies email threads for the Focus view.
 //!
 //! Reads `macro.email` for new and sent messages, asks Jev about each signal
-//! thread and key mail in an inbox whose owner is in the Focus rollout (their
-//! `enable-email-focus` flag) with the owner's stored memory as context, asks
+//! thread and key mail in an inbox in the Focus rollout (the
+//! `enable-email-focus` flag of its owner or of a user it is linked to) with
+//! the owner's stored memory as context, asks
 //! the agent harness for the day a thread that can be in Focus is due, stores
 //! both in `email_thread_focus`, and tells the inbox's readers through the
-//! connection gateway. Every minute it looks for inboxes whose owner joined the
+//! connection gateway. Every minute it looks for inboxes that joined the
 //! rollout and fills them from the last window of mail; an hourly sweep catches
 //! what the event stream missed. Its rollout numbers (cost, failures, delays)
 //! go to CloudWatch as `Macro/EmailFocus` once a minute.

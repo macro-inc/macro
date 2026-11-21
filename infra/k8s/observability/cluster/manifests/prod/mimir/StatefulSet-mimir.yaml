@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mimir
+  namespace: observability
+spec:
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: mimir
+      app.kubernetes.io/name: mimir
+  serviceName: mimir-headless
+  template:
+    metadata:
+      annotations:
+        checksum/config: cf85f46b508d383a86343ff111ddc7f93e1b9aac633e84b9e378a15917b3d985
+      labels:
+        app.kubernetes.io/instance: mimir
+        app.kubernetes.io/name: mimir
+        observability.macro.com/aws-apis: "true"
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: mimir
+                  app.kubernetes.io/name: mimir
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - args:
+            - -target=all
+            - -config.file=/etc/mimir/mimir.yaml
+          env:
+            - name: GOMEMLIMIT
+              value: 1740MiB
+          image: docker.io/grafana/mimir:3.2.5
+          name: mimir
+          ports:
+            - containerPort: 8080
+              name: http-metrics
+            - containerPort: 9095
+              name: grpc
+            - containerPort: 7946
+              name: memberlist
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http-metrics
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 2048Mi
+            requests:
+              cpu: 100m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /etc/mimir
+              name: config
+            - mountPath: /data
+              name: data
+            - mountPath: /tmp
+              name: tmp
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: mimir
+      terminationGracePeriodSeconds: 300
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: mimir
+              app.kubernetes.io/name: mimir
+          maxSkew: 1
+          minDomains: 3
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+      volumes:
+        - configMap:
+            name: mimir
+          name: config
+        - emptyDir: {}
+          name: tmp
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+        storageClassName: gp3

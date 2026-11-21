@@ -7,7 +7,11 @@ use models_email::service::pubsub::DetailedError;
 use sqs_worker::cleanup_message;
 
 /// Perform the domain's delete disposition under the existing failure span.
-#[tracing::instrument(skip(ctx, message, log), err)]
+#[tracing::instrument(
+    skip(ctx, message, log),
+    fields(db.response.status_code = crate::pubsub::util::sqlstate(&e.source).as_deref()),
+    err
+)]
 pub(crate) async fn handle_non_retryable_error(
     ctx: &GmailOpsContext,
     message: &aws_sdk_sqs::types::Message,
@@ -21,7 +25,11 @@ pub(crate) async fn handle_non_retryable_error(
 }
 
 /// Acknowledge completion of this attempt without deleting a retryable delivery.
-#[tracing::instrument(skip(data, e), err)]
+#[tracing::instrument(
+    skip(data, e),
+    fields(db.response.status_code = crate::pubsub::util::sqlstate(&e.source).as_deref()),
+    err
+)]
 pub(crate) async fn handle_retryable_error(
     data: &GmailOpsPubsubMessage,
     e: &DetailedError,

@@ -1,5 +1,6 @@
 import { cn } from '@ui';
 import {
+  children,
   createContext,
   createSignal,
   type JSX,
@@ -134,8 +135,18 @@ function useScopeOrThrow() {
 function TopBar(props: { leading?: JSX.Element; class?: string }) {
   const scope = useScopeOrThrow();
   const floats = useTouchTopBarsFloat();
+  const leading = children(() => props.leading);
   return (
     <ViewShell.TopBar
+      navigation={
+        <Show when={leading()}>
+          {(content) => (
+            <ViewShell.TopBarTitle class="shrink-0">
+              <div class="flex shrink-0 items-center">{content()}</div>
+            </ViewShell.TopBarTitle>
+          )}
+        </Show>
+      }
       ref={scope.headerCollapse.setRow}
       class={cn(
         'relative w-full py-0 touch:flex',
@@ -145,11 +156,6 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
         props.class
       )}
     >
-      <Show when={props.leading}>
-        <ViewShell.TopBarTitle class="shrink-0">
-          <div class="flex shrink-0 items-center">{props.leading}</div>
-        </ViewShell.TopBarTitle>
-      </Show>
       {/* Contributions bring their own touch islands. */}
       <PriorityCollapseOverflowSensor
         controller={scope.headerCollapse}
@@ -157,7 +163,7 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
         class="relative h-full min-w-0 shrink overflow-hidden touch:overflow-visible"
         contentClass={cn(
           'flex h-full items-center gap-1 touch:gap-2',
-          props.leading && 'pl-0.5 touch:pl-0'
+          leading() && 'pl-0.5 touch:pl-0'
         )}
         contentRef={(element) => scope.setLayoutRef('headerLeft', element)}
       />
@@ -166,6 +172,22 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
         ref={(element) => scope.setLayoutRef('headerRight', element)}
       />
     </ViewShell.TopBar>
+  );
+}
+
+/** A detail pane with its own header; disable hosting for a desktop-owned bar. */
+function Pane(props: ParentProps<{ when?: boolean; leading?: JSX.Element }>) {
+  return (
+    <Root when={props.when}>
+      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <Show when={props.when ?? true}>
+          <TopBar leading={props.leading} />
+        </Show>
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {props.children}
+        </div>
+      </div>
+    </Root>
   );
 }
 
@@ -191,4 +213,4 @@ function Toolbar() {
   );
 }
 
-export const SplitHeaderScope = { Root, TopBar, Toolbar };
+export const SplitHeaderScope = { Root, Pane, TopBar, Toolbar };

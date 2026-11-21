@@ -199,3 +199,34 @@ async fn a_fixture_is_an_agent_session_titled_as_the_probe_titles_it() {
     assert_eq!(body["search_on"], "name");
     assert_eq!(body["filters"]["agent_session_filters"]["include"], true);
 }
+
+#[tokio::test]
+async fn a_prefix_search_asks_for_the_prefix_alone_as_a_partial_content_match() {
+    let wanted = Uuid::new_v4();
+    let (server, search) = answering(vec![document(wanted)]).await;
+
+    let hits = search
+        .hits(&SearchQuery::Prefix {
+            entity_type: EntityType::Document,
+            prefix: crate::domain::model::CrowdedPrefix::new("con").expect("a prefix"),
+            entity_id: EntityId(wanted),
+        })
+        .await
+        .expect("searched");
+
+    assert_eq!(hits, [EntityId(wanted)]);
+    let body = sent(&server).await;
+    assert_eq!(body["query"], "con");
+    assert_eq!(body["match_type"], "partial");
+    assert_eq!(body["search_on"], "content");
+    assert_eq!(
+        body["filters"]["project_filters"]["project_ids"],
+        json!([NIL])
+    );
+    // Only the probe's document is searched, so others sharing the prefix
+    // cannot push it off the page.
+    assert_eq!(
+        body["filters"]["document_filters"]["document_ids"],
+        json!([wanted.to_string()])
+    );
+}
