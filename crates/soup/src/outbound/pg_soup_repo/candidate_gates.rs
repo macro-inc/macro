@@ -48,8 +48,8 @@ fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) ->
 /// against every candidate the outer scan could produce rather than the
 /// page's `LIMIT`. For these gates that hash is the user's whole accessible
 /// set. The channel-thread gate's is worse: without the candidate's id to look
-/// up, only `parent_entity_type` narrows its message scan, so the hash is
-/// every channel's root messages. An `OFFSET` keeps the subquery per
+/// up, only `parent_entity_type` narrows its message scan, so building the
+/// hash can read every channel's messages. An `OFFSET` keeps the subquery per
 /// candidate.
 pub(super) const PER_CANDIDATE: &str = "OFFSET 0";
 
@@ -218,6 +218,14 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
 /// notification-state conjuncts it implies are pre-applied here over the
 /// thread's own notifications (the channel notifications naming this root
 /// as their secondary item, the same rows the channels fold predicates on).
+///
+/// The membership check runs once for the root, fenced like the gate itself,
+/// and compares the root's channel as a uuid, so it is one probe of the
+/// viewer's membership whatever the estimates. As a join compared as text
+/// (`cp.channel_id::text`), no index could take the channel, and each root
+/// walked every membership the viewer holds: 15,000 index entries per root
+/// for a viewer in 15,000 channels. The channel check sits in that `CASE`,
+/// not on `m`, so the root is found by its id alone.
 pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
     let implied = implied_conjuncts_sql(
         filter.and_then(|f| f.channel_thread_filter.as_deref()),
@@ -243,13 +251,19 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
         format!(
             r#"EXISTS (
                 SELECT 1 FROM comms_messages m
-                JOIN comms_channel_participants cp
-                    ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text
-                    AND cp.user_id = $1
-                    AND cp.left_at IS NULL
                 WHERE m.id = {id_sql}::uuid
                 AND m.thread_id IS NULL
                 AND m.deleted_at IS NULL
+                AND EXISTS (
+                    SELECT 1 FROM comms_channel_participants cp
+                    WHERE cp.channel_id = CASE
+                        WHEN m.parent_entity_type = 'channel'
+                            AND m.parent_entity_id ~ '{UUID_PATTERN}'
+                        THEN m.parent_entity_id::uuid END
+                    AND cp.user_id = $1
+                    AND cp.left_at IS NULL
+                    {PER_CANDIDATE}
+                )
                 {implied}
                 {PER_CANDIDATE}
             )"#
