@@ -293,7 +293,8 @@ each run.
   never generates: per surface, drafted routines, then catalog picks (each
   best first, a second with the same catalog title or name left out), then
   catalog routines marked `suggest` as Macro's templates (stable ids,
-  `template_id`) to `PER_SURFACE`, showing only open AI suggestions and
+  `template_id`) to `PER_SURFACE` (drafted routines to `DRAFTED_PER_SURFACE`
+  with `routine-suggestions-find-work` on), showing only open AI suggestions and
   skipping dismissed templates (permanent, `.../{id}/dismiss` for either
   kind) and templates saved from (`scheduled_action.suggestion_id`); its
   `status` is the person's latest

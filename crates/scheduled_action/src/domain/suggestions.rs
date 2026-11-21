@@ -20,8 +20,9 @@
 //!
 //! A read serves, per surface, AI's open suggestions best first, then
 //! catalog routines marked `suggest` as Macro's templates, to
-//! [`PER_SURFACE`], skipping what the person dismissed or saved a routine
-//! from. Dismissal is permanent and later generations are told.
+//! [`PER_SURFACE`] (drafted routines to [`DRAFTED_PER_SURFACE`] with
+//! [`ROUTINE_FIND_WORK_FLAG`] on), skipping what the person dismissed or saved
+//! a routine from. Dismissal is permanent and later generations are told.
 //!
 //! An AI suggestion's state is stored; [`state::RoutineSuggestionState::on`]
 //! is the one function that changes it and its card in the Suggestions feed
@@ -83,6 +84,10 @@ pub const ROUTINE_FIND_WORK_FLAG: &str = "routine-suggestions-find-work";
 pub const INBOX_MESSAGES: u16 = 100;
 /// Suggestions shown per surface: AI's, then Macro's templates.
 pub const PER_SURFACE: usize = 3;
+/// Most drafted routines a surface shows with [`ROUTINE_FIND_WORK_FLAG`] on,
+/// where drafting from the month's streams makes more than [`PER_SURFACE`]
+/// worth showing. Catalog picks and templates still stop at [`PER_SURFACE`].
+pub const DRAFTED_PER_SURFACE: usize = 8;
 /// AI's catalog picks onboarding shows switched on, at most.
 pub const MAX_ON_BY_DEFAULT: usize = 2;
 /// The keep estimate a catalog pick needs to be shown switched on.
@@ -254,10 +259,12 @@ where
     }
 
     /// The person's suggestions, per surface AI's then Macro's templates.
+    /// A surface shows up to `drafted` drafted routines.
     async fn answer(
         &self,
         user: &MacroUserIdStr<'static>,
         surface: Option<Surface>,
+        drafted: usize,
     ) -> Result<RoutineSuggestions> {
         let (status, stored, dismissed_templates, saved_from) = tokio::try_join!(
             self.statuses.latest(user),
@@ -267,7 +274,14 @@ where
         )?;
         Ok(RoutineSuggestions {
             status: status.unwrap_or(GenerationStatus::None),
-            suggestions: fill(user, &stored, &dismissed_templates, &saved_from, surface),
+            suggestions: fill(
+                user,
+                &stored,
+                &dismissed_templates,
+                &saved_from,
+                surface,
+                drafted,
+            ),
         })
     }
 
@@ -427,8 +441,13 @@ where
         user: &MacroUserIdStr<'static>,
         surface: Option<Surface>,
     ) -> Result<RoutineSuggestions> {
-        self.require_flag(user).await?;
-        self.answer(user, surface).await
+        let flags = self.require_flag(user).await?;
+        let drafted = if flags.is_enabled(ROUTINE_FIND_WORK_FLAG) {
+            DRAFTED_PER_SURFACE
+        } else {
+            PER_SURFACE
+        };
+        self.answer(user, surface, drafted).await
     }
 
     #[tracing::instrument(name = "routine.suggestions.brief", skip_all, fields(
@@ -884,16 +903,17 @@ fn rejected(problems: Vec<String>) -> SuggestOutcome {
 
 /// Per surface (only `surface`, when given), AI's open suggestions best
 /// first, then catalog routines marked `suggest` as Macro's templates, to
-/// [`PER_SURFACE`]. Skips AI's suggestions that aren't open, and a template
-/// the person dismissed, saved a routine from (`saved_from`) or AI already
-/// picked. Each suggestion appears once, in the order its first surface
-/// reached it.
+/// [`PER_SURFACE`], or drafted routines to `drafted_cap`. Skips AI's
+/// suggestions that aren't open, and a template the person dismissed, saved
+/// a routine from (`saved_from`) or AI already picked. Each suggestion
+/// appears once, in the order its first surface reached it.
 pub fn fill(
     user: &MacroUserIdStr<'_>,
     stored: &[StoredSuggestion],
     dismissed_templates: &[String],
     saved_from: &[Uuid],
     surface: Option<Surface>,
+    drafted_cap: usize,
 ) -> Vec<RoutineSuggestion> {
     let saved: HashSet<&Uuid> = saved_from.iter().collect();
     // Catalog keys AI picked (open, dismissed or saved) never show again as
@@ -943,8 +963,13 @@ pub fn fill(
             .filter(|suggestion| suggestion.surfaces.contains(&surface))
             .count();
         for suggestion in open.iter().filter(|s| s.surfaces.contains(&surface)) {
-            if count >= PER_SURFACE {
-                break;
+            let cap = if drafted(suggestion) {
+                drafted_cap.max(PER_SURFACE)
+            } else {
+                PER_SURFACE
+            };
+            if count >= cap {
+                continue;
             }
             if ids.insert(suggestion.id) {
                 shown.push(for_you(suggestion, on_by_default.contains(&suggestion.id)));

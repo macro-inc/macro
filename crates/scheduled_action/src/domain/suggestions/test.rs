@@ -571,7 +571,7 @@ async fn a_session_may_keep_only_so_many() {
 fn templates_skip_what_was_saved_and_fill_each_surface_to_three() {
     let me = user();
     let saved = template_id(&me, "inbox");
-    let shown = fill(&me, &[], &[], &[saved], Some(Surface::Email));
+    let shown = fill(&me, &[], &[], &[saved], Some(Surface::Email), PER_SURFACE);
     let available = CATALOG
         .iter()
         .filter(|routine| routine.suggest && routine.surfaces.contains(&Surface::Email))
@@ -605,7 +605,7 @@ fn at_most_two_safe_catalog_picks_start_on() {
             created_at: Utc::now(),
         })
         .collect();
-    let shown = fill(&me, &stored, &[], &[], None);
+    let shown = fill(&me, &stored, &[], &[], None, PER_SURFACE);
     assert_eq!(
         shown
             .iter()
@@ -751,6 +751,7 @@ fn a_surface_shows_drafted_routines_then_picks_then_templates_each_once() {
         &[],
         &[],
         Some(Surface::Email),
+        PER_SURFACE,
     );
     // Drafted routines first despite their lower estimates; a second routine
     // with the same name is left out, and a catalog pick named like a drafted
@@ -791,8 +792,65 @@ fn a_pick_that_affects_others_never_starts_on() {
         &[],
         &[],
         Some(Surface::Chat),
+        PER_SURFACE,
     );
     assert!(!shown[0].on_by_default);
+}
+
+#[test]
+fn with_the_finding_flag_a_surface_shows_more_drafted_routines_only() {
+    let me = user();
+    let drafts: Vec<StoredSuggestion> = (0..DRAFTED_PER_SURFACE + 2)
+        .map(|n| {
+            let mut routine = configuration(false);
+            routine.name = format!("Drafted routine {n}");
+            stored(StoredPick::Routine { routine }, &[Surface::Email], 0.3)
+        })
+        .collect();
+    let pick = stored(
+        StoredPick::Catalog {
+            key: "inbox".to_owned(),
+            knobs: Map::new(),
+        },
+        &[Surface::Email],
+        0.95,
+    );
+    let stored: Vec<StoredSuggestion> = drafts.iter().cloned().chain([pick]).collect();
+    // Today's cap: three, all drafted.
+    let today = fill(&me, &stored, &[], &[], Some(Surface::Email), PER_SURFACE);
+    assert_eq!(today.len(), PER_SURFACE);
+    // Raised: drafted routines to their own cap; the catalog pick and Macro's
+    // templates still stop at three, so neither takes a place.
+    let raised = fill(
+        &me,
+        &stored,
+        &[],
+        &[],
+        Some(Surface::Email),
+        DRAFTED_PER_SURFACE,
+    );
+    assert_eq!(raised.len(), DRAFTED_PER_SURFACE);
+    assert!(
+        raised
+            .iter()
+            .all(|suggestion| matches!(suggestion.pick, SuggestedPick::Routine { .. }))
+    );
+    // With two drafted, the catalog pick takes the third place.
+    let two = [
+        drafts[0].clone(),
+        drafts[1].clone(),
+        stored[stored.len() - 1].clone(),
+    ];
+    let few = fill(
+        &me,
+        &two,
+        &[],
+        &[],
+        Some(Surface::Email),
+        DRAFTED_PER_SURFACE,
+    );
+    assert_eq!(few.len(), PER_SURFACE);
+    assert!(matches!(few[2].pick, SuggestedPick::Catalog { .. }));
 }
 
 #[tokio::test]
