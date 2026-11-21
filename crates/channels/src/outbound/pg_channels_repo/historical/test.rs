@@ -684,6 +684,96 @@ async fn a_group_the_other_person_left_is_not_their_dm(pool: PgPool) {
     );
 }
 
+/// Live get-or-create ranks a DM its actor left before one both people left,
+/// however much older that one is, and DMs of the same rank created at the
+/// same instant by id; an import keeps taking the oldest of every row.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn live_ranks_by_who_left_then_age_then_id(pool: PgPool) {
+    let repo = PgChannelsRepo::new(pool.clone());
+    let (lo, hi) = (
+        pair().lo().as_ref().to_owned(),
+        pair().hi().as_ref().to_owned(),
+    );
+    let both_left = insert_dm(&pool, 1_000, &[(&lo, true), (&hi, true)]).await;
+    let lo_left = insert_dm(&pool, 2_000, &[(&lo, true), (&hi, false)]).await;
+    assert_eq!(
+        repo.ensure_dm(pair(), DmCreation::Live(pair().lo().clone()))
+            .await
+            .unwrap(),
+        EnsuredChannel {
+            id: lo_left,
+            created: false
+        },
+        "the actor left it, but not both"
+    );
+    assert_eq!(
+        repo.maybe_get_dm(pair().lo().clone(), pair().hi().clone())
+            .await
+            .unwrap(),
+        None,
+        "the viewer left both"
+    );
+    assert_eq!(
+        repo.maybe_get_dm(pair().hi().clone(), pair().lo().clone())
+            .await
+            .unwrap(),
+        Some(lo_left)
+    );
+    let mut connection = pool.acquire().await.unwrap();
+    assert_eq!(
+        find_dm(&mut connection, &pair(), DmRoster::Stored)
+            .await
+            .unwrap(),
+        Some(both_left)
+    );
+    drop(connection);
+
+    // Two DMs both are in, created at the same instant, inserted highest id
+    // first so neither insertion order nor age decides.
+    let (first, second) = (
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+    );
+    for id in [second, first] {
+        sqlx::query!(
+            "INSERT INTO comms_channels (id, owner_id, channel_type, created_at) VALUES ($1, 'macro|a@example.com', 'direct_message', $2)",
+            id,
+            timestamp(3_000),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member'), ($1, $3, 'member')",
+            id,
+            lo,
+            hi,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let lowest = first.min(second);
+    for (viewer, other) in [
+        (pair().lo().clone(), pair().hi().clone()),
+        (pair().hi().clone(), pair().lo().clone()),
+    ] {
+        assert_eq!(
+            repo.maybe_get_dm(viewer.clone(), other).await.unwrap(),
+            Some(lowest)
+        );
+        assert_eq!(
+            repo.ensure_dm(pair(), DmCreation::Live(viewer))
+                .await
+                .unwrap(),
+            EnsuredChannel {
+                id: lowest,
+                created: false
+            }
+        );
+    }
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn importing_a_live_dm_preserves_owner_and_creates_no_additional_activity(pool: PgPool) {
     let repo = PgChannelsRepo::new(pool.clone());
