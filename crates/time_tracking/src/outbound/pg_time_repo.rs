@@ -285,24 +285,36 @@ async fn insert_row(
 }
 
 impl PgTimeTrackingRepository {
-    /// Store a stopped timer's entry under its task's lock and rewrite the total.
+    /// Store a stopped timer's entry under its task's lock and rewrite the
+    /// total. `None` when another entry already has the timer's id: the
+    /// caller rolls back, so the timer keeps running and nothing is revealed.
     async fn store_timer_entry(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         row: &NewEntryRow,
-    ) -> Result<LoggedTime, PgTimeTrackingError> {
+    ) -> Result<Option<LoggedTime>, PgTimeTrackingError> {
         lock_task(tx, &row.task_id).await?;
         let entry = match insert_row(tx, row).await? {
             Some(entry) => entry,
-            None => entry_by_id(&mut **tx, row.id).await?.ok_or_else(|| {
-                PgTimeTrackingError::InvalidRow(format!("entry {} vanished", row.id))
-            })?,
+            None => {
+                let existing = entry_by_id(&mut **tx, row.id).await?;
+                match existing {
+                    Some(entry)
+                        if entry.user_id == row.user_id
+                            && entry.task_id == row.task_id
+                            && entry.source == TimeEntrySource::Timer =>
+                    {
+                        entry
+                    }
+                    Some(_) | None => return Ok(None),
+                }
+            }
         };
         let total_minutes = self.rewrite_total(tx, &row.task_id).await?;
-        Ok(LoggedTime {
+        Ok(Some(LoggedTime {
             entry,
             total_minutes,
-        })
+        }))
     }
 }
 
@@ -542,9 +554,23 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
                 if removed == 0 {
                     return Ok(StartTimerOutcome::TimerChanged);
                 }
-                Some(self.store_timer_entry(&mut tx, previous).await?)
+                let Some(stopped) = self.store_timer_entry(&mut tx, previous).await? else {
+                    return Ok(StartTimerOutcome::IdTaken);
+                };
+                Some(stopped)
             }
         };
+
+        let running_elsewhere = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM time_timer WHERE id = $1 AND user_id <> $2) AS "taken!""#,
+            timer.id,
+            user_id.as_ref(),
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if running_elsewhere {
+            return Ok(StartTimerOutcome::IdTaken);
+        }
 
         // A timer another device started meanwhile holds the person's row.
         let inserted = sqlx::query!(
@@ -602,7 +628,9 @@ impl TimeTrackingRepository for PgTimeTrackingRepository {
             return Ok(StopTimerOutcome::TimerGone);
         }
 
-        let logged = self.store_timer_entry(&mut tx, row).await?;
+        let Some(logged) = self.store_timer_entry(&mut tx, row).await? else {
+            return Ok(StopTimerOutcome::IdTaken);
+        };
         tx.commit().await?;
         Ok(StopTimerOutcome::Stopped(logged))
     }

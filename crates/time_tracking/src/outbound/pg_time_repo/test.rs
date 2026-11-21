@@ -681,3 +681,58 @@ async fn a_write_behind_a_held_task_lock_gives_up_as_contended(pool: PgPool) -> 
     assert_eq!(repo.entry(Uuid::from_u128(1)).await?, None);
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("time_tracking"))
+)]
+async fn a_timer_cannot_take_another_persons_running_timer_id(pool: PgPool) -> anyhow::Result<()> {
+    let repo = PgTimeTrackingRepository::new(pool.clone());
+    let authors = timer(0x71, TASK, at(9, 0));
+    repo.start_timer(&user(AUTHOR), &authors, None).await?;
+
+    let copied = repo
+        .start_timer(&user(EDITOR), &timer(0x71, OTHER_TASK, at(9, 5)), None)
+        .await?;
+
+    assert_eq!(copied, StartTimerOutcome::IdTaken);
+    assert_eq!(repo.timer(&user(EDITOR)).await?, None);
+    assert_eq!(repo.timer(&user(AUTHOR)).await?, Some(authors));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("time_tracking"))
+)]
+async fn a_stop_never_returns_another_persons_entry(pool: PgPool) -> anyhow::Result<()> {
+    let repo = PgTimeTrackingRepository::new(pool.clone());
+    let authors = timer(0x71, TASK, at(9, 0));
+    repo.start_timer(&user(AUTHOR), &authors, None).await?;
+    repo.stop_timer(&timer_entry(&authors, AUTHOR, at(9, 30)))
+        .await?;
+    // A running timer whose id is already the author's entry, as a client
+    // reusing that id could leave one.
+    sqlx::query!(
+        "INSERT INTO time_timer (user_id, id, task_id, started_at) VALUES ($1, $2, $3, $4)",
+        EDITOR,
+        authors.id,
+        OTHER_TASK,
+        at(9, 10),
+    )
+    .execute(&pool)
+    .await?;
+    let editors = timer(0x71, OTHER_TASK, at(9, 10));
+
+    let stopped = repo
+        .stop_timer(&timer_entry(&editors, EDITOR, at(9, 40)))
+        .await?;
+
+    assert_eq!(stopped, StopTimerOutcome::IdTaken);
+    assert_eq!(repo.timer(&user(EDITOR)).await?, Some(editors));
+    assert_eq!(
+        repo.entry(authors.id).await?.map(|entry| entry.user_id),
+        Some(user(AUTHOR))
+    );
+    Ok(())
+}

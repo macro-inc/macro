@@ -97,7 +97,8 @@ pub enum StartTimerOutcome {
     TimerChanged,
     /// The task is not a live task.
     TaskUnavailable,
-    /// An entry already has the new timer's id: that timer already stopped.
+    /// The new timer's id is another running timer's or an entry's, or the
+    /// stopped timer's id is another entry's; nothing changed.
     IdTaken,
 }
 
@@ -108,6 +109,8 @@ pub enum StopTimerOutcome {
     Stopped(LoggedTime),
     /// The timer was no longer running.
     TimerGone,
+    /// Another entry already has the timer's id; the timer keeps running.
+    IdTaken,
 }
 
 /// Outbound persistence for entries and timers.

@@ -548,7 +548,9 @@ where
                     return Err(TimeTrackingError::NotFound("task"));
                 }
                 StartTimerOutcome::IdTaken => {
-                    return Err(TimeTrackingError::Conflict("that timer already stopped"));
+                    return Err(TimeTrackingError::Conflict(
+                        "that timer id belongs to another timer or entry",
+                    ));
                 }
             }
         }
@@ -600,12 +602,21 @@ where
             span.record("minutes", i64::from(row.values.minutes));
 
             let outcome = self.repo.stop_timer(&row).await.map_err(repository)?;
-            if let StopTimerOutcome::Stopped(logged) = outcome {
-                span.record("outcome", "stopped");
-                self.publish_logged(&logged);
-                return Ok(StoppedTimer {
-                    logged: Some(logged),
-                });
+            match outcome {
+                StopTimerOutcome::Stopped(logged) => {
+                    span.record("outcome", "stopped");
+                    self.publish_logged(&logged);
+                    return Ok(StoppedTimer {
+                        logged: Some(logged),
+                    });
+                }
+                StopTimerOutcome::IdTaken => {
+                    span.record("outcome", "id_taken");
+                    return Err(TimeTrackingError::Conflict(
+                        "that timer id belongs to another entry",
+                    ));
+                }
+                StopTimerOutcome::TimerGone => {}
             }
         }
 

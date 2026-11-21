@@ -31,8 +31,9 @@ CREATE INDEX time_entry_task_date ON time_entry (task_id, entry_date DESC, id DE
 
 CREATE TABLE time_timer (
     user_id TEXT PRIMARY KEY REFERENCES "User" (id) ON DELETE CASCADE,
-    -- Becomes the time_entry id when the timer stops.
-    id UUID NOT NULL,
+    -- Chosen by the client; becomes the time_entry id when the timer stops,
+    -- so no two running timers share it.
+    id UUID NOT NULL UNIQUE,
     task_id TEXT NOT NULL REFERENCES "Document" (id) ON DELETE CASCADE,
     started_at TIMESTAMPTZ NOT NULL
 );
