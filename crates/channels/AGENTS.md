@@ -108,13 +108,17 @@ DMs, and the shared message store other domains discuss things on.
 - Side effects record who "interacted on Macro" (`interactions_for_event` in
   `domain/side_effects.rs`, `ChannelContactsDispatcher::record_interactions`):
   creating a non-DM channel pairs everyone in it unless the Macro system bot
-  created it (the signup support channel), and an add, a join, an approved
-  request or a team auto-join pairs the newcomers with every active member.
+  created it (the signup support channel), and an add, an approved request or
+  a join of a private or team channel pairs the newcomers with every active
+  member. Joining a public channel pairs nobody, in the legacy sync too:
+  anyone signed in may join one, so joining must not hand over its roster
+  (a member adding someone still pairs them). Team auto-join pairs nobody:
+  teammates are computed from the live roster and must not outlive the team.
   A DM counts only from a person's message in it, never from its creation,
   since Macro opens teammate and inbox DMs on its own; bot and guest posts
   never count, and nothing else posted in a channel does. The two team
   auto-join paths (`auto_join_by_team_id`, turning auto-join on in
-  `patch_channel`) dispatch `MembersAutoJoined`, which only feeds contacts.
+  `patch_channel`) dispatch `MembersAutoJoined`, which now writes nothing.
   Every host wraps the contacts ingress in `contacts::domain::list_writes::ListWritesGate`,
   so these sends wait for the `contacts-list-writes` flag; the legacy
   `enqueue_contacts` sync is unchanged.
