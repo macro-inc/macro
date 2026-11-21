@@ -73,9 +73,7 @@ async fn carry_forward_and_upgrade_cost_on_a_retained_cache() {
     };
     let own = database_identity(BENCH_SCOPE);
     let older = cache_database_name(BENCH_SCOPE, 11);
-    let moved = Some(CarryForward::Moved {
-        from_storage_version: 11,
-    });
+    let moved = Some(CarryForward::new(CarryForwardKind::Moved, 11));
     for run in 1..=RUNS {
         for identity in [&own, &older] {
             remove_opfs_pair(identity).await;
