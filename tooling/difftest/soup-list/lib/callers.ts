@@ -23,27 +23,48 @@ function listRow(row: Row) {
   };
 }
 
-/** What a task row renders (TaskListEntity: name, status/priority/assignee pills, unread). */
+/** System column ids of the task row (next-soup/.../task-grid-template.ts: priority, status, assignees). */
+const TASK_COLUMNS = {
+  priority: '00000001-0000-0000-0000-000000000003',
+  status: '00000001-0000-0000-0000-000000000002',
+  assignees: '00000001-0000-0000-0000-000000000001',
+};
+
+function propertyView(p: Row | undefined) {
+  if (!p) return null;
+  return {
+    id: p.id,
+    definition: {
+      id: p.definition?.id,
+      display_name: p.definition?.display_name,
+      data_type: p.definition?.data_type,
+      is_multi_select: p.definition?.is_multi_select,
+      specific_entity_type: p.definition?.specific_entity_type ?? null,
+    },
+    // converters.ts:36-46: a null and a missing value are both "no value".
+    value: p.value ?? null,
+  };
+}
+
+/**
+ * What a task row renders (TaskListEntity → task-grid-layout.tsx): name,
+ * completion, owner, the priority/status/assignee columns looked up by
+ * definition id (:216-226), the tags EntityRowTags resolves from the viewer's
+ * TAG definitions (:205-212, useSoupResolvedTags.ts:41-63), and unread state.
+ */
 function taskRow(row: Row) {
+  const props = rows(row.properties);
+  const byDef = (id: string) => propertyView(props.find((p) => p.definition?.id === id));
   return {
     ...listRow(row),
     ownerId: row.ownerId,
     projectId: row.projectId ?? null,
     completed: row.subType?.is_completed ?? null,
-    properties: rows(row.properties).map((p) => ({
-      id: p.id,
-      definition: {
-        id: p.definition?.id,
-        display_name: p.definition?.display_name,
-        data_type: p.definition?.data_type,
-        is_multi_select: p.definition?.is_multi_select,
-        specific_entity_type: p.definition?.specific_entity_type ?? null,
-        is_system: p.definition?.is_system,
-        is_metadata: p.definition?.is_metadata,
-      },
-      // converters.ts:36-46: a null and a missing value are both "no value".
-      value: p.value ?? null,
-    })),
+    columns: Object.fromEntries(Object.entries(TASK_COLUMNS).map(([k, id]) => [k, byDef(id)])),
+    tags: props
+      .filter((p) => String(p.definition?.data_type ?? '').toUpperCase() === 'TAG')
+      .map(propertyView)
+      .sort((a, b) => String(a?.definition.id).localeCompare(String(b?.definition.id))),
     openNotifications: rows(row.notifications).filter((n) => n?.state !== 'done').length,
   };
 }

@@ -164,6 +164,31 @@ export const PREVIEW_DROPS_NOTIFICATIONS: Rule = {
   applies: (_p, k, o, n) => k === 'notifications' && Array.isArray(o) && (n === undefined || (Array.isArray(n) && n.length === 0)),
 };
 
+/** System property definitions have fixed ids (property/identifiers.ts). */
+export const isSystemPropertyId = (id: unknown) => typeof id === 'string' && id.startsWith('00000001-0000-0000-0000-');
+
+/**
+ * A rule over a whole row list rather than one field: the new side carries
+ * every row the old one does, in the same order, plus rows the rule accepts.
+ */
+export type RowsRule = Rule & { extra: (path: string, row: Record<string, unknown>) => boolean };
+
+export const ROWS_RULES: RowsRule[] = [
+  {
+    id: 'graphql-non-tag-team-properties',
+    cause:
+      'REST Soup attaches only system properties and the viewer\'s tags (crates/soup/src/outbound/pg_soup_repo.rs:497-511); GraphQL Soup attaches every property of the entity (crates/complete_graph/src/edges.rs:161-166 → crates/properties/src/outbound/properties_pg_repo.rs:533-547). The branch moves the hover card and the similar-tasks list from REST to GraphQL.',
+    evidence:
+      'Rows only for non-system, non-tag definitions. The task row looks properties up by the three system column ids (next-soup/.../task-grid-layout.tsx:216-226) and shows tags only from the viewer\'s tag sets (useSoupResolvedTags.ts:41-63, TAG definitions only); the hover card reads ownerId alone (DocumentTitleHoverCard.tsx:44-58). The caller-level comparison projects exactly those.',
+    applies: () => false,
+    extra: (path, row) => {
+      if (!/\.properties$/.test(path)) return false;
+      const def = (row.definition ?? {}) as Record<string, unknown>;
+      return !isSystemPropertyId(def.id) && String(def.data_type ?? '').toUpperCase() !== 'TAG';
+    },
+  },
+];
+
 export type DataResult = {
   equal: boolean;
   diffs: Diff[];
@@ -188,7 +213,8 @@ export function compareData(
   oldValue: unknown,
   newValue: unknown,
   rules: Rule[] = DATA_RULES,
-  limit = 50
+  limit = 50,
+  rowsRules: RowsRule[] = rules.length ? ROWS_RULES : []
 ): DataResult {
   const diffs: Diff[] = [];
   const ruleHits: Record<string, number> = {};
@@ -203,7 +229,14 @@ export function compareData(
       const nKeys = n.map((row) => rowKey(row, key));
       if (oKeys.every(Boolean) && nKeys.every(Boolean)) {
         if (oKeys.join('|') !== nKeys.join('|')) {
-          push({ path: `${path}#rows`, old: oKeys, new: nKeys });
+          const oldSet = new Set(oKeys);
+          const kept = nKeys.filter((k) => oldSet.has(k));
+          const extras = n.filter((_, i) => !oldSet.has(nKeys[i])) as Record<string, unknown>[];
+          const rule =
+            kept.join('|') === oKeys.join('|') &&
+            rowsRules.find((r) => extras.every((row) => isObject(row) && r.extra(path, row)));
+          if (rule) ruleHits[rule.id] = (ruleHits[rule.id] ?? 0) + extras.length;
+          else push({ path: `${path}#rows`, old: oKeys, new: nKeys });
         }
         const byKey = new Map(n.map((row, i) => [nKeys[i], row] as const));
         o.forEach((row, i) => {
