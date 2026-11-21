@@ -2106,8 +2106,8 @@ export type GraphqlSetPropertyValue =
   {   /** A Boolean value. */
   boolean: boolean; date?: never; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
   |  { boolean?: never;   /**
-   * An RFC 3339 date-time value standing for the whole day it falls on
-   * where it was picked.
+   * An RFC 3339 date-time value standing for a whole day, shown as the day
+   * it falls on in the viewer's time zone.
    */
   date: string; dateRange?: never; dateWithTime?: never; entityReference?: never; link?: never; multiEntityReference?: never; multiLink?: never; multiSelectOption?: never; number?: never; selectOption?: never; string?: never; }
   |  { boolean?: never; date?: never;   /** A span from a start date-time to an end one. */

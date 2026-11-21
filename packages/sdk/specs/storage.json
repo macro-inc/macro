@@ -60003,17 +60003,17 @@
             "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set",
             "required": ["value", "type"],
             "properties": {
+              "has_time": {
+                "type": "boolean",
+                "description": "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+              },
               "type": {
                 "type": "string",
                 "enum": ["Date"]
               },
               "value": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "format": "date-time"
-                  }
-                ],
+                "type": "string",
+                "format": "date-time",
                 "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set"
               }
             }
@@ -61863,7 +61863,7 @@
           },
           {
             "type": "object",
-            "description": "Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.",
+            "description": "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant.",
             "required": ["value", "type"],
             "properties": {
               "has_time": {

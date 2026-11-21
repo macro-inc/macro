@@ -18221,6 +18221,10 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
      * Date value, with or without a time of day

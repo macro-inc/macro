@@ -16791,6 +16791,12 @@ export const getCrmPipelineRowsResponse = zod
                       ),
                     zod
                       .object({
+                        has_time: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                          ),
                         type: zod.enum(['Date']),
                         value: zod.iso
                           .datetime({})
@@ -17200,6 +17206,12 @@ export const queryCrmPipelineRowsResponse = zod
                       ),
                     zod
                       .object({
+                        has_time: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                          ),
                         type: zod.enum(['Date']),
                         value: zod.iso
                           .datetime({})
@@ -26114,7 +26126,7 @@ export const createTaskHandlerBody = zod
                     value: zod.iso.datetime({}),
                   })
                   .describe(
-                    'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                    "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                   ),
                 zod
                   .object({
@@ -50274,7 +50286,7 @@ export const createInitiativeBody = zod
                     value: zod.iso.datetime({}),
                   })
                   .describe(
-                    'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                    "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                   ),
                 zod
                   .object({
@@ -51553,6 +51565,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -51998,6 +52016,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -52300,6 +52324,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -52593,6 +52623,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -53015,6 +53051,12 @@ export const getItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
@@ -53774,6 +53816,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -54164,6 +54212,12 @@ export const getItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
@@ -54502,6 +54556,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -54844,6 +54904,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -55204,6 +55270,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -55590,6 +55662,12 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -56757,6 +56835,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -57202,6 +57286,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -57504,6 +57594,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -57797,6 +57893,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -58219,6 +58321,12 @@ export const postItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
@@ -58978,6 +59086,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -59368,6 +59482,12 @@ export const postItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
@@ -59706,6 +59826,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -60048,6 +60174,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -60408,6 +60540,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -60794,6 +60932,12 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -61372,6 +61516,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -61817,6 +61967,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -62119,6 +62275,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -62412,6 +62574,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -62834,6 +63002,12 @@ export const postItemsSoupAstResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
@@ -63595,6 +63769,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -63985,6 +64165,12 @@ export const postItemsSoupAstResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
@@ -64323,6 +64509,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -64665,6 +64857,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -65025,6 +65223,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -65411,6 +65615,12 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
@@ -66443,6 +66653,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -66894,6 +67110,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -67198,6 +67420,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -67495,6 +67723,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -67932,6 +68166,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
@@ -68746,6 +68986,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -69148,6 +69394,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
@@ -69498,6 +69750,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -69842,6 +70100,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -70220,6 +70484,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -70610,6 +70880,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -71032,6 +71308,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -71483,6 +71765,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -71787,6 +72075,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -72084,6 +72378,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -72521,6 +72821,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
@@ -73335,6 +73641,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -73737,6 +74049,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
@@ -74087,6 +74405,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -74431,6 +74755,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -74809,6 +75139,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -75199,6 +75535,12 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
@@ -87943,7 +88285,7 @@ export const listTaskTemplatesResponseItem = zod
                         value: zod.iso.datetime({}),
                       })
                       .describe(
-                        'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                        "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                       ),
                     zod
                       .object({
@@ -88174,7 +88516,7 @@ export const createTaskTemplateBody = zod
                         value: zod.iso.datetime({}),
                       })
                       .describe(
-                        'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                        "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                       ),
                     zod
                       .object({
@@ -88401,7 +88743,7 @@ export const getTaskTemplateResponse = zod
                         value: zod.iso.datetime({}),
                       })
                       .describe(
-                        'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                        "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                       ),
                     zod
                       .object({
@@ -88633,7 +88975,7 @@ export const updateTaskTemplateBody = zod
                         value: zod.iso.datetime({}),
                       })
                       .describe(
-                        'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                        "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                       ),
                     zod
                       .object({
@@ -88847,7 +89189,7 @@ export const updateTaskTemplateResponse = zod
                         value: zod.iso.datetime({}),
                       })
                       .describe(
-                        'Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.'
+                        "Date value. Without `has_time` it stands for a whole day, shown as the\nday its instant falls on in the viewer's time zone; with it, for the\nexact instant."
                       ),
                     zod
                       .object({
