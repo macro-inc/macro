@@ -167,7 +167,13 @@ export async function resolveContactDirectory(
     }
     try {
       const generation = cacheSessionGeneration.capture();
-      const lists = contactListsSelected();
+      // Lists matter only to the cache, so a lookup that will not write
+      // there never asks for them.
+      const lists =
+        guarded !== undefined &&
+        host?.search !== undefined &&
+        host.hydrateQuery !== undefined &&
+        contactListsSelected();
       span.setAttr('contacts.lists', lists);
       const data = await fetchIds(ids, signal, { lists });
       signal.throwIfAborted();

@@ -249,6 +249,27 @@ it.each([false, true])(
   }
 );
 
+it('asks for no lists when the lookup will not write to the cache', async () => {
+  lists.selected = true;
+  const fetch = server().mockResolvedValue({
+    user: { id: VIEWER, contactsByUserIds: [contact(PERSON)] },
+  });
+  try {
+    await resolveContactDirectory(
+      VIEWER,
+      undefined,
+      { kind: 'ids', values: [PERSON] },
+      signal(),
+      fetch
+    );
+  } finally {
+    lists.selected = false;
+  }
+  expect(fetch).toHaveBeenCalledWith([PERSON], expect.any(AbortSignal), {
+    lists: false,
+  });
+});
+
 it('only transport failures allow cached fallback, and that fallback rechecks scope', async () => {
   const cache = host();
   const fetch = server().mockRejectedValue(

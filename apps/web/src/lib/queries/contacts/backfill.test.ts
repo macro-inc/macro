@@ -20,7 +20,7 @@ vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryByIds: vi.fn(),
 }));
 
-const lists = vi.hoisted(() => ({ selected: () => false }));
+const lists = vi.hoisted(() => ({ selected: (): boolean => false }));
 vi.mock('./lists', () => ({
   contactListsSelected: () => lists.selected(),
   useContactListsSelected: () => lists.selected,
@@ -512,6 +512,82 @@ it('restarts the mounted runner with lists when the flag turns on', async () => 
     await calls[0].aborted;
     await started[1].promise;
     expect(calls[1].lists).toBe(true);
+  } finally {
+    mounted.unmount();
+  }
+});
+
+it('hears another tab complete the checkpoint the flag selects', async () => {
+  const notified = vi.fn();
+  const stop = subscribeContactCheckpoint(viewer, notified);
+  const completed = {
+    ...loadContactCheckpoint(viewer, GENERATION, true),
+    nextCursor: null,
+    pages: 1,
+    phase: 'verify',
+    completedAt: 1_000,
+  };
+  const announce = (version: number) =>
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: `graphql-contacts-backfill:v${version}:${viewer}`,
+        newValue: JSON.stringify(completed),
+      })
+    );
+  try {
+    setListsSelected(true);
+    announce(2);
+    expect(notified).not.toHaveBeenCalled();
+    announce(3);
+    expect(notified).toHaveBeenCalledOnce();
+  } finally {
+    stop();
+  }
+});
+
+it('returns to a recent plain checkpoint when the flag turns off', async () => {
+  const cache = host();
+  vi.mocked(hydrateGraphqlContacts).mockResolvedValue(page(null));
+  await Effect.runPromise(
+    runContactBackfill(viewer, cache, { pageDelayMs: 0 })
+  );
+  expect(hydrateGraphqlContacts).toHaveBeenCalledTimes(1);
+  setListsSelected(true);
+  const started = Promise.withResolvers<void>();
+  vi.mocked(hydrateGraphqlContacts).mockImplementation(
+    (_host, _scope, _after, signal) => {
+      started.resolve();
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    }
+  );
+  const mounted = render(() => {
+    useContactBackfill(
+      () => viewer,
+      () => cache,
+      () => 0
+    );
+    return null;
+  });
+  try {
+    await started.promise;
+    expect(vi.mocked(hydrateGraphqlContacts).mock.calls[1][4]).toEqual({
+      lists: true,
+    });
+    const searched = cache.search.mock.calls.length;
+    setListsSelected(false);
+    // The plain scan finished minutes ago, so the restarted runner confirms
+    // it without fetching a page.
+    await vi.waitFor(() =>
+      expect(cache.search.mock.calls.length).toBeGreaterThan(searched)
+    );
+    expect(hydrateGraphqlContacts).toHaveBeenCalledTimes(2);
+    expect(
+      loadContactCheckpoint(viewer, GENERATION).completedAt
+    ).not.toBeNull();
   } finally {
     mounted.unmount();
   }
