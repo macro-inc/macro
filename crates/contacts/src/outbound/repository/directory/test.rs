@@ -261,3 +261,45 @@ async fn the_audience_is_everyone_who_has_the_subject(pool: PgPool) {
         assert_eq!(seen, expected, "limit {limit}");
     }
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory"))
+)]
+async fn a_legacy_mixed_case_team_member_reads_their_team(pool: PgPool) {
+    // team_user stores this user as `macro|Legacy@Example.com`.
+    const LEGACY: &str = "macro|legacy@example.com";
+    let repository = DbContactsRepository::new(pool);
+    let team = [LEGACY, "macro|t@example.com", VIEWER];
+
+    let page = repository
+        .list_directory_page(mid(LEGACY), None, ContactPageSize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(ids(&page), team);
+
+    let audience = repository
+        .audience_page(mid(LEGACY), None, ContactPageSize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(ids(&audience), team);
+
+    let requested = lookup(&[VIEWER, "macro|a@example.com", LEGACY]);
+    assert_eq!(
+        repository
+            .lookup_listed_contacts(mid(LEGACY), &requested)
+            .await
+            .unwrap(),
+        [mid(VIEWER), mid(LEGACY)]
+    );
+    assert_eq!(
+        repository
+            .contact_lists(mid(LEGACY), &requested)
+            .await
+            .unwrap(),
+        [ListedContact {
+            user_id: mid(VIEWER),
+            lists: vec![ContactList::Teammates],
+        }]
+    );
+}
