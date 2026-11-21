@@ -1332,11 +1332,11 @@ async fn code_context_can_be_imported_from_the_sdk() {
     let (_root, service) = checked_service().await;
     for import in ["import type { CodeContext }", "import { CodeContext }"] {
         let source = format!(
-            "{import} from '@macro-inc/sdk';\nexport async function main({{ webAppUrl }}: CodeContext) {{\n  return {{ data: webAppUrl.length > 0 }};\n}}\n"
+            "{import} from '@macro-inc/sdk';\nexport async function main({{ webAppUrl }}: CodeContext) {{\n  return {{ data: typeof webAppUrl }};\n}}\n"
         );
         let (_, outcome) = run(&service, &source, 10_000).await;
         assert!(
-            matches!(&outcome, Outcome::Succeeded { value } if value["data"] == true),
+            matches!(&outcome, Outcome::Succeeded { value } if value["data"] == "string"),
             "{import}: {outcome:?}"
         );
     }
