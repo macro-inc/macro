@@ -1972,7 +1972,7 @@ fn corruption_quota_io_and_uncertain_transactions_have_payload_free_classes() {
     assert!(!error.to_string().contains("secret"));
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 enum IoFault {
     None = 0,
@@ -1980,6 +1980,7 @@ enum IoFault {
     Sync = 2,
     CommitCompletion = 3,
     RollbackIoStep = 4,
+    Truncate = 5,
 }
 
 struct FaultIo {
@@ -2162,6 +2163,9 @@ impl File for FaultFile {
     fn truncate(&self, len: u64, completion: Completion) -> turso_core::Result<Completion> {
         if self.deliver_commit_completion_error(&completion) {
             return Ok(completion);
+        }
+        if self.take(IoFault::Truncate) {
+            return Err(CompletionError::IOError(std::io::ErrorKind::Other, "truncate").into());
         }
         self.inner.truncate(len, completion)
     }

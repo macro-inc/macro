@@ -288,16 +288,19 @@ fn write_pages(db: &Db, from: i64, rows: i64) {
     .unwrap();
 }
 
+fn count(db: &Db) -> Value {
+    read_transaction(db, || query(db, "SELECT count(*) FROM t", vec![])).unwrap()[0][0].clone()
+}
+
 #[test]
-fn a_reader_on_another_connection_gets_a_passive_checkpoint() {
+fn a_reader_on_another_connection_gets_a_copy_without_truncation() {
     let (writer, reader) = deferred_pair("checkpoint-reader.db");
     write_pages(&writer, 0, 40);
     execute(&reader, "BEGIN", vec![]).unwrap();
     let rows = query(&reader, "SELECT count(*) FROM t", vec![]).unwrap();
     assert_eq!(rows[0][0], Value::from_i64(40));
 
-    // The reader pins the WAL, so it is not truncated; its frames are still
-    // copied, and the log stays where Turso left it.
+    // The reader pins the log, so it stays; its frames are still copied.
     let pinned = writer.checkpoint_over(1).unwrap();
     assert!(pinned.ran && !pinned.truncated, "{pinned:?}");
     assert_eq!(pinned.backfilled_frames, pinned.wal_frames, "{pinned:?}");
@@ -306,13 +309,11 @@ fn a_reader_on_another_connection_gets_a_passive_checkpoint() {
     execute(&reader, "COMMIT", vec![]).unwrap();
     let released = writer.checkpoint_over(1).unwrap();
     assert!(released.ran && released.truncated, "{released:?}");
-    let rows =
-        read_transaction(&writer, || query(&writer, "SELECT count(*) FROM t", vec![])).unwrap();
-    assert_eq!(rows[0][0], Value::from_i64(45));
+    assert_eq!(count(&writer), Value::from_i64(45));
 }
 
 #[test]
-fn a_busy_truncation_falls_back_without_failing() {
+fn a_busy_truncation_keeps_the_copy() {
     let (writer, _reader) = deferred_pair("checkpoint-busy.db");
     write_pages(&writer, 0, 10);
     arm_checkpoint_failure(CheckpointFault::TruncateBusy);
@@ -322,14 +323,42 @@ fn a_busy_truncation_falls_back_without_failing() {
 }
 
 #[test]
-fn a_failed_checkpoint_requires_a_reset() {
-    let (writer, _reader) = deferred_pair("checkpoint-failure.db");
+fn a_failed_copy_is_reported_and_leaves_the_wal_for_the_next_checkpoint() {
+    let (writer, _reader) = deferred_pair("checkpoint-copy-failure.db");
     write_pages(&writer, 0, 10);
-    arm_checkpoint_failure(CheckpointFault::Fail);
-    assert_eq!(
-        writer.checkpoint_over(1),
-        Err(TursoStorageError::reset(
-            PhysicalResetReason::TransactionOutcomeUncertain
-        ))
-    );
+    arm_checkpoint_failure(CheckpointFault::FailCopy);
+    assert_eq!(writer.checkpoint_over(1), Err(TursoStorageError::Database));
+    write_pages(&writer, 10, 5);
+    let retried = writer.checkpoint_over(1).unwrap();
+    assert!(retried.ran && retried.truncated, "{retried:?}");
+    assert_eq!(retried.backfilled_frames, retried.wal_frames, "{retried:?}");
+    assert_eq!(count(&writer), Value::from_i64(15));
+}
+
+#[test]
+fn a_failed_truncation_keeps_the_copy() {
+    let (writer, _reader) = deferred_pair("checkpoint-truncate-failure.db");
+    write_pages(&writer, 0, 10);
+    arm_checkpoint_failure(CheckpointFault::FailTruncate);
+    let failed = writer.checkpoint_over(1).unwrap();
+    assert!(failed.ran && !failed.truncated, "{failed:?}");
+    assert_eq!(failed.backfilled_frames, failed.wal_frames, "{failed:?}");
+}
+
+#[test]
+fn a_ceiling_checkpoint_failure_does_not_fail_the_commit() {
+    let (writer, _reader) = deferred_pair("checkpoint-ceiling-failure.db");
+    let mut id = 0;
+    while writer.connection.wal_state().unwrap().max_frame < CHECKPOINT_CEILING_FRAMES - 200 {
+        write_pages(&writer, id, 50);
+        id += 50;
+        assert!(id < 10_000, "the WAL stopped growing");
+    }
+    arm_checkpoint_failure(CheckpointFault::FailCopy);
+    for _ in 0..10 {
+        write_pages(&writer, id, 50);
+        id += 50;
+    }
+    assert!(writer.connection.wal_state().unwrap().max_frame < CHECKPOINT_CEILING_FRAMES);
+    assert_eq!(count(&writer), Value::from_i64(id));
 }

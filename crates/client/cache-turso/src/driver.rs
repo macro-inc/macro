@@ -27,13 +27,16 @@ const CACHED_COPIES_PER_TEXT: usize = 2;
 /// threshold, so moving the checkpoint off COMMIT keeps how often it runs.
 pub(crate) const CHECKPOINT_DUE_FRAMES: u64 = 1_000;
 /// WAL frames past which a commit checkpoints anyway, so a host that is never
-/// idle still bounds the WAL (and the recovery scan at the next open).
+/// idle still bounds the WAL (and the recovery scan at the next open). A
+/// reader on another connection pins the log, so the bound holds only while
+/// none does; the browser's single connection never has one.
 pub(crate) const CHECKPOINT_CEILING_FRAMES: u64 = 4_000;
 
 /// What a WAL checkpoint request did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WalCheckpoint {
-    /// Whether frames were copied into the database file.
+    /// Whether a checkpoint ran. A reader on another connection can leave it
+    /// nothing to copy, so `backfilled_frames` may still be zero.
     pub ran: bool,
     /// Whether the WAL was then truncated. A reader on another connection
     /// keeps the WAL in place; the frames it allows are still copied.
@@ -106,20 +109,21 @@ impl Db {
         self.checkpoints_deferred.load(Ordering::Relaxed)
     }
 
-    /// Checkpoints and truncates the WAL when it holds at least `frames`
-    /// frames. Call it outside a transaction.
+    /// Checkpoints the WAL when it holds at least `frames` frames, then
+    /// truncates it. Call it outside a transaction.
     ///
-    /// When a reader on another connection pins the WAL, Turso refuses the
-    /// truncation before touching anything; the frames the reader allows are
-    /// then copied without restarting the log, as Turso's own checkpoint does.
-    /// Any other failure may leave Turso's WAL position reset ahead of a
-    /// database file that is not yet durable, so it requires a reset: the
-    /// connection must not write again.
+    /// The copy runs first, as Turso's own checkpoint inside COMMIT does, and
+    /// never restarts the log, so a failure leaves every frame in the WAL.
+    /// Only once every frame is in the synced database file does a truncating
+    /// checkpoint restart the log. That one may fail after Turso has reset its
+    /// WAL position but before the file is truncated; the frames left behind
+    /// are already in the database file, so nothing is lost and the next write
+    /// starts a new log over them, as a WAL restart does.
     pub(crate) fn checkpoint_over(&self, frames: u64) -> Result<WalCheckpoint, TursoStorageError> {
         let wal_frames = self
             .connection
             .wal_state()
-            .map_err(checkpoint_failure)?
+            .map_err(|_| TursoStorageError::Database)?
             .max_frame;
         let mut outcome = WalCheckpoint {
             ran: false,
@@ -130,28 +134,24 @@ impl Db {
         if wal_frames < frames.max(1) {
             return Ok(outcome);
         }
-        let truncate = CheckpointMode::Truncate {
+        let copied = match self.run_checkpoint(CheckpointMode::Passive {
             upper_bound_inclusive: None,
-        };
-        let result = match self.run_checkpoint(truncate) {
-            Ok(result) => {
-                outcome.truncated = true;
-                result
-            }
-            Err(LimboError::Busy | LimboError::BusySnapshot) => {
-                let passive = CheckpointMode::Passive {
-                    upper_bound_inclusive: None,
-                };
-                match self.run_checkpoint(passive) {
-                    Ok(result) => result,
-                    Err(LimboError::Busy | LimboError::BusySnapshot) => return Ok(outcome),
-                    Err(error) => return Err(checkpoint_failure(error)),
-                }
-            }
-            Err(error) => return Err(checkpoint_failure(error)),
+        }) {
+            Ok(copied) => copied,
+            Err(LimboError::Busy | LimboError::BusySnapshot) => return Ok(outcome),
+            Err(_) => return Err(TursoStorageError::Database),
         };
         outcome.ran = true;
-        outcome.backfilled_frames = result.wal_checkpoint_backfilled;
+        outcome.backfilled_frames = copied.wal_checkpoint_backfilled;
+        // A reader on another connection can hold back part of the copy, and
+        // pins the log either way; its frames wait for a later checkpoint.
+        if copied.everything_backfilled() {
+            outcome.truncated = self
+                .run_checkpoint(CheckpointMode::Truncate {
+                    upper_bound_inclusive: None,
+                })
+                .is_ok();
+        }
         Ok(outcome)
     }
 
@@ -589,9 +589,9 @@ fn transaction<T>(
         Ok(value) => match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
             Ok(_) => {
                 if connection.checkpoints_deferred() {
-                    // A failed checkpoint fails the request, as one inside
-                    // Turso's COMMIT does: the caller latches the reset.
-                    connection.checkpoint_over(CHECKPOINT_CEILING_FRAMES)?;
+                    // The commit is durable, and a failed checkpoint leaves the
+                    // WAL whole for the next one, as Turso's own does.
+                    let _ = connection.checkpoint_over(CHECKPOINT_CEILING_FRAMES);
                 }
                 Ok(value)
             }
@@ -608,17 +608,6 @@ fn transaction<T>(
                 PhysicalResetReason::TransactionOutcomeUncertain,
             )),
         },
-    }
-}
-
-/// A checkpoint failure other than Busy may have reset Turso's logical WAL
-/// position before the database file was durable.
-fn checkpoint_failure(error: LimboError) -> TursoStorageError {
-    match TursoStorageError::turso(error) {
-        reset @ TursoStorageError::PhysicalResetRequired(_) => reset,
-        TursoStorageError::InvalidInput | TursoStorageError::Database => {
-            TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
-        }
     }
 }
 
@@ -648,6 +637,7 @@ thread_local! {
     static CONTROL_IO_TRACE: std::cell::RefCell<Vec<TestControlPhase>> = const { std::cell::RefCell::new(Vec::new()) };
     static FORCE_CONTROL_IO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static CHECKPOINT_FAILURE: std::cell::Cell<Option<CheckpointFault>> = const { std::cell::Cell::new(None) };
+    static BEFORE_TRUNCATE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -719,10 +709,12 @@ pub(crate) fn arm_rollback_control_io() {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CheckpointFault {
+    /// The copying checkpoint fails before Turso runs it.
+    FailCopy,
     /// The truncating checkpoint reports a pinned WAL.
     TruncateBusy,
-    /// The next checkpoint fails outright.
-    Fail,
+    /// The truncating checkpoint fails before Turso runs it.
+    FailTruncate,
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -730,20 +722,35 @@ pub(crate) fn arm_checkpoint_failure(fault: CheckpointFault) {
     CHECKPOINT_FAILURE.with(|armed| armed.set(Some(fault)));
 }
 
+/// Runs `hook` just before the next truncating checkpoint on this thread, so
+/// a test can fail the I/O inside it.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn arm_before_truncate(hook: impl FnOnce() + 'static) {
+    BEFORE_TRUNCATE.with(|armed| *armed.borrow_mut() = Some(Box::new(hook)));
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 fn take_checkpoint_failure(mode: CheckpointMode) -> Option<LimboError> {
-    CHECKPOINT_FAILURE.with(|armed| match (armed.get(), mode) {
-        (Some(CheckpointFault::TruncateBusy), CheckpointMode::Truncate { .. }) => {
+    let truncating = matches!(mode, CheckpointMode::Truncate { .. });
+    if truncating && let Some(hook) = BEFORE_TRUNCATE.with(|armed| armed.borrow_mut().take()) {
+        hook();
+    }
+    let injected = || {
+        Some(LimboError::InternalError(
+            "injected checkpoint failure".into(),
+        ))
+    };
+    CHECKPOINT_FAILURE.with(|armed| {
+        let error = match (armed.get()?, truncating) {
+            (CheckpointFault::FailCopy, false) => injected(),
+            (CheckpointFault::TruncateBusy, true) => Some(LimboError::Busy),
+            (CheckpointFault::FailTruncate, true) => injected(),
+            _ => None,
+        };
+        if error.is_some() {
             armed.set(None);
-            Some(LimboError::Busy)
         }
-        (Some(CheckpointFault::Fail), _) => {
-            armed.set(None);
-            Some(LimboError::InternalError(
-                "injected checkpoint failure".into(),
-            ))
-        }
-        _ => None,
+        error
     })
 }
 

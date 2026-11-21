@@ -923,21 +923,19 @@ impl TursoStorage {
     /// whether it truncated and how many frames it copied into the database
     /// file. A reader on another connection leaves the WAL untruncated.
     ///
-    /// A failure other than a reader pinning the WAL latches a reset.
+    /// A failure is never a reset: like Turso's own checkpoint, it leaves the
+    /// WAL whole, and the next call tries again.
     pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
         self.require_healthy()?;
-        self.latch_result(
-            self.connection
-                .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES),
-        )
+        self.connection
+            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
     }
 
     /// The truncating checkpoint Turso runs on close, which deferring turns
-    /// off. A failure latches, so the close reports a reset: the WAL may hold
-    /// frames past Turso's reset position that the next open would scan.
+    /// off; best effort, as Turso's own is.
     fn checkpoint_before_close(&self) {
         if self.connection.checkpoints_deferred() && self.latched_reason().is_none() {
-            let _ = self.latch_result(self.connection.checkpoint_over(1));
+            let _ = self.connection.checkpoint_over(1);
         }
     }
 
