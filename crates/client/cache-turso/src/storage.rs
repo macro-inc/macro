@@ -128,6 +128,12 @@ const INDEX_FACTS_DELETE: [&str; 3] = [
     "DELETE FROM integer_facts WHERE document_id = ?1",
     "DELETE FROM sort_facts WHERE document_id = ?1",
 ];
+const EXACT_FACT_DELETE: &str =
+    "DELETE FROM exact_facts WHERE document_id = ?1 AND attribute = ?2 AND value = ?3";
+const INTEGER_FACT_DELETE: &str =
+    "DELETE FROM integer_facts WHERE document_id = ?1 AND attribute = ?2 AND value = ?3";
+const SORT_FACT_DELETE: &str =
+    "DELETE FROM sort_facts WHERE document_id = ?1 AND attribute = ?2 AND value = ?3";
 const EXACT_FACT_INSERT: &str =
     "INSERT INTO exact_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
 const INTEGER_FACT_INSERT: &str =
@@ -2245,7 +2251,7 @@ fn write_projection_mutations(
         for (key, previous) in keys.iter().zip(previous) {
             let next = states.get(key);
             if next != previous.as_ref() {
-                write_projection_state(connection, key, next)?;
+                write_projection_state(connection, key, previous.as_ref(), next)?;
             }
         }
         states
@@ -2315,14 +2321,25 @@ fn write_projection_mutations(
     Ok(())
 }
 
+/// Write `state` over `previous`, the state this transaction loaded for the
+/// key (`None` when unknown or absent).
 fn write_projection_state(
     connection: &Db,
     record_key: &PredicateRecordKey,
+    previous: Option<&ProjectionState>,
     state: Option<&ProjectionState>,
 ) -> Result<(), TursoStorageError> {
     match state {
         Some(ProjectionState::Complete(document)) => {
             document.validate().map_err(|_| invariant())?;
+            if let Some(ProjectionState::Complete(old)) = previous
+                && old.record_key == document.record_key
+                && old.profile == document.profile
+                && old.partition == document.partition
+                && facts_are_distinct(document)
+            {
+                return write_fact_delta(connection, record_key, old, document);
+            }
             let document_id = upsert_index_document(
                 connection,
                 &document.record_key,
@@ -2399,6 +2416,93 @@ fn write_projection_state(
                 return Err(invariant());
             }
         }
+    }
+    Ok(())
+}
+
+/// Whether a full write of `document` would insert no fact twice. A document
+/// that would is left to the full write, which refuses it.
+fn facts_are_distinct(document: &predicate_index::IndexDocument) -> bool {
+    let exact = document.exact_facts.iter().collect::<BTreeSet<_>>();
+    let integer = document.integer_facts.iter().collect::<BTreeSet<_>>();
+    exact.len() == document.exact_facts.len() && integer.len() == document.integer_facts.len()
+}
+
+/// Change only the facts that differ between two complete documents of one
+/// key. A refresh usually changes a few facts of a document; deleting and
+/// reinserting all of them dirtied every index page they live on.
+fn write_fact_delta(
+    connection: &Db,
+    record_key: &PredicateRecordKey,
+    old: &predicate_index::IndexDocument,
+    next: &predicate_index::IndexDocument,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        INDEX_DOCUMENT_ID,
+        vec![text(record_key.as_str())],
+    )?;
+    let document_id = match rows.as_slice() {
+        [row] if row.len() == 1 => required_i64(row, 0)?,
+        _ => return Err(invariant()),
+    };
+    let exact = |fact: &predicate_index::ExactFact| {
+        vec![
+            Value::from_i64(document_id),
+            text(fact.attribute.as_str()),
+            Value::from_blob(fact.value.as_bytes().to_vec()),
+        ]
+    };
+    let integer = |fact: &predicate_index::IntegerFact| {
+        vec![
+            Value::from_i64(document_id),
+            text(fact.attribute.as_str()),
+            Value::from_i64(fact.value),
+        ]
+    };
+    write_changed_facts(
+        connection,
+        &old.exact_facts,
+        &next.exact_facts,
+        EXACT_FACT_DELETE,
+        EXACT_FACT_INSERT,
+        exact,
+    )?;
+    write_changed_facts(
+        connection,
+        &old.integer_facts,
+        &next.integer_facts,
+        INTEGER_FACT_DELETE,
+        INTEGER_FACT_INSERT,
+        integer,
+    )?;
+    write_changed_facts(
+        connection,
+        &old.sort_facts,
+        &next.sort_facts,
+        SORT_FACT_DELETE,
+        SORT_FACT_INSERT,
+        integer,
+    )
+}
+
+/// Delete the facts only `old` has, then insert the ones only `next` has.
+/// Deleting first frees a sort attribute whose value changed.
+fn write_changed_facts<F: Ord>(
+    connection: &Db,
+    old: &[F],
+    next: &[F],
+    delete: &str,
+    insert: &str,
+    parameters: impl Fn(&F) -> Vec<Value>,
+) -> Result<(), TursoStorageError> {
+    let old_set = old.iter().collect::<BTreeSet<_>>();
+    let next_set = next.iter().collect::<BTreeSet<_>>();
+    for fact in old_set.difference(&next_set) {
+        require_changed(driver::execute(connection, delete, parameters(fact))?, 1)?;
+    }
+    for fact in next.iter().filter(|fact| !old_set.contains(fact)) {
+        require_changed(driver::execute(connection, insert, parameters(fact))?, 1)?;
     }
     Ok(())
 }

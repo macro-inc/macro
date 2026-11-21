@@ -278,7 +278,7 @@ fn try_select(
     loop {
         let mut hits = windows
             .iter()
-            .flat_map(|window| window.hits.iter().cloned())
+            .flat_map(|window| window.hits.iter())
             .collect::<Vec<_>>();
         hits.sort_by(|left, right| {
             let value = match query.sort_direction {
@@ -295,8 +295,7 @@ fn try_select(
             .iter()
             .all(|window| window.proves(cutoff, &query.sort_direction))
         {
-            hits.truncate(limit);
-            return Ok(Some(hits));
+            return Ok(Some(hits.into_iter().take(limit).cloned().collect()));
         }
         // A window short of a full page sizes the next one by its hit rate; one
         // that holds a page but ends inside the cutoff's tie only doubles, since
