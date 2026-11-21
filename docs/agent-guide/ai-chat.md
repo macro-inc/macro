@@ -1419,9 +1419,11 @@ row ("Scanning inbox finished") appears, and the agent replies in a
 system turn, or within the next turn when the person already queued a prompt.
 Stop ends only the current turn; jobs keep running. Archiving or deleting the
 session cancels them. A job runs at most 10 minutes; 3 run per session and 10
-per account. In a turn someone else prompted, a system turn, with the flag
-off, for a program that sends (email, messages, routine saves, connected
-apps, the web: a job can't yet), or when the server already holds 8 jobs,
+per account. A job may only read, change items the person owns and draft
+reviews; anything else it tries is refused. In a turn someone else
+prompted, a system turn, with the flag off, for a program that sends
+(email, messages, routine saves, connected apps, the web: a job can't yet),
+or when the server already holds 8 jobs,
 the program runs in the foreground as before. A job that never got a slot
 settles saying nothing ran, and its card reads **Didn't run** (muted). To try it: ask the agent to read your recent
 documents in the background, then send another message while the card runs.

@@ -221,6 +221,11 @@ fn concrete(path: &str) -> String {
 fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
     let scope = SessionScope::DryRun;
     for (key, operation) in code_execution::domain::operations() {
+        // Unfurl fetches what its caller names from Macro's servers: no
+        // scoped run reaches it (the run bootstrap refuses its host).
+        if key.starts_with("unfurl.") {
+            continue;
+        }
         assert_eq!(
             scope.allows(&operation.method, &concrete(&operation.path)),
             !operation.write,
@@ -248,6 +253,10 @@ fn the_generation_scope_matches_the_sdk_catalog() {
     ];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {
+        // Refused to scoped runs by the run bootstrap, whatever the scope.
+        if key.starts_with("unfurl.") {
+            continue;
+        }
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
             assert!(
@@ -532,6 +541,10 @@ enum ScopeEnforcement {
     /// The service accepts no Macro API token, so the credential grants
     /// nothing there.
     NoMacroCredential,
+    /// The service takes no credential and fetches what its caller names
+    /// from Macro's servers, so the run bootstrap refuses its host to every
+    /// scoped run.
+    RefusedToScopedRuns,
 }
 
 /// Decided per host when it is added.
@@ -553,11 +566,10 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
         // CloudFront serves document content only to URLs the storage service
         // signs; the editing worker accepts only document tokens the storage
-        // service mints with a POST no scoped session can make;
-        // unfurl previews public links for any caller.
-        SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
-            ScopeEnforcement::NoMacroCredential
-        }
+        // service mints with a POST no scoped session can make.
+        SdkHost::DocumentContent | SdkHost::EditingWorker => ScopeEnforcement::NoMacroCredential,
+        // Unfurl previews any link for any caller.
+        SdkHost::Unfurl => ScopeEnforcement::RefusedToScopedRuns,
     }
 }
 
@@ -597,7 +609,7 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
                     ),
                     "{environment} {name} ({url}) serves under a prefix the scope doesn't strip"
                 ),
-                ScopeEnforcement::NoMacroCredential => {}
+                ScopeEnforcement::NoMacroCredential | ScopeEnforcement::RefusedToScopedRuns => {}
             }
         }
     }
@@ -680,8 +692,8 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
     // and minted when it starts; a session's own scope always wins.
     let deadline = chrono::Utc::now() + chrono::TimeDelta::minutes(10);
     for (scope, name) in [
-        (None, Some("no_send")),
-        (Some(SessionScope::NoSend), Some("no_send")),
+        (None, Some("job")),
+        (Some(SessionScope::NoSend), Some("job")),
         (Some(SessionScope::Generation), Some("generation")),
     ] {
         let job = ExecutionIdentity {

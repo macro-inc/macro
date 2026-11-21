@@ -47,14 +47,15 @@ stacks. Process isolation belongs to
   approves the run (`ExecutionCredentials::approve_job`), returns a running
   receipt with `job`, and runs on the `JobRuntime`'s own executor (4 slots
   a replica) on a `TaskTracker`. Only once it holds a slot is its credential minted (`mint_job`: the
-  no-send scope, which also refuses routine saves, connected apps, the web
-  and document permission tokens, lasting what is left of its 10 minutes
+  `job` scope, default deny: it makes only the requests on
+  `agent_correlation`'s job lists and changes only items its owner owns,
+  lasting what is left of its 10 minutes
   plus margin, traced under `agent.job.execute`); its correlation is saved
   on the record (`JobInfo.correlation`, never shown to readers), and
   revoked (`ExecutionCredentials::revoke_job`) as soon as its program stops
   on a normal stop (finish, cancel, archive, timeout, shutdown), so a copied
-  token stops working. A replica that crashed leaves it to expire; the
-  sweep's revoke comes after that. A job that never
+  token stops working (a failed revoke is retried twice). A replica that
+  crashed leaves it to expire; the sweep's revoke comes after that. A job that never
   started settles saying nothing ran, and its record says `neverRan`; the
   sweep says the same of a dead replica's job that had no credential yet. It runs without `watch_turn`:
   its row (`JobStore::control`, every second), its
@@ -72,9 +73,8 @@ stacks. Process isolation belongs to
   access. A settle write is retried twice before the sweep is left to it.
   A job's connected-app use keeps its launching turn's authority and never
   waits for approval, and only the job's own credential spends it: admission
-  requires the caller's verified correlation to be the job's. While jobs are
-  no-send, their scope refuses connected-app calls, so this guards listing,
-  tools and search. Discovery,
+  requires the caller's verified correlation to be the job's. The `job` scope
+  refuses connected-app calls, so this guards listing and tools. Discovery,
   adding servers and `macro.ui.open` are refused in a job. Spans: `agent.job.start`, `agent.job.run` (root, linked;
   `agent.job.queue`, `agent.job.execute`), `agent.job.settle`,
   `agent.job.sweep`, `agent.job.cancel`.

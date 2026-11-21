@@ -156,7 +156,10 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation | SessionScope::NoSend | SessionScope::DryRun => matches!(
+        SessionScope::Generation
+        | SessionScope::NoSend
+        | SessionScope::DryRun
+        | SessionScope::Job => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"
@@ -236,12 +239,15 @@ impl RunCredentials {
     ) -> Result<IssuedRun, CodeModeError> {
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         // A background job's credential lasts minutes and no one watches its
-        // calls, so it never sends.
-        let scope = match identity.lifetime {
-            agent_code_mode::domain::RunLifetime::Job { .. } => {
-                scope.or(Some(SessionScope::NoSend))
-            }
-            agent_code_mode::domain::RunLifetime::Foreground => scope,
+        // calls, so it makes only the requests on a job's lists; a session's
+        // own narrower scope still wins.
+        let scope = match (identity.lifetime, scope) {
+            (
+                agent_code_mode::domain::RunLifetime::Job { .. },
+                Some(narrower @ (SessionScope::DryRun | SessionScope::Generation)),
+            ) => Some(narrower),
+            (agent_code_mode::domain::RunLifetime::Job { .. }, _) => Some(SessionScope::Job),
+            (agent_code_mode::domain::RunLifetime::Foreground, scope) => scope,
         };
         let correlation = self
             .correlations

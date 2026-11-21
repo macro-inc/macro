@@ -879,14 +879,29 @@ fn truncate_error(error: &str) -> String {
     )
 }
 
-/// Revoke the credential a job started with, if it started. Best effort:
-/// it expires on its own at the deadline.
+/// Revoke the credential a job started with, if it started, retrying a
+/// failed write as a settle is retried; one that still fails expires on its
+/// own at the deadline.
 async fn revoke(credentials: &dyn ExecutionCredentials, record: &ExecutionRecord) {
     let Some(correlation) = record.job.as_ref().and_then(|job| job.correlation) else {
         return;
     };
-    if let Err(error) = credentials.revoke_job(correlation).await {
-        tracing::warn!(?error, "could not revoke a background job's credential");
+    let mut wait = SETTLE_RETRY_FIRST_WAIT;
+    for attempt in 1..=SETTLE_ATTEMPTS {
+        match credentials.revoke_job(correlation).await {
+            Ok(()) => return,
+            Err(error) if attempt < SETTLE_ATTEMPTS => {
+                tracing::warn!(
+                    ?error,
+                    "could not revoke a background job's credential; retrying"
+                );
+                tokio::time::sleep(wait).await;
+                wait *= 4;
+            }
+            Err(error) => {
+                tracing::error!(?error, "could not revoke a background job's credential")
+            }
+        }
     }
 }
 

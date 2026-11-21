@@ -283,6 +283,8 @@ struct Credentials {
     approvals: std::sync::atomic::AtomicUsize,
     lifetimes: Mutex<Vec<RunLifetime>>,
     revoked: Mutex<Vec<macro_uuid::Uuid>>,
+    /// How many revokes fail before one goes through.
+    failing_revokes: std::sync::atomic::AtomicUsize,
 }
 
 impl Credentials {
@@ -334,6 +336,16 @@ impl ExecutionCredentials for Credentials {
         })
     }
     async fn revoke_job(&self, correlation: macro_uuid::Uuid) -> Result<(), CodeModeError> {
+        use std::sync::atomic::Ordering;
+        if self
+            .failing_revokes
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(CodeModeError::Unavailable);
+        }
         self.revoked.lock().unwrap().push(correlation);
         Ok(())
     }
@@ -1048,4 +1060,23 @@ async fn the_sweep_says_a_dead_replicas_queued_job_never_ran() {
     assert_eq!(settlement.error.as_deref(), Some(INTERRUPTED_BEFORE_START));
     assert!(harness.rows.record(id).job.unwrap().never_ran);
     assert!(harness.credentials.revoked.lock().unwrap().is_empty());
+}
+
+/// A revoke that fails is retried, so a settled job doesn't leave its
+/// credential working until the deadline.
+#[tokio::test(start_paused = true)]
+async fn a_revoke_that_fails_once_is_retried() {
+    let harness = harness(Credentials {
+        failing_revokes: std::sync::atomic::AtomicUsize::new(2),
+        ..Default::default()
+    });
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    harness.program.started.notified().await;
+    harness.program.release.notify_one();
+    harness.rows.settled.notified().await;
+    assert_eq!(
+        *harness.credentials.revoked.lock().unwrap(),
+        [JOB_CORRELATION]
+    );
 }
