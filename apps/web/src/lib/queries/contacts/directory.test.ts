@@ -747,6 +747,92 @@ it('still ranks the rows it has when the reads of who the text names fail', asyn
     readContactDirectory(VIEWER, undefined, { query: 'teo' }, cancelled.signal)
   ).rejects.toMatchObject({ name: 'AbortError' });
 });
+it('lists the page once its rows are in and the budget is spent, without a read still unanswered', async () => {
+  vi.useFakeTimers();
+  const pageRows = contactPage([
+    contact('mateo@example.com', 'Mateo Rossi'),
+    contact('teo.nys@example.com', 'Teo Nys'),
+  ]);
+  remote.mockResolvedValue(pageRows);
+  // The exact search never answers; the lookup does.
+  named.mockReturnValue(new Promise(() => {}));
+  lookedUp.mockResolvedValue({
+    user: {
+      id: VIEWER,
+      contactsByUserIds: [contact('teo.zed@example.com', 'Teo Zed')],
+    },
+  });
+  const request = { query: 'teo', teammates: ['macro|teo.zed@example.com'] };
+  let landed = false;
+  const held = (async () => {
+    const page = await readContactDirectory(
+      VIEWER,
+      undefined,
+      request,
+      signal()
+    );
+    landed = true;
+    return page;
+  })();
+  await vi.advanceTimersByTimeAsync(1_999);
+  expect(landed).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect((await held).users.map((user) => user.name)).toEqual([
+    'Teo Zed',
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+
+  // A page slower than the budget still takes what answered before it landed.
+  remote.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve(pageRows), 3_000);
+      })
+  );
+  named.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(
+          () =>
+            resolve(contactPage([contact('teo.park@example.com', 'Teo Park')])),
+          2_500
+        );
+      })
+  );
+  const slow = readContactDirectory(VIEWER, undefined, request, signal());
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect((await slow).users.map((user) => user.name)).toEqual([
+    'Teo Park',
+    'Teo Zed',
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+  vi.useRealTimers();
+});
+it('leaves a browsing page in server order, whatever its names', async () => {
+  remote.mockResolvedValue(
+    contactPage([
+      contact('ana@example.com', 'Ana Li'),
+      contact('blank@example.com', ''),
+      contact('zed@example.com', 'Zed Ro'),
+    ])
+  );
+  const page = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: '', teammates: ['macro|zed@example.com'] },
+    signal()
+  );
+  expect(page.users.map((user) => user.email)).toEqual([
+    'ana@example.com',
+    'blank@example.com',
+    'zed@example.com',
+  ]);
+  expect(page.named).toBeUndefined();
+  expect(named).not.toHaveBeenCalled();
+  expect(lookedUp).not.toHaveBeenCalled();
+});
 it('binds continuations to query, policy, account and storage; rejects changed core versions', async () => {
   const cache = host();
   const request = { query: 'john' };

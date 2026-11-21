@@ -61,7 +61,7 @@ function orderServerPage(
     const lastMessage = Math.max(messaged.getTime() || 0, 0);
     let closeness = 2;
     if (lastMessage > 0) closeness = 0;
-    else if (working.teammates.has(user.id)) closeness = 1;
+    else if (working.teammates.has(user.id.toLowerCase())) closeness = 1;
 
     let match = 2;
     if (exact.has(user.id)) match = 0;

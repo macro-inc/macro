@@ -214,6 +214,8 @@ function namedBy(
   { text, identity }: TypedText,
   user: IUser
 ): 'exact' | 'wordStart' | undefined {
+  // No text names nobody, whatever a blank name would equal.
+  if (!text) return undefined;
   if (identity) return user.id.toLowerCase() === identity ? 'exact' : undefined;
 
   if (text.includes('@'))
@@ -405,15 +407,42 @@ async function readLateAwareServerWindow(
 /** The most people one lookup by ID reads: the server's bound for a request. */
 const MAX_NAMED_LOOKUP = 500;
 
-/** The rows one extra read answered with, or none when it failed or answered
- * past its bound. */
+/** How long a first server page waits, once its own rows have landed, for the
+ * reads of who its text names. */
+const NAMED_READ_BUDGET_MS = 2_000;
+
+/** What one extra read came to: its answer, a failure, or nothing in time. */
+type ExtraRead<Answer> =
+  | { state: 'answered'; answer: Answer | undefined }
+  | { state: 'failed' }
+  | { state: 'late' };
+
+/** Settles with the read, or as late once `deadline` passes. */
+async function extraRead<Answer>(
+  read: Promise<Answer> | undefined,
+  deadline: Promise<'late'>
+): Promise<ExtraRead<Answer>> {
+  if (!read) return { state: 'answered', answer: undefined };
+  const settle = async (): Promise<ExtraRead<Answer>> => {
+    try {
+      return { state: 'answered', answer: await read };
+    } catch {
+      return { state: 'failed' };
+    }
+  };
+  const first = await Promise.race([settle(), deadline]);
+  return first === 'late' ? { state: 'late' } : first;
+}
+
+/** The rows one extra read answered with, or none when it failed, was late or
+ * answered past its bound. */
 function answeredRows<Answer>(
-  read: PromiseSettledResult<Answer | undefined>,
+  read: ExtraRead<Answer>,
   rows: (answer: Answer) => readonly ContactDirectoryFieldsFragment[],
   bound: number
 ): readonly ContactDirectoryFieldsFragment[] | undefined {
-  if (read.status === 'rejected') return undefined;
-  const found = read.value ? rows(read.value) : [];
+  if (read.state !== 'answered') return undefined;
+  const found = read.answer ? rows(read.answer) : [];
   return found.length > bound ? undefined : found;
 }
 
@@ -421,12 +450,14 @@ function answeredRows<Answer>(
  * server's exact name matches, and by ID a whole typed address or the viewer's
  * teammates (the first 500). The exact search scans only the first 2,000
  * contacts; a lookup by ID finds a person however large the directory is.
- * Each read only adds people to rank, so one that fails costs the page those
- * people and nothing else: the other read's people and the page's own rows
- * are still ranked. */
+ * Each read only adds people to rank, so one that fails, or has not answered
+ * when the page's own rows are in and the budget is spent, costs the page
+ * those people and nothing else: the other read's people and the page's own
+ * rows are still ranked. */
 async function readNamedPeople(
   typed: TypedText,
-  { viewer, request, limit, signal, span }: WindowInput
+  { viewer, request, limit, signal, span }: WindowInput,
+  page: Promise<unknown>
 ): Promise<{
   exact: readonly ContactDirectoryFieldsFragment[];
   lookedUp: readonly ContactDirectoryFieldsFragment[];
@@ -442,27 +473,42 @@ async function readNamedPeople(
     if (supported && lookupIds.size < MAX_NAMED_LOOKUP)
       lookupIds.add(supported);
   }
-  const [exact, lookedUp] = await Promise.allSettled([
-    // No name is an address: a whole one is looked up by ID, and nothing
-    // equals part of one.
-    typed.text.includes('@')
-      ? undefined
-      : span.span('contacts.read_server_exact', () =>
-          fetchContactReferencePage(
-            { limit, search: request.query, matching: 'ANY_NAME' },
-            signal
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, NAMED_READ_BUDGET_MS);
+  });
+  const deadline = (async (): Promise<'late'> => {
+    await Promise.allSettled([page, budget]);
+    return 'late';
+  })();
+  const [exact, lookedUp] = await Promise.all([
+    extraRead(
+      // No name is an address: a whole one is looked up by ID, and nothing
+      // equals part of one.
+      typed.text.includes('@')
+        ? undefined
+        : span.span('contacts.read_server_exact', () =>
+            fetchContactReferencePage(
+              { limit, search: request.query, matching: 'ANY_NAME' },
+              signal
+            )
+          ),
+      deadline
+    ),
+    extraRead(
+      lookupIds.size
+        ? span.span('contacts.read_server_named', () =>
+            fetchContactDirectoryByIds([...lookupIds], signal)
           )
-        ),
-    lookupIds.size
-      ? span.span('contacts.read_server_named', () =>
-          fetchContactDirectoryByIds([...lookupIds], signal)
-        )
-      : undefined,
+        : undefined,
+      deadline
+    ),
   ]);
+  clearTimeout(timer);
   // A superseded read ends here, whatever its reads answered.
   signal.throwIfAborted();
   for (const read of [exact, lookedUp]) {
-    const answer = read.status === 'fulfilled' ? read.value : undefined;
+    const answer = read.state === 'answered' ? read.answer : undefined;
     if (answer && answer.user.id !== viewer)
       throw new ContactDirectoryScopeError();
   }
@@ -475,6 +521,8 @@ async function readNamedPeople(
       lookupIds.size
     ),
   };
+  if ([exact, lookedUp].some((read) => read.state === 'late'))
+    span.setAttr('contacts.named_late', true);
   if (!named.exact || !named.lookedUp)
     span.setAttr('contacts.named_failed', true);
   return { exact: named.exact ?? [], lookedUp: named.lookedUp ?? [] };
@@ -525,18 +573,19 @@ async function readServerWindow(
     throw new ContactDirectoryScopeError();
 
   const typed = typedText(request.cursor ? '' : request.query);
+  const pageRead = span.span('contacts.read_server_window', () =>
+    fetchContactDirectoryPage(
+      {
+        limit,
+        after: request.cursor?.after ?? null,
+        search: request.query || null,
+      },
+      signal
+    )
+  );
   const [result, namedPeople] = await Promise.all([
-    span.span('contacts.read_server_window', () =>
-      fetchContactDirectoryPage(
-        {
-          limit,
-          after: request.cursor?.after ?? null,
-          search: request.query || null,
-        },
-        signal
-      )
-    ),
-    readNamedPeople(typed, input),
+    pageRead,
+    readNamedPeople(typed, input, pageRead),
   ]);
   if (result.user.id !== viewer) throw new ContactDirectoryScopeError();
 

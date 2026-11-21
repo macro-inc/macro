@@ -381,6 +381,58 @@ it('orders the first server page by who the viewer works with, and leaves later 
   client.clear();
 });
 
+it('ranks a teammate whose listed ID differs from the roster only in case', async () => {
+  vi.useFakeTimers();
+  const stranger = {
+    id: 'macro|teo.amy@example.com',
+    email: 'teo.amy@example.com',
+    name: 'Teo Amy',
+  };
+  const teammate = {
+    id: 'macro|Teo.Zed@Example.com',
+    email: 'Teo.Zed@Example.com',
+    name: 'Teo Zed',
+  };
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (_viewer, _host, request) => ({
+      query: request.query,
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      users: [stranger, teammate],
+      named: { exact: [stranger.id, teammate.id], wordStart: [] },
+      nextCursor: null,
+    }));
+  const client = new QueryClient();
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    const [search] = createSignal('teo');
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      {
+        search,
+        debounceMs: 0,
+        teammates: () => new Set(['macro|teo.zed@example.com']),
+      }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(list?.data()?.users.map((user) => user.name)).toEqual([
+    'Teo Zed',
+    'Teo Amy',
+  ]);
+  client.clear();
+});
+
 it('keeps the bound when a server page names more people than it', async () => {
   vi.useFakeTimers();
   const everyone = Array.from({ length: 520 }, (_, index) => person(index));
