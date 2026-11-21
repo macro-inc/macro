@@ -107,7 +107,7 @@ vi.mock('@notifications', () => ({
 }));
 vi.mock('@queries/preview', () => ({ useItemRawName: () => () => 'Doc' }));
 
-const { MarkdownDetail } = await import('./views/MarkdownDetail');
+const { MarkdownDetail } = await import('./MarkdownDetail');
 
 afterEach(() => {
   cleanup();

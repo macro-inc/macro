@@ -1,7 +1,10 @@
 import { Telemetry } from '@macro-inc/observability';
 import { render } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
-import { DetailErrorBoundary, MarkdownDetailBodyState } from './MarkdownDetail';
+import {
+  DetailErrorBoundary,
+  MarkdownDetailBodyState,
+} from '../MarkdownDetail';
 
 let dispose: (() => void) | undefined;
 afterEach(() => {

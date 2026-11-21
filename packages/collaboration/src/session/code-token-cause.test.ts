@@ -76,26 +76,29 @@ test.each([
     (): unknown[] | undefined => undefined,
   ],
   ['take-missed-pair', 'take-missed', [1], [5], () => ['a', 'b']],
-] as const)('a %s contract break is reported, binds nothing and frees the record', (_label, reason, ordinals, causes, take) => {
-  const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
-  const freed: string[] = [];
-  const effects: CodeTokenCauseCarrier[] = [{}, {}];
-  bindCodeTokenCauses(
-    {
-      takeCodeTokenFailure: () => record(freed, [...ordinals], [...causes]),
-      takeCodeTokenCause: take,
-    },
-    effects
-  );
-  expect(report).toHaveBeenCalledTimes(1);
-  expect(report.mock.calls[0]?.[1]).toEqual({
-    surface: 'code-token-cause.binding',
-    reason,
-    ordinal: ordinals[0],
-  });
-  expect(effects.every((effect) => !effect.codeTokenCause)).toBe(true);
-  expect(freed).toEqual(['free']);
-});
+] as const)(
+  'a %s contract break is reported, binds nothing and frees the record',
+  (_label, reason, ordinals, causes, take) => {
+    const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    const freed: string[] = [];
+    const effects: CodeTokenCauseCarrier[] = [{}, {}];
+    bindCodeTokenCauses(
+      {
+        takeCodeTokenFailure: () => record(freed, [...ordinals], [...causes]),
+        takeCodeTokenCause: take,
+      },
+      effects
+    );
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report.mock.calls[0]?.[1]).toEqual({
+      surface: 'code-token-cause.binding',
+      reason,
+      ordinal: ordinals[0],
+    });
+    expect(effects.every((effect) => !effect.codeTokenCause)).toBe(true);
+    expect(freed).toEqual(['free']);
+  }
+);
 
 test('an error that cannot take a cause is still returned, unchanged', () => {
   const effect: CodeTokenCauseCarrier = { codeTokenCause: { value: 'value' } };

@@ -21,8 +21,8 @@ import { For, Match, Show, Switch } from 'solid-js';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
+import { DetailErrorBoundary, MarkdownDetail } from '../MarkdownDetail';
 import { FileDetailBreadcrumbItem } from '../views/FileDetailBreadcrumbItem';
-import { DetailErrorBoundary, MarkdownDetail } from '../views/MarkdownDetail';
 import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
 
 function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {

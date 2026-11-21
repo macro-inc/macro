@@ -58,7 +58,7 @@ vi.mock('@app/components/entity-detail/EntityDetail', () => ({
     </>
   ),
 }));
-vi.mock('@app/features/drive-view/views/MarkdownDetail', () => ({
+vi.mock('@app/features/drive-view/MarkdownDetail', () => ({
   MarkdownDetail: () => null,
 }));
 vi.mock('@app/features/drive-view/views/FileDetailBreadcrumbItem', () => ({

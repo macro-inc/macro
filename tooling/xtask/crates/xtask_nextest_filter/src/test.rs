@@ -53,16 +53,28 @@ fn crate_change_maps_to_rdeps_of_that_crate() {
 #[test]
 fn deployed_sync_schema_copies_select_the_equality_guard() {
     let graph = build_graph(false).expect("cargo metadata");
-    for path in [
-        "services/sync-service/bebop/schema.bop",
-        "services/sync-service/bebop-schema/src/generated.rs",
+    let mut missing = Vec::new();
+    for (path, expected) in [
+        (
+            "services/sync-service/bebop/schema.bop",
+            &["sync_protocol", "sync_service"][..],
+        ),
+        (
+            "services/sync-service/bebop-schema/src/generated.rs",
+            &["sync_protocol", "sync_service_bebop_schema", "sync_service"][..],
+        ),
     ] {
         let selection = select_in_repo(&graph, &[path]);
-        assert!(
-            selected_packages(&selection).contains("sync_protocol"),
-            "deployed schema change must run the equality guard: {path}: {selection:?}"
-        );
+        for package in expected {
+            if !selected_packages(&selection).contains(*package) {
+                missing.push((path, *package, selection.to_string()));
+            }
+        }
     }
+    assert!(
+        missing.is_empty(),
+        "schema changes must select the equality guard and owning packages for tests/clippy: {missing:?}"
+    );
 }
 
 /// Top-level files that belong to no package — a JSON at the repo root, a

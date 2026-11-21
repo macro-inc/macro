@@ -1,5 +1,5 @@
 //! `cloud storage code check` — cargo fmt/clippy/test for the cloud-storage
-//! workspace on pull requests. Generated into `code-check-cloud-storage.yml`.
+//! workspace on pull requests. Generated into `code_check_cloud_storage.yml`.
 //!
 //! Ported from the hand-written workflow, with two infra changes: the runners
 //! moved to Namespace profiles, and compiled objects moved off the S3/local

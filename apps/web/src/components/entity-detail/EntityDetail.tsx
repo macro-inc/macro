@@ -1,7 +1,7 @@
 import {
   MarkdownDetail,
   type MarkdownDetailContext,
-} from '@app/features/drive-view/views/MarkdownDetail';
+} from '@app/features/drive-view/MarkdownDetail';
 import {
   CanvasDetail,
   type CanvasDetailContext,

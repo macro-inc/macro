@@ -46,8 +46,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { FileDetailLoadGate } from '../components/FileDetail';
-import type { FileDetailContext } from '../util/file-detail-context';
+import { FileDetailLoadGate } from './components/FileDetail';
+import type { FileDetailContext } from './util/file-detail-context';
 
 export type MarkdownDetailContext = FileDetailContext<MarkdownDocumentData>;
 
@@ -228,7 +228,11 @@ function MarkdownDetailContent(props: {
   );
 }
 
-/** Renders a markdown document without a block container or split header. */
+/**
+ * Renders a markdown document without a block container or split header.
+ * The embedded markdown view's entry: every Drive, task and CRM detail mounts
+ * the document here, so it picks the desktop or touch composition once.
+ */
 export function MarkdownDetail(props: MarkdownDetailProps) {
   return (
     <FileDetailLoadGate

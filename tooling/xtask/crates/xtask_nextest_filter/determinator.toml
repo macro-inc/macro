@@ -7,6 +7,7 @@ globs = [
   "services/sync-service/bebop-schema/**",
 ]
 mark-changed = ["sync_protocol"]
+post-rule = "skip-rules"
 
 [[path-rule]]
 globs = ["static_assets/**"]
