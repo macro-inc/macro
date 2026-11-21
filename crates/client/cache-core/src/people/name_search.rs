@@ -1,7 +1,9 @@
 //! Shared matching and durable sort-key semantics for the name-first people path.
 //! The active menu reader is switched only with its storage/host integration.
-use super::PeopleError;
+use super::{MAX_LIST_KEY_BYTES, PeopleError};
+use crate::value::{CacheValue, Record};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use std::collections::BTreeSet;
 use subsequence_match::{
     MAX_QUERY_BYTES,
     names::{NameMatch, NameQuery},
@@ -103,6 +105,38 @@ impl NameSearch {
             }
         }
     }
+}
+
+/// Field the server's `GraphqlContact.lists` normalizes into.
+pub const LISTS_FIELD: &str = "lists";
+
+/// The contact's list keys as both the index and the ranker read them: distinct,
+/// nonempty and at most `MAX_LIST_KEY_BYTES`. The server bounds how many lists
+/// a contact is in; dropping some here could hide the one a caller ranks by. A
+/// missing or malformed field means no lists, never an error.
+pub fn contact_lists(record: &Record) -> BTreeSet<&str> {
+    let Some(CacheValue::List(values)) = record.fields.get(LISTS_FIELD) else {
+        return BTreeSet::new();
+    };
+    values
+        .iter()
+        .filter_map(|value| match value {
+            CacheValue::String(key) if !key.is_empty() && key.len() <= MAX_LIST_KEY_BYTES => {
+                Some(key.as_str())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Unambiguous prefix of a list's scoped rank keys: the key's length, then the
+/// key, so one list's range never contains another's.
+pub fn list_prefix(key: &str) -> Vec<u8> {
+    const _: () = assert!(MAX_LIST_KEY_BYTES <= u8::MAX as usize);
+    let mut prefix = Vec::with_capacity(key.len() + 1);
+    prefix.push(u8::try_from(key.len()).unwrap_or(u8::MAX));
+    prefix.extend_from_slice(key.as_bytes());
+    prefix
 }
 
 /// Lexicographic recent-first key: descending signed timestamp, then canonical

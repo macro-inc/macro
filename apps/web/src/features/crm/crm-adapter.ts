@@ -120,6 +120,12 @@ const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
 }));
 
+// Team › Members owns the roster and its CRM access switch.
+const CrmMemberAccess = lazy(async () => ({
+  default: (await import('@app/features/settings/views/crm-member-access'))
+    .CrmMemberAccessSection,
+}));
+
 /**
  * Soup rows carry raw notification arrays; `ListEntity` reads them through
  * an accessor bound to the app's notification source, as other lists do.
@@ -255,6 +261,7 @@ export function createAppCrmContext(): CrmContext {
         record
       ),
     PipelineSharing: PipelineShare,
+    MemberAccess: CrmMemberAccess,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
     feedback: toast,

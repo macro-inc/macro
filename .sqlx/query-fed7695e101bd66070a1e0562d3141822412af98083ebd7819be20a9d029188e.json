@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The inbox owner gains each contact through this inbox (at most 500 per\n-- message). Nothing is written once the inbox is disconnected, so a message\n-- that outlives its link is a no-op instead of a foreign-key failure; the key\n-- share lock makes a disconnect that races this statement wait for it. Rows go\n-- in key order so overlapping messages cannot deadlock.\nINSERT INTO contact_inbox_members (user_id, contact_user_id, link_id, list_key)\nSELECT $1, contacts.id, $2, $3\nFROM unnest($4::text[]) AS contacts (id)\nWHERE contacts.id <> $1\n  AND EXISTS (SELECT 1 FROM email_links WHERE email_links.id = $2 FOR KEY SHARE)\nORDER BY contacts.id\nON CONFLICT (user_id, contact_user_id, link_id) DO NOTHING\nRETURNING contact_user_id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fed7695e101bd66070a1e0562d3141822412af98083ebd7819be20a9d029188e"
+}

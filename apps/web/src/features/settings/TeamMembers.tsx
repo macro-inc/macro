@@ -2,14 +2,10 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
-import { UserIcon } from '@core/component/UserIcon';
-import {
-  enableAgentTeammates,
-  enableCrmMemberAccessChanges,
-} from '@core/constant/featureFlags';
+import { enableCrmMemberAccessChanges } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   getDisplayName,
   isAgentAccount,
@@ -19,12 +15,7 @@ import {
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
-import type { CollectionNode } from '@kobalte/core';
-import { Select } from '@kobalte/core/select';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import { useComputersQuery } from '@queries/computers/computers';
 import {
@@ -41,17 +32,15 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
-import {
-  useRemoveTeamAgentMutation,
-  useTeamAgentsQuery,
-} from '@queries/team-agents/team-agents';
+import { useRemoveTeamAgentMutation } from '@queries/team-agents/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import type { TeamAgent } from '@service-auth/team-agents';
-import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
+import { Key } from '@solid-primitives/keyed';
+import { Button, ConfirmDialog, ToggleSwitch } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -63,7 +52,7 @@ import {
 import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
-import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
+import { TeamMemberRow } from './components/team-member-row';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
 import {
   SettingsCard,
@@ -72,6 +61,13 @@ import {
   SettingsSection,
 } from './primitives';
 import { useRetryTeamAgentSetup } from './primitives/team-agent-status';
+import {
+  hasCrmAccess,
+  memberEmail,
+  memberName,
+  sortTeamMembers,
+  useTeamAgents,
+} from './primitives/team-roster';
 import {
   type InviteKind,
   InviteToTeamDialog,
@@ -84,70 +80,20 @@ import {
   canRemoveTeamMember,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
+import {
+  TeamAgentMenu as MobileTeamAgentMenu,
+  TeamMemberMenu as MobileTeamMemberMenu,
+} from './views/mobile/team-member-menu';
+import {
+  type RemovalLock,
+  type RoleLock,
+  roleName,
+  seatPlanName,
+  type TeamAgentMenuProps,
+  type TeamMemberMenuProps,
+} from './views/shared/team-member-menu';
 import { TeamAgentClaude } from './views/team-agent-claude';
-
-const roleOrder: Record<string, number> = {
-  [TeamRole.owner]: 0,
-  [TeamRole.admin]: 1,
-  [TeamRole.member]: 2,
-};
-
-type RoleOption = { value: TeamRole; label: string };
-
-const roleOptions: RoleOption[] = [
-  { value: TeamRole.member, label: 'Member' },
-  { value: TeamRole.admin, label: 'Admin' },
-];
-
-function RoleSelect(props: {
-  value: TeamRole;
-  onChange: (role: TeamRole) => void;
-  disabled?: boolean;
-}) {
-  const selectedOption = () =>
-    roleOptions.find((o) => o.value === props.value) ?? roleOptions[0];
-
-  return (
-    <Select<RoleOption>
-      options={roleOptions}
-      value={selectedOption()}
-      onChange={(opt) => opt && props.onChange(opt.value)}
-      optionValue="value"
-      optionTextValue="label"
-      gutter={4}
-      placement="bottom-end"
-      disabled={props.disabled}
-      itemComponent={(itemProps: { item: CollectionNode<RoleOption> }) => (
-        <Select.Item
-          item={itemProps.item}
-          class="flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
-        >
-          <Select.ItemLabel>{itemProps.item.rawValue.label}</Select.ItemLabel>
-          <Select.ItemIndicator>
-            <CheckIcon class="size-3" />
-          </Select.ItemIndicator>
-        </Select.Item>
-      )}
-    >
-      <Select.Trigger
-        variant="ghost"
-        as={Button}
-        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
-        disabled={props.disabled}
-      >
-        <Select.Value<RoleOption>>
-          {(state) => state.selectedOption().label}
-        </Select.Value>
-        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content class="menu-surface z-action-menu min-w-25 p-1">
-          <Select.Listbox />
-        </Select.Content>
-      </Select.Portal>
-    </Select>
-  );
-}
+import { TeamAgentMenu, TeamMemberMenu } from './views/team-member-menu';
 
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
@@ -158,160 +104,20 @@ function memberPlan(member: TeamMember): PaidPlan {
   return plan === 'max' ? 'max' : 'premium';
 }
 
-function MemberRow(props: {
-  member: TeamMember;
-  isOwner: boolean;
-  isCurrentUser: boolean;
-  canManageRemovals: boolean;
-  canRemove: boolean;
-  /** Whether seat plans apply (paid team) and the viewer may change them. */
-  showPlan: boolean;
-  canEditPlan: boolean;
-  planPending: boolean;
-  crmAccess: boolean;
-  canManageCrm: boolean;
-  crmPending: boolean;
-  onCrmAccessChange: (enabled: boolean) => void;
-  pendingDowngrade: boolean;
-  onRemove: () => void;
-  onRoleChange: (role: TeamRole) => void;
-  onPlanChange: (plan: PaidPlan) => void;
-}) {
-  const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
-  const isMemberOwner = () => props.member.role === TeamRole.owner;
-  const email = () => {
-    const id = tryMacroId(props.member.user_id);
-    return id ? macroIdToEmail(id) : undefined;
-  };
-  const showEmail = () => {
-    const e = email();
-    return e && e !== displayName();
-  };
-  const showCrmAccess = () =>
-    props.canManageCrm && props.member.role === TeamRole.member;
-
+/** A person's ⋯: a menu on desktop, a sheet on touch, as Machines does. */
+function MemberMenu(props: TeamMemberMenuProps) {
   return (
-    <div
-      data-team-member={props.member.user_id}
-      class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-4"
-    >
-      {/* With the CRM switch the avatar and name keep 12rem, so on phones the
-          controls wrap below the name; other rows keep one line as before. */}
-      <div
-        data-member-identity
-        class="flex min-w-0 grow items-center gap-3"
-        classList={{
-          'basis-48': showCrmAccess(),
-          'basis-0': !showCrmAccess(),
-        }}
-      >
-        <div class="shrink-0">
-          <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <div data-member-name class="text-sm font-medium text-ink truncate">
-              {displayName()}
-              {props.isCurrentUser && (
-                <span class="text-ink-muted font-normal"> (you)</span>
-              )}
-            </div>
-            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
-              <AgentTag />
-            </Show>
-          </div>
-          <Show when={showEmail()}>
-            <div class="text-xs text-ink-muted truncate">{email()}</div>
-          </Show>
-        </div>
-      </div>
-      <div
-        data-member-controls
-        class="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2"
-      >
-        <Show when={props.showPlan}>
-          <Show
-            when={props.canEditPlan}
-            fallback={
-              <span class="text-xs text-ink-muted capitalize">
-                {memberPlan(props.member)}
-              </span>
-            }
-          >
-            <TeamSeatPlanSelect
-              value={memberPlan(props.member)}
-              onChange={props.onPlanChange}
-              disabled={props.planPending}
-              aiUsageBilling
-              pendingDowngrade={props.pendingDowngrade}
-            />
-          </Show>
-        </Show>
-        <Show
-          when={props.isOwner && !isMemberOwner()}
-          fallback={
-            <span class="text-xs text-ink-muted capitalize">
-              {props.member.role}
-            </span>
-          }
-        >
-          <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
-        </Show>
-        <Show when={showCrmAccess()}>
-          <ToggleSwitch
-            size="sm"
-            label={
-              <>
-                <span aria-hidden="true">{t('crm.memberAccessShort')}</span>
-                <span class="sr-only">
-                  {t('crm.memberAccessFor', { name: displayName() })}
-                </span>
-              </>
-            }
-            labelClass="text-xs text-ink"
-            class="touch:-my-1 touch:min-h-11 touch:min-w-11"
-            checked={props.crmAccess}
-            disabled={props.crmPending}
-            onChange={props.onCrmAccessChange}
-          />
-        </Show>
-        <Show when={props.canManageRemovals}>
-          <Show
-            when={props.canRemove}
-            fallback={
-              <Tooltip
-                label={
-                  isMemberOwner()
-                    ? 'Cannot remove team owner'
-                    : 'Cannot remove yourself'
-                }
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled
-                  aria-label={`Remove ${displayName()}`}
-                  class="opacity-50 cursor-not-allowed"
-                >
-                  <TrashIcon class="size-4" />
-                </Button>
-              </Tooltip>
-            }
-          >
-            <Tooltip label="Remove member">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={`Remove ${displayName()}`}
-                onClick={props.onRemove}
-              >
-                <TrashIcon class="size-4" />
-              </Button>
-            </Tooltip>
-          </Show>
-        </Show>
-      </div>
-    </div>
+    <Show when={isTouchDevice()} fallback={<TeamMemberMenu {...props} />}>
+      <MobileTeamMemberMenu {...props} />
+    </Show>
+  );
+}
+
+function AgentMenu(props: TeamAgentMenuProps) {
+  return (
+    <Show when={isTouchDevice()} fallback={<TeamAgentMenu {...props} />}>
+      <MobileTeamAgentMenu {...props} />
+    </Show>
   );
 }
 
@@ -355,13 +161,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   // Agent teammates: listed with their status once the flag is on. Loading
   // is not on, and off leaves the roster exactly as it was.
-  const agentFlag = useFeatureFlag(enableAgentTeammates);
   const canInviteAgents = useCanInviteAgents(isAdminOrOwner);
-  const agentsOn = () => !agentFlag().loading && agentFlag().enabled;
-  const agentsQuery = useTeamAgentsQuery(() => props.team.id, agentsOn);
+  const { enabled: agentsOn, agents } = useTeamAgents(() => props.team.id);
   const removeAgentMutation = useRemoveTeamAgentMutation();
-  const agents = () =>
-    agentsOn() && agentsQuery.isSuccess ? agentsQuery.data.agents : [];
   const agentUserIds = () => agents().map((agent) => agent.userId);
   // The step a new agent's computer is on, read while one is being set up
   // or has failed; any member can read the team's computers.
@@ -388,14 +190,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
     if (!canChangeVoice()) setVoiceAgent(undefined);
   });
 
-  const members = createMemo(() => {
-    const unsorted = teamQuery.data?.members ?? [];
-    return [...unsorted].sort((a, b) => {
-      const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
-      if (roleCompare !== 0) return roleCompare;
-      return a.user_id.localeCompare(b.user_id);
-    });
-  });
+  const members = createMemo(() =>
+    sortTeamMembers(teamQuery.data?.members ?? [])
+  );
 
   const [memberQuery, setMemberQuery] = createSignal('');
   // The input stays live (`memberQuery`); filtering reads this debounced view so
@@ -488,6 +285,37 @@ export function TeamMembers(props: { team: TeamSummary }) {
   // Seat moves read and rewrite the subscription's item quantities, so only
   // one may be in flight per team: every plan menu waits while one runs.
   const planMovePending = () => setMemberPlanMutation.isPending;
+
+  const crmAccessOf = (member: TeamMember) =>
+    hasCrmAccess(member, teamQuery.data?.crm_member_access);
+  const pendingDowngradeOf = (member: TeamMember) =>
+    teamQuery.data?.scheduled_seat_plans?.[member.user_id]?.plan === 'premium';
+
+  // One muted line under the name: role, seat plan, and only what differs
+  // from the usual (a Max seat dropping to Pro, CRM access turned off).
+  const memberSummary = (member: TeamMember) => {
+    const plan = memberPlan(member);
+    return [
+      roleName(member.role),
+      showSeatPlans() && seatPlanName(plan),
+      isAdminOrOwner() &&
+        plan === 'max' &&
+        pendingDowngradeOf(member) &&
+        t('teamMembers.proAtRenewal'),
+      canManageCrm() && !crmAccessOf(member) && t('crm.memberAccessOff'),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  };
+
+  const roleLockOf = (member: TeamMember): RoleLock | undefined => {
+    if (member.role === TeamRole.owner) return 'owner';
+    return isOwner() ? undefined : 'not-owner';
+  };
+  const removalLockOf = (member: TeamMember): RemovalLock | undefined => {
+    if (canRemoveTeamMember(userId(), currentUserRole(), member)) return;
+    return member.role === TeamRole.owner ? 'owner' : 'self';
+  };
 
   const handleRemoveMember = () => {
     const member = showRemoveModal();
@@ -627,75 +455,89 @@ export function TeamMembers(props: { team: TeamSummary }) {
                   below stay in reach. The height cuts a row in half so the
                   list visibly continues. */}
               <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
-                <For each={filteredPeople()}>
+                {/* Keyed by person, so a refetch keeps each row and a ⋯ open
+                    on it. */}
+                <Key each={filteredPeople()} by="user_id">
                   {(member) => (
-                    <MemberRow
-                      member={member}
-                      isOwner={isOwner()}
-                      isCurrentUser={member.user_id === userId()}
-                      canManageRemovals={canManageMemberRemovals()}
-                      canRemove={canRemoveTeamMember(
-                        userId(),
-                        currentUserRole(),
-                        member
-                      )}
-                      showPlan={showSeatPlans()}
-                      canEditPlan={isAdminOrOwner()}
-                      planPending={planMovePending()}
-                      crmAccess={
-                        member.role !== TeamRole.member ||
-                        teamQuery.data?.crm_member_access?.[member.user_id] !==
-                          false
+                    <TeamMemberRow
+                      userId={member().user_id}
+                      name={memberName(member())}
+                      email={memberEmail(member())}
+                      isCurrentUser={member().user_id === userId()}
+                      isAgent={isAgentAccount(tryMacroId(member().user_id))}
+                      summary={memberSummary(member())}
+                      menu={
+                        <Show when={canManageMemberRemovals()}>
+                          <MemberMenu
+                            name={memberName(member())}
+                            email={memberEmail(member())}
+                            plan={
+                              showSeatPlans() ? memberPlan(member()) : undefined
+                            }
+                            pendingDowngrade={pendingDowngradeOf(member())}
+                            planPending={planMovePending()}
+                            onPlanChange={(plan) => {
+                              if (!props.team.id) return;
+                              setMemberPlanMutation.mutate({
+                                teamId: props.team.id,
+                                userId: member().user_id,
+                                plan,
+                              });
+                            }}
+                            role={member().role}
+                            roleLock={roleLockOf(member())}
+                            onRoleChange={(role) => {
+                              if (!props.team.id) return;
+                              patchTeamMutation.mutate({
+                                teamId: props.team.id,
+                                request: {
+                                  user_role_updates: [
+                                    { team_user_id: member().user_id, role },
+                                  ],
+                                },
+                              });
+                            }}
+                            manageCrm={canManageCrm()}
+                            crmAccess={crmAccessOf(member())}
+                            crmPending={crmAccessMutation.isPending}
+                            onCrmAccessChange={(enabled) => {
+                              crmAccessMutation.mutate({
+                                teamId: props.team.id,
+                                request: {
+                                  member_crm_access: {
+                                    user_id: member().user_id,
+                                    enabled,
+                                  },
+                                },
+                              });
+                            }}
+                            removalLock={removalLockOf(member())}
+                            onRemove={() => setShowRemoveModal(member())}
+                          />
+                        </Show>
                       }
-                      canManageCrm={canManageCrm()}
-                      crmPending={crmAccessMutation.isPending}
-                      onCrmAccessChange={(enabled) => {
-                        crmAccessMutation.mutate({
-                          teamId: props.team.id,
-                          request: {
-                            member_crm_access: {
-                              user_id: member.user_id,
-                              enabled,
-                            },
-                          },
-                        });
-                      }}
-                      pendingDowngrade={
-                        teamQuery.data?.scheduled_seat_plans?.[member.user_id]
-                          ?.plan === 'premium'
-                      }
-                      onPlanChange={(plan) => {
-                        if (!props.team.id) return;
-                        setMemberPlanMutation.mutate({
-                          teamId: props.team.id,
-                          userId: member.user_id,
-                          plan,
-                        });
-                      }}
-                      onRemove={() => setShowRemoveModal(member)}
-                      onRoleChange={(newRole) => {
-                        if (!props.team.id) return;
-                        patchTeamMutation.mutate({
-                          teamId: props.team.id,
-                          request: {
-                            user_role_updates: [
-                              {
-                                team_user_id: member.user_id,
-                                role: newRole,
-                              },
-                            ],
-                          },
-                        });
-                      }}
                     />
                   )}
-                </For>
+                </Key>
                 <For each={filteredAgents()}>
                   {(agent) => (
                     <TeamAgentRow
                       agent={agent}
-                      canRemove={isAdminOrOwner()}
-                      onRemove={() => setAgentToRemove(agent)}
+                      menu={
+                        <AgentMenu
+                          name={agent.name}
+                          onChangeVoice={
+                            canChangeVoice()
+                              ? () => setVoiceAgent(agent)
+                              : undefined
+                          }
+                          onRemove={
+                            isAdminOrOwner()
+                              ? () => setAgentToRemove(agent)
+                              : undefined
+                          }
+                        />
+                      }
                       setupStep={agentSetupStep(agent)}
                       onRetry={
                         isAdminOrOwner() &&
@@ -713,11 +555,6 @@ export function TeamMembers(props: { team: TeamSummary }) {
                         isAdminOrOwner() ? (
                           <TeamAgentClaude agent={agent} />
                         ) : undefined
-                      }
-                      onChangeVoice={
-                        canChangeVoice()
-                          ? () => setVoiceAgent(agent)
-                          : undefined
                       }
                     />
                   )}

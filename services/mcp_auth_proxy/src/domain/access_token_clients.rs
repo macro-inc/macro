@@ -50,11 +50,12 @@ impl AccessTokenClients {
             .await
     }
 
-    /// The registered name of the client `access_token` was issued to.
-    /// `None` when the broker never recorded one (a token issued before it
-    /// did, or one whose client registration has lapsed), or when the stored
-    /// name fails [`ClientName::parse`] (registered before it was enforced).
-    pub async fn client_name(&self, access_token: &str) -> anyhow::Result<Option<String>> {
+    /// The client `access_token` was issued to: its opaque id, and its
+    /// registered name as a label. `None` when the broker never recorded one
+    /// (a token issued before it did). The name is `None` when the client's
+    /// registration has lapsed, or when the stored name fails
+    /// [`ClientName::parse`] (registered before it was enforced).
+    pub async fn issued_client(&self, access_token: &str) -> anyhow::Result<Option<IssuedClient>> {
         let Some(binding) = self
             .bindings
             .binding(&access_token_digest(access_token))
@@ -62,12 +63,25 @@ impl AccessTokenClients {
         else {
             return Ok(None);
         };
-        Ok(self
+        let name = self
             .clients
             .find_client(&binding.client_id)
             .await?
-            .and_then(|client| client_label(&client.client_name)))
+            .and_then(|client| client_label(&client.client_name));
+        Ok(Some(IssuedClient {
+            id: binding.client_id,
+            name,
+        }))
     }
+}
+
+/// The registered client an access token was issued to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IssuedClient {
+    /// The id the broker minted at registration; opaque, safe to trace.
+    pub id: String,
+    /// The client's registered name, as a label.
+    pub name: Option<String>,
 }
 
 /// A registered client name as the label on what the client writes, or

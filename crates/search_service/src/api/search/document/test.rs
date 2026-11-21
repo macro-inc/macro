@@ -418,12 +418,19 @@ fn test_document_history_partial_missing_entries() {
 fn test_document_history_deleted() {
     let now = chrono::Utc::now();
 
-    // Test 1: Document that exists but is soft-deleted
-    let input_deleted = vec![create_test_document_response(
-        "11111111-1111-1111-1111-111111111111",
-        "node_1",
-        Some(vec!["hello world".to_string()]),
-    )];
+    // Test 1: a document in the Trash is dropped, a live one beside it is kept
+    let input_deleted = vec![
+        create_test_document_response(
+            "11111111-1111-1111-1111-111111111111",
+            "node_1",
+            Some(vec!["hello world".to_string()]),
+        ),
+        create_test_document_response(
+            "33333333-3333-3333-3333-333333333333",
+            "node_3",
+            Some(vec!["hello again".to_string()]),
+        ),
+    ];
 
     let mut document_histories = HashMap::new();
     document_histories.insert(
@@ -441,16 +448,33 @@ fn test_document_history_deleted() {
             sub_type: None,
         },
     );
+    document_histories.insert(
+        "33333333-3333-3333-3333-333333333333".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryInfo {
+            item_id: "33333333-3333-3333-3333-333333333333".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            deleted_at: None,
+            file_type: Some("md".to_string()),
+            owner: "user_1".to_string(),
+            file_name: "live".to_string(),
+            sub_type: None,
+        },
+    );
 
     let result =
         construct_search_result(input_deleted, document_histories, HashMap::new(), None).unwrap();
 
-    // Deleted document should be returned with metadata including deleted_at
-    assert_eq!(result.len(), 1);
-    assert!(result[0].metadata.is_some());
-    let metadata = result[0].metadata.as_ref().unwrap();
-    assert_eq!(metadata.deleted_at, Some(now));
-    assert_eq!(metadata.project_id, Some("project_1".to_string()));
+    let ids: Vec<String> = result
+        .iter()
+        .map(|r| r.extra.document_id.to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        vec!["33333333-3333-3333-3333-333333333333".to_string()]
+    );
 
     // Test 2: Document that doesn't exist in DB (OpenSearch has stale data)
     let input_not_found = vec![create_test_document_response(
