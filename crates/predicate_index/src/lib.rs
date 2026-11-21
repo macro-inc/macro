@@ -415,48 +415,82 @@ impl IndexDocument {
 
     /// Evaluate an expression against this document's facts.
     pub fn matches(&self, expr: &PredicateExpr) -> bool {
-        match expr {
-            PredicateExpr::All => true,
-            PredicateExpr::None => false,
-            PredicateExpr::Exact { attribute, value } => self
-                .exact_facts
-                .iter()
-                .any(|fact| &fact.attribute == attribute && &fact.value == value),
-            PredicateExpr::ExactExists { attribute } => self
-                .exact_facts
-                .iter()
-                .any(|fact| &fact.attribute == attribute),
-            PredicateExpr::I64Range {
-                attribute,
-                lower,
-                upper,
-            } => self.integer_facts.iter().any(|fact| {
-                &fact.attribute == attribute
-                    && lower.is_none_or(|bound| lower_matches(fact.value, bound))
-                    && upper.is_none_or(|bound| upper_matches(fact.value, bound))
+        matches_facts(self, self.record_key.as_str(), expr)
+    }
+}
+
+impl FactSource for IndexDocument {
+    fn exact_facts(&self) -> impl Iterator<Item = (&str, &[u8])> + '_ {
+        self.exact_facts
+            .iter()
+            .map(|fact| (fact.attribute.as_str(), fact.value.as_bytes()))
+    }
+
+    fn integer_facts(&self) -> impl Iterator<Item = (&str, i64)> + '_ {
+        self.integer_facts
+            .iter()
+            .map(|fact| (fact.attribute.as_str(), fact.value))
+    }
+
+    fn sort_facts(&self) -> impl Iterator<Item = (&str, i64)> + '_ {
+        self.sort_facts
+            .iter()
+            .map(|fact| (fact.attribute.as_str(), fact.value))
+    }
+}
+
+/// One document's facts, however they are held, for [`matches_facts`].
+pub trait FactSource {
+    /// Exact facts as attribute and canonical value bytes.
+    fn exact_facts(&self) -> impl Iterator<Item = (&str, &[u8])> + '_;
+    /// Ordered integer facts as attribute and value.
+    fn integer_facts(&self) -> impl Iterator<Item = (&str, i64)> + '_;
+    /// Sort facts as attribute and value.
+    fn sort_facts(&self) -> impl Iterator<Item = (&str, i64)> + '_;
+}
+
+/// Evaluate an expression against one document's facts. `record_key` breaks
+/// [`PredicateExpr::After`] ties, compared as bytes like [`RecordKey`].
+pub fn matches_facts(facts: &impl FactSource, record_key: &str, expr: &PredicateExpr) -> bool {
+    match expr {
+        PredicateExpr::All => true,
+        PredicateExpr::None => false,
+        PredicateExpr::Exact { attribute, value } => facts
+            .exact_facts()
+            .any(|(name, bytes)| name == attribute.as_str() && bytes == value.as_bytes()),
+        PredicateExpr::ExactExists { attribute } => facts
+            .exact_facts()
+            .any(|(name, _)| name == attribute.as_str()),
+        PredicateExpr::I64Range {
+            attribute,
+            lower,
+            upper,
+        } => facts.integer_facts().any(|(name, value)| {
+            name == attribute.as_str()
+                && lower.is_none_or(|bound| lower_matches(value, bound))
+                && upper.is_none_or(|bound| upper_matches(value, bound))
+        }),
+        PredicateExpr::After {
+            attribute,
+            value,
+            key,
+            direction,
+            tie_direction,
+        } => facts
+            .sort_facts()
+            .find(|(name, _)| *name == attribute.as_str())
+            .is_some_and(|(_, sort)| {
+                directional_cmp(sort.cmp(value), *direction)
+                    .then_with(|| directional_cmp(record_key.cmp(key.as_str()), *tie_direction))
+                    == Ordering::Greater
             }),
-            PredicateExpr::After {
-                attribute,
-                value,
-                key,
-                direction,
-                tie_direction,
-            } => self
-                .sort_facts
-                .iter()
-                .find(|fact| &fact.attribute == attribute)
-                .is_some_and(|fact| {
-                    sorts_after(
-                        (fact.value, &self.record_key),
-                        (*value, key),
-                        *direction,
-                        *tie_direction,
-                    )
-                }),
-            PredicateExpr::And(left, right) => self.matches(left) && self.matches(right),
-            PredicateExpr::Or(left, right) => self.matches(left) || self.matches(right),
-            PredicateExpr::Not(expr) => !self.matches(expr),
+        PredicateExpr::And(left, right) => {
+            matches_facts(facts, record_key, left) && matches_facts(facts, record_key, right)
         }
+        PredicateExpr::Or(left, right) => {
+            matches_facts(facts, record_key, left) || matches_facts(facts, record_key, right)
+        }
+        PredicateExpr::Not(expr) => !matches_facts(facts, record_key, expr),
     }
 }
 
