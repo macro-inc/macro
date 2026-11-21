@@ -1374,11 +1374,10 @@ describe('useChannelParticipantsQuery', () => {
     ]);
     await vi.advanceTimersByTimeAsync(0);
     expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
-    // The check already out when this answer arrived still decides.
+    // The answer hides a at once, while the newer checks still wait.
     second.resolve(ok([owner]));
     await vi.advanceTimersByTimeAsync(0);
-    expect(ids()).toEqual(['owner', 'other', 'a']);
-    // A check sent after it arrived does not hold it off.
+    expect(ids()).toEqual(['owner', 'other']);
     setDetail([
       participant('owner', '2026-01-01T00:00:00Z', 'admin'),
       participant('other', '2026-01-04T00:00:00Z', 'admin'),
@@ -1387,6 +1386,9 @@ describe('useChannelParticipantsQuery', () => {
     expect(storage.getChannelParticipants).toHaveBeenCalledTimes(4);
     third.resolve(ok([owner]));
     await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other']);
+    fourth.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(31_000);
     expect(ids()).toEqual(['owner', 'other']);
   });
 
@@ -1423,10 +1425,111 @@ describe('useChannelParticipantsQuery', () => {
     // The first recheck saw a gone; the second, already out, sees them back.
     second.resolve(ok([owner]));
     await vi.advanceTimersByTimeAsync(0);
-    expect(ids()).toEqual(['owner', 'other', 'a']);
+    expect(ids()).toEqual(['owner', 'other']);
     third.resolve(ok([owner, a, other]));
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(31_000);
     expect(ids()).toEqual(['owner', 'other', 'a']);
+  });
+
+  it('does not let an older recheck that answers late undo a newer one', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const a = restRow('a', '2026-01-03T00:00:00Z');
+    // Answers queued by earlier tests would shift these checks.
+    storage.getChannelParticipants.mockReset();
+    const checks = [0, 1, 2, 3].map(() => Promise.withResolvers<unknown>());
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, a]))
+      .mockReturnValueOnce(checks[0]!.promise)
+      .mockReturnValueOnce(checks[1]!.promise)
+      .mockReturnValueOnce(checks[2]!.promise)
+      .mockReturnValueOnce(checks[3]!.promise);
+    const { add, ids } = mount();
+    const records = [
+      [participant('owner', '2026-01-01T00:00:00Z', 'admin')],
+      [
+        participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+        participant('other', '2026-01-04T00:00:00Z'),
+      ],
+      [
+        participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+        participant('other', '2026-01-04T00:00:00Z', 'admin'),
+      ],
+      [
+        participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+        participant('other', '2026-01-04T00:00:00Z', 'admin'),
+      ],
+    ];
+    const recordChanges = async (from: number, to: number) => {
+      for (const record of records.slice(from, to)) {
+        setDetail(record);
+        await vi.advanceTimersByTimeAsync(0);
+      }
+    };
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+
+    await recordChanges(0, 2);
+    checks[0]!.resolve(ok([owner, a]));
+    await vi.advanceTimersByTimeAsync(0);
+    await recordChanges(2, 4);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(5);
+    // The third check sees a; the second, sent before it, answers late without them.
+    checks[2]!.resolve(ok([owner, a]));
+    await vi.advanceTimersByTimeAsync(0);
+    checks[1]!.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+    checks[3]!.resolve(ok([owner, a]));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+  });
+
+  it('keeps two readers of a channel agreeing when an older recheck answers before one joins a newer check', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const a = restRow('a', '2026-01-03T00:00:00Z');
+    const other = restRow('other', '2026-01-04T00:00:00Z');
+    const second = Promise.withResolvers<unknown>();
+    const third = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, a]))
+      .mockReturnValueOnce(second.promise)
+      // The other reader sends the newer check; the older answers before this
+      // reader asks.
+      .mockImplementationOnce(() => {
+        second.resolve(ok([owner]));
+        return third.promise;
+      })
+      .mockResolvedValue(ok([owner, a, other]));
+    const { add, ids, apartIds } = mount({ apart: true });
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+    expect(apartIds()).toEqual(['owner', 'a']);
+
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'admin')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+      participant('other', '2026-01-04T00:00:00Z'),
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    third.resolve(ok([owner, a, other]));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+    expect(apartIds()).toEqual(['owner', 'other', 'a']);
   });
 
   it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
