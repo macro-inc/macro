@@ -97,6 +97,7 @@ async function runCase(session: UserSession, c: AstCase, result: FuzzResult, cov
   if (newVerdict && newVerdict.shape !== shape)
     fail('fallback-shape', `expected ${shape}, branch says ${newVerdict.shape}`);
 
+  const started = Date.now();
   const spanFrom = session.spans.new.length;
   const reqFrom = session.requests.new.length;
   const key = `fz${Math.random().toString(36).slice(2, 8)}`;
@@ -159,7 +160,7 @@ async function runCase(session: UserSession, c: AstCase, result: FuzzResult, cov
         fail('span-cancelled', `a settled read was traced as cancelled: ${JSON.stringify(spans)} status ${JSON.stringify(status)} rest ${restError}`);
     }
     if (requests.some((r) => r.kind === 'graphql'))
-      fail('graphql-on-fallback', `untranslatable but sent GraphQL ${requests.filter((r) => r.kind === 'graphql').map((r) => r.op).join(',')}`);
+      fail('graphql-on-fallback', `untranslatable but sent GraphQL ${requests.filter((r) => r.kind === 'graphql').map((r) => r.op).join(',')}: ${JSON.stringify(requests.filter((r) => r.kind === 'graphql').map((r) => ({ ms: r.at - started, input: (() => { try { return JSON.parse(r.body ?? '{}').variables?.input; } catch { return null; } })() }))).slice(0, 4000)}`);
     if (restError || newError) {
       if (restError !== newError) fail('error', `branch error ${newError} vs REST error ${restError}`);
       else {
