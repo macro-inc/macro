@@ -41,17 +41,12 @@ export function jobOutcome(status: ExecutionStatus): string | undefined {
     .exhaustive();
 }
 
+/** A cancel someone asked for is not a failure: it reads muted, not red. */
 function toolStatus(status: ExecutionStatus): ToolStatus {
   return match(status)
     .with('running', () => 'running' as const)
-    .with('succeeded', () => 'completed' as const)
-    .with(
-      'failed',
-      'cancelled',
-      'timed_out',
-      'interrupted',
-      () => 'failed' as const
-    )
+    .with('succeeded', 'cancelled', () => 'completed' as const)
+    .with('failed', 'timed_out', 'interrupted', () => 'failed' as const)
     .exhaustive();
 }
 
@@ -145,7 +140,7 @@ function CancelControl(props: {
       when={props.inMenu}
       fallback={
         <Button
-          variant="ghost"
+          variant="secondary"
           size="xs"
           disabled={props.busy}
           onClick={(event: MouseEvent) => {

@@ -270,10 +270,27 @@ it('names a settled background job by its title and how it ended', () => {
           },
         }}
       />
+      <SessionEventRow
+        event={{
+          ...base,
+          id: 'cancelled',
+          kind: 'job.settled',
+          payload: {
+            jobId: 'job-3',
+            title: 'Reading documents',
+            status: 'cancelled',
+            error: 'Background job cancelled',
+          },
+        }}
+      />
     </>
   ));
   const rows = view.getAllByRole('status');
   expect(rows[0].textContent).toContain('Checking routine finished');
   expect(rows[1].textContent).toContain('Scanning inbox was interrupted');
+  expect(rows[1].classList.contains('text-failure')).toBe(true);
+  // A cancel someone asked for is not painted as a failure.
+  expect(rows[2].textContent).toContain('Reading documents cancelled');
+  expect(rows[2].classList.contains('text-failure')).toBe(false);
   expect(view.queryByRole('button')).toBeNull();
 });

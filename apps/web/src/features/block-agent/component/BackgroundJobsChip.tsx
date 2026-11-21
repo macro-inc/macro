@@ -5,7 +5,7 @@ import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { useJobReveal } from '../context/job-reveal';
 
 /**
- * "N running" above the composer while background jobs run in this session;
+ * "N jobs running" above the composer while background jobs run in this session;
  * it brings the oldest running job's card into view. A job whose settle frame
  * was lost still stops counting once its durable `job.settled` event is in.
  */
@@ -33,6 +33,10 @@ export function BackgroundJobsChip() {
             size="xs"
             onClick={() => reveal?.reveal(first().jobId)}
           >
+            <span
+              aria-hidden="true"
+              class="size-1.5 shrink-0 rounded-full bg-accent motion-safe:animate-pulse"
+            />
             {t('agentJobs.running', { count: running().length })}
           </Button>
         </div>

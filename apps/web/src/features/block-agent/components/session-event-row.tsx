@@ -116,7 +116,12 @@ function jobSettledSummary(job: JobSettlement) {
     // A settled event never says running; read it as finished.
     .with('running', () => t('agentJobs.settledDone', { title }))
     .exhaustive();
-  return { summary, failed: job.status !== 'done' };
+  // A cancel someone asked for is not a failure.
+  const failed = match(job.status)
+    .with('failed', 'timed_out', 'interrupted', () => true)
+    .with('done', 'cancelled', 'running', () => false)
+    .exhaustive();
+  return { summary, failed };
 }
 
 /** System facts stay on one line on desktop and mobile, outside messages. */

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -18,7 +19,12 @@ it('counts minutes and seconds since the job started', () => {
 it('says how a settled job ended and nothing while it runs', () => {
   expect(jobOutcome('running')).toBeUndefined();
   expect(jobOutcome('succeeded')).toBe('Done');
-  expect(jobOutcome('interrupted')).toBe('Interrupted');
+  expect(jobOutcome('interrupted')).toBe('Stopped: outcome unknown');
+});
+
+it('names running jobs as jobs in the composer chip', () => {
+  expect(t('agentJobs.running', { count: 1 })).toBe('1 job running');
+  expect(t('agentJobs.running', { count: 3 })).toBe('3 jobs running');
 });
 
 it('offers Cancel while the job runs and stops offering it once it ends', async () => {
@@ -47,6 +53,10 @@ it('offers Cancel while the job runs and stops offering it once it ends', async 
   ));
   expect(ended.getAllByText('Cancelled')).not.toHaveLength(0);
   expect(ended.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  // A cancel the person asked for reads muted, not as a failure.
+  expect(
+    ended.container.querySelector('[data-tool-status="failed"]')
+  ).toBeNull();
 });
 
 it('puts Cancel in an overflow menu when the view asks for one', () => {
