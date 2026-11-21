@@ -1,4 +1,4 @@
-use crate::driver::{self, Db, WalCheckpoint};
+use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
@@ -918,6 +918,13 @@ impl TursoStorage {
         self.require_healthy()?;
         self.connection
             .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+    }
+
+    /// The end of the WAL. A caller that computed something from storage
+    /// compares two positions to learn whether a write committed in between.
+    pub fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        self.require_healthy()?;
+        self.connection.wal_position()
     }
 
     fn latched_reason(&self) -> Option<PhysicalResetReason> {

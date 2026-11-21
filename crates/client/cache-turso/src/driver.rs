@@ -40,6 +40,15 @@ pub struct WalCheckpoint {
     pub backfilled_frames: u64,
 }
 
+/// Where the WAL ends: every committed write moves it, and nothing else does
+/// until a write starts the log over. Two equal positions mean no write
+/// committed in between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalPosition {
+    checkpoint_seq_no: u32,
+    max_frame: u64,
+}
+
 /// A connection and the statements prepared on it.
 ///
 /// Clones share one statement cache. Cached statements hold their connection,
@@ -139,6 +148,18 @@ impl Db {
             Err(LimboError::Busy | LimboError::BusySnapshot) => Ok(outcome),
             Err(_) => Err(TursoStorageError::Database),
         }
+    }
+
+    /// The end of the WAL as this connection sees it.
+    pub(crate) fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        let wal = self
+            .connection
+            .wal_state()
+            .map_err(|_| TursoStorageError::Database)?;
+        Ok(WalPosition {
+            checkpoint_seq_no: wal.checkpoint_seq_no,
+            max_frame: wal.max_frame,
+        })
     }
 
     /// Drops every cached statement, and with it their connection references.
