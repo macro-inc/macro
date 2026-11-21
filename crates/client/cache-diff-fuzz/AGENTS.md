@@ -18,8 +18,9 @@ disk after a reopen must come out the same.
   rollback, defer), deletes, invalidation, people search, idle, reopen, crash,
   probes, and written pages again with one value broken (`src/malformed.rs`). Responses come from `src/faker.rs` over the app schema.
   Random filters rarely fill a first candidate window (64 candidates), so a `deep-window`
-  op hydrates every core page, invalidates a few of the newest documents and filters for a
-  few documents past the first window: the window has to extend past the incomplete ones.
+  op hydrates every core page and filters for a few documents past the first window: the
+  window has to extend past the rows it rejects. It invalidates nothing, since any incomplete
+  document in a query's partitions answers it as incomplete before a window runs.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
   (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
   writes the tables after a final reopen, each value tagged with its type.
@@ -62,7 +63,8 @@ disk after a reopen must come out the same.
   build the side with `STAGED_HYDRATE=1` and give it `--stage-hydrates`: each hydrate is
   staged before the op ahead of it runs and committed at its own turn, or run whole when
   that op made the stage stale (stats `stage.committed`, `stage.whole-at-commit`). A stage
-  that fails answers the hydrate with its error, as the browser's `prepareHydrate` rejects.
+  that fails answers the hydrate with its error, as the browser's `prepareHydrate` rejects,
+  unless storage moved since it was staged; then the hydrate runs whole.
   Staging reads the authority and the contact fence before the op ahead, which the
   browser never lets a write do; a difference that only that ordering explains is the
   harness's.
@@ -103,7 +105,7 @@ disk after a reopen must come out the same.
 
 - Both sides must be built from the same fuzzer source: `fuzz.sh` refuses
   otherwise. Use `FUZZER_SRC=<snapshot>` to build later sides from the same copy.
-- Any change to `src/sequence.rs` changes every seed's case. Earlier runs can't be
+- Any change to `src/sequence.rs` or `src/sequence/` changes every seed's case. Earlier runs can't be
   rerun by seed number after that.
 - A crash copies the cache files and abandons the engine, so it can't model a
   lost fsync.

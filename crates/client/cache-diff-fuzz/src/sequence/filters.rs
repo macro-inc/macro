@@ -57,10 +57,10 @@ impl Gen<'_> {
 
     /// A selective document filter whose few matches sit past the first
     /// candidate window of its sort attribute (64 candidates below a limit of
-    /// 32), with some documents ahead of them left incomplete by an
-    /// invalidation. The window must count those as read and extend past
-    /// them: random filters rarely fill a first window, so a lost extension
-    /// would go unseen.
+    /// 32), so the window must extend past the rows it rejects: random
+    /// filters rarely fill a first window, so a lost extension would go
+    /// unseen. Nothing is left incomplete, since an incomplete document in
+    /// the query's partitions answers it as incomplete before a window runs.
     pub(super) fn deep_window(&mut self) {
         let mut docs: Vec<ItemSpec> = self
             .pools
@@ -77,14 +77,6 @@ impl Gen<'_> {
             self.hydrate_lane("core-entities", page);
         }
         docs.sort_by_key(|spec| std::cmp::Reverse(spec.time_ms));
-        let ahead = self.rng.range(1, 4);
-        let keys = (0..ahead)
-            .map(|_| {
-                let at = self.rng.below(60) as usize;
-                format!("GraphqlSoupDocument:{}", docs[at].id)
-            })
-            .collect();
-        self.push(Op::Invalidate { keys });
         let mut filter: Option<Value> = None;
         for _ in 0..self.rng.range(1, 3) {
             let at = self.rng.range(70, docs.len() as u64 - 1) as usize;
@@ -96,10 +88,8 @@ impl Gen<'_> {
         }
         let mut filters = excluded(&["documentFilter"]);
         filters["documentFilter"] = filter.unwrap_or(Value::Null);
-        let sort = *pick(
-            &mut self.rng,
-            &["UPDATED_AT", "CREATED_AT", "VIEWED_UPDATED"],
-        );
+        // Sorts the bounded window serves; VIEWED_UPDATED answers unsupported.
+        let sort = *pick(&mut self.rng, &["UPDATED_AT", "CREATED_AT"]);
         let limit = *pick(&mut self.rng, &[7u16, 20, 20, 31]);
         let request = json!({
             "filters": filters,
