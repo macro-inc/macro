@@ -66,11 +66,12 @@ pub struct BackgroundRequest {
         description = "A short title shown on the job's card, e.g. \"Checking routine\", at most 80 characters."
     )]
     pub title: String,
-    /// Whether the program sends anything (email, channel messages) itself;
-    /// without it the job's credential can't send, only draft reviews.
+    /// Whether the program sends anything (email, messages, routine saves,
+    /// connected apps, the web). A job can't until its credential can be
+    /// revoked when it settles, so a launch that sends runs in the foreground.
     #[serde(default)]
     #[schemars(
-        description = "Set true only when the program itself sends email or messages; otherwise the job can read, write and draft reviews but not send."
+        description = "Leave unset. A background job can't send, save routines, call connected apps or reach the web yet; true runs the program in the foreground instead."
     )]
     pub sends: bool,
 }
@@ -231,6 +232,7 @@ impl CodeModeService {
         let IssuedRun {
             environment,
             acting_user,
+            ..
         } = match self
             .inner
             .credentials
@@ -667,6 +669,9 @@ impl SessionCodeMode for CodeModeService {
         // A persisted nonterminal record cannot establish whether its process
         // survived. Expose the same uncertainty on journal reads and retries.
         record.error = execution_error(&record);
+        if let Some(job) = &mut record.job {
+            job.correlation = None;
+        }
         Ok(record)
     }
 
@@ -842,7 +847,11 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         result: record.result.clone(),
         error: execution_error(record),
         model_media: Vec::new(),
-        job: record.job.clone(),
+        // A job's correlation is admission's, not the reader's.
+        job: record.job.clone().map(|job| JobInfo {
+            correlation: None,
+            ..job
+        }),
         ran_in_foreground: None,
     }
 }

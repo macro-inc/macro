@@ -225,24 +225,23 @@ impl NativeToolGate for ScopedToolGate {
 /// What the model hears when a session's scope can't be read.
 const SCOPE_UNREAD: &str = "Whether this tool may run could not be checked; nothing was done.";
 
-#[async_trait]
-impl ExecutionCredentials for RunCredentials {
-    async fn issue(
+impl RunCredentials {
+    /// Mint the credential for a run approved to act as `actor`, signing a
+    /// fresh correlation, and capture the current trace so the program's SDK
+    /// calls land under the span it runs in.
+    async fn mint(
         &self,
         identity: &ExecutionIdentity,
-        source: &str,
-        cancel: CancellationToken,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
     ) -> Result<IssuedRun, CodeModeError> {
-        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
-        // A background job that did not declare it sends can't send: its
-        // credential lasts minutes and no one watches the job's calls.
+        // A background job's credential lasts minutes and no one watches its
+        // calls, so it never sends.
         let scope = match identity.lifetime {
-            agent_code_mode::domain::RunLifetime::Job { sends: false, .. } => {
+            agent_code_mode::domain::RunLifetime::Job { .. } => {
                 scope.or(Some(SessionScope::NoSend))
             }
-            agent_code_mode::domain::RunLifetime::Job { sends: true, .. }
-            | agent_code_mode::domain::RunLifetime::Foreground => scope,
+            agent_code_mode::domain::RunLifetime::Foreground => scope,
         };
         let correlation = self
             .correlations
@@ -257,12 +256,13 @@ impl ExecutionCredentials for RunCredentials {
                 CodeModeError::Unavailable
             })?;
         // No refresh credential. Covers the 30-second queue/run deadline, or
-        // a background job's deadline, plus clock margin; a normal user token
-        // expires rather than revoking on exit. A job's token is held only
-        // by its process, which is killed when the job settles.
+        // what is left of a background job's deadline once it holds a slot,
+        // plus clock margin; a normal user token expires rather than
+        // revoking on exit. A job's token is held only by its process, which
+        // is killed when the job settles.
         let lifetime = match identity.lifetime {
             agent_code_mode::domain::RunLifetime::Foreground => 60,
-            agent_code_mode::domain::RunLifetime::Job { deadline, .. } => {
+            agent_code_mode::domain::RunLifetime::Job { deadline } => {
                 usize::try_from((deadline - chrono::Utc::now()).num_seconds()).unwrap_or(0) + 60
             }
         };
@@ -295,7 +295,38 @@ impl ExecutionCredentials for RunCredentials {
                 egress: self.egress.egress(&actor).await,
             },
             acting_user: actor,
+            correlation: Some(correlation),
         })
+    }
+}
+
+#[async_trait]
+impl ExecutionCredentials for RunCredentials {
+    async fn issue(
+        &self,
+        identity: &ExecutionIdentity,
+        source: &str,
+        cancel: CancellationToken,
+    ) -> Result<IssuedRun, CodeModeError> {
+        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        self.mint(identity, actor).await
+    }
+
+    async fn approve_job(
+        &self,
+        identity: &ExecutionIdentity,
+        source: &str,
+        cancel: CancellationToken,
+    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
+        approve_run(self.gate.as_ref(), identity, source, &cancel).await
+    }
+
+    async fn mint_job(
+        &self,
+        identity: &ExecutionIdentity,
+        acting_user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        self.mint(identity, acting_user.clone()).await
     }
 
     async fn may_detach(

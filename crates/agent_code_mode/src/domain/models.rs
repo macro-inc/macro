@@ -75,12 +75,9 @@ pub enum RunLifetime {
     Foreground,
     /// A background job, until its deadline.
     Job {
-        /// When the job stops at the latest.
+        /// When the job stops at the latest. Its credential is always
+        /// limited to the no-send scope: no one watches a job's calls.
         deadline: chrono::DateTime<chrono::Utc>,
-        /// Whether the launch declared that the job sends (email, messages,
-        /// routine saves, connected apps, the web); otherwise its credential
-        /// is limited to the no-send scope.
-        sends: bool,
     },
 }
 
@@ -94,6 +91,12 @@ pub struct JobInfo {
     pub started_at: chrono::DateTime<chrono::Utc>,
     /// When it stops at the latest.
     pub deadline: chrono::DateTime<chrono::Utc>,
+    /// The correlation its credential was minted with, once it started:
+    /// only that credential may spend the job's connected-app authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    #[schema(ignore)]
+    pub correlation: Option<macro_uuid::Uuid>,
 }
 
 /// The recorded outcome of a program.

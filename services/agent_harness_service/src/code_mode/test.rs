@@ -688,20 +688,20 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         }
         JwtToken::MacroAccessToken(_) => panic!("a code-mode credential is a Macro API token"),
     };
-    // A background job that did not declare it sends gets the no-send scope;
-    // one that did keeps the session's; a session's own scope always wins.
+    // A background job always gets the no-send scope, approved at launch
+    // and minted when it starts; a session's own scope always wins.
     let deadline = chrono::Utc::now() + chrono::TimeDelta::minutes(10);
-    for (scope, sends, name) in [
-        (None, false, Some("no_send")),
-        (None, true, None),
-        (Some(SessionScope::Generation), false, Some("generation")),
+    for (scope, name) in [
+        (None, Some("no_send")),
+        (Some(SessionScope::NoSend), Some("no_send")),
+        (Some(SessionScope::Generation), Some("generation")),
     ] {
         let job = ExecutionIdentity {
             execution: agent_code_mode::domain::ExecutionId::mint(),
-            lifetime: agent_code_mode::domain::RunLifetime::Job { deadline, sends },
+            lifetime: agent_code_mode::domain::RunLifetime::Job { deadline },
             ..identity.clone()
         };
-        let run = RunCredentials {
+        let credentials = RunCredentials {
             egress: EgressRollout::new(None),
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
@@ -712,15 +712,18 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             endpoints: SdkEndpoints::default(),
             scopes: Arc::new(Scopes(scope)),
             detach: Arc::new(NeverDetach),
-        }
-        .issue(&job, "fixture", CancellationToken::new())
-        .await
-        .unwrap();
+        };
+        let actor = credentials
+            .approve_job(&job, "fixture", CancellationToken::new())
+            .await
+            .unwrap();
+        let run = credentials.mint_job(&job, &actor).await.unwrap();
         assert_eq!(
             signed(&run.environment.token).as_deref(),
             name,
-            "job run {scope:?}, sends {sends}"
+            "job run {scope:?}"
         );
+        assert!(run.correlation.is_some(), "a job knows its correlation");
     }
     for (scope, name) in [
         (Some(SessionScope::Generation), Some("generation")),

@@ -33,6 +33,29 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
         source: &str,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError>;
+    /// Approve a background job at its launch, in its turn, and name the
+    /// account it acts as. Nothing is minted: [`Self::mint_job`] does that
+    /// once the job holds a slot, so time in the queue is not token time.
+    async fn approve_job(
+        &self,
+        identity: &ExecutionIdentity,
+        source: &str,
+        cancel: CancellationToken,
+    ) -> Result<MacroUserIdStr<'static>, CodeModeError> {
+        let _ = (identity, source, cancel);
+        Err(CodeModeError::Forbidden)
+    }
+    /// Mint the credential of a job [`Self::approve_job`] approved for
+    /// `acting_user`, when it starts running. It is limited to the no-send
+    /// scope and lasts until the job's deadline.
+    async fn mint_job(
+        &self,
+        identity: &ExecutionIdentity,
+        acting_user: &MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        let _ = (identity, acting_user);
+        Err(CodeModeError::Unavailable)
+    }
     /// Whether this execution may run past its turn as a background job.
     /// A job never asks for an approval after its turn, so implementations
     /// allow it only where launching needs none.
@@ -59,6 +82,8 @@ pub struct IssuedRun {
     pub environment: RunEnvironment,
     /// The account the credential was minted for.
     pub acting_user: MacroUserIdStr<'static>,
+    /// The correlation the credential signs, when it has one.
+    pub correlation: Option<macro_uuid::Uuid>,
 }
 
 /// Durable code execution records, always scoped by the owning session.

@@ -5,6 +5,8 @@ use serde_json::json;
 use tokio::sync::Notify;
 
 const TURN: macro_uuid::Uuid = macro_uuid::Uuid::from_u128(1);
+/// The correlation every job credential of the fake signs.
+const JOB_CORRELATION: macro_uuid::Uuid = macro_uuid::Uuid::from_u128(0x10b);
 
 /// Job rows and the session they report to, in memory.
 #[derive(Default)]
@@ -271,11 +273,24 @@ impl ExecutionTurns for Turns {
     }
 }
 
-/// Allows a detach unless told why not, and records each credential's lifetime.
+/// Allows a detach unless told why not, and records each approval and each
+/// credential's lifetime.
 #[derive(Default)]
 struct Credentials {
     refuse: Option<String>,
+    /// Refuse to mint a job's credential.
+    refuse_mint: bool,
+    approvals: std::sync::atomic::AtomicUsize,
     lifetimes: Mutex<Vec<RunLifetime>>,
+}
+
+impl Credentials {
+    fn minted(&self) -> usize {
+        self.lifetimes.lock().unwrap().len()
+    }
+    fn approved(&self) -> usize {
+        self.approvals.load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 #[async_trait]
 impl ExecutionCredentials for Credentials {
@@ -289,6 +304,32 @@ impl ExecutionCredentials for Credentials {
         Ok(IssuedRun {
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
+            correlation: None,
+        })
+    }
+    async fn approve_job(
+        &self,
+        identity: &ExecutionIdentity,
+        _: &str,
+        _: CancellationToken,
+    ) -> Result<MacroUserIdStr<'static>, CodeModeError> {
+        self.approvals
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(identity.owner.clone())
+    }
+    async fn mint_job(
+        &self,
+        identity: &ExecutionIdentity,
+        acting_user: &MacroUserIdStr<'static>,
+    ) -> Result<IssuedRun, CodeModeError> {
+        if self.refuse_mint {
+            return Err(CodeModeError::Unavailable);
+        }
+        self.lifetimes.lock().unwrap().push(identity.lifetime);
+        Ok(IssuedRun {
+            environment: code_execution::domain::RunEnvironment::default(),
+            acting_user: acting_user.clone(),
+            correlation: Some(JOB_CORRELATION),
         })
     }
     async fn may_detach(&self, _: &ExecutionIdentity) -> Result<Detach, CodeModeError> {
@@ -312,10 +353,20 @@ impl ModelImages for NoImages {
 }
 
 /// Runs until released, cancelled or out of time, reporting one SDK call.
-#[derive(Default)]
 struct Held {
     release: Notify,
     started: Notify,
+    /// One permit per program started.
+    starts: Semaphore,
+}
+impl Default for Held {
+    fn default() -> Self {
+        Self {
+            release: Notify::new(),
+            started: Notify::new(),
+            starts: Semaphore::new(0),
+        }
+    }
 }
 #[async_trait]
 impl ProgramExecutor for Held {
@@ -345,6 +396,7 @@ impl ProgramExecutor for Held {
             .send(json!({"id": 1, "service": "cognition", "operation": "decisions", "status": "started"}))
             .await;
         self.started.notify_one();
+        self.starts.add_permits(1);
         tokio::select! {
             () = self.release.notified() => Outcome::Succeeded { value: json!({"data": "passed"}) },
             () = cancellation.cancelled() => Outcome::Cancelled,
@@ -419,18 +471,45 @@ impl Harness {
         id: ExecutionId,
         request: ExecuteRequest,
     ) -> Result<ExecutionReceipt, CodeModeError> {
+        self.launch_in(&self.session, id, request, background("Checking routine"))
+            .await
+    }
+
+    async fn launch_in(
+        &self,
+        session: &AgentSession,
+        id: ExecutionId,
+        request: ExecuteRequest,
+        background: Option<BackgroundRequest>,
+    ) -> Result<ExecutionReceipt, CodeModeError> {
         self.service
             .execute(
-                &self.session,
+                session,
                 id,
                 ai_toolset::actor::ToolActor::Owner,
                 TURN,
                 request,
-                background("Checking routine"),
+                background,
                 CancellationToken::new(),
             )
             .await
     }
+
+    fn jobs(&self) -> &Jobs {
+        self.service.jobs.as_deref().unwrap()
+    }
+
+    /// Take every job slot of this replica, as long jobs would.
+    async fn fill_slots(&self) -> tokio::sync::OwnedSemaphorePermit {
+        Arc::clone(&self.jobs().slots)
+            .acquire_many_owned(u32::try_from(JOB_SLOTS).unwrap())
+            .await
+            .unwrap()
+    }
+}
+
+fn another_session() -> AgentSession {
+    test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()))
 }
 
 /// The routine example: the check starts, the call returns at once while it
@@ -467,9 +546,15 @@ async fn a_background_execution_returns_at_once_and_settles_into_one_waking_even
     assert_eq!(record.status, ExecutionStatus::Succeeded);
     assert_eq!(record.activity.len(), 1);
     let lifetimes = harness.credentials.lifetimes.lock().unwrap().clone();
+    let job = record.job.unwrap();
     assert!(
-        matches!(lifetimes[..], [RunLifetime::Job { deadline, sends: false }] if deadline == record.job.unwrap().deadline),
-        "the credential lasts as long as the job and cannot send: {lifetimes:?}"
+        matches!(lifetimes[..], [RunLifetime::Job { deadline }] if deadline == job.deadline),
+        "the credential lasts as long as the job: {lifetimes:?}"
+    );
+    assert_eq!(
+        job.correlation,
+        Some(JOB_CORRELATION),
+        "the job is bound to its own credential"
     );
 }
 
@@ -514,7 +599,7 @@ async fn a_resent_launch_is_the_same_job_and_identical_launches_are_two_jobs() {
         .unwrap();
     assert_ne!(second.execution_id, id);
     assert_eq!(harness.rows.records.lock().unwrap().len(), 2);
-    assert_eq!(harness.credentials.lifetimes.lock().unwrap().len(), 2);
+    assert_eq!(harness.credentials.approved(), 2);
     harness.service.shutdown_jobs().await;
 }
 
@@ -531,7 +616,7 @@ async fn a_launch_past_the_session_cap_does_not_run() {
     let refused = harness.launch(ExecutionId::mint(), check_routine()).await;
     assert!(matches!(refused, Err(CodeModeError::JobLimit(_))));
     assert_eq!(
-        harness.credentials.lifetimes.lock().unwrap().len(),
+        harness.credentials.approved(),
         usize::from(JOB_CAPS.per_session)
     );
     harness.service.shutdown_jobs().await;
@@ -553,7 +638,8 @@ async fn a_type_error_settles_quietly_in_the_receipt() {
         .await
         .unwrap();
     assert_eq!(receipt.status, ExecutionStatus::Failed);
-    assert!(harness.credentials.lifetimes.lock().unwrap().is_empty());
+    assert_eq!(harness.credentials.approved(), 0);
+    assert_eq!(harness.credentials.minted(), 0);
     assert!(harness.rows.settlements().is_empty());
 }
 
@@ -665,6 +751,7 @@ async fn the_sweep_settles_a_dead_replicas_job_once() {
                     title: "Scanning inbox".into(),
                     started_at: long_ago,
                     deadline: long_ago + chrono::TimeDelta::minutes(10),
+                    correlation: None,
                 }),
             },
             false,
@@ -758,4 +845,145 @@ fn a_huge_error_is_cut_so_its_event_fits() {
         })
         .is_ok()
     );
+}
+
+/// Until its credential can be revoked, a job never sends: a launch that asks
+/// to runs in the foreground, under its turn, and says why.
+#[tokio::test]
+async fn a_launch_that_sends_runs_in_the_foreground() {
+    let harness = harness(Credentials::default());
+    harness.program.release.notify_one();
+    let receipt = harness
+        .launch_in(
+            &harness.session,
+            ExecutionId::mint(),
+            check_routine(),
+            Some(BackgroundRequest {
+                title: "Saving routine".into(),
+                sends: true,
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(receipt.job, None);
+    assert_eq!(
+        receipt.ran_in_foreground.as_deref(),
+        Some(SENDS_IN_FOREGROUND)
+    );
+    assert!(harness.rows.records.lock().unwrap().is_empty());
+    assert_eq!(
+        *harness.credentials.lifetimes.lock().unwrap(),
+        [RunLifetime::Foreground]
+    );
+}
+
+/// A job's credential is minted when it gets a slot, not at launch: time in
+/// the queue is not token time.
+#[tokio::test]
+async fn a_queued_job_has_no_credential_until_it_gets_a_slot() {
+    let harness = harness(Credentials::default());
+    let slots = harness.fill_slots().await;
+    let id = ExecutionId::mint();
+    let receipt = harness.launch(id, check_routine()).await.unwrap();
+    assert_eq!(receipt.status, ExecutionStatus::Running);
+    assert_eq!(harness.credentials.approved(), 1);
+    assert_eq!(harness.credentials.minted(), 0);
+    assert_eq!(harness.rows.record(id).job.unwrap().correlation, None);
+
+    drop(slots);
+    harness.program.starts.acquire().await.unwrap().forget();
+    assert_eq!(harness.credentials.minted(), 1);
+    assert_eq!(
+        harness.rows.record(id).job.unwrap().correlation,
+        Some(JOB_CORRELATION)
+    );
+    harness.service.shutdown_jobs().await;
+}
+
+/// A job that never got a slot says nothing ran, not that its calls may
+/// have taken effect.
+#[tokio::test(start_paused = true)]
+async fn a_job_that_never_got_a_slot_says_it_did_not_start() {
+    let harness = harness(Credentials::default());
+    let _slots = harness.fill_slots().await;
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    harness.rows.settled.notified().await;
+    let settlement = &harness.rows.settlements()[0];
+    assert_eq!(settlement.status, JobStatus::TimedOut);
+    assert_eq!(settlement.error.as_deref(), Some(NEVER_STARTED));
+    assert_eq!(harness.credentials.minted(), 0);
+}
+
+#[tokio::test]
+async fn a_job_cancelled_while_queued_says_nothing_ran() {
+    let harness = harness(Credentials::default());
+    let _slots = harness.fill_slots().await;
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    harness
+        .service
+        .cancel_job(harness.session.id, id)
+        .await
+        .unwrap();
+    harness.rows.settled.notified().await;
+    let settlement = &harness.rows.settlements()[0];
+    assert_eq!(settlement.status, JobStatus::Cancelled);
+    assert_eq!(settlement.error.as_deref(), Some(CANCELLED_BEFORE_START));
+    assert_eq!(harness.credentials.minted(), 0);
+}
+
+#[tokio::test]
+async fn a_job_whose_credential_cannot_be_minted_fails_without_running() {
+    let harness = harness(Credentials {
+        refuse_mint: true,
+        ..Default::default()
+    });
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    harness.rows.settled.notified().await;
+    let settlement = &harness.rows.settlements()[0];
+    assert_eq!(settlement.status, JobStatus::Failed);
+    assert_eq!(settlement.error.as_deref(), Some(NO_CREDENTIAL));
+    assert_eq!(harness.program.starts.available_permits(), 0);
+}
+
+/// A replica takes only so many jobs, running and queued; past that a
+/// launch runs in the foreground instead of waiting out its limit.
+#[tokio::test]
+async fn a_replica_full_of_jobs_runs_the_next_in_the_foreground() {
+    let harness = harness(Credentials::default());
+    let _taken = Arc::clone(&harness.jobs().taken)
+        .acquire_many_owned(u32::try_from(JOBS_ON_REPLICA).unwrap())
+        .await
+        .unwrap();
+    harness.program.release.notify_one();
+    let receipt = harness
+        .launch_in(
+            &another_session(),
+            ExecutionId::mint(),
+            check_routine(),
+            background("Scanning inbox"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(receipt.job, None);
+    assert_eq!(receipt.ran_in_foreground.as_deref(), Some(REPLICA_BUSY));
+    assert!(harness.rows.records.lock().unwrap().is_empty());
+}
+
+/// A job's place on the replica is freed when it settles.
+#[tokio::test]
+async fn a_settled_job_frees_its_place_on_the_replica() {
+    let harness = harness(Credentials::default());
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    assert_eq!(
+        harness.jobs().taken.available_permits(),
+        JOBS_ON_REPLICA - 1
+    );
+    harness.program.started.notified().await;
+    harness.program.release.notify_one();
+    harness.service.shutdown_jobs().await;
+    assert_eq!(harness.jobs().taken.available_permits(), JOBS_ON_REPLICA);
 }

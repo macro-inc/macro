@@ -30,6 +30,7 @@ fn job(deadline: chrono::DateTime<chrono::Utc>) -> ExecutionRecord {
             title: "Checking routine".into(),
             started_at: deadline - chrono::TimeDelta::minutes(10),
             deadline,
+            correlation: None,
         }),
     }
 }
@@ -279,5 +280,32 @@ async fn a_result_with_a_nul_character_still_settles(pool: PgPool) {
             .settle(session(1), &record, Some(&event))
             .await
             .unwrap()
+    );
+}
+
+/// The correlation a job's credential was minted with is saved on its
+/// record, where connected-app admission reads it.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_started_job_keeps_its_credentials_correlation(pool: PgPool) {
+    let store = store(&pool).await;
+    let mut record = job(chrono::Utc::now() + chrono::TimeDelta::minutes(10));
+    store
+        .launch(session(1), &owner(), &record, CAPS)
+        .await
+        .unwrap();
+    let correlation = macro_uuid::Uuid::from_u128(0x10b);
+    record.job.as_mut().unwrap().correlation = Some(correlation);
+    store.save_activity(session(1), &record).await.unwrap();
+    let listed = store
+        .list(
+            session(1),
+            chrono::Utc::now() - chrono::TimeDelta::hours(1),
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        listed[0].job.as_ref().unwrap().correlation,
+        Some(correlation)
     );
 }

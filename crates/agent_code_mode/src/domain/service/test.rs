@@ -86,6 +86,7 @@ impl ExecutionCredentials for Credentials {
                 ..Default::default()
             },
             acting_user: identity.owner.clone(),
+            correlation: None,
         })
     }
 }

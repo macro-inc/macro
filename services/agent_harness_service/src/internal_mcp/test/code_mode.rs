@@ -50,6 +50,7 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         Ok(agent_code_mode::domain::IssuedRun {
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
+            correlation: None,
         })
     }
 }

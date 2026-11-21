@@ -218,10 +218,15 @@ impl ConnectedAppService {
     /// finished program, a replayed one or another turn cannot spend it, and
     /// only a caller holding the account that execution was approved to act
     /// as: its credential names that account, and nobody else's may spend it.
+    /// A running job is spent only by its own credential: `correlation`, the
+    /// verified correlation of the caller's credential, must be the one the
+    /// job was minted with, so another credential of the owner's can't use a
+    /// job's id to borrow its authority.
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
     ) -> Result<ConnectedAppUse, CodeModeError> {
         let session =
@@ -239,8 +244,11 @@ impl ConnectedAppService {
         let accounts = self.tools.accounts(session).await?;
         // A running job is bound to itself, not to the session's current
         // turn, and acts as the owner who launched it.
-        if record.job.is_some() {
-            if &accounts.owner != caller {
+        if let Some(job) = &record.job {
+            if &accounts.owner != caller
+                || job.correlation.is_none()
+                || job.correlation != correlation
+            {
                 return Err(CodeModeError::Forbidden);
             }
             return Ok(ConnectedAppUse {
@@ -272,9 +280,10 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
     ) -> Result<Vec<ConnectedApp>, CodeModeError> {
-        let usage = self.admit(access, caller, execution).await?;
+        let usage = self.admit(access, caller, correlation, execution).await?;
         self.tools.apps(&usage).await
     }
 
@@ -283,10 +292,11 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         app: ConnectedAppRef,
     ) -> Result<Vec<ConnectedTool>, CodeModeError> {
-        let usage = self.admit(access, caller, execution).await?;
+        let usage = self.admit(access, caller, correlation, execution).await?;
         self.tools.tools(&usage, &app).await
     }
 
@@ -295,11 +305,12 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         app: ConnectedAppRef,
         call: CallConnectedTool,
     ) -> Result<ConnectedToolResult, CodeModeError> {
-        let usage = self.admit(access, caller, execution).await?;
+        let usage = self.admit(access, caller, correlation, execution).await?;
         self.tools.call(&usage, &app, call).await
     }
 
@@ -308,10 +319,11 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         request: DiscoveryRequest,
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
-        let usage = self.admit(access, caller, execution).await?;
+        let usage = self.admit(access, caller, correlation, execution).await?;
         refuse_in_job(&usage)?;
         self.tools.discover(&usage, request).await
     }
@@ -321,10 +333,11 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         server: ConnectMcpServer,
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
-        let usage = self.admit(access, caller, execution).await?;
+        let usage = self.admit(access, caller, correlation, execution).await?;
         refuse_in_job(&usage)?;
         self.tools.add_server(&usage, server).await
     }
@@ -337,10 +350,11 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
+        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         query: &str,
     ) -> Result<ConnectedToolSearch, CodeModeError> {
-        let usage = self.admit(access, caller, execution).await?;
+        let usage = self.admit(access, caller, correlation, execution).await?;
         let apps = self.tools.apps(&usage).await?;
         let listings = futures::future::join_all(apps.iter().map(|app| {
             let reference = ConnectedAppRef {

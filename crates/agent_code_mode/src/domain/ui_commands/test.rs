@@ -515,6 +515,7 @@ async fn a_background_job_never_sends_a_command() {
                     title: "Scanning inbox".into(),
                     started_at: now,
                     deadline: now + chrono::TimeDelta::minutes(10),
+                    correlation: None,
                 }),
                 ..record(execution, Uuid::from_u128(TURN))
             })),
