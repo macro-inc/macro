@@ -858,7 +858,9 @@ If you started without the flag and suspect a stale image, press `q`. Then start
 
 Use `just run_local`, with or without a terminal. `just stack` is the same bring-up
 with no background process, kept for Cursor Cloud and environment bakes, which need
-`--infra-only`, or a prebuilt `--binaries-dir` adopted with `update`.
+`--infra-only`, or a prebuilt `--binaries-dir` adopted with `update`. `--infra-only`
+builds (or takes from `--binaries-dir`) only the Outlook emulator, which FusionAuth's
+kickstart needs when no real Microsoft client is configured.
 
 **`just stack up` always deletes the instance's data first.** Use it only when you
 mean that.
