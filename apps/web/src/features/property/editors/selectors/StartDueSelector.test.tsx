@@ -106,6 +106,20 @@ describe('StartDueSelector', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("shows the active end's month when switching ends in the calendar", () => {
+    renderSelector(
+      { start: new Date(2026, 10, 23), due: new Date(2026, 11, 9) },
+      'due'
+    );
+
+    fireEvent.click(screen.getByText('Custom date...'));
+    expect(screen.getByText('December 2026')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Start/ }));
+    expect(screen.getByText('November 2026')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Due/ }));
+    expect(screen.getByText('December 2026')).toBeTruthy();
+  });
+
   it('makes a due day before the start the new start instead', () => {
     const { changes, onClose } = renderSelector(
       { start: new Date(2026, 10, 23), due: new Date(2026, 10, 27) },

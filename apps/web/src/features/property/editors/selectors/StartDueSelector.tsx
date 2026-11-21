@@ -74,8 +74,6 @@ export function StartDueSelector(props: StartDueSelectorProps) {
             : 'border-edge-muted not-touch:hover:bg-hover'
         )}
         aria-pressed={field() === end}
-        onPointerDown={keepSearchFocus}
-        onMouseDown={keepSearchFocus}
         onClick={() => setField(end)}
       >
         <span class="text-xs text-ink-muted">{label}</span>
@@ -105,17 +103,26 @@ export function StartDueSelector(props: StartDueSelectorProps) {
       onClose={props.onClose}
       fillHeight={props.fillHeight}
       header={
-        <div class="grid shrink-0 grid-cols-2 gap-1.5 border-b border-edge-muted p-1.5">
+        <div
+          class="grid shrink-0 grid-cols-2 gap-1.5 border-b border-edge-muted p-1.5"
+          onPointerDown={keepSearchFocus}
+          onMouseDown={keepSearchFocus}
+        >
           {fieldButton('start', 'Start')}
           {fieldButton('due', 'Due')}
         </div>
       }
       calendar={
-        <DatePickerUI
-          value={props.dates[field()] ?? props.dates.start ?? new Date()}
-          range={{ start: props.dates.start, end: props.dates.due }}
-          onChange={pickFromCalendar}
-        />
+        // Remounted per active end so the calendar opens on that end's month.
+        <Show when={field()} keyed>
+          {(active) => (
+            <DatePickerUI
+              value={props.dates[active] ?? props.dates.start ?? new Date()}
+              range={{ start: props.dates.start, end: props.dates.due }}
+              onChange={pickFromCalendar}
+            />
+          )}
+        </Show>
       }
       footer={
         <Show when={props.dates.start}>

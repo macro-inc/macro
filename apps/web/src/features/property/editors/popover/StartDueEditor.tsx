@@ -71,11 +71,22 @@ function StartDueEditorBody(
     await props.saveOther(other, value);
   };
 
+  // What the server holds, so a failed save shows the persisted ends again.
+  let saved: StartDue = dates();
   const commit = async (next: StartDue, changed: DateField[]) => {
-    try {
-      for (const field of changed) await save(field, next[field]);
-    } catch {
-      // mutation onError owns toast
+    for (const [index, field] of changed.entries()) {
+      try {
+        await save(field, next[field]);
+        saved = { ...saved, [field]: next[field] };
+      } catch {
+        // mutation onError owns toast
+        const unsaved = changed.slice(index);
+        setDates((shown) => ({
+          start: unsaved.includes('start') ? saved.start : shown.start,
+          due: unsaved.includes('due') ? saved.due : shown.due,
+        }));
+        return;
+      }
     }
   };
 
