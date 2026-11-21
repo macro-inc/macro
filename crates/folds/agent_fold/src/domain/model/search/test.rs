@@ -404,3 +404,28 @@ fn searchable_text_leaves_out_the_agent_context_a_prompt_hides() {
     reply.author = Author::Agent;
     assert!(reply.searchable_text().contains("Private instructions"));
 }
+
+#[test]
+fn searchable_text_includes_the_name_a_connect_card_shows() {
+    use dynamic_ui::{ConnectTarget, View, Widget};
+
+    let message = message(vec![MessagePart::ToolUse {
+        id: ToolUseId("tool-1".to_owned()),
+        name: ToolName::native("DisplayResults"),
+        status: ToolStatus::Completed,
+        detail: ToolDetail::View {
+            view: Some(View {
+                title: None,
+                widgets: vec![Widget::Connect {
+                    name: "Linear".to_owned(),
+                    target: ConnectTarget::App {
+                        app_slug: "linear".to_owned(),
+                    },
+                }],
+            }),
+            error: None,
+        },
+    }]);
+
+    assert_eq!(message.searchable_text(), "Linear");
+}

@@ -1,3 +1,4 @@
+import { ConnectCard } from '@app/features/agent-cards/components/connect-card';
 import { Telemetry } from '@macro-inc/observability';
 import { createMemo, ErrorBoundary, For, type JSX, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -35,6 +36,9 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'events' }, (n) => <Events {...n} />)
     .with({ type: 'cards' }, (n) => <Cards {...n} />)
     .with({ type: 'tags' }, (n) => <Tags {...n} />)
+    .with({ type: 'connect' }, (n) => (
+      <ConnectCard name={n.name} target={n.target} />
+    ))
     .with({ type: 'agentUpdates' }, (n) => <AgentUpdates {...n} />)
     .with({ type: 'botCredential' }, (n) => <BotCredential {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)

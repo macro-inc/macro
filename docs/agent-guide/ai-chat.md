@@ -501,9 +501,10 @@ the shimmer.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
 - Ask the agent to connect an MCP server by URL (for example "connect the MCP
-  server at https://mcp.example.com/mcp"). It calls **ConnectMcpServer**, which
-  adds a public `https` server to Connections and renders a **Connected MCP
-  server** card; when the server needs a sign-in, the agent asks the user to
+  server at https://mcp.example.com/mcp"). It calls **ConnectMcpServer** (in
+  code mode, `macro.connectedApps.addServer`), which adds a public `https` server to Connections and renders a **Connected MCP
+  server** card; when the server needs a sign-in, an agent session in code mode
+  presents a connect card for the URL, and otherwise the agent asks the user to
   click Connect next to it in Connections.
 
   In a secondary desktop split, the new-conversation page and existing chats show
@@ -2036,7 +2037,30 @@ spreadsheet, an email thread, an event, a project, a channel, a routine, a form
 or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
 from the viewer's calendars and groups them by day. A tags widget nests tags
-to any depth as coloured pills. A list holds a fixed height and says how many
+to any depth as coloured pills. A connect card names an app (by Pipedream app
+slug) or an MCP server (by URL) the agent needs, with one **Connect** button
+that starts its sign-in directly; once connected it reads **Connected**. In
+the session that presented it, connecting an app continues the session through
+`app.connected`, as the `Connect <app>` chip does. Elsewhere (a DM reply, a
+custom MCP server) a toast asks the reader to reply when ready. A server whose
+sign-in cannot start opens the Add MCP Server dialog filled in with its name
+and URL, unless the user already added it; then a toast says the sign-in
+could not start. While the session cannot connect (a viewer, an archived session, a
+running turn) the button is disabled. A code-mode agent is told to present
+connect cards by its session prompt and the `macro.connectedApps` docs, and
+by the not-connected answers of connected-app tool calls; the `m-connect-app`
+chip stays for AI chat, external agents and older replies. In the resumed
+turn, a call to the new server's tools waits for the owner's **Approve**.
+
+To exercise the sign-in locally, never against a real provider, run a
+stand-in OAuth MCP server inside the harness container's network namespace
+(`docker run --network container:<harness>`) at `https://localhost`. The
+OAuth client accepts a non-public metadata host only when it is loopback and
+the server URL is too, so a container IP fails. The harness must also trust a
+certificate from `infra/local/certs`. Forward the browser's `localhost` port
+to the harness IP, and add an `mcp_overlays` row for an app card.
+
+A list holds a fixed height and says how many
 items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
 each widget. Task list titles wrap above their live properties and timestamps;
 side-by-side project groups stack below 672px of available container width,

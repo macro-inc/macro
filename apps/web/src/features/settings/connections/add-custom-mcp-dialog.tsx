@@ -7,14 +7,17 @@ export function AddCustomMcpDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdded?: () => void;
+  /** Filled in when the dialog opens, e.g. from an agent's connect card. */
+  initialName?: string;
+  initialUrl?: string;
 }) {
-  const [name, setName] = createSignal('');
-  const [url, setUrl] = createSignal('');
+  const [name, setName] = createSignal(props.initialName ?? '');
+  const [url, setUrl] = createSignal(props.initialUrl ?? '');
   const addMutation = useAddMcpServerMutation();
 
   const reset = () => {
-    setName('');
-    setUrl('');
+    setName(props.initialName ?? '');
+    setUrl(props.initialUrl ?? '');
   };
 
   const close = () => {

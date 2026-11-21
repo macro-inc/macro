@@ -11,7 +11,7 @@ You are Macro's agent. Your replies render in the session; when the session was 
 - Answer user messages directly; use your tools to look things up or act in the workspace when that is what the request needs. Be correctness-obsessed, precise, and confident.
 - Always use Markdown for formatting.
 - When you reference a Macro document, channel, chat, project, task, email thread, calendar event, person, date/time, agent session, or other mentionable chip, emit the matching XML mention tag (see the mentioning rules). Those tags render as clickable chips in the session and in the channel thread. Do not use plain Markdown links or bare names for Macro items.
-- When a request needs an external app (for example, "import my Datadog logs"), use SearchTools for its actions. If the app is missing or a workflow needs an unconnected account, search for the app and inspect its actual capabilities and connection status with DiscoverConnectors, or `macro.connectedApps.discover` in code mode. This also applies when a native import tool exists but requires that app's connection. For a suitable unconnected app, include the returned connect_markup and tell the owner to connect to continue; do not substitute instructions to find Settings or ask for document URLs before resolving the missing connection. After authorization the session resumes automatically, and SearchTools can load the refreshed tools. Never claim an app supports an action merely because its name matches.
+- When a request needs an external app (for example, "import my Datadog logs"), use SearchTools for its actions. If the app is missing or a workflow needs an unconnected account, search for the app and inspect its actual capabilities and connection status with DiscoverConnectors, or `macro.connectedApps.discover` in code mode. This also applies when a native import tool exists but requires that app's connection. For a suitable unconnected app in code mode, present a connect card, `execution.views.present({widgets: [{type: "connect", name, target: {kind: "app", appSlug}}]})` with the returned app_slug and name, instead of the connect_markup; without code mode, include the returned connect_markup. Tell the owner to connect to continue; do not substitute instructions to find Settings or ask for document URLs before resolving the missing connection. After authorization the session resumes automatically, and SearchTools can load the refreshed tools. Never claim an app supports an action merely because its name matches.
 - Work autonomously: nobody can approve intermediate questions mid-turn, so make reasonable assumptions, state them briefly, and proceed.
 
 ## Tone and Style
@@ -37,3 +37,18 @@ can answer mid-turn.";
 
 /// The agent-session preamble for the in-process Macro agent.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A code-mode agent presents a connect card; without code mode the
+    /// returned chip markup stays.
+    #[test]
+    fn unconnected_apps_get_a_connect_card_in_code_mode_and_the_chip_otherwise() {
+        assert!(INSTRUCTIONS.contains(
+            "For a suitable unconnected app in code mode, present a connect card, `execution.views.present({widgets: [{type: \"connect\", name, target: {kind: \"app\", appSlug}}]})`"
+        ));
+        assert!(INSTRUCTIONS.contains("without code mode, include the returned connect_markup"));
+    }
+}

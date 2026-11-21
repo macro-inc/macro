@@ -132,15 +132,39 @@ export function overlaidSlugsConnected(
   servers: readonly ServerResponse[]
 ): string[] {
   return overlays
-    .filter((overlay) =>
-      servers.some(
-        (server) =>
-          server.enabled &&
-          server.authenticated &&
-          sameEndpoint(server.url, overlay.server_url)
-      )
-    )
+    .filter((overlay) => mcpServerConnected(servers, overlay.server_url))
     .map((overlay) => overlay.app_slug);
+}
+
+/** Whether `servers` holds an enabled, authorized connection to `url`. */
+export function mcpServerConnected(
+  servers: readonly ServerResponse[],
+  url: string
+): boolean {
+  return servers.some(
+    (server) =>
+      server.enabled && server.authenticated && sameEndpoint(server.url, url)
+  );
+}
+
+/**
+ * Whether the current user has an authorized connection to the MCP server
+ * at `url`, whether they have added it at all (`listed`), and whether the
+ * answer is known yet (see `usePipedreamConnectedSlugs`).
+ */
+export function useMcpServerConnected(url: Accessor<string>): {
+  connected: Accessor<boolean>;
+  listed: Accessor<boolean>;
+  ready: Accessor<boolean>;
+} {
+  const servers = useMcpServersQuery({ neverSuspend: true });
+  const connected = () =>
+    queryReadyGate(servers) && mcpServerConnected(servers.data, url());
+  const listed = () =>
+    queryReadyGate(servers) &&
+    servers.data.some((server) => sameEndpoint(server.url, url()));
+  const ready = () => !servers.isPlaceholderData && queryReadyGate(servers);
+  return { connected, listed, ready };
 }
 
 /**
@@ -372,7 +396,14 @@ export async function connectPipedreamApp(args: {
         ? await connectPipedreamAccount(args, popup, span)
         : linksGithub(overlay)
           ? await connectGithubLink(span)
-          : await connectOverlaidApp(overlay, args, popup, span);
+          : await authorizeMcpServer(
+              {
+                url: overlay.server_url,
+                name: args.serverName ?? overlay.app_slug,
+              },
+              popup,
+              span
+            );
       span.setAttr('connector.outcome', outcome);
       return outcome;
     } catch (error) {
@@ -428,23 +459,48 @@ async function connectGithubLink(span: Span): Promise<PipedreamConnectOutcome> {
   return 'connected';
 }
 
-const OVERLAY_AUTH_POLL_MS = 2000;
+const MCP_AUTH_POLL_MS = 2000;
 // Matches the backend's pending-authorization lifetime.
-const OVERLAY_AUTH_TIMEOUT_MS = 10 * 60 * 1000;
+const MCP_AUTH_TIMEOUT_MS = 10 * 60 * 1000;
 
 function currentUserId() {
   return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
 }
 
 /**
- * Authorize an overlaid app's own MCP server in `popup` (or the system
+ * Authorize the MCP server at `url` in one step: its own sign-in opens in a
+ * new tab (or the system browser), and the server is saved once the grant
+ * lands. Resolves like `connectPipedreamApp`; rejects when the server's
+ * sign-in cannot start, for one that takes no OAuth.
+ */
+export async function connectMcpServer(server: {
+  url: string;
+  name: string;
+}): Promise<PipedreamConnectOutcome> {
+  // Reserved inside the click: the authorization URL arrives after an await.
+  const popup = reserveOauthPopup();
+  return Telemetry.span('mcp.connect', async (span) => {
+    try {
+      const outcome = await authorizeMcpServer(server, popup, span);
+      span.setAttr('connector.outcome', outcome);
+      return outcome;
+    } catch (error) {
+      popup?.close();
+      span.setAttr('connector.outcome', 'failed');
+      span.error('MCP server authorization failed');
+      throw error;
+    }
+  });
+}
+
+/**
+ * Authorize the MCP server at `server.url` in `popup` (or the system
  * browser), then wait for the server list to show it authorized. The
  * callback page cannot message this tab, so the list is re-read until the
  * grant lands, the tab is closed, or the pending authorization expires.
  */
-async function connectOverlaidApp(
-  overlay: PipedreamOverlayResponse,
-  args: Parameters<typeof connectPipedreamApp>[0],
+async function authorizeMcpServer(
+  server: { url: string; name: string },
   popup: Window | null,
   span: Span
 ): Promise<PipedreamConnectOutcome> {
@@ -453,8 +509,8 @@ async function connectOverlaidApp(
     throwOnErr(
       async () =>
         await cognitionApiServiceClient.startMcpAuth({
-          server_url: overlay.server_url,
-          server_name: args.serverName ?? overlay.app_slug,
+          server_url: server.url,
+          server_name: server.name,
         })
     )
   );
@@ -466,7 +522,7 @@ async function connectOverlaidApp(
 
   const consent = span.span('mcp.consent');
   try {
-    const deadline = Date.now() + OVERLAY_AUTH_TIMEOUT_MS;
+    const deadline = Date.now() + MCP_AUTH_TIMEOUT_MS;
     while (Date.now() < deadline && currentUserId() === userId) {
       const closed = popup?.closed ?? false;
       const servers = await consent.run(() =>
@@ -475,11 +531,11 @@ async function connectOverlaidApp(
           staleTime: 0,
         })
       );
-      if (overlaidSlugsConnected([overlay], servers).length > 0) {
+      if (mcpServerConnected(servers, server.url)) {
         return 'connected';
       }
       if (closed) return 'closed';
-      await new Promise((resolve) => setTimeout(resolve, OVERLAY_AUTH_POLL_MS));
+      await new Promise((resolve) => setTimeout(resolve, MCP_AUTH_POLL_MS));
     }
     return 'closed';
   } finally {

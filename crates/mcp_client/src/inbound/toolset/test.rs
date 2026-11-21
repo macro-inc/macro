@@ -75,7 +75,7 @@ async fn connecting_a_new_server_adds_it_for_the_caller_and_asks_them_to_sign_in
     assert!(response.enabled);
     assert_eq!(
         response.summary,
-        "Added Linear. If it needs a sign-in, the user must open Settings → Connections and click Connect next to Linear."
+        "Added Linear. If it needs a sign-in, the user must sign in: in an agent session's code mode, present a connect widget with a server target for its URL, whose Connect button signs them in; otherwise tell them to open Settings → Connections and click Connect next to it."
     );
     assert!(
         store

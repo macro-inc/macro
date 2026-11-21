@@ -354,6 +354,7 @@ impl SearchText {
                 }
                 self.tags(tags);
             }
+            Widget::Connect { name, .. } => self.push(name),
             Widget::AgentUpdates { .. } | Widget::ChannelMessage { .. } => {}
             Widget::BotCredential { label, .. } => {
                 if let Some(label) = label {
