@@ -239,15 +239,11 @@ impl RunCredentials {
     ) -> Result<IssuedRun, CodeModeError> {
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         // A background job's credential lasts minutes and no one watches its
-        // calls, so it makes only the requests on a job's lists; a session's
-        // own narrower scope still wins.
-        let scope = match (identity.lifetime, scope) {
-            (
-                agent_code_mode::domain::RunLifetime::Job { .. },
-                Some(narrower @ (SessionScope::DryRun | SessionScope::Generation)),
-            ) => Some(narrower),
-            (agent_code_mode::domain::RunLifetime::Job { .. }, _) => Some(SessionScope::Job),
-            (agent_code_mode::domain::RunLifetime::Foreground, scope) => scope,
+        // calls, so it makes only the requests on a job's lists, whatever its
+        // session's own scope (hidden sessions can't start jobs anyway).
+        let scope = match identity.lifetime {
+            agent_code_mode::domain::RunLifetime::Job { .. } => Some(SessionScope::Job),
+            agent_code_mode::domain::RunLifetime::Foreground => scope,
         };
         let correlation = self
             .correlations

@@ -688,13 +688,13 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         }
         JwtToken::MacroAccessToken(_) => panic!("a code-mode credential is a Macro API token"),
     };
-    // A background job always gets the no-send scope, approved at launch
-    // and minted when it starts; a session's own scope always wins.
+    // A background job always gets the job scope, approved at launch and
+    // minted when it starts, whatever its session's scope.
     let deadline = chrono::Utc::now() + chrono::TimeDelta::minutes(10);
     for (scope, name) in [
         (None, Some("job")),
         (Some(SessionScope::NoSend), Some("job")),
-        (Some(SessionScope::Generation), Some("generation")),
+        (Some(SessionScope::Generation), Some("job")),
     ] {
         let job = ExecutionIdentity {
             execution: agent_code_mode::domain::ExecutionId::mint(),
