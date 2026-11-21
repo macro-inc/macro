@@ -171,6 +171,11 @@ fn a_statement_that_fails_is_not_kept() {
 #[test]
 fn a_reset_failure_is_not_kept() {
     let db = setup("statement-cache-reset-failure.db");
+    // The second use keeps a copy, so the failure hits a cached statement.
+    for _ in 0..2 {
+        query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
+    }
+    assert_eq!(db.cached_copies(SELECT), 1);
     arm_reset_failure(SELECT);
     assert!(query(&db, SELECT, vec![Value::from_i64(0)]).is_err());
     assert_eq!(db.cached_copies(SELECT), 0);
