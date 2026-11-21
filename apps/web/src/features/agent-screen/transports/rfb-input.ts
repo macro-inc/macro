@@ -17,7 +17,11 @@ const WHEEL_DOWN = 1 << 4;
 const WHEEL_LEFT = 1 << 5;
 const WHEEL_RIGHT = 1 << 6;
 
-function pointerEvent(x: number, y: number, mask: number): Uint8Array {
+function pointerEvent(
+  x: number,
+  y: number,
+  mask: number
+): Uint8Array<ArrayBuffer> {
   const message = new Uint8Array(6);
   const view = new DataView(message.buffer);
   view.setUint8(0, POINTER_EVENT);
@@ -27,7 +31,7 @@ function pointerEvent(x: number, y: number, mask: number): Uint8Array {
   return message;
 }
 
-function keyEvent(keysym: number, down: boolean): Uint8Array {
+function keyEvent(keysym: number, down: boolean): Uint8Array<ArrayBuffer> {
   const message = new Uint8Array(8);
   const view = new DataView(message.buffer);
   view.setUint8(0, KEY_EVENT);
@@ -36,7 +40,7 @@ function keyEvent(keysym: number, down: boolean): Uint8Array {
   return message;
 }
 
-function clientCutText(text: string): Uint8Array {
+function clientCutText(text: string): Uint8Array<ArrayBuffer> {
   // Plain ClientCutText is Latin-1; anything else becomes '?'.
   const bytes = Array.from(text, (character) => {
     const codePoint = character.codePointAt(0) ?? 0x3f;
@@ -65,7 +69,7 @@ function wheelClicks(
   ]).flat();
 }
 
-function typeText(text: string): Uint8Array[] {
+function typeText(text: string): Uint8Array<ArrayBuffer>[] {
   return Array.from(text).flatMap((character) => {
     const keysym =
       character === '\n' ? KEYSYM_RETURN : keysymForCharacter(character);
@@ -91,7 +95,9 @@ const STRIPPED_ENCODINGS = [-239, 0x574d5664, 0xc0a1e5ce | 0];
  * must not ask for (`STRIPPED_ENCODINGS`). Any other message comes back
  * unchanged.
  */
-export function viewOnlyEncodings(message: Uint8Array): Uint8Array {
+export function viewOnlyEncodings(
+  message: Uint8Array<ArrayBuffer>
+): Uint8Array<ArrayBuffer> {
   if (message.length < 4 || message[0] !== SET_ENCODINGS) return message;
   const view = new DataView(
     message.buffer,
@@ -115,7 +121,9 @@ export function viewOnlyEncodings(message: Uint8Array): Uint8Array {
   return rewritten;
 }
 
-export function encodeInput(event: ScreenInputEvent): Uint8Array[] {
+export function encodeInput(
+  event: ScreenInputEvent
+): Uint8Array<ArrayBuffer>[] {
   return match(event)
     .with({ kind: 'pointer' }, ({ x, y, buttons }) => [
       pointerEvent(x, y, buttons),

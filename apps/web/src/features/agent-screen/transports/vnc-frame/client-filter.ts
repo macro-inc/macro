@@ -65,8 +65,8 @@ export function createRfbClientFilter() {
   let dropped = 0;
 
   return {
-    push(chunk: Uint8Array): Uint8Array[] {
-      const out: Uint8Array[] = [];
+    push(chunk: Uint8Array): Uint8Array<ArrayBuffer>[] {
+      const out: Uint8Array<ArrayBuffer>[] = [];
       const joined = new Uint8Array(buffer.length + chunk.length);
       joined.set(buffer);
       joined.set(chunk, buffer.length);

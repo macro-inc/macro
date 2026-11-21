@@ -229,7 +229,7 @@ async function connectVnc(
     framePort.onmessage = (event: MessageEvent<FromVncFrame>) => {
       const message = event.data;
       if (message.type === 'send') {
-        let messages: Uint8Array[];
+        let messages: Uint8Array<ArrayBuffer>[];
         try {
           messages = filter.push(new Uint8Array(message.data));
         } catch (error) {
