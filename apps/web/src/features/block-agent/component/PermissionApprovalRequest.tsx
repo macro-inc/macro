@@ -141,7 +141,7 @@ export function PermissionApprovalRequest(props: {
                   type="button"
                   variant="ghost"
                   size="xs"
-                  class="mt-1.5 -ml-2"
+                  class="mt-1.5 -ml-2 self-start"
                   aria-expanded={showProgram()}
                   onClick={() => setShowProgram((open) => !open)}
                 >
