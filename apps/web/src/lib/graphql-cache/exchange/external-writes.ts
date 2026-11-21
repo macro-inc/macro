@@ -14,6 +14,8 @@ type Fences = {
   /** The version of the last deletion of each normalized record key, oldest
    * first. */
   records: Map<string, number>;
+  /** The version of the last deletion fenced in `records`. */
+  lastDeletion: number;
 };
 
 /** A cache host, or the part of one a direct deleter holds. */
@@ -28,7 +30,12 @@ const MAX_FENCED_RECORDS = 5_000;
 function fencesOf(host: FencedHost): Fences {
   let fences = FENCES.get(host);
   if (!fences) {
-    fences = { version: 0, types: new Map(), records: new Map() };
+    fences = {
+      version: 0,
+      types: new Map(),
+      records: new Map(),
+      lastDeletion: 0,
+    };
     FENCES.set(host, fences);
   }
   return fences;
@@ -62,6 +69,7 @@ export function recordExternalDeletion(
   if (keys.length === 0) return;
   const fences = fencesOf(host);
   fences.version += 1;
+  fences.lastDeletion = fences.version;
   for (const key of keys) {
     // Kept in deletion order, so the oldest fold first.
     fences.records.delete(key);
@@ -90,11 +98,17 @@ export function predatesExternalWrite(
   if (!fences || fences.version <= version) return false;
   const after = (fenced: number | undefined) => (fenced ?? 0) > version;
   if (types.some((type) => after(fences.types.get(type)))) return true;
+  // Every response is checked, and many hold hundreds of records. One sent
+  // after the latest fence returned above without a walk; a walk looks up
+  // only the kinds of fence set since its read was sent.
+  const typesFenced = [...fences.types.values()].some(after);
+  const recordsFenced = after(fences.lastDeletion);
   const visit = (value: unknown): boolean => {
     if (typeof value !== 'object' || value === null) return false;
     if ('__typename' in value && typeof value.__typename === 'string') {
-      if (after(fences.types.get(value.__typename))) return true;
+      if (typesFenced && after(fences.types.get(value.__typename))) return true;
       if (
+        recordsFenced &&
         'id' in value &&
         typeof value.id === 'string' &&
         after(

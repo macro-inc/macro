@@ -81,6 +81,19 @@ describe('external write fences', () => {
     ).toBe(false);
   });
 
+  it('does not walk a response sent after the latest fence', () => {
+    const host = fencedHost();
+    recordExternalDeletion(host, ['GraphqlSoupChannel:a']);
+    const after = externalWriteVersion(host);
+    const untouchable = {
+      get items(): never {
+        throw new Error('walked a response no fence can drop');
+      },
+    };
+
+    expect(predatesExternalWrite(host, after, untouchable)).toBe(false);
+  });
+
   it('shares one version between type writes and deletions', () => {
     const host = fencedHost();
     recordExternalWrite(host, ['GraphqlSoupCrmContact']);
