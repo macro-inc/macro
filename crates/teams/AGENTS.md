@@ -79,7 +79,7 @@ event contract (schema, sanitization, delivery semantics).
   best-effort after the change commits. Joins write no contact edges
   (contacts reads the live roster); a removal deletes the edges joins used to
   write (leaver ↔ the roster read before the removal, so members leaving
-  together still lose each other), and team deletion deletes every member
+  together still lose each other; a failed read stops the removal), and team deletion deletes every member
   pair, through `enqueue_contact_disconnections`. That also drops an edge
   some other source explains, until that source writes it again. Joins and removals send `directory_changed` both ways
   (the roster re-reads the member; the member re-reads the roster), and team
