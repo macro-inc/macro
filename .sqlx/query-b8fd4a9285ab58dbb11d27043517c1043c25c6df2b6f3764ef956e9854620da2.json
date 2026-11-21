@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT a.viewed_at as \"viewed_at?: DateTime<Utc>\"\n        FROM comms_activity a\n        WHERE a.user_id = $1 AND a.channel_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "viewed_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "b8fd4a9285ab58dbb11d27043517c1043c25c6df2b6f3764ef956e9854620da2"
+}

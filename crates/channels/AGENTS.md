@@ -102,6 +102,9 @@ DMs, and the shared message store other domains discuss things on.
   cursor from them: a channel left without its row moves the cursor, and the
   next page skips channels. `get_channel_list_activities` (the user's latest
   100) is only the legacy `/activity` read.
+  `ChannelService::channel_viewed_at` reads one row of that table by its
+  unique `(user_id, channel_id)` key, with no access check: it is the
+  caller's own row, kept after they leave the channel.
 
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
 - A person's first top-level message with the default notification policy invites the channel's recipients who are not mentioned in it. In a DM or unnamed group chat (`ChannelMetadata::is_dm_or_group_chat`) that message creates the conversation, so those recipients with an account get the ordinary channel message notification instead, which counts as unread; only people without an account get the invite. Bot first messages and mentions-only posts never invite.

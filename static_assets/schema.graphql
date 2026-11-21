@@ -11079,6 +11079,12 @@ type GraphqlUser {
 	"""
 	directMessageChannelId(userId: ID!): ID
 	"""
+	When the authenticated user last viewed the channel, in RFC 3339
+	format, whether or not they are still in it. Null when they never
+	viewed it. Their own activity row needs no access to the channel.
+	"""
+	channelViewedAt(channelId: ID!): String
+	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
 	"""

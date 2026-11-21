@@ -876,6 +876,54 @@ async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Post
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn get_viewed_at_reads_the_users_own_row_even_after_leaving(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let viewed: DateTime<Utc> = "2024-01-04T12:30:00.123456Z".parse().unwrap();
+    // The left user viewed the channel they later left; someone else viewed
+    // another channel; nobody's row says the left user viewed TEAM_A_MANUAL.
+    sqlx::query(
+        "INSERT INTO comms_activity (id, user_id, channel_id, viewed_at, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, now(), now()),
+                (gen_random_uuid(), $4, $5, now(), now(), now()),
+                (gen_random_uuid(), $1, $6, NULL, now(), now())",
+    )
+    .bind(LEFT_USER)
+    .bind(TEAM_A_AUTO_LEFT)
+    .bind(viewed.naive_utc())
+    .bind(USER_B)
+    .bind(TEAM_A_MANUAL)
+    .bind(TEAM_A_AUTO_ACTIVE)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let left_user = macro_user_id(LEFT_USER);
+    assert_eq!(
+        repo.get_viewed_at(left_user.clone(), TEAM_A_AUTO_LEFT)
+            .await
+            .unwrap(),
+        Some(viewed)
+    );
+    assert_eq!(
+        repo.get_viewed_at(left_user.clone(), TEAM_A_MANUAL)
+            .await
+            .unwrap(),
+        None,
+        "another user's view is not this user's"
+    );
+    assert_eq!(
+        repo.get_viewed_at(left_user, TEAM_A_AUTO_ACTIVE)
+            .await
+            .unwrap(),
+        None,
+        "a row that only records an interaction has no view"
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let before = sqlx::query!(
