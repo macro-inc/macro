@@ -1327,6 +1327,39 @@ lane retains normal cursor pagination, retries, cancellation, storage-generation
 checks, and `graphql_cache.backfill` telemetry. Subsequent passes refresh all
 visible contacts because the contact filter has no updated-at watermark.
 
+## Channel directory lane
+
+The channel lane (`CHANNEL_SOUP_BACKFILL_LANE`, checkpoint `channel-directory`)
+caches every channel the viewer joined with the fields a channel list needs
+(`ChannelDirectoryFields` in `channel-directory.graphql`): members, bots in
+`botParticipants`, team, agent DM and latest messages. The channel filter has no
+updated-at watermark, so every run is a full pass (`refreshAll`), 100 channels
+a page with 250 ms between pages. It pages by creation time (`CREATED_AT`),
+which never changes: by updated or viewed time, activity or a view on another
+device could move a channel the pass had not reached ahead of its cursor, and
+the pass would never return it.
+
+The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
+what a pass proves stale. When a pass that started at its first page finishes,
+each cached channel it did not return is read again by id; the ones the server
+no longer returns are deleted. A resumed, failed or cancelled pass, a page
+without entity ids, or a cache that belongs to another viewer or generation
+deletes nothing. Each delete carries the cache session taken before its
+by-id read, so the cache refuses it once that session has ended (a change of
+viewer or a storage reset). A record the cache rewrote after the read (the
+viewer was added back) is read again instead of deleted, in up to three
+rounds; one still changing after them stays cached and the pass skips the
+shadow comparison. The recheck and the delete are two cache calls, so a write
+landing between them is deleted and returns with the channel's next update or
+pass. A by-id read also returns public and team channels the viewer
+opened without joining (`isParticipant: false`), so the cache holds those too:
+a joined list filters them out.
+
+After a reconciled pass, `queries/channel/directory-shadow.ts` compares the
+cache with the REST channel list the app has loaded, once per viewer per tab,
+and records counts per difference kind on one `channel_directory.shadow` span.
+It is temporary: it goes with the REST list.
+
 ## Authoritative Mail membership repair
 
 The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
