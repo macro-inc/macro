@@ -469,11 +469,15 @@ export function NewChatPage(props: {
     setModelOverride(undefined);
   };
 
+  // A mention made before the roster has loaded is applied once it has.
+  const [pendingMention, setPendingMention] = createSignal<string>();
   const selectAgent = (
     agent: RosterAgent,
     model?: string,
     selection?: EffortChoice
   ) => {
+    // The latest pick wins over a mention still waiting for the roster.
+    setPendingMention(undefined);
     setAgentId(agent.id);
     if (agent.id === MACRO_PERSONA_ID) {
       if (model) preferredInmem.remember(model);
@@ -498,16 +502,13 @@ export function NewChatPage(props: {
     if (mode() !== agentMode) setMode(agentMode);
     selectAgent(agent);
   };
-  // A mention made before the roster has loaded is applied once it has.
-  const [pendingMention, setPendingMention] = createSignal<string>();
   const selectMentionedAgent = (mentionedId: string) => {
+    // Only agents select; a person mentioned meanwhile keeps a pending one.
+    if (!mentionedId.startsWith('bot|')) return;
     const agent = rosterAgentForMention(props.roster, mentionedId);
-    setPendingMention(
-      !agent && (props.rosterLoading || props.availabilityLoading)
-        ? mentionedId
-        : undefined
-    );
     if (agent) activateMentioned(agent);
+    else if (props.rosterLoading || props.availabilityLoading)
+      setPendingMention(mentionedId);
   };
   createEffect(
     on(

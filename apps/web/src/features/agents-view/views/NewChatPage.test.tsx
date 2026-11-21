@@ -759,6 +759,10 @@ describe('agent-led new conversation', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
       target: { value: `bot|${CURSOR_BOT_ID}` },
     });
+    // A person mentioned meanwhile leaves the agent's mention waiting.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: 'macro|person@example.com' },
+    });
     setConnected(true);
     setLoading(false);
     expect(
