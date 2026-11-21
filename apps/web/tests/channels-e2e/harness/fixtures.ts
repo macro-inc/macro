@@ -137,17 +137,10 @@ export function knownDefect(): void {
 }
 
 /**
- * A check that an open page shows, without a reload, what someone else just
- * did. A known defect on main sometimes keeps a live change off an open page;
- * the tests it has been seen in are listed in
- * `ledger/intermittent-defects.tsv`. When the check fails, the failure is
- * recorded as `failsSometimes` records it, the page is reloaded, and the
- * check must then hold: the change is stored and shown, only not live.
+ * `failsSometimes`, saying whether the check failed, for a test that has
+ * something stricter to do when it did.
  */
-export async function arrivesLive(
-  view: { page: Page; shown(): Promise<void> },
-  check: () => Promise<void>
-): Promise<void> {
+export async function missedLive(check: () => Promise<void>): Promise<boolean> {
   let missed = false;
   await failsSometimes(async () => {
     try {
@@ -157,7 +150,24 @@ export async function arrivesLive(
       throw error;
     }
   });
-  if (!missed) {
+  return missed;
+}
+
+/**
+ * A check that an open page shows, without a reload, what someone else just
+ * did. A known defect on main sometimes keeps a live change off an open page;
+ * the tests it has been seen in are listed in
+ * `ledger/intermittent-defects.tsv`. When the check fails, the failure is
+ * recorded as `failsSometimes` records it, the page is reloaded, and the
+ * check must then hold, so a change that is lost still fails the test. Pass
+ * only the arrival (the message is there); what it says and how it looks
+ * stay ordinary checks after this one.
+ */
+export async function arrivesLive(
+  view: { page: Page; shown(): Promise<void> },
+  check: () => Promise<void>
+): Promise<void> {
+  if (!(await missedLive(check))) {
     return;
   }
   await view.page.reload();

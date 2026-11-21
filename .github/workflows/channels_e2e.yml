@@ -509,16 +509,14 @@ jobs:
           ) &
           watch=$!
           trap 'kill "$watch" 2>/dev/null || true' EXIT
-          # One more try when bring-up fails: a build of the stack has failed once on
-          # main for a reason of the runner (a linker error), with no test run.
-          stack_up() {
-            just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
-              --env-file "$stack_env"
-          }
-          if ! stack_up; then
-            echo "Local stack: the first bring-up failed, trying once more" | tee -a "$GITHUB_STEP_SUMMARY"
-            stack_up
-          fi
+          # The wasm packages the web app imports are built first, without the job's
+          # RUSTFLAGS: those link the services with mold, and a package the wasm cache
+          # misses links with rust-lld, which refuses that flag. The bring-up then finds
+          # every package in the cache. Without this, the first run on main after a
+          # change to a wasm package failed before any test ran.
+          (cd apps/web && unset RUSTFLAGS && bun run dev:prepare)
+          just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
+            --env-file "$stack_env"
           kill "$watch" 2>/dev/null || true
           echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 

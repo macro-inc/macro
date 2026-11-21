@@ -70,11 +70,12 @@ lists the tests that assert behaviour the product does not have yet; they are
 marked `knownDefect()` and fail the run the day the defect is fixed, so the
 mark gets removed. `ledger/intermittent-defects.tsv`
 lists the tests with a check a defect fails only in some runs, wrapped in
-`failsSometimes`; the checker reports each run in which one showed. A check
-that an open page shows what someone else just did goes in `arrivesLive`
-instead when it has been seen to fail: it records the miss the same way, then
-reloads the page and requires the check to hold, so a change that is lost,
-not only late, still fails the run.
+`failsSometimes`; the checker reports each run in which one showed. When the
+check is that an open page shows what someone else just did, and it has been seen to fail, use `arrivesLive`: it records the miss the same way,
+then reloads the page and requires the check, so a change that is lost still
+fails the run. Give it the arrival alone, and keep what the message says as
+ordinary checks. `missedLive` is for a test that has to do something of its
+own after a miss.
 
 ```sh
 bun tests/channels-e2e/ledger/check.ts                      # ledger against the tests
@@ -101,8 +102,7 @@ traces (`channels-e2e-results`). One that runs out of time keeps the logs too: t
 suite's step stops after 30 minutes, short of the job's 45, so the steps
 after it still run. It has traces and a report only if the tests had
 finished; while the stack starts, the step's log says once a minute what is
-running. A stack that fails to start is started once more, and the
-run's summary says so.
+running.
 
 The stack starts with local agent sandboxes off
 (`DEV_DANGEROUS_LOCAL_CONTAINERS=false`): no test starts a sandbox, and

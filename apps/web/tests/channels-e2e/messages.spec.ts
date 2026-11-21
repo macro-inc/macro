@@ -1,5 +1,11 @@
 import { conversationRow } from './harness/channel';
-import { arrivesLive, expect, failsSometimes, test } from './harness/fixtures';
+import {
+  arrivesLive,
+  expect,
+  failsSometimes,
+  missedLive,
+  test,
+} from './harness/fixtures';
 import { Conversation } from './harness/messages';
 
 // If this fails, a message sent with Enter is lost, doubled or misplaced for
@@ -80,18 +86,27 @@ test('MSG-03 a quick back-and-forth between two people reads in the same order f
   await Promise.all([mine.open(), bens.open()]);
 
   // Each answers as soon as the other's message is in front of them.
+  // Known defect on main: an open page sometimes never shows a message the
+  // other person sent, without a reload. After the first miss the exchange
+  // goes on without waiting, and the reload below must show all of it.
+  let missed = false;
+  const sees = async (view: Conversation, text: string) => {
+    if (!missed) {
+      missed = await missedLive(() => expect(view.message(text)).toBeVisible());
+    }
+  };
   await mine.send('ada 1');
-  await arrivesLive(bens, () => expect(bens.message('ada 1')).toBeVisible());
+  await sees(bens, 'ada 1');
   await bens.send('ben 1');
-  await arrivesLive(mine, () => expect(mine.message('ben 1')).toBeVisible());
+  await sees(mine, 'ben 1');
   await mine.send('ada 2');
   await mine.send('ada 3');
-  await arrivesLive(bens, () => expect(bens.message('ada 3')).toBeVisible());
+  await sees(bens, 'ada 3');
   await bens.send('ben 2');
   await bens.send('ben 3');
-  await arrivesLive(mine, () => expect(mine.message('ben 3')).toBeVisible());
+  await sees(mine, 'ben 3');
   await mine.send('ada 4');
-  await arrivesLive(bens, () => expect(bens.message('ada 4')).toBeVisible());
+  await sees(bens, 'ada 4');
   await bens.send('ben 4');
 
   const exchange = [
@@ -104,8 +119,27 @@ test('MSG-03 a quick back-and-forth between two people reads in the same order f
     'Ada Owner: ada 4',
     'Ben Member: ben 4',
   ];
-  await expect.poll(() => mine.topLevelByAuthor()).toEqual(exchange);
-  await expect.poll(() => bens.topLevelByAuthor()).toEqual(exchange);
+  // Before the reload, the same defect may leave messages out of a page. It
+  // excuses nothing else: what the page does show is in order, each once.
+  for (const view of [mine, bens]) {
+    try {
+      await expect.poll(() => view.topLevelByAuthor()).toEqual(exchange);
+    } catch (error) {
+      const shown = await view.topLevelByAuthor();
+      const rest = [...exchange];
+      const inOrder = shown.every((line) => {
+        const at = rest.indexOf(line);
+        rest.splice(0, at + 1);
+        return at !== -1;
+      });
+      if (!inOrder || shown.length === exchange.length) {
+        throw error;
+      }
+      await failsSometimes(async () => {
+        throw error;
+      });
+    }
+  }
 
   await Promise.all([mine.reload(), bens.reload()]);
   await expect.poll(() => mine.topLevelByAuthor()).toEqual(exchange);
@@ -135,11 +169,11 @@ test('MSG-04 a message written on several lines with Shift+Enter keeps its lines
   const lines = ['first line', 'second line', 'third line'];
   for (const view of [mine, bens]) {
     const message = view.list.locator('[data-message]');
-    const shows = async () => {
-      await expect(message).toHaveCount(1);
-      await expect.poll(() => view.lines(message)).toEqual(lines);
-    };
-    await (view === bens ? arrivesLive(view, shows) : shows());
+    if (view === bens) {
+      await arrivesLive(view, () => expect(message).not.toHaveCount(0));
+    }
+    await expect(message).toHaveCount(1);
+    await expect.poll(() => view.lines(message)).toEqual(lines);
   }
 
   await Promise.all([mine.reload(), bens.reload()]);
@@ -173,8 +207,12 @@ test('MSG-05 formatting, a link, emoji and other scripts read the same for both 
     'bold and code see https://example.com/path?q=1 🎉 日本語 Привет <b>x</b> & * 100%',
   ];
   for (const view of [mine, bens]) {
-    const shows = () => expect.poll(() => view.topLevel()).toEqual(read);
-    await (view === bens ? arrivesLive(view, shows) : shows());
+    if (view === bens) {
+      await arrivesLive(view, () =>
+        expect(view.list.locator('[data-message]')).not.toHaveCount(0)
+      );
+    }
+    await expect.poll(() => view.topLevel()).toEqual(read);
     await expect(
       view.list.getByRole('link', { name: 'https://example.com/path?q=1' })
     ).toHaveAttribute('href', 'https://example.com/path?q=1');
@@ -746,5 +784,12 @@ test('MSG-18 messages two people send at the same moment end in one order for bo
     const order = await mine.topLevel();
     expect([...order].sort()).toEqual(everyMessage);
     expect(await bens.topLevel()).toEqual(order);
+    // After a reload each person's own messages are in the order they sent
+    // them in, whatever the open pages showed.
+    for (const person of ['ada', 'ben']) {
+      expect(order.filter((text) => text.startsWith(person))).toEqual(
+        [1, 2, 3, 4].map((n) => `${person} ${n}`)
+      );
+    }
   }).toPass({ timeout: 15_000 });
 });
