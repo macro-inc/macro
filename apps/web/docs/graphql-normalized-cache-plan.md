@@ -819,7 +819,9 @@ grouping, email view and targets, never ids or values. A request made with
 `transport: 'rest'` is a choice, not a fallback, and is not recorded.
 
 Without the cache, writes read mounted Soup lists again
-(`refreshActiveGraphqlSoupQueries`). A list that never shows, filters or sorts
+(`refreshActiveGraphqlSoupQueries`), and so do agent-session metadata events
+(`agent-session/list-sync.ts`), which otherwise only read the session's row
+into the cache. A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
 `ignoresNotifications: true`, and notification and email read-state writes
 refresh with `notificationsOnly: true`, which skips it. Such a list also reads
