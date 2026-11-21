@@ -340,14 +340,14 @@ async fn serve_in_span(
     let _ = writer.await;
 }
 
-type Sink = futures::stream::SplitSink<WebSocket, Message>;
 type Receiver = futures::stream::SplitStream<WebSocket>;
 
-/// Messages waiting for a viewer.
-const OUTBOX_MESSAGES: usize = 64;
-/// Room in the outbox kept for control messages: media waits once only
-/// this much is left.
-const CONTROL_HEADROOM: usize = 8;
+/// Media frames that may wait for a viewer; media waits once this many do.
+const QUEUED_MEDIA: usize = 56;
+/// Control messages that may wait for a viewer: far more than a burst of
+/// lease changes and errors makes, so only a viewer that stopped reading
+/// reaches it.
+const QUEUED_CONTROL: usize = 256;
 /// How long one message may take to reach a viewer before the viewer counts
 /// as gone: a link this slow can't show a screen anyway.
 const SEND_TIMEOUT: Duration = Duration::from_secs(10);
@@ -357,25 +357,48 @@ const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Debug)]
 struct Stalled;
 
+/// A message on its way to the viewer, and what it counts as.
+enum Outgoing {
+    Media(Message),
+    Control(Message),
+}
+
 /// The way to a viewer. Its own task writes the WebSocket, so a viewer that
 /// stops reading never stalls the socket's loop (shutdown, access checks,
-/// lease changes keep running): the outbox fills, media waits, and a write
-/// that takes longer than [`SEND_TIMEOUT`] ends the socket.
+/// lease changes keep running): media waits while [`QUEUED_MEDIA`] frames
+/// do, and a write that takes longer than [`SEND_TIMEOUT`] ends the socket.
+/// Media and control share one queue, so they reach the viewer in order,
+/// but are counted apart: control never waits behind the media limit.
 struct Outbox {
-    queue: mpsc::Sender<Message>,
+    queue: mpsc::UnboundedSender<Outgoing>,
+    media: Arc<std::sync::atomic::AtomicUsize>,
+    control: Arc<std::sync::atomic::AtomicUsize>,
     stalled: CancellationToken,
 }
 
 impl Outbox {
     /// Write to `sink` from a task of its own, until the outbox is dropped.
-    fn start(mut sink: Sink) -> (Self, tokio::task::JoinHandle<()>) {
-        let (queue, mut pending) = mpsc::channel(OUTBOX_MESSAGES);
+    fn start<Sink>(mut sink: Sink) -> (Self, tokio::task::JoinHandle<()>)
+    where
+        Sink: futures::Sink<Message> + Unpin + Send + 'static,
+    {
+        use std::sync::atomic::Ordering;
+        let (queue, mut pending) = mpsc::unbounded_channel::<Outgoing>();
+        let media = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let control = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let stalled = CancellationToken::new();
-        let writer_stalled = stalled.clone();
+        let (writer_media, writer_control, writer_stalled) =
+            (Arc::clone(&media), Arc::clone(&control), stalled.clone());
         let writer = tokio::spawn(
             async move {
-                while let Some(message) = pending.recv().await {
-                    match tokio::time::timeout(SEND_TIMEOUT, sink.send(message)).await {
+                while let Some(outgoing) = pending.recv().await {
+                    let (message, count) = match outgoing {
+                        Outgoing::Media(message) => (message, &writer_media),
+                        Outgoing::Control(message) => (message, &writer_control),
+                    };
+                    let sent = tokio::time::timeout(SEND_TIMEOUT, sink.send(message)).await;
+                    count.fetch_sub(1, Ordering::SeqCst);
+                    match sent {
                         Ok(Ok(())) => {}
                         Ok(Err(_)) => {
                             writer_stalled.cancel();
@@ -392,23 +415,48 @@ impl Outbox {
             }
             .in_current_span(),
         );
-        (Self { queue, stalled }, writer)
+        (
+            Self {
+                queue,
+                media,
+                control,
+                stalled,
+            },
+            writer,
+        )
     }
 
-    /// Queue `message`; an outbox that is full means the viewer is gone.
-    fn push(&self, message: Message) -> Result<(), Stalled> {
-        self.queue.try_send(message).map_err(|_| Stalled)
+    /// Queue a media frame; only after [`Self::has_room_for_media`].
+    fn push_media(&self, message: Message) -> Result<(), Stalled> {
+        self.media.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.queue
+            .send(Outgoing::Media(message))
+            .map_err(|_| Stalled)
+    }
+
+    /// Queue a control message; [`QUEUED_CONTROL`] waiting means the viewer
+    /// is gone.
+    fn push_control(&self, message: Message) -> Result<(), Stalled> {
+        let queued = self
+            .control
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if queued >= QUEUED_CONTROL {
+            return Err(Stalled);
+        }
+        self.queue
+            .send(Outgoing::Control(message))
+            .map_err(|_| Stalled)
     }
 
     /// Whether media may queue another frame.
     fn has_room_for_media(&self) -> bool {
-        self.queue.capacity() > CONTROL_HEADROOM
+        self.media.load(std::sync::atomic::Ordering::SeqCst) < QUEUED_MEDIA
     }
 }
 
 async fn send(sender: &Outbox, message: &ServerMessage<'_>) -> Result<(), Stalled> {
     let text = serde_json::to_string(message).unwrap_or_default();
-    sender.push(Message::Text(Utf8Bytes::from(text)))
+    sender.push_control(Message::Text(Utf8Bytes::from(text)))
 }
 
 struct Connection {
@@ -581,7 +629,7 @@ impl Connection {
                         }
                         None => continue,
                     };
-                    if sender.push(message).is_err() {
+                    if sender.push_media(message).is_err() {
                         return Ending::plain(EndReason::Stopped);
                     }
                 }
@@ -591,7 +639,17 @@ impl Connection {
                         None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return Ending::plain(EndReason::Stopped),
                         Some(Ok(Message::Binary(bytes))) => {
                             self.bytes_from_viewer += bytes.len() as u64;
-                            let _ = from_viewer.send(FromViewer::Binary(bytes)).await;
+                            // A guest that stopped reading the viewer's bytes must
+                            // not hold the loop.
+                            match tokio::time::timeout(SEND_TIMEOUT, from_viewer.send(FromViewer::Binary(bytes))).await {
+                                Ok(_) => {}
+                                Err(_) => {
+                                    return Ending {
+                                        reason: EndReason::Error,
+                                        error: Some((ErrorCode::TunnelFailed, "the computer's screen stopped taking input".to_owned())),
+                                    };
+                                }
+                            }
                             continue;
                         }
                         Some(Ok(Message::Text(text))) => text,

@@ -333,6 +333,8 @@ mod over_the_wire {
         screens: Arc<Screens>,
         xvnc: Arc<FakeXvnc>,
         allowed: Arc<AtomicBool>,
+        /// Access lookups fail instead of answering.
+        lookups_fail: Arc<AtomicBool>,
         address: std::net::SocketAddr,
     }
 
@@ -377,13 +379,16 @@ mod over_the_wire {
             ..FakeXvnc::default()
         });
         let allowed = Arc::new(AtomicBool::new(true));
+        let lookups_fail = Arc::new(AtomicBool::new(false));
         let viewers = Arc::new(Viewers::default());
         let route = {
             let screens = Arc::clone(&screens);
             let xvnc = Arc::clone(&xvnc);
             let allowed = Arc::clone(&allowed);
+            let lookups_fail = Arc::clone(&lookups_fail);
             move |upgrade: WebSocketUpgrade| {
                 let allowed = Arc::clone(&allowed);
+                let lookups_fail = Arc::clone(&lookups_fail);
                 let deps = SocketDeps {
                     screens: Arc::clone(&screens),
                     tunnel: Arc::new(FakeTunnel(Arc::clone(&xvnc))),
@@ -392,7 +397,8 @@ mod over_the_wire {
                     viewers: Arc::clone(&viewers),
                     reauthorize: Arc::new(move || {
                         let allowed = allowed.load(Ordering::SeqCst);
-                        Box::pin(async move { Some(allowed) })
+                        let failing = lookups_fail.load(Ordering::SeqCst);
+                        Box::pin(async move { (!failing).then_some(allowed) })
                     }),
                     reauthorize_every: Duration::from_millis(100),
                     shutdown: CancellationToken::new(),
@@ -409,6 +415,7 @@ mod over_the_wire {
             screens,
             xvnc,
             allowed,
+            lookups_fail,
             address,
         }
     }
@@ -646,8 +653,6 @@ mod over_the_wire {
     async fn a_slow_viewer_that_keeps_sending_does_not_wedge_the_socket(pool: PgPool) {
         let rig = rig(pool.clone(), grant("alice", Mode::View)).await;
         // Same rig, flooding guest.
-        let tasks = TaskTracker::new();
-        let _ = &tasks;
         let allowed = Arc::new(AtomicBool::new(true));
         let screens = Arc::clone(&rig.screens);
         let route = {
@@ -679,7 +684,6 @@ mod over_the_wire {
             .await
             .unwrap();
         let (mut writer, reader) = client.split();
-        // A slow link: the viewer reads a frame every 20 ms.
         // A viewer that stops reading (a sleeping laptop, a hostile script).
         let _keep = reader;
         let mut hello: Vec<u8> = b"RFB 003.008\n".to_vec();
@@ -714,5 +718,80 @@ mod over_the_wire {
             ended.expect("the socket never noticed it lost access: its loop is wedged"),
             "accessRevoked"
         );
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_socket_whose_access_cannot_be_checked_ends_after_three_tries(pool: PgPool) {
+        let rig = rig(pool, grant("alice", Mode::View)).await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+
+        rig.lookups_fail.store(true, Ordering::SeqCst);
+
+        assert_eq!(
+            control_of(&mut client, "ended").await["reason"],
+            "accessRevoked"
+        );
+    }
+}
+
+/// A WebSocket whose viewer never takes a message.
+struct NeverReady;
+
+impl futures::Sink<Message> for NeverReady {
+    type Error = axum::Error;
+
+    fn poll_ready(
+        self: Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+
+    fn start_send(self: Pin<&mut Self>, _item: Message) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+
+    fn poll_close(
+        self: Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_viewer_that_takes_nothing_for_the_send_timeout_counts_as_gone() {
+    let (outbox, _writer) = Outbox::start(NeverReady);
+    outbox
+        .push_control(Message::Text(Utf8Bytes::from_static("{}")))
+        .unwrap();
+
+    tokio::time::timeout(SEND_TIMEOUT * 2, outbox.stalled.cancelled())
+        .await
+        .expect("a viewer that took nothing was never given up");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_burst_of_control_messages_never_ends_a_slow_viewer() {
+    let (outbox, _writer) = Outbox::start(NeverReady);
+    while outbox.has_room_for_media() {
+        outbox
+            .push_media(Message::Binary(axum::body::Bytes::from_static(b"frame")))
+            .unwrap();
+    }
+
+    // State on each lease change, errors: all still queue.
+    for _ in 0..64 {
+        outbox
+            .push_control(Message::Text(Utf8Bytes::from_static("{}")))
+            .unwrap();
     }
 }

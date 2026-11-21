@@ -301,7 +301,8 @@ impl ScreenRepo for PgScreenRepo {
         // another user's live lease leaves no row, which is Busy. When no
         // lease row exists yet, two first take-overs race on the insert and
         // the second one's guard sees the first's lease.
-        let row = sqlx::query!(
+        let row = sqlx::query_as!(
+            LeaseRow,
             r#"
             INSERT INTO computer_screen_driver_leases AS lease
                 (computer_id, harness_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at)
@@ -318,8 +319,7 @@ impl ScreenRepo for PgScreenRepo {
                 END,
                 expires_at = EXCLUDED.expires_at
             WHERE lease.user_id = EXCLUDED.user_id OR lease.expires_at <= now()
-            RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at,
-                      xmax::text <> '0' AND started_at <> now() AS "continues!"
+            RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at
             "#,
             grant.computer_id.as_uuid(),
             grant.harness_id.as_uuid(),
@@ -343,19 +343,23 @@ impl ScreenRepo for PgScreenRepo {
                 name: driver.driver_name,
             }));
         };
-        // The same user moved the lease to this socket and kept its start:
-        // an update (xmax set) that left started_at at another transaction's
-        // time. A fresh insert or a lapsed lease's start is this one's now().
-        let continues = row.continues;
-        let row = LeaseRow {
-            computer_id: row.computer_id,
-            session_id: row.session_id,
-            user_id: row.user_id,
-            driver_name: row.driver_name,
-            agent_user_id: row.agent_user_id,
-            started_at: row.started_at,
-            expires_at: row.expires_at,
-        };
+        // The same user moved the lease to this socket when their open drive
+        // started when the lease did: the upsert kept the lease's start. A
+        // fresh or lapsed lease starts now, after any drive. (Read after the
+        // upsert, so a racing first take-over's drive, committed while this
+        // one waited on the lease row, is seen.)
+        let open_drive_started = sqlx::query_scalar!(
+            r#"
+            SELECT started_at FROM computer_screen_drives
+            WHERE computer_id = $1 AND user_id = $2 AND ended_at IS NULL
+            FOR UPDATE
+            "#,
+            grant.computer_id.as_uuid(),
+            grant.user_id.as_ref(),
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let continues = open_drive_started == Some(row.started_at);
         let lease = Lease::try_from(row)?;
 
         if continues {
