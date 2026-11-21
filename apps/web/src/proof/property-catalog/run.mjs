@@ -465,7 +465,7 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
     bump(R.diffSignatures, s);
     R.totals.differences++;
     if (R.diffs.length < 400) R.diffs.push({ level, kind, class: cls, ...at, ...extra, diff: d });
-    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && (shown = marked(level, kind, norm(a), norm(b), extra, norm))) {
+    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && (shown = marked(level, kind, norm(a), norm(b), extra, norm, b === undefined ? null : b))) {
       // A catch is a difference in data both sides read successfully, at a
       // level the planted fault can reach, that the clean run does not have,
       // after the fault was applied at least once.
@@ -506,35 +506,48 @@ const rowsWith = (x, id) => {
   walkRows(x, (r) => r.id === id && out.push(r));
   return out;
 };
-// Whether some list in x holds both rows, p before q.
-function listsBefore(x, p, q) {
+// Every list in x that holds both rows, by its path, with whether p comes first.
+function pairOrders(x, p, q, path = '$', out = new Map()) {
   if (Array.isArray(x)) {
-    const ids = x.map((r) => (r && typeof r === 'object' ? r.id : undefined));
+    const ids = x.map(rowId);
     const i = ids.indexOf(p);
     const j = ids.indexOf(q);
-    if (i >= 0 && j >= 0 && i < j) return true;
-    return x.some((v) => listsBefore(v, p, q));
-  }
-  return !!x && typeof x === 'object' && Object.values(x).some((v) => listsBefore(v, p, q));
+    if (i >= 0 && j >= 0) out.set(path, i < j);
+    x.forEach((v, n) => pairOrders(v, p, q, `${path}[${n}]`, out));
+  } else if (x && typeof x === 'object') for (const [k, v] of Object.entries(x)) pairOrders(v, p, q, `${path}.${k}`, out);
+  return out;
+}
+// The same list holding the two rows in the injected order on NEW and the
+// server's on OLD.
+function swappedAt(a, b, p, q) {
+  const oa = pairOrders(a, p, q);
+  return [...pairOrders(b, p, q)].some(([path, pFirst]) => pFirst && oa.get(path) === false);
 }
 // A GraphQL field and the reader's spelling of it (displayOrder, display_order).
 const sameField = (a, b) => a.replace(/_/g, '').toLowerCase() === b.replace(/_/g, '').toLowerCase();
 const fieldOf = (row, field) => Object.entries(row).filter(([k]) => sameField(k, field)).map(([, v]) => J(v));
-function shows(m, level, kind, a, b, norm) {
+function shows(m, level, kind, a, b, norm, rawB) {
   if (m.kind === 'drop-row') return rowsWith(a, m.id).length > 0 && rowsWith(b, m.id).length === 0;
   // the two rows in the injected order on NEW and the server's on OLD
-  if (m.kind === 'swap-order') return listsBefore(b, m.ids[0], m.ids[1]) && listsBefore(a, m.ids[1], m.ids[0]);
+  if (m.kind === 'swap-order') return swappedAt(a, b, m.ids[0], m.ids[1]);
   // the altered field holding the injected value on NEW and the server's on OLD
   if (m.kind === 'alter-field')
     return rowsWith(b, m.id).some((r) => fieldOf(r, m.field).includes(J(m.to))) && rowsWith(a, m.id).some((r) => fieldOf(r, m.field).includes(J(m.from)));
-  // cache faults: a marked live reader still holding exactly the data the
-  // fault left in the cache (the restored copy, or what a swallowed
-  // invalidation would have refreshed)
-  if (/:live$/.test(level)) return m.readers.some((r) => kind === `reader${r.id}.data` && J(norm(r.data)) === J(b));
+  // cache faults: a marked live NEW reader still holding exactly, unnormalized,
+  // the data the fault left in the cache (the restored copy, or what a
+  // swallowed invalidation would have refreshed), and stale: a cold mount of
+  // the same reader on the same page this step reads otherwise. A refresh
+  // that replaced the fault's data, even with rows only reordered, retires it.
+  if (/:live$/.test(level))
+    return m.readers.some((r) => {
+      if (kind !== `reader${r.id}.data` || J(rawB) !== J(r.data)) return false;
+      const cold = R.mutant.freshNew?.[r.id];
+      return !!cold && J(norm(cold.data)) !== J(b);
+    });
   return false;
 }
-function marked(level, kind, a, b, extra, norm) {
-  return R.mutant.marks.find((m) => m.account === extra.account && m.clock <= (extra.asOf ?? -1) && shows(m, level, kind, a, b, norm)) ?? null;
+function marked(level, kind, a, b, extra, norm, rawB) {
+  return R.mutant.marks.find((m) => m.account === extra.account && m.clock <= (extra.asOf ?? -1) && shows(m, level, kind, a, b, norm, rawB)) ?? null;
 }
 // A sequence's first catch stands only if the sequence had no harness-level
 // difference: a replay failure, a timeout or a page error can leave the two
@@ -608,7 +621,8 @@ async function login(email) {
   for (let attempt = 0; ; attempt++) {
     try {
       await page.goto(`${CONFIG.base}/app/`, { waitUntil: 'load', timeout: 180000 });
-      await page.getByText('Continue with email').first().click({ timeout: 180000 });
+      // a page the dev server served without its modules stays blank: load it again
+      await page.getByText('Continue with email').first().click({ timeout: 60000 });
       await page.getByPlaceholder(/company\.com$/).fill(email);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       const outcome = await Promise.race([
@@ -629,7 +643,9 @@ async function login(email) {
       }
     } catch (e) {
       if (attempt >= 20 || !/Timeout/.test(String(e.message))) throw e;
-      log(`login retry ${email.split('@')[0]}: ${String(e.message).slice(0, 120)}`);
+      // what the page showed instead, for the log (synthetic account pages only)
+      const shown = await page.evaluate(() => `${location.pathname} ${document.body?.innerText.slice(0, 80).replace(/\s+/g, ' ')}`).catch(() => '?');
+      log(`login retry ${email.split('@')[0]}: ${String(e.message).slice(0, 80)}; page: ${shown}`);
     }
   }
   const state = await ctx.storageState();
@@ -1173,7 +1189,10 @@ async function compareStep(pair, level, op) {
     const liveOut = timedOut[at] || timedOut[at + 1];
     const freshOutHere = freshOut[at] || freshOut[at + 1];
     const account = `L${pair.lane}${who}`;
+    // the cold NEW mount of this account, which a cache fault's catch must disagree with
+    if (R.mutant) R.mutant.freshNew = freshOut[at + 1] ? null : fn;
     if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
+    if (R.mutant) R.mutant.freshNew = null;
     if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, { account, asOf: fresh[at + 1].asOf });
     if (liveOut || freshOutHere) continue;
     // staleness: which readers differ live vs fresh, per side. Each side is

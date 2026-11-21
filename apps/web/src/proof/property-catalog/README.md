@@ -88,9 +88,11 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   restored cache entry or a swallowed invalidation left behind with the data
   it left there. The catch must observe that account after the mark and show
   exactly that: the dropped row on OLD only, the two rows in the injected
-  order on NEW and the server's on OLD within one list, the field holding the
+  order on NEW and the server's on OLD in the same list (same path), the field holding the
   injected value on NEW and the server's on OLD, or a live NEW reader still
-  holding the data the fault left. A real bug that made the same change to
+  holding exactly (unnormalized) the data the fault left while a cold mount of
+  it on the same page reads otherwise, so a refresh that replaced that data
+  retires the mark. A real bug that made the same change to
   the same row would also be credited; it would show up as a difference in
   the runs without a mutant. A
   cache restore that changes nothing is not applied. A settle timeout, a write-replay difference or an uncaught page
