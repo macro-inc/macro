@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
 import { useTeamAgentsQuery } from '@queries/team-agents/team-agents';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
@@ -44,9 +45,11 @@ export function hasCrmAccess(
 /**
  * A team's agent teammates, listed once `enable-agent-teammates` is on.
  * Loading is not on, so a roster read before the flag settles lists no agents;
- * a failed refetch keeps the agents last read. `known` is true once the flag
- * has answered and, when it is on, the agents have been read; `failed` is a
- * first read that failed with nothing to show, which `retry` reads again.
+ * a failed refetch keeps the agents last read. The server refuses the read
+ * while the agent teammates rollout is off for the viewer: then there are no
+ * agents to tell apart, as Members shows none. `known` is true once the flag
+ * has answered and, when it is on, the agents have been read or refused;
+ * `failed` is a first read that failed otherwise, which `retry` reads again.
  */
 export function useTeamAgents(teamId: Accessor<string>) {
   const flag = useFeatureFlag(enableAgentTeammates);
@@ -54,7 +57,13 @@ export function useTeamAgents(teamId: Accessor<string>) {
   const query = useTeamAgentsQuery(teamId, enabled);
   const agents = () =>
     enabled() && queryReadyGate(query) ? query.data.agents : [];
-  const known = () => !flag().loading && (!enabled() || queryReadyGate(query));
-  const failed = () => enabled() && query.isError && query.data === undefined;
+  const refused = () =>
+    thrownResultErrorHasCode(query.error, 'FORBIDDEN') ||
+    thrownResultErrorHasCode(query.error, 'UNAUTHORIZED');
+  const unread = () => query.isError && query.data === undefined;
+  const known = () =>
+    !flag().loading &&
+    (!enabled() || queryReadyGate(query) || (unread() && refused()));
+  const failed = () => enabled() && unread() && !refused();
   return { enabled, agents, known, failed, retry: () => query.refetch() };
 }
