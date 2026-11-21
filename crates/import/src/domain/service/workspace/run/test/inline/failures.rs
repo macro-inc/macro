@@ -291,6 +291,6 @@ async fn audit_delta_incomplete_views_fall_back_after_three_source_attempts(pool
             .iter()
             .filter(|fact| fact.kind == WrittenKind::DatabaseReservationFailure)
             .count(),
-        3
+        0
     );
 }

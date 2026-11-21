@@ -108,13 +108,21 @@ fn a_new_database_without_a_starter_table_is_refused() {
         tables: vec![],
     };
 
-    assert!(new_database(&detail).is_err());
+    assert!(matches!(
+        new_database(&detail)
+            .unwrap_err()
+            .downcast_ref::<import::domain::ports::DatabaseWriteFailure>(),
+        Some(import::domain::ports::DatabaseWriteFailure::MissingStarterTable)
+    ));
 }
 
 #[test]
 fn a_new_database_whose_starter_table_has_no_column_is_refused() {
     let database_id = Uuid::from_u128(0x0dbb_0000_0000_0000_0000_0000_0000_0003);
-    let table_id = Uuid::from_u128(0x7ab1_0000_0000_0000_0000_0000_0000_0003);
+    let table_id =
+        *databases::domain::models::FirstTableIds::for_database(DatabaseId::from_uuid(database_id))
+            .table
+            .as_uuid();
     let detail = DatabaseDetail {
         database: Database {
             appearance: None,
@@ -140,5 +148,32 @@ fn a_new_database_whose_starter_table_has_no_column_is_refused() {
         }],
     };
 
-    assert!(new_database(&detail).is_err());
+    assert!(matches!(
+        new_database(&detail)
+            .unwrap_err()
+            .downcast_ref::<import::domain::ports::DatabaseWriteFailure>(),
+        Some(import::domain::ports::DatabaseWriteFailure::MissingTitleColumn)
+    ));
+}
+
+#[test]
+fn folder_access_errors_remain_run_wide_but_database_access_is_source_scoped() {
+    use entity_access::domain::models::AccessError;
+    use import::domain::ports::DatabaseWriteFailure;
+    assert!(matches!(
+        super::database_folder_access_failure(AccessError::Unauthorized),
+        DatabaseWriteFailure::FolderUnavailable
+    ));
+    assert!(matches!(
+        super::database_folder_access_failure(AccessError::NotFound("private folder".into())),
+        DatabaseWriteFailure::FolderUnavailable
+    ));
+    assert!(matches!(
+        super::database_write_failure(databases::domain::models::DatabaseError::NotFound),
+        DatabaseWriteFailure::NotFound
+    ));
+    assert!(matches!(
+        super::database_access_failure(AccessError::Unauthorized),
+        DatabaseWriteFailure::PermissionDenied
+    ));
 }

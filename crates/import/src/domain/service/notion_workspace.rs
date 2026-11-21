@@ -526,20 +526,24 @@ where
             }
             return;
         }
-        let (to, error) = match &outcome {
-            Ok(0) => (RunStatus::Completed, None),
-            Ok(failed) => (
-                RunStatus::Completed,
-                Some(format!(
-                    "{failed} objects could not be imported. Plan again to retry them."
-                )),
-            ),
-            Err(error) => {
-                tracing::warn!(
-                    retryable = true,
-                    "notion import write failed; details retained in the report"
-                );
-                (RunStatus::Failed, Some(failure_text(error)))
+        let (to, error) = if control.cancel.stopped() || self.cancelled(user).await {
+            (RunStatus::Dismissed, Some("Cancelled".to_owned()))
+        } else {
+            match &outcome {
+                Ok(0) => (RunStatus::Completed, None),
+                Ok(failed) => (
+                    RunStatus::Completed,
+                    Some(format!(
+                        "{failed} objects could not be imported. Plan again to retry them."
+                    )),
+                ),
+                Err(error) => {
+                    tracing::warn!(
+                        retryable = true,
+                        "notion import write failed; details retained in the report"
+                    );
+                    (RunStatus::Failed, Some(failure_text(error)))
+                }
             }
         };
         // Anything still claimed (a cancel, or a failure part way) goes back

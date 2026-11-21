@@ -52,6 +52,11 @@ pub(super) const DOCUMENT_ENTITY: &str = "md";
 pub(super) const DATABASE_ENTITY: &str = "database";
 pub(super) const FOLDER_ENTITY: &str = "project";
 
+/// A cancellation checkpoint, kept distinct from provider and source errors.
+#[derive(Debug, thiserror::Error)]
+#[error("Cancelled")]
+pub(super) struct Cancelled;
+
 /// Set once the write must stop (the user cancelled, the process is shutting
 /// down, or another process took the run over); long writes check it between
 /// batches, rows and tasks so a stop takes effect within seconds.
@@ -71,7 +76,9 @@ impl Cancel {
 
     /// Fail with "Cancelled" once the import was cancelled.
     pub fn ensure_running(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(!self.stopped(), "Cancelled");
+        if self.stopped() {
+            return Err(Cancelled.into());
+        }
         Ok(())
     }
 }
@@ -330,6 +337,21 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             }
         }
         Ok(receipts.len().min(RESERVATION_ATTEMPTS))
+    }
+
+    /// Success and terminal fallback both release the bounded retry state.
+    pub async fn clear_reservation_failures(&self) -> anyhow::Result<()> {
+        if self.all(WrittenKind::DatabaseReservationFailure).is_empty() {
+            return Ok(());
+        }
+        self.store
+            .clear_database_reservation_failures(self.user, self.import_id)
+            .await?;
+        self.known
+            .lock()
+            .map_err(|_| anyhow::anyhow!("written marker buffer unavailable"))?
+            .retain(|(kind, _), _| *kind != WrittenKind::DatabaseReservationFailure);
+        Ok(())
     }
 
     /// Spend one source-scoped attempt; run-wide failures never call this.

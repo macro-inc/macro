@@ -27,6 +27,8 @@ pub(super) struct Writer {
     pub(super) grant_on_database: bool,
     pub(super) database_insert_rows: std::sync::atomic::AtomicUsize,
     pub(super) database_error_once: std::sync::atomic::AtomicBool,
+    pub(super) unknown_database: Option<&'static str>,
+    pub(super) folder_access_error: std::sync::atomic::AtomicBool,
     pub(super) database_failures: HashMap<String, crate::domain::ports::DatabaseWriteFailure>,
 
     pub(super) tasks: Mutex<Vec<Uuid>>,
@@ -196,6 +198,12 @@ impl WorkspaceWriter for Writer {
         _: &MacroUserIdStr<'static>,
         folder: Uuid,
     ) -> anyhow::Result<bool> {
+        if self
+            .folder_access_error
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(crate::domain::ports::DatabaseWriteFailure::FolderUnavailable.into());
+        }
         let grants = self.grants.lock().unwrap();
         let records = self.folder_records.lock().unwrap();
         let mut current = Some(folder);
@@ -362,6 +370,9 @@ impl WorkspaceWriter for Writer {
         name: &str,
         folder: Option<Uuid>,
     ) -> anyhow::Result<NewDatabase> {
+        if self.unknown_database == Some(name) {
+            anyhow::bail!("private payload from source {name}");
+        }
         if let Some(error) = self.database_failures.get(name) {
             return Err((*error).into());
         }
@@ -369,7 +380,7 @@ impl WorkspaceWriter for Writer {
             .database_error_once
             .swap(false, std::sync::atomic::Ordering::SeqCst)
         {
-            anyhow::bail!("database service temporarily unavailable");
+            return Err(crate::domain::ports::DatabaseWriteFailure::Unavailable.into());
         }
         if let Some((started, gate)) = &self.reservation_gate {
             started.add_permits(1);

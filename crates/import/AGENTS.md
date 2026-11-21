@@ -336,9 +336,21 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   admitted reservations before returning a transient error; retry without
   converting run-wide outages into permanent fallback links. Source validation,
   missing destinations and explicit source permissions degrade only that source.
-  Incomplete view lists and source conflicts spend durable reservation-failure
-  receipts, capped at three per generation before a named link fallback. Auth,
-  storage, transport and upstream rate limits/outages never spend that threshold.
+  Incomplete view lists, source conflicts and unclassified source errors spend
+  durable consecutive-failure receipts, capped at three before a named link
+  fallback. Reset receipts on successful reservation or budget exhaustion.
+  Re-planning retains failure-only generations while that bounded budget is
+  active; consent markers alone never retain a generation. Unknown failures say
+  "An unexpected error stopped <title>" in the report. Trace only the safe
+  `error_type` and source UUID, never error text or titles.
+  Authentication, storage, folder-access failures and rate limits remain
+  run-wide without spending a source budget. A Notion 5xx/timeout spends only
+  when a fresh uncached, paced read of another successfully reserved source
+  succeeds after the failed pass. Count that single health probe in its child
+  span; cached earlier successes do not qualify. With no healthy peer, stay
+  run-wide. Folder access is rechecked next run instead of leaving permanent
+  links. Recheck persisted cancellation before bodies and preserve Dismissed
+  at settlement, with a typed cancellation checkpoint.
   Every failed reservation names its source; a pending teammate copy fails the
   attempt with a named wait message and remains safe to retry. Use the source UUID as identity within the
   user/team ledger; globally unique Notion source UUIDs never dedupe by title.
@@ -400,7 +412,9 @@ paths reject workspace-plan rows so approval cannot be bypassed.
 
 The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
 `schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`,
-`dependency_included` and `database_reservation_failure` written kinds. Unknown future kinds stay readable as
+`dependency_included` and `database_reservation_failure` written kinds.
+Only consecutive failure receipts retain an otherwise unfinished generation;
+clear them atomically with an owned point lookup after success or exhaustion. Unknown future kinds stay readable as
 `Unsupported` prerequisites and stop only the affected source with a typed
 report warning. Deploy compatible readers before writers; drain affected import
 runs or keep compatible readers before rolling back to an older binary. Renewal

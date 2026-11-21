@@ -32,6 +32,8 @@ struct ReservedSource {
     prepared: Option<write::PreparedDatabase>,
     destination: Option<DatabaseDestination>,
     failure: Option<String>,
+    deferred: Option<failure::Deferred>,
+    error_type: Option<&'static str>,
 }
 
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
@@ -102,23 +104,31 @@ where
             .map(|item| {
                 let context = &context;
                 async move {
-                    (
-                        item.notion_id.clone(),
-                        self.reserve_source(&item, context).await,
-                    )
+                    let result = self.reserve_source(&item, context).await;
+                    (item, result)
                 }
                 .boxed()
             })
             .collect();
         let mut reservations = stream::iter(requests).buffer_unordered(RESERVATION_CONCURRENCY);
         let mut first_error = None;
+        let mut deferred = Vec::new();
+        let mut healthy_source = None;
         // Drain every admitted reservation before returning a transient error.
         // Dropping one after a remote create but before its marker would leave
         // another source's retry without its durable schema facts.
         let mut failed = 0i64;
-        while let Some((source, result)) = reservations.next().await {
+        while let Some((item, result)) = reservations.next().await {
+            let source = item.notion_id.clone();
             match result {
-                Ok(reserved) => {
+                Ok(mut reserved) => {
+                    if let Some(cause) = reserved.deferred.take() {
+                        deferred.push((item, cause));
+                        continue;
+                    }
+                    if reserved.prepared.is_some() {
+                        healthy_source.get_or_insert(source.clone());
+                    }
                     if let Some(destination) = reserved.destination {
                         destinations.insert(source.clone(), destination);
                     }
@@ -138,6 +148,55 @@ where
                 }
             }
         }
+        // Re-check the persisted cancellation at this phase boundary, without
+        // waiting for the periodic cross-process watcher before converting bodies.
+        if self.cancelled(user).await {
+            cancel.stop();
+        }
+        cancel.ensure_running()?;
+        // A fresh paced read occurs after every failed read above. Cached success
+        // from before the failure is deliberately insufficient evidence.
+        let needs_probe = deferred
+            .iter()
+            .any(|(_, cause)| matches!(cause.kind, failure::DeferredKind::NotionUnavailable));
+        let notion_up = if needs_probe && let Some(source) = healthy_source {
+            api.source_responds(&source).await
+        } else {
+            false
+        };
+        for (item, cause) in deferred {
+            cancel.ensure_running()?;
+            failed += 1;
+            let result = if matches!(cause.kind, failure::DeferredKind::NotionUnavailable)
+                && !notion_up
+            {
+                Err(ImportError::Other(
+                    failure::RunFailure {
+                        reason: "Notion could not complete the request; retry this import".into(),
+                        error_type: cause.error_type,
+                        unexpected: false,
+                    }
+                    .into(),
+                ))
+            } else {
+                let progress = write::Progress::new(&self.repo, user, item.import_id, written);
+                failure::spend(&item, &progress, cause).await
+            };
+            match result {
+                Ok(reserved) => {
+                    if let Some(destination) = reserved.destination {
+                        destinations.insert(item.notion_id.clone(), destination);
+                    }
+                    if let Some(reason) = reserved.failure {
+                        failures.insert(item.notion_id.clone(), reason);
+                    }
+                }
+                Err(error) if first_error.is_none() => {
+                    first_error = Some(failure::named(&item, error))
+                }
+                Err(_) => {}
+            }
+        }
         tracing::Span::current().record("failures", failed);
         if let Some(error) = first_error {
             return Err(error);
@@ -151,7 +210,7 @@ where
     }
 
     // Report errors contain reviewed titles; traces retain only ids and outcomes.
-    #[tracing::instrument(name = "notion.reserve_database", skip_all, fields(source_id = %item.notion_id, failed = tracing::field::Empty, attempts = tracing::field::Empty))]
+    #[tracing::instrument(name = "notion.reserve_database", skip_all, fields(source_id = %item.notion_id, failed = tracing::field::Empty, attempts = tracing::field::Empty, error_type = tracing::field::Empty))]
     async fn reserve_source(
         &self,
         item: &write::WriteItem,
@@ -161,23 +220,17 @@ where
         let failed = result.as_ref().is_err()
             || result
                 .as_ref()
-                .is_ok_and(|reserved| reserved.failure.is_some());
+                .is_ok_and(|reserved| reserved.failure.is_some() || reserved.deferred.is_some());
         tracing::Span::current().record("failed", failed);
-        result.map_err(|error| {
-            let reason = match &error {
-                ImportError::Other(cause) => cause
-                    .downcast_ref::<failure::RunFailure>()
-                    .map(|failure| failure.0.as_str()),
-                _ => None,
-            }
-            .unwrap_or("database reservation could not be persisted; retry this import");
-            let title = if item.title.trim().is_empty() {
-                plan::UNTITLED_DATABASE
-            } else {
-                &item.title
-            };
-            ImportError::Other(anyhow::anyhow!("Database \"{title}\": {reason}"))
-        })
+        let kind = match &result {
+            Ok(reserved) => reserved.error_type,
+            Err(ImportError::Other(error)) => Some(failure::error_type(error)),
+            Err(_) => Some("ImportError"),
+        };
+        if let Some(kind) = kind {
+            failure::record(kind, &item.notion_id);
+        }
+        result.map_err(|error| failure::named(item, error))
     }
 
     async fn reserve_source_inner(
@@ -236,7 +289,7 @@ where
                 }
                 TeamClaim::Linked { .. } => return Ok(()),
                 TeamClaim::Waiting { .. } => {
-                    return Err(failure::RunFailure("a teammate is still creating this database; retry this import when it finishes".into()).into());
+                    return Err(failure::RunFailure { reason: "a teammate is still creating this database; retry this import when it finishes".into(), error_type: "teammate_pending", unexpected: false }.into());
                 }
                 TeamClaim::Held | TeamClaim::Free => {}
             }
@@ -263,48 +316,53 @@ where
             Ok(())
         }.await;
         if let Err(error) = outcome {
-            let classified = if let Some(reason) = error.downcast_ref::<failure::RunFailure>() {
-                progress.flush_warnings().await?;
-                return Err(ImportError::Other(
-                    failure::RunFailure(reason.0.clone()).into(),
-                ));
-            } else {
-                failure::classify(&error)
-            };
-            let (reason, fallback) = match classified {
-                failure::Failure::Permanent(reason, fallback) => (reason, fallback),
+            if error.is::<write::Cancelled>() {
+                return Err(ImportError::Other(error));
+            }
+            let error_type = failure::error_type(&error);
+            reserved.error_type = Some(error_type);
+            if error.is::<failure::RunFailure>() {
+                return Err(ImportError::Other(error));
+            }
+            match failure::classify(&error) {
+                failure::Failure::Permanent(reason, fallback) => {
+                    progress.source_stopped(&item.title, reason).await?;
+                    reserved.destination = Some(DatabaseDestination::Fallback(fallback));
+                    reserved.failure = Some(reason.to_string());
+                }
                 failure::Failure::SourceRetryable(reason) => {
-                    let attempts = progress.reservation_failure().await?;
-                    tracing::Span::current().record("attempts", attempts as i64);
-                    tracing::warn!(source_id = %item.notion_id, attempts, retryable = attempts < write::RESERVATION_ATTEMPTS, "source reservation did not complete");
-                    if attempts < write::RESERVATION_ATTEMPTS {
-                        progress.flush_warnings().await?;
-                        return Err(ImportError::Other(
-                            failure::RunFailure(format!(
-                                "{reason}; attempt {attempts} of {}, retry this import",
-                                write::RESERVATION_ATTEMPTS
-                            ))
-                            .into(),
-                        ));
-                    }
-                    (
-                        crate::domain::models::SourceStopReason::ReservationRetriesExhausted,
-                        NotionDatabaseFallback::Unresolved,
-                    )
+                    progress.flush_warnings().await?;
+                    return failure::spend_retryable(item, &progress, reason, error_type).await;
+                }
+                failure::Failure::Unexpected => {
+                    reserved.deferred = Some(failure::Deferred {
+                        kind: failure::DeferredKind::Unexpected,
+                        error_type,
+                    })
+                }
+                failure::Failure::NotionUnavailable => {
+                    reserved.deferred = Some(failure::Deferred {
+                        kind: failure::DeferredKind::NotionUnavailable,
+                        error_type,
+                    })
                 }
                 failure::Failure::RunWide(reason) => {
-                    tracing::warn!(source_id = %item.notion_id, retryable = true, "database reservation stopped before body conversion");
                     progress.flush_warnings().await?;
                     return Err(ImportError::Other(
-                        failure::RunFailure(reason.into()).into(),
+                        failure::RunFailure {
+                            reason: reason.into(),
+                            error_type,
+                            unexpected: false,
+                        }
+                        .into(),
                     ));
                 }
-            };
-            progress.source_stopped(&item.title, reason).await?;
-            reserved.destination = Some(DatabaseDestination::Fallback(fallback));
-            reserved.failure = Some(reason.to_string());
+            }
         }
         progress.flush_warnings().await?;
+        if reserved.deferred.is_none() && reserved.failure.is_none() {
+            progress.clear_reservation_failures().await?;
+        }
         Ok(reserved)
     }
 }

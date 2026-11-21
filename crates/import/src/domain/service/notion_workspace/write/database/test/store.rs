@@ -11,6 +11,17 @@ pub(super) struct FakeStore {
 }
 
 impl WrittenObjects for FakeStore {
+    async fn clear_database_reservation_failures(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> crate::domain::ports::Result<()> {
+        self.written.lock().unwrap().retain(|fact| {
+            fact.import_id != import_id || fact.kind != WrittenKind::DatabaseReservationFailure
+        });
+        Ok(())
+    }
+
     async fn replace_dependency_inclusions(
         &self,
         _: &MacroUserIdStr<'static>,

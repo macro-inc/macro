@@ -17,7 +17,8 @@ pub(in super::super::super) struct PreparedDatabase {
 }
 
 /// Create the owner-only database, then schema and deterministic saved views.
-#[tracing::instrument(name = "notion.prepare_database", skip_all, fields(source_id = %item.notion_id, database_id = tracing::field::Empty, views = tracing::field::Empty, rows_read_scan = tracing::field::Empty), err)]
+// The reservation caller records safe error types; raw errors may contain content.
+#[tracing::instrument(name = "notion.prepare_database", skip_all, fields(source_id = %item.notion_id, database_id = tracing::field::Empty, views = tracing::field::Empty, rows_read_scan = tracing::field::Empty))]
 pub(in super::super::super) async fn prepare_database<
     Api: NotionApi,
     Writer: WorkspaceWriter,

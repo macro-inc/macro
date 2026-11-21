@@ -142,14 +142,14 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
         .iter()
         .find(|entry| entry.table.id == ids.table)
     else {
-        anyhow::bail!("reserved database {database_id} has no recorded starter table");
+        return Err(DatabaseWriteFailure::MissingStarterTable.into());
     };
     let Some(title_column) = table
         .columns
         .iter()
         .find(|entry| entry.column.id == ids.title_column)
     else {
-        anyhow::bail!("reserved database {database_id} has no original title column");
+        return Err(DatabaseWriteFailure::MissingTitleColumn.into());
     };
     Ok(NewDatabase {
         database_id,
@@ -356,11 +356,12 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 model_entity::EntityType::Project,
             )
             .await
-            .map_err(database_access_failure)?;
+            .map_err(database_folder_access_failure)?;
         Ok(self
             .project_service
             .folder_has_explicit_grant(receipt)
-            .await?)
+            .await
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?)
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -378,11 +379,12 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 model_entity::EntityType::Project,
             )
             .await
-            .map_err(database_access_failure)?;
+            .map_err(database_folder_access_failure)?;
         Ok(self
             .project_service
             .folder_has_team_edit_grant(receipt)
-            .await?)
+            .await
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?)
     }
 
     async fn folder_exists(
@@ -505,7 +507,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                     model_entity::EntityType::Project,
                 )
                 .await
-                .map_err(database_access_failure)?;
+                .map_err(database_folder_access_failure)?;
             self.databases_service
                 .create_database_in_project(DatabaseId::from_uuid(id), command, project)
                 .await
@@ -692,6 +694,13 @@ fn database_write_failure(error: DatabaseError) -> DatabaseWriteFailure {
         | DatabaseError::InvalidSharing(_)
         | DatabaseError::InvalidOp(_) => DatabaseWriteFailure::InvalidSchema,
     }
+}
+
+/// A filing failure may affect every source in that folder; always re-check it.
+fn database_folder_access_failure(
+    _: entity_access::domain::models::AccessError,
+) -> DatabaseWriteFailure {
+    DatabaseWriteFailure::FolderUnavailable
 }
 
 fn database_access_failure(

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nWITH owned AS MATERIALIZED (\n    SELECT entity.id FROM import_entity AS entity\n    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1\n      AND entity.source = 'notion' AND entity.kind = 'data_source'\n), removed AS (\n    DELETE FROM import_entity_written AS written USING owned\n    WHERE written.import_id = owned.id AND written.kind = 'database_reservation_failure'\n    RETURNING written.import_id\n)\nSELECT EXISTS (SELECT 1 FROM owned) AS \"owned!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "402700da288cc2d102df895c53951efd5951fbd72a4af21261821078ee219603"
+}

@@ -27,6 +27,15 @@ pub enum DatabaseWriteFailure {
     /// The owner cannot access this source destination.
     #[error("the source database destination is not permitted")]
     PermissionDenied,
+    /// The original starter table was removed from a reserved database.
+    #[error("the reserved database starter table is missing")]
+    MissingStarterTable,
+    /// The original title column was removed from a reserved database.
+    #[error("the reserved database title column is missing")]
+    MissingTitleColumn,
+    /// Filing folder access must be checked again on the next run.
+    #[error("the import folder is inaccessible; retry the import")]
+    FolderUnavailable,
     /// A source version changed during its reservation.
     #[error("the source database changed during reservation")]
     Conflict,
@@ -1284,6 +1293,13 @@ pub trait NotionRunRepo: Send + Sync + 'static {
 /// What workspace writes created for each ledger row, recorded as they go so
 /// a resumed write reuses it instead of creating it again.
 pub trait WrittenObjects: Send + Sync + 'static {
+    /// Clear only this owned source's consecutive reservation failure receipts.
+    fn clear_database_reservation_failures(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Replace only this owned review's dependency consent. The selected ids
     /// must be a subset of its staged source ids; created-object markers stay immutable.
     fn replace_dependency_inclusions(

@@ -55,6 +55,10 @@ never permanently downgrades page cards on an outage. Normalize database
 validation, not-found, explicit resource permission and version-conflict errors
 into `DatabaseWriteFailure`; repository/service outages stay run-wide. The
 import domain owns source retry thresholds and link fallback decisions.
+Map project/folder receipt and grant-read errors to `FolderUnavailable`, so the
+next run rechecks the folder. Keep database access failures source-scoped.
+Missing deterministic starter table/title IDs return typed errors without raw
+ids or messages; never select another table or column by position.
 
 - `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
   ports. PostgreSQL adapter tests cover live targets without grants,

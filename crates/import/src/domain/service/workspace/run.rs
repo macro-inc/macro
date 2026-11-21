@@ -289,7 +289,9 @@ where
                         Ok(set) => {
                             let span = tracing::Span::current();
                             span.record("pending", set.pending.len());
-                            span.record("done", set.all.len() - set.pending.len());
+                            let writes = set.all.iter().filter(|item| item.writes()).count();
+                            let pending = set.pending.iter().filter(|item| item.writes()).count();
+                            span.record("done", writes.saturating_sub(pending));
                             let service = self.clone();
                             self.jobs.tracker.spawn(
                                 async move { service.write_plan(&user, set).await }

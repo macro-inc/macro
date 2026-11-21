@@ -519,6 +519,38 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
+    #[tracing::instrument(skip(self, user), err)]
+    async fn clear_database_reservation_failures(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> Result<()> {
+        let owned = sqlx::query_scalar!(
+            r#"
+WITH owned AS MATERIALIZED (
+    SELECT entity.id FROM import_entity AS entity
+    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+      AND entity.source = 'notion' AND entity.kind = 'data_source'
+), removed AS (
+    DELETE FROM import_entity_written AS written USING owned
+    WHERE written.import_id = owned.id AND written.kind = 'database_reservation_failure'
+    RETURNING written.import_id
+)
+SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
+        "#,
+            user.as_ref(),
+            import_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        if !owned {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all, fields(review_id = %review, sources = import_ids.len(), included = included.len()), err)]
     async fn replace_dependency_inclusions(
         &self,

@@ -37,6 +37,8 @@ pub enum SourceStopReason {
     DestinationNotPermitted,
     /// A source-scoped reservation failed three times in this generation.
     ReservationRetriesExhausted,
+    /// Unexpected source-local failures exhausted their consecutive budget.
+    UnexpectedReservationErrors,
     /// The interrupted run never approved this external dependency in its current review.
     DependencyNotApproved,
     /// A newer worker recorded prerequisites this reader cannot interpret.
@@ -59,6 +61,7 @@ impl std::fmt::Display for SourceStopReason {
             Self::DestinationMissing => "this source's database destination was not found; references retain their Notion links",
             Self::DestinationNotPermitted => "this source's database destination does not permit access; references retain their Notion links",
             Self::ReservationRetriesExhausted => "this source's database reservation could not finish after 3 attempts; references retain their Notion links",
+            Self::UnexpectedReservationErrors => "an unexpected error stopped this source after 3 consecutive attempts; references retain their Notion links",
             Self::DependencyNotApproved => "external dependency was not explicitly included in this review; re-plan to include it",
             Self::UnsupportedMarker => "this import contains unsupported written markers; resume with an upgraded importer before writing this source",
             Self::PersonalFolderShared => "folder sharing changed after reservation; no personal rows were added; re-import into an owner-only folder",
@@ -182,6 +185,12 @@ impl FidelityWarning {
     /// A warning suitable for users, never a serialized enum or raw object id.
     pub fn render(&self) -> String {
         match self {
+            Self::SourceStopped {
+                title,
+                reason: SourceStopReason::UnexpectedReservationErrors,
+            } => format!(
+                "An unexpected error stopped {title} after 3 consecutive attempts; references retain their Notion links."
+            ),
             Self::SourceStopped { title, reason } => format!("Database {title} stopped: {reason}."),
             Self::Text(message) => message.clone(),
             Self::References {

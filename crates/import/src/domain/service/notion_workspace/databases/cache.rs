@@ -22,7 +22,7 @@ impl<Key, Value> Metadata<Key, Value> {
     }
 }
 impl<Key: Eq + Hash + Send, Value: Clone + Send + Sync> Metadata<Key, Value> {
-    #[tracing::instrument(name = "notion.metadata_cache", skip_all, fields(cache_hit = tracing::field::Empty), err)]
+    #[tracing::instrument(name = "notion.metadata_cache", skip_all, fields(cache_hit = tracing::field::Empty, failed = tracing::field::Empty))]
     async fn get<Fetch, Read>(&self, key: Key, fetch: Fetch) -> Result<Value, NotionError>
     where
         Fetch: FnOnce() -> Read + Send,
@@ -46,6 +46,7 @@ impl<Key: Eq + Hash + Send, Value: Clone + Send + Sync> Metadata<Key, Value> {
             .await
             .cloned();
         tracing::Span::current().record("cache_hit", !fetched);
+        tracing::Span::current().record("failed", result.is_err());
         result
     }
 }
@@ -81,6 +82,17 @@ impl<Api> CachedNotion<Api> {
         self.sources.cells.lock().await.clear();
     }
 }
+impl<Api: NotionApi> CachedNotion<Api> {
+    /// One uncached read proves health after the reservation pass failed elsewhere.
+    #[tracing::instrument(name = "notion.probe_source_health", skip_all, fields(source_id = %id, reads = tracing::field::Empty, healthy = tracing::field::Empty))]
+    pub async fn source_responds(&self, id: &NotionId) -> bool {
+        tracing::Span::current().record("reads", 1);
+        let healthy = self.inner.data_source(id).await.is_ok();
+        tracing::Span::current().record("healthy", healthy);
+        healthy
+    }
+}
+
 impl<Api: NotionApi> NotionApi for CachedNotion<Api> {
     async fn search(
         &self,

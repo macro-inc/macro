@@ -7,6 +7,8 @@ pub(super) struct Inline {
     pub(super) external_title: Option<String>,
     pub(super) transient_query: Option<Arc<std::sync::atomic::AtomicBool>>,
     pub(super) incomplete_views: bool,
+    pub(super) query_failures: std::collections::HashMap<NotionId, u16>,
+    pub(super) notion_reads: Option<Arc<Mutex<Vec<(NotionId, bool)>>>>,
 }
 impl NotionApi for Inline {
     async fn page(&self, id: &NotionId) -> std::result::Result<NotionPage, NotionError> {
@@ -47,6 +49,9 @@ impl NotionApi for Inline {
         &self,
         id: &NotionId,
     ) -> std::result::Result<NotionDataSource, NotionError> {
+        if let Some(reads) = &self.notion_reads {
+            reads.lock().unwrap().push((id.clone(), true));
+        }
         Ok(NotionDataSource {
             id: id.clone(),
             database_id: if *id == page_id('d') {
@@ -120,6 +125,15 @@ impl NotionApi for Inline {
         id: &NotionId,
         _: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
+        if let Some(status) = self.query_failures.get(id) {
+            if let Some(reads) = &self.notion_reads {
+                reads.lock().unwrap().push((id.clone(), false));
+            }
+            return Err(NotionError::Upstream {
+                status: *status,
+                body: "private query payload".into(),
+            });
+        }
         if self
             .transient_query
             .as_ref()
