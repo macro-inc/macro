@@ -39,11 +39,14 @@ does; `ARCHITECTURE.md` is how the code is laid out and the rules it keeps;
   pushes. A pull that conflicts is aborted: the commits stay local, the owner
   is told once, and the next commit tries again.
 - New code takes effect when the agent restarts. A supervised agent restarts
-  itself after a landing (exit 75); a boot that comes up healthy records its
-  HEAD as the last good one, which the supervisor rolls back to when boots
-  keep failing. A broken `tsconfig.json` doesn't fail a boot (the script
-  checker is made on first use), so it is never rolled back. Each process
-  that makes a checker after it broke (a script, or the agent's first
+  itself after a landing (exit 75); a boot that comes up healthy (chat's
+  stream open and Macro answering, within 3 minutes) records its HEAD as the
+  last good one, which the supervisor rolls back to when boots keep failing.
+  A boot that can't hear Macro in time exits as a failed one, so a Macro
+  outage of about 9 minutes right after a landing (3 boots) rolls back a
+  correct landing too. A broken `tsconfig.json` doesn't fail a boot (the
+  script checker is made on first use), so it is never rolled back. Each
+  process that makes a checker after it broke (a script, or the agent's first
   `describe`) fails until it is fixed; a checker the agent already made keeps
   the configuration it read. `bun run check` is what catches it before a land.
 - An area keeps a short `DESIGN.md` next to its code where the why isn't

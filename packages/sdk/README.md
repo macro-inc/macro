@@ -791,7 +791,7 @@ atomic database operation contract, including batch-local UUIDs, like
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
 
 A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
-`Won` or `Lost`, independent of Stage) and a currency field beside each
+`Won`, `Lost` or `Declined`, a deal the team turned down, independent of Stage) and a currency field beside each
 monetary field, such as `Revenue currency`; new entries default to `Open` and
 `USD`, and neither field can be emptied. `listWithFields()` and `find()` name
 each monetary field's `currencyField`, `find()` returns one total per

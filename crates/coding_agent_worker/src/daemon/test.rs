@@ -21,6 +21,40 @@ fn the_event_stream_reconnects_fast_then_backs_off() {
 }
 
 #[test]
+fn a_stream_that_ends_as_soon_as_it_opens_keeps_backing_off() {
+    let mut delays = reconnect_delays();
+    let mut attempt = 0;
+    let at_once = Some(Duration::from_millis(5));
+
+    reconnect_delay(at_once, &mut delays, &mut attempt);
+    reconnect_delay(at_once, &mut delays, &mut attempt);
+    let third = reconnect_delay(at_once, &mut delays, &mut attempt);
+
+    assert_eq!(attempt, 3);
+    assert!(
+        third >= Duration::from_millis(750),
+        "third reopen of a stream closed at once after {third:?}"
+    );
+}
+
+#[test]
+fn a_stream_that_stalled_after_holding_reopens_at_the_first_delay() {
+    let mut delays = reconnect_delays();
+    let mut attempt = 0;
+    for _ in 0..5 {
+        reconnect_delay(None, &mut delays, &mut attempt);
+    }
+
+    let stalled = reconnect_delay(Some(Duration::from_secs(70)), &mut delays, &mut attempt);
+
+    assert_eq!(attempt, 1);
+    assert!(
+        stalled <= Duration::from_millis(313),
+        "reopen after a stall after {stalled:?}"
+    );
+}
+
+#[test]
 fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
     let (connected, mut runtime) = watch::channel(false);
     assert!(!runtime_held_since_last_look(&mut runtime));
@@ -48,6 +82,7 @@ async fn stop_does_not_wait_for_in_flight_work() {
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,
         runtime_connected: watch::channel(false).1,
+        trigger_stream: watch::channel(TriggerStreamHealth::Connecting).1,
         _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 
@@ -113,6 +148,14 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
     .await
     .unwrap();
     storage_task.await.unwrap();
+    let mut health = daemon.trigger_stream_health();
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        health.wait_for(|health| *health == TriggerStreamHealth::NoAgentsBound),
+    )
+    .await
+    .expect("the panel must hear that no agent is bound")
+    .unwrap();
     socket
         .send(Message::Text(
             serde_json::to_string(&ToRuntimeMessage::ModelProbeRequest)
@@ -334,7 +377,15 @@ async fn a_stalled_bound_agent_refresh_keeps_the_event_stream() {
     let cancel = CancellationToken::new();
     let agents_changed = Notify::new();
     let mut position = StreamPosition::new(std::time::SystemTime::now());
-    let serving = serve_once(&client, &NoWork, &cancel, &agents_changed, &mut position);
+    let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let serving = serve_once(
+        &client,
+        &NoWork,
+        &cancel,
+        &agents_changed,
+        &mut position,
+        &health,
+    );
     tokio::pin!(serving);
 
     let mut paths = Vec::new();
@@ -387,11 +438,21 @@ async fn a_refused_credential_on_refresh_ends_the_event_stream() {
 
     // The service checks credentials only when a stream opens, so a removed
     // harness must not keep reading the one it has.
-    let outcome = serve_once(&client, &NoWork, &cancel, &agents_changed, &mut position).await;
-    let ServeOutcome::Ended(error) = outcome else {
+    let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let outcome = serve_once(
+        &client,
+        &NoWork,
+        &cancel,
+        &agents_changed,
+        &mut position,
+        &health,
+    )
+    .await;
+    let ServeOutcome::Ended { error, lasted } = outcome else {
         panic!("the stream outlived a refused credential");
     };
     assert!(format!("{error}").contains("401"), "{error}");
+    assert!(lasted.is_some(), "the stream had opened");
 }
 
 /// Never runs: no event reaches it.
