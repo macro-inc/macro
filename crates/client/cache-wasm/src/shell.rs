@@ -598,6 +598,8 @@ thread_local! {
 /// The bundled schema's tables, parsed from its SDL when this engine was built.
 static BUNDLED_SCHEMA_TABLES: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/bundled_schema.postcard"));
+/// The hash `from_artifact` gave those tables when they were built.
+static BUNDLED_SCHEMA_HASH: &str = include_str!(concat!(env!("OUT_DIR"), "/bundled_schema.hash"));
 
 /// Installs a schema other than the bundled one, once per worker, before
 /// opening its engine. The app's own worker needs no call: engines use the
@@ -620,9 +622,11 @@ pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
 
 /// The schema for the next engine: the one `configureCacheSchema` installed,
 /// or else the bundled one. Decoding its tables costs a fraction of parsing its
-/// SDL, which was a large part of starting an engine. The worker keeps the
-/// bundled schema only once an engine is built with it (`build_engine`), so a
-/// caller whose open was refused can still configure another schema.
+/// SDL, which was a large part of starting an engine; they were sorted,
+/// validated and hashed when the engine was built, so it only decodes them.
+/// The worker keeps the bundled schema only once an engine is built with it
+/// (`build_engine`), so a caller whose open was refused can still configure
+/// another schema.
 fn runtime_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
     match RUNTIME_SCHEMA.with(|slot| slot.borrow().clone()) {
         Some(schema) => Ok(schema),
@@ -632,7 +636,10 @@ fn runtime_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue>
 
 fn decode_bundled_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
     let tables = postcard::from_bytes(BUNDLED_SCHEMA_TABLES).map_err(err_js)?;
-    cache_core::meta::Schema::from_artifact(tables).map_err(err_js)
+    Ok(cache_core::meta::Schema::from_canonical_parts(
+        tables,
+        BUNDLED_SCHEMA_HASH.to_owned(),
+    ))
 }
 
 fn build_engine(

@@ -140,6 +140,20 @@ impl Schema {
         let hash = format!("{:x}", Sha256::digest(bytes));
         Ok(Arc::new(Self { hash, ..schema }))
     }
+    /// Rebuilds a schema from the artifact and hash of one that `from_artifact`
+    /// already built, such as tables written at build time, without sorting,
+    /// validating or hashing it again. Pass only a pair taken from the same
+    /// `Schema`; anything else goes through `from_artifact`.
+    pub fn from_canonical_parts(artifact: SchemaArtifact, hash: String) -> Arc<Self> {
+        debug_assert_eq!(
+            Self::from_artifact(artifact.clone())
+                .map(|schema| schema.hash.clone())
+                .ok(),
+            Some(hash.clone()),
+            "canonical parts come from one validated schema"
+        );
+        Arc::new(Self { artifact, hash })
+    }
     /// Combines compatible bundle versions, retaining definitions needed by queued work.
     /// Shape and identity changes require an explicit engine/storage migration.
     pub fn merge(&self, incoming: &Schema) -> Result<Arc<Self>, SchemaError> {

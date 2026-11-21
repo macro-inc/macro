@@ -260,3 +260,22 @@ fn runtime_sdl_identity_ignores_formatting_and_definition_order() {
             .unwrap();
     assert_eq!(first.hash(), second.hash());
 }
+
+#[test]
+fn canonical_parts_rebuild_the_schema_they_came_from() {
+    let parsed = bundled_schema();
+    let rebuilt = Schema::from_canonical_parts(parsed.artifact().clone(), parsed.hash().to_owned());
+    assert_eq!(rebuilt.hash(), parsed.hash());
+    assert_eq!(
+        serde_json::to_value(rebuilt.artifact()).unwrap(),
+        serde_json::to_value(parsed.artifact()).unwrap()
+    );
+}
+
+#[test]
+#[should_panic(expected = "canonical parts come from one validated schema")]
+#[cfg(debug_assertions)]
+fn canonical_parts_with_another_hash_fail_debug_builds() {
+    let parsed = bundled_schema();
+    Schema::from_canonical_parts(parsed.artifact().clone(), "0".repeat(64));
+}
