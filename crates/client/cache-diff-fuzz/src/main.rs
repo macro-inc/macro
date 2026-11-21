@@ -91,15 +91,16 @@ struct Args {
     #[arg(long)]
     stage_hydrates: bool,
     /// The share of hydrates (0 to 1) run with reads issued from other
-    /// threads while they run; each must answer as the state before the
-    /// hydrate or after it, or the seed fails. Not compared: give it to both
+    /// threads while they run. A read issued before the hydrate returned must
+    /// answer as the state before it or after it, and one issued after it
+    /// returned as the state after it, or the seed fails. Not compared: give it to both
     /// sides, so both read the same before and after.
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     concurrent_reads: f64,
 }
 
 fn main() -> Result<(), rootcause::Report> {
-    let args = Args::parse();
+    let mut args = Args::parse();
     // The host spawns background work (the idle checkpoint) on its async
     // runtime, a Tokio one; ops still run one at a time on this thread.
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -120,7 +121,8 @@ fn main() -> Result<(), rootcause::Report> {
     let docs = sequence::load_docs(&faker, &sources)?;
     std::fs::create_dir_all(&args.out)?;
     // Each seed's work directory is removed before it runs, so a start inside
-    // it would be deleted before it is copied.
+    // it would be deleted before it is copied. The copy reads the resolved
+    // path checked here, not a link that a seed's cleanup could remove.
     if let Some(from) = &args.start_from {
         std::fs::create_dir_all(&args.work)?;
         let (from, work) = (from.canonicalize()?, args.work.canonicalize()?);
@@ -131,6 +133,7 @@ fn main() -> Result<(), rootcause::Report> {
                 work.display()
             ));
         }
+        args.start_from = Some(from);
     }
     let end = args
         .seed
