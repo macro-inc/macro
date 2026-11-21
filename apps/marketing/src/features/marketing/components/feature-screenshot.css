@@ -34,15 +34,20 @@
   pointer-events: none;
 }
 
+/* Centered when the phones fit their container, scrolled from the start when they don't. */
 .feature-phone-screens {
   display: flex;
-  justify-content: center;
   gap: 28px;
   margin: 0;
-  padding: 0;
+  padding: 8px; /* room for each phone's frame ring inside the scroll box */
   list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.feature-phone-screens::-webkit-scrollbar { display: none; }
 .feature-phone-screens li { width: 220px; flex: none; }
+.feature-phone-screens li:first-child { margin-inline-start: auto; }
+.feature-phone-screens li:last-child { margin-inline-end: auto; }
 .feature-phone-screens img {
   display: block;
   width: 100%;
@@ -70,18 +75,14 @@
   .feature-screenshot-narrow .feature-screenshot-canvas { width: 100%; }
 }
 
-/* Three 220px phones and their gaps need 716px; below that the row scrolls. */
-@media (max-width: 759px) {
+/* Phones: the row runs to the screen edges and snaps to each phone. */
+@media (max-width: 699px) {
   .feature-phone-screens {
-    justify-content: flex-start;
     gap: 16px;
     margin-inline: -16px;
     padding-inline: 16px;
-    overflow-x: auto;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 16px;
-    scrollbar-width: none;
   }
-  .feature-phone-screens::-webkit-scrollbar { display: none; }
   .feature-phone-screens li { width: 230px; scroll-snap-align: start; }
 }
