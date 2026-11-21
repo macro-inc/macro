@@ -155,6 +155,18 @@ Span `calendar.occurrences.read` records which path answered
 `calendar.read.cache_error`); deadline and cache-error fallbacks also log
 `calendar.occurrences.cache_fallback`. A failed GraphQL fetch of an uncovered
 week also reads REST, as `fetch-error`, without that log.
+A week the cache covered is only as current as its last delta, while a REST
+answer shows the server as it is, so once REST has answered a viewport, or a
+delta has failed (one can fail while another tab hands over the database), the
+cache answers only after a delta succeeds: the read waits for one
+(`calendar.read.catch_up` `held`), or retries the failed one once its backoff
+has passed (`retried`). A failed delta also retries on its own, after 2, 4 and
+8 seconds, then waits for the next poke. A cache that cannot be brought forward
+(`behind`) reads REST (fallback `behind`, also logged), and answers from its
+older week only if REST fails too (`calendar.read.older_cache`). A cache that
+answered from the start and synced reads no REST and runs no extra delta.
+Without this, an event REST had shown, such as one just created, would drop
+off the grid until a later delta.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without

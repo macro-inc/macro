@@ -8,7 +8,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import {
   CalendarOccurrenceItemFieldsFragmentDoc,
@@ -27,6 +27,7 @@ import {
   markCalendarCacheAnswered,
   withinCacheHeadStart,
 } from './readiness';
+import type { CalendarSyncController } from './sync-controller';
 
 const MS_PER_DAY = 86_400_000;
 const OCCURRENCE_PAGE_SIZE = 2000;
@@ -386,8 +387,12 @@ const firstReads = new WeakMap<object, Promise<unknown>>();
 
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
+  /** Answered from a cache older than what REST already showed. */
+  | { kind: 'behind'; data: CalendarOccurrencesData }
   | { kind: 'unsupported' }
   | { kind: 'not-ready' };
+
+type TraceSpan = Pick<Span, 'setAttr'>;
 
 /**
  * Asks the host for a viewport. A host that has never answered gets a head
@@ -420,7 +425,9 @@ async function askCalendarRange(
 
 /**
  * Answers a viewport from the cache, fetching only spans never fetched and,
- * once per key, viewports whose cached occurrences cannot be read.
+ * once per key, viewports whose cached occurrences cannot be read. When the
+ * cache may be older than a REST answer already on screen, `sync` brings it
+ * forward first; a cache it cannot bring forward answers `behind`.
  */
 export async function readCalendarRange(
   host: Pick<
@@ -432,6 +439,8 @@ export async function readCalendarRange(
     fetchPage?: FetchCalendarOccurrencePage;
     signal?: AbortSignal;
     headStartMs?: number;
+    sync?: Pick<CalendarSyncController, 'catchUp'>;
+    span?: TraceSpan;
   } = {}
 ): Promise<CalendarRangeRead> {
   const args = toCalendarRangeArgs(range);
@@ -443,6 +452,16 @@ export async function readCalendarRange(
   if (first === 'not-ready') return { kind: 'not-ready' };
   let result = first;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
+  const catchUp = (await options.sync?.catchUp()) ?? 'current';
+  if (catchUp !== 'current') {
+    options.span?.setAttr('calendar.read.catch_up', catchUp);
+  }
+  if (options.signal?.aborted) throw options.signal.reason;
+  if (catchUp === 'held' || catchUp === 'retried') {
+    // The delta changed what the range holds since the first read.
+    result = await host.calendarRange(args);
+    if (result.kind === 'unsupported') return { kind: 'unsupported' };
+  }
   const fetchPage = options.fetchPage ?? fetchCalendarOccurrencePage;
   if (result.gaps.length > 0) {
     for (const window of calendarGapWindows(result.gaps)) {
@@ -459,7 +478,10 @@ export async function readCalendarRange(
     options.signal
   );
   if (items === 'unsupported') return { kind: 'unsupported' };
-  return { kind: 'range', data: { items, syncStatus: latestSyncStatus } };
+  return {
+    kind: catchUp === 'behind' ? 'behind' : 'range',
+    data: { items, syncStatus: latestSyncStatus },
+  };
 }
 
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';

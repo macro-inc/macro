@@ -10,9 +10,12 @@ import { CalendarsDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { createClient, fetchExchange } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { recordCalendarRestAnswer } from '../readiness';
 import {
   type CalendarChangesPage,
   CalendarSyncController,
+  DELTA_RETRY_BASE_MS,
+  MAX_DELTA_RETRIES,
   refetchCalendarList,
 } from '../sync-controller';
 import { graphqlEvent, graphqlOccurrence } from './fixtures';
@@ -333,5 +336,104 @@ describe('CalendarSyncController', () => {
     await vi.runAllTimersAsync();
     await controller.runDelta();
     expect(fetchChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('CalendarSyncController catching up a read', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('lets a synced cache answer without another delta', async () => {
+    const { fetchChanges, controller } = setup([changes()]);
+    await controller.runDelta();
+
+    await expect(controller.catchUp()).resolves.toBe('current');
+    expect(fetchChanges).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it('runs one delta before answering after REST showed a viewport', async () => {
+    const { fetchChanges, controller } = setup([changes(), changes()]);
+    await controller.runDelta();
+    recordCalendarRestAnswer();
+
+    expect(controller.caughtUp()).toBe(false);
+    await expect(controller.catchUp()).resolves.toBe('held');
+    await expect(controller.catchUp()).resolves.toBe('current');
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
+  it('holds a read for the running delta when REST answered during it', async () => {
+    const { fetchChanges, controller } = setup([changes(), changes()]);
+    const started = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => {
+      started.resolve();
+      return first.promise;
+    });
+    const running = controller.runDelta();
+    await started.promise;
+    recordCalendarRestAnswer();
+    const read = controller.catchUp();
+    first.resolve(changes());
+
+    await expect(read).resolves.toBe('held');
+    await running;
+    // The pass that started before the REST answer could not vouch for it.
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    expect(controller.caughtUp()).toBe(true);
+    controller.dispose();
+  });
+
+  it('reads as behind after a failed delta until its retry succeeds', async () => {
+    const { fetchChanges, controller } = setup([changes()]);
+    fetchChanges.mockRejectedValueOnce(new Error('owner handoff'));
+    await expect(controller.runDelta()).rejects.toThrow('owner handoff');
+
+    await expect(controller.catchUp()).resolves.toBe('behind');
+    expect(fetchChanges).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(DELTA_RETRY_BASE_MS);
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    await expect(controller.catchUp()).resolves.toBe('current');
+    controller.dispose();
+  });
+
+  it('retries a failed delta from a read once its backoff has passed', async () => {
+    const { fetchChanges, controller } = setup([changes()]);
+    fetchChanges.mockRejectedValueOnce(new Error('owner handoff'));
+    await expect(controller.runDelta()).rejects.toThrow('owner handoff');
+    // A hidden tab can hold the retry timer past its time.
+    vi.setSystemTime(Date.now() + DELTA_RETRY_BASE_MS);
+
+    await expect(controller.catchUp()).resolves.toBe('retried');
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    await vi.runAllTimersAsync();
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
+  it('stops retrying with backoff after a few failed deltas', async () => {
+    const { fetchChanges, controller } = setup([]);
+    fetchChanges.mockRejectedValue(new Error('owner handoff'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(controller.runDelta()).rejects.toThrow('owner handoff');
+
+    let waited = 0;
+    for (let retry = 1; retry <= MAX_DELTA_RETRIES; retry += 1) {
+      const delay = DELTA_RETRY_BASE_MS * 2 ** (retry - 1);
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(fetchChanges).toHaveBeenCalledTimes(retry);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchChanges).toHaveBeenCalledTimes(retry + 1);
+      waited += delay;
+    }
+    await vi.advanceTimersByTimeAsync(waited * 10);
+    expect(fetchChanges).toHaveBeenCalledTimes(MAX_DELTA_RETRIES + 1);
+    await expect(controller.catchUp()).resolves.toBe('behind');
+    expect(fetchChanges).toHaveBeenCalledTimes(MAX_DELTA_RETRIES + 1);
+    warn.mockRestore();
+    controller.dispose();
   });
 });

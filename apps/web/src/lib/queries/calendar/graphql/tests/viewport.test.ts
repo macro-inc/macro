@@ -10,6 +10,7 @@ import {
   CALENDAR_CACHE_READ_DEADLINE_MS,
   markCalendarCacheAnswered,
 } from '../readiness';
+import type { CalendarCatchUp } from '../sync-controller';
 import { readCalendarViewport } from '../viewport';
 import { graphqlOccurrence } from './fixtures';
 
@@ -407,5 +408,79 @@ describe('readCalendarViewport', () => {
       source: 'rest',
       fallback: 'unsupported',
     });
+  });
+});
+
+describe('readCalendarViewport after REST showed newer data', () => {
+  const sync = (outcome: CalendarCatchUp) => ({
+    catchUp: vi.fn(async () => outcome),
+  });
+
+  it('answers from the cache once a delta held the read', async () => {
+    const host = answeredHost();
+    const { result, span, fetchRest } = read(host, { sync: sync('held') });
+
+    await expect(result).resolves.toMatchObject({ source: 'cache' });
+    expect(fetchRest).not.toHaveBeenCalled();
+    // The range is read again after the delta changed it.
+    expect(host.calendarRange).toHaveBeenCalledTimes(2);
+    expect(span.attributes).toMatchObject({
+      'calendar.read.source': 'cache',
+      'calendar.read.catch_up': 'held',
+    });
+  });
+
+  it('records a read that retried a failed delta', async () => {
+    const host = answeredHost();
+    const { result, span } = read(host, { sync: sync('retried') });
+
+    await expect(result).resolves.toMatchObject({ source: 'cache' });
+    expect(span.attributes['calendar.read.catch_up']).toBe('retried');
+  });
+
+  it('reads REST when the cache could not be brought forward', async () => {
+    const host = answeredHost();
+    const { result, span, fetchRest } = read(host, { sync: sync('behind') });
+
+    await expect(result).resolves.toEqual({
+      source: 'rest',
+      data: restData,
+      fallback: 'behind',
+    });
+    expect(fetchRest).toHaveBeenCalledOnce();
+    expect(span.attributes).toMatchObject({
+      'calendar.read.source': 'rest',
+      'calendar.read.fallback_reason': 'behind',
+      'calendar.read.catch_up': 'behind',
+    });
+  });
+
+  it('answers from the older cache when REST cannot answer either', async () => {
+    const host = answeredHost();
+    const fetchRest = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const { result, span } = read(host, {
+      sync: sync('behind'),
+      fetchRest,
+    });
+
+    const answer = await result;
+    expect(answer.source).toBe('cache');
+    expect(answer.data.items).toHaveLength(1);
+    expect(span.attributes).toMatchObject({
+      'calendar.read.source': 'cache',
+      'calendar.read.older_cache': true,
+    });
+  });
+
+  it('asks nothing of a cache that is current', async () => {
+    const host = answeredHost();
+    const { result, span, fetchRest } = read(host, { sync: sync('current') });
+
+    await expect(result).resolves.toMatchObject({ source: 'cache' });
+    expect(fetchRest).not.toHaveBeenCalled();
+    expect(host.calendarRange).toHaveBeenCalledOnce();
+    expect(span.attributes['calendar.read.catch_up']).toBeUndefined();
   });
 });
