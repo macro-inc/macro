@@ -11,38 +11,22 @@ function stripeStub(overrides?: {
   subscription?: Stripe.Subscription;
 }): Stripe {
   return {
-    customers: {
-      retrieve: mock(async () => {
-        if (!overrides?.customer) {
-          throw new Error('customers.retrieve should not be called');
-        }
-        return overrides.customer;
-      }),
-    },
-    subscriptions: {
-      retrieve: mock(async () => {
-        if (!overrides?.subscription) {
-          throw new Error('subscriptions.retrieve should not be called');
-        }
-        return overrides.subscription;
-      }),
-    },
+    customers: { retrieve: async () => overrides?.customer },
+    subscriptions: { retrieve: async () => overrides?.subscription },
   } as unknown as Stripe;
 }
 
 function checkoutEvent(
-  overrides: Partial<Stripe.Checkout.Session> & {
-    eventId?: string;
-    livemode?: boolean;
-  } = {}
+  overrides: Partial<Stripe.Checkout.Session> = {}
 ): Stripe.CheckoutSessionCompletedEvent {
-  const { eventId, livemode, ...session } = overrides;
   return {
-    id: eventId ?? 'evt_checkout',
-    livemode: livemode ?? true,
+    id: 'evt_checkout',
+    livemode: true,
     type: 'checkout.session.completed',
+    created: 1_700_000_000,
     data: {
       object: {
+        mode: 'payment',
         payment_status: 'paid',
         amount_total: 2000,
         currency: 'usd',
@@ -51,40 +35,39 @@ function checkoutEvent(
           email: 'ada@example.com',
           name: 'Ada Lovelace',
         },
-        customer_email: null,
-        subscription: 'sub_123',
-        ...session,
+        subscription: null,
+        ...overrides,
       },
     },
   } as Stripe.CheckoutSessionCompletedEvent;
 }
 
 function invoicePaidEvent(
-  overrides: Partial<Stripe.Invoice> & {
-    eventId?: string;
-    livemode?: boolean;
-  } = {}
+  overrides: Partial<Stripe.Invoice> = {}
 ): Stripe.InvoicePaidEvent {
-  const { eventId, livemode, ...invoice } = overrides;
   return {
-    id: eventId ?? 'evt_invoice',
-    livemode: livemode ?? true,
+    id: 'evt_invoice',
+    livemode: true,
     type: 'invoice.paid',
     data: {
       object: {
+        id: 'in_subscription',
+        lines: { data: [] },
         status: 'paid',
         amount_paid: 2000,
         currency: 'usd',
         customer: 'cus_123',
-        customer_email: 'ada@example.com',
-        customer_name: 'Ada Lovelace',
-        period_start: 1_700_000_000,
-        period_end: 1_700_086_400,
         parent: { subscription_details: { subscription: 'sub_123' } },
-        ...invoice,
+        ...overrides,
       },
     },
   } as Stripe.InvoicePaidEvent;
+}
+
+async function invoiceText(event: Stripe.InvoicePaidEvent) {
+  const payment = await notificationFromEvent(stripeStub(), event);
+  if (!payment) throw new Error('Missing invoice notification');
+  return formatNotification(payment);
 }
 
 function subscriptionEvent(
@@ -95,7 +78,8 @@ function subscriptionEvent(
   | Stripe.CustomerSubscriptionDeletedEvent
   | Stripe.CustomerSubscriptionUpdatedEvent {
   return {
-    id: type === 'customer.subscription.deleted' ? 'evt_deleted' : 'evt_updated',
+    id:
+      type === 'customer.subscription.deleted' ? 'evt_deleted' : 'evt_updated',
     livemode: true,
     type,
     data: {
@@ -133,7 +117,6 @@ describe('notificationFromEvent', () => {
       customer: 'Ada Lovelace (ada@example.com)',
       eventId: 'evt_checkout',
       livemode: true,
-      subscriptionId: 'sub_123',
     });
   });
 
@@ -145,35 +128,116 @@ describe('notificationFromEvent', () => {
     expect(notification).toBeUndefined();
   });
 
-  test('maps a first invoice after a trial to a payment', async () => {
-    const notification = await notificationFromEvent(
-      stripeStub({
-        subscription: {
-          id: 'sub_123',
-          trial_end: 1_700_043_200,
-        } as Stripe.Subscription,
-      }),
-      invoicePaidEvent()
-    );
-    expect(notification).toMatchObject({
-      kind: 'payment',
-      amount: 2000,
-      customer: 'Ada Lovelace (ada@example.com)',
-      subscriptionId: 'sub_123',
+  test('renewal uses the amount collected after credits', async () => {
+    const invoice = invoicePaidEvent({
+      billing_reason: 'subscription_cycle',
+      total: 3000,
+      amount_paid: 1800,
+    });
+    const text = await invoiceText(invoice);
+    expect(text).toContain('Amount: $18.00 USD');
+    expect(text).toContain('Reason: Subscription renewal');
+  });
+
+  test('formats Stripe minor units for ISK, UGX and JPY', async () => {
+    for (const [currency, expected] of [
+      ['isk', 'ISK 5 ISK'],
+      ['ugx', 'UGX 5 UGX'],
+      ['jpy', '¥500 JPY'],
+    ]) {
+      expect(
+        await invoiceText(invoicePaidEvent({ currency, amount_paid: 500 }))
+      ).toContain(expected);
+    }
+  });
+
+  test('labels the collected proration for an added seat', async () => {
+    const invoice = invoicePaidEvent({
+      billing_reason: 'subscription_update',
+      amount_paid: 653,
+      total: 900,
+    });
+    invoice.data.object.lines.data.push({
+      quantity: 1,
+      parent: { subscription_item_details: { proration: true } },
+    } as Stripe.InvoiceLineItem);
+    const text = await invoiceText(invoice);
+    expect(text).toContain('Amount: $6.53 USD');
+    expect(text).toContain('Reason: Subscription change (prorated)');
+  });
+
+  test('checks later invoice lines for a prorated change', async () => {
+    const invoice = invoicePaidEvent({ billing_reason: 'subscription_update' });
+    invoice.data.object.lines.has_more = true;
+    invoice.data.object.lines.data.push({
+      id: 'il_first',
+    } as Stripe.InvoiceLineItem);
+    const listLineItems = mock(async function* () {
+      yield { parent: { invoice_item_details: { proration: true } } };
+    });
+    const stripe = Object.assign(stripeStub(), { invoices: { listLineItems } });
+    const payment = await notificationFromEvent(stripe, invoice);
+    expect(listLineItems).toHaveBeenCalledWith(invoice.data.object.id, {
+      starting_after: 'il_first',
+      limit: 100,
+    });
+    expect(payment).toMatchObject({
+      reason: 'Subscription change (prorated)',
     });
   });
 
-  test('ignores invoices that are not the first after a trial', async () => {
-    const notification = await notificationFromEvent(
-      stripeStub({
-        subscription: {
-          id: 'sub_123',
-          trial_end: null,
-        } as Stripe.Subscription,
-      }),
-      invoicePaidEvent()
+  test('only the invoice announces a subscription checkout payment', async () => {
+    const checkout = checkoutEvent({
+      mode: 'subscription',
+      subscription: 'sub_123',
+    });
+    const events = [
+      checkout,
+      {
+        ...checkout,
+        type: 'checkout.session.async_payment_succeeded',
+      } as Stripe.Event,
+      invoicePaidEvent({ billing_reason: 'subscription_create' }),
+    ];
+    const notifications = await Promise.all(
+      events.map((event) => notificationFromEvent(stripeStub(), event))
     );
-    expect(notification).toBeUndefined();
+    expect(notifications.filter(Boolean)).toHaveLength(1);
+    expect(notifications[2]).toMatchObject({
+      kind: 'payment',
+      reason: 'New subscription',
+    });
+  });
+
+  test('preserves trial starts and ignores their zero-dollar invoices', async () => {
+    const checkout = checkoutEvent({
+      mode: 'subscription',
+      amount_total: 0,
+      payment_status: 'no_payment_required',
+      subscription: 'sub_123',
+    });
+    const stripe = stripeStub({
+      subscription: {
+        id: 'sub_123',
+        trial_start: checkout.created,
+        trial_end: checkout.created + 86400,
+      } as Stripe.Subscription,
+    });
+    expect(await notificationFromEvent(stripe, checkout)).toMatchObject({
+      kind: 'trial',
+      subscriptionId: 'sub_123',
+    });
+    expect(
+      await notificationFromEvent(stripe, invoicePaidEvent({ amount_paid: 0 }))
+    ).toBeUndefined();
+  });
+
+  test('ignores standalone invoices and unpaid subscription invoices', async () => {
+    for (const overrides of [{ parent: null }, { status: 'open' as const }]) {
+      expect(
+        await notificationFromEvent(stripeStub(), invoicePaidEvent(overrides))
+      ).toBeUndefined();
+    }
   });
 
   test('maps subscription.deleted to an ended cancellation', async () => {
