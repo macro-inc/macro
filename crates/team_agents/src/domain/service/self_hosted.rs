@@ -260,13 +260,16 @@ where
             None => Ok(()),
             Some((Checkpoint::Moving { to }, _)) => {
                 // A new install id per machine: a move back never reuses a
-                // stale volume. Credentials are minted only when the new
-                // machine's socket holder delivers, which revokes the old key.
+                // stale volume. The old machine's credentials die here, not
+                // at the new machine's first delivery, which may never come.
+                // Only the call that finished the move revokes, so a racing
+                // finisher can't revoke what the new machine was just given.
                 if let Some(moved) = self
                     .installs
                     .finish_move(install_id, Uuid::now_v7())
                     .await?
                 {
+                    self.revoke_credentials(&install.agent).await?;
                     tracing::info!(
                         previous_install_id = %install_id,
                         install_id = %moved.install_id,
@@ -281,6 +284,24 @@ where
         }
     }
 
+    /// Void every credential the agent's machine holds: its API keys, and
+    /// its repository token, by issuing a fresh one nobody receives.
+    async fn revoke_credentials(&self, agent: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        let Some(record) = self
+            .repository
+            .get(agent)
+            .await
+            .map_err(TeamAgentError::internal)?
+        else {
+            return Ok(());
+        };
+        self.api_keys.revoke_all(&record.user_id).await?;
+        self.repos
+            .create(&record.user_id, record.team_id, &record.persona_seed)
+            .await?;
+        Ok(())
+    }
+
     /// Remove the agent as removing one on a Macro computer does, with its
     /// install, which its seat's removal deletes, last. Each step is
     /// idempotent, so a retry finishes.
@@ -293,11 +314,7 @@ where
         else {
             return Ok(());
         };
-        self.api_keys.revoke_all(&record.user_id).await?;
-        // Issuing a fresh token voids the one the machine holds.
-        self.repos
-            .create(&record.user_id, record.team_id, &record.persona_seed)
-            .await?;
+        self.revoke_credentials(&record.user_id).await?;
         let removed_by = record
             .created_by
             .clone()

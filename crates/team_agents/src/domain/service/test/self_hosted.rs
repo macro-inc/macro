@@ -533,3 +533,48 @@ async fn only_the_inviter_or_the_hosts_owner_may_move_an_agent() {
     assert_eq!(install.harness_id, LAPTOP);
     assert_eq!(install.checkpoint, None);
 }
+
+#[tokio::test]
+async fn a_finished_move_revokes_the_old_machines_credentials_before_the_new_one_gets_any() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let old = service
+        .installs
+        .for_agent(&agent.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    service
+        .issue_install(LAPTOP, old.install_id, None)
+        .await
+        .unwrap();
+    service
+        .move_install(
+            receipt(),
+            &agent.user_id,
+            MoveTeammate {
+                harness_id: DESKTOP,
+            },
+        )
+        .await
+        .unwrap();
+    // The target never comes back to take a delivery.
+    set_connected(&service, DESKTOP, false);
+    let before = journal.entries().len();
+
+    service.finish_checkpoint(old.install_id).await.unwrap();
+
+    let after = &journal.entries()[before..];
+    assert!(
+        after.iter().any(|entry| entry == "api_key.revoke_all"),
+        "{after:?}"
+    );
+    assert!(
+        after.iter().any(|entry| entry == "repo.create Sam Rivera"),
+        "a fresh repository token voids the old machine's: {after:?}"
+    );
+    assert!(
+        !after.iter().any(|entry| entry == "api_key.mint"),
+        "{after:?}"
+    );
+}
