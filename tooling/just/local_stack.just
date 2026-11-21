@@ -44,7 +44,7 @@ create_local_queues:
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-inbox-retry-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-ops-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-ops-retry-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-refresh-queue || true
+  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-refresh-queue --attributes VisibilityTimeout=300 || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-link-maintenance-queue --attributes VisibilityTimeout=300 || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name search-event-queue || true
   aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-sfs-delete-queue || true

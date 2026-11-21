@@ -129,6 +129,11 @@ impl Queue {
                 (QueueAttributeName::DelaySeconds, "10".to_string()),
             ]
             .into(),
+            // The deployed link-manager queues' visibility timeout: a purge
+            // outlasts SQS's 30 s default before its first renewal at 60 s.
+            macro_queues::LinkManagerQueue::LOCAL | macro_queues::LinkMaintenanceQueue::LOCAL => {
+                [(QueueAttributeName::VisibilityTimeout, "300".to_string())].into()
+            }
             _ => Default::default(),
         }
     }
