@@ -379,7 +379,7 @@ const R = {
   diffs: [], // first 400 real differences with context
   diffSignatures: {}, // signature -> count
   examples: {}, // class -> first few examples
-  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, tainted: {}, discardedCatches: 0, taintedSequences: 0 } : null,
+  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, candidatesBy: {}, tainted: {}, running: {}, discardedCatches: 0, taintedSequences: 0 } : null,
   load: CONFIG.load ? { pages: CONFIG.load, ops: 0, errors: 0, sameUserReads: 0, sameUserErrors: 0 } : null,
   crashes: [],
 };
@@ -424,6 +424,33 @@ const sig = (level, cls, kind, d, extra) =>
 // read or showed: a timeout, a write outside the tap, an uncaught page error.
 // They are still differences, but never count as catching a mutant.
 const NOT_A_CATCH = new Set(['settle', 'write-replay', 'page-errors']);
+// Where each planted fault can show. The response mutants rewrite NEW's
+// GraphQL read responses, so any read of them; the cache mutants change what
+// NEW's live query cache holds, so only live readers and callers (and the
+// live-vs-fresh staleness built from them), never a direct read or a fresh
+// mount.
+const anyRead = () => true;
+const liveCache = (level) => /:live(:caller)?$|:staleness$/.test(level);
+const MUTANT_REACH = {
+  'drop-row': anyRead,
+  'swap-order': anyRead,
+  'alter-field': anyRead,
+  'stale-cache': liveCache,
+  'skip-live-update': liveCache,
+};
+// Whether a difference is about data rather than a failure on one side: a
+// reader that succeeded on both; a caller that rendered on both, over a
+// source list that read without error on both; a snapshot with all of that.
+const readerOk = (r) => r?.isSuccess === true && !r.isError;
+const threw = (x) => !!x && typeof x === 'object' && 'thrown' in x;
+function callerOk(snap, caller) {
+  const source = CALLER_SOURCES[caller];
+  const src = snap?.callers?.__sources;
+  if (!source || !src || threw(snap.callers[caller])) return false;
+  if (source === 'opts') return Object.entries(snap).every(([k, r]) => readerKind(k) !== 'opts' || readerOk(r));
+  return src[source] !== null && src[source] !== undefined && src.failing?.[source] === false;
+}
+const snapshotClean = (s) => !!s && Object.entries(s).every(([k, v]) => (k === 'callers' ? !!v && Object.keys(v).every((c) => c === '__sources' || callerOk(s, c)) : readerOk(v)));
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   bump(R.classes, level, cls);
   if (cls === 'equal') return;
@@ -438,13 +465,14 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
     bump(R.diffSignatures, s);
     R.totals.differences++;
     if (R.diffs.length < 400) R.diffs.push({ level, kind, class: cls, ...at, ...extra, diff: d });
-    if (R.mutant && cls !== 'error-shape' && !NOT_A_CATCH.has(level)) {
-      // A catch is a difference in what the app read or showed, one the clean
-      // run does not have, after the fault was applied at least once.
+    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level)) {
+      // A catch is a difference in data both sides read successfully, at a
+      // level the planted fault can reach, that the clean run does not have,
+      // after the fault was applied at least once.
       if (R.mutant.applied === 0) R.mutant.beforeApplied++;
       else if (BASELINE.has(s)) R.mutant.ignoredAsInBaseline++;
       else {
-        bump(R.mutant.caughtBy, level);
+        bump(R.mutant.candidatesBy, level);
         R.mutant.candidate[laneOf(at)] ??= { level, kind, signature: s, appliedBefore: R.mutant.applied, ...at, diff: d };
       }
     }
@@ -459,12 +487,20 @@ const laneOf = (at) => String(at.lane ?? 'none');
 function settleCatch(lane) {
   if (!R.mutant) return;
   const k = String(lane ?? 'none');
+  delete R.mutant.running[k];
   const c = R.mutant.candidate[k];
   if (c && R.mutant.tainted[k]) R.mutant.discardedCatches++;
   else if (c && !R.mutant.firstCatch) R.mutant.firstCatch = c;
+  if (c && !R.mutant.tainted[k]) bump(R.mutant.caughtBy, c.level);
   if (R.mutant.tainted[k]) R.mutant.taintedSequences++;
   delete R.mutant.candidate[k];
   delete R.mutant.tainted[k];
+}
+// Page errors arrive on the page's own callback, outside any lane: one seen
+// while a sequence runs taints every sequence then running.
+function pageErrorTaint() {
+  if (!R.mutant) return;
+  for (const k of Object.keys(R.mutant.running)) R.mutant.tainted[k] = true;
 }
 // A failure of the harness itself (setup, a write the tap could not pair):
 // counted, sampled, and never mistaken for an equal comparison.
@@ -695,6 +731,7 @@ async function openSide(storageState, side, label) {
     const msg = String(e.message).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').slice(0, 200);
     if (!/^load\d/.test(label)) bump(R.pageErrors, side, msg);
     harnessError(`${label}: pageerror ${msg}`);
+    pageErrorTaint();
   });
   // Module loads that failed or errored, for diagnosing a page that never got ready.
   const note = (x) => {
@@ -845,15 +882,18 @@ function compareReader(level, id, a, b) {
   const sb = Object.fromEntries(STATE_FIELDS.map((k) => [k, b[k]]));
   if (J(sa) !== J(sb)) record(level, kind, 'state', sa, sb);
   const canon = canonFor(readerKind(id));
-  record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, {}, canon);
+  record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, { clean: readerOk(a) && readerOk(b) }, canon);
   compareErrors(level, kind, a.error, b.error);
 }
-function compareCallers(level, a, b, groupsFor) {
+function compareCallers(level, sa, sb, groupsFor) {
+  const a = sa.callers;
+  const b = sb.callers;
   for (const k of new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])) {
     if (k === '__sources') continue;
+    const clean = callerOk(sa, k) && callerOk(sb, k);
     const canon = (x) => canonCallers(x, groupsFor(k));
     R.counts.callerComparisons++;
-    record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], {}, canon);
+    record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], { clean }, canon);
   }
 }
 // `expected`: the reader ids that must be in both snapshots.
@@ -862,7 +902,7 @@ function compareSnapshots(level, a, b, expected) {
   for (const k of new Set([...Object.keys(a), ...Object.keys(b), ...expected, 'callers'])) {
     if (k === 'callers') {
       if (!a.callers || !b.callers) record(`${level}:caller`, 'callers', 'state', a.callers ?? null, b.callers ?? null, { note: 'callers missing' });
-      else compareCallers(level, a.callers, b.callers, groupsFor);
+      else compareCallers(level, a, b, groupsFor);
     } else compareReader(level, k, a[k], b[k]);
   }
 }
@@ -877,7 +917,7 @@ function compareRaw(kind, k, oldR, newR) {
   }
   bump(R.coverage, 'raw outcome', 'both ok');
   const canon = canonFor(k);
-  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, {}, canon);
+  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true }, canon);
 }
 // In CONTROL both halves of a raw case run the base commit's functions.
 const newRaw = (fn) => (CONFIG.control ? `raw.old.${fn}` : `raw.neu.${fn}`);
@@ -1087,7 +1127,7 @@ async function compareStep(pair, level, op) {
     if (sn.length) bump(R.staleness.byOp, `${op}:${who}`, 'new');
     if (J(so) !== J(sn)) {
       R.staleness.mismatches++;
-      record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn);
+      record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn, { clean: [lo, ln, fo, fn].every(snapshotClean) });
     } else record(`${level}:staleness`, `stale keys ${who}`, 'equal');
   }
   delete c.account;
@@ -1386,6 +1426,7 @@ async function runLane(lane, seqCount) {
   const gen = makeGen(g);
   let pair = null;
   for (let seq = 0; seq < seqCount; seq++) {
+    if (R.mutant) R.mutant.running[String(lane)] = true;
     if (!pair || seq % CONFIG.rotate === 0) {
       if (pair) {
         if (CONFIG.sweep) await sweep(pair, 'end');

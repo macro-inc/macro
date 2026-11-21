@@ -291,10 +291,18 @@ function Callers(props: { registry: Registry; optionIds: Accessor<string[]> }) {
   const read = () => ({
     // Each caller's own list, by name (run.mjs `CALLER_SOURCES`).
     __sources: {
-      all: all.isSuccess ? plain(all.data) : null,
-      system: system.isSuccess ? plain(system.data) : null,
-      crmExport: crmExport.isSuccess ? plain(crmExport.data) : null,
-      tags: tags.isSuccess ? plain(tags.data) : null,
+      // What each list holds, kept through a refetch error as its callers
+      // keep showing it (only a pending read has nothing).
+      all: all.isPending ? null : plain(all.data),
+      system: system.isPending ? null : plain(system.data),
+      crmExport: crmExport.isPending ? null : plain(crmExport.data),
+      tags: tags.isPending ? null : plain(tags.data),
+      failing: {
+        all: all.isError,
+        system: system.isError,
+        crmExport: crmExport.isError,
+        tags: tags.isError,
+      },
       // The select editors' tie keys come from the list each one shows.
       opts: safe(() =>
         props.optionIds().map((id) => ({

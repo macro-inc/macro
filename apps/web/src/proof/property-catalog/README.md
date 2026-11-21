@@ -76,12 +76,15 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   errors are compared whatever the data did.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
   fault in the NEW path; `mutants` mode first runs a clean baseline of the same
-  shape, and a mutant counts as caught only at a `diff` or `state` signature
-  the baseline does not have, after the fault was applied, at a level that
-  compares what the app read or showed: a settle timeout, a write-replay
-  difference or an uncaught page error never counts as a catch, and a catch in
-  a sequence that had one is discarded (each sequence ends with a reload, so
-  its fallout stays inside it). `CONTROL=1` runs OLD
+  shape, and a mutant counts as caught only at a signature
+  the baseline does not have, after the fault was applied. It must be a `diff`
+  in data both sides read successfully (a reader that succeeded on both, a
+  caller that rendered on both over a source list that read without error),
+  at a level the fault can reach (`MUTANT_REACH`: any read for the response
+  mutants, only live readers, callers and staleness for the cache mutants).
+  A settle timeout, a write-replay difference or an uncaught page error never
+  counts, and a catch in a sequence that had one is discarded (each sequence
+  ends with a reload, so its fallout stays inside it). `CONTROL=1` runs OLD
   against OLD.
 - `LOAD=n` adds `n` other accounts writing and reading on the server, and has
   each fuzzed account's NEW page read both catalogs in the background.
