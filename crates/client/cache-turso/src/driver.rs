@@ -42,11 +42,9 @@ pub struct WalCheckpoint {
     pub backfilled_frames: u64,
 }
 
-/// Where the WAL ends, as this connection sees it: every write it commits
-/// moves it, and nothing else does until a write starts the log over. Two
-/// equal positions taken on one connection mean it committed no write in
-/// between; a write on another connection may not show until this one starts
-/// a read.
+/// Where the WAL ends: every commit to the file moves it, and nothing else
+/// does until a write starts the log over. Two equal positions mean nothing
+/// was committed to the file in between, through any connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WalPosition {
     checkpoint_seq_no: u32,
@@ -182,8 +180,10 @@ impl Db {
         }
     }
 
-    /// The end of the WAL as this connection sees it.
+    /// The end of the WAL. A read first moves this connection's view to the
+    /// end of the log, so a commit through another connection shows too.
     pub(crate) fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        query_each(self, "SELECT 1 FROM meta LIMIT 1", Vec::new(), |_| Ok(()))?;
         let wal = self
             .connection
             .wal_state()

@@ -5,7 +5,7 @@ use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, EntityKey, Record};
-use cache_turso::{TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
+use cache_turso::{TursoFileDatabase, TursoMemoryDatabase, TursoStorage, TursoStorageCloseOutcome};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -473,10 +473,11 @@ fn optimistic_discard_restores_durable_base_over_turso() {
 }
 
 #[test]
-fn reads_kept_for_a_write_are_dropped_once_storage_commits() {
+fn reads_kept_for_a_write_are_dropped_once_another_connection_commits() {
     use cache_core::store::DurableRead;
     block_on(async {
-        let database = TursoMemoryDatabase::new("engine-kept-reads.db");
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
         let mut writer = Engine::new(database.open("engine-kept-reads").unwrap());
         let original = page("Status", "todo", "user-1");
         writer
@@ -495,9 +496,11 @@ fn reads_kept_for_a_write_are_dropped_once_storage_commits() {
         let reads = reads.finish();
         engine.keep_pass_reads(reads);
 
-        // Clearing commits without the write, so the kept property is stale:
-        // it is no longer stored.
-        engine.clear().await.unwrap();
+        // Another connection to the file clears it, so the kept property is
+        // stale: it is no longer stored. Kept open, so closing it cannot
+        // checkpoint the log over.
+        let mut other = Engine::new(database.open("engine-kept-reads").unwrap());
+        other.clear().await.unwrap();
         engine
             .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
             .await
@@ -509,5 +512,31 @@ fn reads_kept_for_a_write_are_dropped_once_storage_commits() {
             read_value(&mut reopened).await,
             ("Status".into(), "todo".into())
         );
+        drop(other);
+    });
+}
+
+#[test]
+fn write_position_moves_when_another_connection_commits() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let reader = database.open("engine-write-position").unwrap();
+        let mut writer = Engine::new(database.open("engine-write-position").unwrap());
+        let before = reader.write_position();
+        assert!(before.is_some());
+        writer
+            .write_query(
+                Some(1),
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        // The reader has not read since; its position must still move.
+        assert_ne!(reader.write_position(), before);
     });
 }
