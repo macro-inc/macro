@@ -67,6 +67,8 @@ export function ChatComposer(props: {
   modelName?: string;
   selector: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
+  /** A person or agent picked from the @ menu, by principal id. */
+  onMentionUser?: (userId: string) => void;
   session?: AgentInputProps;
   attachments?: InputAttachmentData[];
   onAttachFiles?: (files: File[]) => void;
@@ -135,7 +137,13 @@ export function ChatComposer(props: {
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
-    .withMentions({ showOpenTabs: true, block: 'agent' })
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+      onUserMention: (mention) => {
+        for (const userId of mention.mentions) props.onMentionUser?.(userId);
+      },
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
