@@ -143,8 +143,8 @@ const rereadAfterReplicaLag = debounce(
  * can neither place a newly notified entity in them nor move a row up, and
  * the notified-at floor only applies when a row is mapped again. Grouped
  * notified lists project by update time, which a notification leaves alone.
- * They read their loaded pages again instead, which carries the new stamps. Each read
- * runs the notified page query, whose cost grows with the viewer's
+ * They read their loaded pages again instead, which carries the new stamps.
+ * Each read runs the notified page query, whose cost grows with the viewer's
  * notifications, for every loaded page: a burst reads at most once per
  * interval, and a hidden tab reads once when it is shown.
  */
