@@ -209,22 +209,30 @@ The counts measure work attempted, not successes, and are not interchangeable:
   there), the API requests that finished during the wait with their status,
   start and duration (`recent`), the page's own view of its API fetches, in ms
   from the settle's start (`fetches`, from a pass-through `fetch` wrapper in
-  `harness.tsx`), the driver's event-loop stalls of 100 ms or more during the
+  `harness.tsx`; a failed one is marked `failed`), the driver's event-loop stalls of 100 ms or more during the
   wait (`driverStalls`; the driver answers every API request through its route
   handlers, so a stall delays every page's answers), the driver's own blocking work of
   100 ms or more in that time (`driverWork`: its synchronous child processes,
   such as the SQL steps' `psql`, its comparisons, its results flushes, and
-  garbage collection), and the page's last eight
+  garbage collection). Stalls and work are kept when they overlap the driver's
+  call to that side, from its start to its return, with `overlapMs` saying how
+  much did; and the page's last eight
   network notes (failed requests, failed module responses, console errors:
   `net`).
   `inflight`, `recent` and `net` are taken when that side's call returns, which
-  for a fresh mount is after the mount was torn down.
+  for a fresh mount is after the mount was torn down. Paths are masked: ids,
+  numbers and any segment of 24 or more token characters.
 - The SQL steps (`sqlRename`, `sqlNullColor`) run `psql` through
   `docker exec` synchronously (`sql()` in `run.mjs`), which blocks the driver
   and so every page's API answers until it returns. Under machine load that
-  took up to 3.1 s, and a cold mount then waiting on a retried read (two
-  round trips plus TanStack's 1 s delay; `opts-error.test.tsx` shows it) or a
-  token refresh overran `SETTLE_MS`. Those are the `settle` timeouts of the
-  load runs; `driverWork` names the `psql` beside each one.
+  took up to 3.1 s. No route handler runs while it does, so every request in
+  flight across it is answered that much later; a cold mount that also needs a
+  retried read (two round trips plus TanStack's 1 s delay;
+  `opts-error.test.tsx` shows it) or a token refresh then overruns
+  `SETTLE_MS`. In the final load run every `settle` timeout's `waitedOn` has
+  a `psql` in `driverWork` covering 2.8 s or more of the call, matching a
+  stall in `driverStalls`. That is a coincidence in time plus the mechanism,
+  not a trace of each request: `driverWork` is process-wide, and `fetches`
+  shows which of the page's requests were open across it.
 - `out/` can hold Playwright error dumps with the local session cookie; it is
   gitignored, and nothing from it is published unscanned.

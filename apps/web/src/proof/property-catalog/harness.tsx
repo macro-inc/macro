@@ -490,10 +490,33 @@ type FetchNote = {
   start: number;
   end: number | null;
   status: number | null;
+  failed?: true;
 };
 const fetchNotes: FetchNote[] = [];
 const pageFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input, init) => {
+  // A note that can't be made is skipped; the call itself always goes through.
+  let note: FetchNote | null = null;
+  try {
+    note = fetchNote(input, init);
+  } catch {
+    note = null;
+  }
+  try {
+    const res = await pageFetch(input, init);
+    if (note) note.status = res.status;
+    return res;
+  } catch (e) {
+    if (note) note.failed = true;
+    throw e;
+  } finally {
+    if (note) note.end = performance.now();
+  }
+};
+function fetchNote(
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1]
+): FetchNote | null {
   const url = new URL(
     input instanceof Request ? input.url : String(input),
     location.href
@@ -502,21 +525,19 @@ globalThis.fetch = async (input, init) => {
     method: (
       init?.method ?? (input instanceof Request ? input.method : 'GET')
     ).toUpperCase(),
-    path: url.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, '<id>'),
+    path: url.pathname
+      .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>')
+      .replace(/[A-Za-z0-9_.~-]{24,}/g, '<token>'),
     op: operationName(init?.body),
     start: performance.now(),
     end: null,
     status: null,
   };
-  if (!/^\/(src|node_modules|@)/.test(url.pathname)) {
-    fetchNotes.push(note);
-    if (fetchNotes.length > 60) fetchNotes.shift();
-  }
-  const res = await pageFetch(input, init);
-  note.end = performance.now();
-  note.status = res.status;
-  return res;
-};
+  if (/^\/(src|node_modules|@)/.test(url.pathname)) return null;
+  fetchNotes.push(note);
+  if (fetchNotes.length > 60) fetchNotes.shift();
+  return note;
+}
 // A GraphQL request's operation name, so its fetches can be told apart.
 function operationName(body: unknown): string | null {
   if (typeof body !== 'string') return null;
@@ -540,6 +561,7 @@ function fetchesSince(start: number) {
       start: Math.round(f.start - start),
       end: f.end === null ? null : Math.round(f.end - start),
       status: f.status,
+      ...(f.failed ? { failed: true } : {}),
     }));
 }
 

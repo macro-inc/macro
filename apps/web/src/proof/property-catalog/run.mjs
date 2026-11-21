@@ -35,9 +35,9 @@ const driverStalls = [];
 // collection. A stall with none of these in it was spent elsewhere in the
 // driver process (Playwright's protocol handling).
 const driverWork = [];
-function noteWork(what, ms) {
+function noteWork(what, ms, end = Date.now()) {
   if (ms < 100) return;
-  driverWork.push({ end: Date.now(), ms: Math.round(ms), what });
+  driverWork.push({ end: Math.round(end), ms: Math.round(ms), what });
   if (driverWork.length > 500) driverWork.shift();
 }
 function execFileSync(file, args, opts) {
@@ -60,7 +60,8 @@ function timed(what, f) {
   };
 }
 new PerformanceObserver((list) => {
-  for (const e of list.getEntries()) noteWork('gc', e.duration);
+  // when the pause happened, not when the observer was told
+  for (const e of list.getEntries()) noteWork('gc', e.duration, performance.timeOrigin + e.startTime + e.duration);
 }).observe({ entryTypes: ['gc'] });
 const ROOT = path.resolve(HERE, '../../../../..');
 const E = process.env;
@@ -765,7 +766,7 @@ const isGraphqlMutation = (req) => {
 };
 // Writes the page sends outside the properties service and GraphQL, by side,
 // tap mode and route (ids masked): a census, and in a write window a stray.
-const maskPath = (p) => p.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/\/\d+(?=\/|$)/g, '/<n>');
+const maskPath = (p) => p.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/[A-Za-z0-9_.~-]{24,}/g, '<token>').replace(/\/\d+(?=\/|$)/g, '/<n>');
 // Writes either page sends that never touch the catalog, seen in a smoke run:
 // the session token refresh, which the auth client sends on its own clock.
 // Still counted in `otherWrites`; never a stray.
@@ -909,12 +910,16 @@ async function openSide(storageState, side, label) {
   // API requests that finished lately, with their status and duration, so a
   // settle timeout shows how long the attempts before the one in flight took.
   const finished = [];
-  page.on('requestfinished', async (r) => {
+  // The status comes from the response event, so a request moves from
+  // inflight to finished at once, timed when it finished.
+  const statuses = new WeakMap();
+  page.on('response', (res) => statuses.set(res.request(), res.status()));
+  page.on('requestfinished', (r) => {
     const x = inflight.get(r);
     inflight.delete(r);
     if (!x) return;
-    const status = await r.response().then((res) => res?.status() ?? null, () => null);
-    finished.push({ ...x, status, ms: Date.now() - x.at, end: Date.now() });
+    const end = Date.now();
+    finished.push({ ...x, status: statuses.get(r) ?? null, ms: end - x.at, end });
     if (finished.length > 30) finished.shift();
   });
   page.on('requestfailed', (r) => inflight.delete(r));
@@ -1250,20 +1255,28 @@ async function setKeys(pair, keys) {
   for (const k of keys) cover('open reader', k.k === 'defs' ? `defs:${k.scope}` : k.k);
 }
 // What a side that timed out was still waiting on: its busy queries, its API
-// requests in flight (with their age) and its last failed requests.
-function withWaitedOn(s, t) {
+// requests in flight (with their age) and its last failed requests. `since` is
+// when the driver made the call, so only what overlapped the call is kept;
+// `overlapMs` says how much of each entry fell inside it.
+function withWaitedOn(s, t, since) {
   if (!t.timedOut) return t;
   const now = Date.now();
+  const overlap = (x) => Math.min(x.end, now) - Math.max(x.end - x.ms, since);
   const recent = s.finished
-    .filter((x) => now - x.end <= t.ms + 1000)
+    .filter((x) => x.end >= since)
     .map((x) => ({ method: x.method, path: x.path, status: x.status, startedAgoMs: now - x.at, ms: x.ms }));
-  const stalls = driverStalls.filter((x) => now - x.end <= t.ms + 1000).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms }));
-  const work = driverWork.filter((x) => now - x.end <= t.ms + 1000).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms, what: x.what }));
+  const stalls = driverStalls.filter((x) => overlap(x) > 0).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms, overlapMs: overlap(x) }));
+  const work = driverWork.filter((x) => overlap(x) > 0).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms, overlapMs: overlap(x), what: x.what }));
   return { ...t, waitedOn: { busy: t.busy ?? null, fetches: t.fetches ?? null, driverStalls: stalls, driverWork: work, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), recent, net: (s.netlog ?? []).slice(-8) } };
 }
 async function settleAll(pair) {
   // what a side that timed out waited on is sampled as its settle returns
-  const res = await Promise.all(sides(pair).map(async (s) => withWaitedOn(s, await ev(s, 'settle', CONFIG.settleMs))));
+  const res = await Promise.all(
+    sides(pair).map(async (s) => {
+      const since = Date.now();
+      return withWaitedOn(s, await ev(s, 'settle', CONFIG.settleMs), since);
+    })
+  );
   // A side that did not settle within the bound broke the live-update bound:
   // a difference, and its snapshot is not compared as data.
   res.forEach((t, i) => {
@@ -1307,8 +1320,9 @@ async function compareStep(pair, level, op) {
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map((s) => ev(s, 'snapshot')));
   const fresh = await Promise.all(
     sides(pair).map(async (s) => {
+      const since = Date.now();
       const f = await ev(s, 'fresh', keys, CONFIG.settleMs);
-      return { ...f, timing: withWaitedOn(s, f.timing), asOf: clockNow() };
+      return { ...f, timing: withWaitedOn(s, f.timing, since), asOf: clockNow() };
     })
   );
   R.counts.freshMounts += 4;

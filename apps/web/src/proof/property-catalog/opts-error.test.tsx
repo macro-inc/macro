@@ -201,6 +201,12 @@ it('retry policy matches src/lib/queries/client.ts', async () => {
   expect(source).toContain(
     "retry: (failureCount, error) => { if ( thrownResultErrorHasCode(error, 'UNAUTHORIZED') || thrownResultErrorHasCode(error, 'FORBIDDEN') ) { return false; } return failureCount < 1; },"
   );
+  // Neither the client nor the options query sets a retry delay, so TanStack's
+  // default (1,000 ms before the first retry) applies, as the settle test uses.
+  expect(source).not.toContain('retryDelay');
+  expect(
+    readFileSync('src/lib/queries/properties/options.ts', 'utf8')
+  ).not.toMatch(/retry/);
 });
 
 // The fresh-mount settle timeouts the load runs show. A cold mount of the
@@ -213,8 +219,18 @@ it('retry policy matches src/lib/queries/client.ts', async () => {
 const LATENCY_MS = 2100;
 it('needs two round trips plus the 1 s retry delay to settle a hidden definition, on both sides', async () => {
   appClient = new QueryClient({ defaultOptions: { queries: { retry } } });
-  const late = <T,>(value: T) =>
-    new Promise<T>((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
+  // each call's start and answer, to show the wait between them
+  const calls: { start: number; answered: number }[] = [];
+  const late = <T,>(value: T) => {
+    const call = { start: performance.now(), answered: Infinity };
+    calls.push(call);
+    return new Promise<T>((resolve) =>
+      setTimeout(() => {
+        call.answered = performance.now();
+        resolve(value);
+      }, LATENCY_MS)
+    );
+  };
   rest.getPropertyOptions.mockImplementation(() =>
     late(err([{ code: 'NOT_FOUND', message: 'Resource not found' }]))
   );
@@ -236,13 +252,19 @@ it('needs two round trips plus the 1 s retry delay to settle a hidden definition
   const oldMs = await time(
     mount(() => useQuery(() => oldPropertyOptionsQueryOptions(HIDDEN)))
   );
+  const oldCalls = calls.splice(0);
   dispose?.();
   appClient.clear();
   const neuMs = await time(mount(() => usePropertyOptionsQuery(() => HIDDEN)));
+  const neuCalls = calls.splice(0);
+  for (const [first, second] of [oldCalls, neuCalls]) {
+    // the retry went out TanStack's 1 s after the first answer
+    expect(second.start - first.answered).toBeGreaterThanOrEqual(1000 - 20);
+  }
   for (const ms of [oldMs, neuMs]) {
     expect(ms).toBeGreaterThanOrEqual(2 * LATENCY_MS + 1000 - 20);
     expect(ms).toBeGreaterThan(5000);
   }
   expect(rest.getPropertyOptions).toHaveBeenCalledTimes(2);
   expect(network.executeQuery).toHaveBeenCalledTimes(2);
-}, 20000);
+}, 30000);
