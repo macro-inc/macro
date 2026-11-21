@@ -9,6 +9,8 @@
 use std::collections::HashMap;
 use std::future::Future;
 
+use futures::future::join_all;
+
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -311,10 +313,10 @@ pub trait AgentInboxRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<InboxRecord>, Self::Err>> + Send;
 
     /// Claim at most `limit` records marked `pausing` or `releasing` whose
-    /// next attempt is due at `now` and that have had fewer than
-    /// [`MAX_SWEEP_ATTEMPTS`]: each claimed record's next attempt moves out
-    /// by its backoff, so replicas split the work and a mark that keeps
-    /// failing is tried less and less often.
+    /// next attempt is due at `now`: each claimed record's next attempt
+    /// moves out by its backoff (a minute, doubling, at most an hour), so
+    /// replicas split the work and a mark that keeps failing is tried less
+    /// often, but never abandoned.
     fn claim_unsettled(
         &self,
         now: DateTime<Utc>,
@@ -681,7 +683,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
     }
 
     /// Finish wind-downs email_service hasn't confirmed: claim at most
-    /// `limit` marks that are due, and retry each. Also releases live inboxes
+    /// `limit` marks that are due, and retry each. Also pauses live inboxes
     /// whose agent lost its seat without a mark ([`SEATLESS_WINDOW`]).
     #[tracing::instrument(
         name = "team_agents.inbox.sweep",
@@ -715,11 +717,21 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
                 .await
             {
                 failed += 1;
-                tracing::warn!(
-                    error = ?error,
-                    agent_user_id = %agent_credentials::telemetry_id(record.agent.as_ref()),
-                    "could not finish an inbox wind-down; it is retried after its backoff"
-                );
+                let agent_user_id = agent_credentials::telemetry_id(record.agent.as_ref());
+                if now - record.updated_at >= STUCK_MARK_AFTER {
+                    tracing::error!(
+                        error = ?error,
+                        agent_user_id = %agent_user_id,
+                        mark_age_s = (now - record.updated_at).num_seconds(),
+                        "an inbox wind-down has failed for over a day; it keeps being retried hourly"
+                    );
+                } else {
+                    tracing::warn!(
+                        error = ?error,
+                        agent_user_id = %agent_user_id,
+                        "could not finish an inbox wind-down; it is retried after its backoff"
+                    );
+                }
             }
         }
         let seatless = self
@@ -730,14 +742,14 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         for record in &seatless {
             tracing::warn!(
                 agent_user_id = %agent_credentials::telemetry_id(record.agent.as_ref()),
-                "an agent inbox outlived its seat; releasing it"
+                "an agent inbox outlived its seat; pausing it"
             );
             if let Err(error) = self
-                .wind_down(record.team_id, &record.agent, WindDown::Release, now)
+                .wind_down(record.team_id, &record.agent, WindDown::Pause, now)
                 .await
             {
                 failed += 1;
-                tracing::warn!(error = ?error, "could not release a seatless inbox; the sweep retries its mark");
+                tracing::warn!(error = ?error, "could not pause a seatless inbox; the sweep retries its mark");
             }
         }
         let span = tracing::Span::current();
@@ -752,19 +764,20 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         })
     }
 
-    /// The team is being deleted: release every agent's inbox. Every one is
-    /// marked first; an error means a mark couldn't be stored, and deleting
-    /// the team again retries. Whatever email_service doesn't confirm now
-    /// the sweep finishes.
+    /// The team is being deleted: pause every agent's inbox at once, so none
+    /// keeps receiving mail; email_service releases paused mailboxes after
+    /// its retention. Every one is marked first; an error means a mark
+    /// couldn't be stored, and deleting the team again retries. Whatever
+    /// email_service doesn't confirm now the sweep finishes.
     #[tracing::instrument(
-        name = "team_agents.inbox.release_team",
+        name = "team_agents.inbox.pause_team",
         skip_all,
         fields(team_id = %team_id, inboxes = tracing::field::Empty),
         err
     )]
-    pub async fn release_team(&self, team_id: Uuid) -> Result<(), InboxError> {
+    pub async fn pause_team(&self, team_id: Uuid) -> Result<(), InboxError> {
         // Every seated agent too, inbox or not: marking one without an inbox
-        // records it released, so a provision that starts after this never
+        // records it paused, so a provision that starts after this never
         // makes one.
         let mut agents = self
             .repository
@@ -792,25 +805,23 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         for agent in &agents {
             let now = Utc::now();
             if let Marked::Pending { record, marked_at } =
-                self.mark(team_id, agent, WindDown::Release, now).await?
+                self.mark(team_id, agent, WindDown::Pause, now).await?
             {
                 pending.push((record, marked_at));
             }
         }
-        for (record, marked_at) in pending {
+        // All at once: each call is bounded by the email_service adapter, so
+        // the deletion waits for one call, not one per agent.
+        let now = Utc::now();
+        join_all(pending.iter().map(|(record, marked_at)| async move {
             let _ = self
-                .finish(
-                    &record.agent,
-                    WindDown::Release,
-                    &record,
-                    marked_at,
-                    Utc::now(),
-                )
+                .finish(&record.agent, WindDown::Pause, record, *marked_at, now)
                 .await
                 .inspect_err(|error| {
-                    tracing::warn!(error = ?error, "could not release an agent's inbox now; the sweep retries");
+                    tracing::warn!(error = ?error, "could not pause an agent's inbox now; the sweep retries");
                 });
-        }
+        }))
+        .await;
         Ok(())
     }
 }
@@ -828,9 +839,9 @@ pub const SWEEP_AFTER: chrono::Duration = chrono::Duration::minutes(1);
 /// and it is written moments before the team row goes.
 pub const SEATLESS_WINDOW: chrono::Duration = chrono::Duration::hours(1);
 
-/// A mark is retried with backoff (a minute, doubling, at most an hour) up
-/// to this many times; then it is left for an operator, with an error log.
-pub const MAX_SWEEP_ATTEMPTS: i16 = 30;
+/// How old an unfinished mark is before each failed retry logs an error
+/// rather than a warning: by then it needs someone to look.
+pub const STUCK_MARK_AFTER: chrono::Duration = chrono::Duration::days(1);
 
 /// The most wind-downs one sweep round retries.
 pub const SWEEP_BATCH: u32 = 100;

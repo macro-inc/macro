@@ -214,9 +214,9 @@ where
             .map_err(ReportAsError::from)
     }
     #[tracing::instrument(skip(self), err)]
-    async fn release_agent_inboxes(&self, team_id: Uuid) -> Result<(), Self::Err> {
+    async fn pause_agent_inboxes(&self, team_id: Uuid) -> Result<(), Self::Err> {
         self.agent_inboxes
-            .release_team(team_id)
+            .pause_team(team_id)
             .await
             .map_err(ReportAsError::from)
     }

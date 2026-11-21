@@ -174,7 +174,7 @@ impl AgentInboxRepository for FakeRecords {
             let (attempts, next) = *backoff
                 .entry(record.agent.as_ref().to_owned())
                 .or_insert((0, record.updated_at + chrono::Duration::minutes(1)));
-            if next > now || attempts >= MAX_SWEEP_ATTEMPTS {
+            if next > now {
                 continue;
             }
             let delay =
@@ -804,17 +804,19 @@ async fn a_release_email_service_is_still_finishing_stays_releasing_until_it_con
 }
 
 #[tokio::test]
-async fn deleting_a_team_releases_every_agents_inbox() {
+async fn deleting_a_team_pauses_every_agents_inbox_and_keeps_the_mail() {
     let (service, records, mailboxes) = service(Answer::Active);
     service
         .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
         .await
         .unwrap();
 
-    service.release_team(TEAM).await.unwrap();
+    service.pause_team(TEAM).await.unwrap();
 
-    assert_eq!(records.only().state, AgentInboxState::Released);
-    assert!(mailboxes.calls().contains(&"release".to_owned()));
+    // Stops receiving now; email_service releases it after its retention.
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+    assert!(mailboxes.calls().contains(&"pause".to_owned()));
+    assert!(!mailboxes.calls().contains(&"release".to_owned()));
 }
 
 #[tokio::test]
@@ -847,14 +849,14 @@ async fn a_provision_that_starts_after_a_team_deletion_marked_the_agent_makes_no
     let (service, records, mailboxes) = service(Answer::Active);
 
     // The deletion marks every seated agent, inbox or not.
-    service.release_team(TEAM).await.unwrap();
+    service.pause_team(TEAM).await.unwrap();
     let late = service
         .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
         .await
         .unwrap();
 
-    assert_eq!(late.state, AgentInboxState::Released);
-    assert_eq!(records.only().state, AgentInboxState::Released);
+    assert_eq!(late.state, AgentInboxState::Paused);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
     assert!(
         !mailboxes
             .calls()
@@ -893,7 +895,7 @@ async fn a_release_email_service_is_already_doing_is_not_asked_again() {
 }
 
 #[tokio::test]
-async fn an_inbox_made_while_its_team_was_deleted_is_released_by_the_sweep() {
+async fn an_inbox_made_while_its_team_was_deleted_is_paused_by_the_sweep() {
     let (service, records, mailboxes) = service(Answer::Active);
     // The team's deletion listed its inboxes before this provision reserved
     // one, then the team row (and the seat) went.
@@ -911,8 +913,8 @@ async fn an_inbox_made_while_its_team_was_deleted_is_released_by_the_sweep() {
         .await
         .unwrap();
 
-    assert_eq!(records.only().state, AgentInboxState::Released);
-    assert!(mailboxes.calls().contains(&"release".to_owned()));
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+    assert!(mailboxes.calls().contains(&"pause".to_owned()));
 }
 
 #[tokio::test]
@@ -924,8 +926,8 @@ async fn deleting_a_team_while_email_service_is_down_marks_its_inboxes_and_succe
         .unwrap();
     mailboxes.answer(Answer::Down);
 
-    service.release_team(TEAM).await.unwrap();
+    service.pause_team(TEAM).await.unwrap();
 
     // Marked: the sweep finishes it once email_service is back.
-    assert_eq!(records.only().state, AgentInboxState::Releasing);
+    assert_eq!(records.only().state, AgentInboxState::Pausing);
 }

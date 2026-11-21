@@ -8,7 +8,6 @@ use uuid::Uuid;
 
 use crate::domain::inbox::{
     AgentInboxFailure, AgentInboxRepository, AgentInboxState, InboxRecord, InboxUpdate,
-    MAX_SWEEP_ATTEMPTS,
 };
 
 #[cfg(test)]
@@ -304,15 +303,14 @@ impl AgentInboxRepository for PgAgentInboxes {
                 FROM team_agent_inboxes
                 WHERE state IN ('pausing', 'releasing')
                   AND next_sweep_at <= $1
-                  AND sweep_attempts < $2
                 ORDER BY next_sweep_at
-                LIMIT $3
+                LIMIT $2
                 FOR UPDATE SKIP LOCKED
             )
             UPDATE team_agent_inboxes i
-            SET sweep_attempts = i.sweep_attempts + 1,
+            SET sweep_attempts = LEAST(i.sweep_attempts + 1, 100),
                 next_sweep_at = $1 + LEAST(
-                    interval '1 minute' * power(2, i.sweep_attempts),
+                    interval '1 minute' * power(2, LEAST(i.sweep_attempts, 6)),
                     interval '1 hour'
                 )
             FROM due
@@ -321,7 +319,6 @@ impl AgentInboxRepository for PgAgentInboxes {
                       i.state, i.last_error, i.fake_provider, i.updated_at
             "#,
             now,
-            MAX_SWEEP_ATTEMPTS,
             i64::from(limit),
         )
         .fetch_all(&self.pool)

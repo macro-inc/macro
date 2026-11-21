@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH due AS (\n                SELECT agent_user_id\n                FROM team_agent_inboxes\n                WHERE state IN ('pausing', 'releasing')\n                  AND next_sweep_at <= $1\n                  AND sweep_attempts < $2\n                ORDER BY next_sweep_at\n                LIMIT $3\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE team_agent_inboxes i\n            SET sweep_attempts = i.sweep_attempts + 1,\n                next_sweep_at = $1 + LEAST(\n                    interval '1 minute' * power(2, i.sweep_attempts),\n                    interval '1 hour'\n                )\n            FROM due\n            WHERE i.agent_user_id = due.agent_user_id\n            RETURNING i.agent_user_id, i.team_id, i.request_id, i.mailbox_id, i.address,\n                      i.state, i.last_error, i.fake_provider, i.updated_at\n            ",
+  "query": "\n            WITH due AS (\n                SELECT agent_user_id\n                FROM team_agent_inboxes\n                WHERE state IN ('pausing', 'releasing')\n                  AND next_sweep_at <= $1\n                ORDER BY next_sweep_at\n                LIMIT $2\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE team_agent_inboxes i\n            SET sweep_attempts = LEAST(i.sweep_attempts + 1, 100),\n                next_sweep_at = $1 + LEAST(\n                    interval '1 minute' * power(2, LEAST(i.sweep_attempts, 6)),\n                    interval '1 hour'\n                )\n            FROM due\n            WHERE i.agent_user_id = due.agent_user_id\n            RETURNING i.agent_user_id, i.team_id, i.request_id, i.mailbox_id, i.address,\n                      i.state, i.last_error, i.fake_provider, i.updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -52,7 +52,6 @@
     "parameters": {
       "Left": [
         "Timestamptz",
-        "Int2",
         "Int8"
       ]
     },
@@ -68,5 +67,5 @@
       false
     ]
   },
-  "hash": "00ddac9f6f680d2d0c3a587377a2b41d93a4450429df43b9518ae26f541ab9b4"
+  "hash": "46ec36423e90968700911e04aa82ec45b0e81140ed45f5adf338b2075c7b5a2c"
 }

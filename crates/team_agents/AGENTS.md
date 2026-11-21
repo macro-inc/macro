@@ -96,17 +96,22 @@ inboxes to team admins and owners only, and asks about inboxes still
 address lives only on the inbox.
 
 Winding an inbox down marks the record first (`pausing` when the agent is
-removed, `releasing` when its invite is taken back or its team is deleted),
+removed or its team is deleted, `releasing` when its invite is taken back),
 creating it if the agent has none; only email_service's confirmation settles
-it (`paused`, `released`). Provisioning writes only through `update_live`,
-which refuses a marked record, and then finishes what the mark asks for. The
-record outlives the seat and the team (it goes only with the agent's
-account), and `inbound::inbox_sweep` (every replica, each minute) retries
-marks older than a minute until they settle; a mark with no mailbox at
-email_service settles after 15 minutes. Team deletion calls
-`InboxService::release_team` through the teams crate's
-`OwnedEntityCleanup::release_agent_inboxes`. A pause or release email_service
-misses fails the removal step, so the removal is retried too.
+it (`paused`, `released`), as a compare-and-set on the mark. email_service
+releases paused mailboxes after its 30-day retention. Provisioning reserves
+its record only while the agent holds its seat (same statement) and writes
+only through `update_live`, which refuses a marked record; then it finishes
+what the mark asks for. The record outlives the seat and the team (it goes
+only with the agent's account). Team deletion calls `InboxService::pause_team`
+through the teams crate's `OwnedEntityCleanup::pause_agent_inboxes`: it marks
+every seated agent, inbox or not, and fails only when a mark can't be stored.
+`inbound::inbox_sweep` (every replica, each minute) claims due marks
+(`FOR UPDATE SKIP LOCKED`, backoff a minute doubling to an hour, never
+abandoned; a mark failing for over a day logs an error), asks email_service
+first, and also pauses live inboxes from the
+last hour whose agent lost its seat without a mark; a mark with no mailbox
+settles after 15 minutes.
 
 ## Start here
 

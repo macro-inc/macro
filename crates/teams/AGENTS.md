@@ -31,9 +31,10 @@ event contract (schema, sanitization, delivery semantics).
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release). Team deletion
   calls `OwnedEntityCleanup::release_computers` and then
-  `release_agent_inboxes` after the purge and before cancelling the
-  subscription, so computers and agent mailboxes leave through their own
-  lifecycles; either failing stops the deletion before billing and the row.
+  `pause_agent_inboxes` after the purge and before cancelling the
+  subscription, so computers leave through their own lifecycle and agent
+  mailboxes stop receiving at once (email_service releases them after its
+  retention); either failing stops the deletion before billing and the row.
 - `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
   (Macro computers) on the team subscription. Each computer bills ONE item at
   a price of its own (`create_computer_price` copies the catalog price; Stripe

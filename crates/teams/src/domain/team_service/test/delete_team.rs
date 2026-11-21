@@ -19,7 +19,7 @@ const SUBSCRIPTION: &str = "sub_team";
 pub(super) enum Step {
     Purge(Uuid),
     ReleaseComputers(Uuid),
-    ReleaseAgentInboxes(Uuid),
+    PauseAgentInboxes(Uuid),
     CancelSubscription(String),
     DeleteTeam { team_id: Uuid, bot_ids: Vec<BotId> },
     Published(String),
@@ -206,8 +206,8 @@ impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
         Ok(())
     }
 
-    async fn release_agent_inboxes(&self, team_id: Uuid) -> Result<(), Self::Err> {
-        self.journal.record(Step::ReleaseAgentInboxes(team_id));
+    async fn pause_agent_inboxes(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.journal.record(Step::PauseAgentInboxes(team_id));
         if self.world.lock().unwrap().fail_agent_inboxes {
             return Err(std::io::Error::other("email service unavailable"));
         }
@@ -247,8 +247,8 @@ fn release_computers() -> Step {
     Step::ReleaseComputers(TEAM_ID)
 }
 
-fn release_agent_inboxes() -> Step {
-    Step::ReleaseAgentInboxes(TEAM_ID)
+fn pause_agent_inboxes() -> Step {
+    Step::PauseAgentInboxes(TEAM_ID)
 }
 
 fn cancel_subscription() -> Step {
@@ -346,7 +346,7 @@ async fn delete_team_purges_what_the_team_owns_directly() {
             purge(2),
             purge(3),
             release_computers(),
-            release_agent_inboxes(),
+            pause_agent_inboxes(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -373,7 +373,7 @@ async fn delete_team_purges_what_the_teams_bots_own() {
             purge(1),
             purge(2),
             release_computers(),
-            release_agent_inboxes(),
+            pause_agent_inboxes(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -401,7 +401,7 @@ async fn delete_team_purges_what_soft_deleted_team_bots_own() {
             purge(1),
             purge(2),
             release_computers(),
-            release_agent_inboxes(),
+            pause_agent_inboxes(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01), bot(0xb02)]),
             published_team_deleted(),
@@ -433,7 +433,7 @@ async fn delete_team_purges_in_rank_order_before_billing_the_row_and_the_event()
             purge(6),
             purge(1),
             release_computers(),
-            release_agent_inboxes(),
+            pause_agent_inboxes(),
             cancel_subscription(),
             delete_team(vec![bot(0xb01)]),
             published_team_deleted(),
@@ -457,7 +457,7 @@ async fn delete_team_purges_content_created_while_it_purges() {
             purge(1),
             purge(0x1000),
             release_computers(),
-            release_agent_inboxes(),
+            pause_agent_inboxes(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -514,7 +514,7 @@ async fn delete_team_keeps_the_team_when_a_purge_fails_and_a_retry_resumes() {
             purge(4),
             purge(5),
             release_computers(),
-            release_agent_inboxes(),
+            pause_agent_inboxes(),
             cancel_subscription(),
             delete_team(Vec::new()),
             published_team_deleted(),
@@ -689,7 +689,7 @@ async fn namespace_preflight_failure_stops_before_any_team_side_effect_and_retry
 }
 
 #[tokio::test]
-async fn agent_inboxes_that_cannot_be_released_stop_before_billing_and_the_row() {
+async fn agent_inboxes_that_cannot_be_paused_stop_before_billing_and_the_row() {
     let journal = Journal::default();
     let cleanup = RecordingOwnedEntityCleanup::new(&journal);
     cleanup.world.lock().unwrap().fail_agent_inboxes = true;
@@ -697,13 +697,13 @@ async fn agent_inboxes_that_cannot_be_released_stop_before_billing_and_the_row()
 
     assert!(matches!(
         cleanup_failure(service.delete_team(owner_receipt()).await),
-        OwnedEntityCleanupError::ReleaseAgentInboxes { .. }
+        OwnedEntityCleanupError::PauseAgentInboxes { .. }
     ));
 
     // The mailboxes would outlive the team: nothing past the release runs.
     assert_eq!(
         journal.steps(),
-        vec![release_computers(), release_agent_inboxes()]
+        vec![release_computers(), pause_agent_inboxes()]
     );
     assert!(broker.events().is_empty());
 }

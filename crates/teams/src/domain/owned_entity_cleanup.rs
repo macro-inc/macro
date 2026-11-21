@@ -108,9 +108,10 @@ pub trait OwnedEntityCleanup: Clone + Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Release every agent teammate's email inbox the team has, so no
-    /// mailbox keeps receiving mail for a deleted team. Safe to repeat.
-    fn release_agent_inboxes(
+    /// Pause every agent teammate's email inbox the team has, so no mailbox
+    /// keeps receiving mail for a deleted team; email_service releases paused
+    /// mailboxes after its retention. Safe to repeat.
+    fn pause_agent_inboxes(
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -154,7 +155,7 @@ impl OwnedEntityCleanup for UnwiredOwnedEntityCleanup {
         Err(OwnedEntityCleanupUnwired)
     }
 
-    async fn release_agent_inboxes(&self, _team_id: Uuid) -> Result<(), Self::Err> {
+    async fn pause_agent_inboxes(&self, _team_id: Uuid) -> Result<(), Self::Err> {
         Err(OwnedEntityCleanupUnwired)
     }
 }
@@ -257,9 +258,9 @@ pub enum OwnedEntityCleanupError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
-    /// The team's agent teammates' inboxes could not be released.
-    #[error("unable to release the team's agent inboxes")]
-    ReleaseAgentInboxes {
+    /// The team's agent teammates' inboxes could not be paused.
+    #[error("unable to pause the team's agent inboxes")]
+    PauseAgentInboxes {
         /// The port's error.
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,

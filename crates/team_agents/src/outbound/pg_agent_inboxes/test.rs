@@ -260,3 +260,76 @@ async fn a_seated_reserve_needs_the_agent_on_the_team(pool: PgPool) {
     );
     assert_eq!(inboxes.seated_agents(TEAM).await.unwrap(), vec![]);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_settle_only_moves_the_mark_it_was_started_from(pool: PgPool) {
+    team_with_agent(&pool).await;
+    let inboxes = PgAgentInboxes::new(pool.clone());
+    inboxes
+        .reserve(
+            &user(AGENT),
+            TEAM,
+            Uuid::from_u128(1),
+            AgentInboxState::Releasing,
+        )
+        .await
+        .unwrap();
+    let paused = InboxUpdate {
+        mailbox_id: None,
+        address: None,
+        state: AgentInboxState::Paused,
+        last_error: None,
+        fake_provider: false,
+    };
+
+    // A pause finishing late never overwrites a release in progress.
+    assert_eq!(
+        inboxes
+            .settle(&user(AGENT), AgentInboxState::Pausing, &paused)
+            .await
+            .unwrap(),
+        None
+    );
+    let released = InboxUpdate {
+        state: AgentInboxState::Released,
+        ..paused
+    };
+    let settled = inboxes
+        .settle(&user(AGENT), AgentInboxState::Releasing, &released)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(settled.state, AgentInboxState::Released);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_sweep_finds_a_live_inbox_whose_agent_lost_its_seat(pool: PgPool) {
+    team_with_agent(&pool).await;
+    let inboxes = PgAgentInboxes::new(pool.clone());
+    let record = inboxes
+        .reserve_seated(&user(AGENT), TEAM, Uuid::from_u128(1))
+        .await
+        .unwrap()
+        .unwrap();
+    let window = |record: &InboxRecord| {
+        (
+            record.updated_at - chrono::Duration::minutes(1),
+            record.updated_at + chrono::Duration::minutes(1),
+        )
+    };
+    let (after, before) = window(&record);
+    assert_eq!(
+        inboxes.seatless_live(after, before, 10).await.unwrap(),
+        vec![]
+    );
+
+    PgTeamAgentsRepo::new(pool.clone())
+        .remove_seat(&user(AGENT))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        inboxes.seatless_live(after, before, 10).await.unwrap(),
+        vec![record]
+    );
+}
