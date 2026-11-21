@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph, Wrap};
 
 use super::super::layout::{ago, field};
+use super::super::status::detail_rows;
 use super::super::theme::{ACCENT, DIM, WARN, card};
 use crate::tui::app::App;
 
@@ -41,6 +42,8 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                 ),
             ));
             lines.push(field("Registered by", Span::raw(&harness.created_by)));
+            lines.push(Line::raw(""));
+            lines.extend(detail_rows(&app.health(), app.pid));
             if app.serving() {
                 lines.push(field(
                     "Harness proc",
@@ -53,15 +56,6 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                     },
                 ));
             }
-            lines.push(Line::raw(""));
-            lines.push(Line::styled(
-                if app.serving() {
-                    "Serving from this window; the dot turns green when this machine connects."
-                } else {
-                    "The daemon is not running; check the Logs tab for why."
-                },
-                Style::new().fg(DIM),
-            ));
         }
         None if app.paired() => {
             lines.push(Line::styled(
@@ -69,6 +63,8 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                 Style::new().fg(WARN),
             ));
             lines.push(Line::raw("It was likely removed. Press p to pair again."));
+            lines.push(Line::raw(""));
+            lines.extend(detail_rows(&app.health(), app.pid));
         }
         None => {
             lines.push(Line::styled(

@@ -237,6 +237,16 @@ impl HerdrCli {
         }
     }
 
+    /// Whether herdr shows macrod's own terminal: a herdr 0.9 pane always is
+    /// on screen in its workspace, a herdr-core terminal when the herdr app
+    /// holds it in a tab.
+    pub(crate) async fn shows_own_terminal(&self) -> Result<bool, HerdrError> {
+        match &self.backend {
+            Backend::Legacy(_) => Ok(true),
+            Backend::Core(herdr) => herdr.shows_own_terminal().await,
+        }
+    }
+
     /// Submit a prompt to a named agent's TUI, returning once it is typed.
     pub(crate) async fn prompt_agent(&self, name: &str, text: &str) -> Result<(), HerdrError> {
         match &self.backend {

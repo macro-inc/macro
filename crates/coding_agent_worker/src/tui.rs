@@ -13,6 +13,7 @@ pub(crate) mod agent_catalog;
 mod api;
 mod app;
 pub(crate) mod config_form;
+pub(crate) mod health;
 #[cfg(unix)]
 mod herdr_pane;
 mod input;

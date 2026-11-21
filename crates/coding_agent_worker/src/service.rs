@@ -18,7 +18,7 @@ use serde::Serialize;
 use tokio::io::AsyncReadExt as _;
 
 use crate::config::{self, Config, ConfigLock, HarnessCredentials};
-use crate::daemon::Daemon;
+use crate::daemon::{Daemon, TriggerStreamHealth};
 use crate::outbound::pairing::{ClaimStatus, PairingClient, machine_name};
 use crate::profiles::{ConfigSelection, ProfileName};
 use crate::tui::agent_catalog::{self, DetectedAgent, PathCommands};
@@ -80,8 +80,53 @@ enum Event {
     Paired { harness_id: String },
     /// The serving core is up on the stored credential.
     Running { harness_id: String },
+    /// What the serving core's connections are doing, emitted at start and
+    /// whenever either changes.
+    Health {
+        /// Whether this process holds the harness service's runtime
+        /// connection, which is what makes the machine online in Macro.
+        runtime_connected: bool,
+        /// The agent-trigger event stream, which brings mentions and messages.
+        triggers: TriggerStreamState,
+    },
     /// The service is exiting on an error; the message is user-facing.
     Fatal { message: String },
+}
+
+/// The agent-trigger stream as `health` events report it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+enum TriggerStreamState {
+    Connecting,
+    NoAgentsBound,
+    /// `verified` when the service heartbeats the stream, so a quiet stream
+    /// still shows its events flow.
+    Live {
+        verified: bool,
+    },
+    Reconnecting {
+        attempt: u32,
+        last_error: String,
+    },
+}
+
+impl From<&TriggerStreamHealth> for TriggerStreamState {
+    fn from(health: &TriggerStreamHealth) -> Self {
+        match health {
+            TriggerStreamHealth::Connecting => Self::Connecting,
+            TriggerStreamHealth::NoAgentsBound => Self::NoAgentsBound,
+            TriggerStreamHealth::Live { verified, .. } => Self::Live {
+                verified: *verified,
+            },
+            TriggerStreamHealth::Reconnecting {
+                attempt,
+                last_error,
+            } => Self::Reconnecting {
+                attempt: *attempt,
+                last_error: crate::tui::health::top_line(last_error).to_owned(),
+            },
+        }
+    }
 }
 
 fn emit(event: &Event) {
@@ -126,10 +171,33 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
         () = &mut shutdown => return Ok(()),
     };
 
+    let mut runtime = daemon.runtime_connection();
+    let mut triggers = daemon.trigger_stream_health();
+    // A live stream republishes on every event and heartbeat; only a change
+    // of what the event says is emitted.
+    let mut reported = None;
+    // An interval, not a sleep per turn: state changes arriving faster than
+    // the watch must not keep deferring the dead-daemon check.
+    let mut watch_daemon = tokio::time::interval(DAEMON_WATCH);
+    watch_daemon.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
+        let health = (
+            *runtime.borrow_and_update(),
+            TriggerStreamState::from(&*triggers.borrow_and_update()),
+        );
+        if reported.as_ref() != Some(&health) {
+            emit(&Event::Health {
+                runtime_connected: health.0,
+                triggers: health.1.clone(),
+            });
+            reported = Some(health);
+        }
+
         tokio::select! {
             () = &mut shutdown => break,
-            () = tokio::time::sleep(DAEMON_WATCH) => {
+            Ok(()) = runtime.changed() => {}
+            Ok(()) = triggers.changed() => {}
+            _ = watch_daemon.tick() => {
                 if !daemon.is_running() {
                     daemon.stop().await;
                     rootcause::bail!("the serving core stopped unexpectedly");

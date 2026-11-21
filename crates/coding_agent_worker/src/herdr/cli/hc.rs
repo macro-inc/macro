@@ -92,6 +92,15 @@ impl Terminal {
         }
     }
 
+    /// Whether the herdr app holds it in a tab. The app adopts a terminal by
+    /// its space and tab labels and clears both when it parks one; a terminal
+    /// started with plain `hc run` has neither.
+    pub(super) fn in_app_tab(&self) -> bool {
+        [SPACE_LABEL, TAB_LABEL]
+            .into_iter()
+            .all(|key| self.label(key).is_some_and(|value| !value.is_empty()))
+    }
+
     pub(super) fn info(self) -> Result<AgentInfo, HerdrError> {
         if !self.agent_running() {
             return Err(HerdrError::Ended);
@@ -305,6 +314,10 @@ impl Core {
         if let Err(error) = self.run(&["rm", name]).await {
             tracing::debug!(%error, terminal = name, "could not remove a stale session terminal");
         }
+    }
+
+    pub(super) async fn shows_own_terminal(&self) -> Result<bool, HerdrError> {
+        Ok(self.get(&self.terminal).await?.in_app_tab())
     }
 
     async fn get(&self, terminal: &str) -> Result<Terminal, HerdrError> {

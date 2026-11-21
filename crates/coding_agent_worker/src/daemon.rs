@@ -211,12 +211,13 @@ impl Daemon {
     }
 
     /// What the agent-trigger stream is doing, updated as it changes.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the control panel's health display reads it next")
-    )]
     pub fn trigger_stream_health(&self) -> watch::Receiver<TriggerStreamHealth> {
         self.trigger_stream.clone()
+    }
+
+    /// Whether this daemon holds a runtime connection, updated as it changes.
+    pub fn runtime_connection(&self) -> watch::Receiver<bool> {
+        self.runtime_connected.clone()
     }
 
     /// Whether this daemon currently holds a runtime connection.
