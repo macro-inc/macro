@@ -334,25 +334,40 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   the team claim. A folder's link-only setting does not grant database access.
 - `databases::body_links` builds a separate occurrence map for each page or row;
   `?v` selects the saved view, otherwise the first container tab is assumed and
-  reported. Excluded sources retain `notImported` links.
+  reported. Excluded sources retain `notImported` links. Keep permanently unreadable
+  tab slots in list order; a missing default never silently selects the next tab.
+  Retain other readable tabs and propagate transient detail failures.
 - Stream rows once to collect date-range property ids, union timeline usage,
   and retain schemas/ids/views only until writing. Re-read rows under the normal
   write pacer and concurrency bound; report schema or date-shape drift and write
   the values fitting the reserved schema. Record API row counts per pass. Persist
   `SchemaPlan` and `DateRangeProperty` markers atomically before applying schema
   operations, and reuse them on resume instead of changing Date/DateRange shapes.
-  `SchemaPlan` carries a UUIDv5 property-schema fingerprint: on restart mismatch,
-  fail only that source and report unresolved card fallbacks; keep other sources
-  and pages running. Do not rebuild incompatible columns or store full snapshots.
+  `SchemaPlan` fingerprints sorted property ids and kinds only: on structural
+  mismatch fail that source and report unresolved card fallbacks. Names and option
+  metadata drift warn instead. `ColumnOption` facts preserve the reserved option
+  ids and labels; match row values by option id when present, otherwise by name.
+  Omit unmatched values with counted losses naming the matching method. Keep
+  other sources and pages running; never rebuild columns or store full snapshots.
+  An older interrupted database without planning facts stops with a typed warning
+  asking the user to re-import it; do not guess live schema through a new port.
 - Discover row-body references only when writing. Sources absent from the review
   remain named Notion links with typed reasons and counted report losses; never
   import an unreviewed dependency while writing. Page-level dependencies remain
   in the review. Span page scans and dependency metadata as separate phases.
   Approximate filters preserve a superset of source rows and visibly mark the
-  saved view name. Persist translation losses, unresolved placements and labelled
-  computed snapshots through `WrittenObjects::record_warnings`; reports and
-  settlement events retain them across retries.
+  saved view name. Reserve readable, unique view names before creation; never
+  display a source UUID. A ready database with an unavailable selected view keeps
+  a default-view card and reports the approximation. Record typed occurrence and
+  option loss facts in the same ledger batch as their completed row/body/task.
+  Flush counted, human-readable warnings at most twice per source attempt
+  (reservation and after writing, including failures), before marking it imported.
+  Reports merge cumulative snapshots by maximum count across retries; settlement
+  events carry the same warning lines. Keep formulas and rollups labelled snapshots.
 - Database ids derive from the ledger row; view ids derive from database and
   source-view ids. Record their written markers and reuse an existing caller id
   after a lost create response. Reuse the privacy helpers and persisted mirror
   ids used by pages and tasks; do not create a second personal root or guard.
+  Before inserting Personal rows, recheck the reserved database's actual folder
+  and ancestors for explicit grants. Stop that source with a typed sharing-change
+  warning if a grant appeared after reservation; do not relocate it implicitly.

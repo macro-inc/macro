@@ -22,6 +22,8 @@ pub(super) struct Writer {
     pub(super) steps: Mutex<Vec<&'static str>>,
     pub(super) database_reads: Mutex<Vec<(Uuid, models_databases::TableId)>>,
     pub(super) deny_database_access: bool,
+    pub(super) grant_on_database: bool,
+    pub(super) database_insert_rows: std::sync::atomic::AtomicUsize,
 
     pub(super) tasks: Mutex<Vec<Uuid>>,
     pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
@@ -363,6 +365,11 @@ impl WorkspaceWriter for Writer {
                 self.steps.lock().unwrap().push("database");
             }
         }
+        if self.grant_on_database
+            && let Some(folder) = folder
+        {
+            self.grants.lock().unwrap().insert(folder);
+        }
         let _ = user;
         Ok(NewDatabase {
             database_id: id,
@@ -388,13 +395,18 @@ impl WorkspaceWriter for Writer {
                 DatabaseOp::Rows {
                     table,
                     change: RowsChange::Insert { rows, ids },
-                } => Some(OpResult::Rows {
-                    table,
-                    table_version: TableVersion(1),
-                    change: RowsResult::Inserted {
-                        rows: ids.unwrap_or_else(|| rows.iter().map(|_| RowId::new()).collect()),
-                    },
-                }),
+                } => {
+                    self.database_insert_rows
+                        .fetch_add(rows.len(), std::sync::atomic::Ordering::SeqCst);
+                    Some(OpResult::Rows {
+                        table,
+                        table_version: TableVersion(1),
+                        change: RowsResult::Inserted {
+                            rows: ids
+                                .unwrap_or_else(|| rows.iter().map(|_| RowId::new()).collect()),
+                        },
+                    })
+                }
                 _ => None,
             })
             .collect())

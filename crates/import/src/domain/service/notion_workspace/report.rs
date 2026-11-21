@@ -48,9 +48,26 @@ pub(in crate::domain::service) fn report(
             .get("warnings")
             .and_then(serde_json::Value::as_array)
         {
-            for warning in warnings.iter().filter_map(serde_json::Value::as_str) {
-                if !report.warnings.iter().any(|existing| existing == warning) {
-                    report.warnings.push(warning.to_string());
+            let typed = warnings
+                .iter()
+                .cloned()
+                .map(serde_json::from_value::<crate::domain::models::FidelityWarning>)
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            for warning in crate::domain::models::FidelityWarning::merge(typed) {
+                let counted = matches!(
+                    warning,
+                    crate::domain::models::FidelityWarning::References { .. }
+                        | crate::domain::models::FidelityWarning::OmittedOptions { .. }
+                );
+                let rendered = if counted {
+                    format!("{}: {}", meta.title, warning.render())
+                } else {
+                    warning.render()
+                };
+                // Counts belong to distinct source rows; identical titles or
+                // totals must not hide a second source's losses.
+                if counted || !report.warnings.contains(&rendered) {
+                    report.warnings.push(rendered);
                 }
             }
         }

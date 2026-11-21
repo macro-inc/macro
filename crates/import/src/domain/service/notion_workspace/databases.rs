@@ -26,10 +26,30 @@ pub(super) enum DatabaseDestination {
 
 pub(super) type DatabaseDestinations = HashMap<NotionId, DatabaseDestination>;
 
+/// A tab keeps its listed position even when its detail endpoint is unavailable.
+pub(super) enum ViewTab {
+    Ready(Box<NotionView>),
+    Unavailable { id: NotionId, reason: ReadFailure },
+}
+impl ViewTab {
+    pub fn id(&self) -> &NotionId {
+        match self {
+            Self::Ready(view) => &view.id,
+            Self::Unavailable { id, .. } => id,
+        }
+    }
+    pub fn view(&self) -> Option<&NotionView> {
+        match self {
+            Self::Ready(view) => Some(view),
+            Self::Unavailable { .. } => None,
+        }
+    }
+}
+
 /// A body with its container-local views, in Notion's tab order.
 pub(super) struct ResolvedPage {
     pub body: PageDatabases,
-    pub views: HashMap<NotionId, Vec<NotionView>>,
+    pub views: HashMap<NotionId, Vec<ViewTab>>,
     pub warnings: Vec<String>,
     pub unavailable: HashMap<NotionId, ReadFailure>,
 }
@@ -65,8 +85,8 @@ pub(super) async fn enrich<Api: NotionApi>(
                 Some(reason) => {
                     unavailable.insert(key.container_id.clone(), reason);
                     warnings.push(format!(
-                        "Database {}: views unavailable ({reason:?})",
-                        key.container_id
+                        "Database {}: views unavailable ({reason})",
+                        occurrence.title
                     ));
                 }
                 None => return Err(error),
@@ -82,9 +102,9 @@ pub(super) async fn enrich<Api: NotionApi>(
         occurrence
             .losses
             .retain(|loss| *loss != DatabaseLoss::NeedsViews);
-        for tab in tabs {
+        for tab in tabs.iter().filter_map(ViewTab::view) {
             if tab.parent.database_id != key.container_id {
-                warnings.push(format!("View {}: container identity mismatch", tab.id));
+                warnings.push(format!("View {}: container identity mismatch", tab.name));
                 continue;
             }
             if let Some(source) = &tab.data_source_id
@@ -124,6 +144,7 @@ pub(super) async fn enrich<Api: NotionApi>(
         }
         if tabs
             .iter()
+            .filter_map(ViewTab::view)
             .any(|view| view.parent.database_id == key.container_id)
             && occurrence
                 .sources
@@ -152,7 +173,7 @@ pub(super) async fn enrich<Api: NotionApi>(
 pub(super) async fn read_views<Api: NotionApi>(
     api: &Api,
     scope: &ViewScope,
-) -> Result<Vec<NotionView>, NotionError> {
+) -> Result<Vec<ViewTab>, NotionError> {
     match scope {
         ViewScope::Database(id) => {
             tracing::Span::current().record("container_id", tracing::field::display(id));
@@ -169,7 +190,18 @@ pub(super) async fn read_views<Api: NotionApi>(
         let page = api.list_views(scope, cursor).await?;
         for id in page.results {
             if ids.insert(id.clone()) {
-                views.push(api.retrieve_view(&id).await?);
+                let tab = match api.retrieve_view(&id).await {
+                    Ok(view) if view.id == id => ViewTab::Ready(Box::new(view)),
+                    Ok(_) => ViewTab::Unavailable {
+                        id,
+                        reason: ReadFailure::InvalidObject,
+                    },
+                    Err(error) => match read_failure(&error) {
+                        Some(reason) => ViewTab::Unavailable { id, reason },
+                        None => return Err(error),
+                    },
+                };
+                views.push(tab);
             }
         }
         cursor = page.next_cursor;
@@ -189,6 +221,7 @@ pub(super) fn read_failure(error: &NotionError) -> Option<ReadFailure> {
     match error {
         NotionError::NotFound => Some(ReadFailure::NotFound),
         NotionError::Forbidden => Some(ReadFailure::Forbidden),
+        NotionError::Decode(_) => Some(ReadFailure::InvalidObject),
         NotionError::Upstream { status: 400, .. } => Some(ReadFailure::InvalidObject),
         _ => None,
     }

@@ -256,6 +256,7 @@ async fn a_committed_view_with_a_lost_response_is_reused_before_its_marker_is_wr
             .get_for(WrittenKind::View, view_id.as_str())
             .is_some()
     );
+    progress.flush_warnings().await.unwrap();
     assert_eq!(
         store.warnings.lock().unwrap().len(),
         1,
@@ -331,11 +332,12 @@ async fn rows_are_read_again_after_reservation_and_schema_drift_is_reported() {
         "write-time rows replace the scan snapshot"
     );
     assert!(!written.rows.contains_key(&id('1')));
+    progress.flush_warnings().await.unwrap();
     let losses = store.warnings.lock().unwrap();
     assert!(
         losses
             .iter()
-            .any(|loss| loss.contains("property dates") && loss.contains("changed"))
+            .any(|loss| loss.contains("property Dates") && loss.contains("changed"))
     );
     assert!(
         losses
@@ -386,16 +388,18 @@ async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
         },
     );
     let recorded = store.written(&user, &[item.import_id]).await.unwrap();
+    let progress = Progress::new(&store, &user, item.import_id, &recorded);
     let resumed = prepare_database(
         &notion,
         &writer,
         &user,
         &item,
         Some(Uuid::from_u128(42)),
-        &Progress::new(&store, &user, item.import_id, &recorded),
+        &progress,
     )
     .await
     .unwrap();
+    progress.flush_warnings().await.unwrap();
     assert_eq!(resumed.plan.columns[0].shape, ColumnShape::Date);
     assert!(
         store
@@ -409,5 +413,76 @@ async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
         writer.batches.lock().unwrap().len(),
         1,
         "the written schema is reused"
+    );
+}
+
+#[tokio::test]
+async fn a_column_rename_and_added_option_do_not_block_schema_resume() {
+    use import_notion::domain::model::NotionOption;
+    let mut notion = FakeNotion {
+        views: vec![],
+        fetched: Mutex::new(0),
+        rows: vec![],
+        bodies: HashMap::new(),
+        source: NotionDataSource {
+            id: id('e'),
+            database_id: id('f'),
+            title: "Work".into(),
+            database_parent: NotionParent::Workspace,
+            in_trash: false,
+            properties: vec![NotionPropertySchema {
+                id: "status".into(),
+                name: "Stage".into(),
+                kind: NotionPropertyKind::Select {
+                    options: vec![NotionOption {
+                        id: "open".into(),
+                        name: "Open".into(),
+                        color: "blue".into(),
+                    }],
+                },
+            }],
+        },
+    };
+    let writer = FakeWriter::default();
+    let store = FakeStore::default();
+    let user = user();
+    let item = source_item("Work");
+    prepare_database(
+        &notion,
+        &writer,
+        &user,
+        &item,
+        Some(Uuid::from_u128(42)),
+        &Progress::new(&store, &user, item.import_id, &[]),
+    )
+    .await
+    .unwrap();
+    notion.source.properties[0].name = "Workflow".into();
+    let NotionPropertyKind::Select { options } = &mut notion.source.properties[0].kind else {
+        unreachable!()
+    };
+    options.push(NotionOption {
+        id: "done".into(),
+        name: "Done".into(),
+        color: "green".into(),
+    });
+    let recorded = store.written(&user, &[item.import_id]).await.unwrap();
+    let result = prepare_database(
+        &notion,
+        &writer,
+        &user,
+        &item,
+        Some(Uuid::from_u128(42)),
+        &Progress::new(&store, &user, item.import_id, &recorded),
+    )
+    .await;
+    assert!(
+        result.is_ok(),
+        "names and declared options do not change the reserved column types"
+    );
+    assert_eq!(
+        writer.batches.lock().unwrap().len(),
+        1,
+        "the reserved schema is reused"
     );
 }

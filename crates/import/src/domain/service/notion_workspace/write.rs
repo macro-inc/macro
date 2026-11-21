@@ -254,6 +254,8 @@ pub(super) struct Progress<'a, Store> {
     user: &'a MacroUserIdStr<'static>,
     import_id: Uuid,
     known: Mutex<HashMap<(WrittenKind, String), Uuid>>,
+    warnings: Mutex<Vec<crate::domain::models::FidelityWarning>>,
+    losses: Mutex<HashMap<NotionId, HashSet<crate::domain::models::SourceLossFact>>>,
 }
 
 impl<'a, Store: WrittenObjects> Progress<'a, Store> {
@@ -274,6 +276,8 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             user,
             import_id,
             known: Mutex::new(known),
+            warnings: Mutex::new(Vec::new()),
+            losses: Mutex::new(HashMap::new()),
         }
     }
 
@@ -344,14 +348,96 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         Ok(())
     }
 
-    /// Persist losses before converting or writing a body or preset.
+    /// Buffer phase warnings; only the phase boundary rewrites warning metadata.
     pub async fn warn(&self, warnings: &[String]) -> anyhow::Result<()> {
+        self.warn_fidelity(&warnings.iter().cloned().map(Into::into).collect::<Vec<_>>())
+            .await
+    }
+
+    /// Forward another source's already counted warnings after its access check.
+    pub async fn warn_fidelity(
+        &self,
+        warnings: &[crate::domain::models::FidelityWarning],
+    ) -> anyhow::Result<()> {
+        self.warnings
+            .lock()
+            .map_err(|_| anyhow::anyhow!("warning buffer unavailable"))?
+            .extend_from_slice(warnings);
+        Ok(())
+    }
+
+    /// Report a typed source-only stop before recording its failure.
+    pub async fn source_stopped(
+        &self,
+        title: &str,
+        reason: crate::domain::models::SourceStopReason,
+    ) -> anyhow::Result<()> {
+        self.warn_fidelity(&[crate::domain::models::FidelityWarning::SourceStopped {
+            title: title.to_owned(),
+            reason,
+        }])
+        .await
+    }
+
+    /// Keep a typed loss until the same batch records its completed object.
+    pub fn loss(&self, fact: crate::domain::models::SourceLossFact) -> anyhow::Result<()> {
+        self.losses
+            .lock()
+            .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+            .entry(fact.object.clone())
+            .or_default()
+            .insert(fact);
+        Ok(())
+    }
+
+    /// Persist one cumulative snapshot per phase, rebuilding facts after a restart.
+    pub async fn flush_warnings(&self) -> anyhow::Result<()> {
+        use crate::domain::models::{FidelityWarning, SourceLossFact};
+        let mut facts: Vec<SourceLossFact> = self
+            .all(WrittenKind::Loss)
+            .into_keys()
+            .map(|payload| serde_json::from_str(&payload))
+            .collect::<std::result::Result<_, _>>()?;
+        facts.extend(
+            self.losses
+                .lock()
+                .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+                .values()
+                .flatten()
+                .cloned(),
+        );
+        let mut warnings = self
+            .warnings
+            .lock()
+            .map_err(|_| anyhow::anyhow!("warning buffer unavailable"))?
+            .clone();
+        warnings.extend(SourceLossFact::warnings(facts));
+        let warnings = FidelityWarning::merge(warnings);
         if !warnings.is_empty() {
             self.store
-                .record_warnings(self.user, self.import_id, warnings)
+                .record_warnings(self.user, self.import_id, &warnings)
                 .await?;
         }
         Ok(())
+    }
+
+    /// Add small loss facts to an existing marker batch, never a per-row warning update.
+    pub fn loss_markers(&self, object: &NotionId) -> anyhow::Result<Vec<WrittenObject>> {
+        self.losses
+            .lock()
+            .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+            .get(object)
+            .into_iter()
+            .flatten()
+            .map(|fact| {
+                Ok(WrittenObject {
+                    import_id: self.import_id,
+                    kind: WrittenKind::Loss,
+                    object: serde_json::to_string(fact)?,
+                    macro_id: self.import_id,
+                })
+            })
+            .collect()
     }
 
     /// Record the row's own object of `kind`.
@@ -367,13 +453,9 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         row: &NotionId,
         macro_id: Uuid,
     ) -> anyhow::Result<()> {
-        self.record_all(vec![WrittenObject::for_row(
-            self.import_id,
-            kind,
-            row,
-            macro_id,
-        )])
-        .await
+        let mut objects = self.loss_markers(row)?;
+        objects.push(WrittenObject::for_row(self.import_id, kind, row, macro_id));
+        self.record_all(objects).await
     }
 
     /// Record `objects`, which must belong to this row.

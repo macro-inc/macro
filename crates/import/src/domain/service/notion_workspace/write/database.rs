@@ -32,6 +32,7 @@ use crate::domain::ports::{
 mod test;
 
 mod prepare;
+mod schema;
 pub(in super::super) use prepare::{PreparedDatabase, prepare_database};
 
 /// Rows per insert batch, well under the 10,000-row batch limit.
@@ -111,8 +112,10 @@ pub(in super::super) async fn write_database<
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
 ) -> anyhow::Result<WrittenDatabase> {
-    let prepared = prepare_database(api, writer, user, item, Some(folder), progress).await?;
-    write_prepared_database(
+    let prepared = prepare_database(api, writer, user, item, Some(folder), progress).await;
+    progress.flush_warnings().await?;
+    let prepared = prepared?;
+    let result = write_prepared_database(
         api,
         writer,
         user,
@@ -126,7 +129,9 @@ pub(in super::super) async fn write_database<
         &HashMap::new(),
         personal_folder,
     )
-    .await
+    .await;
+    progress.flush_warnings().await?;
+    result
 }
 
 /// Fill a reserved database only after every source and saved view exists.
@@ -163,9 +168,19 @@ pub(in super::super) async fn write_prepared_database<
     cancel.ensure_running()?;
     let current = api.data_source(&item.notion_id).await?;
     let mut losses = Vec::new();
+    let mut plan = plan.clone();
+    for column in &mut plan.columns {
+        if let Some(property) = current
+            .properties
+            .iter()
+            .find(|property| property.id == column.property_id)
+        {
+            column.property = property.name.clone();
+        }
+    }
     for property in &source.properties {
         if !current.properties.iter().any(|now| now == property) {
-            losses.push(format!("Source {}: property {} changed after planning; only values fitting the planned schema are written", item.notion_id, property.id));
+            losses.push(format!("Database {}: property {} changed after planning; only values fitting the planned schema are written", item.title, property.name));
         }
     }
     for property in &current.properties {
@@ -174,15 +189,15 @@ pub(in super::super) async fn write_prepared_database<
             .iter()
             .any(|before| before.id == property.id)
         {
-            losses.push(format!("Source {}: property {} added after planning; values are omitted from the reserved schema", item.notion_id, property.id));
+            losses.push(format!("Database {}: property {} added after planning; values are omitted from the reserved schema", item.title, property.name));
         }
     }
     let drained = all_rows(api, &item.notion_id).await?;
     tracing::Span::current().record("rows_read_write", drained.rows_read as i64);
     if !drained.complete {
         losses.push(format!(
-            "Source {}: Notion returned an incomplete write-time row query",
-            item.notion_id
+            "Database {}: Notion returned an incomplete write-time row query",
+            item.title
         ));
     }
     let rows = &drained.rows;
@@ -195,7 +210,7 @@ pub(in super::super) async fn write_prepared_database<
                 )
             })
         {
-            losses.push(format!("Source {}: property {} acquired an end date after planning; only its start date fits the reserved Date column", item.notion_id, column.property));
+            losses.push(format!("Database {}: property {} acquired an end date after planning; only its start date fits the reserved Date column", item.title, column.property));
         }
     }
     progress.warn(&losses).await?;
@@ -228,6 +243,16 @@ pub(in super::super) async fn write_prepared_database<
         rows: recorded_rows(progress, database, table),
         ..WrittenDatabase::default()
     };
+    // Reservation can precede this phase by many sources. Recheck the actual
+    // filed folder, not a newly resolved mirror, before adding personal rows.
+    if !item.shared
+        && let Some(folder) = folder
+        && writer.folder_has_explicit_grant(user, *folder).await?
+    {
+        let reason = crate::domain::models::SourceStopReason::PersonalFolderShared;
+        progress.source_stopped(&item.title, reason).await?;
+        return Err(reason.into());
+    }
     let unwritten: Vec<NotionPage> = rows
         .iter()
         .filter(|row| !written.rows.contains_key(&row.id))
@@ -235,6 +260,20 @@ pub(in super::super) async fn write_prepared_database<
         .collect();
     for batch in owned_batches(&unwritten) {
         cancel.ensure_running()?;
+        for row in &batch {
+            for loss in plan.option_losses(row) {
+                progress.loss(crate::domain::models::SourceLossFact {
+                    object: row.id.clone(),
+                    detail: crate::domain::models::SourceLossDetail::Option {
+                        property_id: loss.property_id,
+                        property: loss.property,
+                        option_id: loss.value.id,
+                        option: loss.value.name,
+                        matched_by: loss.matched_by,
+                    },
+                })?;
+            }
+        }
         let cells: Vec<Vec<CellWrite>> = batch
             .iter()
             .map(|row| plan.row_cells(row, created.title_column, people))
@@ -265,13 +304,18 @@ pub(in super::super) async fn write_prepared_database<
                     .iter()
                     .zip(&ids)
                     .map(|(row, id)| {
-                        WrittenObject::for_row(
+                        let mut markers = progress.loss_markers(&row.id)?;
+                        markers.push(WrittenObject::for_row(
                             item.import_id,
                             WrittenKind::Row,
                             &row.id,
                             id.into_uuid(),
-                        )
+                        ));
+                        Ok(markers)
                     })
+                    .collect::<anyhow::Result<Vec<_>>>()?
+                    .into_iter()
+                    .flatten()
                     .collect(),
             )
             .await?;
@@ -490,6 +534,7 @@ fn inserted_rows(results: &[OpResult]) -> Vec<RowId> {
     clippy::too_many_arguments,
     reason = "row bodies need the rows, their database, links and progress"
 )]
+#[tracing::instrument(name = "notion.database_row_bodies", skip_all, fields(source_id = %item.notion_id, rows = rows.len() as i64), err)]
 async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: WrittenObjects>(
     api: &Api,
     writer: &Writer,
@@ -533,9 +578,25 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     return Ok(Some(change(document)));
                 }
                 let (markdown, database_links) =
-                    super::super::databases::body_links(api, &row.id, destinations, progress)
-                        .await?;
+                    match super::super::databases::body_links(api, &row.id, destinations, progress)
+                        .await
+                    {
+                        Ok(body) => body,
+                        Err(error) => {
+                            progress.loss(crate::domain::models::SourceLossFact {
+                            object: row.id.clone(),
+                            detail: crate::domain::models::SourceLossDetail::Text {
+                                message: format!(
+                                    "Page {}: content could not be read; its database row was kept",
+                                    row.title
+                                ),
+                            },
+                        })?;
+                            return Err(error);
+                        }
+                    };
                 if markdown.trim().is_empty() {
+                    progress.record_all(progress.loss_markers(&row.id)?).await?;
                     return Ok(None);
                 }
                 let folder = *bodies_folder

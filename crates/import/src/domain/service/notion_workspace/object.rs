@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 
+use futures::FutureExt;
+
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionConnections};
@@ -83,8 +85,24 @@ where
         control: &JobControl,
     ) -> Outcome {
         let progress = write::Progress::new(&self.repo, user, item.import_id, target.written);
-        match self.write_item(user, item, target, &progress).await {
-            Ok(Written::Done) => Outcome::Done,
+        let result = async {
+            let result = self.write_item(user, item, target, &progress).boxed().await;
+            progress.flush_warnings().await?;
+            let outcome = result?;
+            if let Written::Done {
+                entity_id,
+                entity_type,
+            } = &outcome
+            {
+                self.repo
+                    .mark_imported(user, item.import_id, entity_id, entity_type, None)
+                    .await?;
+            }
+            Result::Ok(outcome)
+        }
+        .await;
+        match result {
+            Ok(Written::Done { .. }) => Outcome::Done,
             Ok(Written::Waiting(holder)) => Outcome::Waiting(holder),
             // Stopped part way for the next process: the row stays
             // `importing` for it to finish.
@@ -162,13 +180,13 @@ where
                         "database view access is unavailable"
                     )));
                 }
-                self.repo
-                    .mark_imported(user, item.import_id, &entity_id, &entity_type, None)
-                    .await?;
                 if item.shared && item.kind == ImportKind::DataSource {
                     progress.clear_task_notices().await?;
                 }
-                return Ok(Written::Done);
+                return Ok(Written::Done {
+                    entity_id,
+                    entity_type,
+                });
             }
             TeamClaim::Waiting { holder } => return Ok(Written::Waiting(holder)),
             TeamClaim::Held => true,
@@ -325,17 +343,23 @@ where
                         .share_with_team(user, SharedEntity::Document(id))
                         .await?;
                 }
+                progress
+                    .record_for(
+                        crate::domain::models::WrittenKind::Document,
+                        &item.notion_id,
+                        id,
+                    )
+                    .await?;
                 (document, write::DOCUMENT_ENTITY)
             }
         };
         if item.shared && item.kind == ImportKind::DataSource {
             progress.clear_task_notices().await?;
         }
-        // The row's team claim, taken before writing, stays on it.
-        self.repo
-            .mark_imported(user, item.import_id, &entity_id, entity_type, None)
-            .await?;
-        Ok(Written::Done)
+        Ok(Written::Done {
+            entity_id,
+            entity_type: entity_type.to_owned(),
+        })
     }
 
     /// Where the plan's pages and people resolve in Macro, known before
@@ -466,7 +490,10 @@ pub(super) enum Outcome {
 /// What one object's write did.
 enum Written {
     /// It was written, or linked to the team's copy.
-    Done,
+    Done {
+        entity_id: String,
+        entity_type: String,
+    },
     /// A teammate is writing it for the team; nothing was written.
     Waiting(Uuid),
 }

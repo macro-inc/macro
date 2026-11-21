@@ -159,3 +159,31 @@ async fn page_scan_reports_progress_before_all_page_reads_finish() {
     assert_eq!(progress.first().unwrap().pages, 0);
     assert!(progress.iter().any(|counts| counts.pages == 1));
 }
+
+#[tokio::test]
+async fn review_permanent_tab_failure_retains_readable_tabs_and_missing_positions() {
+    let container = NotionId::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    let page = NotionId::parse("11111111111111111111111111111111").unwrap();
+    for missing in ['b', 'c'] {
+        let api = LinkedNotion {
+            unavailable_view: NotionId::parse(&missing.to_string().repeat(32)),
+            ..Default::default()
+        };
+        let resolved = resolve_page(&api, &page).await.unwrap();
+        assert!(
+            !resolved.unavailable.contains_key(&container),
+            "one deleted tab does not lose the container"
+        );
+        assert_eq!(
+            resolved.views[&container].len(),
+            2,
+            "tab order includes unavailable positions"
+        );
+        assert_eq!(resolved.body.occurrences[0].sources.len(), 1);
+        let tabs = &resolved.views[&container];
+        assert_eq!(tabs[0].id(), &NotionId::parse(&"b".repeat(32)).unwrap());
+        assert_eq!(tabs[1].id(), &NotionId::parse(&"c".repeat(32)).unwrap());
+        assert!(tabs[usize::from(missing == 'c')].view().is_none());
+        assert!(tabs[usize::from(missing == 'b')].view().is_some());
+    }
+}

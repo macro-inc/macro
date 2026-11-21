@@ -484,3 +484,77 @@ fn shared_re_reviews_hide_historical_personal_relocations() {
             .all(|warning| !warning.contains("kept in Notion (personal)"))
     );
 }
+
+#[test]
+fn resumed_warning_snapshots_keep_counts_without_adding_them_twice() {
+    use crate::domain::models::{FidelityWarning, ReferenceLossReason};
+    let mut source = row(
+        "Work",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([
+        FidelityWarning::References {
+            reason: ReferenceLossReason::NotReviewed,
+            title: "External plans".into(),
+            count: 3
+        },
+        FidelityWarning::References {
+            reason: ReferenceLossReason::NotReviewed,
+            title: "External plans".into(),
+            count: 8
+        },
+        FidelityWarning::Text("A saved sort was omitted".into()),
+    ]);
+    let report = report(None, &[source]);
+    assert_eq!(report.warnings.len(), 2);
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("8 references") && warning.contains("External plans"))
+    );
+}
+
+#[test]
+fn review_counted_warnings_remain_scoped_to_their_containing_sources() {
+    use crate::domain::models::{FidelityWarning, ReferenceLossReason};
+    let mut source = row(
+        "Work",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([FidelityWarning::References {
+        reason: ReferenceLossReason::NotReviewed,
+        title: "External plans".into(),
+        count: 3
+    }]);
+    let mut other = source.clone();
+    other.id = Uuid::now_v7();
+    other.foreign_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into();
+    other.metadata["title"] = serde_json::json!("Roadmap");
+    let report = report(None, &[source, other]);
+    assert_eq!(
+        report.warnings.len(),
+        2,
+        "distinct source counts must not collapse into one line"
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Work") && warning.contains("3 references"))
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Roadmap") && warning.contains("3 references"))
+    );
+}

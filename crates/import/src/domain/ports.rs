@@ -620,7 +620,7 @@ pub struct RecordedDatabaseMapping {
     /// The exact imported table, regardless of its current UI tab position.
     pub table: models_databases::TableId,
     /// Losses from the copy being reused.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<crate::domain::models::FidelityWarning>,
 }
 
 /// An accessible destination, including the saved views that actually exist.
@@ -1291,7 +1291,7 @@ pub trait WrittenObjects: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
-        warnings: &[String],
+        warnings: &[crate::domain::models::FidelityWarning],
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Everything recorded for the user's ledger rows `import_ids`.

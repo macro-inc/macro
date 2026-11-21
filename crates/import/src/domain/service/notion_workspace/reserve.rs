@@ -39,7 +39,19 @@ where
         let store = &self.repo;
         let pending: HashSet<Uuid> = set.pending.iter().map(|item| item.import_id).collect();
         let mut prepared = HashMap::new();
-        let mut destinations = HashMap::new();
+        let mut destinations: DatabaseDestinations = set
+            .all
+            .iter()
+            .filter(|item| {
+                item.kind == ImportKind::DataSource && item.decision != NotionDecision::Copy
+            })
+            .map(|item| {
+                (
+                    item.notion_id.clone(),
+                    DatabaseDestination::Fallback(NotionDatabaseFallback::NotImported),
+                )
+            })
+            .collect();
         let mut failures = HashMap::new();
         let source_titles: HashMap<&str, &str> = set
             .all
@@ -67,7 +79,7 @@ where
                         reuse_database(writer, store, user, &item.notion_id, database, &progress).await?
                     };
                     if matches!(destination, DatabaseDestination::Fallback(NotionDatabaseFallback::NoAccess)) {
-                        progress.warn(&[format!("Source {}: database view access unavailable; occurrences retain Notion links", item.notion_id)]).await?;
+                        progress.warn(&[format!("Database {}: database view access unavailable; occurrences retain Notion links", item.title)]).await?;
                     }
                     destinations.insert(item.notion_id.clone(), destination);
                 }
@@ -81,14 +93,14 @@ where
                 TeamClaim::Linked { entity_id, entity_type } if entity_type == write::DATABASE_ENTITY => {
                     let destination = reuse_database(writer, store, user, &item.notion_id, entity_id.parse()?, &progress).await?;
                     if matches!(destination, DatabaseDestination::Fallback(NotionDatabaseFallback::NoAccess)) {
-                        progress.warn(&[format!("Source {}: database view access unavailable; occurrences retain Notion links", item.notion_id)]).await?;
+                        progress.warn(&[format!("Database {}: database view access unavailable; occurrences retain Notion links", item.title)]).await?;
                     }
                     destinations.insert(item.notion_id.clone(), destination);
                     return Ok(());
                 }
                 TeamClaim::Linked { .. } => return Ok(()),
                 TeamClaim::Waiting { .. } => {
-                    progress.warn(&[format!("Source {}: another import is still creating its database; occurrences retain Notion links", item.notion_id)]).await?;
+                    progress.warn(&[format!("Database {}: another import is still creating its database; occurrences retain Notion links", item.title)]).await?;
                     return Ok(());
                 }
                 TeamClaim::Held | TeamClaim::Free => {}
@@ -108,7 +120,7 @@ where
                 let row_sources: Vec<&str> = item.dependency_of.iter()
                     .filter_map(|id| source_titles.get(id.as_str()).copied()).collect();
                 if row_sources.len() == item.dependency_of.len() {
-                    progress.warn(&[format!("Source {}: filed at the Notion folder because it is only referenced from rows of {}", item.notion_id, row_sources.join(", "))]).await?;
+                    progress.warn(&[format!("Database {}: filed at the Notion folder because it is only referenced from rows of {}", item.title, row_sources.join(", "))]).await?;
                 }
             }
             destinations.insert(item.notion_id.clone(), DatabaseDestination::Ready(ImportedDatabase { database_id: database.created.database_id, table: database.created.table, views: database.views.iter().copied().collect() }));
@@ -117,13 +129,16 @@ where
         }.await;
             if let Err(error) = outcome {
                 let reason = super::super::admission::failure_reason(&error);
-                progress.warn(&[format!("Source {}: unresolved database destination: {reason}; occurrences retain Notion links", item.notion_id)]).await?;
+                if !error.is::<crate::domain::models::SourceStopReason>() {
+                    progress.warn(&[format!("Database {}: unresolved database destination: {reason}; occurrences retain Notion links", item.title)]).await?;
+                }
                 destinations.insert(
                     item.notion_id.clone(),
                     DatabaseDestination::Fallback(NotionDatabaseFallback::Unresolved),
                 );
                 failures.insert(item.notion_id.clone(), reason);
             }
+            progress.flush_warnings().await?;
         }
         tracing::Span::current().record("databases", destinations.len() as i64);
         Ok(Reservations {
@@ -154,6 +169,6 @@ async fn reuse_database<Writer: WorkspaceWriter, Store: WrittenObjects>(
         .await?
         .ok_or_else(|| anyhow::anyhow!("the source holder's recorded table marker is missing"))?;
     let database = writer.database(user, database, mapping.table).await?;
-    progress.warn(&mapping.warnings).await?;
+    progress.warn_fidelity(&mapping.warnings).await?;
     Ok(DatabaseDestination::Ready(database))
 }

@@ -677,7 +677,7 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
-        warnings: &[String],
+        warnings: &[crate::domain::models::FidelityWarning],
     ) -> Result<()> {
         if warnings.is_empty() {
             return Ok(());

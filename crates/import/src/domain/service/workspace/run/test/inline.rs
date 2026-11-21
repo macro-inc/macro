@@ -6,126 +6,9 @@ use crate::domain::ports::{NotionDatabaseFallback, NotionDatabaseTarget};
 use import_notion::domain::model::{
     NotionParent, NotionPropertyKind, NotionPropertySchema, RowsNext,
 };
-use import_notion::domain::views::{NotionView, ViewScope};
 
-struct Inline;
-impl NotionApi for Inline {
-    async fn page(&self, id: &NotionId) -> std::result::Result<NotionPage, NotionError> {
-        let mut page = Pages::default().page(id).await?;
-        page.title = "Row".into();
-        page.parent = NotionParent::DataSource {
-            data_source: page_id('d'),
-            database: page_id('a'),
-        };
-        Ok(page)
-    }
-    async fn page_markdown(&self, id: &NotionId) -> std::result::Result<PageMarkdown, NotionError> {
-        let markdown = if *id == page_id('e') {
-            "Before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=cccccccccccccccccccccccccccccccc\" inline=\"true\">Work</database>\nBetween\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" inline=\"true\">Work</database>\nAfter"
-        } else {
-            "Row before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\" inline=\"true\">Work</database>\nRow after"
-        };
-        Ok(PageMarkdown {
-            markdown: markdown.into(),
-            unknown_block_ids: vec![],
-        })
-    }
-    async fn data_source(
-        &self,
-        id: &NotionId,
-    ) -> std::result::Result<NotionDataSource, NotionError> {
-        Ok(NotionDataSource {
-            id: id.clone(),
-            database_id: if *id == page_id('d') {
-                page_id('a')
-            } else {
-                page_id('6')
-            },
-            title: "Work".into(),
-            database_parent: if *id == page_id('d') {
-                NotionParent::Page { id: page_id('e') }
-            } else {
-                NotionParent::Workspace
-            },
-            in_trash: false,
-            properties: vec![NotionPropertySchema {
-                id: "title".into(),
-                name: "Name".into(),
-                kind: NotionPropertyKind::Title,
-            }],
-        })
-    }
-    async fn database_sources(
-        &self,
-        _: &NotionId,
-    ) -> std::result::Result<Vec<NotionId>, NotionError> {
-        Ok(vec![page_id('d')])
-    }
-    async fn list_views(
-        &self,
-        scope: &ViewScope,
-        _: Option<String>,
-    ) -> std::result::Result<Paged<NotionId>, NotionError> {
-        if matches!(scope, ViewScope::DataSource(id) if *id != page_id('d')) {
-            return Ok(Paged {
-                results: vec![],
-                next_cursor: None,
-            });
-        }
-        Ok(Paged {
-            results: vec![page_id('b'), page_id('c')],
-            next_cursor: None,
-        })
-    }
-    async fn retrieve_view(&self, id: &NotionId) -> std::result::Result<NotionView, NotionError> {
-        Ok(serde_json::from_value(serde_json::json!({
-            "object":"view", "id":id, "name":"Work", "type":"table",
-            "parent":{"database_id":page_id('a')}, "data_source_id":page_id('d'),
-            "filter": if *id == page_id('c') { Some(serde_json::json!({"property":"unknown", "people":{"contains":"me"}})) } else { None },
-        })).unwrap())
-    }
-    async fn query_data_source(
-        &self,
-        id: &NotionId,
-        _: Option<String>,
-    ) -> std::result::Result<RowsPage, NotionError> {
-        let rows = if *id == page_id('d') {
-            vec![self.page(&page_id('f')).await?]
-        } else {
-            vec![]
-        };
-        Ok(RowsPage {
-            rows,
-            next: RowsNext::End,
-        })
-    }
-    async fn users(
-        &self,
-        _: Option<String>,
-    ) -> std::result::Result<Paged<NotionUser>, NotionError> {
-        Ok(Paged {
-            results: vec![],
-            next_cursor: None,
-        })
-    }
-    async fn search(
-        &self,
-        _: SearchObject,
-        _: Option<String>,
-    ) -> std::result::Result<Paged<SearchHit>, NotionError> {
-        unreachable!("approved snapshot")
-    }
-}
-struct InlineConnected;
-impl NotionConnections for InlineConnected {
-    type Api = Inline;
-    async fn for_user(
-        &self,
-        _: &MacroUserIdStr<'static>,
-    ) -> std::result::Result<Option<Inline>, NotionError> {
-        Ok(Some(Inline))
-    }
-}
+mod fixture;
+use fixture::{Inline, InlineConnected};
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_independent(
@@ -159,6 +42,19 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
     tracker.wait().await;
     let report = service.notion_import_report(&owner).await.unwrap();
     assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert!(
+        report.warnings.iter().any(|loss| loss.contains("Work")),
+        "loss reports identify the database by its title"
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|loss| ['a', 'b', 'c', 'd', 'e', 'f']
+                .iter()
+                .all(|id| !loss.contains(page_id(*id).as_str()))),
+        "loss reports use titles, not raw object identifiers"
+    );
     assert_eq!(report.imported, 2);
     let databases = service.creator.databases.lock().unwrap();
     assert_eq!(databases.len(), 1);
@@ -222,7 +118,7 @@ async fn databases_and_views_exist_before_page_and_row_cards_and_sharing_stays_i
         report
             .warnings
             .iter()
-            .any(|warning| warning.contains("Filter at"))
+            .any(|warning| warning.contains("filter approximated at"))
     );
 }
 
@@ -715,7 +611,7 @@ async fn an_approved_tasks_source_keeps_not_imported_links_in_its_page(pool: PgP
         report
             .warnings
             .iter()
-            .any(|loss| loss.contains("NotImported"))
+            .any(|loss| loss.contains("not copied as a database"))
     );
 }
 
@@ -933,3 +829,5 @@ async fn a_personal_inline_database_never_lands_under_a_team_shared_folder(pool:
             .any(|entity| matches!(entity, SharedEntity::Database(_)))
     );
 }
+
+mod review;

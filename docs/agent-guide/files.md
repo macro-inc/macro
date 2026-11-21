@@ -147,12 +147,21 @@ original position, including in row bodies, with its translated saved view.
 Row bodies are checked while importing: a reference to a source absent from the
 review stays a named Notion link, with the reason and count in the report.
 A missing selected-tab hint uses the first Notion tab and reports that assumption.
+If a selected saved view is unavailable but its database is ready, the card stays
+editable on the default view and the report names that approximation. Saved view
+names are readable and unique, without source identifiers.
 Unsupported filter clauses broaden the view rather than hide source rows; its
 name says **filter approximated** and the report lists every translation loss.
 Formula and rollup columns are labelled snapshots. Database sharing is separate
 from page sharing; if a personal database's folder or an ancestor has explicit
 sharing grants, it uses the owner-only **Notion (personal)** folder and mirrored
-subfolder path, with a placement note in the report. A resumed run reuses reserved
+subfolder path, with a placement note in the report. Renamed properties and options
+warn on resume; values missing from the reserved option schema are omitted and
+counted, with the matching method. Structural property changes stop only that
+source and leave named Notion links in affected placements. An older interrupted
+database without planning facts asks for a re-import. A Personal source stops
+before writing rows if its reserved folder gains an explicit sharing grant, with
+a sharing-change warning. A resumed run reuses reserved
 databases and saved views. **Open full review** shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that

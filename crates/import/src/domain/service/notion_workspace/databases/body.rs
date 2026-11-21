@@ -6,6 +6,7 @@ use models_databases::views::ViewId;
 
 use super::super::write::Progress;
 use super::*;
+use crate::domain::models::{ReferenceLossReason, SourceLossDetail, SourceLossFact};
 use crate::domain::ports::{
     NotionDatabaseFallback, NotionDatabaseOccurrence, NotionDatabaseTarget, WrittenObjects,
 };
@@ -20,20 +21,32 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
 ) -> anyhow::Result<(String, Vec<NotionDatabaseOccurrence>)> {
     let resolved = resolve_page(api, page).await?;
     let mut warnings = resolved.warnings;
+    let reference = |occurrence: &import_notion::domain::databases::DatabaseOccurrence, reason| {
+        progress.loss(SourceLossFact {
+            object: page.clone(),
+            detail: SourceLossDetail::Reference {
+                container: occurrence.key.as_ref().map(|key| key.container_id.clone()),
+                ordinal: occurrence
+                    .key
+                    .as_ref()
+                    .map_or(occurrence.range.start, |key| key.ordinal),
+                title: occurrence.title.clone(),
+                reason,
+            },
+        })
+    };
     let mut databases = Vec::new();
     let mut unresolved = 0i64;
     for occurrence in &resolved.body.occurrences {
         for loss in &occurrence.losses {
-            warnings.push(format!(
-                "Page {page}, database occurrence {:?}: {loss:?}",
-                occurrence.key
-            ));
+            warnings.push(format!("Database {}: {loss}", occurrence.title));
         }
         let Some(key) = &occurrence.key else {
+            reference(occurrence, ReferenceLossReason::Unresolved)?;
             unresolved += 1;
-            warnings.push(format!(
-                "Page {page}: database occurrence has no container identity; retained Notion link"
-            ));
+            warnings.push(
+                "Database occurrence has no container identity; retained Notion link".to_owned(),
+            );
             continue;
         };
         let fallback = |reason| NotionDatabaseTarget::Fallback(reason);
@@ -47,54 +60,53 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
                     _ => None,
                 })
             });
-        let target = if let Some(reason) = failure {
+        let uniquely_identified =
+            (occurrence.sources.len() == 1).then(|| &occurrence.sources[0].id);
+        let ready_without_views = uniquely_identified
+            .and_then(|id| destinations.get(id))
+            .is_some_and(|destination| matches!(destination, DatabaseDestination::Ready(_)));
+        let target = if let Some(reason) = failure.filter(|_| !ready_without_views) {
             fallback(fallback_reason(reason))
         } else {
             let tabs = resolved.views.get(&key.container_id);
-            let selected = match &occurrence.view_id {
-                Some(id) => tabs.and_then(|tabs| {
-                    tabs.iter()
-                        .find(|view| &view.id == id && view.parent.database_id == key.container_id)
-                }),
-                None => tabs
-                    .and_then(|tabs| tabs.first())
-                    .filter(|view| view.parent.database_id == key.container_id),
+            let selected_tab = match &occurrence.view_id {
+                Some(id) => tabs.and_then(|tabs| tabs.iter().find(|tab| tab.id() == id)),
+                None => tabs.and_then(|tabs| tabs.first()),
             };
+            let selected = selected_tab
+                .and_then(ViewTab::view)
+                .filter(|view| view.parent.database_id == key.container_id);
             if occurrence.view_id.is_none() && selected.is_some() {
-                warnings.push(format!(
-                    "Page {page}, database {}:{}: default tab assumed",
-                    key.container_id, key.ordinal
-                ));
+                reference(occurrence, ReferenceLossReason::DefaultTabAssumed)?;
             }
             let source = selected
                 .and_then(|view| view.data_source_id.as_ref())
                 .or_else(|| {
-                    if selected.is_none()
-                        && occurrence.view_id.is_none()
-                        && tabs.is_some_and(Vec::is_empty)
-                        && occurrence.sources.len() == 1
-                    {
-                        occurrence.sources.first().map(|source| &source.id)
+                    if selected.is_none() {
+                        uniquely_identified
                     } else {
                         None
                     }
                 });
             match source.and_then(|source| destinations.get(source)) {
                 Some(DatabaseDestination::Ready(destination)) => {
-                    let view_id = selected.map(|view| {
+                    let mut view_id = selected.map(|view| {
                         ViewId::from_uuid(derived_id(
                             destination.database_id,
                             &format!("view/{}", view.id),
                         ))
                     });
-                    if view_id.is_some_and(|id| !destination.views.contains(&id)) {
-                        fallback(NotionDatabaseFallback::Unresolved)
-                    } else {
-                        NotionDatabaseTarget::Resolved {
-                            database_id: destination.database_id,
-                            table_id: destination.table,
-                            view_id,
-                        }
+                    if view_id.is_some_and(|id| !destination.views.contains(&id))
+                        || selected.is_none()
+                        || failure.is_some()
+                    {
+                        reference(occurrence, ReferenceLossReason::DefaultView)?;
+                        view_id = None;
+                    }
+                    NotionDatabaseTarget::Resolved {
+                        database_id: destination.database_id,
+                        table_id: destination.table,
+                        view_id,
                     }
                 }
                 Some(DatabaseDestination::Fallback(reason)) => fallback(*reason),
@@ -119,10 +131,23 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
         };
         if let NotionDatabaseTarget::Fallback(reason) = &target {
             unresolved += 1;
-            warnings.push(format!(
-                "Page {page}, database {}:{}: {reason:?}; retained Notion link",
-                key.container_id, key.ordinal
-            ));
+            let reason = match reason {
+                NotionDatabaseFallback::NotImported => {
+                    let reviewed = occurrence
+                        .sources
+                        .iter()
+                        .any(|source| destinations.contains_key(&source.id));
+                    if reviewed {
+                        ReferenceLossReason::NotImported
+                    } else {
+                        ReferenceLossReason::NotReviewed
+                    }
+                }
+                NotionDatabaseFallback::NoAccess => ReferenceLossReason::NoAccess,
+                NotionDatabaseFallback::NotFound => ReferenceLossReason::NotFound,
+                NotionDatabaseFallback::Unresolved => ReferenceLossReason::Unresolved,
+            };
+            reference(occurrence, reason)?;
         }
         databases.push(NotionDatabaseOccurrence {
             container_id: key.container_id.clone(),
@@ -151,7 +176,12 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
             &format!("[{label}]({})", occurrence.fallback_url(page)),
         );
     }
-    progress.warn(&warnings).await?;
+    for message in warnings {
+        progress.loss(SourceLossFact {
+            object: page.clone(),
+            detail: SourceLossDetail::Text { message },
+        })?;
+    }
     tracing::Span::current().record("occurrences", databases.len() as i64);
     tracing::Span::current().record("unresolved", unresolved);
     Ok((markdown, databases))

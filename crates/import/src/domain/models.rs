@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod notion_loss;
 mod notion_run;
+pub use notion_loss::{
+    FidelityWarning, ReferenceLossReason, SourceLossDetail, SourceLossFact, SourceStopReason,
+};
 mod notion_sharing;
 pub use notion_run::{
     AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TaskImportNotice,

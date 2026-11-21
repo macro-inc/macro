@@ -15,6 +15,7 @@ struct LinkedNotion {
     row_calls: std::sync::atomic::AtomicUsize,
     gate: Option<tokio::sync::Semaphore>,
     fail_body: bool,
+    unavailable_view: Option<NotionId>,
 }
 impl NotionApi for LinkedNotion {
     async fn page_markdown(&self, _: &NotionId) -> Result<PageMarkdown, NotionError> {
@@ -66,6 +67,9 @@ impl NotionApi for LinkedNotion {
         })
     }
     async fn retrieve_view(&self, id: &NotionId) -> Result<NotionView, NotionError> {
+        if self.unavailable_view.as_ref() == Some(id) {
+            return Err(NotionError::NotFound);
+        }
         Ok(serde_json::from_value(json!({
             "object":"view", "id":id, "name":"Work", "type":"table",
             "parent":{"type":"database_id","database_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
@@ -140,11 +144,11 @@ async fn empty_linked_containers_use_paginated_views_and_keep_repeated_positions
     );
     let container = NotionId::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
     assert_eq!(
-        resolved.views[&container][0].id.as_str(),
+        resolved.views[&container][0].id().as_str(),
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     );
     assert_eq!(
-        resolved.views[&container][1].id.as_str(),
+        resolved.views[&container][1].id().as_str(),
         "cccccccccccccccccccccccccccccccc"
     );
     assert!(

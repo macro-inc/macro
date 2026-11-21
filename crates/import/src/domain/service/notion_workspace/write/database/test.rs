@@ -106,7 +106,7 @@ impl NotionApi for FakeNotion {
         &self,
         _database: &NotionId,
     ) -> std::result::Result<Vec<NotionId>, NotionError> {
-        unimplemented!("writing never expands databases")
+        Ok(vec![self.source.id.clone()])
     }
 
     async fn query_data_source(
@@ -148,6 +148,7 @@ struct FakeWriter {
     reapplied_tasks: Mutex<Vec<(Uuid, String, ImportVisibility)>>,
     task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
     saved_views: Mutex<HashSet<models_databases::views::ViewId>>,
+    view_names: Mutex<Vec<String>>,
     fail_after_view: Mutex<bool>,
     databases: Mutex<usize>,
     tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
@@ -333,6 +334,7 @@ impl WorkspaceWriter for FakeWriter {
         if self.saved_views.lock().unwrap().contains(&id) {
             return Ok(());
         }
+        self.view_names.lock().unwrap().push(view.name.clone());
         self.apply_database_ops(
             user,
             database,
@@ -471,7 +473,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
                 '1',
                 "Login fails",
                 vec![
-                    ("Severity", NotionValue::Option("High".to_string())),
+                    ("Severity", NotionValue::Option("High".into())),
                     ("Project", NotionValue::Relation(vec![id('8')])),
                 ],
             ),
@@ -950,3 +952,5 @@ async fn date_ranges_are_planned_before_schema_is_written() {
 
 mod folders;
 mod resume;
+
+mod review;

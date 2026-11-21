@@ -4,7 +4,7 @@ use import_notion::domain::macro_cells::{MAX_NAME, date_range_properties};
 use import_notion::domain::views::{self, ViewLossKind, ViewScope, ViewType};
 use models_databases::views::ViewId;
 
-use super::super::super::databases::{read_failure, read_views};
+use super::super::super::databases::{ViewTab, read_failure, read_views};
 use super::*;
 
 /// Source snapshot and ready destination for the write phase.
@@ -32,15 +32,32 @@ pub(in super::super::super) async fn prepare_database<
 ) -> anyhow::Result<PreparedDatabase> {
     let source = api.data_source(&item.notion_id).await?;
     let created = database_once(writer, user, item, folder, progress).await?;
-    let schema = derived_id(
+    let schema = super::schema::fingerprint(&source, created.database_id)?;
+    let metadata = derived_id(
         created.database_id,
-        &format!("schema/{}", serde_json::to_string(&source.properties)?),
+        &serde_json::to_string(&source.properties)?,
     );
-    if let Some(recorded) = progress.get(WrittenKind::SchemaPlan) {
-        anyhow::ensure!(
-            recorded == schema,
-            "Notion source schema changed after schema planning; this source cannot resume against its reserved columns"
-        );
+    if progress
+        .get(WrittenKind::SchemaMetadata)
+        .is_some_and(|recorded| recorded != metadata)
+    {
+        progress.warn(&[format!("Database {}: property names or options changed; preserving the reserved schema and matching values by option id when available, otherwise by name", item.title)]).await?;
+    }
+    let stop = if progress
+        .get(WrittenKind::SchemaPlan)
+        .is_some_and(|recorded| recorded != schema)
+    {
+        Some(crate::domain::models::SourceStopReason::SchemaChanged)
+    } else if progress.get(WrittenKind::Schema).is_some()
+        && progress.get(WrittenKind::SchemaPlan).is_none()
+    {
+        Some(crate::domain::models::SourceStopReason::MissingSchemaPlan)
+    } else {
+        None
+    };
+    if let Some(reason) = stop {
+        progress.source_stopped(&item.title, reason).await?;
+        return Err(reason.into());
     }
     let names = ColumnNames::new(&source.properties);
     let snapshots: Vec<String> = source
@@ -52,7 +69,7 @@ pub(in super::super::super) async fn prepare_database<
                 NotionPropertyKind::Formula | NotionPropertyKind::Rollup
             )
         })
-        .map(|property| format!("Source {}: {}", item.notion_id, names.of(property)))
+        .map(|property| format!("Database {}: {}", item.title, names.of(property)))
         .collect();
     progress.warn(&snapshots).await?;
     // Retain only property ids: reservation spans the whole workspace, so row
@@ -70,8 +87,8 @@ pub(in super::super::super) async fn prepare_database<
             import_notion::domain::model::RowsNext::Truncated => {
                 progress
                     .warn(&[format!(
-                        "Source {}: Notion returned an incomplete date-range scan",
-                        item.notion_id
+                        "Database {}: Notion returned an incomplete date-range scan",
+                        item.title
                     )])
                     .await?;
                 break;
@@ -85,8 +102,8 @@ pub(in super::super::super) async fn prepare_database<
             Some(reason) => {
                 progress
                     .warn(&[format!(
-                        "Source {}: saved views unavailable ({reason:?})",
-                        item.notion_id
+                        "Database {}: saved views unavailable ({reason})",
+                        item.title
                     )])
                     .await?;
                 Vec::new()
@@ -94,6 +111,22 @@ pub(in super::super::super) async fn prepare_database<
             None => return Err(error.into()),
         },
     };
+    let mut readable = Vec::new();
+    for (index, tab) in presets.into_iter().enumerate() {
+        match tab {
+            ViewTab::Ready(view) => readable.push(*view),
+            ViewTab::Unavailable { reason, .. } => {
+                progress
+                    .warn(&[format!(
+                        "Database {}, saved tab {}: {reason}",
+                        item.title,
+                        index + 1
+                    )])
+                    .await?
+            }
+        }
+    }
+    let presets = readable;
     for view in presets
         .iter()
         .filter(|view| view.data_source_id.as_ref() == Some(&source.id))
@@ -114,17 +147,13 @@ pub(in super::super::super) async fn prepare_database<
             .into_keys()
             .collect();
         if planned != ranges {
-            progress.warn(&[format!("Source {}: date-range usage changed after schema planning; preserving the recorded column shapes", item.notion_id)]).await?;
+            progress.warn(&[format!("Database {}: date-range usage changed after schema planning; preserving the recorded column shapes", item.title)]).await?;
         }
         ranges = planned;
     } else {
-        anyhow::ensure!(
-            progress.get(WrittenKind::Schema).is_none(),
-            "written database schema has no recorded column-planning facts"
-        );
         // Persist both empty and populated sets atomically, before the schema
         // call: a lost response must replay the same column shapes too.
-        let facts = std::iter::once(WrittenObject::own(
+        let mut facts: Vec<_> = std::iter::once(WrittenObject::own(
             item.import_id,
             WrittenKind::SchemaPlan,
             schema,
@@ -136,9 +165,17 @@ pub(in super::super::super) async fn prepare_database<
             macro_id: created.database_id,
         }))
         .collect();
+        facts.push(WrittenObject::own(
+            item.import_id,
+            WrittenKind::SchemaMetadata,
+            metadata,
+        ));
+        let plan = ColumnPlan::new_with_date_ranges(&source, created.database_id, &ranges);
+        facts.extend(super::schema::option_markers(&plan, item.import_id)?);
         progress.record_all(facts).await?;
     }
-    let plan = ColumnPlan::new_with_date_ranges(&source, created.database_id, &ranges);
+    let mut plan = ColumnPlan::new_with_date_ranges(&source, created.database_id, &ranges);
+    super::schema::restore_options(&mut plan, progress)?;
     if progress.get(WrittenKind::Schema).is_none() {
         writer
             .apply_database_ops(user, created.database_id, schema_ops(item, &plan, &created))
@@ -152,7 +189,7 @@ pub(in super::super::super) async fn prepare_database<
     for view in presets {
         if view.data_source_id.as_ref() != Some(&item.notion_id) {
             progress
-                .warn(&[format!("View {}: source identity mismatch", view.id)])
+                .warn(&[format!("View {}: source identity mismatch", view.name)])
                 .await?;
             continue;
         }
@@ -162,8 +199,8 @@ pub(in super::super::super) async fn prepare_database<
             .iter()
             .map(|loss| {
                 format!(
-                    "Source {}, view {}: {:?} at {}: {}",
-                    item.notion_id, view.id, loss.kind, loss.path, loss.reason
+                    "Database {}, view {}: {} at {}: {}",
+                    item.title, view.name, loss.kind, loss.path, loss.reason
                 )
             })
             .collect();
@@ -177,19 +214,12 @@ pub(in super::super::super) async fn prepare_database<
         } else {
             ""
         };
-        let suffix = format!("{marker} [{}]", view.id);
-        let prefix: String = translated
-            .view
-            .name
-            .trim()
-            .chars()
-            .take(MAX_NAME.saturating_sub(suffix.chars().count()))
-            .collect();
-        translated.view.name = format!("{prefix}{suffix}");
         let id = ViewId::from_uuid(derived_id(
             created.database_id,
             &format!("view/{}", view.id),
         ));
+        let name = reserve_view_name(progress, &view.id, id, &translated.view.name, marker).await?;
+        translated.view.name = name;
         if progress
             .get_for(WrittenKind::View, view.id.as_str())
             .is_none()
@@ -218,4 +248,52 @@ pub(in super::super::super) async fn prepare_database<
         views: saved,
         folder,
     })
+}
+
+/// Reserve readable names before creation so retries keep the same unique name.
+async fn reserve_view_name<Store: WrittenObjects>(
+    progress: &Progress<'_, Store>,
+    notion: &NotionId,
+    id: ViewId,
+    name: &str,
+    marker: &str,
+) -> anyhow::Result<String> {
+    let mut taken = HashSet::new();
+    for (payload, _) in progress.all(WrittenKind::ViewName) {
+        let (known, name): (NotionId, String) = serde_json::from_str(&payload)?;
+        if &known == notion {
+            return Ok(name);
+        }
+        taken.insert(name.to_lowercase());
+    }
+    let base = if name.trim().is_empty() {
+        "Untitled view"
+    } else {
+        name.trim()
+    };
+    for index in 1.. {
+        let duplicate = if index == 1 {
+            String::new()
+        } else {
+            format!(" {index}")
+        };
+        let suffix = format!("{duplicate}{marker}");
+        let prefix: String = base
+            .chars()
+            .take(MAX_NAME.saturating_sub(suffix.chars().count()))
+            .collect();
+        let name = format!("{prefix}{suffix}");
+        if taken.insert(name.to_lowercase()) {
+            progress
+                .record_all(vec![WrittenObject {
+                    import_id: progress.import_id,
+                    kind: WrittenKind::ViewName,
+                    object: serde_json::to_string(&(notion, &name))?,
+                    macro_id: id.into_uuid(),
+                }])
+                .await?;
+            return Ok(name);
+        }
+    }
+    unreachable!("view suffixes are unbounded")
 }
