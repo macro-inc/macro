@@ -63,7 +63,7 @@ pub struct SearchedPerson {
     /// Whether the person is an agent rather than a human; false for non-Macro contacts.
     pub is_agent: bool,
     /// The keys of the viewer's contact lists the person is in (`teammates`,
-    /// `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+    /// `interacted`, `invited`, `gmail`, `outlook`, `imap`; more may be added). Empty
     /// for the viewer and for a contact only the legacy directory knows.
     pub lists: Vec<String>,
 }
@@ -91,7 +91,7 @@ pub struct SearchPeopleResponse {
     /// Matches ranked by group, then prefix matches, then by name or email.
     /// Teammates come first. For a viewer on the list-aware directory,
     /// `interacted` and `invited` people come next, then `gmail` and
-    /// `outlook` contacts.
+    /// `outlook` and `imap` contacts.
     pub people: Vec<SearchedPerson>,
 }
 

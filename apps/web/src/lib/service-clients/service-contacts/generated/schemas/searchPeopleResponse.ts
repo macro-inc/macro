@@ -13,6 +13,6 @@ export interface SearchPeopleResponse {
   /** Matches ranked by group, then prefix matches, then by name or email.
 Teammates come first. For a viewer on the list-aware directory,
 `interacted` and `invited` people come next, then `gmail` and
-`outlook` contacts. */
+`outlook` and `imap` contacts. */
   people: SearchedPerson[];
 }

@@ -21,7 +21,7 @@ pub struct GraphqlContact {
     /// Macro profile name, then this viewer's address-book name; null means use email fallback.
     name: Option<String>,
     /// Keys of the viewer's lists this person is in (`teammates`, `interacted`,
-    /// `invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+    /// `invited`, `gmail`, `outlook`, `imap`; more may be added), each once. Empty for
     /// the viewer, and for a person in no list.
     lists: Vec<String>,
 }

@@ -137,7 +137,16 @@ impl LegacyDirectorySource for DbContactsRepository {
                     .map(|(link_id, value)| {
                         Ok(Inbox {
                             link_id,
-                            provider: InboxProvider::from_str(&value)?,
+                            provider: InboxProvider::from_str(&value).map_err(|error| {
+                                let label = value
+                                    .chars()
+                                    .take(64)
+                                    .flat_map(char::escape_default)
+                                    .collect::<String>();
+                                Report::new(error)
+                                    .context(format!("unknown inbox provider {label}"))
+                                    .into_dynamic()
+                            })?,
                         })
                     })
                     .collect::<Result<_, Report>>()?;

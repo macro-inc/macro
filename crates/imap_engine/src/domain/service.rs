@@ -12,10 +12,21 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 const PAGE_SIZE: usize = 500;
 const MAX_ATTACHMENT: usize = 25 * 1024 * 1024;
+
+#[derive(strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+enum AdmissionOutcome {
+    Admitted,
+    #[strum(serialize = "admission_unavailable")]
+    Unavailable,
+    #[strum(serialize = "admission_timeout")]
+    Timeout,
+}
 
 /// Engine orchestrator. Authorization and state transitions live here, not in HTTP handlers.
 pub struct Engine {
@@ -239,9 +250,20 @@ impl Engine {
         let capacity = if matches!(operation, Operation::Submit { .. }) {
             // A queued request has not inspected its prior durable submission,
             // so an expired wait remains a conservative connectivity error.
-            tokio::time::timeout_at(submission_deadline, admission)
-                .await
-                .map_err(|_| Error::ConnectionUnavailable)?
+            let span = tracing::info_span!(
+                "imap.submit.admission",
+                smtp.outcome = tracing::field::Empty
+            );
+            let result = tokio::time::timeout_at(submission_deadline, admission)
+                .instrument(span.clone())
+                .await;
+            let outcome = match &result {
+                Ok(Ok(_)) => AdmissionOutcome::Admitted,
+                Ok(Err(_)) => AdmissionOutcome::Unavailable,
+                Err(_) => AdmissionOutcome::Timeout,
+            };
+            span.record("smtp.outcome", outcome.as_ref());
+            result.map_err(|_| Error::ConnectionUnavailable)?
         } else {
             admission.await
         };
