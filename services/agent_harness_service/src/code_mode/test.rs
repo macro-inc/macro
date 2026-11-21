@@ -418,10 +418,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         // Unauthenticated: a credential adds nothing.
         "storage.claimHarnessPairing",
         "storage.createHarnessPairing",
-        // Document tokens for the editing worker, whose routes edit
-        // documents, which a run that sends nothing may do.
-        "storage.getDocumentPermissionsToken",
-        "storage.validateDocumentPermissionsToken",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();
@@ -564,8 +560,7 @@ fn enforcement(host: SdkHost) -> ScopeEnforcement {
         SdkHost::StaticFiles | SdkHost::StaticContent => ScopeEnforcement::SignedScope,
         // CloudFront serves document content only to URLs the storage service
         // signs; the editing worker accepts only document tokens the storage
-        // service mints with a POST a generation session can't make, and its
-        // routes edit documents, which a run that sends nothing may do;
+        // service mints with a POST no scoped session can make;
         // unfurl previews public links for any caller.
         SdkHost::DocumentContent | SdkHost::EditingWorker | SdkHost::Unfurl => {
             ScopeEnforcement::NoMacroCredential

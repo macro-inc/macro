@@ -143,7 +143,8 @@ const SENDS: &[(&str, &str)] = &[
     // Document and collab surface permission tokens are bearer credentials
     // that outlive the run (an hour), and the sync service honours them
     // without a database check: handing one out reaches past the run's own
-    // scope.
+    // scope. The template also covers `permissions_token/validate`, which a
+    // run with no token of its own has no use for.
     ("POST", "/documents/permissions_token/{id}"),
     ("POST", "/collab_surfaces/{id}/token"),
     ("POST", "/documents/{id}/comments/text"),
