@@ -8,6 +8,12 @@ import { type FetchChannelServerPage, loadChannelPage } from './pages';
 /** The page a channel opens with. */
 export const PREWARM_PAGE_SIZE = 50;
 const CHANNEL_DELAY_MS = 500;
+/**
+ * A host still starting is asked again this often, this many times, before
+ * the pass gives up on it: the next pass is minutes away.
+ */
+const NOT_READY_DELAY_MS = 2_000;
+const NOT_READY_ATTEMPTS = 20;
 /** Channels not opened for this long leave the device. */
 export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;
 const MAX_EVICTION_PASSES = 10;
@@ -52,6 +58,7 @@ export async function runChannelPrewarm(
   options: {
     signal: AbortSignal;
     delayMs?: number;
+    notReadyDelayMs?: number;
     /** Resolves when the next channel may start: the person is not using the app. */
     ready?: (signal: AbortSignal) => Promise<void>;
     fetchPage?: FetchChannelServerPage;
@@ -75,16 +82,27 @@ export async function runChannelPrewarm(
       // starts over.
       if (!onlineManager.isOnline()) break;
       try {
-        const loaded = await loadChannelPage(
-          host,
-          { channelId, limit: PREWARM_PAGE_SIZE },
-          {
-            signal,
-            fetchPage: options.fetchPage,
-            now: options.now,
-            background: true,
-          }
-        );
+        const load = () =>
+          loadChannelPage(
+            host,
+            { channelId, limit: PREWARM_PAGE_SIZE },
+            {
+              signal,
+              fetchPage: options.fetchPage,
+              now: options.now,
+              background: true,
+            }
+          );
+        let loaded = await load();
+        for (
+          let attempt = 1;
+          loaded === 'not-ready' && attempt < NOT_READY_ATTEMPTS;
+          attempt += 1
+        ) {
+          await sleep(options.notReadyDelayMs ?? NOT_READY_DELAY_MS, signal);
+          if (signal.aborted) break;
+          loaded = await load();
+        }
         if (loaded === 'unsupported' || loaded === 'not-ready') {
           outcome.unavailable = true;
           break;

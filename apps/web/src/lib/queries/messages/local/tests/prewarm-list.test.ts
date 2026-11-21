@@ -1,3 +1,4 @@
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type FetchChannelListIds,
@@ -29,5 +30,26 @@ describe('loadPrewarmChannelIds', () => {
     ]);
     expect(PREWARM_UNREAD_CHANNELS).toBe(40);
     expect(PREWARM_RECENT_CHANNELS).toBe(20);
+  });
+
+  it('never takes the lists from what the device kept of an earlier page', async () => {
+    const query = vi.fn(() => ({
+      toPromise: async () => ({
+        data: {
+          user: {
+            soup: { items: [{ __typename: 'GraphqlSoupChannel', id: 'new' }] },
+          },
+        },
+      }),
+    }));
+    vi.mocked(getGraphqlSoupClient).mockReturnValue({
+      query,
+    } as unknown as ReturnType<typeof getGraphqlSoupClient>);
+
+    expect(await loadPrewarmChannelIds()).toEqual(['new']);
+    expect(query.mock.calls.map((call) => (call as unknown[])[2])).toEqual([
+      { requestPolicy: 'network-only' },
+      { requestPolicy: 'network-only' },
+    ]);
   });
 });
