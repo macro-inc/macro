@@ -17,7 +17,6 @@ import {
   createRequest,
   type GraphQLRequest,
 } from '@urql/core';
-import type { DocumentNode } from 'graphql';
 import { match } from 'ts-pattern';
 import {
   type GraphqlPropertyDefinitionScope,
@@ -218,6 +217,11 @@ function toQueryError(error: CombinedError): Error {
   return error;
 }
 
+// Outside every hashed operation key: urql's `phash` moves at most about 2^31
+// per character hashed, so no document or variables under 2^20 characters
+// reach it, and far below the normalized cache's link repairs (from -2^40).
+let lastCatalogReadKey = -(2 ** 52);
+
 /**
  * urql's client answers a query whose key (document and variables) is already
  * in flight with that earlier request's result, `network-only` included. A
@@ -230,13 +234,8 @@ function catalogRequest<Data, Variables extends AnyVariables>(
   document: TypedDocumentNode<Data, Variables>,
   variables: Variables
 ): GraphQLRequest<Data, Variables> {
-  const request = createRequest(document, variables);
-  const query: DocumentNode = request.query;
-  const { key } = createRequest(query, {
-    catalogRead: crypto.randomUUID(),
-    key: request.key,
-  });
-  return { ...request, key };
+  lastCatalogReadKey -= 1;
+  return { ...createRequest(document, variables), key: lastCatalogReadKey };
 }
 
 async function readCatalog<Data, Variables extends AnyVariables>(

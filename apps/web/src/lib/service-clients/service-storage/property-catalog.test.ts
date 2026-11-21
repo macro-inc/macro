@@ -316,10 +316,15 @@ function heldCatalogServer() {
   let names = ['Status'];
   let holding = true;
   const waiting: Array<() => void> = [];
+  let arrivals = 0;
+  const arrivalWaiters: Array<{ count: number; resolve: () => void }> = [];
   const fetch = vi.fn(async () => {
     const seen = names.map((displayName) =>
       definition({ id: displayName, displayName })
     );
+    arrivals += 1;
+    for (const waiter of arrivalWaiters.filter((w) => w.count <= arrivals))
+      waiter.resolve();
     if (holding) await new Promise<void>((resolve) => waiting.push(resolve));
     return new Response(
       JSON.stringify({
@@ -340,6 +345,12 @@ function heldCatalogServer() {
     write: (name: string) => {
       names = [...names, name];
     },
+    /** Resolves once the `count`th read has reached the server. */
+    arrived: (count: number) =>
+      new Promise<void>((resolve) => {
+        if (arrivals >= count) resolve();
+        else arrivalWaiters.push({ count, resolve });
+      }),
     hold: () => {
       holding = true;
     },
@@ -361,10 +372,12 @@ it('sends a read made after a write as its own request while an earlier read of 
   transport.client = server.client;
 
   const before = listPropertyDefinitions(ALL);
-  await vi.waitFor(() => expect(server.fetch).toHaveBeenCalledTimes(1));
+  await server.arrived(1);
   server.write('Stage');
   const after = listPropertyDefinitions(ALL);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The first read is still held: a read that joined it, or waited for it,
+  // never arrives and the test times out.
+  await server.arrived(2);
   server.release();
 
   expect(namesOf(await before)).toEqual(['Status']);
@@ -385,10 +398,11 @@ it('keeps a write in the list its invalidation refetches while an earlier refetc
   // lands and invalidates the list again, which cancels and refetches.
   server.hold();
   const pending = queries.refetchQueries({ queryKey });
-  await vi.waitFor(() => expect(server.fetch).toHaveBeenCalledTimes(2));
+  await server.arrived(2);
   server.write('Stage');
   const refetched = queries.refetchQueries({ queryKey });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // As above: a refetch that joined the held read never arrives.
+  await server.arrived(3);
   server.release();
   await Promise.all([pending, refetched]);
 
