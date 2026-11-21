@@ -24,6 +24,7 @@ lru = { workspace = true }
 macro_user_id = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
 miniz_oxide = { workspace = true }
+zlib-rs = { workspace = true }
 postcard = { workspace = true }
 predicate-index = { path = "../../predicate_index" }
 schemars = { workspace = true, optional = true }
