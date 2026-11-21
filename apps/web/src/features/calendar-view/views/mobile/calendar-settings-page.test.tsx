@@ -165,7 +165,9 @@ it('writes select values and availability through the existing settings owners',
   fireEvent.keyDown(screen.getByRole('button', { name: /^Start time / }), {
     key: 'ArrowDown',
   });
-  fireEvent.click(await screen.findByRole('option', { name: '10:00 AM' }));
+  await screen.findByRole('option', { name: '10:00 AM' });
+  expect(screen.queryByRole('option', { name: '11:30 PM' })).toBeNull();
+  fireEvent.click(screen.getByRole('option', { name: '10:00 AM' }));
   expect(availability.settings().startTime).toBe('10:00');
   fireEvent.keyDown(screen.getByRole('button', { name: /^End time / }), {
     key: 'ArrowDown',

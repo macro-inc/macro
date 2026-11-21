@@ -18,6 +18,7 @@ import {
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import {
   AVAILABILITY_RANGE_OPTIONS,
+  AVAILABILITY_TIME_BOUNDS,
   type AvailabilityRangeKey,
   formatAvailabilityText,
 } from './availability';
@@ -51,8 +52,14 @@ function timeOptions(fromHour: number, toHour: number): TimeOption[] {
   return options;
 }
 
-const START_TIME_OPTIONS = timeOptions(6, 12);
-const END_TIME_OPTIONS = timeOptions(12, 22);
+const START_TIME_OPTIONS = timeOptions(
+  AVAILABILITY_TIME_BOUNDS.start.min / 60,
+  AVAILABILITY_TIME_BOUNDS.start.max / 60
+);
+const END_TIME_OPTIONS = timeOptions(
+  AVAILABILITY_TIME_BOUNDS.end.min / 60,
+  AVAILABILITY_TIME_BOUNDS.end.max / 60
+);
 
 /** Managed availability settings and click-to-copy ranges. */
 export function CopyAvailabilityDialog(props: ManagedDialogProps) {

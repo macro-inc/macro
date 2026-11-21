@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { AVAILABILITY_TIME_BOUNDS } from '@app/features/calendar/availability/availability';
 import { useAvailabilitySettings } from '@app/features/calendar/availability/settings';
 import { createCalendarSettingsControls } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { TurnOffCalendarDialog } from '@app/features/calendar/components/TurnOffCalendarDialog';
@@ -17,7 +18,7 @@ import {
   useSetAvailabilityCalendarMutation,
 } from '@queries/calendar/availability';
 import { Button, Checkbox } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   CalendarSettingsGroup,
   CalendarSettingsRow,
@@ -54,14 +55,26 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
   });
   usePending('calendar.settings.availability', () => busy.isLoading);
   const busyCalendars = () => (busy.isSuccess ? busy.data.calendars : []);
-  const timeOptions = () =>
-    HOURS.map(({ id, hour, minute }) => ({
+  const startTime = createMemo(() => availability.settings().startTime);
+  const endTime = createMemo(() => availability.settings().endTime);
+  const timeOptions = (edge: 'start' | 'end', selected: string) => {
+    const bounds = AVAILABILITY_TIME_BOUNDS[edge];
+    return HOURS.filter(({ id, hour, minute }) => {
+      const minutes = hour * 60 + Number(minute);
+      // Preserve a valid older setting without expanding the offered workday range.
+      return (
+        id === selected || (minutes >= bounds.min && minutes <= bounds.max)
+      );
+    }).map(({ id, hour, minute }) => ({
       id,
       name:
         preferences.timeFormat === '24-hour'
           ? id
           : `${hour % 12 || 12}:${minute} ${hour < 12 ? 'AM' : 'PM'}`,
     }));
+  };
+  const startOptions = createMemo(() => timeOptions('start', startTime()));
+  const endOptions = createMemo(() => timeOptions('end', endTime()));
   const back = () => (busyPage() ? setBusyPage(false) : props.onBack());
   return (
     <ViewShell.Root aside={false}>
@@ -234,13 +247,13 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                 <CalendarSettingsSelect
                   label="Start time"
                   value={availability.settings().startTime}
-                  options={timeOptions()}
+                  options={startOptions()}
                   onChange={availability.setStartTime}
                 />
                 <CalendarSettingsSelect
                   label="End time"
                   value={availability.settings().endTime}
-                  options={timeOptions()}
+                  options={endOptions()}
                   onChange={availability.setEndTime}
                 />
                 <CalendarSettingsSwitch

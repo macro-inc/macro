@@ -42,6 +42,12 @@ export const DEFAULT_AVAILABILITY_SETTINGS: AvailabilitySettings = {
   excludeWeekends: true,
 };
 
+/** The supported choices shared by copy-availability and Calendar settings. */
+export const AVAILABILITY_TIME_BOUNDS = {
+  start: { min: 6 * 60, max: 12 * 60 },
+  end: { min: 12 * 60, max: 22 * 60 },
+} as const;
+
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
