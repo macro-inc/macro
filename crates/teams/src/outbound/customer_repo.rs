@@ -10,11 +10,15 @@ mod item_changes;
 mod subscription_items;
 use subscription_items::{cadence, item_quantity_updates, update_error};
 mod computer_items;
+mod computer_refunds;
+mod payment_terms;
 pub use computer_items::{
     COMPUTER_ID_KEY, item_computer_id, item_computer_uuid, list_subscription_items,
 };
+mod stripe_calls;
 mod subscription_error;
 use computer_items::ComputerItem;
+use stripe_calls::{CatalogPrices, stripe_span, traced};
 use subscription_error::SubscriptionDataError;
 
 use anyhow::Context;
@@ -24,9 +28,10 @@ use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        BillingCadence, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
-        ItemQuantityChange, ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SeatPrices,
-        SubscriptionItemView, SubscriptionTerms,
+        BillingCadence, ComputerPurchaseCredit, CustomerError, ItemChangeSettlement,
+        ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo,
+        ProratedCharge, ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionItemView,
+        SubscriptionTerms,
     },
 };
 
@@ -41,6 +46,8 @@ pub struct CustomerRepositoryImpl {
     pool: sqlx::PgPool,
     team_locks: sqlx::PgPool,
     subscription_locks: sqlx::PgPool,
+    /// Catalog prices read once per process.
+    catalog_prices: CatalogPrices,
 }
 
 /// How an item update is sent beyond the items themselves.
@@ -407,6 +414,21 @@ impl CustomerRepository for CustomerRepositoryImpl {
         .await
     }
 
+    async fn refund_computer_purchase(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        computer_id: computer_id::ComputerId,
+        idempotency_key: &str,
+    ) -> Result<Option<ComputerPurchaseCredit>, CustomerError> {
+        CustomerRepositoryImpl::refund_computer_purchase(
+            self,
+            subscription_id,
+            computer_id,
+            idempotency_key,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn subscription_items(
         &self,
@@ -437,25 +459,30 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<SubscriptionTerms, CustomerError> {
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(storage)?;
-        let interval = subscription
-            .items
-            .data
-            .iter()
-            .find_map(|item| item.price.as_ref()?.recurring.as_ref())
-            .map(|recurring| cadence(recurring.interval))
-            .ok_or(SubscriptionDataError::MissingRecurringItem)?;
-        let current_period_end =
-            chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
-                .ok_or(SubscriptionDataError::InvalidPeriodEnd)?;
-        Ok(SubscriptionTerms {
-            current_period_end,
-            interval,
-            currency: subscription.currency.to_string(),
-            trialing: subscription.status == stripe::SubscriptionStatus::Trialing,
-        })
+        let subscription = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %subscription_id),
+            stripe::Subscription::retrieve(&self.client, subscription_id, &[]),
+        )
+        .await
+        .map_err(storage)?;
+        payment_terms::terms_of(&subscription)
+    }
+
+    #[tracing::instrument(skip(self), fields(card = tracing::field::Empty), err)]
+    async fn payment_terms(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<PaymentTerms, CustomerError> {
+        self.read_payment_terms(subscription_id).await
+    }
+
+    #[tracing::instrument(skip(self, prices), fields(prices = prices.len()), err)]
+    async fn preview_prorations(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        prices: &[stripe::PriceId],
+    ) -> Result<Vec<ProratedCharge>, CustomerError> {
+        self.read_prorations(subscription_id, prices).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -463,9 +490,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         let id: stripe::PriceId = price_id.as_str().parse().map_err(|error| {
             SubscriptionDataError::Internal(rootcause::Report::new(error).into_dynamic())
         })?;
-        let price = stripe::Price::retrieve(&self.client, &id, &[])
-            .await
-            .map_err(storage)?;
+        let price = self.catalog_price(&id).await?;
         Ok(PriceInfo {
             amount: price
                 .unit_amount

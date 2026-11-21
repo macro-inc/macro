@@ -8,6 +8,7 @@ edition = "2024"
 ammonia = { workspace = true }
 ego-tree = { workspace = true }
 html2text = "0.16.5"
+html5ever = { workspace = true }
 lazy_static = { workspace = true }
 regex = { workspace = true }
 scraper = { workspace = true, features = ["deterministic"] }

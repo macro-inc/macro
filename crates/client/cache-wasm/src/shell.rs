@@ -40,6 +40,7 @@ use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
+mod authority;
 mod calendar;
 mod people;
 #[cfg(test)]
@@ -623,6 +624,7 @@ fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngi
         hot_capacity.map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
         schema,
     )
+    .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners)
 }
 
 fn validate_hot_capacity(hot_capacity: Option<u32>) -> Result<(), JsValue> {
@@ -1716,6 +1718,7 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
+
             to_js(&js_write_result(result, &ops.borrow()))
         })
     }
@@ -1821,6 +1824,7 @@ impl CacheEngine {
                 }
             };
             let result = state.engine_result(result)?;
+
             // A failed optional proof must still deliver the committed write and broad invalidation.
             let unchanged_views = state
                 .engine_mut()?
@@ -1869,6 +1873,7 @@ impl CacheEngine {
         lease_expires_at_ms: f64,
         client_metadata: JsValue,
         uncertain_calendar_event_keys: JsValue,
+        generation: Option<String>,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1879,6 +1884,25 @@ impl CacheEngine {
             let client_metadata: Option<serde_json::Value> =
                 serde_wasm_bindgen::from_value(client_metadata).map_err(err_js)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let generation = Some(
+                generation
+                    .ok_or_else(|| err_js("missing cache response generation"))?
+                    .parse::<uuid::Uuid>()
+                    .map_err(err_js)?,
+            );
+            let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
+                client_metadata,
+                &data,
+                operation_name.as_deref(),
+            );
+            let admitted = state
+                .engine_mut()?
+                .snapshot_is_current(generation)
+                .await
+                .map_err(err_js)?;
+            let empty = serde_json::json!({});
+            let projection_data = if admitted { &data } else { &empty };
+
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
@@ -1886,7 +1910,8 @@ impl CacheEngine {
             let uncertain_calendar_event_keys: Vec<EntityKey<'static>> =
                 parse_vec(uncertain_calendar_event_keys)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
-            let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
+            let mut projection_mutations =
+                optimistic_projection_mutations(projection_data, created_at_ms);
             projection_mutations.extend(
                 optimistic_notification_updates(
                     notification_projection_updates(
@@ -1895,7 +1920,7 @@ impl CacheEngine {
                         &query,
                         operation_name.as_deref(),
                         &vars,
-                        &data,
+                        projection_data,
                     )
                     .await
                     .map_err(err_js)?,
@@ -1909,7 +1934,7 @@ impl CacheEngine {
                     &query,
                     operation_name.as_deref(),
                     &vars,
-                    &data,
+                    projection_data,
                 )
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
@@ -1921,7 +1946,7 @@ impl CacheEngine {
                     &query,
                     operation_name.as_deref(),
                     &vars,
-                    &data,
+                    projection_data,
                 )
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
@@ -1932,7 +1957,7 @@ impl CacheEngine {
                 &query,
                 operation_name.as_deref(),
                 &vars,
-                &data,
+                projection_data,
                 projection_mutations,
             )
             .await
@@ -1946,25 +1971,29 @@ impl CacheEngine {
                 )?,
             };
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
+            let input = BeginOptimisticWrite {
+                client_metadata: client_metadata.as_ref(),
+                uuid: &uuid,
+                query: &query,
+                operation_name: operation_name.as_deref(),
+                variables: &vars,
+                data: &data,
+                link_patches: &link_patches,
+                revalidations: &revalidations,
+                created_at_ms,
+                identity_bindings: &identity_bindings,
+            };
             let result = state
                 .engine_mut()?
-                .enqueue_optimistic_mutation_with_calendar(
+                .enqueue_optimistic_mutation_in_generation(
                     origin,
-                    BeginOptimisticWrite {
-                        client_metadata: client_metadata.as_ref(),
-                        uuid: &uuid,
-                        query: &query,
-                        operation_name: operation_name.as_deref(),
-                        variables: &vars,
-                        data: &data,
-                        link_patches: &link_patches,
-                        revalidations: &revalidations,
-                        created_at_ms,
-                        identity_bindings: &identity_bindings,
-                    },
+                    input,
                     claim,
-                    projection_mutations,
-                    uncertain_calendar_event_keys,
+                    cache_core::engine::authority::OptimisticEffects {
+                        projections: projection_mutations,
+                        uncertain_calendar_event_keys,
+                    },
+                    generation,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -2051,7 +2080,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let result = state.engine_mut()?.inspect_mutations().await;
+            let result = soup_filter_cache_adapter::permissions::inspect_authored_mutations(
+                state.engine_mut()?,
+            )
+            .await;
             to_js(&state.engine_result(result)?)
         })
     }
@@ -2141,6 +2173,7 @@ impl CacheEngine {
         operation_name: Option<String>,
         variables: JsValue,
         data: JsValue,
+        generation: Option<String>,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -2154,11 +2187,28 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
+            let generation = Some(
+                generation
+                    .ok_or_else(|| err_js("missing cache response generation"))?
+                    .parse::<uuid::Uuid>()
+                    .map_err(err_js)?,
+            );
+            let admitted = state
+                .engine_mut()?
+                .snapshot_is_current(generation)
+                .await
+                .map_err(err_js)?;
+            let projection_data = if admitted {
+                data.clone()
+            } else {
+                serde_json::json!({})
+            };
+
             let mut projections = authoritative_projection_mutations(
                 &state.engine_mut()?.schema_snapshot(),
                 &query,
                 operation_name.as_deref(),
-                &data,
+                &projection_data,
             )
             .map_err(err_js)?;
             projections.extend(
@@ -2168,7 +2218,7 @@ impl CacheEngine {
                     &query,
                     operation_name.as_deref(),
                     &vars,
-                    &data,
+                    &projection_data,
                 )
                 .await
                 .map_err(err_js)?,
@@ -2180,7 +2230,7 @@ impl CacheEngine {
                     &query,
                     operation_name.as_deref(),
                     &vars,
-                    &data,
+                    &projection_data,
                 )
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
@@ -2191,7 +2241,7 @@ impl CacheEngine {
                 &query,
                 operation_name.as_deref(),
                 &vars,
-                &data,
+                &projection_data,
                 true,
                 projections,
             )
@@ -2199,17 +2249,23 @@ impl CacheEngine {
             .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write_with_projections_outcome(
+                .commit_optimistic_write_in_generation(
                     transaction,
                     claim,
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
+                    NetworkWrite {
+                        query: &query,
+                        operation_name: operation_name.as_deref(),
+                        variables: &vars,
+                        data: &data,
+                        identity: None,
+                    },
                     projections,
+                    generation,
                 )
                 .await;
-            let result = match state.engine_result(result)? {
+            let result = state.engine_result(result)?;
+
+            let result = match result {
                 CommitOptimisticWriteResult::Failed(result) => {
                     JsCommitOptimisticWriteResult::Failed {
                         error: result.error,

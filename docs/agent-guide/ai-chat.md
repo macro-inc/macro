@@ -289,61 +289,50 @@ channel message link and a settings page (refused; linked instead).
 **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
+The session hides the bottom navigation dock and its islands through the shared
+floating-region owner; its composer sits in the bottom accessory with safe-area
+and keyboard clearance. Header Back and swipe-back still return through split
+history, restoring the dock on the Agents list and other Agents pages.
 Narrow touch layouts have no docked conversation side panel. Above 720px,
 including unfolded Duo, selecting a session or legacy chat opens it in the
 right preview instead of a standalone split. The Agents sidebar stays left and can
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The mobile conversation list omits the desktop **Agents** and **Connections** controls. Use the Agents composer or global create menu to start
+The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
-draft, attachments, agent, model, repository, and branch. Tap the
-agent/model control once to open a bottom sheet with its search field focused,
-without first focusing or expanding the message input. Tap an agent to use its
-default model, or its model arrow to choose a model; **Create agent** opens the
-roster. Agents are clustered into **Built-in**, **Your agents**, and **Needs
-connection**, with runtime/model details below their names. Code opens directly
-on these groups without an empty Models section or an unrelated runtime warning.
-**Create agent** uses the shared rounded pill button with a subtle fill at the
-bottom right at the end of the scrolling list. The picker uses one
-continuous surface, with labels and spacing separating groups instead of nested
-shaded cards. Provider sections use compact spacing, with labels close to their
-rows. Model lists start with
-**Suggested**, with Gemini last when available, followed by **More models** and your agents. **More models**
-opens the complete provider catalog, including copies of Suggested choices;
-use Back to return. Search accepts
-model names, IDs, and providers. When browsing an agent, **Use default** in the
-header selects its configured model.
+draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
+Suggested models sit above Built-in and Your agents; All models opens a pushed
+page in the same sheet with Back, search, and the remaining provider catalog.
+Suggested models never repeat there. Reasoning effort and Speed appear below the list when the
+selected runtime and model support them. Tap an option to set it, or Back to
+return to the list. An agent without access offers its existing connection
+flow. Search filters models and agents without changing the current selection.
 
 The floating mobile composer appears only on **Agents**; Home and other views
 keep their New action or their own reply/comment composer.
-The mobile Agents composer is an opaque, rounded input using the same surface as
-the New button, including its glass treatment in dark mode. Send is a bare up
-arrow without a background, including when disabled. The short placeholder reads
-“Message Macro AI”.
-Its collapsed height matches New, with Send visible and the model/provider control hidden until the input is focused. Tap the input to expand across the row, hiding New and giving the draft
-a full-width text area above the controls.
-Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
-Repository controls appear alongside it in Code mode.
-Tapping outside collapses the composer and restores New.
-The editor and model picker stay mounted so collapsing preserves the draft.
-Dismissing the model, effort, or priority tier selector on mobile returns focus to the message input.
-Active sessions use the same compact mobile model drawer: focused search, Suggested
-with Gemini last, and More models for the complete provider catalog.
-Beside the model selector, the composer shows **Effort** (a dial plus the
-current level, such as *High*) for models that advertise reasoning effort, and
-**Priority tier** (a lightning bolt plus *Standard*, *Priority* or *Ultrafast*)
-for models with a tier beyond standard: GPT-6.1 Sol and GPT-6 Astra today. On
-touch both are icon buttons that open a bottom sheet. The tier is one browser
-preference shared by every composer (`macro:ai-speed`); a model that doesn't
-offer it runs at standard, and the agent composer applies it before the next
-prompt only when the session reports a different tier. Priority sends
-`service_tier: "priority"` to OpenAI and bills the `:priority` price rows.
-In new and active agent composers, check that the model selector and these
-controls share a height and vertical center: 32px on desktop and 36px with
-touch emulation, and stay interactive at desktop, phone, and tablet widths.
-Repository and branch pickers keep the composer expanded while their search
-fields are focused, so their anchor stays in place.
+
+The phone Agents composer is a chrome island above the dock. At rest it is a
+46px pill with the vertically centered “Message Macro AI” placeholder or a
+one-line draft, and no Send control. Tapping the editor expands it to show
+attachments above the text, then Add on the left and model/agent, dictation, and Send on the right. The microphone sits immediately before Send.
+The 46px pill expands continuously with its corner radius and editor insets;
+the shape grows over 200ms and controls fade and scale in during its final part. Empty blur reverses the
+transition without moving the list behind it. Reduced motion skips the transition.
+The editor, controls, and attachment owners stay mounted while clipped or inert. Home keeps a separate draft and attachment store.
+
+The expanded composer shows icon-only Chat and Code tabs above the island.
+Code shows a content-width repository-and-branch pill beside the tabs. The
+repository and branch each open their own sheet; selecting a new repository
+resets the starting branch. A paired local runtime locks its branch to main.
+The composer stays expanded while repository, branch, or model sheets are open.
+The model pill shows only the selected model or agent name; reasoning effort and
+Speed live in the model sheet. Dismissing that sheet restores editor focus.
+Tapping an agent bubble selects its agent and focuses the composer during the
+tap, as required for the iOS keyboard; changing Chat or Code afterward remains possible.
+Outside taps collapse the island. The touch keyboard's Enter inserts a newline;
+Send submits text and attachments. Active session composers retain their existing
+controls and send/stop behavior.
 
 Home/list composers, search, the create menu, folder AI creation, contextual
 **Chat with AI**, and onboarding prompts all start new agent sessions, with or
@@ -443,7 +432,7 @@ empty session there. Command-menu actions open a new split.
 code files, images, canvases, spreadsheets, email, channels, calls, and projects,
 and the channel message hover menu, open the Agents workspace's new-conversation
 composer in a new split, the same centered composer as Home and **Create → Agent**,
-with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
+with its grouped Auto/Chat/Code switch and unified agent/model selector. Their entity
 mention fills the composer as an unsent draft; an Agents split that is already open
 returns to its composer with that draft. The mention fills the composer once: after
 sending, Back, Forward, or returning to Agents from the dock or sidebar shows the
@@ -505,9 +494,10 @@ the shimmer.
 
 - Open **Go to Agents** → `/app/component/agents`. The workspace uses one
   sidebar for Chat and Code.
-  **Agents** in the sidebar opens the same roster as the composer’s
-  **Create agent** action. **Connections** manages MCP integrations (including
-  app authentication and disconnection), also available under Settings → Integrations.
+  The desktop footer contains **Agents**, **Routines**, and **Archived**.
+  **Agents** opens the same roster as the composer’s **Create agent** action.
+  Connections has no desktop footer row; existing links and Settings → Integrations
+  still open its MCP integration management.
   Every agent composer's **+** button, including a session opened in a split,
   lists the connected apps with **Add connections** and **Manage connections**.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
@@ -549,34 +539,35 @@ the shimmer.
 
   Start a conversation with the desktop sidebar's **New** button or **Create → Agent**.
   The empty composer has no New conversation heading.
-  **Conversations** is a mixed list
-  of chats and coding sessions, with one search across both. **Group conversations**
-  switches between Status (the default), Type, and None, preserving newest-first
-  order within each group. **Filter conversations** combines Type, Status, and
-  Pull request filters; choices within a category are ORed and categories are
-  ANDed. Grouping and filters are remembered per user. Clear filters from the menu
-  or an empty filtered list.
-  With the `enable-agent-updates` flag, an **Open PRs** section sits above
-  Conversations: your non-archived coding sessions whose pull request is open or
-  draft, newest first, using the same rows (they stay in Conversations too). It
-  is hidden when empty.
-  Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
-  pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. A session that is starting or
-  whose turn is still running (the agent is working, writing code, or stopping)
-  shows the same three-dot working wave as the transcript in place of the
-  leading icon; the row's accessible name appends `Starting` or `Working`.
-  The row follows each turn without a reload: it turns Working when a turn
-  starts and clears when the last turn ends. Each session update re-reads the
-  row from the primary database after the list refetch, which corrects a
-  stale replica read at that point; a later replica-backed refetch from
-  another trigger can still briefly restore an older row until the next
-  session update.
-  Sessions with a linked PR show
-  **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the pull request on GitHub (a new tab, or the
-  system browser in the desktop app), as the session header chip and Magic Chip
-  do. The click leaves the session unopened.
+  **Waiting on you** appears above the desktop conversation list only while
+  sessions await input. Its amber ring identifies the section; its rows use
+  blue unread dots and regular-weight titles. Waiting sessions do not repeat in
+  **Open PRs** or **Conversations**. Search, filters, and Show hidden routine runs
+  apply to every active section.
+  **Sort conversations** offers **Last updated** (default) and **Date created**,
+  newest first. The server query follows the selected sort. **Filter conversations**
+  combines Type, Status, and Pull request filters; choices within a category are
+  ORed and categories are ANDed. Sort and filters are remembered per user;
+  previously saved grouping is ignored by the redesigned desktop list.
+  With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
+  Conversations, showing non-waiting active coding sessions with open or draft
+  PRs. Each session appears in only one section; disabling Open PRs returns its
+  rows to Conversations. All sections follow the selected sort. Pinned rows do
+  not stop pagination from filling Conversations, even when Open PRs is collapsed.
+  The section stays hidden when empty.
+  Desktop rows are one line: a status glyph, the title, and a PR or branch icon.
+  The working glyph is the transcript's rotating five-dot plus; idle is an outline
+  ring, unread is blue, and failed is a red five-dot ×. Session titles keep normal
+  weight in every state. Home keeps its existing row layout and indicators.
+  Rows follow persisted turn updates without a reload.
+  On hover or keyboard focus, the selected-sort age overlays the row's right end
+  over a matching surface gradient, including its code icon, without changing title truncation.
+  Relative units and older dates follow the interface language.
+  At rest the age is hidden. The code icon retains its preview and activation target.
+  PR previews reuse the existing synced card or its unsynced fallback; a synced
+  PR icon opens the PR in Macro (Shift opens a split), while an unresolved PR opens
+  GitHub. Branch previews show only the branch and repository, with Copy branch
+  name and Open on GitHub. Clicking the branch icon opens its conversation.
   Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
   Switching conversations keeps the sidebar mounted (no reload or scroll reset)
@@ -586,14 +577,20 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. Archived sessions are grouped at the bottom under **Archived**, a
-  section that starts collapsed; click its header (count and caret) to expand it.
+  actions. On desktop, **Archived** in the footer opens a searchable main-pane
+  list with the loaded count, code identity, and archive date. Hover or focus a
+  row for **Unarchive** and **More actions**; right-click offers the same actions.
+  Unarchive restores the row to the sidebar. Non-action code/date cells open the
+  conversation while icons and action buttons retain their own behavior. The
+  archived page reads more pages while fewer than 20 matching rows are loaded,
+  then pages near the scroll end. Empty results appear only after paging finishes;
+  counts describe loaded rows, not a server total. Phone has its own Archived view.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
-  conversations** menu, which counts it on the filter badge and unchecks it with
+  conversations** menu, which adds it to the count in the filter button and unchecks it with
   **Clear filters**; runs of routines with it on are always listed. Every
-  routine run carries a clock icon after its age. The list starts without hidden
-  runs each time the Agents view opens.
+  routine run keeps its clock icon in the desktop row. The list starts without
+  hidden runs each time the Agents view opens.
 - The agent composer's **+ (Add)** menu offers **Add photos**, **Add files**,
   **Add from library** (`@` references), and **Use a skill** (`/`; sessions show
   **Skills & commands**). Desktop uses a scrollable menu; phones use a bottom
@@ -620,23 +617,12 @@ the shimmer.
   16px top padding when expanded. Light mode uses a faint shadow outline and
   layered outer shadow; dark mode retains the production glass rim and shadow.
   Both modes retain the production composer background.
-- In dark mode, the footer is darker than the input, with successively lighter
-  toggle track and selected segment.
-- The starting page has **Auto / Chat / Code** in the composer’s inset bar, below the input on
-  desktop and above it on phones. On desktop, the borderless footer is inset 12px
-  from the 28px-radius input; Auto / Chat / Code share one track with equal 8px insets
-  in the 52px footer. The dark track is lighter than the footer lip and the selected segment lighter again;
-  a faint gradient gives the dark toggle depth without borders or shadows.
-  Light mode uses a panel-colored selected segment with a subtle border and shadow.
-  The footer, track, and selected segment follow the active theme's color tokens.
-  The footer mixes a little ink into the panel color so its rounded lower lip
-  remains distinct from the page, including behind the input's bottom corners.
-  Verify them with a colored dark theme (such as Moon) and a colored light theme,
-  including switching Chat / Code; none should retain fixed neutral grays.
-  The selected segment glides for 250ms with
-  an ease-out curve. The greeting text flips vertically into place on each mode change
-  with the same duration; both animations respect reduced motion.
-  Its bottom corners follow the toggle's curve. Chat and Code limit the offered agents; the choice
+- The starting page uses the shared grouped **Auto / Chat / Code** Tabs pill,
+  below the input on desktop and above it in the phone drawer. The shared Tabs
+  component owns spacing, selection, focus, and touch treatment; the composer
+  does not resize or recolor its parts. Verify switching modes with the pointer
+  and keyboard on desktop and at 390×844.
+  Chat and Code limit the offered agents; the choice
   lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
   agent harness checks too; without it the switch is Chat / Code and Auto reads as Chat.
@@ -664,14 +650,16 @@ the shimmer.
 - The agent dropdown includes saved agents of the selected mode regardless of
   runtime, plus Cursor in Code mode.
   Macro's models use the same searchable catalog as running sessions:
-  **Suggested** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
-  runtime catalogs), **GPT-6 Astra**, and **Gemini**, when available, in that order. The
-  **More models** submenu contains the complete catalog grouped by provider,
-  including the Suggested choices and effort/speed variants. Your agents
-  follow Suggested and More models in the root menu. Choosing a model
-  does not reorder the sections. Search matches names, IDs, and provider names. The compact borderless search
+  **Suggested** lists the runtime's available frontier models. The **All models**
+  submenu groups the remaining models by provider, excluding every Suggested ID
+  from both browsing and search and omitting empty provider groups. Your agents
+  follow Suggested and All models in the root menu. Choosing a model
+  does not reorder the sections. Root search includes all models and agent names. The compact borderless search
   field receives focus when the selector opens or reopens. Its opaque header
   meets the top of the scroll area so rows cannot show through above it.
+  All models focuses its search on hover or keyboard opening. ArrowDown/ArrowUp
+  move from search to the first/last matching model; ArrowLeft returns to the
+  parent trigger. Subsequent model navigation keeps focus on the chosen row.
   **Built-in**, **Your agents**, and **Needs connection** groups follow when
   they have entries. Each agent row shows its runtime and model, or its setup
   action/availability reason. **Create agent** uses the shared rounded pill
@@ -744,13 +732,15 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with the repository bar below the input on desktop and above it on mobile.
-  The plus attachment button stays at the far left: before the
-  text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. On mobile, Auto/Chat/Code sits at the top left and repository controls at the top right; repository and branch selection open in standard bottom drawers. These controls sit inside the same continuous surface as the input with no inset or dividing border. On desktop, the borderless bar sits 12px inside each input edge and gives the 36px Auto/Chat/Code toggle equal 8px insets, with concentric bottom corners and a darker fill. The settings row keeps a stable height when changing modes: 52px on desktop and a 46px minimum on mobile.
-  Selecting Chat hides the repository controls and keeps the mode switch in
-  the settings row, without remounting the editor or losing the draft. Reduced-motion
-  preferences disable the animation. The hidden drawer is inert. **Repository**
+  with controls inside the composer. Only the plus attachment action stays on the
+  left of the bottom row. The right group contains mode/repository controls on
+  the Agents desktop composer, then the agent/model selector, dictation, and Send.
+  Home keeps mode and repository controls in its existing drawer below. Mode/repository
+  controls can wrap above the final model, dictation, and Send controls.
+  On mobile, grouped Auto/Chat/Code stays above the composer with repository
+  controls; both pickers open standard bottom drawers. Selecting Chat hides
+  repository controls without remounting the editor or losing the draft.
+  Reduced-motion preferences disable the expansion animation. **Repository**
   (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
   **Auto-detect**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
@@ -785,25 +775,26 @@ the shimmer.
   the owner must have access through the connected GitHub App.
   Paired macrod agents also receive the repository choice. With native Herdr,
   macrod finds an existing clone or clones it using local Git credentials, then
-  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  creates a worktree from a fresh `origin/main` and opens the session in its own
+  Herdr workspace. **Branch** shows `main`
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
   update the saved agent; configure persistent defaults in the agent editor.
-  Within an existing session, the model picker remains available on the right.
-  Its trigger, model options, and session metadata use the same readable model names
-  as the new-conversation picker. Large catalogs share the Settings picker:
-  provider icons, search, **Suggested** first, and **More models** for the
-  complete provider catalog. Desktop opens a submenu; phone widths show
-  the catalog in place with a Back action. Search includes every model.
-- A labeled **Effort** button (dial icon and current level, e.g. `Effort: High` to screen readers) beside the model selector opens a titled list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
-  Model-specific effort choices remain available in desktop model submenus.
-  New conversations remember the last effort picked for each runtime and model,
-  per signed-in user, across sends, mode switches, and reloads, while that model
-  still offers it. Without one, Free and Pro users start at the lowest advertised
-  level. Existing sessions keep their current setting.
+  Inline and standalone sessions use the same unified agent/model selector as
+  Home and new conversations. The session host applies model and effort changes;
+  new-chat preferences do not overwrite existing session configuration.
+  **Suggested** models and custom agents share the root list. **All models** retains
+  the provider catalog submenu on desktop and its pushed page on phone, excluding
+  Suggested choices even during search. Universal-input AI drafts and routine agent/model targets
+  use the same selector, but omit effort and speed because those hosts store only
+  an agent/model target.
+- **Reasoning effort** and **Speed** live inside that selector, as desktop submenus
+  and phone pushed pages. Rows with fewer than two advertised choices stay hidden.
+  New conversations retain per-user, per-runtime/model effort preferences across
+  sends, mode switches, and reloads. Existing sessions retain their own setting.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.
@@ -878,7 +869,7 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
-  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  This works in herdr 0.9 and in the herdr app (herdr-core, which names its `hc` in each terminal's `HC_BIN`),
   where session tabs open in macrod's space. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
   versions" in `crates/coding_agent_worker/README.md`.
@@ -950,6 +941,11 @@ the shimmer.
 
 ## Routine run history
 
+On phones, Routines uses the shared header islands: Back to the previous page,
+its title, Search, and Create Routine actions stay above the list. Opening a routine replaces them with Back,
+the routine title, save status, and its action menu. Overview and Runs tabs remain
+in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
+
 A routine's **Runs** tab can contain both legacy chats and agent sessions. Each
 row opens the surface created by that run; changing the routine's execution
 target does not change older links. Shift-click opens the run in a new split.
@@ -994,7 +990,12 @@ the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
 the routine can't be created until it is drafted again or the step is
-removed. Saving checks every id again. A request the gateway
+removed. Saving checks every id again. The draft also picks the routine's
+icon and colour from Macro's icons, which the new routine's page draws in its
+header and top bar (else the first trigger's icon) and creating it saves; a
+pick naming an icon Macro doesn't have is dropped. An agent that later
+changes what the routine does may pick again, but never replaces a look the
+owner chose with **Change icon**. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
 
@@ -1024,9 +1025,32 @@ blocking request as before; older clients keep using it.
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a
-sparkle. A choice opens a menu that saves the option picked; a number opens a
-field with − and +, its range, and Enter to save (Esc cancels); text or the
-question AI is asked open an editor with **Save**; on/off flips in place.
+sparkle. On/off flips in place; every other knob opens an editor (a choice's
+options as radios, a number's field with − and + and its range, a text field,
+or the question AI is asked) with **Clear**, **Cancel** and **Save**, on touch
+too. Only **Save** applies the change: Enter never saves, and **Cancel**, Esc
+or a click away drop it. **Clear** empties the field; a value that can't be
+empty (a choice, a number, the question) keeps **Save** disabled, with the
+reason, until one is entered.
+A text knob with no value shows a + and its label (**Not set** under
+**Settings**) with a dashed underline, and opens the same editor.
+An item the step uses (an entity knob: a channel, document, folder, person,
+task, email thread, AI chat, CRM company, CRM contact, project, or database)
+shows by its icon and name and opens the same editor around the app's entity
+picker, showing only the kinds the knob accepts, email search included when
+email threads are one of them (for a database, a searchable list of the
+owner's databases). Picking an item only changes the draft, Enter included, and
+picking the picked item again keeps it; only **Clear** empties it, keeping
+**Save** disabled until one is picked. On touch it
+opens a sheet instead, with **Cancel**, **Clear** and **Done**, and only
+**Done** applies the pick. One not picked yet, as in a starter, shows the same
++ and its label with a dashed underline. Saving refuses an item the owner
+can't open. A run checks each picked item when the first step that uses it
+starts; one deleted, trashed or lost by then fails that step with the reason,
+before its code runs. On the routine's page such a knob shows
+its + and label dashed in red (**Needs a new pick** under **Settings**); its
+editor gives the reason and keeps **Save** (**Done** on touch) off until
+another item is picked.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**
@@ -1162,9 +1186,10 @@ file or a guessed remote revision.
 
 ## Starting from Home
 
-Home mounts the same new-conversation composer as the Agents page.
-The greeting, agent/model selector, coding repository/branch drawer, and send flow
-are shared. Sending stays on Home and opens the new session in Home's detail
+Home shares new-conversation behavior with the Agents page but preserves its
+original layout: track mode tabs and repository/branch controls stay below the
+desktop composer. The unified model selector stays inside the composer. Its bottom row keeps only + on the left, with model, dictation,
+and Send on the right. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
 top of the Home list once the session is created.
 Session creation and prompt delivery use the shared pending-session flow.
@@ -1396,6 +1421,13 @@ idempotency key. No separate member confirmation is required. The server still
 refuses restricted credentials and unavailable rollout gates; CRM viewing
 permission is separate from these own-member controls. A conflict requires
 inspection and a new decision, never an automatic refresh and retry.
+Validation and replacement share a live-expansion resource check. A named limit
+error refuses activation and leaves the current policy unchanged; narrow the
+rules before retrying. Validation does not reserve capacity, so replacement can
+still refuse after live data changes. Later growth can make a Team email read
+fail with a named resource limit instead of returning an incomplete feed;
+withdrawal stays available. Do not describe validation as a permanent guarantee
+that a live rule will fit.
 
 The agent explains that a matching participant shares the whole past/future
 thread; contact/company selectors follow live records, all exclusions win, and
@@ -1416,8 +1448,11 @@ immediately, with no review card, so test them on a team and addresses you
 control. The standard toolset and the standard MCP have no direct tool for
 either.
 
-Ask the agent to discover SDK entities and write a JavaScript module exporting
-`async function main({macro, session, execution})`. These are actual public SDK
+Ask the agent to discover SDK entities and write a TypeScript module exporting
+`async function main({macro, session, execution}: CodeContext)`. The harness
+type-checks it against the SDK first; a program with type errors never runs,
+and its `ExecuteCode` result is the checker's errors (`at main.ts:<line>:<column>`).
+These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
 `await document.content()` fetches a document as Macro's internal Markdown, with
 chips, tables and other rich content as `<m-*>` tags. To write text back, the
@@ -1477,8 +1512,8 @@ together, before writing it. There is no runtime `sdk.help` or
 body with `document.edit(instructions)`, and a canvas through `document.canvas()`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
-bundled at build time; no TypeScript compilation or package downloads happen
-in a run. The process receives a short-lived normal user token after any required
+bundled at build time; no package downloads happen in a run, and Deno strips
+the types. The process receives a short-lived normal user token after any required
 approval for the selected account. SDK methods make HTTP requests to configured Macro
 service hosts using normal API authorization. The token also signs the session's
 agent identity: SDK messages show that agent as sender and the selected acting user in the
@@ -1494,7 +1529,9 @@ Inline channel and discussion steps show the observed SDK operation names while
 code runs, using the same execution journal as the full session view. The final
 tool receipt carries those operations into the shared fold, so posted step
 snapshots retain the names and outcomes without exposing source or returned JSON.
-A code run without observed SDK requests reads as **Worked in your workspace**.
+A code run without observed SDK requests reads only as how far it got:
+**Working on it**, **Finished a step**, **A step failed**, or
+**Step interrupted**.
 People never see that the agent works in code: no surface names `ExecuteCode`,
 shows a program or its JSON, or words a step as code, scripts, the SDK or
 requests. `DescribeCodeTools`, `ReadCodeDocs`, `SearchTools` and `LoadTools`
@@ -1558,7 +1595,8 @@ the harness can run code. Those clients see only
 `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
 individual Macro tools — and the server instructions tell the client to call
 `DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
-before writing a program. Programs export `async function main({macro})` and
+before writing a program. Programs are type-checked TypeScript exporting
+`async function main({macro}: CodeContext)` and
 return exactly `{data}` (an empty `reviews: []` is dropped). There is no
 session, execution journal, review stack or `execution_id`; the receipt carries
 status, observed SDK activity, result and error. Runs act as the user with no
@@ -1834,7 +1872,9 @@ and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
-latest turn.
+latest turn. A date chip written for a moment (a timestamp whose label names a
+time, as agents write a busy block) shows that moment's day and time in the
+viewer's zone, such as "Today, 3:15 PM"; a day chip shows the day alone.
 `@mention` a person in a prompt and, if you can edit the session, they are granted edit
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.
@@ -1899,8 +1939,8 @@ invalid event links are omitted.
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text
-sits on top and a footer row holds the model (left, as a provider logo and
-name, e.g. `✳ Sonnet 5.5 ⌄`) and **Send** (right). On touch devices Enter on the
+sits on top and a footer row holds only + on the left, with the model
+(as a provider logo and name), dictation, and **Send** on the right. On touch devices Enter on the
 virtual keyboard inserts a newline and never sends; only **Send** submits, the
 same as channel composers. This also applies to the Agents workspace session
 and new-conversation inputs and to the mobile **Ask AI** composer. On desktop
@@ -1910,7 +1950,7 @@ bottom sheet listing every model the same way, with a check on the current one
 only ids: Macro Agent's `anthropic/claude-sonnet-5-5` shows as **Sonnet 5.5**. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
-sits above the box. Tap the session title
+sits inside the composer's bottom row, before the microphone and Send or Stop. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the generic entity
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
@@ -2263,9 +2303,10 @@ The pane does not create PRs or generate their descriptions.
 
 ### Failed session rows
 
-A failed agent turn shows a small red status dot in Home and Agents, including
-after reloading the list. Open the row to read the existing transcript error.
-Starting another turn clears the failure dot; unread state remains independent.
+A failed agent turn shows a red five-dot × in the redesigned desktop Agents
+list, including after reloading. Home and the legacy phone list keep their red
+status dot. Open the row to read the existing transcript error. Starting another
+turn clears the failure indicator; unread state remains independent.
 
 ### Live development previews
 
@@ -2494,20 +2535,18 @@ There is no periodic PR lookup polling.
 
 ### Agent reasoning effort
 
-Long model names wrap in model menus and touch sheets. Desktop composer
-triggers stay on one line within the available width; hover a truncated trigger
-to read its full model and effort in the native tooltip. Verify both ordinary
-model rows and rows that open effort submenus, including search results.
-Long runtime-provided effort names wrap within their submenu rows as well.
+The Agents composers use one model selector for models, custom agents, reasoning
+effort, and speed. The desktop pill shows the provider or agent avatar, bounded
+name, available effort, and selected speed glyph. Its shared tooltip gives the
+full choice. Search filters model labels and agent names; All models opens the
+catalog. Selecting an agent keeps the desktop menu open; selecting a model or
+option closes it. In the phone sheet, search and pinned settings remain above
+and below the scrolling list. Effort and speed open pushed views; choosing an
+option returns to the list, while model and agent choices close the sheet and
+restore editor focus. One-choice settings remain hidden.
 
-Open the model selector and hover a model to choose its reasoning effort in the
-submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,
-then use the adjacent effort button to adjust effort.
-Cursor and Macro's in-memory agent load the hovered model's own advertised
-choices. The selected label includes the effort, such as `Sonnet 5.5 · High`;
-the composer also offers a separate effort button for the selected model. Models without effort
-support remain selectable through `Use <model>` (or a desktop click/Enter).
-Default keeps the model's existing behavior.
+Only the selected runtime's advertised effort choices appear. A model without
+effort support remains selectable. Default keeps the model's existing behavior.
 
 In an open session, choosing a different model's effort confirms the model first,
 then validates and applies effort. Wait for the selector to become available
@@ -2679,24 +2718,14 @@ choose a vision model or start a conversation without images.
 
 ## Priority tier
 
-The **Priority tier** menu beside the model selector picks how a model's requests
-are processed: *Standard*; *Priority* (OpenAI priority processing, 2× usage) and
-*Ultrafast* (6× usage) for GPT-6 Astra and GPT-6.1 Sol. Each choice shows its
-usage multiplier before sending. Claude models, including Opus 5.5, stay on
-standard speed until Anthropic fast mode is enabled for this deployment
-(Anthropic's own Priority Tier doesn't support Opus 5.5 or Sonnet 5.5). Other
-models keep standard speed and show no menu. The preference is saved in browser
-local storage and shared by legacy chat and native Macro agent composers; an old
-saved "fast mode on" becomes Ultrafast. External coding agents use their own
-speed controls.
-
-Preview the control at `/app/debug/ui?ui=speed-selector`.
-Pick Priority and verify the trigger reads *Priority*.
-Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the menu is hidden; switching back restores
-the preference. Native sessions confirm the tier before sending the prompt when
-the session reports a different one; a rejected configuration must retain the
-unsent draft and attachments.
+The Agents selector's Speed submenu uses the in-memory runtime's advertised
+choices. It labels `standard` Standard, `priority` or `fast` Fast (2× usage),
+and `ultrafast` Ultrafast (6× usage). It hides when only one tier is offered.
+These labels do not change the saved wire value. A model name never implies
+Ultrafast support. Other chat composers keep their existing priority controls.
+The preference is shared across legacy chat and native Macro agent composers.
+Running sessions confirm a changed speed before sending; a rejected change
+retains the draft and attachments.
 
 Usage records follow the provider's delivered speed for each call, including tool
 loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that
@@ -2808,14 +2837,10 @@ presentation, and typing during a save is `bunx playwright test --config src/fea
 (from `apps/web`).
 ## Agent reasoning effort
 
-Open the model selector and hover a model to choose its reasoning effort in the
-submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,
-then use the adjacent effort button to adjust effort.
-Cursor and Macro's in-memory agent load the hovered model's own advertised
-choices. The selected label includes the effort, such as `Sonnet 5.5 · High`;
-the composer also offers a separate effort button for the selected model. Models without effort
-support remain selectable through `Use <model>` (or a desktop click/Enter).
-Default keeps the model's existing behavior.
+Open the unified Agents selector to choose an advertised model and its
+Reasoning effort or Speed options. Desktop uses submenus; phone uses pushed
+views in one sheet. Unsupported settings have no row. See [effort capabilities](../architecture/agent-effort.md)
+for the harness contracts.
 
 In an open session, choosing a different model's effort confirms the model first,
 then validates and applies effort. Wait for the selector to become available

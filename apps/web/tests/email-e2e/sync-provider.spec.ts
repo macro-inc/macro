@@ -247,13 +247,10 @@ for (const provider of PROVIDERS) {
 
     // When this fails, a message deleted for good at the provider stays in
     // its thread in the app.
-    //
-    // Known bug on Outlook: the service asks Outlook for the deleted message
-    // three times over a minute and a half, then marks it missing, and the
-    // thread goes on showing it.
-    test(`${provider === 'OUTLOOK' ? 'known bug: outlook-deleted-message-stays-in-thread: ' : ''}a message deleted at the provider is gone from its thread`, {
-      tag: provider === 'OUTLOOK' ? '@known-bug' : [],
-    }, async ({ page, mailbox }) => {
+    test('a message deleted at the provider is gone from its thread', async ({
+      page,
+      mailbox,
+    }) => {
       // Outlook's deletion is believed only on the third look, 90 s later.
       if (provider === 'OUTLOOK') test.setTimeout(240_000);
       const [, second] = await deliverConversation(mailbox, 'Offsite', [

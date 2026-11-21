@@ -105,22 +105,28 @@ impl InboxSyncAttachmentStore for PgInboxSync {
         link: Uuid,
         provider: &str,
     ) -> Result<Vec<AttachmentUploadMetadata>, Self::Err> {
-        email_db_client::attachments::provider::upload::new_email_document_atts(
+        let claimed = email_db_client::attachments::provider::upload::new_email_document_atts(
             &self.0, link, provider,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+        Ok(claimed
+            .into_iter()
+            .map(|claimed| claimed.metadata)
+            .collect())
     }
     async fn media_attachments(
         &self,
         link: Uuid,
         provider: &str,
     ) -> Result<Vec<AttachmentUploadMetadata>, Self::Err> {
-        email_db_client::attachments::provider::upload::new_email_media_atts(
+        let claimed = email_db_client::attachments::provider::upload::new_email_media_atts(
             &self.0, link, provider,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+        Ok(claimed
+            .into_iter()
+            .map(|claimed| claimed.metadata)
+            .collect())
     }
     async fn attachment_recipients(
         &self,

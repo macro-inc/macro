@@ -217,6 +217,22 @@ fn boot_stubs_are_local_only() {
     );
 }
 
+/// authentication_service refuses to start unless every configured Stripe
+/// price id has this shape
+/// (`services/authentication_service/src/config.rs::configured_price_id`).
+#[test]
+fn stripe_price_id_stubs_pass_the_auth_service_check() {
+    for (key, value) in local_env()
+        .iter()
+        .filter(|(key, _)| key.starts_with("STRIPE_") && key.ends_with("PRICE_ID"))
+    {
+        assert!(
+            lazy_regex::regex_is_match!(r"^price_[A-Za-z0-9_]{1,64}$", value),
+            "{key}={value:?} would stop authentication_service at boot"
+        );
+    }
+}
+
 #[test]
 fn internal_auth_values_are_authoritative_local_env() {
     let env = LocalEnv::for_instance(

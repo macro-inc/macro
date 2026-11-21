@@ -24,6 +24,7 @@ import { queryClient } from '../client';
 import {
   createLocalDraftStore,
   type DraftStorageSession,
+  type LocalDraftListOptions,
 } from './local-draft-store';
 
 import type { EmailSendIntent } from './send-intent';
@@ -195,9 +196,11 @@ export function watchEmailStorageEnded(
   };
 }
 
-export async function listLocalDrafts(): Promise<LocalDraft[]> {
+export async function listLocalDrafts(
+  options?: LocalDraftListOptions
+): Promise<LocalDraft[]> {
   const owner = await emailStorageSession();
-  return await localDraftStore.list(owner);
+  return await localDraftStore.list(owner, options);
 }
 export async function readLocalDraft(
   id: string
@@ -798,7 +801,11 @@ export function localDraftQueueLifecycle(
       (!draft || migrated.get(id) === draft.revision)
     ) {
       const optimistic = object(object(mutation.optimisticData).saveEmailDraft);
-      const message = object(optimistic.draft);
+      // Permission retirement preserves authored attachment/sender recovery
+      // metadata while removing the copied response that contained it.
+      const message = object(
+        optimistic.draft ?? object(mutation.clientMetadata).legacyDraftRecovery
+      );
       const attachments: LocalDraftAttachment[] = [
         ...objects(message.attachmentsDraft).map(
           (attachment): LocalDraftAttachment => ({

@@ -120,6 +120,10 @@ pub fn drafted_pick(
     match (common, problems.is_empty()) {
         (Some((reason, surfaces, keep_probability)), true) => {
             routine.enabled = false;
+            // A kept suggestion has no look of its own yet: it is stored as a
+            // configuration, which a replica built before `appearance` refuses
+            // to read, and it outlives a deploy and a rollback.
+            routine.appearance = None;
             Ok(CheckedSuggestion {
                 surfaces,
                 reason,
@@ -214,7 +218,8 @@ fn knob_values(
                 None => problems.push(format!(
                     "`{name}` doesn't fit its knob: a text knob is a name of at most \
                      {MAX_TEXT_KNOB_CHARS} characters, a question ends with ?, a number \
-                     stays in range, a choice is one of its options"
+                     stays in range, a choice is one of its options, and an entity \
+                     knob is left for its owner to pick"
                 )),
             },
         }
@@ -244,6 +249,8 @@ fn fit(knob: &Knob, value: &Value) -> Option<Value> {
                 .any(|option| option == choice)
                 .then(|| Value::String(choice.to_owned()))
         }
+        // The owner picks the item an entity knob names, before saving.
+        Knob::Entity { .. } => None,
     }
 }
 

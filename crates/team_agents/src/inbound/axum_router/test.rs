@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    models::{ComputerId, TeamAgents},
+    models::{ComputerId, ComputerSize, TeamAgents},
     voice::AgentVoice,
 };
 use axum::{
@@ -72,6 +72,12 @@ impl TeamAgentService for Reached {
         _: &MacroUserIdStr<'_>,
         _: AgentVoice,
     ) -> Result<AgentVoice, TeamAgentError> {
+        self.reached()
+    }
+    async fn agent_online(
+        &self,
+        _: EntityAccessReceipt<MemberTeamRole>,
+    ) -> Result<(), TeamAgentError> {
         self.reached()
     }
     async fn issue_enrollment(
@@ -308,4 +314,63 @@ async fn a_person_creates_a_team_agent() {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert_eq!(service.0.load(Ordering::SeqCst), 1);
+}
+
+async fn error_body(error: TeamAgentError) -> (StatusCode, serde_json::Value) {
+    let response = error.into_response();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+#[tokio::test]
+async fn no_room_is_a_coded_conflict_naming_the_size() {
+    let (status, body) = error_body(TeamAgentError::NoRoom(ComputerSize::Large)).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "no_room");
+    assert_eq!(body["size"], "large");
+}
+
+#[tokio::test]
+async fn a_declined_card_is_a_coded_payment_required() {
+    let (status, body) = error_body(TeamAgentError::PaymentDeclined).await;
+    assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+    assert_eq!(body["code"], "payment_declined");
+    assert!(body.get("size").is_none());
+}
+
+#[tokio::test]
+async fn a_repeat_of_an_invite_in_flight_is_coded() {
+    let (status, body) = error_body(TeamAgentError::InviteInProgress).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "invite_in_progress");
+}
+
+/// A bad purchase key reaches the service, which refuses it before creating
+/// anything, and answers a 400 with a message, not the extractor's 422.
+#[tokio::test]
+async fn an_invalid_purchase_key_is_a_bad_request_with_a_message() {
+    let service = Arc::new(Reached::default());
+    let request = Request::post("/")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"purchaseKey": "has space", "name": "Ada", "size": "standard"}"#,
+        ))
+        .unwrap();
+
+    let response = router(service.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(service.0.load(Ordering::SeqCst), 1);
+
+    let (status, body) = error_body(TeamAgentError::InvalidPurchaseKey).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["message"],
+        "the purchase key must be 1 to 128 printable ASCII characters"
+    );
+    assert!(body.get("code").is_none());
 }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mailbox::live_pass::StreamKind;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 const REVISION: i16 = 1;
@@ -126,7 +127,7 @@ async fn inbox_and_sent_restart_alone_and_the_rest_waits_for_their_import(db: Pg
 
     // The fresh Inbox round lists nothing new and ends on its deltaLink.
     let round = repo
-        .claim_stream(macro_uuid::generate_uuid_v7())
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
         .unwrap();
@@ -285,5 +286,40 @@ async fn a_link_without_a_folder_catalog_is_not_restarted(db: PgPool) {
         (position.as_deref(), complete),
         (Some("inbox-delta"), true),
         "nothing would ever report the run complete, so the folder keeps its round"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_restarted_folder_drops_its_live_pass(db: PgPool) {
+    let repo = PgMailboxSync::new(db.clone());
+    let mailbox = imported_link(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,position) VALUES ($1,$2,1,'mail_folder_live','inbox-id',true,'live-delta'),($3,$2,1,'mail_folder_live','archive-id',true,'live-delta')",
+        macro_uuid::generate_uuid_v7(),
+        mailbox.link_id,
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.restart_folders(mailbox, ReimportPhase::InboxAndSent, REVISION, false)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+
+    let passes = sqlx::query_scalar!(
+        "SELECT scope_id FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder_live'",
+        mailbox.link_id
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        passes,
+        ["archive-id"],
+        "only the restarted folder's pass goes"
     );
 }

@@ -29,7 +29,7 @@ async fn missing_history_and_query_failure_keep_the_original_dispositions() {
         let (delete, error) = failure(svc.process(Ok(input(gmail_notification()))).await);
         assert_eq!(delete, missing);
         assert_eq!(error.reason, FailureReason::DatabaseQueryFailed);
-        assert!(error.source.to_string().starts_with("gmail_message:"));
+        assert!(format!("{:#}", error.source).starts_with("gmail_message: "));
         assert_eq!(names(&fake.calls()), vec!["history"]);
     }
 }
@@ -79,10 +79,7 @@ async fn malformed_history_creates_or_reuses_a_recovery_job_then_repairs_the_cur
         assert!(delete);
         assert_eq!(error.reason, FailureReason::OutdatedHistoryId);
         assert!(
-            error
-                .source
-                .to_string()
-                .contains("Failed to parse current history_id as u64")
+            format!("{:#}", error.source).contains("Failed to parse current history_id as u64")
         );
         let expected = if reuse {
             vec!["history", "active_job", "backfill_queue", "repair"]
@@ -126,8 +123,9 @@ async fn recovery_insert_conflict_reads_the_winner_and_missing_winner_is_retryab
         assert_eq!(delete, !missing);
         if missing {
             assert_eq!(
-                error.source.to_string(),
-                "gmail_message: Failed to schedule stale-cursor backfill"
+                format!("{:#}", error.source),
+                "gmail_message: Failed to schedule stale-cursor backfill: \
+                 backfill insert conflicted but no active job was found"
             );
         }
         assert_eq!(
@@ -266,6 +264,48 @@ async fn history_query_and_journal_failures_stop_later_steps() {
         assert_eq!(error.reason, FailureReason::DatabaseQueryFailed);
         assert_eq!(names(&fake.calls()).last(), Some(&step));
     }
+}
+
+#[tokio::test]
+async fn a_history_commit_that_times_out_on_a_lock_is_left_for_redelivery() {
+    let (svc, fake) = make_service(false);
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.import.history = Some("1".into());
+        s.failures.push(("accept", 1));
+    }
+    let InboxSyncDisposition::LeaveForRedelivery { error, .. } =
+        svc.process(Ok(input(gmail_notification()))).await
+    else {
+        panic!("a lock timeout must leave the notification for redelivery");
+    };
+    assert_eq!(error.reason, FailureReason::DatabaseQueryFailed);
+    assert_eq!(names(&fake.calls()).last(), Some(&"accept"));
+}
+
+#[tokio::test]
+async fn a_history_lock_timeout_keeps_its_sqlstate_in_the_failure_chain() {
+    let (svc, fake) = make_service(false);
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.import.history = Some("1".into());
+        s.failures.push(("accept", 1));
+    }
+    let InboxSyncDisposition::LeaveForRedelivery { error, .. } =
+        svc.process(Ok(input(gmail_notification()))).await
+    else {
+        panic!("a lock timeout must leave the notification for redelivery");
+    };
+    assert_eq!(
+        format!("{:#}", error.source),
+        "gmail_message: Failed to atomically accept Gmail history and its work: \
+         mailbox persistence is unavailable: sqlstate 55P03"
+    );
+    assert!(error.source.chain().any(|cause| {
+        cause
+            .downcast_ref::<crate::domain::mailbox::MailboxError>()
+            .is_some_and(crate::domain::mailbox::MailboxError::is_lock_timeout)
+    }));
 }
 
 #[tokio::test]

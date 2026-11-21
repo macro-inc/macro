@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/instance: alloy-node
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: alloy
+    app.kubernetes.io/version: v1.22.0
+    helm.sh/chart: alloy-1.16.0
+  name: alloy-node
+  namespace: alloy
+spec:
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: alloy-node
+      app.kubernetes.io/name: alloy
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: alloy
+      labels:
+        app.kubernetes.io/instance: alloy-node
+        app.kubernetes.io/name: alloy
+    spec:
+      containers:
+        - args:
+            - run
+            - /etc/alloy/config.alloy
+            - --storage.path=/var/lib/alloy
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --server.http.ui-path-prefix=/
+            - --disable-reporting
+            - --stability.level=generally-available
+          env:
+            - name: ALLOY_DEPLOY_MODE
+              value: helm
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          image: docker.io/grafana/alloy:v1.22.0
+          imagePullPolicy: IfNotPresent
+          name: alloy
+          ports:
+            - containerPort: 12345
+              name: http-metrics
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 12345
+              scheme: HTTP
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /etc/alloy
+              name: config
+            - mountPath: /var/log
+              name: varlog
+              readOnly: true
+            - mountPath: /host/proc
+              name: proc
+              readOnly: true
+            - mountPath: /host/sys
+              name: sys
+              readOnly: true
+            - mountPath: /var/lib/alloy
+              name: data
+        - args:
+            - --watched-dir=/etc/alloy
+            - --reload-url=http://localhost:12345/-/reload
+          image: quay.io/prometheus-operator/prometheus-config-reloader:v0.94.2@sha256:a1897c67478bc23434534e91ad3855280771196b1daf17144db9dbcb655bef71
+          imagePullPolicy: IfNotPresent
+          name: config-reloader
+          resources:
+            requests:
+              cpu: 10m
+              memory: 50Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 65534
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /etc/alloy
+              name: config
+      dnsPolicy: ClusterFirst
+      serviceAccountName: alloy-node
+      tolerations:
+        - operator: Exists
+      volumes:
+        - configMap:
+            name: alloy-node
+          name: config
+        - hostPath:
+            path: /var/log
+          name: varlog
+        - hostPath:
+            path: /proc
+          name: proc
+        - hostPath:
+            path: /sys
+          name: sys
+        - hostPath:
+            path: /var/lib/alloy-node
+            type: DirectoryOrCreate
+          name: data

@@ -1,5 +1,6 @@
 import { ThrownResultError } from '@core/util/result';
 import type { ChannelEntity } from '@entity/types/entity';
+import { CombinedError } from '@urql/core';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -147,6 +148,29 @@ describe('channel opening', () => {
     expect(detail.view().status).toBe('ready');
     expect(detail.target()).toEqual({ kind: 'latest' });
     expect(markRead).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an open channel through a GraphQL server fault and offers a retry without one', () => {
+    const fault = new CombinedError({
+      graphQLErrors: [{ message: 'A comms error has occured' }],
+    });
+    const { detail, setLoad, setCached, setSelection } = setup();
+    setLoad({ status: 'ready', channel: channel('one') });
+    setLoad({ status: 'error', error: fault });
+    expect(detail.view()).toEqual({ status: 'ready', channel: channel('one') });
+    setLoad({ status: 'ready', channel: channel('one') });
+    expect(detail.view().status).toBe('ready');
+
+    batch(() => {
+      setCached(undefined);
+      setSelection({ id: 'two' });
+      setLoad({ status: 'error', error: fault });
+    });
+    expect(detail.view()).toEqual({
+      status: 'unavailable',
+      channelId: 'two',
+      denied: false,
+    });
   });
 
   it('handles missing channels and failures without cached metadata', () => {

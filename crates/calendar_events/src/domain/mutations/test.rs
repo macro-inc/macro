@@ -1449,13 +1449,14 @@ async fn deleting_clears_team_ooo_rows_only_for_an_out_of_office_event() {
     }
 }
 
-/// An Outlook copy's viewers hear of a write from the projection relay, which
-/// publishes the outbox row the write queued a relay round later. Fails while
-/// the mutation path nudges them too, refreshing them twice. The guest copies
+/// An Outlook copy's write is announced by the projection relay, which
+/// publishes the outbox row the write queued a relay round later, to the
+/// calendar topic and to the inbox's viewers. Fails while the mutation path
+/// publishes or nudges too, which reached each of them twice. The guest copies
 /// a write aligns are Google copies, which no relay announces, so they still
 /// hear it from here.
 #[tokio::test]
-async fn an_outlook_write_leaves_its_inbox_viewers_to_the_projection_relay() {
+async fn an_outlook_write_leaves_its_announcements_to_the_projection_relay() {
     let guest_link = Uuid::now_v7();
     let mut creation = creation_target(false);
     creation.token_identity.provider = CalendarProvider::Outlook;
@@ -1486,17 +1487,14 @@ async fn an_outlook_write_leaves_its_inbox_viewers_to_the_projection_relay() {
         refresh.notified.lock().expect("notifier lock").clone(),
         vec![("macro|guest@example.com".to_string(), guest_link, false)]
     );
-    assert_eq!(
-        broker.published().len(),
-        1,
-        "the topic event still goes out"
-    );
+    assert!(broker.published().is_empty(), "{:?}", broker.published());
 }
 
-/// Deleting an Outlook event queues its outbox row, so the relay refreshes
-/// its viewers; the mutation path stays quiet. Fails while it nudges too.
+/// Deleting an Outlook event queues its outbox row, so the relay publishes
+/// the deletion and refreshes its viewers; the mutation path stays quiet.
+/// Fails while it publishes or nudges too.
 #[tokio::test]
-async fn deleting_an_outlook_event_leaves_its_viewers_to_the_projection_relay() {
+async fn deleting_an_outlook_event_leaves_its_announcements_to_the_projection_relay() {
     let event_id = Uuid::now_v7();
     let mut target = mutation_target(false);
     target.token_identity.provider = CalendarProvider::Outlook;
@@ -1524,11 +1522,7 @@ async fn deleting_an_outlook_event_leaves_its_viewers_to_the_projection_relay() 
     .unwrap();
 
     assert!(refresh.notified.lock().expect("notifier lock").is_empty());
-    assert_eq!(
-        broker.published().len(),
-        1,
-        "the topic event still goes out"
-    );
+    assert!(broker.published().is_empty(), "{:?}", broker.published());
 }
 
 #[tokio::test]
@@ -3401,3 +3395,21 @@ mod invite;
 mod join;
 mod organizer_copy;
 mod replacement;
+
+#[test]
+fn a_refused_change_shows_its_message_without_the_request_prefix() {
+    let refused = provider_error(CalendarProviderError::refused("Edit it in Outlook."));
+    let failed = provider_error(CalendarProviderError::new(
+        CalendarProviderErrorKind::Permanent,
+        "Outlook refused the change",
+    ));
+
+    assert!(
+        matches!(refused, CalendarMutationError::ProviderRejected(m) if m == "Edit it in Outlook.")
+    );
+    assert!(matches!(
+        failed,
+        CalendarMutationError::ProviderRejected(m)
+            if m == "Calendar provider request failed: Outlook refused the change"
+    ));
+}

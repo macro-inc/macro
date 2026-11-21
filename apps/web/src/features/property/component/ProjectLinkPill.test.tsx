@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useProperty } from '../core/context';
@@ -86,6 +87,19 @@ it('opens the project from its name, in a new split on shift', () => {
     newSplit: true,
   });
   expect(screen.getByText('Not editing')).toBeTruthy();
+});
+
+it('leaves focus where it was when the name is clicked', async () => {
+  const user = userEvent.setup();
+  render(() => <input aria-label="Notes" />);
+  renderPill({});
+  const notes = screen.getByRole('textbox', { name: 'Notes' });
+  notes.focus();
+
+  await user.click(screen.getByRole('button', { name: 'Open project Launch' }));
+
+  expect(document.activeElement).toBe(notes);
+  expect(mocks.openProject).toHaveBeenCalledOnce();
 });
 
 it('changes the project from the caret without opening it', () => {

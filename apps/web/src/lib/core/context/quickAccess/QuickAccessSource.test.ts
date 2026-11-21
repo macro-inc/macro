@@ -45,6 +45,7 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
+import type { createPersonList } from './person-list';
 import { MAX_BROWSE_PAGES_PER_LOAD } from './projected-list';
 import { QuickAccessProvider } from './QuickAccessProvider';
 import { createQuickAccessValue } from './QuickAccessSource';
@@ -67,6 +68,7 @@ vi.mock('@queries/email/local-draft-source', async () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  personPolicies: [] as Parameters<typeof createPersonList>[0]['policy'][],
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
   channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
@@ -84,6 +86,7 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   schedules: [] as ScheduledAction[],
+  crmAllowed: (): boolean => true,
   cacheEnabled: true,
   historyReading: undefined as (() => boolean) | undefined,
   queries: {} as Partial<
@@ -92,6 +95,9 @@ const mocks = vi.hoisted(() => ({
       () => UseQueryResult<unknown[]>
     >
   >,
+}));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => mocks.crmAllowed(),
 }));
 vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => () => true,
@@ -111,16 +117,22 @@ vi.mock('@core/context/channels', () => ({
 vi.mock('@queries/contacts/use-directory', () => ({
   useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
 }));
+vi.mock('@queries/team/roster', () => ({
+  useTeammateIds: () => () => new Set<string>(),
+}));
 vi.mock('./person-list', () => ({
-  createPersonList: () => ({
-    items: () => [],
-    totalCount: () => 0,
-    hasMore: () => false,
-    isLoading: () => false,
-    isLoadingMore: () => false,
-    error: () => undefined,
-    loadMore: async () => {},
-  }),
+  createPersonList: (options: Parameters<typeof createPersonList>[0]) => {
+    mocks.personPolicies.push(options.policy);
+    return {
+      items: () => [],
+      totalCount: () => 0,
+      hasMore: () => false,
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      error: () => undefined,
+      loadMore: async () => {},
+    };
+  },
 }));
 vi.mock('@core/context/emailLinks', () => ({
   useEmailLinksContext: () => ({
@@ -280,6 +292,7 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.schedules = [];
+  mocks.crmAllowed = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
@@ -1661,6 +1674,30 @@ describe('Soup search pool', () => {
   });
 });
 
+describe('personal people windows', () => {
+  it("passes a surface's list order to its people window, and none without one", () => {
+    mocks.personPolicies = [];
+    const order = [['teammates'], ['interacted', 'invited']];
+    const [listPriority, setListPriority] = createSignal<
+      string[][] | undefined
+    >(order);
+    setup((source) => [
+      source.useList({
+        buckets: ['person'],
+        peopleMode: 'mention',
+        peopleListPriority: listPriority,
+      }),
+      source.useList({ buckets: ['person'], peopleMode: 'command' }),
+    ]);
+    const [mention, command] = mocks.personPolicies;
+    expect(mention()).toMatchObject({ mode: 'mention', listPriority: order });
+    setListPriority(undefined);
+    expect(mention().listPriority).toBeUndefined();
+    expect(command()).toMatchObject({ mode: 'command' });
+    expect(command().listPriority).toBeUndefined();
+  });
+});
+
 describe('CRM contacts', () => {
   const contact: CrmContactEntity = {
     type: 'crm_contact',
@@ -1865,3 +1902,86 @@ it('keeps a cached sender hit when the same thread has an unmatched local draft'
   expect(list.items().map((item) => item.id)).toEqual(['thread-1']);
   expect(list.items()[0].searchText).toContain('teo@example.com');
 });
+
+it('conceals CRM rows and excludes CRM search buckets after access is revoked', async () => {
+  const [allowed, setAllowed] = createSignal(true);
+  mocks.crmAllowed = allowed;
+  mocks.companies = [restCompany];
+  const list = setup((source) =>
+    source.useList({
+      buckets: ['crm_company', 'crm_contact'],
+      searchTerm: () => 'acme',
+    })
+  );
+  await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  expect(list.items().map((item) => item.id)).toContain(restCompany.id);
+  mocks.search.mockClear();
+  setAllowed(false);
+  expect(list.items()).toEqual([]);
+  await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  expect(
+    mocks.search.mock.calls.every(
+      ([args]) =>
+        !args.buckets?.some(
+          (bucket: string) =>
+            bucket === 'crm_company' || bucket === 'crm_contact'
+        )
+    )
+  ).toBe(true);
+  setAllowed(true);
+  await vi.waitFor(() =>
+    expect(list.items().map((item) => item.id)).toContain(restCompany.id)
+  );
+});
+
+it.each([false, true])(
+  'retires cached CRM lookups until fresh rows arrive (read while denied: %s)',
+  (readWhileDenied) => {
+    const [allowed, setAllowed] = createSignal(true);
+    mocks.crmAllowed = allowed;
+    mocks.cacheEnabled = false;
+    mocks.companies = [restCompany];
+    mocks.crmContacts = [
+      {
+        type: 'crm_contact',
+        id: 'contact-1',
+        name: 'Contact',
+        ownerId: 'owner',
+        companyId: restCompany.id,
+        email: 'contact@example.com',
+        hidden: false,
+      },
+    ];
+    mocks.history = retainedHistory;
+    const { source, list } = setup((source) => {
+      const list = source.useList('crm_company', 'crm_contact', 'note');
+      list.items();
+      return { source, list };
+    });
+    expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
+    expect(source.getById('contact-1')?.bucket).toBe('crm_contact');
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(false);
+    if (readWhileDenied) {
+      expect(source.getById(restCompany.id)).toBeUndefined();
+      expect(source.getById('contact-1')).toBeUndefined();
+      expect(list.items().some((item) => item.bucket.startsWith('crm_'))).toBe(
+        false
+      );
+    }
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(true);
+    expect(source.getById(restCompany.id)).toBeUndefined();
+    expect(source.getById('contact-1')).toBeUndefined();
+    mocks.companies = [{ ...restCompany, name: 'Fresh company' }];
+    mocks.crmContacts = [{ ...mocks.crmContacts[0], name: 'Fresh contact' }];
+    list.items();
+    expect(source.getById(restCompany.id)?.data).toMatchObject({
+      name: 'Fresh company',
+    });
+    expect(source.getById('contact-1')?.data).toMatchObject({
+      name: 'Fresh contact',
+    });
+    expect(source.getById('older-note')?.bucket).toBe('note');
+  }
+);

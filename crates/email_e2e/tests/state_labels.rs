@@ -621,7 +621,6 @@ async fn outlook_a_refused_label_deletion_is_reported_until_it_goes_through() ->
 /// done and never reaches Outlook, so the category is missing there and in
 /// every other mail client.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "known bug: outlook-message-labels-not-written"]
 async fn outlook_a_label_on_one_message_reaches_outlook() -> Result<(), Report> {
     use email_e2e::{DEFAULT_TIMEOUT, eventually};
 

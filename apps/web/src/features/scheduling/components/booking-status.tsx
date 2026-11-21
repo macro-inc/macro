@@ -1,11 +1,12 @@
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { Badge } from '@ui';
-import { bookingIsPast } from '../core/booking-list';
+import { bookingAbandoned, bookingIsPast } from '../core/booking-list';
 import type { Booking } from '../core/types';
 
 export function BookingStatus(props: { booking: Booking; class?: string }) {
   const label = () => {
     if (props.booking.status === 'pending') return 'Unconfirmed';
+    if (bookingAbandoned(props.booking)) return 'Not on calendar';
     if (props.booking.status === 'failed') return 'Calendar sync failed';
     if (props.booking.status === 'processing') return 'Syncing calendar';
     if (props.booking.status === 'cancelled') return 'Cancelled';

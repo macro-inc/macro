@@ -11,10 +11,16 @@ import type {
   SavedViewSource,
   SavedViewsSource,
 } from '@app/features/saved-views/context/saved-views-source';
+import {
+  createSavedViewCreation,
+  type NewSavedView,
+  type SavedViewCreation,
+} from '@app/features/saved-views/primitives/create-saved-view-creation';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { createTagFacetContext } from '@app/features/soup/filters/facets/tag-facet';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGantt } from '@app/lib/core/constant/featureFlags';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -39,6 +45,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
   batch,
@@ -62,6 +69,10 @@ import type { DateBucketBoundaries } from './core/task-due-date';
 import { isProjectTab } from './core/task-navigation';
 import type { TaskFacetContext } from './filters/task-facets';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
+import {
+  materializeTaskSavedView,
+  type TaskSavedViewConfig,
+} from './filters/task-saved-view';
 import { createTasksViewPersistence } from './persistence';
 import { createDateBucketBoundariesSignal } from './primitives/create-date-bucket-boundaries';
 import {
@@ -132,7 +143,16 @@ export type TasksViewContext = {
   savedViewScope: Accessor<
     { id: string | undefined; viewerId: string | undefined } | undefined
   >;
-  startSavedView: () => void;
+  savedViewCreation?: SavedViewCreation;
+  registerProjectViewLeave: (run: (action: () => void) => void) => () => void;
+  discardNewSavedView: () => void;
+  startSavedView: (
+    config?: TaskSavedViewConfig,
+    name?: string,
+    afterStart?: () => void,
+    changed?: boolean,
+    appearance?: NewSavedView['appearance']
+  ) => void;
   selectSavedView: (id: string) => void;
   selectCreatedSavedView: (id: string) => void;
   leaveSavedView: () => void;
@@ -140,6 +160,7 @@ export type TasksViewContext = {
   facetContext: Accessor<TaskFacetContext>;
   createTask?: TasksViewProviderProps['onCreateTask'];
   showTaskProject: Accessor<boolean>;
+  showProjectFilter: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
@@ -309,6 +330,13 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     !state.collapsedGroupIds.includes(groupId);
 
   let savedViews: TaskSavedViewDraft | undefined;
+  let savedViewCreation: SavedViewCreation | undefined;
+  let projectViewLeave = (action: () => void) => action();
+  const runViewNavigation = (action: () => void) =>
+    projectViewLeave(() => {
+      if (savedViewCreation) savedViewCreation.run(action);
+      else action();
+    });
   const facetContext = (): TaskFacetContext => {
     const tags = new Map(
       createTagFacetContext(tagSets()).tagPropertyDefinitionByOptionId
@@ -351,33 +379,74 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     );
     closeTask();
   };
-  const selectSavedView = (id: string) =>
-    batch(() => {
-      setNewSavedView(false);
-      navigateSavedView(id);
-    });
+  const selectSavedView = (id: string) => {
+    const select = () =>
+      batch(() => {
+        savedViewCreation?.discard();
+        setNewSavedView(false);
+        navigateSavedView(id);
+      });
+    runViewNavigation(select);
+  };
   const selectCreatedSavedView = (id: string) =>
     batch(() => {
       // Keep the created draft active until the router installs its ID.
       setNewSavedView(id);
       navigateSavedView(id);
     });
-  const startSavedView = () =>
-    batch(() => {
-      setNewSavedView(true);
-      applyTaskFacets('team-tasks', DEFAULT_TASK_FACET_SELECTION);
-      setState('dueDate', undefined);
-      setState('search', '');
-      navigateSavedView(undefined);
-    });
-  const leaveSavedView = () =>
-    batch(() => {
-      savedViews?.reset();
-      setNewSavedView(false);
-      applyTaskFacets('my-tasks', DEFAULT_TASK_FACET_SELECTION);
-      setState('dueDate', undefined);
-      navigateSavedView(undefined);
-    });
+  const startSavedView = (
+    config?: TaskSavedViewConfig,
+    name = t('viewMenus.newView'),
+    afterStart?: () => void,
+    changed = false,
+    appearance?: NewSavedView['appearance']
+  ) => {
+    const start = () => {
+      batch(() => {
+        const restored = config
+          ? materializeTaskSavedView(config)
+          : {
+              facets: DEFAULT_TASK_FACET_SELECTION,
+              layout: 'list' as const,
+              groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
+              sort: [{ id: 'updated_at' as const }],
+              dueDate: undefined,
+            };
+        applyTaskFacets('team-tasks', restored.facets);
+        setState({
+          layout: restored.layout,
+          groupBy: restored.groupBy,
+          sort: restored.sort,
+          dueDate: restored.dueDate,
+          search: '',
+        });
+        setNewSavedView(true);
+        const captured = savedViews?.capture();
+        if (captured?.isOk())
+          savedViewCreation?.begin(captured.value, name, changed, appearance);
+        savedViewCreation?.internalNavigation(() =>
+          navigateSavedView(undefined)
+        );
+      });
+      afterStart?.();
+    };
+    runViewNavigation(start);
+  };
+  const discardNewSavedView = () => {
+    savedViewCreation?.discard();
+    setNewSavedView(false);
+  };
+  const leaveSavedView = () => {
+    const leave = () =>
+      batch(() => {
+        savedViews?.reset();
+        discardNewSavedView();
+        applyTaskFacets('my-tasks', DEFAULT_TASK_FACET_SELECTION);
+        setState('dueDate', undefined);
+        navigateSavedView(undefined);
+      });
+    runViewNavigation(leave);
+  };
   if (savedView) {
     savedViews = createTaskSavedViewDraft({
       source: savedView,
@@ -411,6 +480,18 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         }),
     });
   }
+  if (savedViews && savedViewsList)
+    savedViewCreation = createSavedViewCreation({
+      kind: 'tasks',
+      viewerId: userId,
+      list: savedViewsList.items,
+      capture: () => {
+        const config = savedViews?.capture();
+        return config?.isOk() ? config.value : undefined;
+      },
+      equal: deepEqual,
+      confirmed: () => setNewSavedView(false),
+    });
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -624,9 +705,12 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
-  const setTab = (tab: TasksTab) => {
+  const setTabNow = (tab: TasksTab) => {
     const leavingSavedView = state.savedViewActive;
-    if (leavingSavedView) leaveSavedView();
+    if (leavingSavedView) {
+      savedViews?.reset();
+      discardNewSavedView();
+    }
     if (persistedState.tab === tab && !leavingSavedView) {
       closeTask();
       return;
@@ -681,6 +765,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     savedViewsList,
     savedViewSource: savedView,
     savedViewScope,
+    savedViewCreation,
+    registerProjectViewLeave: (run) => {
+      projectViewLeave = run;
+      return () => {
+        if (projectViewLeave === run) projectViewLeave = (action) => action();
+      };
+    },
+    discardNewSavedView,
     startSavedView,
     selectSavedView,
     selectCreatedSavedView,
@@ -693,6 +785,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     state,
     calendar,
     showTaskProject,
+    showProjectFilter: () => !props.hideTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,
     selectedTask,
@@ -701,7 +794,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     registerListActivationHandler,
     openTask,
     closeTask,
-    setTab,
+    setTab: (tab: TasksTab) => runViewNavigation(() => setTabNow(tab)),
     setFacets,
     filterByTag,
     filterByAssignee,

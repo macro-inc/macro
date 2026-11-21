@@ -522,7 +522,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Search email threads by subject and content, most relevant first, auto-paginated. */
+  /** Search email threads by subject and content, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { email_filters: {} },
     type: 'email',

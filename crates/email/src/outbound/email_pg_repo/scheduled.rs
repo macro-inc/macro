@@ -27,6 +27,7 @@ impl EmailSchedulingRepo for EmailPgRepo {
             expected_generation,
         )
         .await
+        .map_err(super::contended)
     }
 }
 
@@ -40,10 +41,10 @@ async fn change_schedule(
 
     expected_generation: i32,
 ) -> Result<Option<Uuid>, EmailErr> {
-    let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
+    let mut tx = super::begin(pool).await.map_err(anyhow::Error::from)?;
     let outlook = sqlx::query!(r#"
         SELECT (macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = email_links.id AND u.primary_macro_id = $2)) AS "authorized!"
-        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE
+        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR SHARE
     "#,link_id,actor.as_ref()).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
     if outlook.as_ref().is_some_and(|link| !link.authorized) {
         return Err(EmailErr::Unauthorized);
@@ -133,6 +134,18 @@ async fn change_schedule(
             super::send_attempt::cancel_revoked_attempts(&mut tx, &[message_id], link_id)
                 .await
                 .map_err(anyhow::Error::from)?;
+            if outlook.is_some() {
+                // A definitive rejection has already rewound the Outlook checkpoint
+                // to Ready. Let the draft worker settle it without a delivery schedule.
+                sqlx::query!(
+                    "UPDATE email_mailbox_drafts SET state = 'pending', error_code = NULL, available_at = now(), updated_at = now()
+                     WHERE link_id = $1 AND message_id = $2 AND state = 'failed' AND error_code = 'send_rejected' AND NOT delete_requested",
+                    link_id, message_id,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(anyhow::Error::from)?;
+            }
             sqlx::query!(
                 "UPDATE email_messages SET is_draft = true, updated_at = NOW() WHERE id = $1 AND link_id = $2 AND NOT is_sent",
                 message_id, link_id,

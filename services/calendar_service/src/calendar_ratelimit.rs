@@ -1,7 +1,7 @@
 //! Redis-backed Google Calendar API quota gate.
 
 use redis::Script;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 /// Flat Google Calendar per-inbox query budget for the sliding window.
@@ -19,6 +19,11 @@ impl CalendarRateLimiter {
     /// Construct the limiter over a Redis client and window duration.
     pub fn new(inner: redis::Client, window_secs: u32) -> Self {
         Self { inner, window_secs }
+    }
+
+    /// How long the sliding window counts an admitted request.
+    pub fn window(&self) -> Duration {
+        Duration::from_secs(u64::from(self.window_secs))
     }
 
     /// Checks if a Google Calendar API request is rate-limited, using an

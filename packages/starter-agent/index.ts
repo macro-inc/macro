@@ -11,8 +11,11 @@ import { rm } from 'node:fs/promises';
 import { query, type SpawnOptions } from '@anthropic-ai/claude-agent-sdk';
 import { inSubprocess } from '@macro-inc/muppet/core/code';
 import type { Scripts } from '@macro-inc/muppet/runtimes/pieces';
-import { checker, loader } from '@macro-inc/muppet/utilities/scripts';
-import typescript from 'typescript';
+import {
+  type Checker,
+  checker,
+  loader,
+} from '@macro-inc/muppet/utilities/scripts';
 import { authorized } from './behavior/agent/authority.ts';
 import {
   budgeted,
@@ -93,14 +96,35 @@ export const sandboxProgram = (): string | undefined => {
   return found;
 };
 
-// One type checker for the life of the process: the first script pays for
-// reading the agent's code, and each one after costs only its own check.
-const check = checker({ typescript, config: base.config.tsconfig });
+// One type checker per process, made when first needed: in the agent's
+// process by its first `describe` (signatures), and in each script's own
+// `cli.ts exec` process by that script's check. It pays for loading
+// TypeScript and reading the agent's code; a start needs neither. A failure
+// to make it (a broken tsconfig) fails that call and is tried again by the
+// next, so fixing the config needs no restart.
+let made: Promise<Checker> | undefined;
+const check = (): Promise<Checker> => {
+  made ??= trace('agent.script_checker.build', async (span) => {
+    try {
+      const { default: typescript } = await import('typescript');
+      const built = checker({ typescript, config: base.config.tsconfig });
+      span.set('agent.script_checker.outcome', 'built');
+      return built;
+    } catch (error) {
+      span.set('agent.script_checker.outcome', 'failed');
+      throw error;
+    }
+  }).catch((error: unknown) => {
+    made = undefined;
+    throw error;
+  });
+  return made;
+};
 
 const load = loader({
   directory: base.config.scripts,
   script: { file: base.config.scriptType, name: 'Script' },
-  check: async (files) => check.check(files),
+  check: async (files) => (await check()).check(files),
   id: () => crypto.randomUUID(),
   write: async (path, text) => {
     await Bun.write(path, text);
@@ -117,7 +141,7 @@ const load = loader({
 export const scripts: Scripts = {
   script: { file: base.config.scriptType, name: 'Script' },
   load,
-  signatures: async (file, names) => check.signatures(file, names),
+  signatures: async (file, names) => (await check()).signatures(file, names),
   run: inSubprocess({
     timeoutMs: base.config.scriptTimeoutMs,
     run: (source, { timeoutMs, wakeId }) =>

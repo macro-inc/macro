@@ -83,6 +83,11 @@ pub struct ChannelDeletedMetadata {
     pub channel_id: Uuid,
     /// Actor that deleted the channel.
     pub actor: ChannelSender<'static>,
+    /// Active participants just before the delete. The channel and its
+    /// memberships are gone by the time this is consumed, so consumers that
+    /// tell members about the delete cannot look them up.
+    #[serde(default)]
+    pub participant_user_ids: Vec<MacroUserIdStr<'static>>,
 }
 
 /// The channel-only shape of a posted message.

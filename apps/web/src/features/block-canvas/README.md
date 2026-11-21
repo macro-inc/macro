@@ -195,15 +195,30 @@ started (marquee, move, resize, shape, stroke, connector, erase, text box) with 
 history entry and restores the selection from before it; a finger left behind does
 nothing until every finger has lifted. Touches inside an embed being interacted
 with, or inside text being edited, stay with that editor. A pen or mouse that is
-already pressed keeps its gesture, and fingers landing meanwhile (a resting palm)
-are ignored. A flick glides only when the fingers were travelling together as
-they lifted: a pinch, whose midpoint also drifts, does not, and neither does a
-gesture the system cancelled.
+already pressed keeps its gesture, and fingers landing meanwhile do not
+navigate. Beside a pen they are a resting palm, so no tool hears of them
+either, until they lift. A pen that lands among fingers takes the surface from
+them: what one finger had started is dropped the same way, navigation stops
+where it is, and the fingers do nothing more, and reach no tool, until they
+have lifted and landed again. A two-finger flick glides only when the fingers
+were travelling together as they lifted: a pinch, whose midpoint also drifts,
+does not, and neither does a gesture the system cancelled.
 Each finger reports its own moves, so the camera is moved once per animation
 frame, to where both fingers are by then, rather than once per event.
 `attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
 `GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
 which the lightbox and opened images also use for their momentum.
+
+In the touch view the first press of a pen gives the drawing to the pen
+(`drawsWith` in the canvas state, for as long as the canvas is open). From then
+on one finger pans under any tool but Select, Hand and Text, as two fingers do,
+and the tool never sees it (`fingerPans` on the graphics input). It pans only
+once it has moved 10px from where it landed, so a hand that merely settles
+moves nothing, and it glides on a flick. Once a pen has been seen the zoom
+sheet offers **Draw with pen only**, which hands drawing back to fingers when
+switched off; later pen presses do not switch it on again. The desktop view
+passes no `fingerPans` and has no pen mode.
+
 The Canvas panel's zoom menu offers **No grid snapping** (the default grid mode for each session),
 **Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
 currently visible dot-grid interval, including faint dots). Auto follows zoom;

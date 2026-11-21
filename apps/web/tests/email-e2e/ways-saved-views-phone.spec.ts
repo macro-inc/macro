@@ -1,7 +1,5 @@
-// Saved views on a phone: the header's Show sidebar opens the Email sidebar
-// as a sheet, whose Saved views section starts the builder with New saved
-// view, opens a view from its rows, and moves a view up and down from a
-// row's menu. Each for a Gmail and an Outlook inbox.
+// The touch sidebar sheet starts the builder, opens a view, and offers
+// Move up and Move down. Reordering is exercised at phone and tablet widths.
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
@@ -15,9 +13,10 @@ import {
   storeView,
   viewRow,
 } from './harness/ways-saved-views';
-import { did } from './ledger/record';
+import { confirmed, did, saw } from './ledger/record';
 
 const from = 'Grace <grace@example.com>';
+const TABLET = { ...PHONE, viewport: { width: 1024, height: 768 } };
 
 for (const provider of PROVIDERS) {
   test.describe(`saved views on a phone, ${anInbox(provider)}`, () => {
@@ -75,32 +74,56 @@ for (const provider of PROVIDERS) {
       await expect(sheet).toHaveCount(0);
       await expect.poll(() => rowIds(page)).toEqual([beta.id]);
     });
-
-    // Known bug touch-saved-views-reorder: the sheet lists the desktop's
-    // rows, which reorder by a mouse drag alone, so their menus have no Move
-    // up or Move down and a touch cannot reorder views. When this passes,
-    // the bug is fixed: remove the tag.
-    test('known bug: touch-saved-views-reorder: Move up and Move down in a row menu of the sheet reorder the views @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
-      await storeView(mailbox, 'Alpha mail', { subject: ['Alpha'] });
-      await storeView(mailbox, 'Beta mail', { subject: ['Beta'] });
-      const stored = await storedNames(mailbox);
-      const [upper, lower] = stored;
-      const sheet = sidebarSheet(page);
-
-      await mailbox.open();
-      await openSidebarSheet(page);
-      await expect.poll(() => listedNames(page)).toEqual(stored);
-      await sheet.getByRole('button', { name: `Actions for ${lower}` }).tap();
-      await page.getByRole('menuitem', { name: 'Move up' }).tap();
-      did('AL-115');
-      await expect.poll(() => listedNames(page)).toEqual([lower, upper]);
-      await expect.poll(() => storedNames(mailbox)).toEqual([lower, upper]);
-      await sheet.getByRole('button', { name: `Actions for ${lower}` }).tap();
-      await page.getByRole('menuitem', { name: 'Move down' }).tap();
-      await expect.poll(() => listedNames(page)).toEqual([upper, lower]);
-      await expect.poll(() => storedNames(mailbox)).toEqual([upper, lower]);
-    });
   });
+
+  for (const [layout, device] of [
+    ['phone', PHONE],
+    ['tablet', TABLET],
+  ] as const) {
+    test.describe(`saved-view order on a ${layout}, ${anInbox(provider)}`, () => {
+      test.use({ ...device, provider });
+      test.beforeEach(({ page }) => loadAppSteadily(page));
+
+      // If the sheet loses its Move items, there is no way to save a new
+      // order by touch.
+      test('Move up and Move down in a row menu of the sheet reorder the views', async ({
+        page,
+        mailbox,
+      }) => {
+        await storeView(mailbox, 'Alpha mail', { subject: ['Alpha'] });
+        await storeView(mailbox, 'Beta mail', { subject: ['Beta'] });
+        const stored = await storedNames(mailbox);
+        const [upper, lower] = stored;
+        const sheet = sidebarSheet(page);
+        const actions = sheet.getByRole('button', {
+          name: `Actions for ${lower}`,
+        });
+        const moveUp = page.getByRole('menuitem', { name: 'Move up' });
+        const moveDown = page.getByRole('menuitem', { name: 'Move down' });
+
+        await mailbox.open();
+        expect(await page.evaluate(() => window.innerWidth)).toBe(
+          device.viewport.width
+        );
+        await openSidebarSheet(page);
+        await expect.poll(() => listedNames(page)).toEqual(stored);
+        await actions.tap();
+        await expect(moveUp).toBeVisible({ timeout: 5_000 });
+        await moveUp.tap();
+        did('AL-115');
+        await expect.poll(() => listedNames(page)).toEqual([lower, upper]);
+        saw('STL-702');
+        await expect.poll(() => storedNames(mailbox)).toEqual([lower, upper]);
+
+        await page.reload();
+        await openSidebarSheet(page);
+        await expect.poll(() => listedNames(page)).toEqual([lower, upper]);
+        await actions.tap();
+        await moveDown.tap();
+        await expect.poll(() => listedNames(page)).toEqual(stored);
+        await expect.poll(() => storedNames(mailbox)).toEqual(stored);
+        confirmed('F-049');
+      });
+    });
+  }
 }

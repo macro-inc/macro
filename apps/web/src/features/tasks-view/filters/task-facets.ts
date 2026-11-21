@@ -14,6 +14,7 @@ import type { TaskEntityWithProperties } from '@entity/types/entity';
 import {
   getTaskAssigneeIds,
   getTaskPriorityOptionId,
+  getTaskReferencedEntityIds,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -107,6 +108,15 @@ const creatorOption = (id: string): TaskFacetOption => ({
   predicate: (task) => task.ownerId === id,
 });
 
+const projectOption = (id: string): TaskFacetOption => ({
+  id,
+  propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+  propertyEntityId: id,
+  clause: propertyClause(SYSTEM_PROPERTY_IDS.PROJECT, 'entity', id),
+  predicate: (task) =>
+    getTaskReferencedEntityIds(task, SYSTEM_PROPERTY_IDS.PROJECT).includes(id),
+});
+
 const tagOption = (
   id: string,
   context: TaskFacetContext
@@ -168,6 +178,12 @@ export const TASK_FACETS: Facet<
     id: 'created-by',
     mode: 'or',
     options: (id, context) => creatorOption(resolveTaskPersonId(id, context)),
+  },
+  {
+    id: 'project',
+    mode: 'or',
+    options: (id) =>
+      z.string().guid().safeParse(id).success ? projectOption(id) : undefined,
   },
   { id: TAG_FACET_ID, mode: 'or', options: tagOption },
 ];

@@ -16,15 +16,18 @@ use crate::dispatch::Dispatcher;
 use crate::harness::{HandoffSender, Handoffs};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::agent_session::HarnessApi;
-use crate::outbound::stream::EventStreamClient;
+use crate::outbound::stream::{EventStreamClient, StreamNext};
+use crate::retry_delay::RetryDelays;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
 
+mod health;
 mod position;
 #[cfg(test)]
 mod test;
 
+pub use health::TriggerStreamHealth;
 use position::StreamPosition;
 
 /// How often the bound-agent set is re-read without being told it changed.
@@ -49,6 +52,7 @@ pub struct Daemon {
     )]
     handoff: HandoffSender,
     runtime_connected: watch::Receiver<bool>,
+    trigger_stream: watch::Receiver<TriggerStreamHealth>,
     _presence_watch: AbortOnDropHandle<()>,
 }
 
@@ -89,13 +93,12 @@ impl Daemon {
         #[cfg(unix)]
         let workspaces = if crate::herdr::drives_herdr(&config.harness) {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
-            let herdr = crate::herdr::HerdrSession::detect()
+            crate::herdr::HerdrSession::detect()?
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
                 config.workspace.path.clone(),
                 config.herdr.storage_path.clone().unwrap_or(root),
-                herdr.cli(),
             ))
         } else {
             None
@@ -156,8 +159,10 @@ impl Daemon {
         );
 
         let shutdown = cancel.clone();
+        let (health, trigger_stream) = watch::channel(TriggerStreamHealth::Connecting);
         let task = tokio::spawn(async move {
-            let mut failures = 0u32;
+            let mut delays = reconnect_delays();
+            let mut attempt: u32 = 0;
             loop {
                 if shutdown.is_cancelled() {
                     return Ok(());
@@ -168,17 +173,23 @@ impl Daemon {
                     &shutdown,
                     &agents_changed,
                     &mut position,
+                    &health,
                 )
                 .await
                 {
                     ServeOutcome::Stopped => return Ok(()),
                     ServeOutcome::Idle => {
-                        failures = 0;
+                        delays.reset();
+                        attempt = 0;
+                        health.send_if_modified(TriggerStreamHealth::reopening);
                     }
-                    ServeOutcome::Ended(error) => {
+                    ServeOutcome::Ended { error, lasted } => {
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
-                        failures = failures.saturating_add(1);
-                        let delay = reconnect_delay(failures);
+                        let delay = reconnect_delay(lasted, &mut delays, &mut attempt);
+                        health.send_replace(TriggerStreamHealth::Reconnecting {
+                            attempt,
+                            last_error: error.to_string(),
+                        });
                         tokio::select! {
                             () = shutdown.cancelled() => return Ok(()),
                             () = tokio::time::sleep(delay) => {}
@@ -194,8 +205,18 @@ impl Daemon {
             turns,
             handoff,
             runtime_connected,
+            trigger_stream,
             _presence_watch: presence_watch,
         })
+    }
+
+    /// What the agent-trigger stream is doing, updated as it changes.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the control panel's health display reads it next")
+    )]
+    pub fn trigger_stream_health(&self) -> watch::Receiver<TriggerStreamHealth> {
+        self.trigger_stream.clone()
     }
 
     /// Whether this daemon currently holds a runtime connection.
@@ -308,14 +329,27 @@ fn adopt(inherited: Option<InheritedAgent>, _turns: &ActiveTurns) -> Option<Runn
 /// every session works in, and each session gets a herdr window.
 #[cfg(unix)]
 fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
-    let herdr = crate::herdr::HerdrSession::detect()?;
-    if !crate::herdr::drives_herdr(&config.harness) {
+    use crate::herdr::HcBinMissing;
+    let herdr = crate::herdr::HerdrSession::detect();
+    let drives_herdr = crate::herdr::drives_herdr(&config.harness);
+    // A herdr-core terminal without `HC_BIN` is still inside herdr: only its
+    // windows are lost.
+    if !drives_herdr && !matches!(herdr, Ok(None)) {
         match std::env::current_dir() {
             Ok(cwd) => config.workspace.path = cwd,
             Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
         }
     }
-    if crate::herdr::drives_herdr(&config.harness) {
+    let herdr = match herdr {
+        Ok(herdr) => herdr?,
+        // A `macrod herdr-acp` harness fails startup with this error itself.
+        Err(HcBinMissing) if drives_herdr => return None,
+        Err(error) => {
+            tracing::error!(error = %error, "herdr-core detected but its windows cannot open");
+            return None;
+        }
+    };
+    if drives_herdr {
         tracing::info!("herdr detected; the harness opens a herdr window per session");
         return None;
     }
@@ -334,15 +368,41 @@ fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<
     }
 }
 
-fn reconnect_delay(failures: u32) -> Duration {
-    let secs = 1u64.checked_shl(failures.min(5)).unwrap_or(30).min(30);
-    Duration::from_secs(secs)
+/// The event stream's reconnect delays: 250 ms, doubling to 30 s.
+fn reconnect_delays() -> RetryDelays {
+    RetryDelays::new(Duration::from_millis(250), Duration::from_secs(30))
+}
+
+/// A stream open this long was healthy: it reopens at the first delay, so a
+/// stall reopens within the service's two-minute replay retention. One that
+/// ends sooner (the service closing it at once, say on a failed access
+/// check) keeps backing off.
+const HEALTHY_STREAM: Duration = Duration::from_secs(10);
+
+/// The delay before reopening a stream that was open for `lasted` (`None`
+/// when it never opened), counting `attempt` from 1 since the last healthy
+/// stream.
+fn reconnect_delay(
+    lasted: Option<Duration>,
+    delays: &mut RetryDelays,
+    attempt: &mut u32,
+) -> Duration {
+    if lasted.is_some_and(|lasted| lasted >= HEALTHY_STREAM) {
+        delays.reset();
+        *attempt = 0;
+    }
+    *attempt = attempt.saturating_add(1);
+    delays.next_delay()
 }
 
 enum ServeOutcome {
     Stopped,
     Idle,
-    Ended(rootcause::Report),
+    Ended {
+        error: rootcause::Report,
+        /// How long the stream was open, `None` when it never opened.
+        lasted: Option<Duration>,
+    },
 }
 
 /// Open the stream (or wait for bound agents) until it ends or is cancelled.
@@ -350,12 +410,15 @@ enum ServeOutcome {
 /// The stream resumes after `position`'s cursor, which advances past every
 /// event it delivers, so reopening it for a changed agent set or after an
 /// error replays what was published in between; `position` drops repeats.
+/// A stream from a service that heartbeats ends as stalled after missed
+/// heartbeats (`EventStream::next_event`), and reopens the same way.
 async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     client: &EventStreamClient,
     executor: &Executor,
     cancel: &CancellationToken,
     agents_changed: &Notify,
     position: &mut StreamPosition,
+    health: &watch::Sender<TriggerStreamHealth>,
 ) -> ServeOutcome {
     let read_at = std::time::SystemTime::now();
     let bots = match client.bound_agents().await {
@@ -363,9 +426,15 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
             position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
             agents.bot_ids
         }
-        Err(error) => return ServeOutcome::Ended(error),
+        Err(error) => {
+            return ServeOutcome::Ended {
+                error,
+                lasted: None,
+            };
+        }
     };
     if bots.is_empty() {
+        health.send_replace(TriggerStreamHealth::NoAgentsBound);
         tracing::info!("no agents are bound; waiting for one before opening the event stream");
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
@@ -374,6 +443,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         }
     }
 
+    health.send_if_modified(TriggerStreamHealth::agents_bound);
     let filters = trigger_filters(bots.iter());
     let resume = position.resume_cursor();
     let mut stream = match client
@@ -381,11 +451,27 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         .await
     {
         Ok(stream) => stream,
-        Err(error) => return ServeOutcome::Ended(error),
+        Err(error) => {
+            return ServeOutcome::Ended {
+                error,
+                lasted: None,
+            };
+        }
+    };
+    let opened = tokio::time::Instant::now();
+    let ended = |error| ServeOutcome::Ended {
+        error,
+        lasted: Some(opened.elapsed()),
     };
     position.opened();
+    let verified = stream.heartbeat_interval().is_some();
+    health.send_replace(TriggerStreamHealth::Live {
+        verified,
+        last_signal: tokio::time::Instant::now(),
+    });
     tracing::info!(
         bound_agents = bots.len(),
+        heartbeats = verified,
         "connected to the agent-trigger event stream"
     );
 
@@ -393,54 +479,76 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
             () = agents_changed.notified() => {
-                if let Some(outcome) = bound_agents_changed(client, &bots, position).await {
-                    return outcome;
+                match bound_agents_changed(client, &bots, position).await {
+                    Ok(false) => {}
+                    Ok(true) => return ServeOutcome::Idle,
+                    Err(error) => return ended(error),
                 }
             }
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
-                if let Some(outcome) = bound_agents_changed(client, &bots, position).await {
-                    return outcome;
+                match bound_agents_changed(client, &bots, position).await {
+                    Ok(false) => {}
+                    Ok(true) => return ServeOutcome::Idle,
+                    Err(error) => return ended(error),
                 }
             }
             next = stream.next_event() => {
                 if let Some(id) = stream.last_event_id() {
                     position.delivered(id);
                 }
+                if let Ok(Some(_)) = next {
+                    health.send_replace(TriggerStreamHealth::Live {
+                        verified,
+                        last_signal: tokio::time::Instant::now(),
+                    });
+                }
                 match next {
-                    Ok(Some(event)) => {
+                    Ok(Some(StreamNext::Event(event))) => {
                         if position.admits(&event) {
                             let _ = handle_event(event, executor).await;
                         }
                     }
-                    Ok(None) => {
-                        return ServeOutcome::Ended(rootcause::report!(
-                            "the server closed the stream"
-                        ));
-                    }
-                    Err(error) => return ServeOutcome::Ended(error),
+                    Ok(Some(StreamNext::Heartbeat)) => {}
+                    Ok(None) => return ended(rootcause::report!("the server closed the stream")),
+                    Err(error) => return ended(error),
                 }
             }
         }
     }
 }
 
-/// Re-read the bound agents: `Some` ends the stream when they are no longer
-/// `bots` (or cannot be read), `None` keeps it.
+/// Re-read the bound agents: `Ok(true)` when they are no longer `bots`, so
+/// the stream reopens for the new set, and `Err` when the service refuses the
+/// credentials. When they cannot be read otherwise, the stream is kept.
 async fn bound_agents_changed(
     client: &EventStreamClient,
     bots: &[String],
     position: &mut StreamPosition,
-) -> Option<ServeOutcome> {
+) -> Result<bool, rootcause::Report> {
     let read_at = std::time::SystemTime::now();
     match client.bound_agents().await {
         Ok(latest) if latest.bot_ids == bots => {
             position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
-            None
+            Ok(false)
         }
         Ok(_) => {
             tracing::info!("bound-agent set changed; reconnecting the event stream");
-            Some(ServeOutcome::Idle)
+            Ok(true)
         }
-        Err(error) => Some(ServeOutcome::Ended(error)),
+        // The harness was removed or its token revoked: the service checks
+        // credentials only when a stream opens, so stop reading this one.
+        Err(error)
+            if error
+                .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
+                .is_some() =>
+        {
+            Err(error)
+        }
+        // The stream itself is fine: keep reading it and look again on the
+        // next refresh.
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not re-read the bound agents; keeping the event stream");
+            Ok(false)
+        }
     }
 }

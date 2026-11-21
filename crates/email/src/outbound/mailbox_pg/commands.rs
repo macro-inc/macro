@@ -66,7 +66,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT c.id FROM email_mailbox_commands c JOIN email_links l ON l.id = c.link_id
-                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND c.generation = l.sync_generation
+                WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND c.generation = l.sync_generation
                     AND c.status IN ('pending','running') AND c.available_at <= now()
                     AND (c.lease_until IS NULL OR c.lease_until < now())
                     AND c.intent->>'kind' IN ('read','flagged','archived','trashed','junk','category')
@@ -165,7 +165,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         previous: &str,
         current: &str,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_command(&mut tx, lease).await?;
         sqlx::query!(r#"INSERT INTO email_draft_organization_versions(message_id,versions)
             SELECT m.id,ARRAY[$3::text,$4::text] FROM email_messages m WHERE m.id=$1 AND m.link_id=$2 AND m.is_draft
@@ -190,7 +190,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         target: &CommandTarget,
         snapshot: Option<&MailboxOrganization>,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_command(&mut tx, lease).await?;
         let retired=sqlx::query_scalar!(r#"SELECT (COALESCE((m.mailbox_state->>'provider_missing')::bool,false)
             OR EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND (d.delete_requested OR d.state='deleted'))
@@ -284,7 +284,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         target: &CommandTarget,
         conflict: bool,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_command(&mut tx, lease).await?;
         sqlx::query!(
             "DELETE FROM email_pending_mailbox_state WHERE command_id = $1 AND message_id = $2",
@@ -324,7 +324,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         lease: &CommandLease,
         completion: CommandCompletion,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_command(&mut tx, lease).await?;
         let messages = sqlx::query_scalar!(
             "DELETE FROM email_pending_mailbox_state WHERE command_id = $1 RETURNING message_id",

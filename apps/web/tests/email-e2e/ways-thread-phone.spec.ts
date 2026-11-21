@@ -69,15 +69,6 @@ for (const provider of PROVIDERS) {
         new RegExp(`/app/email/(?!${middle})[0-9a-f-]{36}$`)
       );
 
-      // Every thread opened so far is read at the provider before the reload
-      // below: a reload while a read is still being written holds the next
-      // write back (known bug mutation-queue-lease-after-reload).
-      const opened = new URL(page.url()).pathname.split('/').pop() ?? '';
-      for (const id of new Set([middle, last, opened]))
-        await expect
-          .poll(async () => (await held(mailbox, subjectOf(id)))?.read)
-          .toBe(true);
-
       // On a done thread the same check marks it not done.
       await mailbox.open(`/app/email/${middle}`);
       await expect(

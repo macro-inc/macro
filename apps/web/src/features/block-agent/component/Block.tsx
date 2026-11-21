@@ -7,7 +7,7 @@ import {
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
@@ -27,7 +27,6 @@ import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
 import {
   type Accessor,
-  children,
   createEffect,
   createSignal,
   on,
@@ -40,8 +39,9 @@ import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentSessionHeader } from '../views/agent-session-header';
-import { MobileAgentSessionHeader } from '../views/mobile/agent-session-header';
+import { MobileAgentSessionHeader } from '../views/mobile/redesigned-session-header/redesigned-session-header';
 import { AgentComposer } from './AgentComposer';
+import { AgentComposerRegion } from './AgentComposerRegion';
 import { AgentConnections } from './AgentConnections';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
@@ -67,14 +67,6 @@ function AgentBlockHeader(props: {
     >
       <MobileAgentSessionHeader session={props.session()} header={header} />
     </Show>
-  );
-}
-
-// Keep the editor mounted while another mobile accessory (Changes) is active.
-function AgentComposerRegion(props: ParentProps) {
-  const content = children(() => props.children);
-  return (
-    <FloatRegionOrInline region="accessory">{content()}</FloatRegionOrInline>
   );
 }
 
@@ -224,8 +216,8 @@ function AgentBlockContent(props: {
                   <Transcript searchTarget={searchTarget()} />
                 </AgentConnections>
               </AgentPanelClearance>
-              {/* Full-frame mobile: composer + queue float in the bottom
-                  accessory region above the dock; desktop stays inline. */}
+              {/* The mobile composer owns the bottom accessory; the session
+                  suppresses app navigation while retaining safe-area padding. */}
               <AgentComposerRegion>
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
@@ -287,14 +279,17 @@ export default function BlockAgent() {
   return (
     <Show when={blockId}>
       {(id) => (
-        <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
-          <AgentChangesProvider>
-            <AgentBlockContent
-              active={split?.isPanelActive() ?? false}
-              notificationSource={notificationSource}
-            />
-          </AgentChangesProvider>
-        </AgentSessionProvider>
+        <>
+          <FloatRegion region="dock" priority={10} />
+          <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
+            <AgentChangesProvider>
+              <AgentBlockContent
+                active={split?.isPanelActive() ?? false}
+                notificationSource={notificationSource}
+              />
+            </AgentChangesProvider>
+          </AgentSessionProvider>
+        </>
       )}
     </Show>
   );

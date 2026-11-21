@@ -543,6 +543,10 @@ pub enum CrmError {
     /// Preview work is limited to one new request per member per thirty seconds.
     #[error("wait before starting another email contribution preview")]
     EmailPreviewRateLimited,
+    /// Complete live rule discovery exceeded an authoring/read resource limit.
+    #[cfg(feature = "ports")]
+    #[error(transparent)]
+    EmailRuleLimitExceeded(#[from] super::email_rule_discovery::EmailRuleLimitExceeded),
     /// A count page reached its bounded statement/work budget.
     #[error("email contribution preview reached its work budget")]
     EmailPreviewBudgetExhausted,
@@ -569,8 +573,8 @@ pub enum CrmError {
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,
-    /// Another write held the records this one needs for longer than it may
-    /// wait. Nothing was written; retry later.
+    /// A concurrent write invalidated this population's history evidence or
+    /// held needed records for too long. Nothing was written; retry later.
     #[error("crm records are busy; retry later")]
     Contended,
 }
