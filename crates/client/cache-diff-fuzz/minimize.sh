@@ -19,6 +19,9 @@ side_b=$3
 jobs=${4:-8}
 [[ "$seed" =~ ^(0|[1-9][0-9]{0,18})$ ]] || { echo "SEED must be a decimal number" >&2; exit 2; }
 [[ "$jobs" =~ ^[1-9][0-9]{0,3}$ ]] || { echo "JOBS must be a number from 1" >&2; exit 2; }
+for plain in "$side_a" "$side_b"; do
+  [[ "$plain" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "side names may hold only letters, digits, - and _" >&2; exit 2; }
+done
 repo=$(git rev-parse --show-toplevel)
 home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
 for side in "$side_a" "$side_b"; do

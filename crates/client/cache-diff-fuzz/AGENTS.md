@@ -27,7 +27,7 @@ disk after a reopen must come out the same.
 
 ## Recipes
 
-- Build a side: `build-side.sh NAME BASE [BRANCH...]` (a detached worktree in
+- Build a side: `build-side.sh NAME BASE [BRANCH...]`, NAME of letters, digits, `-` and `_` (a detached worktree in
   `~/.cache/cache-diff-fuzz/sides/NAME`, binary in `bin/NAME`). Set
   `IDLE_CHECKPOINT=1` when the side has `TursoStorage::checkpoint_if_due`.
 - Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. RUN must be a new name.

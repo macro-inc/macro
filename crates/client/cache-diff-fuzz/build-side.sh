@@ -18,9 +18,10 @@ fi
 name=$1
 base=$2
 shift 2
-case "$name${TARGET:-}" in
-  '' | */* | *..*) echo "NAME and TARGET must be plain names" >&2; exit 2 ;;
-esac
+# Letters, digits, - and _ only: no dot, so no name is another side's .side, .tmp or lock.
+for plain in "$name" "${TARGET:-x}"; do
+  [[ "$plain" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "NAME and TARGET may hold only letters, digits, - and _" >&2; exit 2; }
+done
 repo=$(git rev-parse --show-toplevel)
 # FUZZER_SRC builds from a snapshot of the fuzzer, so the working copy can change meanwhile.
 crate=${FUZZER_SRC:-$repo/crates/client/cache-diff-fuzz}

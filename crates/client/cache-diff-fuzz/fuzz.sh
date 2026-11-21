@@ -21,9 +21,9 @@ count=$3
 side_a=$4
 side_b=$5
 jobs=${6:-12}
-case "$run" in
-  '' | */* | *..*) echo "RUN must be a plain name" >&2; exit 2 ;;
-esac
+for plain in "$run" "$side_a" "$side_b"; do
+  [[ "$plain" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "RUN and side names may hold only letters, digits, - and _" >&2; exit 2; }
+done
 # Plain decimals, small enough that Bash's signed arithmetic and seq agree with the binary.
 for number in "$first" "$count" "$jobs"; do
   [[ "$number" =~ ^(0|[1-9][0-9]{0,15})$ ]] || { echo "FIRST, COUNT and JOBS must be decimal numbers below 10^16" >&2; exit 2; }
