@@ -226,15 +226,19 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collected once rather than semi-joined per row; cost follows the ids passed
   in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
   into the caller's whole accessible set.
-- Postgres 14 hashes only constant arrays, so `= ANY(ARRAY(SELECT ...))`
-  scans the whole source list for each grant row it checks, and a plain
+- Postgres 14 hashes `= ANY(...)` only over a constant array. Over
+  `ARRAY(SELECT ...)` it searches the source list for each grant row it
+  filters, or, as an index condition, descends the index once per source, so
+  either way its cost per candidate grows with the viewer's sources. A plain
   `IN (SELECT source_id FROM user_source_ids)` is a join that stale statistics
   can drive from the sources, one `entity_access` probe per source and
   candidate. The agent-session gate writes `ea.source_id = $1 OR ea.source_id
-  IN (...)` (`notified::SOURCE_GRANTED_SQL`): under the `OR` it is a subplan
-  that hashes the sources once per statement. Measure any other gate on a
-  viewer with thousands of sources before moving it to that form, since the
-  gates are shared with every page.
+  IN (...)` (`notified::SOURCE_GRANTED_SQL`): under the `OR` it is a subplan.
+  It hashes the sources only when the planner expects them to fit in
+  `work_mem`, and builds that hash each time the subplan holding it runs;
+  otherwise it compares each grant row with a materialized source list.
+  Measure any other gate on a viewer with thousands of sources before moving
+  it to that form, since the gates are shared with every page.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and

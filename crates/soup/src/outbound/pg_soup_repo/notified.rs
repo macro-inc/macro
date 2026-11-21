@@ -136,10 +136,12 @@ pub(super) fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
 /// it from `user_source_ids`, one `entity_access` probe per source and
 /// candidate: it does once it underestimates the viewer's channels, which
 /// cost 40,000 buffers per agent-session candidate for a viewer in 15,000
-/// channels. Under an `OR` it cannot become a join, so it is a subplan that
-/// hashes the sources once per statement, and each candidate's grants are
-/// read by their entity. `$1` is itself one of the sources, so the `OR`
-/// admits nothing more.
+/// channels. Under an `OR` it cannot become a join, so it is a subplan, and
+/// each candidate's grants are read by their entity. The subplan hashes the
+/// sources only when the planner expects them to fit in `work_mem`, building
+/// the hash each time the subplan holding it runs; otherwise it compares each
+/// grant row with a materialized source list. `$1` is itself one of the
+/// sources, so the `OR` admits nothing more.
 const SOURCE_GRANTED_SQL: &str =
     "(ea.source_id = $1 OR ea.source_id IN (SELECT source_id FROM user_source_ids))";
 
