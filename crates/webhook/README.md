@@ -422,7 +422,10 @@ encrypts the secret before calling it.
   Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
   `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. Attempts follow the
   webhook retry schedule, counted by SQS's receive count (5 attempts; a later receipt is acknowledged
-  without a POST); `410` and
+  without a POST). A receipt that fails inside this service (the database or
+  KMS) counts too, since nothing is stored per delivery: an outage longer than
+  the five receipts (about two minutes) drops the deliveries
+  waiting on it; `410` and
   `413` are not retried and leave the subscription alone. Nothing is recorded
   per delivery: a row that is gone by delivery time drops the event.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server
