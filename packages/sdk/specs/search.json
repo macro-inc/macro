@@ -3351,7 +3351,7 @@
             "properties": {
               "has_time": {
                 "type": "boolean",
-                "description": "Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                "description": "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
               },
               "type": {
                 "type": "string",

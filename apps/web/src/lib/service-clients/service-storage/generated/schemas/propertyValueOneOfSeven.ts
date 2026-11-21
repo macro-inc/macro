@@ -11,7 +11,7 @@ import type { PropertyValueOneOfSevenType } from './propertyValueOneOfSevenType'
 Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
  */
 export type PropertyValueOneOfSeven = {
-  /** Present and true when the date's time of day was set. Without it the value is a whole day, shown as the day its instant falls on in the viewer's time zone. */
+  /** True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone. */
   has_time?: boolean;
   type: PropertyValueOneOfSevenType;
   /** Date value, with or without a time of day

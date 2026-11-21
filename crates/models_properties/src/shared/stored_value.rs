@@ -48,9 +48,9 @@ pub(crate) enum TaggedValue {
     Link(Vec<String>),
 }
 
-const HAS_TIME_DESCRIPTION: &str = "Present and true when the date's time of day was set. \
-    Without it the value is a whole day, shown as the day its instant falls on \
-    in the viewer's time zone.";
+const HAS_TIME_DESCRIPTION: &str = "True when the date is an exact instant, its time of day set. \
+    False or absent, the value is a whole day, shown as the day its instant falls \
+    on in the viewer's time zone.";
 
 /// The OpenAPI schema of a value as it is sent: the tagged forms, with the
 /// optional `has_time` flag beside a date's `type` and `value`. Both
