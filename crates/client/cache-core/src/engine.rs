@@ -3289,6 +3289,7 @@ impl<S: Storage> Engine<S> {
     pub fn external_reset(&mut self) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
@@ -3379,6 +3380,7 @@ impl<S: Storage> Engine<S> {
         self.storage.clear().await.map_err(EngineError::Storage)?;
         self.contact_fence = Uuid::now_v7();
         self.hot.clear();
+        self.kept_reads = None;
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
