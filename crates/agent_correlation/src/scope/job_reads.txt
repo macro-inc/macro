@@ -44,13 +44,10 @@ GET /codex
 GET /codex/environments
 GET /cursor-api-key
 GET /cursor-api-key/models
-GET /email/fusionauth/verify/{verification_id}
-GET /email/verify/{verification_id}
 GET /gtm-invite/offer
 GET /health
 GET /link/github/status
 GET /link/gmail/status
-GET /merge/verify/{code}
 GET /permissions
 GET /permissions/me
 GET /referral/code
@@ -63,7 +60,6 @@ GET /team/computers/purchase-offers
 GET /team/computers/rollout
 GET /team/computers/usage
 GET /team/invites
-GET /team/join/{team_invite_id}
 GET /team/user
 GET /team/user/invites
 GET /team_agents
@@ -225,7 +221,6 @@ GET /call/record/{call_id}/participants
 GET /call/record/{call_id}/recording
 GET /call/record/{call_id}/ring
 GET /call/ring-status/{call_id}
-GET /call/{channel_id}
 GET /call/{channel_id}/active
 GET /channel-labels
 GET /channel-sections
@@ -318,7 +313,6 @@ GET /forms/{id}/permissions
 GET /forms/{id}/responses/mine
 GET /forms/{id}/responses/summary
 GET /forms/{id}/tally
-GET /github/install-sync
 GET /github_pull_requests/facets
 GET /github_pull_requests/{id}
 GET /github_pull_requests/{id}/changes

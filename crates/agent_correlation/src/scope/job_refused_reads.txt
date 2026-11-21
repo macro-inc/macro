@@ -7,6 +7,10 @@
 GET /agent-repositories/branches  # fetches a caller-chosen git remote from Macro's servers
 
 [auth]
+GET /email/fusionauth/verify/{verification_id}  # verifies an email address
+GET /email/verify/{verification_id}  # verifies an email address
+GET /merge/verify/{code}  # merges accounts
+GET /team/join/{team_invite_id}  # joins a team
 GET /codex/login/{attempt_id}  # credential sign-in flow
 GET /gtm-invite/links  # invite links others redeem
 GET /gtm-invite/public/{token}  # invite tokens
@@ -26,6 +30,8 @@ GET /mcp/servers/auth/callback  # sign-in and OAuth flows
 GET /opens/{token}  # an open-tracking pixel: records an open
 
 [storage]
+GET /github/install-sync  # syncs a GitHub installation
+GET /call/{channel_id}  # creates a call
 GET /bots/{bot_id}/tokens  # bot credentials
 GET /call/join/{token}  # joins a call
 GET /call/join/{token}/participants  # call join tokens

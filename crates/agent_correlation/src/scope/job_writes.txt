@@ -18,20 +18,11 @@ PUT /agent-sessions/{session_id}/task
 POST /structured-completion
 
 [email]
-DELETE /email/drafts/{id}
-DELETE /email/drafts/{id}/attachments/{attachment_id}
-DELETE /email/drafts/{id}/forwarded-attachments/{attachment_id}
-PATCH /email/messages/labels
 PATCH /email/threads/archived
 PATCH /email/threads/{id}/archived
 PATCH /email/threads/{id}/labels
 PATCH /email/threads/{id}/state
 PATCH /email/threads/{thread_id}/project
-POST /email/drafts
-POST /email/drafts/{id}/attachments
-POST /email/drafts/{id}/attachments/{attachment_id}/complete
-POST /email/drafts/{id}/forwarded-attachments
-POST /email/labels
 POST /email/threads/{id}/seen
 
 [notification]
@@ -45,7 +36,6 @@ DELETE /properties/entity_properties/{entity_property_id}
 POST /properties/entities/{entity_type}/{entity_id}/options/bulk
 POST /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}
 POST /properties/options/bulk
-POST /properties/tags
 PUT /properties/entities/{entity_type}/{entity_id}/{property_id}
 
 [storage]
@@ -62,9 +52,6 @@ PATCH /initiatives/{initiative_id}
 PATCH /pins
 PATCH /saved_views/definitions/{saved_view_id}
 PATCH /v2/projects/{id}
-POST /crm/companies
-POST /crm/companies/{company_id}/contacts
-POST /crm/contacts
 POST /crm/pipelines/record-entries
 POST /crm/pipelines/{id}/entries
 POST /crm/pipelines/{id}/entries/find
@@ -101,15 +88,6 @@ POST /initiatives
 POST /pins/{pinned_item_id}
 POST /projects
 POST /saved_views/definitions
-PUT /crm/companies/{company_id}/hidden
-PUT /crm/companies/{company_id}/name
-PUT /crm/contacts/{contact_id}/company
-DELETE /crm/contacts/{contact_id}/company
-PUT /crm/contacts/{contact_id}/email
-PUT /crm/contacts/{contact_id}/emails
-DELETE /crm/contacts/{contact_id}/emails
-PUT /crm/contacts/{contact_id}/hidden
-PUT /crm/contacts/{contact_id}/name
 PUT /documents/presave/{document_id}
 PUT /documents/{document_id}
 PUT /documents/{document_id}/appearance

@@ -599,6 +599,13 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ("PATCH", "/dss/forms/01a1"),
         ("PATCH", "/dss/webhook/webhooks/01a1"),
         ("DELETE", "/dss/documents/01a1/permanent"),
+        // Drafts can go into an inbox someone delegated; team-wide CRM
+        // records and tags; GETs that change something.
+        ("POST", "/email/drafts"),
+        ("POST", "/dss/crm/companies"),
+        ("POST", "/properties/tags"),
+        ("GET", "/auth/team/join/01a1"),
+        ("GET", "/dss/call/01a1"),
         ("POST", "/dss/chats/01a1/tool/call"),
         ("POST", "/items/soup/graphql"),
     ] {
@@ -612,7 +619,7 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
         ("PUT", "/properties/entities/document/01a1/02b2"),
         ("POST", "/search"),
         ("POST", "/scheduled-actions/check"),
-        ("POST", "/email/drafts"),
+        ("PATCH", "/email/threads/01a1/archived"),
         ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
     ] {
         assert!(scope.allows(method, path), "{method} {path}");
