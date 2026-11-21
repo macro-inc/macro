@@ -36,7 +36,8 @@ check	cargo_deny.yml	cargo-deny	cargo-deny
 check	cargo_deny_advisories.yml	advisories	cargo deny check advisories
 check	cargo_workspace_dependency_check.yml	dependency-check	dependency-check
 check	cargo_workspace_dependency_check.yml	hakari-and-dep-closures	hakari-and-dep-closures
-check	channels_e2e.yml	suite	Channels end-to-end
+check	channels_e2e.yml	suite	Channels end-to-end (channel local sync off)
+check	channels_e2e.yml	suite-local-sync-on	Channels end-to-end (channel local sync on)
 check	channels_e2e.yml	email-e2e-alert	Tell Macro Alerts
 check	check_generated.yml	check-workflows	check-workflows
 check	check_generated.yml	lint-workflows	lint-workflows
