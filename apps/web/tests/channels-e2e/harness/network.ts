@@ -1,5 +1,6 @@
 import {
   type BrowserContext,
+  chromium,
   expect,
   type Page,
   type Route,
@@ -262,4 +263,35 @@ export async function holdChannelList(
     holding = false;
     for (const letGo of held) letGo();
   };
+}
+
+/**
+ * Fails the run when the browser cannot tell being connected from being cut
+ * off. In a network namespace that has loopback alone, Chromium counts itself
+ * offline from the start: `navigator.onLine` stays false and no `offline` or
+ * `online` event ever fires, so the app never learns that a test cut its
+ * connection and no such test checks what it says.
+ */
+export async function checkBrowserSeesConnection(): Promise<void> {
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const online = () => page.evaluate(() => navigator.onLine);
+    const becomes = (state: boolean) =>
+      page.waitForFunction((want) => navigator.onLine === want, state, {
+        timeout: 5_000,
+      });
+    if (!(await online())) {
+      throw new Error(
+        'The browser reports no connection before any test cut it (navigator.onLine is false). Run the suite where the browser has a network interface with a route, not loopback alone.'
+      );
+    }
+    await context.setOffline(true);
+    await becomes(false);
+    await context.setOffline(false);
+    await becomes(true);
+  } finally {
+    await browser.close();
+  }
 }

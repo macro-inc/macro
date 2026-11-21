@@ -460,8 +460,18 @@ test('WRT-15 a message waiting to be sent when the device loses what it kept is 
   // so the end of the text or Enter goes nowhere and nothing is sent. A
   // person clicks the composer and writes it again, and so does this.
   const sent = bens.list.getByText('after', { exact: true });
-  await failsSometimes(() => expect(sent).toBeVisible({ timeout: 10_000 }));
-  if ((await sent.count()) === 0) {
+  // Written again only when the message never showed: the row can leave the
+  // page for a moment after it has, and a second look would send it twice.
+  let showed = true;
+  await failsSometimes(async () => {
+    try {
+      await expect(sent).toBeVisible({ timeout: 10_000 });
+    } catch (error) {
+      showed = false;
+      throw error;
+    }
+  });
+  if (!showed) {
     await bens.composerText.click();
     await bens.page.keyboard.press('ControlOrMeta+A');
     await bens.page.keyboard.type('after');

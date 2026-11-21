@@ -125,3 +125,8 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`, which has no default; without it
   channel messages go over REST. That flag alone tells the suite's two builds
   apart, and CI runs both.
+- Chromium with no network interface but loopback (a bare network namespace)
+  counts itself offline from the start: `navigator.onLine` is false and no
+  `offline` or `online` event ever fires, so the app never learns that a test
+  cut its connection. Global setup refuses to run there; give the namespace
+  an interface with an address and a default route.
