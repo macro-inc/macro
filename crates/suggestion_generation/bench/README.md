@@ -179,7 +179,10 @@ score,found,bad`: how far two runs of main land apart at the default size,
 on the same kind of set and judged by the same judge) and the interval
 leaves zero. *found* and *bad* get the same
 test against margins of their own, and show a change in one before the
-score can. Measure the margins again after changing the personas, the
+score can. On a month set judged for stream jobs, good drafts and good
+drafts by stream job get it too, with two margins more (`--margins
+score,found,bad,goodDrafts,jobDrafts`, as `noise` prints them); given three,
+`compare` reports their change as unmeasured. Measure the margins again after changing the personas, the
 judge or the default size:
 
 ```sh
@@ -232,25 +235,45 @@ drafted routines are within reach, and a streams key (`streams-truth.json`)
 that spells out every stream in the mail: its senders, count, cadence, what
 each message asks and what the person does with it, as `work` (mail they act
 on), `noise` (mail they read or ignore) or `thread` (a one-off
-conversation). Every message is the inbox's. The writer refuses a person
-whose month keeps fewer than 250 messages or whose key has fewer than five
+conversation). Every message of `inbox.messages` is the inbox's. A person
+written since sent mail was added (sets `msent0`, `mdev2` and later) is also
+written with what they sent in the same 30 days
+(`inbox.sent`, never seeded): a reply to or forward of the plan's count of
+each stream they answer or forward, sent 20 minutes to 9 hours after its
+message, and the mail they start themselves, with text on the newest 50; each
+stream of the key says in one word what they do with its mail (`does`:
+answers, forwards, files, leaves to someone, nothing, or sends), to whom
+(`to`), and how many they sent. The writer refuses a person
+whose month keeps fewer than 250 messages or whose key has fewer than eight
 needs (by id, with a drafted routine that isn't blank) a drafted routine can
-meet. Both writers refuse a workspace where two people share a first name in
+meet (five for earlier sets). Both writers refuse a workspace where two people share a first name in
 any case (each is mailed as first name at the domain) or a colleague is named
 Owner (the person's own place), when sketching and when finishing a set.
 `run`, `find` and `heldout make` take counts from 1 to 1000.
 Writing one took $4.50 to $4.91 a person (three at once in about ten
-minutes). The stand-in serves the month to the read the finding step makes
-(`?days=30&limit=500&texts=100&snippet_chars=500`), refuses any other
-window, and serves the newest 100 to the old read; both hold the inbox
-alone, as Gmail and Outlook are read, cut at the exact start of the window
-and with texts cut by characters, as the service cuts them.
+minutes), and $5.70 with sent mail. The stand-in serves the month to the read
+the finding step makes (`?days=30&limit=500&texts=100&snippet_chars=500`),
+what they sent to its sent read (`&folder=sent` with `limit=200&texts=50`),
+refuses any other window or folder, and serves the newest 100 to the old
+read; the inbox reads hold the inbox alone, as Gmail and Outlook are read,
+all cut at the exact start of the window and with texts cut by characters,
+as the service cuts them. The routines judge (`v5`) reads what a person
+sent beside their mail, where they have it, so a reason that rests on it
+isn't marked invented.
 
 On a month set a routines run also reports good suggestions: a drafted
 routine or a catalog pick that meets a need of the key with nothing wrong
 with it, counted apart, and how many generations reached five good drafts.
-They have no measured margin; `compare` reports their change without a
-verdict.
+Beside them it reports a second measure, judged apart (`judgeJobs`): for
+each suggestion, the key's work streams whose real job it does right (runs
+on that stream's mail and does what the person does with it, or the part an
+assistant can do without sending as them), whether or not a need of the key
+bundles that stream with others. A good draft by stream job does at least
+one work stream's job with nothing wrong by the first measure's flags; the
+run reports them per generation, how many generations reached five, the
+distinct work streams their jobs cover, and good catalog picks by stream
+job. Both measures are always reported. Good catalog picks have no measured
+margin.
 
 `find` measures the finding step on its own: one model call reads a month
 person's mail as the service reads it (`mailText`, the lines
@@ -429,9 +452,9 @@ cost nothing beyond the model calls.
   under the name `stack.env` points at: PostHog's `/flags` answers with the
   section's flags, and email_service's `/internal/recent_messages/{user}`
   answers with the persona's mailbox (the routines brief reads it from Gmail
-  or Outlook, which seeded mail never reaches): the newest 100, or the month
-  for exactly the month read. A person with a month answers any other window
-  with a 400; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
+  or Outlook, which seeded mail never reaches): the newest 100, the month
+  for exactly the month read, or what they sent for exactly the sent read.
+  A person with a month answers any other window or folder with a 400; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
   bench waits a minute after changing them.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up
