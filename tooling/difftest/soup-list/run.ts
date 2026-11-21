@@ -31,6 +31,8 @@ const { values: a } = parseArgs({
     callers: { type: 'boolean', default: true },
     'no-callers': { type: 'boolean', default: false },
     'seq-lanes': { type: 'string', default: '8' },
+    /** Step-kind weights for a focused pass, e.g. 'rename=6,option=4'; unnamed kinds are left out. */
+    weights: { type: 'string' },
     seqs: { type: 'string', default: '104' },
     steps: { type: 'string', default: '20' },
     'mutant-steps': { type: 'string', default: '20' },
@@ -231,6 +233,7 @@ try {
         log: (line) => log(`lane ${k} ${line}`),
         length: Number(a.steps),
         count: perLane,
+        ...(a.weights && { stepWeights: Object.fromEntries(a.weights.split(',').map((kv) => { const [k, v] = kv.split('='); return [k, Number(v)]; })) }),
       });
       coverage.merge(cov);
       await truth.context().close();
