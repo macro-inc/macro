@@ -21,7 +21,8 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchDocumentRef, SearchProfile, SearchQuery, project_search_documents,
+    SearchDocumentRef, SearchProfile, SearchQuery, project_encoded_search_documents,
+    project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -5078,10 +5079,11 @@ fn prepare_records(
     entries
         .into_iter()
         .map(|(key, record)| {
+            let value = encode_record(&record);
             Ok(EncodedRecord {
                 key: RecordKey::from_entity(&key)?,
-                value: encode_record(&record),
-                search_documents: project_search_documents(&key, &record),
+                search_documents: project_encoded_search_documents(&key, &record, &value),
+                value,
                 calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record
