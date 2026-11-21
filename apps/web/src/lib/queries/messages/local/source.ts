@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   MessageCursor,
@@ -30,6 +31,7 @@ import {
   type UnheldRead,
   unheldReadsLeft,
 } from './unheld-reads';
+import { pageHasQueuedReplies } from './unsettled-replies';
 import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
@@ -94,7 +96,10 @@ async function settleServerPage(
 ): Promise<void> {
   const storedSeq = await loaded.stored;
   if (storedSeq === null) return;
-  if (await pageHasPendingWrites(host, request)) {
+  if (
+    (await pageHasPendingWrites(host, request)) ||
+    (await pageHasQueuedReplies(host, request.channelId, loaded.page))
+  ) {
     refreshChannelViews(request.channelId);
   }
   if (anchored) return;
@@ -148,10 +153,13 @@ export async function loadLocalChannelTimelinePage(
       // Opening from the device counts as use, which eviction goes by; a
       // server page records it with its coverage.
       fireAndForget(
-        host.channelTimelineCommit({
-          channelId: read.channelId,
-          touchedAtMs: Date.now(),
-        }),
+        host.channelTimelineCommit(
+          {
+            channelId: read.channelId,
+            touchedAtMs: Date.now(),
+          },
+          cacheSessionGeneration.capture()
+        ),
         SYNC_SURFACE
       );
     }

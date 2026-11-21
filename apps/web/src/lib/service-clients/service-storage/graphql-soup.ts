@@ -27,6 +27,11 @@ import {
   normalizedCacheExchange,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
+import {
+  cacheSessionExchange,
+  createCacheSessionExchange,
+  sessionSubscriptionExchange,
+} from '@graphql-cache/exchange/session-exchange';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import { NativeCacheUpgradeRequiredError } from '@graphql-cache/host/tauri-host';
@@ -70,7 +75,6 @@ import {
   fetchExchange,
   type Operation,
   type RequestPolicy,
-  subscriptionExchange,
 } from '@urql/core';
 import {
   type DocumentNode,
@@ -94,6 +98,10 @@ import {
   canRetryCacheFailure,
   createCacheRecovery,
 } from './cache-recovery';
+import {
+  initializeCrmCacheOwner,
+  installCrmCacheHost,
+} from './crm-access-cache';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
@@ -466,6 +474,7 @@ async function sendGraphqlTransportRequest(
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
   exchanges: [
+    cacheSessionExchange,
     captureTraceParentExchange,
     networkRevalidationExchange(),
     traceParentExchange,
@@ -552,25 +561,6 @@ function createGraphqlSoupWebSocketClient(
   return client;
 }
 
-function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
-  return subscriptionExchange({
-    forwardSubscription(payload, request) {
-      const graphqlWsPayload = {
-        query: print(stripGraphqlSoupClientDirectives(request.query)),
-        operationName: payload.operationName,
-        variables: payload.variables,
-        extensions: payload.extensions,
-      };
-      return {
-        subscribe(sink) {
-          const unsubscribe = websocketClient.subscribe(graphqlWsPayload, sink);
-          return { unsubscribe };
-        },
-      };
-    },
-  });
-}
-
 let uncachedRealtimeClient: Client | undefined;
 let uncachedRealtimeCleanup: (() => void) | undefined;
 
@@ -582,6 +572,7 @@ function disposeUncachedRealtimeClient(): void {
 
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
+  const lifetime = new AbortController();
 
   const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
     suspendOnPagehide: !isTauri(),
@@ -593,19 +584,30 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
+      createCacheSessionExchange(lifetime.signal),
       captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
-      graphqlSoupSubscriptionExchange(websocketClient),
+      sessionSubscriptionExchange(
+        websocketClient,
+        stripGraphqlSoupClientDirectives
+      ),
       traceParentExchange,
       fetchExchange,
     ],
     fetch: dssGraphqlFetch,
   });
-  subscriptionsLifecycle.replace(client);
   uncachedRealtimeClient = client;
+  fireAndForget(
+    initializeCrmCacheOwner().then(() => {
+      if (uncachedRealtimeClient === client)
+        subscriptionsLifecycle.replace(client);
+    }),
+    'graphql-cache-subscriptions'
+  );
   uncachedRealtimeCleanup = () => {
     subscriptionsLifecycle.dispose();
+    lifetime.abort();
     fireAndForget(websocketClient.dispose(), 'graphql-soup-client');
   };
   return client;
@@ -730,6 +732,7 @@ function disposeSessionClients(): void {
   const cleanup = cachedCacheCleanup;
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
+  installCrmCacheHost(undefined);
   cachedClient = undefined;
   browserCacheClientActivated = false;
   disposeUncachedRealtimeClient();
@@ -787,6 +790,7 @@ function fallbackAfterInitializationFailure(error: unknown): void {
   const cleanup = cachedCacheCleanup;
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
+  installCrmCacheHost(undefined);
   cacheInitializationFailed = true;
   cachedClient = getUncachedRealtimeClient();
   browserCacheClientActivated = false;
@@ -823,6 +827,30 @@ export async function recordGraphqlMutationQueueCleared(
 export function getGraphqlCacheHost(): CacheHost | undefined {
   cacheAvailability();
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
+}
+
+/** Establish the local response generation without gating app startup. */
+export async function initializeGraphqlSoupCache(): Promise<void> {
+  await Telemetry.span('graphql.cache_startup', async (span) => {
+    getGraphqlSoupClient();
+    const host = cachedCacheHost;
+    // Root never awaits this local handshake. Keep the host's phase deadlines:
+    // an outer timer could interrupt valid asset retries or lose its proof that
+    // storage stayed untouched, permanently blocking the preserved draft queue.
+    const result = await initializeCrmCacheOwner().then(
+      () => ({ ready: true as const }),
+      (error: unknown) => ({ ready: false as const, error })
+    );
+    if (result.ready) return;
+    const error = result.error;
+    span.setAttr('cache.fallback', true);
+    span.error(error);
+    if (host && cachedCacheHost === host) {
+      fallbackAfterInitializationFailure(error);
+    }
+    // Fallback detaches the failed owner; memory initialization cannot do I/O.
+    await initializeCrmCacheOwner();
+  });
 }
 
 /** Cache writes reach readers of the normalized cache only while it runs. */
@@ -897,11 +925,13 @@ export function getGraphqlSoupClient(): Client {
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
       suspendOnPagehide: !native,
     });
+    const lifetime = new AbortController();
     const cleanup = () => {
       unregisterHost();
       // Unsubscribing emits urql teardown operations; keep the cache host
       // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      lifetime.abort();
       // Retires the host: operations still running on this client, and any
       // caller that captured the host, fall back to the network from here.
       host?.dispose();
@@ -985,10 +1015,12 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
+          createCacheSessionExchange(lifetime.signal),
           captureTraceParentExchange,
           optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
+            signal: lifetime.signal,
             ...localDraftQueueLifecycle(host),
             externalMutationVersion: () => externalMutationVersion,
             deletedRecordKeys: emailCacheDeletionKeys,
@@ -1025,12 +1057,17 @@ export function getGraphqlSoupClient(): Client {
             isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
-          graphqlSoupSubscriptionExchange(graphqlWsClient),
+          sessionSubscriptionExchange(
+            graphqlWsClient,
+            stripGraphqlSoupClientDirectives
+          ),
           traceParentExchange,
           fetchExchange,
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),
       });
+      // Publish both resources before observing the owner's baseline.
+      cachedClient = client;
       cachedCacheHost = host;
       // A replacement stays blocked until its persisted queue is readable.
       if (cacheRecovery.state() !== 'recovering')
@@ -1038,14 +1075,22 @@ export function getGraphqlSoupClient(): Client {
       unregisterHost = registerCacheHost(host, (error) =>
         canRetryCacheFailure(error) ? createHost(false) : undefined
       );
-      subscriptionsLifecycle.replace(client, host);
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;
+      installCrmCacheHost(host);
+      fireAndForget(
+        initializeCrmCacheOwner().then(() => {
+          if (host && cachedCacheHost === host && !host.disabled)
+            subscriptionsLifecycle.replace(client, host);
+        }),
+        'graphql-cache-subscriptions'
+      );
       return client;
     } catch (error) {
       reportCacheError(error, 'initialization');
       cleanup();
       cachedCacheHost = undefined;
+      installCrmCacheHost(undefined);
       cachedCacheCleanup = undefined;
       cacheInitializationFailed = true;
       cacheRecovery.failed(error);
@@ -1674,6 +1719,30 @@ function mapGraphqlNotificationMetadata(
               .exhaustive(() => ({ kind: 'ready' as const })),
           },
         }) satisfies NotifEventMember<'computer_setup'>
+    )
+    .with(
+      { __typename: 'GraphqlPingMetadata' },
+      (metadata) =>
+        ({
+          tag: 'ping',
+          content: {
+            body: metadata.pingBody,
+            entityName: metadata.pingEntityName,
+            agent: metadata.pingAgentId
+              ? {
+                  id: metadata.pingAgentId,
+                  name: metadata.pingAgentName ?? '',
+                  avatarUrl: metadata.pingAgentAvatarUrl,
+                }
+              : undefined,
+            message: metadata.pingMessageId
+              ? {
+                  messageId: metadata.pingMessageId,
+                  threadId: metadata.pingThreadId,
+                }
+              : undefined,
+          },
+        }) satisfies NotifEventMember<'ping'>
     )
     .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },

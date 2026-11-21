@@ -129,7 +129,9 @@ Opening the editor must not blank or remount the surrounding app.
 Readers, including public viewers, see saved appearance wherever an entity icon
 already appears. Appearance edits do not reorder content, update content recency,
 or send notifications. They create entity-history entries without entering
-broader activity feeds. Copies and template instances retain the appearance.
+broader activity feeds. Copies and template instances retain the appearance,
+except that an agent creating or changing a routine may pick its look; it never
+replaces a look the owner chose.
 
 ## Responsive workspace navigation
 
@@ -331,7 +333,12 @@ newly selected values.
 New references appear immediately in the collection as pending chips with an
 inline spinner through saving and refresh. Use the dragged item's label while
 its preview metadata loads. Failed saves clear pending chips through the existing
-error flow. Pending chips cannot be opened or removed. A persistently
+error flow. Pending chips cannot be opened or removed. Click a saved chip's
+name to open its item (a contact, company, task, document, channel, email,
+folder or project); shift-click opens it in a new split, and an item already
+open in another split is brought forward instead of opened twice. The Add
+button opens the picker and a chip's remove control removes that value; a chip
+never opens the picker. People who can't edit the item still open its values. A persistently
 mounted status region announces additions, including picker saves. Removed
 references disappear immediately and are restored from the last confirmed values
 if saving fails. A failed refresh does not undo a successful save: keep confirmed

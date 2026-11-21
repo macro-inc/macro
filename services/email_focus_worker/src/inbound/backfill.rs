@@ -1,4 +1,5 @@
-//! Fill an inbox as soon as its owner joins the Focus rollout.
+//! Fill an inbox as soon as it joins the Focus rollout: as soon as its owner,
+//! or a user it is linked to, gets the flag.
 //!
 //! Every [`LOOK_INTERVAL`] the worker looks at every connected inbox's place
 //! in the rollout, evaluating the flag in memory, so a look asks PostHog nothing.
@@ -11,7 +12,7 @@
 //! inbox's stale threads newest first, [`THREADS_AT_ONCE`] at a time, with
 //! [`INBOXES_AT_ONCE`] passes running, the earliest found first.
 //!
-//! So an owner who joins is filled without waiting for mail, and after a
+//! So an inbox that joins is filled without waiting for mail, and after a
 //! restart every enrolled inbox is backfilled once, which for an inbox already
 //! filled reads only its few stale threads.
 
@@ -38,11 +39,11 @@ use crate::metrics::{FocusMetrics, Metric};
 #[cfg(test)]
 mod test;
 
-/// How often every connected inbox's place in the rollout is looked at. An
-/// owner who joins is found within this plus the flag definitions' poll
+/// How often every connected inbox's place in the rollout is looked at. A
+/// person who joins is found within this plus the flag definitions' poll
 /// interval.
 const LOOK_INTERVAL: Duration = Duration::from_secs(60);
-/// Owners' places read at once during a look.
+/// Inboxes whose places are read at once during a look.
 const FLAG_CHECKS_AT_ONCE: usize = 16;
 /// Days of mail the first pass covers: the top of the Focus tab.
 const FIRST_FILL_DAYS: i64 = 3;
@@ -85,8 +86,8 @@ impl Pass {
 struct Waiting {
     inbox: FocusInboxOwner,
     found: Instant,
-    /// Found after the worker's first look, so its owner joined while the
-    /// worker ran: only these time how long a new inbox takes to fill. The
+    /// Found after the worker's first look, so it joined the rollout while
+    /// the worker ran: only these time how long a new inbox takes to fill. The
     /// first look finds every enrolled inbox again after each restart.
     new: bool,
 }
@@ -112,15 +113,25 @@ struct Backfills {
 }
 
 impl Backfills {
-    /// Queue the enrolled inboxes not yet filled; forget those that left.
+    /// Queue the enrolled inboxes not yet filled; forget those that left. An
+    /// inbox still waiting keeps its place and takes who it is linked to now.
     fn found(&mut self, enrolled: Vec<FocusInboxOwner>, now: Instant) {
-        let ids: HashSet<_> = enrolled.iter().map(|inbox| inbox.link_id).collect();
-        self.filled.retain(|link_id| ids.contains(link_id));
-        self.dropped.retain(|link_id, _| ids.contains(link_id));
-        self.first
-            .retain(|waiting| ids.contains(&waiting.inbox.link_id));
-        self.rest
-            .retain(|waiting| ids.contains(&waiting.inbox.link_id));
+        let current: HashMap<Uuid, &FocusInboxOwner> = enrolled
+            .iter()
+            .map(|inbox| (inbox.link_id, inbox))
+            .collect();
+        self.filled.retain(|link_id| current.contains_key(link_id));
+        self.dropped
+            .retain(|link_id, _| current.contains_key(link_id));
+        for queue in [&mut self.first, &mut self.rest] {
+            queue.retain_mut(|waiting| match current.get(&waiting.inbox.link_id) {
+                Some(inbox) => {
+                    waiting.inbox = (*inbox).clone();
+                    true
+                }
+                None => false,
+            });
+        }
         for inbox in enrolled {
             let known = self.filled.contains(&inbox.link_id)
                 || self.running.contains(&inbox.link_id)
@@ -155,8 +166,9 @@ impl Backfills {
     }
 
     /// Record how a pass ended. A first pass done queues the rest; a pass the
-    /// classifier stopped or that failed is dropped, so the next look queues
-    /// the inbox again.
+    /// classifier stopped, that failed or that found the inbox out of the
+    /// rollout is dropped, so the next look queues the inbox again if it is
+    /// in then, with who it is linked to then.
     fn done(&mut self, waiting: Waiting, pass: Pass, completed: bool, stop: bool) {
         self.running.remove(&waiting.inbox.link_id);
         match (pass, completed) {
@@ -293,6 +305,7 @@ fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics)
                 %link_id,
                 pass = pass.name(),
                 enrolled = report.inboxes == 1,
+                left_rollout = report.inboxes_left > 0,
                 candidates = report.candidates,
                 classified = report.classified,
                 redecided = report.redecided,
@@ -304,17 +317,20 @@ fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics)
                 since_found_secs = since_found,
                 "focus backfill pass finished"
             );
-            // Timed only once the whole inbox went through: an inbox that
-            // reads as not enrolled, or a pass with failed threads, is not
-            // filled.
-            if waiting.new && report.inboxes == 1 && report.failed == 0 && !report.stopped_early {
+            // An inbox that read as out of the rollout, at the start or
+            // partway through, was not filled: the pass may have asked people
+            // it is no longer linked to.
+            let in_rollout = report.inboxes == 1 && report.inboxes_left == 0;
+            // Timed only once the whole inbox went through: a pass with
+            // failed threads did not fill it either.
+            if waiting.new && in_rollout && report.failed == 0 && !report.stopped_early {
                 let filled = match pass {
                     Pass::First => Metric::BackfillTopFilledSeconds,
                     Pass::Rest => Metric::BackfillFilledSeconds,
                 };
                 metrics.observe(filled, since_found);
             }
-            (!report.stopped_early, report.stopped_early)
+            (in_rollout && !report.stopped_early, report.stopped_early)
         }
         Err(error) => {
             metrics.add(Metric::BackfillPassFailures, 1.0);

@@ -8,6 +8,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   ChannelMessageFieldsFragmentDoc,
@@ -35,10 +36,14 @@ import {
   cursorFromSortKey,
 } from './sort-key';
 import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
+import { listQueuedReplies, withUnsettledReplies } from './unsettled-replies';
 
 export type ChannelPageHost = Pick<
   CacheHost,
-  'channelTimeline' | 'channelTimelineCommit' | 'readRecordsByKeys'
+  | 'channelTimeline'
+  | 'channelTimelineCommit'
+  | 'readRecordsByKeys'
+  | 'inspectMutations'
 >;
 
 export type ChannelServerPage = ChannelTimelineQuery['user']['channelTimeline'];
@@ -203,17 +208,28 @@ type DeviceRead =
 
 /** Answers a page from the device, or says why the server must. */
 export async function readDeviceChannelPage(
-  host: Pick<CacheHost, 'channelTimeline' | 'readRecordsByKeys'>,
+  host: Pick<
+    CacheHost,
+    'channelTimeline' | 'readRecordsByKeys' | 'inspectMutations'
+  >,
   request: ChannelPageRequest
 ): Promise<DeviceRead> {
   const result = await host.channelTimeline(cacheArgs(request));
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
   if (!result.covered) return { kind: 'miss', storedSeq: result.seq };
+  // Listed beside the records, so the page waits on the slower of the two.
+  const queued = listQueuedReplies(host, request.channelId);
   const records = await readTimelineRecords(host, result.keys);
   if (!records) return { kind: 'miss', storedSeq: result.seq };
   return {
     kind: 'page',
-    page: timelinePage(records, result.olderCursor, result.newerCursor),
+    // A root's record does not show a reply this device has just written.
+    page: await withUnsettledReplies(
+      host,
+      request.channelId,
+      timelinePage(records, result.olderCursor, result.newerCursor),
+      queued
+    ),
     storedSeq: result.seq,
   };
 }
@@ -372,6 +388,8 @@ async function loadPage(
 ): Promise<LoadedChannelPage | ChannelPageUnavailable> {
   const cacheHost = host as CacheHost;
   const pushesBefore = channelPushes.get(request.channelId);
+  // The session the page is read under: a later one must not store it.
+  const generation = cacheSessionGeneration.capture();
   const pendingKey = JSON.stringify(cacheArgs(request));
   const latest =
     request.before === undefined &&
@@ -463,12 +481,15 @@ async function loadPage(
       return null;
     }
     markChannelCacheAnswered(cacheHost);
-    const committed = await host.channelTimelineCommit({
-      channelId: request.channelId,
-      ...(coverage && { coverage: [coverage] }),
-      seq: { kind: 'lower', seq: server.seq },
-      touchedAtMs: (options.now ?? Date.now)(),
-    });
+    const committed = await host.channelTimelineCommit(
+      {
+        channelId: request.channelId,
+        ...(coverage && { coverage: [coverage] }),
+        seq: { kind: 'lower', seq: server.seq },
+        touchedAtMs: (options.now ?? Date.now)(),
+      },
+      generation
+    );
     if (committed.kind !== 'committed') return held.storedSeq;
     if (latest && coverage) {
       heldChannels.add(request.channelId);

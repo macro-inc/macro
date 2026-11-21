@@ -51,6 +51,8 @@ export function addedAgentProgress(
       )
       .with('running', () => 'online')
       .with('released', () => 'gone')
+      // Not answering yet, but coming back by itself.
+      .with('unhealthy', () => 'waiting')
       .with('failed', 'paused', () => 'failed')
       // A status a newer server sends keeps waiting, into the slow path.
       .exhaustive(() => 'waiting')

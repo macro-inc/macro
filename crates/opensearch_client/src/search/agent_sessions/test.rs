@@ -34,7 +34,7 @@ fn modes_keep_names_and_folded_content_separate_and_terms_in_one_session() {
     let terms = clauses[0]["bool"]["must"].as_array().unwrap();
     assert_eq!(terms.len(), 2);
     assert_eq!(terms[0]["has_child"]["type"], "message");
-    assert!(terms[0]["has_child"]["query"]["match_phrase_prefix"].is_object());
+    assert!(terms[0]["has_child"]["query"]["match_bool_prefix"].is_object());
     let name = build_query(&args(AgentSessionSearchMode::Name), "exact")
         .unwrap()
         .build()

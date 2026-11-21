@@ -33,6 +33,11 @@ import { mapChannelMessage } from './map';
 import { CHANNEL_MESSAGE_TYPENAME, unplacedSortKey } from './sort-key';
 import { loadChannelMessage } from './thread';
 import { noteUnqueuedSend, pageIsLeaving } from './unqueued-sends';
+import {
+  forgetOwnReply,
+  noteOwnReply,
+  ownReplyDelivered,
+} from './unsettled-replies';
 import { announceWaitingWrite } from './waiting-writes';
 
 /**
@@ -338,42 +343,66 @@ export function sendChannelMessage(
   const predicted = predictedMessage(send, createdAt);
   // Until the queue holds it, a reload would lose a message already shown.
   const note = noteUnqueuedSend(send, createdAt);
+  const rootId = send.message.thread_id;
+  if (rootId && predicted) {
+    // The root's record will not show the reply until the device catches up.
+    noteOwnReply(send.channelId, rootId, mapChannelMessage(predicted));
+  }
   return unlessPageLeft(
-    queuedWrite(host, deps, {
-      operation: 'channel.write.send',
-      channelId: send.channelId,
-      messageId: send.id,
-      predicted,
-      run: async (client) => {
-        try {
-          return await executeOptimisticMutation(
-            client,
-            SendChannelMessageDocument,
-            {
-              input: {
-                channelId: send.channelId,
-                id: send.id,
-                content: send.message.content,
-                threadId: send.message.thread_id ?? null,
-                mentions: (send.message.mentions ?? []).map(mentionInput),
-                attachments: (send.message.attachments ?? []).map(
-                  attachmentInput
-                ),
-                nonce: send.id,
+    settledReply(
+      send.id,
+      queuedWrite(host, deps, {
+        operation: 'channel.write.send',
+        channelId: send.channelId,
+        messageId: send.id,
+        predicted,
+        run: async (client) => {
+          try {
+            return await executeOptimisticMutation(
+              client,
+              SendChannelMessageDocument,
+              {
+                input: {
+                  channelId: send.channelId,
+                  id: send.id,
+                  content: send.message.content,
+                  threadId: send.message.thread_id ?? null,
+                  mentions: (send.message.mentions ?? []).map(mentionInput),
+                  attachments: (send.message.attachments ?? []).map(
+                    attachmentInput
+                  ),
+                  nonce: send.id,
+                },
               },
-            },
-            (predicted
-              ? { sendChannelMessage: predicted }
-              : {}) as OptimisticResponse<SendChannelMessageMutation>,
-            { uuid: send.id, onEnqueued: note.stored }
-          ).toPromise();
-        } finally {
-          note.ended();
-        }
-      },
-      written: (data) => data.sendChannelMessage,
-    })
+              (predicted
+                ? { sendChannelMessage: predicted }
+                : {}) as OptimisticResponse<SendChannelMessageMutation>,
+              { uuid: send.id, onEnqueued: note.stored }
+            ).toPromise();
+          } finally {
+            note.ended();
+          }
+        },
+        written: (data) => data.sendChannelMessage,
+      })
+    )
   );
+}
+
+/** Keeps the note of a reply in step with what became of it. */
+async function settledReply(
+  replyId: string,
+  write: Promise<Message>
+): Promise<Message> {
+  try {
+    const delivered = await write;
+    ownReplyDelivered(delivered);
+    return delivered;
+  } catch (error) {
+    // A page being left keeps the row; the note goes with the page.
+    forgetOwnReply(replyId);
+    throw error;
+  }
 }
 
 /**

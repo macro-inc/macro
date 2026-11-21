@@ -2966,6 +2966,10 @@
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked for what the routine does. Saved\nunless the owner chose the routine's appearance, which only the\nappearance endpoint does; absent leaves the stored one."
+          },
           "description": {
             "type": "string",
             "description": "What the routine is for, in the owner's words; empty when unset."
@@ -2997,6 +3001,10 @@
         "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "An icon and colour an agent picked, as on create. Saved only when the\nupdate is made for the routine's owner; skipped for anyone else."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "An empty string clears it."
@@ -3433,6 +3441,13 @@
               "$ref": "#/components/schemas/CreatedItem"
             },
             "description": "What a routine draft's session created for the routine to use, such as\nthe database it writes to; kept with its draft for the person to see."
+          },
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps a routine draft's session found the routine needs that its owner\nhasn't connected, for the person to connect before saving. The routine\nitself requires only connected ones."
           },
           "routine": {
             "$ref": "#/components/schemas/ActionConfiguration"
@@ -4091,12 +4106,30 @@
         "description": "A drafted routine.",
         "required": ["name", "steps", "problems", "created"],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "The icon and colour AI picked for it from Macro's icons; absent when\nit picked none, or one Macro doesn't have."
+          },
+          "apps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps outside Macro its Ask AI step uses that its owner connected,\nwhich the routine requires (its task's `mcp_servers`)."
+          },
           "created": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DraftCreated"
             },
             "description": "What AI created while drafting, such as the database the routine\nwrites to. These exist whether or not the routine is saved."
+          },
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps its Ask AI step needs that its owner hasn't connected: the owner\nconnects each one, or removes it, before saving."
           },
           "name": {
             "type": "string"
@@ -4985,6 +5018,13 @@
         "description": "What saving a routine would find wrong, without saving it: the answer to\n`POST /scheduled-actions/check`.",
         "required": ["ok", "problems", "steps", "routine"],
         "properties": {
+          "missingApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps the routine needs that its owner hasn't connected, as a routine\ndraft's session named them (`missingApps`): the person connects each\none before saving. Never ones the routine already requires."
+          },
           "ok": {
             "type": "boolean",
             "description": "Whether saving it would succeed: no problems and no failing steps."

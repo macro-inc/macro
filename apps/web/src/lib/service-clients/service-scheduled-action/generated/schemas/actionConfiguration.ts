@@ -5,8 +5,10 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineTask } from './routineTask';
 import type { RunVisibility } from './runVisibility';
 
@@ -15,6 +17,10 @@ import type { RunVisibility } from './runVisibility';
 server-owned.
  */
 export interface ActionConfiguration {
+  /** An icon and colour an agent picked for what the routine does. Saved
+unless the owner chose the routine's appearance, which only the
+appearance endpoint does; absent leaves the stored one. */
+  appearance?: EntityAppearance;
   /** What the routine is for, in the owner's words; empty when unset. */
   description?: string;
   enabled: boolean;

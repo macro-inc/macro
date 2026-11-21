@@ -1,0 +1,263 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    secret.reloader.stakater.com/reload: grafana,grafana-db,grafana-goalert,grafana-watchdog
+  labels:
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/version: 13.0.9
+    helm.sh/chart: grafana-14.4.2
+  name: grafana
+  namespace: observability
+spec:
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: grafana
+      app.kubernetes.io/name: grafana
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/config: 0e83658f9309cf2f8f80548544f3e697e2396c52873c6d8ade16db393d1e4089
+        checksum/provisioning: e23decb9aebf812f74a07ac3b9de7ec940f4d79000b587891d883ba27d75dcc1
+        checksum/sc-dashboard-provider-config: e70bf6a851099d385178a76de9757bb0bef8299da6d8443602590e44f05fdf24
+        kubectl.kubernetes.io/default-container: grafana
+      labels:
+        app.kubernetes.io/instance: grafana
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/version: 13.0.9
+        observability.macro.com/aws-apis: "true"
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: GF_PATHS_DATA
+              value: /var/lib/grafana/
+            - name: GF_PATHS_LOGS
+              value: /var/log/grafana
+            - name: GF_PATHS_PLUGINS
+              value: /var/lib/grafana/plugins
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+            - name: GF_UNIFIED_STORAGE_INDEX_PATH
+              value: /var/lib/grafana-search/bleve
+            - name: GOMEMLIMIT
+              value: 921MiB
+            - name: GOALERT_CLUSTER_HEARTBEAT_ID
+              valueFrom:
+                secretKeyRef:
+                  key: goalert_cluster_heartbeat_id
+                  name: grafana-watchdog
+                  optional: true
+            - name: GOALERT_GRAFANA_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: goalert_grafana_integration_key
+                  name: grafana-goalert
+                  optional: true
+            - name: GOALERT_GRAFANA_NOTIFY_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: goalert_grafana_notify_integration_key
+                  name: grafana-goalert
+                  optional: true
+            - name: AWS_REGION
+              value: us-east-2
+            - name: GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION
+              value: "true"
+            - name: GRAFANA_ALERT_TOPIC_ARN
+              value: arn:aws:sns:us-east-2:569036502058:observability-prod-alerts
+          image: docker.io/grafana/grafana:13.0.9-distroless@sha256:1872f0afe4085c9648715dc95dd334fe0e7b2dd6902d6a94a5d215c5ec48a2af
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
+          livenessProbe:
+            failureThreshold: 10
+            httpGet:
+              httpHeaders:
+                - name: Host
+                  value: grafana.macro-internal.com
+              path: /api/health
+              port: grafana
+            initialDelaySeconds: 60
+            timeoutSeconds: 30
+          name: grafana
+          ports:
+            - containerPort: 3000
+              name: grafana
+              protocol: TCP
+            - containerPort: 9094
+              name: gossip-tcp
+              protocol: TCP
+            - containerPort: 9094
+              name: gossip-udp
+              protocol: UDP
+            - containerPort: 6060
+              name: profiling
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              httpHeaders:
+                - name: Host
+                  value: grafana.macro-internal.com
+              path: /api/health
+              port: grafana
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /etc/grafana/grafana.ini
+              name: config
+              subPath: grafana.ini
+            - mountPath: /etc/grafana/provisioning/alerting
+              name: grafana-alerting
+              readOnly: true
+            - mountPath: /etc/grafana/provisioning/dashboards
+              name: grafana-dashboard-providers
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro
+              name: grafana-dashboards-macro
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-ci
+              name: grafana-dashboards-macro-ci
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-computers-fleet
+              name: grafana-dashboards-macro-computers-fleet
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-email-focus
+              name: grafana-dashboards-macro-email-focus
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-postgres
+              name: grafana-dashboards-macro-postgres
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-postgres-queries
+              name: grafana-dashboards-macro-postgres-queries
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-prod-alerts
+              name: grafana-dashboards-macro-prod-alerts
+              readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-run-local
+              name: grafana-dashboards-macro-run-local
+              readOnly: true
+            - mountPath: /etc/grafana/provisioning/datasources
+              name: grafana-datasources
+              readOnly: true
+            - mountPath: /etc/grafana/rds
+              name: grafana-rds-ca
+              readOnly: true
+            - mountPath: /var/lib/grafana
+              name: storage
+            - mountPath: /var/lib/grafana-search
+              name: search
+            - mountPath: /etc/grafana/secrets
+              name: grafana
+              readOnly: true
+            - mountPath: /etc/grafana/database
+              name: grafana-db
+              readOnly: true
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 472
+        runAsGroup: 472
+        runAsNonRoot: true
+        runAsUser: 472
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: grafana
+      shareProcessNamespace: false
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: grafana
+              app.kubernetes.io/name: grafana
+          maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: grafana
+              app.kubernetes.io/name: grafana
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - configMap:
+            name: grafana
+          name: config
+        - configMap:
+            name: grafana-alerting
+          name: grafana-alerting
+        - configMap:
+            name: grafana-dashboard-providers
+          name: grafana-dashboard-providers
+        - configMap:
+            name: grafana-dashboards-macro
+          name: grafana-dashboards-macro
+        - configMap:
+            name: grafana-dashboards-macro-ci
+          name: grafana-dashboards-macro-ci
+        - configMap:
+            name: grafana-dashboards-macro-computers-fleet
+          name: grafana-dashboards-macro-computers-fleet
+        - configMap:
+            name: grafana-dashboards-macro-email-focus
+          name: grafana-dashboards-macro-email-focus
+        - configMap:
+            name: grafana-dashboards-macro-postgres
+          name: grafana-dashboards-macro-postgres
+        - configMap:
+            name: grafana-dashboards-macro-postgres-queries
+          name: grafana-dashboards-macro-postgres-queries
+        - configMap:
+            name: grafana-dashboards-macro-prod-alerts
+          name: grafana-dashboards-macro-prod-alerts
+        - configMap:
+            name: grafana-dashboards-macro-run-local
+          name: grafana-dashboards-macro-run-local
+        - configMap:
+            name: grafana-datasources
+          name: grafana-datasources
+        - configMap:
+            name: grafana-rds-ca
+          name: grafana-rds-ca
+        - emptyDir: {}
+          name: storage
+        - emptyDir: {}
+          name: search
+        - name: grafana
+          secret:
+            secretName: grafana
+        - name: grafana-db
+          secret:
+            secretName: grafana-db

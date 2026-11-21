@@ -5,9 +5,13 @@
 Behind `enable-unified-notifications`, the bell below Home
 on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
-`VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
+`VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. GraphQL Soup has no
+dev default, so a local stack shows the view only with
+`VITE_ENABLE_GRAPHQL_SOUP=true` (or the flag from PostHog). With the flag off the
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
-Home keeps `g h`.
+Home keeps `g h`. With `enable-new-home` on (desktop), this route is New Home's
+Notifications tab instead and the rail's bell gives way to New Home; see
+[New Home](home.md#new-home).
 
 With unified notifications on, the outer rail and mobile dock show unread dots
 from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
@@ -55,13 +59,13 @@ channel, session, document or thread), and the newest line, with its sender when
 there are several people.
 Choosing a stack opens it and leaves it folded; only its caret unfolds it. At phone
 width the caret sits on the first line; wider, it sits at the bottom of the row with
-how many more (**2 more**) and, once open, at the bottom of the stack as **Hide**.
-The row stays exactly as it was, its notifications list below it indented to its
-text, and every other row dims until you close it. Hovering or moving to a dimmed
-row brings it back. Each unfolded notification opens that notification:
+how many more (**2 more**) and, once open, reads **Hide** in the same place and
+again at the bottom of the stack; either folds it. The row stays exactly as it
+was, its notifications list below it indented to its text, and the other rows
+stay as they are. Each unfolded notification opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time always shows. With a pointer, the first line ends with the time and Mark done: Mark done shows on hover in a slot that stays empty otherwise, so it sits at the same spot on every row, stacked or not, read or not, and nothing moves. Touch has no Mark done button and no empty slot. The author is
+A stack stays open as new notifications land. The first line ends with the time. With a pointer, hovering a row hides its time and shows Mark done in its place, as on an unfolded notification, so nothing moves. Touch has no Mark done button. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't
@@ -77,8 +81,9 @@ focus, and Esc returns to the row; see
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.
-In splits 720px wide or narrower the list fills the split until a row opens,
-which then fills it with **Back** (left arrow) returning to the list.
+On desktop, a new split shows the list beside its empty preview, like any
+split wider than 720px. In splits 720px wide or narrower the list fills the split until a
+row opens, which then fills it with **Back** (left arrow) returning to the list.
 Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
@@ -157,7 +162,9 @@ and inline row buttons; at phone width they have a larger avatar and slightly la
 text; a read row there fades its avatar and mutes its text, so unread rows stand
 out. A tablet keeps the desktop's sizes. Tapping a row or an unfolded notification opens it
 full-screen in place, tapping a stack's caret unfolds it, a left swipe marks it
-done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+done (with the same Undo), and pulling down refreshes. A done on touch (a swipe, or a
+row button that completes the row) folds the row's height away before the row leaves,
+so the rows below slide up; with reduced motion it leaves at once. Hover controls and the preview pane are desktop-only. The
 dock keeps the bell active while the view shows.
 
 The list updates live, without a reload, and a live change never remounts a row:
@@ -364,16 +371,19 @@ event over GraphQL or the legacy WebSocket gateway, so they do not trigger brows
 Those rows are available on the next fetch/refetch. Signal delivery and the existing
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
 
-Discussion composers on companies, contacts, documents, tasks, and PRs use the
-shared channel/AI composer surface, 26.25px desktop corners, 15px desktop text, and
-a circular neutral Send button. Edit with AI uses the same composer treatment.
+Discussion composers on projects, companies, contacts, documents, tasks, and PRs
+use the shared channel/AI composer surface, 26.25px desktop corners, 15px desktop
+text, and a circular neutral Send button. Edit with AI uses the same composer treatment.
 Inline comments, replies, and their edits use a plain
 input without a surface background, rounded frame, or shadow. Attachment and
 formatting actions stay available.
-On mobile, open documents and tasks put their new-comment composer in the
-accessory dock above navigation, using the channel input's compact pill and
-expanded surface. New is hidden when the comment composer is available; list
-screens keep New. Users without comment permission have no comment composer.
+On phones, projects, tasks, and companies use the shared Discussion entry and
+sheet with a pinned new-comment composer. The thread shrinks around the keyboard
+without moving the sheet. Ordinary documents and tablet tasks keep their
+new-comment composer in the accessory dock above navigation, using the channel
+input's compact pill and expanded surface. New is hidden when that docked
+composer is available; list screens keep New. Users without comment permission
+have no comment composer.
 The floating Ask AI input appears only on the AI/Agents view.
 
 On touch devices, an email thread's floating action bar has Previous email and
@@ -435,6 +445,109 @@ inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
 with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
 "<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
 Team → Members (see Agent teammates in [settings.md](settings.md)).
+
+## Pings
+
+Agent code (ExecuteCode) and SDK scripts ping people: they put a notification
+they write on an entity with `macro.notifications.send({ body, link, to? })`, which
+calls `POST /user_notifications/send` on the notification service. It becomes a
+ping (notification kind `ping`): in-app, desktop/browser alert and phone push, all
+subject to each recipient's preferences (**Settings → Notifications → AI →
+Agent pings** turns them off; a muted or snoozed entity stays quiet).
+
+Sending is behind the `enable-agent-notifications` flag, read for the sender:
+with it off the call answers 403 "agent notifications are not enabled for this
+account", and 503 when the flag cannot be read. The same flag shows the Agent
+pings setting, and its entry in settings search, in the web app. On a local
+stack both sides are on for everyone; `VITE_ENABLE_AGENT_NOTIFICATIONS=false`
+turns the web side off there. A deployment asks PostHog, and the notification
+service needs `POSTHOG_API_KEY` to do so: without it nobody can send.
+
+`body` is the whole message: required, at most 280 characters once trimmed
+(400 "body is longer than 280 characters" past that, 400 when blank). A ping
+has no title; who sent it and what it is about frame it.
+
+`link` is what the notification is about: a document or task, a channel or
+one of its messages, an email thread, a folder, a project, a calendar event, a
+company or contact, a chat or a listed agent session. `to` is one user or a
+list, and defaults to the sender. The sender must be able to open `link` (404
+otherwise). Each recipient who cannot is skipped and returned in `skipped`
+with reason `no_access`; nobody is given access, and the call still succeeds
+for the others. Recipients are also skipped as `not_listed` or
+`recipient_limit` (below). It returns `{ notified, skipped }`. Recipients who have the
+kind turned off are in `notified`: the sender is not told their settings. A
+background run that may send nothing (`no_send` scope) cannot ping anyone,
+itself included: the request is refused before it reaches the handler.
+
+Two guards stop a looping program from flooding people. The same body about
+the same `link` to the same recipients from the same sender is
+delivered once in each ten-minute window. Windows are fixed spans of the
+clock, so a repeat that falls in the next one is delivered again; a dropped
+repeat still answers 200. One call
+names at most 100 recipients (400 past that), and a sender can notify at most
+1,000 recipients an hour, counted per notified recipient: past that the call
+answers 429 with a message and `Retry-After`, and notifies nobody.
+
+A push reads "<sender> pinged you", then what it is about, then the body: on
+iOS the entity's name is the subtitle, and Android, which has no subtitle,
+titles it "<sender> pinged you — <entity>". A browser alert is titled like
+Android; the macOS app shows "<sender> pinged you" with the entity beneath,
+like iOS. An email digest lists it as "<sender> pinged you — <entity>" over
+the body. The sender is the agent (its name and avatar as they were
+when sent), else the sending user by the local part of their email, as other
+pushes name people; a ping to oneself without an agent reads "You pinged
+yourself". The entity's name is taken when the ping is sent, from the
+recipients' own inbox listing: `#name` for a public or team channel, an
+email's subject, an item's name. A direct message has no name that reads the
+same to both sides, so its push has no subtitle.
+
+A link must be something the Notifications view lists, or the ping would be
+delivered and never shown. The service takes the allowed kinds from the
+inbox's `CANDIDATE_TYPES` and refuses the rest (routines, databases, forms)
+with 400. Each recipient (the sender, for a ping to oneself) then gets it only
+if their own inbox would list it: the service runs the inbox's candidate query
+for them on the primary database, with their team, the link probed as if a
+notification about it were pending, through the inbox's own filter and
+hydration. Anyone it would leave out is skipped with reason `not_listed`:
+access only through a link share or an attachment, a deleted entity, an
+unlisted or hidden session (a routine's runs, unless the routine lists them,
+or followed), mail that is not the recipient's own Signal inbox mail (so only
+the thread's owner gets pings about it), and a calendar event they neither own
+nor see through a linked inbox. Snippets pass: the inbox lists them, though
+Home does not.
+
+Each person receives at most 60 pings an hour from others, from all senders
+together; past that they are skipped with reason `recipient_limit` and the
+others still get it. Pings to oneself are not counted, so a person's own
+routines and agents always get through.
+
+In the unified Notifications view a ping joins the row its
+entity already has, stacked with what is there, and its badge is the icon of
+that entity (a task's, a document's, a channel's, an email's):
+
+| Linked entity | Row it joins |
+| --- | --- |
+| Document, task, folder, project, company, contact | The entity's comments row |
+| Channel | The channel's row |
+| Channel message | That message's thread row |
+| Email thread | The email's row, which stays unread until the ping is seen |
+| Calendar event | The event's row |
+| Chat, agent session | The agent row |
+
+The card names the sender ("Scout pinged you"), then the entity, then the
+body. A ping people send themselves without an agent reads "You pinged
+yourself". Home shows it the same way, under the entity's icon. Clicking the
+row opens the entity; a ping on a channel message opens the channel at that
+message.
+
+Verify from an agent session: ask the agent to ping you and two teammates
+about a task, one who can open it and one who cannot. You and the teammate
+with access each get a row on that task reading "<agent> pinged you", the
+task's name and the body, with the task icon as its badge, and a desktop alert
+from "<agent> pinged you" about the task; clicking the row opens the task.
+The agent's result lists the other teammate under `skipped` (`no_access`),
+and they receive nothing. Someone who has only the task's public link is
+skipped as `not_listed`.
 
 ## Notification sounds
 

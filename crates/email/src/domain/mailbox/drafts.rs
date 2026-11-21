@@ -79,7 +79,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                             .release_draft(
                                 &lease,
                                 match &error {
-                                    MailboxError::Provider(e) => super::retry_seconds(e),
+                                    MailboxError::Provider(e) => super::retry::retry_seconds(e),
                                     _ => 30,
                                 },
                             )
@@ -138,8 +138,22 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 return self.confirm(lease, &mut checkpoint).await;
             }
         }
-        self.repo.checkpoint_draft(lease, &checkpoint).await?;
+        self.checkpoint_after_provider(lease, &checkpoint).await?;
         self.repo.release_draft(lease, 2).await
+    }
+
+    /// Records the checkpoint that follows a provider call. The provider has
+    /// already acted, and a checkpoint left behind is misread on the next run:
+    /// a write as another client's edit (a draft conflict), a rejection as an
+    /// outcome still unknown. A lock timeout only means the mailbox was busy,
+    /// so the checkpoint tries again a few times, each in a fresh transaction.
+    async fn checkpoint_after_provider(
+        &self,
+        lease: &DraftLease,
+        checkpoint: &DraftCheckpoint,
+    ) -> Result<(), MailboxError> {
+        super::record_after_provider("drafts", || self.repo.checkpoint_draft(lease, checkpoint))
+            .await
     }
 
     async fn inspect(
@@ -197,7 +211,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 Err(error) => {
                     if definitively_rejected(&error) {
                         checkpoint.advance(DraftStage::Inspect);
-                        self.repo.checkpoint_draft(lease, checkpoint).await?;
+                        self.checkpoint_after_provider(lease, checkpoint).await?;
                     }
                     return Err(error.into());
                 }
@@ -427,7 +441,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 Err(error) => {
                     if definitively_rejected(&error) {
                         checkpoint.transfer = None;
-                        self.repo.checkpoint_draft(lease, checkpoint).await?;
+                        self.checkpoint_after_provider(lease, checkpoint).await?;
                     }
                     return Err(error.into());
                 }

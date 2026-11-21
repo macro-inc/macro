@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n                EXISTS (SELECT 1 FROM \"User\" WHERE id = $1)\n                OR EXISTS (SELECT 1 FROM \"User\" WHERE lower(email) = substr($1, 7))\n            ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3d654b638d78212e496d2e7bf27ae8a18049c7068edcceb8d7f830fcfc990ad4"
+}

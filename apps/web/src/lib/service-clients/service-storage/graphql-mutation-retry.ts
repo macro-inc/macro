@@ -10,7 +10,7 @@ type QueuedMutation = Pick<
 /** A refusal the server answers before writing anything, worth sending again. */
 type RefusalRetry = {
   operations: readonly string[];
-  code: string;
+  codes: readonly string[];
   attempts: number;
 };
 
@@ -18,10 +18,11 @@ type RefusalRetry = {
 // the server keeps faulting on gives up after a few seconds of backoff.
 const REFUSAL_RETRIES: readonly RefusalRetry[] = [
   // A draft write is a full-state upsert (or an idempotent delete) under its
-  // own handle, so sending it again after the server faulted is safe.
+  // own handle, so sending it again is safe after the server faulted or an
+  // inbox stayed locked past its lock timeout: the write rolled back.
   {
     operations: ['SaveEmailDraft', 'DeleteEmailDraft'],
-    code: 'INTERNAL',
+    codes: ['INTERNAL', 'INBOX_BUSY'],
     attempts: 2,
   },
   // The channel write guard turns a write away before it runs when too many
@@ -35,7 +36,7 @@ const REFUSAL_RETRIES: readonly RefusalRetry[] = [
       'DeleteChannelMessage',
       'ReactToChannelMessage',
     ],
-    code: 'SERVICE_UNAVAILABLE',
+    codes: ['SERVICE_UNAVAILABLE'],
     attempts: Number.POSITIVE_INFINITY,
   },
 ];
@@ -53,8 +54,8 @@ function retriesRefusal(
   const retry = REFUSAL_RETRIES.find(
     (entry) =>
       entry.operations.includes(mutation.operationName ?? '') &&
-      error.graphQLErrors.every(
-        (refusal) => refusal.extensions.code === entry.code
+      error.graphQLErrors.every((refusal) =>
+        entry.codes.includes(String(refusal.extensions.code))
       )
   );
   if (!retry) return false;

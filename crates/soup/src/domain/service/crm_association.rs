@@ -4,8 +4,11 @@
 //! the company, its Contacts property names one of the company's contacts, or
 //! it references the company or one of those contacts. An item is associated
 //! with a contact when its Contacts property names the contact or it
-//! references the contact. Activity matches properties only, and email
-//! participants from visible CRM domains and addresses in the user's own mailbox.
+//! references the contact. A task is also associated with a record that one
+//! of its custom entity properties names, by the same rule: a company's task
+//! may name the company or one of its contacts. Activity matches the built-in
+//! properties only, and email participants from visible CRM domains and
+//! addresses in the user's own mailbox.
 //!
 //! The CRM service authorizes the record and expands a company to the
 //! contacts the viewer may see. The property and reference edges of those
@@ -617,10 +620,17 @@ where
             .await
             .map_err(crm_error)?;
         let targets = reference_targets(&association);
+        // A record lists the tasks whose own custom properties name it. The
+        // activity scope matches the built-in properties only.
+        let custom_task_properties = record != CrmAssociation::Activity;
         let (property_edges, reference_sources) = tokio::join!(
             async {
                 self.soup_storage
-                    .crm_property_edges(&association.company_ids, &association.contact_ids)
+                    .crm_property_edges(
+                        &association.company_ids,
+                        &association.contact_ids,
+                        custom_task_properties,
+                    )
                     .await
                     .map_err(anyhow::Error::from)
                     .map_err(SoupErr::from)

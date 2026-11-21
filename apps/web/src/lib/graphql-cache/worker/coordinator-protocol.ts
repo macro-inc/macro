@@ -47,7 +47,7 @@ function isPeopleTraceparent(value: unknown): boolean {
 }
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 17 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 18 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -520,7 +520,38 @@ const commonRequest = (record: UnknownRecord): boolean =>
 /** Strictly validates a cache RPC request nested in a coordinator envelope. */
 export function isCacheRequest(value: unknown): value is CacheRequest {
   if (!isRecord(value) || !commonRequest(value)) return false;
+  if (Object.hasOwn(value, 'generation')) {
+    const { generation, ...request } = value;
+    return (
+      (generation === undefined ||
+        (typeof generation === 'string' &&
+          /^[0-9a-f-]{36}$/.test(generation))) &&
+      isCacheRequest(request)
+    );
+  }
   switch (value.kind) {
+    case 'current-authority':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'identity', 'traceparent']) &&
+        isPeopleTraceparent(value.traceparent) &&
+        isNonEmptyString(value.identity)
+      );
+    case 'transition-authority':
+      return (
+        hasOnlyKeys(value, [
+          'id',
+          'kind',
+          'identity',
+          'expected',
+          'policy',
+          'traceparent',
+        ]) &&
+        isPeopleTraceparent(value.traceparent) &&
+        isNonEmptyString(value.identity) &&
+        isNonEmptyString(value.policy) &&
+        typeof value.expected === 'string' &&
+        /^[0-9a-f-]{36}$/.test(value.expected)
+      );
     case 'init':
       return (
         hasOnlyKeys(value, ['id', 'kind', 'scope', 'hotCapacity']) &&

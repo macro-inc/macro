@@ -911,6 +911,18 @@ and `MIN_NATIVE_BUILD_IOS`; production builds read them from
 raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
 
+At startup, the updater rejects a saved or previously downloaded OTA whose bundle
+build is older than the binary's embedded bundle, falling back to the embedded
+assets when needed. That prevents an older cached OTA from automatically surviving every
+native upgrade. It does not prove reverse IPC compatibility: a later-built OTA
+or republished rollback can still contain older JS and satisfy the native floor.
+Preserve the legacy command contract on newer binaries when older bundles omit
+new arguments. The [CRM cache authority contract](../../apps/web/docs/ios-releases.md#crm-cache-command-compatibility)
+uses this rule; an omitted `generation` keeps legacy cache behavior, while a
+supplied stale generation is rejected on response writes. Reads and watches do
+not require an admission claim. Cut the store build from the final
+native tree, including this compatibility behavior.
+
 Android ConnectivityManager reports the validated default network and takes a
 fresh snapshot on resume. Captive/unvalidated networks count as offline. Older
 native binaries lacking the command retain browser connectivity. Neither signal

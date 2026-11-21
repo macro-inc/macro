@@ -20,6 +20,12 @@ import { createEffect, on } from 'solid-js';
 import { computerKeys } from './keys';
 
 const TRANSITION_POLL_MS = 3_000;
+/**
+ * How often a ready or failed computer is checked again: the server marks it
+ * unhealthy, or recovers it, minutes after any presence change this client
+ * sees.
+ */
+const SETTLED_POLL_MS = 30_000;
 
 const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
   'purchasing',
@@ -27,16 +33,22 @@ const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
   'waiting_for_capacity',
   'starting',
   'stopping',
+  'unhealthy',
 ];
 
-/** Polls only while a computer is moving between states. */
-function computersPollInterval(
+const SETTLED_LIVE_STATUSES: readonly ComputerStatusKind[] = [
+  'ready',
+  'failed',
+];
+
+/** Polls fast while a computer is moving between states, slowly while one may change on its own. */
+export function computersPollInterval(
   computers: readonly ComputerStatus[] | undefined
 ): number | false {
-  const moving = computers?.some((computer) =>
-    TRANSITIONAL_STATUSES.includes(computer.status)
-  );
-  return moving ? TRANSITION_POLL_MS : false;
+  const has = (statuses: readonly ComputerStatusKind[]) =>
+    computers?.some((computer) => statuses.includes(computer.status));
+  if (has(TRANSITIONAL_STATUSES)) return TRANSITION_POLL_MS;
+  return has(SETTLED_LIVE_STATUSES) ? SETTLED_POLL_MS : false;
 }
 
 // Cached callbacks outlive the hooks; keep hook scope out of these closures.

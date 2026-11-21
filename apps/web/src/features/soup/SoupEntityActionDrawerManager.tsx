@@ -105,7 +105,11 @@ export function MaybeSoupEntityActionDrawerManager(props: {
       setEntry(() => nextEntry);
       setIsOpen(true);
     },
-    close: () => setIsOpen(false),
+    close: () => {
+      if (!isOpen()) return;
+      setIsOpen(false);
+      entry()?.onClose?.();
+    },
   };
 
   let wrapperEl!: HTMLDivElement;

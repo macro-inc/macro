@@ -408,10 +408,12 @@ async fn inboxes_with_focus_are_those_holding_a_focus_thread(
             FocusInboxOwner {
                 link_id: OWNER_LINK,
                 owner: owner(),
+                delegates: Vec::new(),
             },
             FocusInboxOwner {
                 link_id: OTHER_LINK,
                 owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+                delegates: Vec::new(),
             },
         ]
     );
@@ -434,10 +436,12 @@ async fn syncing_inboxes_are_every_connected_inbox_still_syncing(
             FocusInboxOwner {
                 link_id: OWNER_LINK,
                 owner: owner(),
+                delegates: Vec::new(),
             },
             FocusInboxOwner {
                 link_id: OTHER_LINK,
                 owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+                delegates: Vec::new(),
             },
         ]
     );
@@ -634,6 +638,88 @@ async fn focus_covers_inboxes_linked_to_the_owner(pool: Pool<Postgres>) -> Resul
         repo.focus_for_threads(&owner(), &[OTHER_THREAD], now, now)
             .await?
             .contains_key(&OTHER_THREAD)
+    );
+    Ok(())
+}
+
+/// The inbox in `inboxes` with id `link_id`.
+fn inbox_of(inboxes: &[FocusInboxOwner], link_id: Uuid) -> &FocusInboxOwner {
+    inboxes
+        .iter()
+        .find(|inbox| inbox.link_id == link_id)
+        .expect("inbox listed")
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_linked")
+    )
+)]
+async fn every_read_of_a_linked_inbox_names_the_user_it_is_linked_to(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), Utc::now(), 70)
+    })
+    .await?;
+
+    let linked = repo.thread_inbox(OTHER_THREAD).await?.expect("thread");
+    assert_eq!(
+        linked.owner,
+        MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap()
+    );
+    assert_eq!(linked.delegates, vec![owner()]);
+    let own = repo.thread_inbox(INVOICE).await?.expect("thread");
+    assert!(own.delegates.is_empty());
+
+    let with_focus = repo.inboxes_with_focus().await?;
+    assert_eq!(inbox_of(&with_focus, OTHER_LINK).delegates, vec![owner()]);
+    let syncing = repo.syncing_inboxes().await?;
+    assert_eq!(inbox_of(&syncing, OTHER_LINK).delegates, vec![owner()]);
+    assert!(inbox_of(&syncing, OWNER_LINK).delegates.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_linked", "email_focus_linked_shared")
+    )
+)]
+async fn a_mailbox_several_people_read_names_each_of_them_once(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), Utc::now(), 70)
+    })
+    .await?;
+    // Sorted, each once, and never the inbox's own owner.
+    let readers = vec![
+        MacroUserIdStr::try_from_email("assistant@acme.example").unwrap(),
+        owner(),
+    ];
+
+    assert_eq!(
+        repo.thread_inbox(OTHER_THREAD)
+            .await?
+            .expect("thread")
+            .delegates,
+        readers
+    );
+    assert_eq!(
+        inbox_of(&repo.inboxes_with_focus().await?, OTHER_LINK).delegates,
+        readers
+    );
+    assert_eq!(
+        inbox_of(&repo.syncing_inboxes().await?, OTHER_LINK).delegates,
+        readers
     );
     Ok(())
 }

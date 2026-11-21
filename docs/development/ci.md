@@ -44,6 +44,13 @@ replace another run: a re-run in the queue would replace the push waiting
 and test an older commit in its place (`concurrency` in `xtask_workflows`'
 `email_e2e.rs`).
 
+The channels suite (`channels_e2e.yml`,
+[its README](../../apps/web/tests/channels-e2e/README.md#in-ci)) runs the same
+way: on pushes to `main`, queued as above, and nightly at 04:00 UTC; not in
+`PR CI`. On a branch, `gh workflow run channels_e2e.yml --ref <branch>`. Its
+last job is the same `Tell Macro Alerts` job, so what follows holds for it
+too, with the nightly run in place of the sweep.
+
 ### When an email end-to-end alert fires
 
 The last job of each of the three workflows, `Tell Macro Alerts`
@@ -84,10 +91,18 @@ last pass.
    `email-e2e-browser-logs-<shard>`, `email-e2e-full-stack-logs`) and the
    browser suite its Playwright traces (`email-e2e-browser-traces-<shard>`,
    `email-e2e-full-stack-traces`).
+   The channels suite has two jobs (the app without and with channel local
+   sync; the second adds `-local-sync-on` to its artifact names) and no
+   coverage job: each summary has the
+   ledger check, its report is `channels-e2e-report`, and a failed run keeps
+   `channels-e2e-stack-logs` and `channels-e2e-results` (the traces).
 2. Run the test locally: `just email-e2e <scenario>` for a Rust scenario,
    `just email-e2e-browser <test>` for a browser test, and the
    [full-stack tier's commands](../../apps/web/tests/email-e2e/README.md#the-full-stack-tier)
    for a `full-stack-*` test.
+   For a channels test, start and seed a stack and run
+   `just test-channels-e2e <instance> -g <test id>` from `apps/web`
+   ([README](../../apps/web/tests/channels-e2e/README.md)).
 3. A change broke it: fix or revert the change. It fails for a product bug
    that will not be fixed now: keep the test, asserting the right behaviour,
    and mark it as a known bug, so it stops gating. A Rust scenario gets
@@ -98,11 +113,18 @@ last pass.
    ([README](../../apps/web/tests/email-e2e/README.md)). A bug that shows
    only in some runs is also tagged `@sometimes` (browser) or named under
    `[[intermittent_bug]]` in `crates/email_e2e/coverage/waivers.toml` (Rust).
+   A channels test is marked `knownDefect()` with a row in
+   `ledger/known-defects.tsv`, or wraps the check in `failsSometimes` with a
+   row in `ledger/intermittent-defects.tsv`.
 4. Kept for a known bug and now passing: the bug is fixed, and the alert
    comes from the known-bug report, not from a gating test. Remove the
    `#[ignore]` and the `bug` line of its function in
    `crates/email_e2e/coverage/functions.toml`, or the `@known-bug` tag and
    its waiver line, so the test gates again.
+   The channels suite runs its known-defect tests in every run, so one that
+   passes fails the run and is named with the failed tests as "marked as a
+   known defect, and now passes": remove its `knownDefect()` and its row in
+   `ledger/known-defects.tsv`.
 5. "This commit passed in an earlier run" means the failure may be flaky:
    re-run the failed jobs, and treat a test that passes only on a retry as a
    defect of the test or the product.

@@ -1,6 +1,7 @@
 import { match, P } from 'ts-pattern';
 import type {
   ActionTrigger,
+  AgentMcpServer,
   AgentTask,
   CodeStep,
   EventFilter,
@@ -127,6 +128,17 @@ export type RoutineStepOptions =
       agent?: Agent;
     };
 
+/** An app outside Macro that a routine's Ask AI step uses. */
+export interface RoutineApp {
+  /**
+   * The app's slug, e.g. `linear`: a connected app's `key`, or a connector's
+   * `slug`.
+   */
+  slug: string;
+  /** Its display name, e.g. `Linear`. */
+  name: string;
+}
+
 /** What every routine has, whatever it runs. */
 interface RoutineCommonOptions {
   /** Display name. */
@@ -143,6 +155,23 @@ interface RoutineCommonOptions {
    * creation; an update that omits it keeps the stored value.
    */
   runVisibility?: RunVisibility;
+  /**
+   * An icon and color for what the routine does, picked by the agent writing
+   * it: `{ icon: { kind: 'macro', name }, color }`, with `name` from Macro's
+   * icon catalog (a check or save naming another lists the catalog). Saved
+   * on create, and on an update made for the routine's owner, unless the
+   * owner chose the routine's look with {@link Routine.setAppearance}, which
+   * it never replaces; omit it to keep the stored look.
+   */
+  appearance?: EntityAppearance;
+  /**
+   * Apps outside Macro (Linear, GitHub, Notion…) the routine's Ask AI step
+   * uses. The owner must have each connected: saving and every run check.
+   * Only an Ask AI step reaches them, so a routine without one requires
+   * none. An update that omits `apps` is refused while the routine requires
+   * some; pass `[]` to remove them.
+   */
+  apps?: readonly RoutineApp[];
 }
 
 /**
@@ -581,12 +610,21 @@ function stepBody(step: RoutineStepOptions): RoutineStep {
     .exhaustive();
 }
 
+/** The apps a routine requires, as its task stores them; absent when not given. */
+export function appsBody(
+  apps: readonly RoutineApp[] | undefined,
+): AgentMcpServer[] | undefined {
+  return apps?.map((app) => ({ app_slug: app.slug, server_name: app.name }));
+}
+
 function taskBody(options: RoutineOptions): RoutineTask {
+  const mcpServers = appsBody(options.apps);
   return match(options)
     .returnType<RoutineTask>()
     .with({ steps: P.array() }, (program) => ({
       steps: program.steps.map(stepBody),
       dangerously_operate_as_user: program.dangerouslyOperateAsUser,
+      mcp_servers: mcpServers,
     }))
     .with(
       { prompt: P.string },
@@ -595,6 +633,7 @@ function taskBody(options: RoutineOptions): RoutineTask {
         user_prompt: agentTask.userPrompt,
         model: agentTask.model,
         agent: agentTask.agent ? { bot_id: agentTask.agent.id } : undefined,
+        mcp_servers: mcpServers,
       }),
     )
     .exhaustive();
@@ -607,6 +646,7 @@ export function routineBody(options: RoutineOptions) {
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
+    appearance: options.appearance,
     trigger: triggerBody(options.trigger),
     task: taskBody(options),
   };

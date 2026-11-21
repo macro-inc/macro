@@ -35,10 +35,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
           if (!current.people) return { kind: 'unsupported' };
           return current.people.snapshot(request);
         },
-        async reconcile(request) {
+        async reconcile(request, generation) {
           if (!current.people)
             throw new Error('Contact reconciliation is unsupported');
-          return current.people.reconcile(request);
+          return current.people.reconcile(request, generation);
         },
         async readSql(request) {
           if (!current.people) return { kind: 'unsupported' };
@@ -52,9 +52,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
           if (!current.people) return { kind: 'unsupported' };
           return current.people.context(scope);
         },
-        async update(update) {
+        async update(update, generation) {
           if (!current.people) throw new Error(PEOPLE_UNSUPPORTED);
-          return current.people.update(update);
+          return current.people.update(update, generation);
         },
         async search(request) {
           if (!current.people) return { kind: 'unsupported' };
@@ -65,6 +65,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   const wrapper: CacheHost = {
     clientId: inner.clientId,
     people,
+    get authority() {
+      return current.authority;
+    },
     get liveQueries() {
       return current.liveQueries;
     },
@@ -80,9 +83,11 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     search: (args, options) => current.search(args, options),
     entityFilter: (args) => current.entityFilter(args),
     calendarRange: (args) => current.calendarRange(args),
-    calendarCommit: (args) => current.calendarCommit(args),
+    calendarCommit: (args, generation) =>
+      current.calendarCommit(args, generation),
     channelTimeline: (args) => current.channelTimeline(args),
-    channelTimelineCommit: (args) => current.channelTimelineCommit(args),
+    channelTimelineCommit: (args, generation) =>
+      current.channelTimelineCommit(args, generation),
     channelTimelineEvict: (args) => current.channelTimelineEvict(args),
     channelTimelineStats: () => current.channelTimelineStats(),
     writeQuery: (args) => current.writeQuery(args),
@@ -115,7 +120,8 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     rollbackOptimisticWrite: (transactionId, claim, error, errorCode) =>
       current.rollbackOptimisticWrite(transactionId, claim, error, errorCode),
     invalidate: (keys) => current.invalidate(keys),
-    deleteRecords: (keys) => current.deleteRecords(keys),
+    deleteRecords: (keys, generation) =>
+      current.deleteRecords(keys, generation),
     teardown: (opKey) => current.teardown(opKey),
     clear: () => current.clear(),
     onOpsAffected: (cb) =>

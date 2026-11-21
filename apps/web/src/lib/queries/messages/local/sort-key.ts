@@ -20,7 +20,7 @@ export const channelActivityKey = (id: string) =>
  * Microseconds since the epoch of an RFC 3339 timestamp. `Date` keeps only
  * milliseconds, and the server orders by the stored microseconds.
  */
-function timestampMicros(timestamp: string): bigint | undefined {
+export function timestampMicros(timestamp: string): bigint | undefined {
   const seconds = Date.parse(timestamp.replace(TIMESTAMP_FRACTION, ''));
   if (Number.isNaN(seconds)) return undefined;
   const fraction = (TIMESTAMP_FRACTION.exec(timestamp)?.[1] ?? '')

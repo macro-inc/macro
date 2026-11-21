@@ -4,6 +4,7 @@ import {
 } from '@graphql-cache/people/generated';
 import type { PeopleCache } from '@graphql-cache/people/host';
 import { PEOPLE_UNSUPPORTED } from '@graphql-cache/people/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   EMPTY_PERSON_FACTS,
@@ -27,6 +28,7 @@ export type ContactContextPublishState =
  * replaces the snapshot instead of retaining an unbounded update history.
  * Source snapshots contain existing channel/inbox facts, never directory rows. */
 export class ContactContextPublisher {
+  private readonly generation = cacheSessionGeneration.capture();
   private source: ReadonlyMap<string, PersonFacts> | undefined;
   private readonly dirty = new Map<string, number>();
   private sequence = 0;
@@ -89,6 +91,7 @@ export class ContactContextPublisher {
       this.stopped ||
       !this.source ||
       continuity !== this.continuity ||
+      !cacheSessionGeneration.isCurrent(this.generation) ||
       !this.current()
     )
       throw new ContactContextCanceled();
@@ -102,7 +105,7 @@ export class ContactContextPublisher {
   ): Promise<void> {
     this.assertActive(continuity);
     await span.run(() =>
-      this.cache.update({ scope: this.scope, epoch, action })
+      this.cache.update({ scope: this.scope, epoch, action }, this.generation)
     );
     this.assertActive(continuity);
   }

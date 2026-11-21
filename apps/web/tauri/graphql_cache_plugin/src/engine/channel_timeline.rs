@@ -52,9 +52,8 @@ impl EngineHandle {
         &self,
         request: ChannelTimelineRequest,
     ) -> Result<ChannelTimelineResultWire, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .channel_timeline(&request)
             .await
@@ -71,7 +70,7 @@ impl EngineHandle {
         &self,
         commit: ChannelTimelineCommit,
     ) -> Result<ChannelCommitResultWire, String> {
-        let mut state = self.inner.write().await;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .channel_timeline_commit(&commit)
@@ -94,7 +93,7 @@ impl EngineHandle {
         &self,
         eviction: ChannelEviction,
     ) -> Result<ChannelEvictionResultWire, String> {
-        let mut state = self.inner.write().await;
+        let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .channel_timeline_evict(&eviction)
@@ -115,9 +114,8 @@ impl EngineHandle {
 
     /// Counts the channels and entries the timeline index holds.
     pub async fn channel_timeline_stats(&self) -> Result<ChannelTimelineStats, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .channel_timeline_stats()
             .await

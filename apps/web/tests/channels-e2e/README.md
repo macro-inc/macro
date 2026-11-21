@@ -76,6 +76,27 @@ environment.
   `VITE_ENABLE_CHANNEL_LOCAL_SYNC` and compared ([fuzz/README.md](fuzz/README.md)).
   It is run by hand, not by `just test-channels-e2e` or CI.
 
+## In CI
+
+`Channels end-to-end` (`channels_e2e.yml`) is not part of `PR CI`, and
+`CI gate` does not wait for it. Every run has two jobs: the suite on the app
+built without `VITE_ENABLE_CHANNEL_LOCAL_SYNC`, and on the app built with it.
+
+| When | What runs |
+| --- | --- |
+| A push to `main` that changes the web app, backend code, or what the stack is seeded and started from | Both jobs, each with the ledger check, one run at a time; of the pushes that come meanwhile only the newest waits. |
+| Nightly, 04:00 UTC | The same, on `main`. |
+| By hand: `gh workflow run channels_e2e.yml --ref <branch>` | The same, on that branch. Do this before merging a change to channels or to the suite. |
+
+A red run on `main` blocks nothing. Its last job tells the Macro Alerts
+channel when the pushes or the nightly runs turn red, and when they pass again
+([what to do](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires)).
+The message names the failed tests of the job without the flag; a failure of
+the other job turns the run red too, and its tests are in that job's log.
+A failed job keeps the stack's logs (`channels-e2e-stack-logs`) and its
+traces (`channels-e2e-results`); the job with the flag adds `-local-sync-on`
+to each name.
+
 ## The ledger
 
 `ledger/inventory.tsv` lists what channels do, and for each thing the tests

@@ -195,6 +195,10 @@ impl SuggestionSources for FakeSources {
     async fn apps(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<String>> {
         Ok(vec!["slack".to_owned()])
     }
+
+    async fn crm(&self, _: &MacroUserIdStr<'static>) -> Result<bool> {
+        Ok(true)
+    }
 }
 
 /// Generation sessions open in a generation, and the latest status.
@@ -1106,6 +1110,53 @@ async fn a_drafted_routine_brings_its_card_and_a_catalog_pick_none() {
     .await;
     assert!(!named.ok);
     assert_eq!(h.repo.cards.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_drafted_routine_is_kept_without_its_look() {
+    let h = harness(true);
+    let session = open_session(&h, &[Surface::Tasks]).await;
+    let SuggestRequest::Routine {
+        mut routine,
+        created,
+        reason,
+        surfaces,
+        keep_probability,
+        card,
+    } = drafted("You chase late deliveries every week", 0.6)
+    else {
+        unreachable!()
+    };
+    routine.appearance = Some(model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "chart-bar".to_owned(),
+        }),
+        color: Some(model_entity::AppearanceColor::Blue),
+    });
+    let kept = suggest(
+        &h,
+        session,
+        SuggestRequest::Routine {
+            routine,
+            created,
+            reason,
+            surfaces,
+            keep_probability,
+            card,
+        },
+    )
+    .await;
+    assert!(kept.ok, "{kept:?}");
+    // Stored as a configuration a replica built before `appearance` can read.
+    let stored = h.repo.suggestions.lock().unwrap();
+    let Some(StoredPick::Routine { routine }) = stored
+        .iter()
+        .find(|suggestion| Some(suggestion.id) == kept.id)
+        .map(|suggestion| &suggestion.pick)
+    else {
+        panic!("a drafted routine");
+    };
+    assert_eq!(routine.appearance, None);
 }
 
 /// Saving a routine started on mail needs the person's event flag and a
