@@ -613,3 +613,12 @@ async fn a_follow_up_keeps_the_previous_requests_entities() {
 
     assert!(result.contains("\n## calendar\n"));
 }
+
+#[test]
+fn a_short_unknown_symbol_is_near_only_one_edit_away() {
+    let read = read_symbols(&["Tasks".to_owned(), "Taxi".to_owned()]);
+    assert_eq!(read.unknown, ["Tasks", "Taxi"]);
+    assert_eq!(read.suggestions.len(), 1);
+    assert_eq!(read.suggestions[0].symbol, "Tasks");
+    assert_eq!(read.suggestions[0].did_you_mean[0], "Task");
+}

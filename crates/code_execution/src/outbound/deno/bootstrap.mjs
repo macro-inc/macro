@@ -18,8 +18,29 @@ const hasOwn = Object.hasOwn;
 const SEARCHES_IN_FLIGHT = 4;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
 const LOOP_HINT_CALLS = 50;
+// A program can return, log or rethrow an error's stack, whose frames name
+// this run's scratch directory and the minified SDK bundle beside it. Neither
+// helps a model, and the bundle's path invites it to read the bundle: a frame
+// in the program keeps only `main.ts:line:column`, and a run of frames in any
+// other scratch file becomes one `at <Macro SDK>`.
+// The directory appears as a file URL, percent-encoded, in frames and as a
+// plain path elsewhere. A frame is `at name (location)` or `at location`; its
+// name is bounded so a long text with many "at " words stays linear.
+const scratchUrlPath = new URL("./", import.meta.url).pathname;
+const scratchPaths = [...new Set([scratchUrlPath, decodeURIComponent(scratchUrlPath)])];
+const escapedScratch = scratchPaths.map((path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+const scratchFrame = new RegExp(`\\bat (?:async )?(?:[^"\\\\()]{0,200} \\()?(?:file://)?(?:${escapedScratch})(?!main\\.ts:)[^:)"\\\\]+:\\d+:\\d+\\)?`, "g");
+const scratchPrefix = new RegExp(`(?:file://)?(?:${escapedScratch})`, "g");
+const repeatedSdkFrames = /at <Macro SDK>(?:\\n\s*at <Macro SDK>)+/g;
+function withoutScratchPaths(json) {
+  if (!scratchPaths.some((path) => json.includes(path))) return json;
+  return json
+    .replace(scratchFrame, "at <Macro SDK>")
+    .replace(scratchPrefix, "")
+    .replace(repeatedSdkFrames, "at <Macro SDK>");
+}
 function emit(frame) {
-  const bytes = encoder.encode(`${stringify(frame)}\n`);
+  const bytes = encoder.encode(`${withoutScratchPaths(stringify(frame))}\n`);
   let offset = 0;
   while (offset < bytes.length) offset += write(bytes.subarray(offset));
 }

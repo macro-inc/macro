@@ -46,6 +46,18 @@ const PROMPTS: &[(&str, &[&str])] = &[
         "How many rows in Leads have revenue over 10k?",
         &["databases"],
     ),
+    (
+        "Add an Hours Spent number field to my tasks so I can log time",
+        &["tasks", "properties"],
+    ),
+    (
+        "Only tasks assigned to me with their due date, and put somewhere in the task where I can enter the hours it took",
+        &["tasks", "properties"],
+    ),
+    (
+        "Add an Hours Spent field to the deals in our Sales pipeline",
+        &["crm"],
+    ),
     ("Move Acme to Negotiation", &["crm"]),
     ("Which deals in the pipeline are owned by Sam?", &["crm"]),
     (
