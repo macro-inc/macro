@@ -466,3 +466,29 @@ fn an_install_problem_reads_camel_case_on_the_api() {
         serde_json::json!({"kind": "rolledBack", "reason": "badConfiguration"})
     );
 }
+
+#[tokio::test]
+async fn listing_reads_every_agents_install_in_one_query() {
+    let (service, _, _) = self_hosted_service();
+    service.create(receipt(), own(LAPTOP)).await.unwrap();
+    service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                purchase_key: "invite-2".to_owned(),
+                name: "Ada".to_owned(),
+                ..own(DESKTOP)
+            },
+        )
+        .await
+        .unwrap();
+    let before = service.installs.agent_reads.load(Ordering::SeqCst);
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents.len(), 2);
+    assert_eq!(
+        service.installs.agent_reads.load(Ordering::SeqCst) - before,
+        1
+    );
+}

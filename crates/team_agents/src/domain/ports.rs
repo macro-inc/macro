@@ -273,6 +273,12 @@ pub trait TeammateInstalls: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
 
+    /// The installs of those of `agents` that have one, in one read.
+    fn for_agents(
+        &self,
+        agents: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
+
     /// An install by its id.
     fn by_id(
         &self,

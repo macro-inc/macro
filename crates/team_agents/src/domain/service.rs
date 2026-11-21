@@ -567,9 +567,19 @@ where
     }
 
     async fn team_agent(&self, record: TeamAgentRecord) -> Result<TeamAgent, TeamAgentError> {
+        let install = self.installs.for_agent(&record.user_id).await?;
+        self.team_agent_with(record, install).await
+    }
+
+    /// The agent from its record and its install, if it has one.
+    async fn team_agent_with(
+        &self,
+        record: TeamAgentRecord,
+        install: Option<TeammateInstallRecord>,
+    ) -> Result<TeamAgent, TeamAgentError> {
         // An agent runs either on its owner's own machine or on a Macro
         // computer, never both.
-        if let Some(install) = self.installs.for_agent(&record.user_id).await? {
+        if let Some(install) = install {
             return Ok(Self::installed_agent(record, &install));
         }
         let computer_id = self
@@ -719,9 +729,18 @@ where
             .list_for_team(team_id(&receipt)?)
             .await
             .map_err(TeamAgentError::internal)?;
+        let users: Vec<_> = records
+            .iter()
+            .map(|record| record.user_id.clone())
+            .collect();
+        let mut installs = self.installs.for_agents(&users).await?;
         let mut agents = Vec::with_capacity(records.len());
         for record in records {
-            agents.push(self.team_agent(record).await?);
+            let install = installs
+                .iter()
+                .position(|install| install.agent == record.user_id)
+                .map(|index| installs.swap_remove(index));
+            agents.push(self.team_agent_with(record, install).await?);
         }
         Ok(TeamAgents { agents })
     }

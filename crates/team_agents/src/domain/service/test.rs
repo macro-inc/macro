@@ -475,6 +475,8 @@ struct FakeInstalls {
     journal: Journal,
     rows: Arc<Mutex<Vec<TeammateInstallRecord>>>,
     hosts: Arc<Mutex<Vec<(MacroUserIdStr<'static>, HostFacts)>>>,
+    /// Queries that read installs by agent.
+    agent_reads: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl FakeInstalls {
@@ -543,6 +545,7 @@ impl TeammateInstalls for FakeInstalls {
         &self,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        self.agent_reads.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .rows
             .lock()
@@ -550,6 +553,21 @@ impl TeammateInstalls for FakeInstalls {
             .iter()
             .find(|row| row.agent.as_ref() == agent.as_ref())
             .cloned())
+    }
+
+    async fn for_agents(
+        &self,
+        agents: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        self.agent_reads.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|row| agents.contains(&row.agent))
+            .cloned()
+            .collect())
     }
 
     async fn by_id(

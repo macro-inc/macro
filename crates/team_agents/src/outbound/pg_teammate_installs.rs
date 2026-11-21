@@ -242,6 +242,32 @@ impl TeammateInstalls for PgTeammateInstalls {
         .transpose()
     }
 
+    #[tracing::instrument(skip_all, fields(agents = agents.len()), err)]
+    async fn for_agents(
+        &self,
+        agents: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        let agents: Vec<&str> = agents.iter().map(|agent| agent.as_ref()).collect();
+        sqlx::query_as!(
+            InstallRow,
+            r#"
+            SELECT install_id, agent_user_id, team_id, harness_id, generation, run_state,
+                   failure, delivery, applied_generation, applied_delivery, checkpoint,
+                   move_to_harness_id,
+                   checkpoint_started_at, delivered_image_id
+            FROM team_agent_installs
+            WHERE agent_user_id = ANY($1::TEXT[])
+            "#,
+            &agents as &[&str],
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?
+        .into_iter()
+        .map(TeammateInstallRecord::try_from)
+        .collect()
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn by_id(
         &self,

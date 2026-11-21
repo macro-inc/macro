@@ -560,3 +560,30 @@ async fn a_start_refused_for_network_isolation_is_stored_with_its_reason(pool: P
         Some(InstallFailure::NetworkIsolationUnavailable)
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_teams_installs_are_read_in_one_query_by_agent(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+    let without_install = MacroUserIdStr::parse_from_str("macro|nobody@example.com")
+        .unwrap()
+        .into_owned();
+
+    let found = installs
+        .for_agents(&[agent, without_install])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        found
+            .iter()
+            .map(|install| install.install_id)
+            .collect::<Vec<_>>(),
+        [INSTALL]
+    );
+}
