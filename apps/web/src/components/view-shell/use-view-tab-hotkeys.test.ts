@@ -112,6 +112,44 @@ it('switches tabs only while they are on screen and the keyboard is on their pan
   });
 });
 
+it('takes the key from what stands for the pane, never from a data grid', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    const main = view.split.querySelector('[data-view-shell-main]')!;
+    main.insertAdjacentHTML(
+      'beforeend',
+      `<div role="table" aria-label="Routines" tabindex="-1"></div>
+       <div data-pane-focus tabindex="-1"></div>
+       <div role="grid" aria-label="Tasks" data-owns-arrow-keys tabindex="-1"></div>`
+    );
+    const move = vi.fn();
+    useViewTabHotkeys({
+      scopeId: 'split-test',
+      tabs: () => view.tabs,
+      ids: () => ['all', 'on'],
+      activeId: () => 'all',
+      setActiveId: move,
+      label: (id) => id,
+    });
+
+    expect(handler('tab')(keydown(main.querySelector('[role="table"]')!))).toBe(
+      true
+    );
+    expect(
+      handler('tab')(keydown(main.querySelector('[data-pane-focus]')!))
+    ).toBe(true);
+    // A database's own grid takes focus with a range of cells selected.
+    expect(
+      handler('tab')(keydown(main.querySelector('[data-owns-arrow-keys]')!))
+    ).toBe(false);
+    expect(
+      handler('2')(keydown(main.querySelector('[data-owns-arrow-keys]')!))
+    ).toBe(false);
+    expect(move).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+});
+
 it('names each number key after its tab and offers only the tabs there are', () => {
   createRoot((dispose) => {
     const view = pane();
@@ -187,7 +225,7 @@ it('leaves the split itself to the pane the user last put the keyboard in', () =
     // The detail replacing what was pressed keeps the keyboard there.
     view.detailText.remove();
     expect(handler('tab')(keydown(view.split))).toBe(false);
-    // A pane no longer on screen (a list the open item now covers) does not.
+    // A pane no longer laid out (hidden while another takes its place) does not.
     const detail = view.split.querySelector('[data-view-shell-detail]')!;
     Object.defineProperty(detail, 'getClientRects', { value: () => [] });
     expect(handler('tab')(keydown(view.split))).toBe(true);

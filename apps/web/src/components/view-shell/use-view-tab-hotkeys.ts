@@ -28,10 +28,17 @@ export type UseViewTabHotkeysOptions<TTab extends string> = {
 /**
  * Focus targets that stand for the pane itself rather than for one of its
  * controls: a container that owns keys (the split, a conversation's message
- * list, a list scope) or a list grid, whose rows take focus virtually.
+ * list, a list scope), a list whose rows take focus virtually, or a container
+ * a view focuses to give its pane the keyboard, marked `data-pane-focus`.
  */
 const PANE_FOCUS_SELECTOR =
-  '[data-hotkey-scope], [role="grid"], [role="treegrid"], [role="tree"], [role="listbox"]';
+  '[data-hotkey-scope], [data-pane-focus], [role="grid"], [role="treegrid"], [role="tree"], [role="listbox"], [role="table"]';
+
+/**
+ * Data grids and canvases that move by the arrow keys (a database's cells, a
+ * slide stage) are content, not a list: a key there is never the pane's.
+ */
+const OWNS_ITS_KEYS_SELECTOR = '[data-owns-arrow-keys]';
 
 /** The view-shell regions a split lays its list, sidebar and detail in. */
 const PANE_REGION_SELECTOR =
@@ -73,7 +80,11 @@ function keyboardIsOnPane(
       !!pane?.contains(lastPlace)
     );
   if (!pane?.contains(target)) return false;
-  return target.matches(PANE_FOCUS_SELECTOR) && !isEditableInput(target);
+  return (
+    target.matches(PANE_FOCUS_SELECTOR) &&
+    !target.matches(OWNS_ITS_KEYS_SELECTOR) &&
+    !isEditableInput(target)
+  );
 }
 
 /**

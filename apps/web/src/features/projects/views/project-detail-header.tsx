@@ -7,6 +7,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { createSignal, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { ProjectSection } from '../core/project';
 import type { ProjectDetailHeaderProps } from '../project-detail';
 import { ProjectTitleMenu } from '../project-title-menu';
@@ -26,9 +27,10 @@ export function ProjectDetailHeader(props: ProjectDetailHeaderProps) {
       activeId: () => props.section,
       setActiveId: props.onSectionChange,
       label: (section) =>
-        section === 'overview'
-          ? t('tabs.project-overview')
-          : t('tabs.project-tasks'),
+        match(section)
+          .with('overview', () => t('tabs.project-overview'))
+          .with('tasks', () => t('tabs.project-tasks'))
+          .exhaustive(),
     });
   }
 
