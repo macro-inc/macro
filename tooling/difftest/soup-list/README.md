@@ -15,10 +15,35 @@ from its own Vite with `probe/` copied in, and runs the passes in `PASSES`: quie
 (seed `A1`), under concurrent load (`B1`), with the browser cache off (`C1`),
 mutants (`M1`: each planted mutant in its own lane, plus a control) and an A/A
 control (`D1`: main against itself, the base rate of each difference kind).
-Environment variables override the defaults at the top of the script.
+The A/A serves main from a second checkout (`AA_CHECKOUT`, default
+`<repo>-main2`, at `OLD_REF`) on the new side's port, so each side has its own
+Vite as in the real passes; one Vite serving both sides made its steps several
+times slower than theirs. Environment variables override the defaults at the
+top of the script.
+
+Each pass logs every sequence step with its duration (`seq <n> step <i> <kind>:
+<ms> ms`), and each missed live update in the results carries the app's own
+spans from that step, per side (`phases`). World building retries a document
+create that failed on a backend hop (DSS answering 500 "error sending
+request" to the lexical or sync service, on a loaded machine) and reports how
+many it retried as `meta.setupRetries`; sequence steps are never retried.
+
+`bun run against-aa.ts results/aa.json results/quiet.json ...` puts each
+sequence failure bucket next to the A/A's rate for the same bucket, per 100
+steps of that kind.
 
 `repro/` holds the minimal repros of the differences the runs found; each says
-what it shows at the top.
+what it shows and how to run it at the top:
+
+| Repro | Shows |
+| --- | --- |
+| `or-chain-depth.ts` | Main's PR-link query nests one `or` per id and REST Soup rejects it past serde_json's recursion limit. |
+| `team-property.ts` | A task's team select property as REST and GraphQL Soup return it, assigned and after its option is deleted. |
+| `preview-option-delete.ts` | Whether a list read with `ignoresNotifications` sees an option deleted elsewhere. |
+| `rename-writes.ts` | How many times a rename writes an entity's `updated_at`. |
+| `qa-rename.ts` | Whether each side's live Quick Access skills or snippets list reaches what a reload shows after a rename. |
+| `session-rename.ts` | When each side's Quick Access sessions list shows a rename, with the app's spans per phase. |
+| `replay.ts` | One reader on both apps as an existing synthetic user, with every failed response. |
 
 ## Pieces
 
@@ -34,6 +59,7 @@ what it shows at the top.
 | `lib/compare.ts` | Field-by-field comparison and the named rules for differences callers can't see. |
 | `probe/` | Mounts the real callers inside each app and exposes their output. |
 | `summarize.ts` | Folds result files into one summary. |
+| `against-aa.ts` | Each run's failure buckets against the A/A control's rates. |
 
 Only synthetic data: every user is under `*.difftest.dev`. The auth service
 allows 50 new users per address per hour, so `run.sh` resets that counter in the
