@@ -1352,10 +1352,12 @@ describe('useChannelParticipantsQuery', () => {
     const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
     const second = Promise.withResolvers<unknown>();
     const third = Promise.withResolvers<unknown>();
+    const fourth = Promise.withResolvers<unknown>();
     storage.getChannelParticipants
       .mockResolvedValueOnce(ok([owner, restRow('a', '2026-01-03T00:00:00Z')]))
       .mockReturnValueOnce(second.promise)
-      .mockReturnValueOnce(third.promise);
+      .mockReturnValueOnce(third.promise)
+      .mockReturnValueOnce(fourth.promise);
     const { add, ids } = mount();
 
     add.mutate({ channelId: 'channel-1', participants: ['a'] });
@@ -1372,9 +1374,59 @@ describe('useChannelParticipantsQuery', () => {
     ]);
     await vi.advanceTimersByTimeAsync(0);
     expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    // The check already out when this answer arrived still decides.
     second.resolve(ok([owner]));
     await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+    // A check sent after it arrived does not hold it off.
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+      participant('other', '2026-01-04T00:00:00Z', 'admin'),
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(4);
+    third.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
     expect(ids()).toEqual(['owner', 'other']);
+  });
+
+  it('lets a recheck already out when an older one answers decide whether a confirmed write holds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const a = restRow('a', '2026-01-03T00:00:00Z');
+    const other = restRow('other', '2026-01-04T00:00:00Z');
+    const second = Promise.withResolvers<unknown>();
+    const third = Promise.withResolvers<unknown>();
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, a]))
+      .mockReturnValueOnce(second.promise)
+      .mockReturnValueOnce(third.promise)
+      .mockResolvedValue(ok([owner, a, other]));
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+
+    // Someone removes a, who rejoins; two late records ask twice.
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'admin')]);
+    await vi.advanceTimersByTimeAsync(0);
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+      participant('other', '2026-01-04T00:00:00Z'),
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(3);
+    // The first recheck saw a gone; the second, already out, sees them back.
+    second.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+    third.resolve(ok([owner, a, other]));
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
   });
 
   it('lets a remove win over an earlier add whose soup update has not arrived', async () => {
