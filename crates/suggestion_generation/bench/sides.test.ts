@@ -60,6 +60,10 @@ describe('one side of a comparison', () => {
   test('refuses runs scored against different answer keys, or one without them', () => {
     expect(() => joinRuns('a,b', [run(), run({ keys: { ana: 'changed', bo: 'kb' } })])).toThrow("different answer keys for ana");
     expect(() => joinRuns('a,b', [run(), run({ keys: undefined })])).toThrow('rejudge it');
+    // A held-out run without keys can't be rejudged: it is run again.
+    const held = (over: Partial<RunFile>) => run({ attempts: [attempt('ana', 1, true), attempt('bo', 1, true)], ...over });
+    expect(() => joinRuns('a,b', [held({}), held({ keys: undefined })])).toThrow('run it again');
+    expect(() => comparable(held({}), held({ keys: undefined }))).toThrow('run it again');
   });
 
   test('never names a held-out person', () => {
@@ -166,6 +170,8 @@ describe('a rescore', () => {
     expect(unrecordedKeys(run({ keys: undefined }), [held('ana'), persona('bo')])).toBe(1);
     expect(unrecordedKeys(run({ keys: { ana: 'ka' } }), [held('ana'), held('bo')])).toBe(1);
     expect(unrecordedKeys(run({ keys: { ana: 'ka', bo: 'kb' } }), [held('ana'), held('bo')])).toBe(0);
+    // A name that is an inherited property is no key.
+    expect(unrecordedKeys(run({ keys: {} }), [held('constructor')])).toBe(1);
   });
 
   test("refuses a run that can't show which keys its marks were judged against", () => {

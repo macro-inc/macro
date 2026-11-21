@@ -12,8 +12,13 @@ export const digestOf = (run: RunFile, name: string) => (run.personas && Object.
 /** The digest of the answer keys a run scored a persona against, if it recorded one. */
 export const keyOf = (run: RunFile, name: string) => (run.keys && Object.hasOwn(run.keys, name) ? run.keys[name] : undefined);
 
+const heldoutIn = (runs: RunFile[], name: string) => runs.some((run) => run.attempts.some((attempt) => attempt.persona === name && attempt.heldout));
+
 /** How an error names persona `name` of `runs`: a held-out person never by name. */
-const named = (runs: RunFile[], name: string) => (runs.some((run) => run.attempts.some((attempt) => attempt.persona === name && attempt.heldout)) ? 'a held-out person' : name);
+const named = (runs: RunFile[], name: string) => (heldoutIn(runs, name) ? 'a held-out person' : name);
+
+/** What to do with a run of `runs` that recorded no keys for `name`: a held-out one isn't judged again (`unrecordedKeys`). */
+const recordKeys = (runs: RunFile[], name: string) => (heldoutIn(runs, name) ? "run it again: a held-out run that recorded no keys isn't judged again" : 'rejudge it to record the keys it is scored against');
 
 const personasOf = (run: RunFile) => new Set(run.attempts.map((attempt) => attempt.persona));
 
@@ -51,7 +56,7 @@ export function joinRuns(arg: string, runs: RunFile[]): RunFile {
       if ((personas.get(name) ?? digest) !== digest) throw new Error(`${arg} joins runs that read ${named(runs, name)}'s workspace or mail differently`);
       personas.set(name, digest);
       const key = keyOf(run, name);
-      if (!key) throw new Error(`${arg} joins a run with no digest of ${named(runs, name)}'s answer keys: rejudge it to record the keys it is scored against`);
+      if (!key) throw new Error(`${arg} joins a run with no digest of ${named(runs, name)}'s answer keys: ${recordKeys(runs, name)}`);
       if ((keys.get(name) ?? key) !== key) throw new Error(`${arg} joins runs scored against different answer keys for ${named(runs, name)}: rejudge the older one`);
       keys.set(name, key);
     }
@@ -86,7 +91,7 @@ export function comparable(a: RunFile, b: RunFile) {
     if (!da || !db) throw new Error(`${(da ? b : a).label} has no digest of ${named([a, b], name)}, so what its generations read is unknown: run it again`);
     if (da !== db) throw new Error(`${a.label} and ${b.label} read ${named([a, b], name)}'s workspace or mail differently`);
     const [ka, kb] = [keyOf(a, name), keyOf(b, name)];
-    if (!ka || !kb) throw new Error(`${(ka ? b : a).label} has no digest of ${named([a, b], name)}'s answer keys: rejudge it to record the keys it is scored against`);
+    if (!ka || !kb) throw new Error(`${(ka ? b : a).label} has no digest of ${named([a, b], name)}'s answer keys: ${recordKeys([a, b], name)}`);
     if (ka !== kb) throw new Error(`${a.label} and ${b.label} were scored against different answer keys for ${named([a, b], name)}: rejudge the older one`);
   }
 }
@@ -114,7 +119,7 @@ export function sameBuild(a: RunFile, b: RunFile) {
  * isn't judged again.
  */
 export function unrecordedKeys(run: RunFile, people: Persona[]): number {
-  return people.filter((persona) => persona.heldout && !run.keys?.[persona.name]).length;
+  return people.filter((persona) => persona.heldout && !keyOf(run, persona.name)).length;
 }
 
 export function staleKeys(run: RunFile, people: Persona[], keys: Record<string, string>): number {

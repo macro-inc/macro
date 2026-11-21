@@ -240,6 +240,12 @@ describe('workListOf', () => {
     // A URL linked to another target is a link, the target kept whole.
     expect(unlinkMarkdown(element('https://example.com/incoming/', 'https://example.com/incoming'))).toBe('[https://example.com/incoming](https://example.com/incoming/)');
     expect(unlinkMarkdown(element('https://example.com/incoming', 'https://example.com/incoming'))).toBe('https://example.com/incoming');
+    // A slash added to a bare host is the host's own link; one added to a path is another target.
+    expect(unlinkMarkdown(element('https://example.com/', 'example.com'))).toBe('example.com');
+    expect(unlinkMarkdown(element('https://example.com/incoming/', 'example.com/incoming'))).toBe('[example.com/incoming](https://example.com/incoming/)');
+    // A host with a port has no scheme.
+    expect(unlinkMarkdown(element('https://www.example.com:8443/incoming', 'www.example.com:8443/incoming'))).toBe('www.example.com:8443/incoming');
+    expect(unlinkMarkdown(element('mailto:ops@example.com', 'ops@example.com'))).toBe('ops@example.com');
     // An element that isn't one stays as it was.
     expect(unlinkMarkdown('<m-link>{not json}</m-link>')).toBe('<m-link>{not json}</m-link>');
     // One written as a link, its text not its target, stays the Markdown link it was written as.
@@ -591,6 +597,11 @@ describe('the finding score of a run', () => {
     const timedOut = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: unread }), failed('p3')] }]).join('\n');
     expect(timedOut).toContain('work lists read in 2 of 3 generations');
     expect(timedOut).not.toContain('fewer than 2');
+    // With one of two people built, the scores are withheld but the two read lists show.
+    const half = lines([{ ...run, attempts: [heldout('p1', { finding: list }), failed('p2')] }]).join('\n');
+    expect(half).toContain('fewer than 2: their aggregate would show one person');
+    expect(half).toContain('work lists read in 2 of 2 generations');
+    expect(half).not.toContain('good drafts per generation');
   });
 
   test('shows a held-out time or quality only over two people who have one', () => {

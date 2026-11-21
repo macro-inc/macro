@@ -21,6 +21,16 @@ export function withheldAcross(sides: Attempt[][]): string | undefined {
 /** Why `run`'s aggregate can't be shown (see `withheldAcross`). */
 export const withheld = (run: RunFile) => withheldAcross([run.attempts]);
 
+/** The lines of `run`'s work-list score `s.finding`, judged lists and all. */
+function listLines(run: RunFile, s: ReturnType<typeof summary>): string[] {
+  const finding = s.finding as { lists: number; read: number; errors: number; found: number; unreal: number; listed: number };
+  const errors = finding.errors ? ` (${finding.errors} more not judged)` : '';
+  const out = [`${run.section} (${run.label}): work lists read in ${finding.read} of ${finding.lists} generations${errors}; they named ${(100 * finding.found).toFixed(0)}% of the key's work streams, with ${finding.unreal.toFixed(1)} of ${finding.listed.toFixed(1)} entries naming none`];
+  // Every finding step failing is possible; a brief whose list the bench no longer finds is likelier.
+  if (!finding.read && finding.lists) out.push(`${run.section} (${run.label}): no drafting brief carried a list the bench read: check run.ts WORK_LIST_MARK against the drafting brief, then the finding step's failures in the harness log`);
+  return out;
+}
+
 const secs = (ms: number) => (Number.isFinite(ms) ? `${(ms / 1000).toFixed(0)}s` : '–');
 
 export function lines(runs: RunFile[]): string[] {
@@ -40,7 +50,12 @@ export function lines(runs: RunFile[]): string[] {
     );
   }
   for (const run of runs) {
-    if (withheld(run)) continue;
+    if (withheld(run)) {
+      // A list read before its build failed counts its person, so the lists can show where the scores can't.
+      const s = summary(run.attempts);
+      if (s.goodDrafts !== undefined && s.finding && !('withheld' in s.finding) && s.finding.lists) out.push('', ...listLines(run, s));
+      continue;
+    }
     const s = summary(run.attempts);
     const wrong = Object.entries(s.wrongPerRun)
       .sort((a, b) => b[1] - a[1])
@@ -52,12 +67,7 @@ export function lines(runs: RunFile[]): string[] {
       // A held-out list score shows only over two people's read lists or more, like the row above.
       if (s.finding && 'withheld' in s.finding) out.push(`${run.section} (${run.label}): ${s.finding.withheld} held-out people's work lists read and judged, fewer than ${MIN_HELDOUT_PEOPLE}: not shown${s.finding.errors ? ` (${s.finding.errors} not judged)` : ''}`);
       else if (s.finding && !s.finding.lists) out.push(`${run.section} (${run.label}): no work list could be judged (${s.finding.errors} failed)`);
-      else if (s.finding) {
-        const errors = s.finding.errors ? ` (${s.finding.errors} more not judged)` : '';
-        out.push(`${run.section} (${run.label}): work lists read in ${s.finding.read} of ${s.finding.lists} generations${errors}; they named ${(100 * s.finding.found).toFixed(0)}% of the key's work streams, with ${s.finding.unreal.toFixed(1)} of ${s.finding.listed.toFixed(1)} entries naming none`);
-        // Every finding step failing is possible; a brief whose list the bench no longer finds is likelier.
-        if (!s.finding.read && s.finding.lists) out.push(`${run.section} (${run.label}): no drafting brief carried a list the bench read: check run.ts WORK_LIST_MARK against the drafting brief, then the finding step's failures in the harness log`);
-      }
+      else if (s.finding) out.push(...listLines(run, s));
       out.push(`${run.section} (${run.label}): good drafts per generation ${s.goodDrafts.toFixed(2)} of ${s.drafts!.toFixed(2)} drafted, 5 or more in ${s.fiveGoodDrafts} of ${s.scored}; good catalog picks ${s.goodPicks!.toFixed(2)}${aimed}`);
       // The second measure, beside the first, where the run was judged for stream jobs.
       if (s.jobWithheld !== undefined) out.push(`${run.section} (${run.label}): ${s.jobWithheld} held-out people judged for stream jobs, fewer than ${MIN_HELDOUT_PEOPLE}: good drafts by stream job not shown${s.jobErrors ? ` (${s.jobErrors} whose jobs judgement failed)` : ''}`);
