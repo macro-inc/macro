@@ -120,6 +120,20 @@ describe('InteractionCard', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
+  it('keeps Submit disabled until the required answer is chosen', () => {
+    const { value, respond } = controller(true);
+    const view = render(() => (
+      <InteractionCard request={formQuestion} controller={value} />
+    ));
+    const card = within(view.getByRole('region', { name: 'Agent question' }));
+    const submit = card.getByRole('button', { name: 'Submit' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(respond).not.toHaveBeenCalled();
+    fireEvent.click(card.getByRole('radio', { name: /Blue/ }));
+    expect(submit.disabled).toBe(false);
+  });
+
   it('claims nothing about access while it is still loading', () => {
     const { value } = controller(false, false);
     const view = render(() => (

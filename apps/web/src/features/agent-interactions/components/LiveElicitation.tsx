@@ -42,6 +42,7 @@ import {
   type FieldValue,
   type FormValues,
   initialValues,
+  requiredAnswered,
   toContent,
   validate,
 } from '../state/elicitation-form';
@@ -66,6 +67,8 @@ export type FormDraft = {
   /** Problems shown to the user - none until the first submit attempt. */
   errors: Accessor<Record<string, string>>;
   setValue: (name: string, value: FieldValue) => void;
+  /** Every required field has an answer, so Submit can be pressed. */
+  answered: Accessor<boolean>;
   /**
    * The content to accept with, or undefined while the draft is not valid -
    * from then on the problems show.
@@ -88,6 +91,7 @@ function createFormDraft(schema: ElicitationSchema): FormDraft {
     values,
     errors: () => (touched() ? problems() : {}),
     setValue: (name, value) => setValues(name, value),
+    answered: () => requiredAnswered(schema, values),
     content: () => {
       setTouched(true);
       return Object.keys(problems()).length > 0
@@ -229,7 +233,7 @@ export function QuestionActions(props: {
           <Button
             variant={props.card ? 'secondary' : 'primary'}
             size={size()}
-            disabled={props.locked}
+            disabled={props.locked || !question().draft.answered()}
             onClick={() => submit(question().draft)}
           >
             Submit

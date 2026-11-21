@@ -1761,7 +1761,7 @@ typing row. Forms have one control per field (radios for a choice, a `Type your 
 row when the agent allows a custom answer, checkboxes for multi-select, text/number inputs).
 The footer has `Skip` on the left (it declines; its tooltip reads `The agent continues
 without your answer`) and `Submit` on the right. There is no Cancel: stopping the agent is the
-composer's `Stop`. Submit stays enabled and flags an empty required field when pressed. A link
+composer's `Stop`. Submit is disabled until every required question has an answer. A skipped native question reaches the agent as `skipped`. A link
 request shows the target host and URL with an `Open` button that only opens a new tab after
 you click it. An email draft under review has `Skip` under the composer. Once resolved the card
 collapses to `Question · <text>` with `Answered` / `Skipped` / `Cancelled` on the right and
