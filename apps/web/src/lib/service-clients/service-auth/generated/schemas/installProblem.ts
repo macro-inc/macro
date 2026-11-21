@@ -5,9 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InstallProblemOneOf } from './installProblemOneOf';
+import type { InstallProblemOneOfFive } from './installProblemOneOfFive';
 import type { InstallProblemOneOfThree } from './installProblemOneOfThree';
 
 /**
  * What went wrong with an agent on its owner's own machine.
  */
-export type InstallProblem = InstallProblemOneOf | InstallProblemOneOfThree;
+export type InstallProblem =
+  | InstallProblemOneOf
+  | InstallProblemOneOfThree
+  | InstallProblemOneOfFive;

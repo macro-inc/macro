@@ -1,11 +1,11 @@
+import type { InstallFailure } from '@service-auth/generated/schemas/installFailure';
 import { describe, expect, it } from 'vitest';
 import { installProblemLine } from './teammate-install-problem';
 
 describe('installProblemLine', () => {
   it('says why a failed agent stopped, naming the machine', () => {
-    const line = (
-      reason: NonNullable<Parameters<typeof installProblemLine>[0]>['reason']
-    ) => installProblemLine({ kind: 'failed', reason }, 'demo-laptop');
+    const line = (reason: InstallFailure) =>
+      installProblemLine({ kind: 'failed', reason }, 'demo-laptop');
     expect(line('imageUnavailable')).toBe(
       "Couldn't download the agent's runtime on demo-laptop. Check its internet connection."
     );
@@ -25,15 +25,23 @@ describe('installProblemLine', () => {
     expect(line('networkIsolationUnavailable')).toBe(
       "Couldn't lock down its network on demo-laptop, so it isn't running."
     );
+    expect(line('egressBlocked')).toBe(
+      "demo-laptop has no route to the internet, so it isn't running."
+    );
     expect(line('hostUnsupported')).toBe(
       "Agents can't run on demo-laptop. Move it to another computer."
     );
   });
 
+  it('says a parked agent was stopped because its machine may no longer host it', () => {
+    expect(installProblemLine({ kind: 'hostRemoved' }, 'demo-laptop')).toBe(
+      'Stopped: demo-laptop can no longer host it. Move it to one of your computers to run it again.'
+    );
+  });
+
   it('says a rolled-back agent runs the previous version, and why', () => {
-    const line = (
-      reason: NonNullable<Parameters<typeof installProblemLine>[0]>['reason']
-    ) => installProblemLine({ kind: 'rolledBack', reason }, 'demo-laptop');
+    const line = (reason: InstallFailure) =>
+      installProblemLine({ kind: 'rolledBack', reason }, 'demo-laptop');
     expect(line('crashLoop')).toBe(
       'Running the previous version: the update kept crashing.'
     );

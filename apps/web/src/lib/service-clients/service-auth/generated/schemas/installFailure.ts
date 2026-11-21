@@ -22,4 +22,5 @@ export const InstallFailure = {
   crashLoop: 'crashLoop',
   hostUnsupported: 'hostUnsupported',
   networkIsolationUnavailable: 'networkIsolationUnavailable',
+  egressBlocked: 'egressBlocked',
 } as const;

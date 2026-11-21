@@ -89,4 +89,14 @@ describe('teammate hosts', () => {
       canMoveTeammate({ ...agent, harnessId: null }, 'macro|a@x.test', [])
     ).toBe(false);
   });
+
+  it('lets any admin move a parked agent, which runs nowhere', () => {
+    const parked = {
+      createdBy: 'macro|a@x.test',
+      harnessId: 'laptop-a',
+      installProblem: { kind: 'hostRemoved' as const },
+    };
+    expect(canMoveTeammate(parked, 'macro|b@x.test', ['laptop-b'])).toBe(true);
+    expect(canMoveTeammate(parked, undefined, [])).toBe(false);
+  });
 });

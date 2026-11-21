@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import type { InstallProblem } from '@service-auth/generated/schemas/installProblem';
 import type { TeammateHost } from '@service-auth/team-agents';
 import { match, P } from 'ts-pattern';
 
@@ -80,16 +81,23 @@ export function ownMachineRemoveBody(hostName: string): string {
 
 /**
  * Whether the viewer may move an agent to another of their machines: only
- * the admin who invited it, or the owner of the machine it runs on now. The
- * service enforces the same rule.
+ * the admin who invited it, or the owner of the machine it runs on now. A
+ * parked agent (its machine may no longer host it) runs nowhere, so any
+ * admin may. The service enforces the same rule.
  */
 export function canMoveTeammate(
-  agent: { createdBy?: string | null; harnessId?: string | null },
+  agent: {
+    createdBy?: string | null;
+    harnessId?: string | null;
+    installProblem?: InstallProblem | null;
+  },
   viewerId: string | undefined,
   ownHarnessIds: readonly string[]
 ): boolean {
   if (!agent.harnessId || !viewerId) return false;
   return (
-    agent.createdBy === viewerId || ownHarnessIds.includes(agent.harnessId)
+    agent.installProblem?.kind === 'hostRemoved' ||
+    agent.createdBy === viewerId ||
+    ownHarnessIds.includes(agent.harnessId)
   );
 }

@@ -45,8 +45,12 @@ export default {
   failedCrashLoop: 'It kept crashing on {{host}}.',
   failedNetworkIsolation:
     "Couldn't lock down its network on {{host}}, so it isn't running.",
+  failedEgressBlocked:
+    "{{host}} has no route to the internet, so it isn't running.",
   failedHostUnsupported:
     "Agents can't run on {{host}}. Move it to another computer.",
+  hostRemoved:
+    'Stopped: {{host}} can no longer host it. Move it to one of your computers to run it again.',
   rolledBackCrashLoop:
     'Running the previous version: the update kept crashing.',
   rolledBackImageUnavailable:

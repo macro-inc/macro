@@ -1606,7 +1606,7 @@ export type InitOutlookLinkResponse = {
  * Why a machine gave up on an install's generation. Stored snake_case;
  * camelCase on the API.
  */
-export type InstallFailure = 'imageUnavailable' | 'imageMismatch' | 'engineRefused' | 'badConfiguration' | 'incompatibleRuntime' | 'crashLoop' | 'hostUnsupported' | 'networkIsolationUnavailable';
+export type InstallFailure = 'imageUnavailable' | 'imageMismatch' | 'engineRefused' | 'badConfiguration' | 'incompatibleRuntime' | 'crashLoop' | 'hostUnsupported' | 'networkIsolationUnavailable' | 'egressBlocked';
 
 /**
  * What went wrong with an agent on its owner's own machine.
@@ -1623,6 +1623,8 @@ export type InstallProblem = {
      * Why.
      */
     reason: InstallFailure;
+} | {
+    kind: 'hostRemoved';
 };
 
 /**

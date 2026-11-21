@@ -214,6 +214,8 @@ export * from './initOutlookLinkResponse';
 export * from './installFailure';
 export * from './installProblem';
 export * from './installProblemOneOf';
+export * from './installProblemOneOfFive';
+export * from './installProblemOneOfFiveKind';
 export * from './installProblemOneOfKind';
 export * from './installProblemOneOfThree';
 export * from './installProblemOneOfThreeKind';

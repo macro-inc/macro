@@ -9974,7 +9974,8 @@
           "incompatibleRuntime",
           "crashLoop",
           "hostUnsupported",
-          "networkIsolationUnavailable"
+          "networkIsolationUnavailable",
+          "egressBlocked"
         ]
       },
       "InstallProblem": {
@@ -10006,6 +10007,17 @@
               "reason": {
                 "$ref": "#/components/schemas/InstallFailure",
                 "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its machine may no longer host it (the machine's owner left the team,\nlost admin, or unpaired it), so it was stopped there and its\ncredentials revoked. It keeps its account, seat and repository; an\nadmin moves it to a machine of theirs to run it again.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["hostRemoved"]
               }
             }
           }

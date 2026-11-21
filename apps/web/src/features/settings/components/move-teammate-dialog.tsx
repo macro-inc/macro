@@ -27,11 +27,13 @@ function MoveTeammate(props: {
   );
   const move = useMoveTeamAgentMutation();
   const [chosen, setChosen] = createSignal<string>();
-  // Only another machine that can host it now.
+  // Only another machine that can host it now; a parked agent runs
+  // nowhere, so the machine it was stopped on counts too.
+  const parked = () => props.agent.installProblem?.kind === 'hostRemoved';
   const candidates = () =>
     hosts.isSuccess
       ? hosts.data.hosts.filter(
-          (host) => host.harnessId !== props.agent.harnessId
+          (host) => parked() || host.harnessId !== props.agent.harnessId
         )
       : undefined;
   const from = () =>
