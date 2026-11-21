@@ -206,7 +206,7 @@ describe('ScreenStage keyboard', () => {
     unmount();
   });
 
-  it("keeps the keyboard while a dropped drive reconnects: keys reach neither the app's hotkeys nor the guest", () => {
+  it("keeps the keyboard while a dropped drive reconnects: keys never reach the app's hotkeys", () => {
     const openCreate = vi.fn(() => true);
     createRoot((dispose) => {
       disposers.push(dispose);
@@ -262,7 +262,9 @@ describe('ScreenStage keyboard', () => {
     expect(swallowed.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(keyboard);
     expect(openCreate).not.toHaveBeenCalled();
-    expect(typed).toEqual([]);
+    // The input handler still sees it, for the release chord; it sends
+    // nothing while not driving (views/agent-screen.test.tsx).
+    expect(typed).toEqual(['c']);
 
     // The lease went to someone else: the keyboard is the app's again.
     setOwns(false);

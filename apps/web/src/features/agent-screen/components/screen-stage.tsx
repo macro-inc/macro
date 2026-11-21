@@ -142,8 +142,16 @@ export function ScreenStage(props: {
         onKeyDown={(event) => {
           if (!props.ownsKeyboard) return props.handlers.onKeyDown(event);
           event.stopPropagation();
-          // Reconnecting a drive: the key reaches nobody.
-          if (!props.drivingMe) return event.preventDefault();
+          if (!props.drivingMe) {
+            // Reconnecting a drive: the key reaches nobody, but the release
+            // chord still leaves the keyboard (the handler sends nothing).
+            event.preventDefault();
+            props.handlers.onKeyDown(event);
+            // Left on purpose: the resume doesn't take focus back.
+            if (document.activeElement !== keyboardField)
+              typingWhenPaused = false;
+            return;
+          }
           props.handlers.onKeyDown(event);
         }}
         onKeyUp={(event) => {

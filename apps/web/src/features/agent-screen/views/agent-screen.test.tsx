@@ -306,4 +306,40 @@ describe('the screen viewer while a drive drops', () => {
     ]);
     unmount();
   });
+
+  it('desktop: Ctrl+Alt+Shift still leaves the keyboard while a drive is being resumed, and the resume leaves it alone', async () => {
+    vi.useFakeTimers();
+    const connections: Connection[] = [];
+    const { unmount } = renderView(AgentScreen, connections);
+    await vi.advanceTimersByTimeAsync(0);
+    connections[0].handlers.onState(state(true));
+    const keyboard = screen.getByRole('textbox', {
+      name: 'Keyboard for Scout’s desktop',
+    });
+    keyboard.focus();
+
+    let left = false;
+    await dropAndResume(connections, () => {
+      if (left) return;
+      left = true;
+      // No keyboard trap: the release chord works while reconnecting.
+      for (const key of ['Control', 'Alt', 'Shift']) {
+        keyboard.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            ctrlKey: true,
+            altKey: key !== 'Control',
+            shiftKey: key === 'Shift',
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      }
+      expect(document.activeElement).not.toBe(keyboard);
+    });
+
+    // Left on purpose: the resume doesn't pull focus back.
+    expect(document.activeElement).not.toBe(keyboard);
+    unmount();
+  });
 });

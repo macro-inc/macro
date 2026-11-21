@@ -387,14 +387,15 @@ export function createScreenInput(options: ScreenInputOptions) {
     onContextMenu: (event: MouseEvent) => event.preventDefault(),
 
     onKeyDown(event: KeyboardEvent) {
+      // Windows reports AltGr as Ctrl+Alt: an AltGr character is not a
+      // shortcut, and AltGr+Shift is not the release chord.
+      const altGraph = event.getModifierState?.('AltGraph') ?? false;
+      // The way out works even while a dropped drive reconnects.
+      if (!altGraph && isReleaseChord(event)) return leaveKeyboard(event);
       if (!options.sendsInput()) return;
       // An IME (or a dead key) is composing in the keyboard field: let it,
       // and send what it commits (onCompositionEnd).
       if (composingKey(event)) return;
-      // Windows reports AltGr as Ctrl+Alt: an AltGr character is not a
-      // shortcut, and AltGr+Shift is not the release chord.
-      const altGraph = event.getModifierState?.('AltGraph') ?? false;
-      if (!altGraph && isReleaseChord(event)) return leaveKeyboard(event);
       if (event.key === 'Escape') return holdEscape(event);
       if (isPasteShortcut(event)) return armPasteFallback();
       event.preventDefault();

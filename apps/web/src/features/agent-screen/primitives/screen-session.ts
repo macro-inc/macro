@@ -263,7 +263,15 @@ export function createScreenSession(options: ScreenSessionOptions) {
           onError: (error) => {
             if (current !== generation) return;
             record('computer.screen.error', { code: error.code });
-            setStore({ notice: error, takingOver: false });
+            // An error answering the take-back of a dropped drive ends the
+            // resume: the lease stays where it is, and the view offers the
+            // ordinary Take over here instead of holding the keyboard.
+            const resumeRefused = store.takingOver && store.controlLost;
+            setStore({
+              notice: error,
+              takingOver: false,
+              ...(resumeRefused ? { controlLost: false } : {}),
+            });
           },
           onEnded: (reason) => {
             if (current !== generation) return;

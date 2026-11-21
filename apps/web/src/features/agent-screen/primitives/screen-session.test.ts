@@ -897,4 +897,53 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('gives up on resuming when the take-back is refused, instead of holding the keyboard until the lease lapses', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const alice = { userId: 'user-alice', name: 'Alice' };
+    const state = (drivingHere: boolean) => ({
+      driver: alice,
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere,
+    });
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState(state(true));
+      connections[0].handlers.onEnded('connectionLost');
+      await vi.advanceTimersByTimeAsync(500);
+      connections[1].handlers.onState(state(false));
+      expect(connections[1].controls).toEqual(['takeOver']);
+      expect(session.resumingDrive()).toBe(true);
+
+      // The take-back is refused; the lease stays on the dropped socket.
+      connections[1].handlers.onError({
+        code: 'driveNotAllowed',
+        message: 'no longer allowed to drive',
+      });
+
+      expect(session.resumingDrive()).toBe(false);
+      expect(session.holdsKeyboard()).toBe(false);
+      // The ordinary state for a lease held elsewhere: Take over here.
+      expect(session.drivingElsewhere()).toBe(true);
+      dispose();
+    });
+  });
 });
