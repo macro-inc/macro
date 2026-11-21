@@ -61,6 +61,13 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
   `new_notification_listing` and the work feed as `admits_new_notification`,
   each with its own candidate request.
 
+- `CandidateRequest::read` picks the store. Pages and pre-write checks read
+  the replica (`CandidateRead::Replica`); the feeds' recomputes (live updates,
+  and the entries undo and seen return) read the primary (`Committed`, through
+  `SoupCandidateSource::with_committed_reads`). Clients apply recomputed
+  entries over the Soup patch that announced the change, which was hydrated
+  from the primary, so entries read from a lagging replica would write the
+  state before the change back into their caches.
 - Revision, cursor and undo token JSON is a wire format clients hold across
   deploys; `models/test.rs` pins it.
 - Under `ThreadScoped`, a `channel_message` candidate reads its channel's

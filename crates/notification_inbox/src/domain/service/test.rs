@@ -1540,3 +1540,49 @@ async fn a_new_notification_listing_probes_the_inbox_candidate_query() {
         format!("{:?}", policy::inbox_filter())
     );
 }
+
+/// The store each candidate read went to, in order, clearing the record.
+fn take_reads(source: &FakeSource<&'static str>) -> Vec<CandidateRead> {
+    source
+        .requests
+        .lock()
+        .unwrap()
+        .drain(..)
+        .map(|request| request.read)
+        .collect()
+}
+
+#[tokio::test]
+async fn live_recomputes_and_write_replies_read_committed_state() {
+    let harness = inbox();
+
+    harness
+        .service
+        .page(viewer(), query(Vec::new()))
+        .await
+        .unwrap();
+    let reads = take_reads(&harness.source);
+    assert!(!reads.is_empty());
+    assert!(reads.iter().all(|read| *read == CandidateRead::Replica));
+
+    // A live recompute answers a change its client already holds from a
+    // primary-hydrated Soup patch.
+    harness
+        .service
+        .recompute(viewer(), unread(), vec![channel()])
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+
+    // Finding the rows to mark reads the replica, as before; the reply,
+    // sent after the write, reads what the write committed.
+    harness
+        .service
+        .mark_seen(viewer(), unread(), vec![row(&channel(), &thread_slot())])
+        .await
+        .unwrap();
+    assert_eq!(
+        take_reads(&harness.source),
+        vec![CandidateRead::Replica, CandidateRead::Committed]
+    );
+}

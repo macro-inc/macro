@@ -205,6 +205,21 @@ pub struct CandidateRequest {
     /// now, to ask whether a new notification would be listed. Requires
     /// `only` and no own work.
     pub assume_attention: bool,
+    /// Which store may answer the read.
+    pub read: CandidateRead,
+}
+
+/// Which store may answer a candidate read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CandidateRead {
+    /// A replica, which can lag the primary: feed pages.
+    Replica,
+    /// The primary: a recompute answering a change the viewer has just been
+    /// told about, or a write the viewer just made. Its entries reach clients
+    /// that already hold the change (Soup patches are hydrated from the
+    /// primary), so entries read from a lagging replica would write the
+    /// state before the change back into their caches.
+    Committed,
 }
 
 /// One hydrated, authorized candidate.

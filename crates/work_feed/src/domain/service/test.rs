@@ -592,3 +592,64 @@ async fn admitting_a_new_notification_probes_home_without_snippets() {
         format!("{:?}", policy::signal_filter(&viewer().user, &scope))
     );
 }
+
+/// The store each candidate read went to, in order, clearing the record.
+fn take_reads(source: &FakeSource<&'static str>) -> Vec<CandidateRead> {
+    source
+        .requests
+        .lock()
+        .unwrap()
+        .drain(..)
+        .map(|request| request.read)
+        .collect()
+}
+
+#[tokio::test]
+async fn live_recomputes_read_committed_state_and_pages_read_the_replica() {
+    let harness = harness(
+        vec![candidate(
+            "doc",
+            entity(EntityType::Document, DOC),
+            Some(5),
+            Some(9),
+        )],
+        vec![doc_comment(1, DOC, 0xA0, 0xA0, 5)],
+    );
+    let doc = key(entity(EntityType::Document, DOC));
+
+    harness.service.page(viewer(), query()).await.unwrap();
+    let reads = take_reads(&harness.source);
+    assert!(!reads.is_empty());
+    assert!(reads.iter().all(|read| *read == CandidateRead::Replica));
+
+    // A live recompute answers a change its client already holds from a
+    // primary-hydrated Soup patch.
+    harness
+        .service
+        .recompute(viewer(), query().scope, vec![doc.clone()])
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![WorkFeedDoneTarget {
+                key: doc,
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Replica]);
+
+    // Undo's reply is a recompute of what the viewer just wrote.
+    let receipt = DoneReceipt::decode(&outcome.receipt.encode()).unwrap();
+    harness
+        .service
+        .undo_done(viewer(), query().scope, receipt)
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+}
