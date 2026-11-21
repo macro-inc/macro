@@ -919,7 +919,8 @@ async fn carry_forward(scope: &str, owner: &mut OpfsOwner) -> Carried {
             Ok(AdoptOutcome::Unreadable) => CarryForwardKind::Unreadable,
             Err(_) => CarryForwardKind::Failed,
         };
-        carried.adoption_pending |= matches!(kind, CarryForwardKind::Moved | CarryForwardKind::Failed);
+        carried.adoption_pending |=
+            matches!(kind, CarryForwardKind::Moved | CarryForwardKind::Failed);
         carried.report = Some(CarryForward::new(kind, from_storage_version));
         return carried;
     }
@@ -1003,8 +1004,12 @@ async fn open_cache_inner(
     if_available: bool,
 ) -> Result<(CacheEngine, OpenReport), JsValue> {
     validate_hot_capacity(hot_capacity)?;
-    let (OpenedStorage { storage, outcome, .. }, carry_forward) =
-        acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
+    let (
+        OpenedStorage {
+            storage, outcome, ..
+        },
+        carry_forward,
+    ) = acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {

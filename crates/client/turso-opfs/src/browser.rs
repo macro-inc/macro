@@ -790,7 +790,10 @@ async fn move_missing(
             move_entry(&root, source, to.get(role), deadline).await?;
         }
     }
-    Ok(matches!(present_files(&root, &to).await?, [Some(_), Some(_)]))
+    Ok(matches!(
+        present_files(&root, &to).await?,
+        [Some(_), Some(_)]
+    ))
 }
 
 /// The first bytes of an SQLite database file.
