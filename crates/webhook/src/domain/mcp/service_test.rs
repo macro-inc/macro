@@ -602,6 +602,14 @@ async fn a_nul_character_is_refused_before_the_endpoint_is_called() {
         refused,
         Err(McpSubscriptionError::InvalidParams(_))
     ));
+
+    let mut nul_url = request("mentions", mentions_of_me_in_channels());
+    nul_url.endpoint_url.push('\0');
+    let refused = service.subscribe(user(ME), nul_url).await;
+    assert!(matches!(
+        refused,
+        Err(McpSubscriptionError::InvalidParams(_))
+    ));
     assert_eq!(endpoint.verify_count(), 0);
     assert!(repo.rows().is_empty());
 }

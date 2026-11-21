@@ -125,6 +125,12 @@ where
             .validate()
             .map_err(|error| McpSubscriptionError::InvalidParams(error.to_string()))?;
         check_arguments(&key.arguments)?;
+        // The URL is bound as text before the endpoint parses it.
+        if key.endpoint_url.contains('\0') {
+            return Err(McpSubscriptionError::InvalidParams(
+                "delivery.url must not hold a NUL character".to_owned(),
+            ));
+        }
 
         // A live subscription of this user to this URL means the endpoint
         // already proved it wants their deliveries.
