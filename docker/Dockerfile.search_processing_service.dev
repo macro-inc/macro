@@ -11,7 +11,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
     --mount=type=cache,target=/app/target,id=rust-target-dev-release,sharing=locked \
-    cargo build --bin search_processing_service \
+    cargo build --package search_processing_service --bin search_processing_service \
     && cp /app/target/debug/search_processing_service /app/svc
 
 # Runtime image

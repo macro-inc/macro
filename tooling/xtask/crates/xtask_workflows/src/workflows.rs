@@ -262,7 +262,12 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "code_check_cloud_storage",
         file_name: "code_check_cloud_storage.yml",
-        render_yaml: || render_gh_workflow(code_check_cloud_storage::code_check_cloud_storage)(),
+        render_yaml: || {
+            render_patched(
+                code_check_cloud_storage::code_check_cloud_storage,
+                code_check_cloud_storage::patch,
+            )
+        },
     },
     WorkflowFile {
         slug: "code_check_conventions",

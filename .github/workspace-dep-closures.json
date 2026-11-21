@@ -17805,6 +17805,11 @@
     "xtask": [
       "tooling/xtask"
     ],
+    "xtask_deploy_cargo": [
+      "crates/workspace-hack",
+      "tooling/xtask/crates/xtask_deploy_cargo",
+      "tooling/xtask/crates/xtask_paths"
+    ],
     "xtask_deps": [
       "tooling/xtask/crates/xtask_deps",
       "tooling/xtask/crates/xtask_graph",

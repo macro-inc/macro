@@ -88,7 +88,10 @@ export class SlackImportWorker extends pulumi.ComponentResource {
         imageId: `${name}-image`,
         imagePath: '../../..',
         dockerfile: 'docker/Dockerfile',
-        buildArgs: { SERVICE_NAME: 'slack_import_worker' },
+        buildArgs: {
+          SERVICE_NAME: 'slack_import_worker',
+          PACKAGE_NAME: 'slack_import_worker',
+        },
         platform: { family: 'linux', architecture: 'amd64' },
         tags,
       },

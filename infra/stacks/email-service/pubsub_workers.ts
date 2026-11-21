@@ -94,6 +94,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
         tags: this.tags,
         buildArgs: {
           SERVICE_NAME: 'pubsub_workers',
+          PACKAGE_NAME: 'email_service',
         },
       },
       { parent: this }

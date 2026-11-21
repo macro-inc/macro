@@ -883,9 +883,12 @@
       # One shared dep closure for all lambda handlers. Build it with the same
       # cargo-zigbuild target used by the final packages; Cargo fingerprints the
       # `.2.26` target separately from the plain triple, so warming the plain
-      # target does not help the deploy builds. Select with --bin, as
-      # deployLambdaPackage does: without --package cargo resolves features across
-      # the workspace, and any other selection gives units the handlers can't reuse.
+      # target does not help the deploy builds. Select each handler with
+      # --package and --bin, as deployLambdaPackage does: without --package cargo
+      # resolves features across the whole workspace, so a handler would link
+      # crates with features only other members enable (such as loro-internal's
+      # native-editor, which only the document session may turn on).
+      # check-loro-native-editor-features.sh resolves these exact commands.
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
@@ -897,7 +900,7 @@
           cargoBuildCommand = "cargo zigbuild --release";
           cargoExtraArgs =
             "--locked --target ${lambdaZigTarget} "
-            + pkgs.lib.concatMapStringsSep " " (n: "--bin ${n}") lambdaNames;
+            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n} --bin ${n}") lambdaNames;
         }
       );
 
@@ -916,7 +919,7 @@
             # cargo-zigbuild links the final binary against the pinned Lambda
             # glibc, selected via the `.2.26` target suffix.
             cargoBuildCommand = "cargo zigbuild --release";
-            cargoExtraArgs = "--locked --target ${lambdaZigTarget} --bin ${lambdaName}";
+            cargoExtraArgs = "--locked --target ${lambdaZigTarget} --package ${lambdaName} --bin ${lambdaName}";
             # Emit the Lambda custom-runtime artifact: a zip whose single entry
             # is named `bootstrap`, mirroring cargo-lambda's
             # target/lambda/<name>/bootstrap.zip layout. zigbuild writes to

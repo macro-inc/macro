@@ -149,6 +149,7 @@ export class ContactsService extends pulumi.ComponentResource {
         platform,
         buildArgs: {
           SERVICE_NAME: 'contacts_service',
+          PACKAGE_NAME: 'contacts_service',
         },
         tags: this.tags,
       },

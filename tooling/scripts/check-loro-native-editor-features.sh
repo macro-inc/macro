@@ -4,9 +4,13 @@
 # The feature switches on the editor's local runtime changes in
 # vendor/loro-editor (see its README); servers must run upstream 1.17.1.
 #
-# Each package resolves alone, as its deploy build does (`--package X --bin Y`):
-# Cargo unifies features across every package one command selects, so a single
-# workspace-wide resolution would mix the editor into every server.
+# Cargo unifies features across every package one command selects, so a
+# workspace-wide resolution mixes the editor into every server. Two passes:
+# - every workspace package resolved alone;
+# - every deploy build (nix `.#deploy-*` services and Lambdas, and deploy
+#   Dockerfiles) resolved with the exact selection its cargo command makes.
+#   A build without --package (`cargo build --bin X`) resolves the whole
+#   workspace, so xtask_deploy_cargo rejects it.
 #
 # Checked: every workspace member whose normal/build graph reaches the editor's
 # loro-internal, for all targets, plus sync_service for wasm32. Allowed: the
@@ -63,6 +67,22 @@ for package in "${packages[@]}"; do
     status=1
   fi
 done
+
+# Deploy builds: xtask_deploy_cargo reads every nix deploy derivation's cargo
+# command and every deploy Dockerfile's, fails on any it cannot read or that
+# selects no package, and prints each selection to resolve here.
+selections=$(cargo run --locked --quiet -p xtask_deploy_cargo)
+deploys=0
+while IFS=$'\t' read -r source selection; do
+  [ -n "$source" ] || continue
+  read -ra args <<<"$selection"
+  deploys=$((deploys + 1))
+  if enabled "${args[@]}"; then
+    echo "deploy build $source ($selection) enables $feature" >&2
+    status=1
+  fi
+done <<<"$selections"
+checked=$((checked + deploys))
 
 # The sync worker deploys as wasm32; check that target explicitly.
 checked=$((checked + 1))

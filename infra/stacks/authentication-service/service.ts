@@ -429,6 +429,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
         tags: this.tags,
         buildArgs: {
           SERVICE_NAME: 'authentication_service',
+          PACKAGE_NAME: 'authentication_service',
         },
       },
       { parent: this }

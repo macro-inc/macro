@@ -25167,6 +25167,21 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
+name = "xtask_deploy_cargo"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+ "logos",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "shell-words",
+ "workspace-hack",
+ "xtask_paths",
+]
+
+[[package]]
 name = "xtask_deps"
 version = "0.1.0"
 dependencies = [

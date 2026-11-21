@@ -86,6 +86,7 @@ export class EmailService extends pulumi.ComponentResource {
         tags: this.tags,
         buildArgs: {
           SERVICE_NAME: 'email_service',
+          PACKAGE_NAME: 'email_service',
         },
       },
       { parent: this }

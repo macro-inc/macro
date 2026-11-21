@@ -52,7 +52,8 @@ composes these pieces:
 
 1. **Task role** with only the policies the service needs: `GetSecretValue` on the
    specific secret ARNs, SQS on specific queues, `getKafkaClusterPolicy()`.
-2. **Image** with `EcrImage` (`docker/Dockerfile`, build arg `SERVICE_NAME`). CI
+2. **Image** with `EcrImage` (`docker/Dockerfile`, build args `SERVICE_NAME`
+   and `PACKAGE_NAME`, the Cargo package that owns the binary). CI
    swaps in the prebuilt Dockerfile that copies nix-built binaries; a new
    Dockerfile must be added to that map in `packages/service/src/ecr.ts`.
 3. **Gateway routing** with `ServiceTargetGroup({ service: GatewayService.X,

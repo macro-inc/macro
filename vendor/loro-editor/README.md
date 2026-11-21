@@ -26,11 +26,23 @@ Only document_session enables the feature (through lexical_loro's optional
 session, its WASM and FFI builds and sync_sim run these changes. Servers that
 link this crate through the workspace patch run upstream behaviour;
 `just check-loro-native-editor-features` fails if any other workspace package's
-own dependency graph enables it. Cargo unifies features per build, so a build
+own dependency graph enables it, or if any nix deploy build (services and
+Lambdas) resolves it on with the exact cargo command it runs; deploy builds must
+select their package, since `cargo build --bin X` alone resolves the workspace. Cargo unifies features per build, so a build
 that links document_session beside server crates (sync_sim, a workspace-wide
 `cargo test`) runs the server side with these changes too; that is test-only. The shallow-export fast path duplicates
 upstream's forward-replay block under the feature instead of editing it, so the
 feature-off branch stays verbatim.
+
+The existing required Rust `check` job runs both guards as failing steps when
+vendor, manifests, guard tools or deployment-selection inputs change. YAML
+consumer discovery is structural, so YAML inputs are included regardless of
+filename. Guarded changes get a 30-minute job budget; other changes retain 20.
+`just test-loro-servers-upstream` and `just test-loro-editor-differential` remain
+local commands: they add server/worker builds and differential suites beyond
+the two required guards and the existing job's budget. No standalone or nightly
+workflow is added. Local timings do not establish CI performance; the guarded
+path must execute successfully on the published CI head.
 
 ## Local changes
 

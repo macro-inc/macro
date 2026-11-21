@@ -325,6 +325,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         platform,
         buildArgs: {
           SERVICE_NAME: 'agent_harness_service',
+          PACKAGE_NAME: 'agent_harness_service',
         },
         tags,
       },

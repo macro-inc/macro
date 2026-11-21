@@ -1,5 +1,5 @@
 //! `cloud storage code check` — cargo fmt/clippy/test for the cloud-storage
-//! workspace on pull requests. Generated into `code-check-cloud-storage.yml`.
+//! workspace on pull requests. Generated into `code_check_cloud_storage.yml`.
 //!
 //! Ported from the hand-written workflow, with two infra changes: the runners
 //! moved to Namespace profiles, and compiled objects moved off the S3/local
@@ -41,6 +41,47 @@ pub fn code_check_cloud_storage() -> Workflow {
 /// must not be able to plant a binary under a key a later PR would execute.
 const TRUSTED_CONTEXT: &str = steps::TRUSTED_NAMESPACE_SCCACHE_CONTEXT;
 
+const CHECK_TIMEOUT_MINUTES: u32 = 20;
+const LORO_CHECK_TIMEOUT_MINUTES: u32 = 30;
+const LORO_GUARD_CONDITION: &str = "needs.path-check.outputs.loro_guards == 'true'";
+
+// These are selection-defining inputs and every literal caller namespace the
+// checker discovers. YAML discovery is structural, so filenames cannot narrow it.
+const LORO_GUARD_PATHS: &[&str] = &[
+    "vendor/loro-editor/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "**/Cargo.toml",
+    "rust-toolchain.toml",
+    ".cargo/**",
+    ".config/hakari.toml",
+    "crates/workspace-hack/**",
+    "tooling/xtask/**",
+    "**/*.sh",
+    "justfile",
+    "**/justfile",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*Dockerfile*",
+    "nix/**",
+    "flake.nix",
+    "flake.lock",
+    ".github/services-config.json",
+    ".github/workspace-dep-closures.json",
+    "infra/stacks/**/*.ts",
+    "infra/packages/service/**",
+];
+
+/// gh-workflow models timeout-minutes as a number. Patch only this job's
+/// budget through the generator's existing expression-capable rendering path.
+pub fn patch(root: &mut serde_yaml::Value) -> anyhow::Result<()> {
+    crate::workflows::job_mut(root, "check")?.insert(
+        "timeout-minutes".into(),
+        format!("${{{{ {LORO_GUARD_CONDITION} && {LORO_CHECK_TIMEOUT_MINUTES} || {CHECK_TIMEOUT_MINUTES} }}}}").into(),
+    );
+    Ok(())
+}
+
 /// Where `path-check` keeps the release `xtask_nextest_filter` binary (keyed by
 /// its source trees and `Cargo.lock`) and the target dir that builds it.
 const FILTER_CACHE_DIR: RuntimePath<'static> =
@@ -55,6 +96,7 @@ fn path_check() -> Job {
         .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output("loro_guards", "${{ steps.filter.outputs.loro_guards }}")
         .add_output(
             "doppler_candidates",
             "${{ steps.filter.outputs.doppler_candidates }}",
@@ -99,7 +141,7 @@ const REBUILD_ALL_REASON: &str = "${{ needs.path-check.outputs.query_data == 'tr
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job()
-        .timeout_minutes(20u32)
+        .timeout_minutes(CHECK_TIMEOUT_MINUTES)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env(("CARGO_TARGET_REBUILD_ALL", REBUILD_ALL_REASON))
         .map(with_check_env)
@@ -109,6 +151,16 @@ fn check() -> Job {
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(
+            Step::new("Check vendored Loro against upstream")
+                .run("just check-loro-editor-vendor")
+                .if_condition(Expression::new(LORO_GUARD_CONDITION)),
+        )
+        .add_step(
+            Step::new("Check deployed server Loro feature isolation")
+                .run("just check-loro-native-editor-features")
+                .if_condition(Expression::new(LORO_GUARD_CONDITION)),
+        )
         .add_step(steps::code_mode_assets())
         .add_step(cargo_fmt())
         .add_step(cargo_shear())
@@ -302,6 +354,67 @@ fn test_execution_runtime() -> Step<Run> {
 /// change could affect a service's Doppler config contract (a superset of
 /// what `xtask doppler-bins` checks, so the gate never hides a bin).
 fn paths_filter() -> Step<gh_workflow::Use> {
+    let mut should_run = vec![
+        "Cargo.toml",
+        "Cargo.lock",
+        "Cross.toml",
+        "clippy.toml",
+        "deny.toml",
+        "rust-toolchain.toml",
+        ".cargo/**",
+        ".config/**",
+        ".sqlx/**",
+        "crates/**",
+        "services/**",
+        "tooling/xtask/**",
+        "static_assets/**",
+        "nix/**",
+        "nix-support/node_modules*",
+        "flake.nix",
+        "flake.lock",
+        "bun.lock",
+        "packages/sdk/**",
+        "packages/sdk-docs/**",
+        "packages/code-mode-sdk/**",
+        ".github/actions/setup-nix/**",
+        ".github/actions/setup-nix-dev-shell/**",
+        ".github/actions/teardown-nix/**",
+        ".github/actions/setup-sccache/**",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+    ];
+    for path in LORO_GUARD_PATHS {
+        if !should_run.contains(path) {
+            should_run.push(path);
+        }
+    }
+    let path_list = |paths: &[&str]| {
+        paths
+            .iter()
+            .map(|path| format!("  - '{path}'"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let filters = format!(
+        "should_run:\n{}\nloro_guards:\n{}\n{}",
+        path_list(&should_run),
+        path_list(LORO_GUARD_PATHS),
+        indoc::indoc! {r#"
+        doppler_candidates:
+          - '.github/services-config.json'
+          - '**/src/config.rs'
+          - '**/src/doppler_config.rs'
+          - '**/Cargo.toml'
+          - 'tooling/xtask/crates/xtask_doppler_bins/**'
+          - .github/workflows/code_check_cloud_storage.yml
+        graphql_schema:
+          - 'static_assets/schema.graphql'
+          - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
+          - .github/workflows/code_check_cloud_storage.yml
+        query_data:
+          - '**/.sqlx/**'
+    "#}
+    );
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -309,52 +422,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
             "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
         ) // v3.0.3
         .id("filter")
-        .add_with((
-            "filters",
-            indoc::indoc! {r#"
-                should_run:
-                  - 'Cargo.toml'
-                  - 'Cargo.lock'
-                  - 'Cross.toml'
-                  - 'clippy.toml'
-                  - 'deny.toml'
-                  - 'rust-toolchain.toml'
-                  - '.cargo/**'
-                  - '.config/**'
-                  - '.sqlx/**'
-                  - 'crates/**'
-                  - 'services/**'
-                  - 'tooling/xtask/**'
-                  - 'static_assets/**'
-                  - 'nix/**'
-                  - 'nix-support/node_modules*'
-                  - 'flake.nix'
-                  - 'flake.lock'
-                  - 'bun.lock'
-                  - 'packages/sdk/**'
-                  - 'packages/sdk-docs/**'
-                  - 'packages/code-mode-sdk/**'
-                  - '.github/actions/setup-nix/**'
-                  - '.github/actions/setup-nix-dev-shell/**'
-                  - '.github/actions/teardown-nix/**'
-                  - '.github/actions/setup-sccache/**'
-                  - '.github/services-config.json'
-                  - .github/workflows/code_check_cloud_storage.yml
-                doppler_candidates:
-                  - '.github/services-config.json'
-                  - '**/src/config.rs'
-                  - '**/src/doppler_config.rs'
-                  - '**/Cargo.toml'
-                  - 'tooling/xtask/crates/xtask_doppler_bins/**'
-                  - .github/workflows/code_check_cloud_storage.yml
-                graphql_schema:
-                  - 'static_assets/schema.graphql'
-                  - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
-                  - .github/workflows/code_check_cloud_storage.yml
-                query_data:
-                  - '**/.sqlx/**'
-            "#},
-        ))
+        .add_with(("filters", filters))
 }
 
 /// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked

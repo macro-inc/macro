@@ -63,6 +63,7 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
         tags,
         buildArgs: {
           SERVICE_NAME: 'email_focus_worker',
+          PACKAGE_NAME: 'email_focus_worker',
         },
       },
       { parent: this }

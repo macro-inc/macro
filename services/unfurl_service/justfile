@@ -35,7 +35,7 @@ bulk-link-test:
 	  -d @data/lots_of_links.json
 
 docker-build:
-	docker build --tag 'unfurl-service' --build-arg SERVICE_NAME=unfurl_service -f ../../docker/Dockerfile ../..
+	docker build --tag 'unfurl-service' --build-arg SERVICE_NAME=unfurl_service --build-arg PACKAGE_NAME=unfurl_service -f ../../docker/Dockerfile ../..
 
 docker-run:
 	docker run -p 8080:8080 unfurl-service:latest

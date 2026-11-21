@@ -1,0 +1,21 @@
+[package]
+description = "Extracts the Cargo selection of every deploy build (nix derivations and Dockerfiles) so feature checks resolve exactly what ships"
+edition = "2024"
+name = "xtask_deploy_cargo"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "xtask_deploy_cargo"
+path = "src/main.rs"
+
+[dependencies]
+lazy-regex = { workspace = true }
+logos = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+shell-words = { workspace = true }
+xtask_paths = { path = "../xtask_paths" }
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

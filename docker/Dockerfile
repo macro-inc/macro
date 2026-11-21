@@ -7,6 +7,10 @@ WORKDIR /app
 
 FROM chef AS builder
 ARG SERVICE_NAME
+# The package that owns SERVICE_NAME's binary. Selecting it keeps Cargo's
+# feature resolution to that package: `--bin` alone resolves the whole
+# workspace (check-loro-native-editor-features.sh).
+ARG PACKAGE_NAME
 
 # cmake is needed to compile librdkafka (via rdkafka-sys, pulled in
 # transitively by workspace-hack for every binary) from source; rust:latest
@@ -20,7 +24,8 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
   --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
   --mount=type=cache,target=/app/target,id=rust-target-release,sharing=locked \
-  cargo build --release --bin ${SERVICE_NAME} && \
+  test -n "${PACKAGE_NAME}" || { echo "PACKAGE_NAME build arg is required" >&2; exit 1; } && \
+  cargo build --release --package ${PACKAGE_NAME} --bin ${SERVICE_NAME} && \
   strip /app/target/release/${SERVICE_NAME} && \
   cp /app/target/release/${SERVICE_NAME} /app/svc
 

@@ -165,6 +165,7 @@ export class CalendarService extends pulumi.ComponentResource {
         platform,
         buildArgs: {
           SERVICE_NAME: 'calendar_service',
+          PACKAGE_NAME: 'calendar_service',
         },
         tags: this.tags,
       },

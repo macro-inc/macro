@@ -36,7 +36,10 @@ TypeScript job logic in the owning package.
 ## Gotchas
 
 - Step conditions use `if_condition` after `run` or `uses`; job conditions use `cond`.
-- The editor landing keeps conformance, session-contract and Loro compatibility
-  checks as local commands. Existing web test WASM builds, decorator typechecks
-  and bundle gates remain in their owning jobs.
+- Keep conformance replay and session-contract checks local. The existing Rust
+  check job enforces vendor token parity and deployed-server Loro feature
+  isolation on their input paths, with a conditional 30-minute budget (20
+  otherwise). Server-upstream tests and the editor differential suite remain
+  local. Existing web WASM builds, decorator typechecks and bundle gates stay
+  in their owning jobs.
 

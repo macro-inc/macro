@@ -78,6 +78,7 @@ export class ImageProxyService extends pulumi.ComponentResource {
         platform,
         buildArgs: {
           SERVICE_NAME: 'image_proxy_service',
+          PACKAGE_NAME: 'image_proxy_service',
         },
         tags: this.tags,
       },

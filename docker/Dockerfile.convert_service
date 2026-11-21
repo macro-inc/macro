@@ -19,10 +19,10 @@ RUN cargo chef prepare  --recipe-path recipe.json --bin convert_service
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
-RUN cargo chef cook --release --recipe-path recipe.json --bin convert_service
+RUN cargo chef cook --release --recipe-path recipe.json --package convert_service --bin convert_service
 # Build application
 COPY . .
-RUN cargo build --release --bin convert_service && \
+RUN cargo build --release --package convert_service --bin convert_service && \
   cargo strip && \
   mv /app/target/release/convert_service /app/svc
 
