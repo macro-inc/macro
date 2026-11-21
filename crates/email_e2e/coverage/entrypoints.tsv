@@ -277,12 +277,12 @@ provider	outlook:uploads.put	outlook		crates/outlook_emulator/src/fault.rs:97
 queue	backfill:BackfillAttachment	gmail	/backfillOperation/backfill_attachment	crates/models_email/src/email/service/backfill.rs:84
 queue	backfill:BackfillMessage	gmail	/backfillOperation/backfill_message	crates/models_email/src/email/service/backfill.rs:75
 queue	backfill:BackfillThread	gmail	/backfillOperation/backfill_thread	crates/models_email/src/email/service/backfill.rs:72
-queue	backfill:DepopulateCrmContact	gmail	/backfillOperation/depopulate_crm_contact	crates/models_email/src/email/service/backfill.rs:106
+queue	backfill:DepopulateCrmContact	gmail	/backfillOperation/depopulate_crm_contact	crates/models_email/src/email/service/backfill.rs:105
 queue	backfill:DepopulateCrmForUser	gmail	/backfillOperation/depopulate_crm_for_user	crates/models_email/src/email/service/backfill.rs:119
 queue	backfill:FinalizeBackfill	gmail	/backfillOperation/finalize_backfill	crates/models_email/src/email/service/backfill.rs:86
 queue	backfill:Init	gmail	/backfillOperation/init	crates/models_email/src/email/service/backfill.rs:65
 queue	backfill:ListThreads	gmail	/backfillOperation/list_threads	crates/models_email/src/email/service/backfill.rs:69
-queue	backfill:PopulateCrmContact	gmail	/backfillOperation/populate_crm_contact	crates/models_email/src/email/service/backfill.rs:99
+queue	backfill:PopulateCrmContact	gmail	/backfillOperation/populate_crm_contact	crates/models_email/src/email/service/backfill.rs:98
 queue	backfill:PopulateCrmForUser	gmail	/backfillOperation/populate_crm_for_user	crates/models_email/src/email/service/backfill.rs:111
 queue	backfill:PopulateCrmPolicy	both	/backfillOperation/populate_crm_policy	crates/models_email/src/email/service/backfill.rs:113
 queue	backfill:SeedSentContact	gmail	/backfillOperation/seed_sent_contact	crates/models_email/src/email/service/backfill.rs:93
@@ -290,6 +290,8 @@ queue	backfill:UpdateThreadMetadata	gmail	/backfillOperation/update_thread_metad
 queue	crm-cleanup:ListCandidates	both	/operation/list_candidates	crates/models_email/src/email/service/crm_cleanup.rs:24
 queue	crm-cleanup:ProcessCandidate	both	/operation/process_candidate	crates/models_email/src/email/service/crm_cleanup.rs:30
 queue	crm-cleanup:StartJob	both	/operation=start_job	crates/models_email/src/email/service/crm_cleanup.rs:20
+queue	crm-population.fifo:Contact	both	/operation=contact	crates/models_email/src/email/service/crm_population.rs:15
+queue	crm-population.fifo:PolicyPage	both	/operation=policy_page	crates/models_email/src/email/service/crm_population.rs:17
 queue	gmail-inbox-sync:DeleteMessage	gmail	/operation/delete_message	crates/models_email/src/gmail/inbox_sync.rs:67
 queue	gmail-inbox-sync:GmailMessage	gmail	/operation/gmail_message	crates/models_email/src/gmail/inbox_sync.rs:63
 queue	gmail-inbox-sync:UpdateLabels	gmail	/operation/update_labels	crates/models_email/src/gmail/inbox_sync.rs:69
@@ -307,7 +309,7 @@ queue	link-manager:Refresh	both	/operation=Refresh	crates/models_email/src/email
 queue	reminder-dispatch:Deliver	both	/operation/deliver	crates/reminders/src/domain/models.rs:87
 queue	reminder-dispatch:Sweep	both	/operation=sweep	crates/reminders/src/domain/models.rs:85
 queue	scheduled:ScheduledPubsubMessage	both	*	crates/models_email/src/email/service/pubsub.rs:165
-queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:373
+queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:424
 queue	sfs-uploader:SFSUploaderMessage	gmail	*	crates/models_email/src/email/service/pubsub.rs:172
 tool	GetThread	both		crates/email/src/inbound/toolset/get_thread.rs:109
 tool	ListInboxes	both		crates/email/src/inbound/toolset/list_inboxes.rs:55

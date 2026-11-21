@@ -75,7 +75,7 @@ pub(crate) fn context(
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<crate::composition::ContactsProducer>,
     email_api: GmailApi,
-    _redis_client: RedisClient,
+    redis_client: RedisClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     sfs_client: StaticFileServiceClient,
     connection_gateway_client: ConnectionGatewayClient,
@@ -108,7 +108,10 @@ pub(crate) fn context(
         links: PgGmailOps(db.clone()),
         repository: PgInboxSync(db),
         gmail: GmailInboxSync(email_api),
-        queue: InboxSyncSqs(sqs_client),
+        queue: InboxSyncSqs(
+            sqs_client.clone(),
+            crate::outbound::crm_population::requests(redis_client, sqs_client),
+        ),
         effects,
         retry_worker,
         features: email::domain::mailbox::inbox_sync::InboxSyncFeatures {

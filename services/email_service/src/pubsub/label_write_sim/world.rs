@@ -228,6 +228,7 @@ impl World {
             .gmail_ops_retry_queue(&queues.ops_retry)
             .gmail_label_write_batches(label_write_batches)
             .email_backfill_queue(&format!("{services_url}/queue/backfill"))
+            .email_crm_population_queue(&format!("{services_url}/queue/crm-population"))
             .email_link_manager_queue(&format!("{services_url}/queue/link-manager"))
             .sfs_uploader_queue(&format!("{services_url}/queue/sfs"));
         let email_api = wiring::gmail_api(

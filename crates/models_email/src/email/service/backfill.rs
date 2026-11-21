@@ -91,11 +91,10 @@ pub enum BackfillOperation {
     // address, so a brand-new user has contacts before full backfill completes.
     // handle_contacts_sync re-seeds the full contact set at job completion.
     SeedSentContact(JobScopedPayload<SeedSentContactPayload>),
-    // Idempotently records a contact the requesting user has emailed into the
-    // CRM tables (crm_companies, crm_domains, crm_contacts, crm_contact_sources).
-    // Fanned out one-per-recipient from BackfillMessage when the message was
-    // sent by the user. No-op if the user has no team or the contact's domain
-    // has been opted out by the team (crm_companies.email_sync = false).
+    // A CRM population an older release queued here, one per message and
+    // address. Producers now ask through the CRM population queue
+    // (`crm_population::CrmPopulationMessage`); the backfill worker forwards
+    // these there as new requests, without running them.
     PopulateCrmContact(LinkScopedPayload<PopulateCrmContactPayload>),
     // Walks the CRM cascade in reverse for one (link, contact_email): drops
     // the matching crm_contact_sources row, then crm_contacts when no other
@@ -104,10 +103,11 @@ pub enum BackfillOperation {
     // is deleted. Ignores the company-level email_sync killswitch so that
     // deletions stay reflected in the CRM tables even on opted-out domains.
     DepopulateCrmContact(LinkScopedPayload<DepopulateCrmContactPayload>),
-    // Fans out PopulateCrmContact messages for every contact a user has
-    // previously emailed. Resolves the user's link + team itself (bails if
-    // either is missing). Triggered when a user gets added to a team so
-    // their historical sent-mail recipients seed the team's CRM tables.
+    // Asks for a CRM population of every contact a user has previously
+    // emailed, in batches on the CRM population queue. Resolves the user's
+    // link + team itself (bails if either is missing). Triggered when a user
+    // gets added to a team so their historical correspondents seed the
+    // team's CRM tables.
     PopulateCrmForUser(PopulateCrmForUserPayload),
     /// One durable, generation-bound page of policy history. Never adopts a later grant.
     PopulateCrmPolicy(PopulateCrmPolicyPayload),
@@ -166,7 +166,7 @@ impl BackfillOperation {
 #[serde(rename_all = "camelCase")]
 pub struct BackfillPubsubMessage {
     // the operation being performed (init, backfill_thread, backfill_message,
-    // populate_crm_contact, populate_crm_for_user). Each variant carries its
+    // populate_crm_for_user, ...). Each variant carries its
     // own link_id/job_id/macro_id as needed — see JobScopedPayload,
     // LinkScopedPayload, and PopulateCrmForUserPayload.
     pub backfill_operation: BackfillOperation,

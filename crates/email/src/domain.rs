@@ -77,6 +77,10 @@ pub mod signature_settings;
 #[cfg(feature = "mailbox")]
 pub mod backfill_jobs;
 
+/// CRM contact population on its own queue, one population per mailbox at a time.
+#[cfg(feature = "mailbox")]
+pub mod crm_population;
+
 /// Nightly CRM candidate cleanup and delivery disposition.
 #[cfg(feature = "mailbox")]
 pub mod crm_cleanup;

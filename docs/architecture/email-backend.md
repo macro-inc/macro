@@ -54,11 +54,16 @@ each delivery. Those are transport lifecycles, distinct from domain retry policy
 | Link manager | [mailbox/link_manager](../../crates/email/src/domain/mailbox/link_manager.rs): probes, reauthentication recipients and link deletion, on an interactive and a maintenance queue (`LinkManagerMessage::lane`) | [link_manager](../../services/email_service/src/outbound/link_manager.rs) |
 | Scheduled delivery | [scheduled_delivery](../../crates/email/src/domain/scheduled_delivery.rs): claims, delivery fences, reconciliation and retained deletion | [scheduled_delivery](../../services/email_service/src/outbound/scheduled_delivery.rs) |
 | CRM cleanup | [crm_cleanup](../../crates/email/src/domain/crm_cleanup.rs): jobs, pruning, dispatch, teardown and retry | [crm_cleanup](../../services/email_service/src/outbound/crm_cleanup.rs) |
+| CRM population | [crm_population](../../crates/email/src/domain/crm_population.rs): request coalescing, team admission, attempts, back-off and hand-off | [crm_population](../../services/email_service/src/outbound/crm_population.rs) |
 | Contact-photo upload | [mailbox/contacts/sfs_upload](../../crates/email/src/domain/mailbox/contacts/sfs_upload.rs): mapping reuse, best-effort writes and refresh | [sfs_upload](../../services/email_service/src/outbound/sfs_upload.rs) |
 | Stored-file deletion | [attachment_cleanup/sfs_deletion](../../crates/email/src/domain/attachment_cleanup/sfs_deletion.rs): file/row deletion order and already-missing files | [sfs_deletion](../../services/email_service/src/outbound/sfs_deletion.rs) |
 
 Backfill and inbox sync share the domain's catalog, contact and pending-label
 rules; inbox sync and link manager share notification-recipient selection.
+Inbox sync, backfill and the Outlook projection ask for CRM populations through
+the population domain's requests; none of them populates the CRM itself. The
+population workers have their own FIFO queue, grouped by mailbox, and their
+own database pool.
 Backfill's durable publication is a separate
 [domain outbox](../../crates/email/src/domain/backfill_jobs/outbox.rs), with the
 service's `backfill_outbox` facade retaining polling and cancellation.

@@ -389,6 +389,19 @@ impl InboxSyncQueue for Fake {
             Call::Enqueue(true, serde_json::to_value(message).unwrap()),
         )
     }
+    async fn request_crm_population(
+        &self,
+        link_id: Uuid,
+        contacts: Vec<models_email::service::backfill::PopulateCrmContactPayload>,
+    ) -> Result<(), Failure> {
+        self.step(
+            "crm_population",
+            Call::Import(
+                "crm_population",
+                serde_json::json!({ "linkId": link_id, "contacts": contacts }),
+            ),
+        )
+    }
 }
 
 impl MacroEventBroker for Fake {

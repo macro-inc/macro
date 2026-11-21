@@ -1,6 +1,8 @@
 //! Outbound infrastructure adapters.
 /// Nightly CRM cleanup effects.
 pub mod crm_cleanup;
+/// CRM population's pending entries, queue, slots and mailbox reads.
+pub mod crm_population;
 /// Email-owned invitation extraction.
 pub mod invitation_extraction;
 

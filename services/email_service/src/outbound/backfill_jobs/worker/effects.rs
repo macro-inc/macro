@@ -27,7 +27,6 @@ use models_email::service::{backfill::*, link::Link};
 use std::collections::HashSet;
 
 impl BackfillEffects for BackfillWorkerEffects {
-    type Permit = crate::util::redis::backfill_write_slots::BackfillWriteSlot;
     async fn delete_job_progress(&self, job: Uuid) {
         let _ = self.redis_client.delete_backfill_job_progress(job).await;
     }
@@ -79,12 +78,6 @@ impl BackfillEffects for BackfillWorkerEffects {
         self.contacts_ingress
             .record_inbox_contacts(inbox_source(link), recipients)
             .await
-    }
-    async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self::Permit>> {
-        self.redis_client
-            .try_acquire_crm_population_slot(team)
-            .await
-            .map_err(anyhow::Error::new)
     }
     async fn notify_failed(&self, link: &Link) {
         crate::pubsub::util::cg_refresh_email(

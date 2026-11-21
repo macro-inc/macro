@@ -85,6 +85,12 @@ type = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupOperatio
 envelope = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubsubMessage"
 
 [[queue]]
+name = "crm-population.fifo"
+consumes = ["EmailCrmPopulationQueue"]
+type = "crates/models_email/src/email/service/crm_population.rs::CrmPopulationMessage"
+at = ""
+
+[[queue]]
 name = "link-manager"
 aliases = ["link-maintenance"]
 consumes = ["LinkManagerQueue", "LinkMaintenanceQueue"]

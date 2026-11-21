@@ -15,7 +15,9 @@ use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::backfill_jobs::worker::*;
 use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
-use models_email::service::backfill::BackfillPubsubMessage;
+use models_email::service::backfill::{
+    BackfillPubsubMessage, PopulateCrmContactPayload, PopulateCrmPolicyPayload,
+};
 use uuid::Uuid;
 
 pub(crate) type Backfill = BackfillService<
@@ -30,7 +32,11 @@ pub(crate) struct PgBackfillWorker {
     pub jobs: super::PgBackfillJobs,
 }
 pub(crate) struct GmailBackfill(pub GmailApi);
-pub(crate) struct BackfillSqs(pub sqs_client::SQS);
+/// Backfill's queue, and the CRM population requests its stored mail makes.
+pub(crate) struct BackfillSqs(
+    pub sqs_client::SQS,
+    pub crate::outbound::crm_population::CrmPopulation,
+);
 pub(crate) struct BackfillWorkerEffects {
     pub invitation_extractor: crate::composition::workers::EmailInvitationExtractor,
     pub db: sqlx::PgPool,
@@ -111,6 +117,21 @@ impl BackfillQueue for BackfillSqs {
     ) -> Result<(), Self::Err> {
         self.0
             .defer_email_backfill_message(data, seconds, deferrals)
+            .await
+            .map_err(Into::into)
+    }
+    async fn request_crm_population(
+        &self,
+        link_id: Uuid,
+        contacts: Vec<PopulateCrmContactPayload>,
+    ) -> Result<(), Self::Err> {
+        self.1.request(link_id, contacts).await.map_err(Into::into)
+    }
+    async fn enqueue_crm_policy_page(
+        &self,
+        page: PopulateCrmPolicyPayload,
+    ) -> Result<(), Self::Err> {
+        email::domain::crm_population::queue_policy_page(&self.1.queue, page)
             .await
             .map_err(Into::into)
     }

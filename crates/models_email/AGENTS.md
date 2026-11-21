@@ -36,6 +36,12 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 Preview wire names include `spam` and `trash`; provider folder semantics belong to
 the email domain and use normalized mailbox facts, not Gmail-only label names.
 
+`service::crm_population::CrmPopulationMessage` is the CRM population queue's
+message: a correspondent to reconcile with the claim it was queued under, or a
+`PopulateCrmPolicy` page. Its group is the mailbox. The backfill queue's
+`PopulateCrmContact` and `PopulateCrmPolicy` remain decodable for messages an
+older release left there.
+
 Historical CRM messages use `PopulateCrmPolicy` with mandatory team, mailbox,
 work ID, consent incarnation and policy version. Missing `live_mail` on a
 `PopulateCrmContact` payload means legacy history; new per-message hints set it

@@ -97,6 +97,12 @@ pub struct Config {
     #[macro_config_default(10)]
     pub crm_cleanup_queue_max_messages: i32,
 
+    /// CRM population workers per task. Each holds at most one database
+    /// connection of its own pool; the fleet-wide population cap applies on
+    /// top of this.
+    #[macro_config_default(2)]
+    pub crm_population_queue_workers: u32,
+
     /// The number of workers we spawn for gmail inbox sync
     #[macro_config_default(10)]
     pub inbox_sync_queue_workers: i32,

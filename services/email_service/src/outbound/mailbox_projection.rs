@@ -24,9 +24,7 @@ use models_email::{
     api::refresh::RefreshEmailEvent,
     service::{
         attachment::{AttachmentUploadArgs, AttachmentUploadDestination},
-        backfill::{
-            BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-        },
+        backfill::PopulateCrmContactPayload,
     },
 };
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
@@ -45,6 +43,8 @@ pub struct MailboxEffects<A, I, B, N, C> {
     pub notification: Arc<N>,
     pub contacts: Arc<C>,
     pub queue: sqs_client::SQS,
+    /// CRM population requests for the correspondents of imported mail.
+    pub crm_population: crate::outbound::crm_population::CrmPopulation,
     pub gateway: connection_gateway_client::client::ConnectionGatewayClient,
     pub dss: document_storage_service_client::DocumentStorageServiceClient,
     pub sfs: static_file_service_client::StaticFileServiceClient,
@@ -198,25 +198,22 @@ where
                 .await
                 .map_err(failed)?;
         }
-        for contact in correspondence.contacts {
-            self.queue
-                .enqueue_email_backfill_message(BackfillPubsubMessage {
-                    backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                        link_id: correspondence.link_id,
-                        payload: PopulateCrmContactPayload {
-                            live_mail: true,
-                            contact_email: contact.email,
-                            contact_name: contact.name,
-                            first_at: contact.at,
-                            last_at: contact.at,
-                            is_sent: correspondence.is_sent,
-                        },
-                    }),
-                })
-                .await
-                .map_err(failed)?;
-        }
-        Ok(())
+        let requests = correspondence
+            .contacts
+            .into_iter()
+            .map(|contact| PopulateCrmContactPayload {
+                live_mail: true,
+                contact_email: contact.email,
+                contact_name: contact.name,
+                first_at: contact.at,
+                last_at: contact.at,
+                is_sent: correspondence.is_sent,
+            })
+            .collect();
+        self.crm_population
+            .request(correspondence.link_id, requests)
+            .await
+            .map_err(failed)
     }
     async fn invitations(
         &self,

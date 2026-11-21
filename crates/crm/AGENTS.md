@@ -274,9 +274,10 @@ tools/HTTP/GraphQL surfaces over them.
   A population scans the address history once, inside that transaction:
   `may_contribute_contact` is admission only, `populate_changes_nothing`
   skips a company-domain job before any scan, and a personal-provider address
-  the team keeps out is refused before it. Email sync queues a job per message and
-  address, so a busy contact's jobs are mostly duplicates; a scan ahead of the
-  no-op check ran for each of them and hit the 15-second cap on large mailboxes.
+  the team keeps out is refused before it. Email sync asks for a population per
+  message and address; the email service's population queue merges a busy
+  contact's requests while one is queued, but a scan ahead of the no-op check
+  ran once per job and hit the 15-second cap on large mailboxes.
   Manual creation retains domain/parent/entity ordering without email consent.
   Contact field edits take exclusive privacy coordination before discovery/domain
   locks because reassignment changes contribution eligibility; they never require

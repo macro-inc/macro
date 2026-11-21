@@ -4,7 +4,6 @@ use models_email::service::{
     pubsub::{DetailedError, FailureReason},
 };
 use uuid::Uuid;
-mod crm_policy;
 mod events;
 mod fakes;
 mod import_fakes;
@@ -237,75 +236,62 @@ fn sqlstate_policy_uses_the_first_deterministic_code_in_the_original_chain() {
 
 #[tokio::test]
 async fn missing_crm_link_is_a_noop_without_a_job_lookup() {
-    for msg in [crm_population(), crm_depopulation()] {
-        let (svc, f) = setup();
-        f.0.lock().unwrap().link = None;
-        assert!(matches!(
-            svc.process(&msg).await,
-            BackfillDisposition::DoneDelete
-        ));
-        assert_eq!(f.calls(), ["link"]);
-    }
+    let (svc, f) = setup();
+    f.0.lock().unwrap().link = None;
+    assert!(matches!(
+        svc.process(&crm_depopulation()).await,
+        BackfillDisposition::DoneDelete
+    ));
+    assert_eq!(f.calls(), ["link"]);
 }
 
 #[tokio::test]
-async fn crm_population_holds_and_releases_the_slot_around_the_service_call() {
+async fn legacy_population_messages_move_to_the_population_queue_without_database_reads() {
     let (svc, f) = setup();
     assert!(matches!(
         svc.process(&crm_population()).await,
         BackfillDisposition::DoneDelete
     ));
-    assert_eq!(
-        f.calls(),
-        ["link", "team", "acquire", "hold", "populate", "release"]
-    );
-    let (svc, f) = setup();
-    f.fail("populate");
-    let BackfillDisposition::Defer { error, retry_after } = svc.process(&crm_population()).await
+    assert_eq!(f.calls(), ["request_crm"]);
+    let BackfillOperation::PopulateCrmContact(population) = crm_population().backfill_operation
     else {
-        panic!("deferred")
+        panic!("population")
     };
-    assert_eq!(error.reason, FailureReason::BackfillWritesBusy);
-    assert_eq!(retry_after, None);
     assert_eq!(
-        f.calls(),
-        ["link", "team", "acquire", "hold", "populate", "release"]
+        f.0.lock().unwrap().crm_requests,
+        [(LINK, vec![population.payload])]
     );
-}
 
-#[tokio::test]
-async fn refused_and_failed_crm_admission_never_populate() {
-    for fail in [false, true] {
-        let (svc, f) = setup();
-        if fail {
-            f.fail("acquire")
-        } else {
-            f.0.lock().unwrap().slot = false
-        };
-        let BackfillDisposition::Defer { error, retry_after } =
-            svc.process(&crm_population()).await
-        else {
-            panic!("deferred")
-        };
-        assert_eq!(error.reason, FailureReason::BackfillWritesBusy);
-        assert_eq!(f.calls(), ["link", "team", "acquire"]);
-        if fail {
-            // Slots that can't be read back off like a busy backfill write.
-            assert_eq!(retry_after, None);
-        } else {
-            // The team is paused or busy: try again in minutes, not seconds.
-            let retry_after = retry_after.expect("a refused team defers for its own delay");
-            assert!(
-                (Duration::from_secs(600)..=Duration::from_secs(900)).contains(&retry_after),
-                "{retry_after:?}"
-            );
-        }
-    }
+    let (svc, f) = setup();
+    let page = PopulateCrmPolicyPayload {
+        team_id: TEAM,
+        macro_id: macro_user_id::user_id::MacroUserIdStr::try_from("macro|owner@example.com")
+            .unwrap(),
+        link_id: LINK,
+        work_id: Uuid::from_u128(40),
+        consent_incarnation: Uuid::from_u128(50),
+        policy_version: 7,
+    };
+    let data = input(BackfillOperation::PopulateCrmPolicy(page.clone()));
+    assert!(matches!(
+        svc.process(&data).await,
+        BackfillDisposition::DoneDelete
+    ));
+    assert_eq!(f.calls(), ["enqueue_policy_page"]);
+    assert_eq!(f.0.lock().unwrap().policy_requests, [page]);
+
+    let (svc, f) = setup();
+    f.fail("request_crm");
+    failure(
+        svc.process(&crm_population()).await,
+        true,
+        FailureReason::SqsEnqueueFailed,
+    );
 }
 
 #[tokio::test]
 async fn crm_no_team_and_remaining_message_guards_stop_before_removal() {
-    for msg in [crm_population(), crm_depopulation(), population()] {
+    for msg in [crm_depopulation(), population()] {
         let (svc, f) = setup();
         f.0.lock().unwrap().team = None;
         assert!(matches!(
@@ -328,7 +314,6 @@ async fn crm_no_team_and_remaining_message_guards_stop_before_removal() {
 #[tokio::test]
 async fn crm_queries_fail_in_place_without_following_effects() {
     for (msg, fault, expected) in [
-        (crm_population(), "team", vec!["link", "team"]),
         (
             crm_depopulation(),
             "remaining",
@@ -392,24 +377,27 @@ async fn historical_contacts_send_sent_before_received_with_shared_normalization
             "team",
             "consent",
             "sent_contacts",
-            "enqueue",
+            "request_crm",
             "received_contacts",
-            "enqueue"
+            "request_crm"
         ]
     );
     let s = f.0.lock().unwrap();
-    assert_eq!(s.sent.len(), 2);
-    let BackfillOperation::PopulateCrmContact(first) = &s.sent[0].0.backfill_operation else {
-        panic!("contact")
+    let [(LINK, first), (LINK, second)] = s.crm_requests.as_slice() else {
+        panic!("two requests for the mailbox: {:?}", s.crm_requests)
     };
-    assert_eq!(first.payload.contact_email, "first@example.com");
-    assert_eq!(first.payload.contact_name.as_deref(), Some("first"));
-    assert!(first.payload.is_sent);
-    let BackfillOperation::PopulateCrmContact(second) = &s.sent[1].0.backfill_operation else {
-        panic!("contact")
+    let [first] = first.as_slice() else {
+        panic!("one sent contact")
     };
-    assert_eq!(second.payload.contact_email, "second@example.com");
-    assert!(!second.payload.is_sent);
+    assert_eq!(first.contact_email, "first@example.com");
+    assert_eq!(first.contact_name.as_deref(), Some("first"));
+    assert!(first.is_sent);
+    assert!(!first.live_mail);
+    let [second] = second.as_slice() else {
+        panic!("one received contact")
+    };
+    assert_eq!(second.contact_email, "second@example.com");
+    assert!(!second.is_sent);
 }
 
 #[tokio::test]
@@ -424,13 +412,16 @@ async fn historical_contacts_require_consent_and_stop_after_send_failure() {
     let (svc, f) = setup();
     let at = chrono::DateTime::default();
     f.0.lock().unwrap().sent_contacts = vec![("first@example.com".into(), None, at, at)];
-    f.fail("enqueue");
+    f.fail("request_crm");
     failure(
         svc.process(&population()).await,
         true,
         FailureReason::SqsEnqueueFailed,
     );
-    assert_eq!(f.calls(), ["team", "consent", "sent_contacts", "enqueue"]);
+    assert_eq!(
+        f.calls(),
+        ["team", "consent", "sent_contacts", "request_crm"]
+    );
 }
 
 #[tokio::test]
@@ -652,26 +643,6 @@ async fn failed_job_notifications_tolerate_missing_job_link_and_lookup_failure()
         .unwrap();
         assert!(!f.calls().contains(&"notify"));
     }
-}
-
-#[tokio::test]
-async fn noncontention_crm_population_error_keeps_normal_retry_policy_and_releases_the_slot() {
-    let (svc, f) = setup();
-    f.fail("populate");
-    f.0.lock().unwrap().crm_contended = false;
-    let error = failure(
-        svc.process(&crm_population()).await,
-        true,
-        FailureReason::DatabaseQueryFailed,
-    );
-    assert_eq!(
-        format!("{:#}", error.source),
-        "Failed to populate CRM contact: provider failure"
-    );
-    assert_eq!(
-        f.calls(),
-        ["link", "team", "acquire", "hold", "populate", "release"]
-    );
 }
 
 #[tokio::test]

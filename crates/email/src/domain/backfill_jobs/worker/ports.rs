@@ -163,6 +163,17 @@ pub trait BackfillQueue: Send + Sync + 'static {
         seconds: i32,
         deferrals: u32,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Ask for CRM populations of a mailbox's correspondents.
+    fn request_crm_population(
+        &self,
+        link_id: Uuid,
+        contacts: Vec<PopulateCrmContactPayload>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Queue one page of a mailbox's durable CRM email history.
+    fn enqueue_crm_policy_page(
+        &self,
+        page: models_email::service::backfill::PopulateCrmPolicyPayload,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Attachment facts preserve the original error for the domain's classification.
@@ -191,8 +202,6 @@ pub trait BackfillWritePermit: Send {
 pub trait BackfillEffects:
     BackfillImportEffects + BackfillLifecycleEffects + MacroEventBroker + Send + Sync + 'static
 {
-    /// CRM write admission lease.
-    type Permit: BackfillWritePermit;
     /// Drop job progress after a terminal job is observed.
     fn delete_job_progress(&self, job: Uuid) -> impl Future<Output = ()> + Send;
     /// Drop per-thread progress after a terminal message is observed.
@@ -210,12 +219,6 @@ pub trait BackfillEffects:
         link: &Link,
         recipients: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-    /// One of a team's CRM population slots if one is free now, without
-    /// waiting.
-    fn acquire_crm(
-        &self,
-        team: Uuid,
-    ) -> impl Future<Output = Result<Option<Self::Permit>, anyhow::Error>> + Send;
     /// Publish a failed-job refresh, best effort.
     fn notify_failed(&self, link: &Link) -> impl Future<Output = ()> + Send;
 }

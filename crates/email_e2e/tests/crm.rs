@@ -527,6 +527,66 @@ async fn gmail_a_new_member_brings_their_correspondents_into_the_crm() -> Result
     stack.finish().await
 }
 
+/// A population an older release queued on the backfill queue still reaches
+/// the CRM: during a rolling deploy, workers of the release before CRM
+/// population had its own queue still send them there, and the backfill
+/// worker moves each onto the population queue. When this fails, mail synced
+/// by old workers during a deploy never files its correspondents.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_population_left_on_the_backfill_queue_still_reaches_the_crm() -> Result<(), Report>
+{
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let ada_primary = ada.link_gmail().await?;
+    let carol = format!("carol@{COMPANY}");
+
+    // The mail is there before there is a team to learn from it, and the
+    // population its sync asked for has found no team and ended: only the
+    // forwarded request below can file Carol.
+    ada_primary.deliver(&Mail::new(
+        &format!("Carol <{carol}>"),
+        "Renewal",
+        "Shall we renew?",
+    ))?;
+    ada_primary.wait_for_preview("inbox", "Renewal").await?;
+    eventually(
+        "the sync's own population to end",
+        Duration::from_secs(120),
+        async || Ok((stack.queue_depth("crm-population.fifo").await? == 0).then_some(())),
+    )
+    .await?;
+    seed_team(&stack, &[(&ada, &ada_primary)]).await?;
+    assert_eq!(contact(&ada, &carol).await?, Value::Null);
+
+    stack
+        .send_to_queue(
+            "backfill",
+            &json!({ "backfillOperation": {
+                "populate_crm_contact": {
+                    "link_id": ada_primary.link_id(),
+                    "live_mail": true,
+                    "contact_email": carol,
+                    "contact_name": "Carol",
+                    "first_at": "2026-01-01T00:00:00Z",
+                    "last_at": "2026-01-01T00:00:00Z",
+                    "is_sent": false,
+                },
+            } }),
+        )
+        .await?;
+    let added = wait_for_contact(&ada, &carol).await?;
+    assert_eq!(added["email"], carol.as_str(), "{added}");
+    assert_eq!(sources(&stack, &ada_primary, &carol).await?, 1);
+    assert_eq!(stack.dead_letters("backfill").await?, 0);
+    assert_eq!(stack.dead_letters("crm-population.fifo").await?, 0);
+
+    stack.finish().await
+}
+
 /// Someone who leaves a team takes the contacts the CRM learned from their
 /// mail alone with them, and leaves those of the other members: the
 /// authentication service asks for it when the member is removed, and the

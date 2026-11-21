@@ -1,6 +1,7 @@
 pub mod access_token;
 pub mod backfill;
 pub mod backfill_write_slots;
+pub mod crm_population;
 pub mod health_probe;
 pub mod lock;
 pub mod outlook_health;

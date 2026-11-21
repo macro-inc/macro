@@ -39,9 +39,15 @@ const KEY: &str = "email:backfill:write_slots";
 /// Concurrent CRM contact populations per team, across the fleet. A team's
 /// consent backfill fans out one population per contact, and populations of
 /// one domain serialize on its advisory lock, so without a per-team cap a
-/// single team's backfill could hold a database connection per worker.
+/// single team's backfill could take every population worker. Filling a
+/// team's set by hand pauses its populations; keep the key and capacity.
 const CRM_POPULATION_CAPACITY: u32 = 4;
 const CRM_POPULATION_KEY_PREFIX: &str = "email:backfill:crm_population_slots";
+/// Concurrent CRM populations across the fleet, whatever the number of tasks,
+/// so their database load doesn't grow with the pubsub workers scaled for
+/// backfill.
+const CRM_POPULATION_FLEET_CAPACITY: u32 = 6;
+const CRM_POPULATION_FLEET_KEY: &str = "email:crm_population:fleet_slots";
 
 fn crm_population_key(team_id: Uuid) -> String {
     format!("{CRM_POPULATION_KEY_PREFIX}:{team_id}")
@@ -193,21 +199,50 @@ impl RedisClient {
     }
 
     /// One of a team's CRM population slots if one is free now. Never waits:
-    /// a team whose slots are all taken is usually paused or busy for far
-    /// longer than a backfill worker should sit idle, so the caller defers its
-    /// operation instead.
+    /// a refused population is hidden on its queue and tried later.
     pub async fn try_acquire_crm_population_slot(
         &self,
         team_id: Uuid,
     ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
         let key = crm_population_key(team_id);
-        self.acquire_write_slot(&SlotSet {
-            key: &key,
-            capacity: CRM_POPULATION_CAPACITY,
-            lease: LEASE,
-            wait: Duration::ZERO,
-        })
-        .await
+        self.try_acquire_write_slot(&key, CRM_POPULATION_CAPACITY)
+            .await
+    }
+
+    /// One of the fleet's CRM population slots if one is free now. A
+    /// population worker takes one before it receives a message, so a busy
+    /// fleet leaves messages queued rather than spending their deliveries.
+    pub async fn try_acquire_crm_population_fleet_slot(
+        &self,
+    ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
+        self.try_acquire_write_slot(CRM_POPULATION_FLEET_KEY, CRM_POPULATION_FLEET_CAPACITY)
+            .await
+    }
+
+    /// One admission check, with no span of its own: idle population
+    /// workers ask for a fleet slot every second or so.
+    async fn try_acquire_write_slot(
+        &self,
+        key: &str,
+        capacity: u32,
+    ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
+        let id = Uuid::now_v7().to_string();
+        let mut connection = self.inner.get_multiplexed_async_connection().await?;
+        let in_flight: u32 = ACQUIRE
+            .key(key)
+            .arg(&id)
+            .arg(capacity)
+            .arg(LEASE.as_millis().to_string())
+            .invoke_async(&mut connection)
+            .await?;
+        Ok((in_flight > 0).then(|| BackfillWriteSlot {
+            inner: Some(SlotLease {
+                client: self.inner.clone(),
+                key: key.to_string(),
+                id,
+                lease: LEASE,
+            }),
+        }))
     }
 
     #[tracing::instrument(

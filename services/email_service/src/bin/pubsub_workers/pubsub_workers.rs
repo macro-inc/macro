@@ -92,6 +92,22 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to backfill db")?;
 
+    // CRM population gets a pool of its own, one connection per population
+    // worker, so it never waits for or takes a connection inbox sync or
+    // backfill needs. Its sessions are named for pg_stat_activity.
+    let db_crm_population = PgPoolOptions::new()
+        .min_connections(0)
+        .max_connections(config.crm_population_queue_workers.max(1))
+        .connect_with(
+            config
+                .macro_db_url
+                .parse::<sqlx::postgres::PgConnectOptions>()
+                .context("could not parse the database url")?
+                .application_name("email-crm-population"),
+        )
+        .await
+        .context("could not connect to crm population db")?;
+
     let gmail_queue_aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new();
@@ -100,6 +116,7 @@ async fn main() -> anyhow::Result<()> {
     let gmail_ops_retry_queue = macro_queues::GmailOpsRetryQueue::new();
     let backfill_queue = macro_queues::EmailBackfillQueue::new();
     let crm_cleanup_queue = macro_queues::EmailCrmCleanupQueue::new();
+    let crm_population_queue = macro_queues::EmailCrmPopulationQueue::new();
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
@@ -115,6 +132,7 @@ async fn main() -> anyhow::Result<()> {
         .gmail_ops_retry_queue(&gmail_ops_retry_queue)
         .email_backfill_queue(&backfill_queue)
         .email_crm_cleanup_queue(&crm_cleanup_queue)
+        .email_crm_population_queue(&crm_population_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
@@ -205,6 +223,18 @@ async fn main() -> anyhow::Result<()> {
                 aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
                 crm_cleanup_queue.to_string(),
                 config.crm_cleanup_queue_max_messages,
+                config.queue_wait_time_seconds,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    // One message per receive: a population worker holds a fleet slot for it.
+    let crm_population_workers = (0..config.crm_population_queue_workers)
+        .map(|_| {
+            sqs_worker::SQSWorker::new(
+                aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+                crm_population_queue.to_string(),
+                1,
                 config.queue_wait_time_seconds,
             )
         })
@@ -442,10 +472,15 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // Backfill workers run against a dedicated pool to keep their writes
-    // off the primary worker pool. CRM writes are part of the backfill
-    // flow, so route them through `db_backfill` too.
+    // off the primary worker pool. CRM writes that are part of the backfill
+    // flow route through `db_backfill` too.
     let crm_service_backfill = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db_backfill.clone()),
+        metadata_resolver.clone(),
+    );
+    // Contact population runs on its own pool and workers.
+    let crm_service_population = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db_crm_population.clone()),
         metadata_resolver,
     );
     worker_tracker.spawn(email_service::email_policy_worker::run(
@@ -553,6 +588,10 @@ async fn main() -> anyhow::Result<()> {
                 notification: notification_ingress_service.clone(),
                 contacts: contacts_ingress.clone(),
                 queue: sqs_client.clone(),
+                crm_population: email_service::outbound::crm_population::requests(
+                    redis_client.clone(),
+                    sqs_client.clone(),
+                ),
                 gateway: connection_gateway_client.clone(),
                 dss: dss_client.clone(),
                 sfs: sfs_client.clone(),
@@ -732,6 +771,23 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         num_workers = config.backfill_queue_workers,
         "backfill workers started"
+    );
+
+    for worker in crm_population_workers {
+        worker_tracker.spawn(
+            email_service::pubsub::crm_population::worker::run_worker_with_cancellation(
+                db_crm_population.clone(),
+                worker,
+                sqs_client.clone(),
+                redis_client.clone(),
+                crm_service_population.clone(),
+                worker_cancellation_token.clone(),
+            ),
+        );
+    }
+    tracing::info!(
+        num_workers = config.crm_population_queue_workers,
+        "crm population workers started"
     );
 
     // nightly crm cleanup: pages crm_cleanup_candidates and depopulates

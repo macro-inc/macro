@@ -44,6 +44,7 @@ pub(super) struct State {
     pub sent_contacts: Vec<CrmContactRecipient>,
     pub received_contacts: Vec<CrmContactRecipient>,
     pub sent: Vec<(BackfillPubsubMessage, Option<(i32, u32)>)>,
+    pub crm_requests: Vec<(Uuid, Vec<PopulateCrmContactPayload>)>,
     pub connections: Vec<Vec<MacroUserIdStr<'static>>>,
 }
 impl Default for State {
@@ -70,6 +71,7 @@ impl Default for State {
             sent_contacts: vec![],
             received_contacts: vec![],
             sent: vec![],
+            crm_requests: vec![],
             connections: vec![],
         }
     }
@@ -474,6 +476,20 @@ impl BackfillQueue for Fake {
         ));
         Ok(())
     }
+    async fn request_crm_population(
+        &self,
+        link: Uuid,
+        contacts: Vec<PopulateCrmContactPayload>,
+    ) -> Result<(), Error> {
+        self.call("request_crm")?;
+        self.0.lock().unwrap().crm_requests.push((link, contacts));
+        Ok(())
+    }
+    async fn enqueue_crm_policy_page(&self, page: PopulateCrmPolicyPayload) -> Result<(), Error> {
+        self.call("enqueue_policy_page")?;
+        self.0.lock().unwrap().policy_requests.push(page);
+        Ok(())
+    }
 }
 impl MacroEventBroker for Fake {
     fn send_event<E: MacroEvent + ?Sized>(
@@ -486,7 +502,6 @@ impl MacroEventBroker for Fake {
     }
 }
 impl BackfillEffects for Fake {
-    type Permit = Self;
     async fn delete_job_progress(&self, id: Uuid) {
         assert_eq!(id, JOB);
         let _ = self.call("delete_job_progress");
@@ -516,12 +531,6 @@ impl BackfillEffects for Fake {
         self.call("connect").map_err(rootcause::Report::new)?;
         self.0.lock().unwrap().connections.push(recipients);
         Ok(())
-    }
-    async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self>> {
-        assert_eq!(team, TEAM);
-        self.call("acquire")
-            .map_err(ConnectionSourceError::into_original)?;
-        Ok(self.0.lock().unwrap().slot.then(|| self.clone()))
     }
     async fn notify_failed(&self, link: &Link) {
         assert_eq!(link.id, LINK);

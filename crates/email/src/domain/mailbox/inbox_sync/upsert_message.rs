@@ -25,7 +25,7 @@ mod persistence;
 mod test;
 use attachments::handle_attachment_upload;
 pub use attachments::upload_claimed_attachments;
-use contacts::{CrmContactRecipient, enqueue_populate_crm_contacts, handle_contacts_sync};
+use contacts::{CrmContactRecipient, handle_contacts_sync, request_crm_populations};
 use notifications::notify_for_new_message;
 use persistence::fetch_and_insert_thread;
 pub use persistence::process_and_insert_message;
@@ -346,13 +346,12 @@ where
     )
     .await?;
 
-    // Fan out a PopulateCrmContact job per address. Mirrors
-    // `backfill_message.rs`: sent → to/cc/bcc, received → from,
-    // drafts → skipped. The consumer branches on `is_sent` for the
-    // company-insert gate.
+    // Ask for a CRM population per address. Mirrors `backfill_message.rs`:
+    // sent → to/cc/bcc, received → from, drafts → skipped. The consumer
+    // branches on `is_sent` for the company-insert gate.
     if !crm_recipients.is_empty() {
         let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        enqueue_populate_crm_contacts(ctx, link.id, &self_email, crm_recipients, is_sent).await?;
+        request_crm_populations(ctx, link.id, &self_email, crm_recipients, is_sent).await?;
     }
 
     // trigger FE inbox refresh
