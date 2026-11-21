@@ -4,8 +4,6 @@
 
 use std::path::{Path, PathBuf};
 
-const MODULES: &[&str] = &["access", "authority", "calendar", "people", "soup"];
-
 fn main() {
     let manifest = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let host = manifest.join("../../../apps/web/tauri/graphql_cache_plugin/src");
@@ -16,13 +14,17 @@ fn main() {
     let engine = engine.replace("#[cfg(test)]\nmod test;", "") + "\nmod fuzz_hooks;\n";
     // As a `mod.rs`, so its submodules resolve next to it.
     std::fs::write(out.join("engine/mod.rs"), engine).unwrap();
-    for module in MODULES {
-        let source = host.join("engine").join(format!("{module}.rs"));
-        std::fs::write(
-            out.join("engine").join(format!("{module}.rs")),
-            read(&source),
-        )
-        .unwrap();
+    // Every submodule but the tests, so a build of any checkout gets the ones it declares.
+    for entry in std::fs::read_dir(host.join("engine")).unwrap() {
+        let source = entry.unwrap().path();
+        let name = source.file_name().unwrap().to_owned();
+        if source.extension().is_none_or(|extension| extension != "rs") || name == "test.rs" {
+            continue;
+        }
+        // Outside Tauri, the host's background tasks run on the fuzzer's Tokio runtime,
+        // which is what Tauri's async runtime is.
+        let module = read(&source).replace("tauri::async_runtime::spawn(", "tokio::spawn(");
+        std::fs::write(out.join("engine").join(name), module).unwrap();
     }
     let hooks = manifest.join("src/fuzz_hooks.rs");
     std::fs::write(out.join("engine/fuzz_hooks.rs"), read(&hooks)).unwrap();

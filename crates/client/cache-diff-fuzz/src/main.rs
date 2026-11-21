@@ -76,10 +76,26 @@ struct Args {
     /// Start from a copy of this cache directory (another build's, for an upgrade) instead of an empty one.
     #[arg(long)]
     start_from: Option<PathBuf>,
+    /// Wait this many milliseconds (plus up to 30) in real time at each `idle`,
+    /// `reopen` and `crash` op, so a host's own idle checkpoint runs, and races
+    /// the reopen or crash after it.
+    #[arg(long)]
+    real_pause: Option<u64>,
+    /// At `idle` ops, leave checkpointing to the host instead of calling its
+    /// idle point.
+    #[arg(long)]
+    no_idle_hook: bool,
 }
 
 fn main() -> Result<(), rootcause::Report> {
     let args = Args::parse();
+    // The host spawns background work (the idle checkpoint) on its async
+    // runtime, a Tokio one; ops still run one at a time on this thread.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_time()
+        .build()?;
+    let _runtime = runtime.enter();
     let sdl = std::fs::read_to_string(&args.schema)?;
     let faker = faker::Faker::new(&sdl)?;
     let sources: BTreeMap<String, String> =
@@ -161,6 +177,8 @@ fn run(
         args.hot_capacity,
     )
     .map_err(|error| rootcause::report!("{error}"))?;
+    exec.pause_ms = args.real_pause;
+    exec.idle_hook = !args.no_idle_hook;
     let outcome = pollster::block_on(exec.run());
     let (lines, mut counters, path, mut normalizer) =
         exec.finish().map_err(|error| match &outcome {

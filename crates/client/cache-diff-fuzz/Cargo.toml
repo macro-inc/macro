@@ -21,7 +21,7 @@ serde_json = { workspace = true, features = ["unbounded_depth"] }
 sha2 = { workspace = true }
 soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }
 soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
 turso_core = { workspace = true, features = ["fs"] }
 uuid = { workspace = true }
@@ -29,5 +29,5 @@ uuid = { workspace = true }
 # build.rs compiles the Tauri host's engine module and src/fuzz_hooks.rs into the binary
 # through include!, where cargo-shear can't see them use these.
 [package.metadata.cargo-shear]
-ignored = ["soup-filter-cache-adapter", "tokio", "tracing"]
+ignored = ["soup-filter-cache-adapter", "tracing"]
 ignored-paths = ["src/fuzz_hooks.rs"]

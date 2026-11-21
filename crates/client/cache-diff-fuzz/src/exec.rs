@@ -45,6 +45,10 @@ pub struct Exec<'a> {
     last_keys: BTreeMap<&'static str, Vec<String>>,
     pub lines: Vec<Line>,
     pub counters: BTreeMap<String, u64>,
+    /// Real time to wait at `idle`, `reopen` and `crash` ops, in milliseconds (see `pause`).
+    pub pause_ms: Option<u64>,
+    /// Whether `idle` ops call the host's idle point directly.
+    pub idle_hook: bool,
 }
 
 type Outcome = Result<Value, String>;
@@ -88,6 +92,8 @@ impl<'a> Exec<'a> {
             last_keys: BTreeMap::new(),
             lines: Vec::new(),
             counters: BTreeMap::new(),
+            pause_ms: None,
+            idle_hook: true,
         };
         exec.open(0)?;
         Ok(exec)
@@ -128,6 +134,30 @@ impl<'a> Exec<'a> {
 
     fn add(&mut self, name: impl Into<String>, amount: u64) {
         *self.counters.entry(name.into()).or_default() += amount;
+    }
+
+    /// Waits `pause_ms` plus up to 30 ms in real time, so a host that
+    /// checkpoints on its own once quiet for 100 ms gets to, and the op after
+    /// the pause (a reopen, a crash) can land while that copy runs. The
+    /// pauses during which the database file was written (a copy from the
+    /// WAL: commits only append to the WAL) are counted.
+    fn pause(&mut self, index: usize) {
+        let Some(base) = self.pause_ms else {
+            return;
+        };
+        let written = |path: &Path| {
+            std::fs::metadata(path)
+                .ok()
+                .map(|metadata| (metadata.len(), metadata.modified().ok()))
+        };
+        let before = written(&self.path);
+        std::thread::sleep(std::time::Duration::from_millis(
+            base + (index as u64 * 7) % 31,
+        ));
+        self.count("pause");
+        if written(&self.path) != before {
+            self.count("pause.database-written");
+        }
     }
 
     fn record(&mut self, index: usize, kind: &'static str, outcome: Outcome) {
@@ -471,6 +501,10 @@ impl<'a> Exec<'a> {
                 // Builds differ here by design: only the idle checkpoint build
                 // checkpoints. What it did is counted, not compared; a failed
                 // checkpoint fails the seed.
+                self.pause(index);
+                if !self.idle_hook {
+                    return Ok(());
+                }
                 if let Some(checkpoint) = self.handle().fuzz_idle().await {
                     let (ran, backfilled) = checkpoint?;
                     if ran {
@@ -483,12 +517,14 @@ impl<'a> Exec<'a> {
             }
             Op::Reopen => {
                 self.count("reopen");
+                self.pause(index);
                 let handle = self.handle.take().ok_or("engine is closed")?;
                 handle.shutdown()?;
                 self.open(index)?;
             }
             Op::Crash => {
                 self.count("crash");
+                self.pause(index);
                 self.copies += 1;
                 let from = self.path.parent().expect("db dir").to_path_buf();
                 let to = self.root.join(format!("db-{}", self.copies));
@@ -887,9 +923,15 @@ fn collect_leases(value: &Value, found: &mut Vec<(String, String)>) {
 
 fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     std::fs::create_dir_all(to).map_err(|error| error.to_string())?;
-    let entries = std::fs::read_dir(from).map_err(|error| error.to_string())?;
+    let mut entries = std::fs::read_dir(from)
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    // The WAL before the database file: a checkpoint copying meanwhile then
+    // leaves a database ahead of a WAL that still holds every frame it copied,
+    // as a crash would, never a WAL restarted past a database that missed it.
+    entries.sort_by_key(|entry| !entry.file_name().to_string_lossy().ends_with("-wal"));
     for entry in entries {
-        let entry = entry.map_err(|error| error.to_string())?;
         if entry
             .file_type()
             .map_err(|error| error.to_string())?

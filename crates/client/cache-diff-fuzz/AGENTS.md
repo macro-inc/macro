@@ -45,6 +45,13 @@ disk after a reopen must come out the same.
   them as one blob per document), add `--decoded-facts`: `index_document_facts` is
   compared as each complete document's facts, decoded from the blob or gathered from
   the fact tables, and `meta`'s storage schema version is masked.
+- When the host checkpoints on its own once quiet (an idle task 100 ms after its last
+  command), add `--real-pause 95` to `FUZZ_ARGS`: `idle`, `reopen` and `crash` ops
+  first wait that long plus up to 30 ms in real time, so the host's copy runs, and the
+  reopen or crash after a pause can land while it copies. `--no-idle-hook` stops
+  `idle` ops calling the host's idle point, so only the host's own task checkpoints.
+  Stats count `pause.database-written`: pauses during which a copy reached the
+  database file. Background tasks the host spawns run on a Tokio runtime.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).
