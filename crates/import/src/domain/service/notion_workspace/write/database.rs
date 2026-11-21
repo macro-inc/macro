@@ -380,7 +380,8 @@ async fn database_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
             &capped_name(&item.title),
             folder,
         )
-        .await?;
+        .await
+        .map_err(crate::domain::ports::DatabaseWriteFailure::from_backend)?;
     progress
         .record_all(vec![
             WrittenObject::own(item.import_id, WrittenKind::Database, created.database_id),

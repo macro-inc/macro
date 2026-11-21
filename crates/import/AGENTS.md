@@ -338,17 +338,25 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   missing destinations and explicit source permissions degrade only that source.
   Incomplete view lists, source conflicts and unclassified source errors spend
   durable consecutive-failure receipts, capped at three before a named link
-  fallback. Reset receipts on successful reservation or budget exhaustion.
-  Re-planning retains failure-only generations while that bounded budget is
-  active; consent markers alone never retain a generation. Unknown failures say
+  fallback. Reset receipts only on successful reservation. Persist the terminal
+  link outcome before reporting it, and bypass reservation on later re-plans of
+  that generation. Retain at most three source attempts, three timed outage
+  observations and one terminal receipt. Consent markers never retain a generation.
+  Unknown failures say
   "An unexpected error stopped <title>" in the report. Trace only the safe
   `error_type` and source UUID, never error text or titles.
   Authentication, storage, folder-access failures and rate limits remain
   run-wide without spending a source budget. A Notion 5xx/timeout spends only
   when a fresh uncached, paced read of another successfully reserved source
   succeeds after the failed pass. Count that single health probe in its child
-  span; cached earlier successes do not qualify. With no healthy peer, stay
-  run-wide. Folder access is rechecked next run instead of leaving permanent
+  span; cached earlier successes do not qualify. Without a healthy peer, record
+  at most three outage observations under the existing failure-receipt kind.
+  Degrade only after at least three observations spanning 24 hours, using the
+  injected reservation clock; record observation count and age in its child span.
+  A 429 never records an observation. Persist that terminal link
+  too. Folder creation/existence and other untyped Macro service errors are
+  run-wide; only source-local errors spend the unexpected budget.
+  Folder access is rechecked next run instead of leaving permanent
   links. Recheck persisted cancellation before bodies and preserve Dismissed
   at settlement, with a typed cancellation checkpoint.
   Every failed reservation names its source; a pending teammate copy fails the
@@ -413,8 +421,11 @@ paths reject workspace-plan rows so approval cannot be bypassed.
 The inline writer adds `view`, `view_name`, `loss`, `schema_plan`,
 `schema_metadata`, `column_option`, `date_range_property`, `dependency_reviewed`,
 `dependency_included` and `database_reservation_failure` written kinds.
-Only consecutive failure receipts retain an otherwise unfinished generation;
-clear them atomically with an owned point lookup after success or exhaustion. Unknown future kinds stay readable as
+The failure kind also stores validated typed outage/terminal payloads. Its at
+most seven facts retain their generation; clear them atomically on success.
+A terminal outcome stays a link until a new generation replaces it. Retrying a
+degraded source has no card action/API yet; report the link outcome without
+promising a retry control. Unknown future kinds stay readable as
 `Unsupported` prerequisites and stop only the affected source with a typed
 report warning. Deploy compatible readers before writers; drain affected import
 runs or keep compatible readers before rolling back to an older binary. Renewal

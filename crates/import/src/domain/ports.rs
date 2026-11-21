@@ -47,6 +47,13 @@ pub enum DatabaseWriteFailure {
     Unavailable,
 }
 
+impl DatabaseWriteFailure {
+    /// Untyped Macro service errors are run-wide; explicit destination errors retain scope.
+    pub fn from_backend(error: anyhow::Error) -> Self {
+        error.downcast::<Self>().unwrap_or(Self::Unavailable)
+    }
+}
+
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {

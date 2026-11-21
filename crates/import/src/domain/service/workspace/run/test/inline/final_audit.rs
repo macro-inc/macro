@@ -11,10 +11,7 @@ async fn audit_final_unknown_source_error_survives_replanning_and_is_not_an_outa
     let tracker = TaskTracker::new();
     let service = service(
         &pool,
-        Writer {
-            unknown_database: Some("Work"),
-            ..Default::default()
-        },
+        Writer::default(),
         CancellationToken::new(),
         tracker.clone(),
     )
@@ -24,7 +21,7 @@ async fn audit_final_unknown_source_error_survives_replanning_and_is_not_an_outa
     let rows = [planned_page('e', "Project", false), source];
     let mut generation = None;
     for attempt in 1..=6 {
-        let consecutive = (attempt - 1) % 3 + 1;
+        let consecutive = attempt.min(3);
         let documents_before = service.creator.documents.lock().unwrap().len();
         // The real retry entry point plans again; it cannot approve a Failed review.
         let (review, _) = approved(&pool, &owner, &rows).await;
@@ -38,6 +35,21 @@ async fn audit_final_unknown_source_error_survives_replanning_and_is_not_an_outa
             .unwrap()
             .id;
         planned(&service.repo, &owner).await;
+        if attempt == 1 {
+            service
+                .repo
+                .record_written(
+                    &owner,
+                    &[crate::domain::models::WrittenObject {
+                        import_id: source_id,
+                        kind: WrittenKind::ViewName,
+                        object: "private payload".into(),
+                        macro_id: Uuid::now_v7(),
+                    }],
+                )
+                .await
+                .unwrap();
+        }
         if consecutive > 1 {
             assert_eq!(generation, Some(source_id));
         }
@@ -49,7 +61,7 @@ async fn audit_final_unknown_source_error_survives_replanning_and_is_not_an_outa
         tracker.close();
         tracker.wait().await;
         let report = service.notion_import_report(&owner).await.unwrap();
-        if consecutive < 3 {
+        if attempt < 3 {
             assert_eq!(report.status, Some(RunStatus::Failed));
             let error = report.error.as_deref().unwrap();
             assert!(
@@ -93,13 +105,21 @@ async fn audit_final_unknown_source_error_survives_replanning_and_is_not_an_outa
             .written(&owner, &all.iter().map(|row| row.id).collect::<Vec<_>>())
             .await
             .unwrap();
-        assert_eq!(
-            facts
-                .iter()
-                .filter(|f| f.kind == WrittenKind::DatabaseReservationFailure)
-                .count(),
-            if consecutive == 3 { 0 } else { consecutive }
-        );
+        let receipts = facts
+            .iter()
+            .filter(|f| f.kind == WrittenKind::DatabaseReservationFailure)
+            .count();
+        if attempt < 3 {
+            assert_eq!(receipts, attempt);
+        } else {
+            assert!((1..=7).contains(&receipts));
+            assert!(
+                report
+                    .warnings
+                    .iter()
+                    .any(|line| line.contains("imported as a link"))
+            );
+        }
     }
 }
 
@@ -218,7 +238,7 @@ async fn audit_final_one_poison_source_spends_only_with_a_later_healthy_read(poo
                 .iter()
                 .filter(|f| f.kind == WrittenKind::DatabaseReservationFailure)
                 .count(),
-            if attempt == 3 { 0 } else { attempt }
+            if attempt == 3 { 4 } else { attempt }
         );
         let observed = reads.lock().unwrap();
         let failure = observed
@@ -285,7 +305,8 @@ async fn audit_final_workspace_outages_and_rate_limits_never_spend_source_budget
                 .await
                 .unwrap()
                 .iter()
-                .all(|f| f.kind != WrittenKind::DatabaseReservationFailure)
+                .all(|f| f.kind != WrittenKind::DatabaseReservationFailure
+                    || Uuid::parse_str(&f.object).is_err())
         );
     }
 }
@@ -449,4 +470,157 @@ async fn audit_final_folder_access_is_rechecked_instead_of_writing_permanent_lin
         report.error
     );
     assert!(!service.creator.documents.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn audit_terminal_projects_outage_never_spends_personal_source_budgets(pool: PgPool) {
+    for failure in ["create", "exists", "database"] {
+        let owner = user(&format!("projects-outage-{failure}"));
+        let tracker = TaskTracker::new();
+        let service = service(
+            &pool,
+            Writer {
+                mirror_service_error: (failure != "database").then_some(failure),
+                unknown_database: (failure == "database").then_some("Work"),
+                ..Default::default()
+            },
+            CancellationToken::new(),
+            tracker.clone(),
+        )
+        .with_notion_connections(Arc::new(InlineConnected));
+        let mut first = planned_page('d', "Work", false);
+        first.kind = ImportKind::DataSource;
+        let mut second = planned_page('7', "Projects", false);
+        second.kind = ImportKind::DataSource;
+        for _ in 0..3 {
+            let (review, _) = approved(&pool, &owner, &[first.clone(), second.clone()]).await;
+            planned(&service.repo, &owner).await;
+            if failure == "exists" {
+                service
+                    .repo
+                    .set_personal_root_folder(&owner, Uuid::now_v7())
+                    .await
+                    .unwrap();
+            }
+            service
+                .start_notion_write(&owner, review, NotionWriteChoices::default())
+                .await
+                .unwrap();
+            tracker.close();
+            tracker.wait().await;
+            let report = service.notion_import_report(&owner).await.unwrap();
+            assert_eq!(report.status, Some(RunStatus::Failed), "{:?}", report.error);
+            let rows = service
+                .repo
+                .list(&owner, Some(ImportSource::Notion), None)
+                .await
+                .unwrap();
+            let facts = service
+                .repo
+                .written(&owner, &rows.iter().map(|r| r.id).collect::<Vec<_>>())
+                .await
+                .unwrap();
+            assert!(
+                !facts
+                    .iter()
+                    .any(|f| f.kind == WrittenKind::DatabaseReservationFailure),
+                "a projects outage spent a source budget"
+            );
+            assert!(service.creator.documents.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn audit_terminal_no_peer_outage_requires_three_observations_and_twenty_four_hours(
+    pool: PgPool,
+) {
+    for (name, status, schedule, terminal_at) in [
+        ("outage-window", 503, vec![0, 1, 23, 24, 25, 48, 72], 3),
+        ("outage-count", 503, vec![0, 48, 49, 50, 51, 52], 2),
+        ("outage-rate-limit", 429, vec![0, 1, 23, 24, 25, 48, 72], 3),
+    ] {
+        let owner = user(name);
+        let tracker = TaskTracker::new();
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let now = Arc::new(std::sync::atomic::AtomicI64::new(0));
+        let mut service = service(
+            &pool,
+            Writer::default(),
+            CancellationToken::new(),
+            tracker.clone(),
+        )
+        .with_notion_connections(Arc::new(QueryFailures {
+            failures: HashMap::from([(page_id('d'), status)]),
+            reads: reads.clone(),
+        }));
+        let clock = now.clone();
+        service.reservation_clock = Arc::new(move || {
+            chrono::DateTime::from_timestamp(
+                1_800_000_000 + clock.load(std::sync::atomic::Ordering::SeqCst),
+                0,
+            )
+            .unwrap()
+        });
+        let mut source = planned_page('d', "Work", false);
+        source.kind = ImportKind::DataSource;
+        let rows = [planned_page('e', "Project", false), source];
+        let mut terminal_reads = None;
+        for (attempt, hours) in schedule.into_iter().enumerate() {
+            now.store(hours * 3600, std::sync::atomic::Ordering::SeqCst);
+            let (review, _) = approved(&pool, &owner, &rows).await;
+            planned(&service.repo, &owner).await;
+            service
+                .start_notion_write(&owner, review, NotionWriteChoices::default())
+                .await
+                .unwrap();
+            tracker.close();
+            tracker.wait().await;
+            let report = service.notion_import_report(&owner).await.unwrap();
+            let degraded = status == 503 && attempt >= terminal_at;
+            assert_eq!(
+                report.status,
+                Some(if degraded {
+                    RunStatus::Completed
+                } else {
+                    RunStatus::Failed
+                }),
+                "{:?}",
+                report.error
+            );
+            if degraded {
+                assert!(report.warnings.iter().any(|line| {
+                    line.contains("Notion kept failing for Work, so it was imported as a link")
+                }));
+                let read_count = reads.lock().unwrap().len();
+                if let Some(previous) = terminal_reads {
+                    assert_eq!(read_count, previous);
+                }
+                terminal_reads = Some(read_count);
+            } else {
+                assert!(report.error.as_deref().unwrap().contains("Work"));
+            }
+            let entities = service
+                .repo
+                .list(&owner, Some(ImportSource::Notion), None)
+                .await
+                .unwrap();
+            let facts = service
+                .repo
+                .written(
+                    &owner,
+                    &entities.iter().map(|row| row.id).collect::<Vec<_>>(),
+                )
+                .await
+                .unwrap();
+            let count = facts
+                .iter()
+                .filter(|f| f.kind == WrittenKind::DatabaseReservationFailure)
+                .count();
+            assert!(count <= 7);
+            if status == 429 {
+                assert_eq!(count, 0);
+            }
+        }
+    }
 }

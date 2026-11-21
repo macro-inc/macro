@@ -251,10 +251,45 @@ async fn spend_budget<Store: WrittenObjects>(
     } else {
         SourceStopReason::ReservationRetriesExhausted
     };
+    degrade(item, progress, stop, error_type).await
+}
+
+/// With no health proof, wait for three observations spanning a full day.
+#[tracing::instrument(name = "notion.wait_source_outage", skip_all, fields(source_id = %item.notion_id, error_type, observations = tracing::field::Empty, age_seconds = tracing::field::Empty))]
+pub(super) async fn without_peer<Store: WrittenObjects>(
+    item: &write::WriteItem,
+    progress: &write::Progress<'_, Store>,
+    now: chrono::DateTime<chrono::Utc>,
+    error_type: &'static str,
+) -> Result<ReservedSource> {
+    if progress.prolonged_notion_failure(now).await? {
+        return degrade(
+            item,
+            progress,
+            SourceStopReason::NotionPersistentFailure,
+            error_type,
+        )
+        .await;
+    }
+    Err(ImportError::Other(
+        RunFailure {
+            reason: "Notion could not complete the request; retry this import".into(),
+            error_type,
+            unexpected: false,
+        }
+        .into(),
+    ))
+}
+
+async fn degrade<Store: WrittenObjects>(
+    item: &write::WriteItem,
+    progress: &write::Progress<'_, Store>,
+    stop: SourceStopReason,
+    error_type: &'static str,
+) -> Result<ReservedSource> {
+    progress.degrade_reservation(stop).await?;
     progress.source_stopped(&item.title, stop).await?;
     progress.flush_warnings().await?;
-    // Releasing this generation's retry-only state bounds replanning history.
-    progress.clear_reservation_failures().await?;
     Ok(ReservedSource {
         destination: Some(DatabaseDestination::Fallback(
             NotionDatabaseFallback::Unresolved,

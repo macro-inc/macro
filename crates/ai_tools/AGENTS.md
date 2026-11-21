@@ -56,7 +56,8 @@ validation, not-found, explicit resource permission and version-conflict errors
 into `DatabaseWriteFailure`; repository/service outages stay run-wide. The
 import domain owns source retry thresholds and link fallback decisions.
 Map project/folder receipt and grant-read errors to `FolderUnavailable`, so the
-next run rechecks the folder. Keep database access failures source-scoped.
+next run rechecks the folder. Type folder creation/existence errors too, including
+parent authorization and target liveness reads. Keep database access failures source-scoped.
 Missing deterministic starter table/title IDs return typed errors without raw
 ids or messages; never select another table or column by position.
 

@@ -39,6 +39,8 @@ pub enum SourceStopReason {
     ReservationRetriesExhausted,
     /// Unexpected source-local failures exhausted their consecutive budget.
     UnexpectedReservationErrors,
+    /// Repeated Notion read failures persisted for at least a day.
+    NotionPersistentFailure,
     /// The interrupted run never approved this external dependency in its current review.
     DependencyNotApproved,
     /// A newer worker recorded prerequisites this reader cannot interpret.
@@ -61,6 +63,7 @@ impl std::fmt::Display for SourceStopReason {
             Self::DestinationMissing => "this source's database destination was not found; references retain their Notion links",
             Self::DestinationNotPermitted => "this source's database destination does not permit access; references retain their Notion links",
             Self::ReservationRetriesExhausted => "this source's database reservation could not finish after 3 attempts; references retain their Notion links",
+            Self::NotionPersistentFailure => "Notion kept failing for this database; it was imported as a link",
             Self::UnexpectedReservationErrors => "an unexpected error stopped this source after 3 consecutive attempts; references retain their Notion links",
             Self::DependencyNotApproved => "external dependency was not explicitly included in this review; re-plan to include it",
             Self::UnsupportedMarker => "this import contains unsupported written markers; resume with an upgraded importer before writing this source",
@@ -187,9 +190,13 @@ impl FidelityWarning {
         match self {
             Self::SourceStopped {
                 title,
+                reason: SourceStopReason::NotionPersistentFailure,
+            } => format!("Notion kept failing for {title}, so it was imported as a link."),
+            Self::SourceStopped {
+                title,
                 reason: SourceStopReason::UnexpectedReservationErrors,
             } => format!(
-                "An unexpected error stopped {title} after 3 consecutive attempts; references retain their Notion links."
+                "An unexpected error stopped {title} after 3 consecutive attempts; it was imported as a link."
             ),
             Self::SourceStopped { title, reason } => format!("Database {title} stopped: {reason}."),
             Self::Text(message) => message.clone(),

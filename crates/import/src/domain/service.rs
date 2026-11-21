@@ -325,6 +325,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     notifier: Option<ImportNotify>,
     jobs: WorkspaceJobs,
     mirror_locks: Arc<PersonalMirrorLocks>,
+    reservation_clock: Arc<dyn Fn() -> chrono::DateTime<chrono::Utc> + Send + Sync>,
 }
 
 /// Weak slots keep in-run mirror exclusion per user without retaining inactive locks.
@@ -370,6 +371,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             notifier: self.notifier.clone(),
             jobs: self.jobs.clone(),
             mirror_locks: self.mirror_locks.clone(),
+            reservation_clock: self.reservation_clock.clone(),
         }
     }
 }
@@ -395,6 +397,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             notifier: None,
             jobs: WorkspaceJobs::new(),
             mirror_locks: Arc::new(PersonalMirrorLocks::default()),
+            reservation_clock: Arc::new(chrono::Utc::now),
         }
     }
 }
@@ -417,6 +420,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notifier: self.notifier,
             jobs: self.jobs,
             mirror_locks: self.mirror_locks,
+            reservation_clock: self.reservation_clock,
             slack_source: source,
         }
     }
@@ -470,6 +474,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notifier: self.notifier,
             jobs: self.jobs,
             mirror_locks: self.mirror_locks,
+            reservation_clock: self.reservation_clock,
             slack_source: self.slack_source,
         }
     }

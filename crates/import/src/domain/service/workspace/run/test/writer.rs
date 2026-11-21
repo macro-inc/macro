@@ -27,6 +27,7 @@ pub(super) struct Writer {
     pub(super) grant_on_database: bool,
     pub(super) database_insert_rows: std::sync::atomic::AtomicUsize,
     pub(super) database_error_once: std::sync::atomic::AtomicBool,
+    pub(super) mirror_service_error: Option<&'static str>,
     pub(super) unknown_database: Option<&'static str>,
     pub(super) folder_access_error: std::sync::atomic::AtomicBool,
     pub(super) database_failures: HashMap<String, crate::domain::ports::DatabaseWriteFailure>,
@@ -167,6 +168,9 @@ impl WorkspaceWriter for Writer {
         parent: Option<Uuid>,
         visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
+        if name == "Notion (personal)" && self.mirror_service_error == Some("create") {
+            anyhow::bail!("projects service request failed");
+        }
         if let Some(delay) = self.folder_delay {
             tokio::time::sleep(delay).await;
         }
@@ -204,6 +208,9 @@ impl WorkspaceWriter for Writer {
         {
             return Err(crate::domain::ports::DatabaseWriteFailure::FolderUnavailable.into());
         }
+        if self.mirror_service_error.is_some() {
+            return Ok(true);
+        }
         let grants = self.grants.lock().unwrap();
         let records = self.folder_records.lock().unwrap();
         let mut current = Some(folder);
@@ -233,6 +240,9 @@ impl WorkspaceWriter for Writer {
     }
 
     async fn folder_exists(&self, _: &MacroUserIdStr<'static>, id: Uuid) -> anyhow::Result<bool> {
+        if self.mirror_service_error == Some("exists") {
+            anyhow::bail!("projects service request failed");
+        }
         if let Some(pool) = &self.folder_pool {
             return Ok(sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,id.to_string()).fetch_one(pool).await?);
         }

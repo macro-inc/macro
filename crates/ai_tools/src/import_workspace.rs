@@ -216,7 +216,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         // Mirrors the CreateProject tool: creating inside a parent requires
         // edit access to it.
         if let Some(parent) = parent {
-            self.authorize_folder(user, parent).await?;
+            self.authorize_folder(user, parent)
+                .await
+                .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?;
         }
         let project = self
             .project_service
@@ -229,8 +231,11 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 crate::tool_context::imported_link_share(visibility),
             )
             .await
-            .map_err(|error| anyhow::anyhow!("failed to create imported folder: {error:?}"))?;
-        Ok(project.id.parse()?)
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?;
+        Ok(project
+            .id
+            .parse()
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?)
     }
 
     #[tracing::instrument(skip(self, user, name, notion_markdown, links, properties), err)]
@@ -402,15 +407,14 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             )
             .await
         {
-            Ok(_) => {
-                import::domain::ports::ImportedTargetReader::target_exists(
-                    self,
-                    ImportedTarget::Folder(folder),
-                )
-                .await
-            }
+            Ok(_) => import::domain::ports::ImportedTargetReader::target_exists(
+                self,
+                ImportedTarget::Folder(folder),
+            )
+            .await
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable.into()),
             Err(error) if crate::tool_context::refuses_view(&error) => Ok(false),
-            Err(error) => Err(anyhow::Error::new(error)),
+            Err(error) => Err(database_folder_access_failure(error).into()),
         }
     }
 

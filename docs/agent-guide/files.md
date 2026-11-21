@@ -167,15 +167,19 @@ databases and saved views. Invalid source schemas or missing or inaccessible
 destinations leave named links for that source. An incomplete saved-view listing
 is retried across attempts. After three consecutive source-specific failures,
 the report names the fallback; a successful reservation resets that budget.
+The link outcome persists across later plans of the same import generation.
 Unexpected errors name the database and follow the same bounded retry policy.
 Authentication, rate limits, storage and folder-access failures stop the attempt
 without permanently replacing cards with links. A repeatedly timing-out Notion
 source counts toward its budget only when another source answers a fresh read
-after the failure; a general Notion outage keeps the attempt retryable.
+after the failure. Without a healthy peer, it stays retryable until at least
+three observed failures span 24 hours, then the report says the database was
+imported as a link. Rate limits never trigger this fallback.
 Cancellation stays cancelled even if an in-flight reservation later returns an
 error. A teammate still
 creating a shared copy produces a named waiting error; a later import retry
-finishes it. Failed cards currently have no resume action. **Open full review** shows the whole plan in a dialog
+finishes it. Failed cards currently have no resume action, and degraded database
+links have no retry/reset action. **Open full review** shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

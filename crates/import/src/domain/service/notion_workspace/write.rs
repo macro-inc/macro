@@ -30,6 +30,7 @@ use crate::domain::ports::{
 use super::values::{task_body, task_properties};
 
 mod database;
+mod reservation;
 pub(super) use database::{
     PreparedDatabase, WrittenDatabase, link_relations, prepare_database, recorded_database,
     write_prepared_database,
@@ -328,18 +329,7 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             .unwrap_or_default()
     }
 
-    /// Count only validated receipts from this source's current ledger generation.
-    pub fn reservation_failures(&self) -> anyhow::Result<usize> {
-        let receipts = self.all(WrittenKind::DatabaseReservationFailure);
-        for (object, id) in &receipts {
-            if Uuid::parse_str(object).ok() != Some(*id) {
-                return Err(crate::domain::models::SourceStopReason::UnsupportedMarker.into());
-            }
-        }
-        Ok(receipts.len().min(RESERVATION_ATTEMPTS))
-    }
-
-    /// Success and terminal fallback both release the bounded retry state.
+    /// A successful reservation releases its bounded retry and outage state.
     pub async fn clear_reservation_failures(&self) -> anyhow::Result<()> {
         if self.all(WrittenKind::DatabaseReservationFailure).is_empty() {
             return Ok(());

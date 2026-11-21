@@ -167,21 +167,20 @@ where
         for (item, cause) in deferred {
             cancel.ensure_running()?;
             failed += 1;
-            let result = if matches!(cause.kind, failure::DeferredKind::NotionUnavailable)
-                && !notion_up
-            {
-                Err(ImportError::Other(
-                    failure::RunFailure {
-                        reason: "Notion could not complete the request; retry this import".into(),
-                        error_type: cause.error_type,
-                        unexpected: false,
-                    }
-                    .into(),
-                ))
-            } else {
-                let progress = write::Progress::new(&self.repo, user, item.import_id, written);
-                failure::spend(&item, &progress, cause).await
-            };
+            let result =
+                if matches!(cause.kind, failure::DeferredKind::NotionUnavailable) && !notion_up {
+                    let progress = write::Progress::new(&self.repo, user, item.import_id, written);
+                    failure::without_peer(
+                        &item,
+                        &progress,
+                        (self.reservation_clock)(),
+                        cause.error_type,
+                    )
+                    .await
+                } else {
+                    let progress = write::Progress::new(&self.repo, user, item.import_id, written);
+                    failure::spend(&item, &progress, cause).await
+                };
             match result {
                 Ok(reserved) => {
                     if let Some(destination) = reserved.destination {
@@ -254,6 +253,12 @@ where
         let outcome: anyhow::Result<()> = async {
             progress.ensure_supported()?;
             progress.reservation_failures()?;
+            if let Some(reason) = progress.degraded_reservation()? {
+                progress.source_stopped(&item.title, reason).await?;
+                reserved.destination = Some(DatabaseDestination::Fallback(NotionDatabaseFallback::Unresolved));
+                reserved.failure = Some(reason.to_string());
+                return Ok(());
+            }
             if !pending.contains(&item.import_id) {
                 if let Some(row) = store.get(user, item.import_id).await?
                     && row.entity_type.as_deref() == Some(write::DATABASE_ENTITY)
@@ -263,7 +268,7 @@ where
                     let destination = if progress.get(WrittenKind::Database) == Some(database)
                         && let Some(table) = progress.get(WrittenKind::Table)
                     {
-                        DatabaseDestination::Ready(writer.database(user, database, models_databases::TableId::from_uuid(table)).await?)
+                        DatabaseDestination::Ready(writer.database(user, database, models_databases::TableId::from_uuid(table)).await.map_err(crate::domain::ports::DatabaseWriteFailure::from_backend)?)
                     } else {
                         reuse_database(writer, store, user, &item.notion_id, database, &progress).await?
                     };
@@ -275,7 +280,7 @@ where
                 return Ok(());
             }
             let claim = match team {
-                Some(team) if item.shared || item.already_imported => super::super::lifecycle::claim_team_object(store, writer, user, item.import_id, team, item.shared).await?,
+                Some(team) if item.shared || item.already_imported => super::super::lifecycle::claim_team_object(store, writer, user, item.import_id, team, item.shared).await.map_err(|error| crate::domain::ports::DatabaseWriteFailure::from_backend(error.into()))?,
                 _ => TeamClaim::Free,
             };
             match claim {
@@ -301,7 +306,7 @@ where
                 ImportVisibility::Shared => Some(planned),
                 ImportVisibility::Personal => Some(self.personal_item_folder(
                     user, item.import_id, planned, place.path_for(planned)?,
-                ).await?),
+                ).await.map_err(|_| crate::domain::ports::DatabaseWriteFailure::FolderUnavailable)?),
             };
             let database = write::prepare_database(api, writer, user, item, folder, &progress, cancel).await?;
             if item.parent.is_none() && folder == Some(place.root) && !item.dependency_of.is_empty() {
@@ -377,7 +382,11 @@ async fn reuse_database<Writer: WorkspaceWriter, Store: WrittenObjects>(
     database: Uuid,
     progress: &write::Progress<'_, Store>,
 ) -> anyhow::Result<DatabaseDestination> {
-    if !writer.database_access(user, database).await? {
+    if !writer
+        .database_access(user, database)
+        .await
+        .map_err(crate::domain::ports::DatabaseWriteFailure::from_backend)?
+    {
         return Ok(DatabaseDestination::Fallback(
             NotionDatabaseFallback::NoAccess,
         ));
@@ -386,7 +395,10 @@ async fn reuse_database<Writer: WorkspaceWriter, Store: WrittenObjects>(
         .database_mapping(user, source, database)
         .await?
         .ok_or(crate::domain::models::SourceStopReason::HolderMarkerMissing)?;
-    let database = writer.database(user, database, mapping.table).await?;
+    let database = writer
+        .database(user, database, mapping.table)
+        .await
+        .map_err(crate::domain::ports::DatabaseWriteFailure::from_backend)?;
     progress.warn_fidelity(&mapping.warnings).await?;
     Ok(DatabaseDestination::Ready(database))
 }

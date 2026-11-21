@@ -183,7 +183,8 @@ pub(in super::super::super) async fn prepare_database<
     if progress.get(WrittenKind::Schema).is_none() {
         writer
             .apply_database_ops(user, created.database_id, schema_ops(item, &plan, &created))
-            .await?;
+            .await
+            .map_err(crate::domain::ports::DatabaseWriteFailure::from_backend)?;
         progress
             .record(WrittenKind::Schema, created.database_id)
             .await?;
@@ -236,7 +237,8 @@ pub(in super::super::super) async fn prepare_database<
                     id,
                     translated.view,
                 )
-                .await?;
+                .await
+                .map_err(crate::domain::ports::DatabaseWriteFailure::from_backend)?;
             progress
                 .record_for(WrittenKind::View, &view.id, id.into_uuid())
                 .await?;

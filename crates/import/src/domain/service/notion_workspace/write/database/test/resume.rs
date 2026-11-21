@@ -214,22 +214,22 @@ async fn a_committed_view_with_a_lost_response_is_reused_before_its_marker_is_wr
     let store = FakeStore::default();
     let user = user();
     let item = source_item("Work");
-    assert_eq!(
-        prepare_database(
-            &notion,
-            &writer,
-            &user,
-            &item,
-            Some(Uuid::from_u128(42)),
-            &Progress::new(&store, &user, item.import_id, &[]),
-            &Cancel::default(),
-        )
-        .await
-        .err()
-        .unwrap()
-        .to_string(),
-        "lost view response"
-    );
+    let error = prepare_database(
+        &notion,
+        &writer,
+        &user,
+        &item,
+        Some(Uuid::from_u128(42)),
+        &Progress::new(&store, &user, item.import_id, &[]),
+        &Cancel::default(),
+    )
+    .await
+    .err()
+    .unwrap();
+    assert!(matches!(
+        error.downcast_ref::<crate::domain::ports::DatabaseWriteFailure>(),
+        Some(crate::domain::ports::DatabaseWriteFailure::Unavailable)
+    ));
     let recorded = store.written(&user, &[item.import_id]).await.unwrap();
     assert!(
         !recorded
