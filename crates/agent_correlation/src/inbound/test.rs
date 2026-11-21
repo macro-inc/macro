@@ -441,14 +441,20 @@ async fn a_service_without_a_database_enforces_the_signed_scope() {
             StatusCode::OK,
         ),
         // A background job's credential makes only its listed requests,
-        // here too: it reads its files and deletes none.
+        // here too: neither this delete nor this read is on its lists (it
+        // reads files at `/file/{id}`), so both are refused.
         (
             Some(scoped(Some("job"))),
             "DELETE",
             false,
             StatusCode::FORBIDDEN,
         ),
-        (Some(scoped(Some("job"))), "GET", false, StatusCode::OK),
+        (
+            Some(scoped(Some("job"))),
+            "GET",
+            false,
+            StatusCode::FORBIDDEN,
+        ),
         (Some(scoped(None)), "DELETE", false, StatusCode::OK),
         (
             Some("not a token".to_owned()),
