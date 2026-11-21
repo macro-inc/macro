@@ -1119,4 +1119,38 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('hands back when the browser tab closes or reloads while driving, once', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState({
+        driver: { userId: 'user-alice', name: 'Alice' },
+        agentHeld: true,
+        waking: false,
+        transport: 'vnc',
+        viewers: 1,
+      });
+
+      window.dispatchEvent(new Event('pagehide'));
+      expect(connections[0].controls).toEqual(['handBack:null']);
+      dispose();
+      expect(connections[0].controls).toEqual(['handBack:null', 'close']);
+    });
+  });
 });

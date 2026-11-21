@@ -348,6 +348,11 @@ export function createScreenSession(options: ScreenSessionOptions) {
   }
   document.addEventListener('visibilitychange', reconnectIfShown);
 
+  // Closing or reloading the browser tab never runs `onCleanup`: hand back
+  // on the way out too, so the agent needn't wait out the lease.
+  const handBackOnPageHide = () => handBackIfDriving();
+  window.addEventListener('pagehide', handBackOnPageHide);
+
   function retry() {
     clearTimeout(retryTimer);
     setStore({ status: { kind: 'connecting' } });
@@ -356,6 +361,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
 
   onCleanup(() => {
     document.removeEventListener('visibilitychange', reconnectIfShown);
+    window.removeEventListener('pagehide', handBackOnPageHide);
     handBackIfDriving();
     disposed = true;
     // Late results from any attempt in flight are dropped from here on.
