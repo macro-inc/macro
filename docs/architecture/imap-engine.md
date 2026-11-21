@@ -113,3 +113,9 @@ identities reject surrounding whitespace rather than implicitly trimming.
 Provider usernames, SMTP envelopes and received MIME headers remain raw protocol
 strings, including SMTPUTF8 addresses outside Macro's ASCII sign-in grammar.
 Persisted protocol credentials are checked at the settings/discovery boundary.
+
+IMAP correspondence uses the distinct `imap` contacts inbox list while preserving
+legacy contact edges. Apply the additive list-key constraint migrations and update
+every contacts worker and directory reader (including document_storage_service)
+before publishing that queue value. The existing contacts
+list-publication flag remains independent of IMAP enrollment and mailbox work.

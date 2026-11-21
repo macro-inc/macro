@@ -133,12 +133,12 @@ async fn main() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-            contacts_queue.to_string(),
-        ),
-    });
+    let contacts_ingress = Arc::new(email_service::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        contacts_queue.to_string(),
+        config.environment,
+        email_service::outlook_flags::posthog(&config)?,
+    ));
 
     // One message per receive: messages are processed one at a time and only the one in
     // progress renews its visibility, so the rest of a batch would time out behind a long
