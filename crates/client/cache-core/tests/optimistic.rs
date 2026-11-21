@@ -87,6 +87,31 @@ impl ClaimFailingStorage {
 
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        Ok(self
+            .inner
+            .record_keys(typename, after_id, limit)
+            .await
+            .unwrap())
+    }
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        Ok(self
+            .inner
+            .projection_keys(typename, after_id, limit)
+            .await
+            .unwrap())
+    }
 
     async fn read_people_sql(
         &self,
@@ -183,6 +208,22 @@ impl Storage for ClaimFailingStorage {
             .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
             .await
             .unwrap())
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(
+            cache_core::queue::MutationId,
+            cache_core::queue::PersistedOptimisticLayer,
+        )],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .replace_optimistic_layers(layers, affected_projection_keys, projections)
+            .await
+            .unwrap();
+        Ok(())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

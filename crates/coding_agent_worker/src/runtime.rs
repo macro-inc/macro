@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use tokio::sync::{Notify, watch};
 use tokio::time::Instant;
-use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -18,6 +17,7 @@ use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
+use crate::retry_delay::RetryDelays;
 use crate::turns::ActiveTurns;
 
 #[cfg(test)]
@@ -29,6 +29,9 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 /// A connection that lasted this long was healthy: its loss is redialed at
 /// once rather than after a backoff step.
 const HEALTHY_CONNECTION: Duration = Duration::from_secs(10);
+/// The first redial after a failure; later ones double up to the cap. Short:
+/// a booting computer's first dial often races its network.
+const FIRST_RECONNECT_DELAY: Duration = Duration::from_millis(250);
 const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// The daemon's connection to its harness's sessions.
@@ -110,7 +113,8 @@ impl Runtime {
 /// the supervisor until the user re-pairs or restarts the daemon.
 ///
 /// An `adopted` agent (handed over by the previous process image) serves the
-/// first connection instead of a fresh spawn. A handoff request ends the
+/// first connection instead of a fresh spawn. Otherwise the agent is started
+/// before each dial, so it boots while the socket opens. A handoff request ends the
 /// supervisor: the bridge answers it with its agent, and between bridges it
 /// is answered with whatever agent is still waiting for a connection.
 #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
@@ -130,6 +134,9 @@ async fn serve(
     let mut backoff = reconnect_strategy();
     loop {
         let mut lasted = None;
+        if adopted.is_none() {
+            adopted = start_ahead(&harness, &cwd);
+        }
         let dialed = tokio::select! {
             dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
             request = handoffs.next() => {
@@ -188,8 +195,23 @@ async fn serve(
     }
 }
 
+/// Start the agent while the runtime dials, so a session that arrives with
+/// the connection (a computer's first prompt) does not also wait for the
+/// agent's own startup: a Node adapter takes a quarter of a second or more.
+/// It stays ready across failed dials. A failed start is left to the bridge,
+/// which starts it again and reports why it could not.
+fn start_ahead(harness: &Harness, cwd: &Path) -> Option<RunningAgent> {
+    let _span = tracing::info_span!("macrod.agent.start_ahead").entered();
+    harness::agent_process(harness, cwd)
+        .start()
+        .inspect_err(
+            |error| tracing::warn!(error = ?error, "could not start the agent ahead of the dial"),
+        )
+        .ok()
+}
+
 /// Answer a handoff that arrived while no bridge was relaying: only an agent
-/// adopted and not yet connected is running.
+/// adopted or started ahead, and not yet connected, is running.
 #[cfg(unix)]
 fn answer_between_bridges(
     reply: harness::HandoffRequest,
@@ -199,7 +221,7 @@ fn answer_between_bridges(
     let handed = adopted.and_then(|agent| {
         agent
             .hand_off(turns.snapshot())
-            .inspect_err(|error| tracing::warn!(error = %error, "could not hand the agent off"))
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not hand the agent off"))
             .ok()
     });
     let _ = reply.send(handed);
@@ -231,16 +253,14 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
 
 /// How long to wait before the next dial, given how long the last
 /// connection lasted (`None` when the dial itself failed).
-fn redial_delay(lasted: Option<Duration>, backoff: &mut ExponentialBackoff) -> Duration {
+fn redial_delay(lasted: Option<Duration>, backoff: &mut RetryDelays) -> Duration {
     if lasted.is_some_and(|lasted| lasted >= HEALTHY_CONNECTION) {
-        *backoff = reconnect_strategy();
+        backoff.reset();
         return Duration::ZERO;
     }
-    backoff.next().unwrap_or(MAX_RECONNECT_DELAY)
+    backoff.next_delay()
 }
 
-fn reconnect_strategy() -> ExponentialBackoff {
-    ExponentialBackoff::from_millis(2)
-        .factor(500)
-        .max_delay(MAX_RECONNECT_DELAY)
+fn reconnect_strategy() -> RetryDelays {
+    RetryDelays::new(FIRST_RECONNECT_DELAY, MAX_RECONNECT_DELAY)
 }

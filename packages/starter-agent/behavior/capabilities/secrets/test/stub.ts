@@ -109,6 +109,7 @@ const statusOf: Record<ErrorCode, number> = {
   version_conflict: 409,
   vault_busy: 409,
   vault_unavailable: 503,
+  vault_not_provisioned: 409,
 };
 
 const refuse = (code: ErrorCode, retryAfterMs?: number): Response =>

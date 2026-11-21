@@ -34,3 +34,14 @@ nix develop --command cargo test -p local_e2e_integration_tests --test bot_entit
 The test reads `LOCAL_E2E_DATABASE_URL` and
 `LOCAL_E2E_DOCUMENT_STORAGE_URL`, falling back to the standard local MacroDB
 and DSS addresses.
+
+## Email-code signup
+
+`email_code_signup` signs up a referrer through the email code, seeds a team
+whose auto-join domain is a fresh domain, then requests a code for a new address
+at that domain with the referrer's code. Requesting the code must neither join
+the team nor track the referral; using the code must do both. It needs the
+authentication service built with `return_passwordless_code` (the local stack's
+default), reads `LOCAL_E2E_AUTHENTICATION_URL` (the proxy's `/auth`, falling
+back to the service's local port) and `LOCAL_E2E_DATABASE_URL`, and removes
+the team it seeded; the accounts it creates use unique addresses and stay.

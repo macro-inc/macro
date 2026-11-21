@@ -1530,6 +1530,12 @@ pub trait RuntimeSessionLookup: Send + Sync {
         sessions: &[SessionId],
         dormant_before: chrono::DateTime<chrono::Utc>,
     ) -> impl Future<Output = std::result::Result<Vec<RuntimeSession>, Self::Err>> + Send;
+    /// Which of `bots` have a session with work under way: a turn not yet
+    /// ended or prompts queued. A Macro computer running one is in use.
+    fn bots_with_live_work(
+        &self,
+        bots: &[BotId],
+    ) -> impl Future<Output = std::result::Result<std::collections::HashSet<BotId>, Self::Err>> + Send;
     /// Persistence failure.
     type Err: std::error::Error + Send + Sync + 'static;
 }

@@ -79,14 +79,20 @@ five minutes. The calendar-service worker runs every 15 seconds and failures bac
 A refusal decided before anything reaches the provider (no writable calendar, a read-only calendar,
 an event the host can no longer see) abandons the operation at once; any other failure is retried
 hourly until the meeting's start time has passed, then abandoned. An abandoned booking stays
-`failed` with its reservations and is never retried again. Cancelling it releases
-them once the calendar accepts the cancellation; a calendar that refuses that too keeps them, as
-lost access always has. A move the calendar refuses on its first attempt returns the booking to its
-original time and status and releases the new interval; one refused after an earlier attempt that
-left no recorded outcome, or that keeps failing until its new start, stays failed at the requested
-time with both intervals held. Keyed deletion works even after local calendar projection
+`failed` with its reservations and is never retried again; its booking carries `abandonedAt`, so
+the booker's receipt and the host's dialog offer Cancel instead of saying it is retrying. A create
+refused on its first attempt never reached the calendar, so cancelling it releases them without a
+calendar change. Any other abandoned booking releases them once the calendar accepts the
+cancellation; a calendar that refuses that too keeps them, as lost access always has, and both
+views say the cancellation did not reach the host's calendar. A move the calendar refuses on its
+first attempt returns the booking to its original time and status and releases the new interval;
+one refused after an earlier attempt that left no recorded outcome, or that keeps failing until its
+new start, stays failed at the requested time with both intervals held. Keyed deletion works even after local calendar projection
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider
-accepts the update, then releases the old interval. Calendar projections without a
+accepts the update, then releases the old interval. A booking link's daily limit likewise
+counts a move whose first attempt is still waiting on the calendar on both days, so a
+refusal that returns it cannot leave its original day over the limit. Replacement times for a
+reschedule skip a day already at the limit, without counting the booking being moved. Calendar projections without a
 source time zone for all-day events conservatively block all possible UTC offsets.
 
 This change does not include payments, workflow automation, routing forms, advanced

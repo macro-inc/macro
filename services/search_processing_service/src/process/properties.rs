@@ -1,9 +1,23 @@
 use anyhow::Context;
 use models_properties::EntityType;
-use opensearch_client::{OpensearchClient, upsert::properties::IndexedProperty};
+use opensearch_client::{
+    OpensearchClient,
+    upsert::properties::{IndexedProperty, PropertyUpdate},
+};
 use properties::outbound::entity_properties_get_query::{
     IndexedEntityProperty, get_entity_properties_for_index,
 };
+
+/// What refreshing an entity's indexed properties did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyRefresh {
+    /// The entity's search documents now carry its properties.
+    Written,
+    /// The index holds no document for the entity yet, so nothing changed.
+    NotIndexed,
+    /// The entity's type has no search index that holds properties.
+    UnindexedType,
+}
 
 /// Refresh only the indexed `properties` of an entity after a property
 /// mutation, without re-extracting its content. Fetches once, then routes to
@@ -14,13 +28,13 @@ pub async fn process_entity_property_update(
     db: &sqlx::Pool<sqlx::Postgres>,
     entity_id: &str,
     entity_type: EntityType,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<PropertyRefresh> {
     let rows = get_entity_properties_for_index(db, entity_id, entity_type)
         .await
         .context("failed to fetch properties for reindex")?;
     let properties = to_indexed_properties(rows);
 
-    match entity_type {
+    let update = match entity_type {
         EntityType::Task | EntityType::Document => opensearch_client
             .update_document_properties(entity_id, &properties)
             .await
@@ -41,15 +55,28 @@ pub async fn process_entity_property_update(
             .update_call_record_properties(entity_id, &properties)
             .await
             .context("failed to update call record properties in search index"),
-        other => {
+        EntityType::CalendarEvent => opensearch_client
+            .update_calendar_event_properties(entity_id, &properties)
+            .await
+            .context("failed to update calendar event properties in search index"),
+        other @ (EntityType::Channel
+        | EntityType::Company
+        | EntityType::Contact
+        | EntityType::DatabaseRow
+        | EntityType::Initiative
+        | EntityType::User) => {
             tracing::warn!(
                 entity_type = %other,
                 entity_id = %entity_id,
                 "property update for unindexed entity type"
             );
-            Ok(())
+            return Ok(PropertyRefresh::UnindexedType);
         }
-    }
+    }?;
+    Ok(match update {
+        PropertyUpdate::Applied => PropertyRefresh::Written,
+        PropertyUpdate::NotIndexed => PropertyRefresh::NotIndexed,
+    })
 }
 
 /// Convert DB-flattened properties into the search index's document shape.
@@ -64,3 +91,6 @@ pub fn to_indexed_properties(properties: Vec<IndexedEntityProperty>) -> Vec<Inde
         })
         .collect()
 }
+
+#[cfg(test)]
+mod test;

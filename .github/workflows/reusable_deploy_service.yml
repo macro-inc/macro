@@ -5,27 +5,27 @@ on:
   workflow_call:
     inputs:
       environment:
-        required: true
-        type: string
         description: The environment to deploy to
-      service-name:
         required: true
         type: string
+      service-name:
         description: The name of the service to deploy
+        required: true
+        type: string
       pulumi-stack-name:
+        description: Override pulumi stack name (defaults to service-name)
         required: false
         type: string
-        description: Override pulumi stack name (defaults to service-name)
       use-docker:
+        description: Whether to setup docker
         required: false
         type: boolean
         default: true
-        description: Whether to setup docker
       use-lfs:
+        description: Whether to checkout LFS content
         required: false
         type: boolean
         default: false
-        description: Whether to checkout LFS content
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -37,6 +37,8 @@ on:
         required: true
       DD_API_KEY:
         required: true
+      NIX_CACHE_SIGNING_KEY:
+        required: false
 jobs:
   setup:
     name: Check ${{ inputs.service-name }} artifacts
@@ -45,218 +47,277 @@ jobs:
       has_binaries: ${{ steps.check.outputs.has_binaries }}
       has_lambdas: ${{ steps.check.outputs.has_lambdas }}
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        sparse-checkout: .github/
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - id: check
-      name: Check artifact config
-      run: |
-        set -euo pipefail
-        cfg=.github/services-config.json
-        if jq -e --arg service "$SERVICE" '.services[$service].bootstrap_pending != null' "$cfg" > /dev/null; then
-          reason=$(jq -r --arg service "$SERVICE" '.services[$service].bootstrap_pending' "$cfg")
-          echo "::error::Cannot deploy $SERVICE before bootstrap: $reason"
-          exit 1
-        fi
-        has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' "$cfg")
-        has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' "$cfg")
-        echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
-        echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
-        echo "service=$SERVICE binaries=$has_binaries lambdas=$has_lambdas"
-      env:
-        SERVICE: ${{ inputs.service-name }}
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+          sparse-checkout: .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - id: check
+        name: Check artifact config
+        run: |
+          set -euo pipefail
+          cfg=.github/services-config.json
+          if jq -e --arg service "$SERVICE" '.services[$service].bootstrap_pending != null' "$cfg" > /dev/null; then
+            reason=$(jq -r --arg service "$SERVICE" '.services[$service].bootstrap_pending' "$cfg")
+            echo "::error::Cannot deploy $SERVICE before bootstrap: $reason"
+            exit 1
+          fi
+          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' "$cfg")
+          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' "$cfg")
+          echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
+          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+          echo "service=$SERVICE binaries=$has_binaries lambdas=$has_lambdas"
+        env:
+          SERVICE: ${{ inputs.service-name }}
   build-service-binaries:
     needs:
-    - setup
-    if: ${{ needs.setup.outputs.has_binaries == 'true' }}
+      - setup
+    if: needs.setup.outputs.has_binaries == 'true'
     name: Build ${{ inputs.service-name }} binaries
     runs-on: namespace-profile-linux-mid
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        clean: 'false'
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-      with:
-        bun-version: 1.3.13
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: ./.github/actions/setup-nix
-    - name: Build prebuilt binaries
-      run: |
-        set -euo pipefail
-        mkdir -p prebuilt
-        # DSS bundles two cargo packages; the hand-written nix.conf leaves
-        # max-jobs at 1, which would build them one after the other.
-        nix build --max-jobs auto --print-build-logs ".#deploy-service-binaries-${SERVICE}"
-        cp -r result/bin/* prebuilt/
-        mkdir -p prebuilt/nix-store
-        while IFS= read -r store_path; do
-          cp -a "$store_path" prebuilt/nix-store/
-        done < <(nix-store -qR result)
-        touch prebuilt/.keep
-        tar -C prebuilt -czf prebuilt-binaries.tar.gz .
-        # Receipt: the deploy job logs the same hash on read.
-        echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
-      shell: bash
-      env:
-        SERVICE: ${{ inputs.service-name }}
-    - name: Upload handoff artifact
-      run: bun .github/scripts/upload-handoff-artifact.ts prebuilt-binaries.tar.gz "$DEST"
-      shell: bash
-      env:
-        DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}/prebuilt-binaries.tar.gz
-      timeout-minutes: 20
-    - name: Teardown Nix
-      if: always()
-      uses: ./.github/actions/teardown-nix
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+          clean: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.13'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build prebuilt binaries
+        run: |
+          set -euo pipefail
+          mkdir -p prebuilt
+          # DSS bundles two cargo packages; the hand-written nix.conf leaves
+          # max-jobs at 1, which would build them one after the other.
+          nix build --max-jobs auto --print-build-logs ".#deploy-service-binaries-${SERVICE}"
+          cp -r result/bin/* prebuilt/
+          mkdir -p prebuilt/nix-store
+          while IFS= read -r store_path; do
+            cp -a "$store_path" prebuilt/nix-store/
+          done < <(nix-store -qR result)
+          touch prebuilt/.keep
+          tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+          # Receipt: the deploy job logs the same hash on read.
+          echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
+        shell: bash
+        env:
+          SERVICE: ${{ inputs.service-name }}
+      - id: build-inputs
+        name: Collect build inputs for the nix cache
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -uo pipefail
+          # The cache is an optimization: a failed lookup only pushes less.
+          mapfile -t candidates < <(
+            nix eval --raw .#deployCargoArtifacts --apply 'deps: builtins.concatStringsSep "\n" ([ (toString deps.cargoVendorDir) ] ++ map toString (builtins.filter (input: builtins.match "rust-[0-9].*" (input.name or "") != null) deps.nativeBuildInputs))' \
+              || echo "::warning::could not list the deps' build inputs" >&2
+            echo
+            nix eval --raw .#code-mode-assets.outPath \
+              || echo "::warning::could not find the code-mode assets" >&2
+            echo
+          )
+          paths=()
+          for path in $(printf '%s\n' "${candidates[@]}" | sort -u); do
+            if [[ -e "$path" ]]; then paths+=("$path"); fi
+          done
+          echo "build inputs to cache: ${paths[*]}"
+          echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: Push to nix cache
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -uo pipefail
+          if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+            echo "nix cache not configured; skipping push"
+            exit 0
+          fi
+          key="$RUNNER_TEMP/nix-cache-signing-key"
+          printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+          sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+          # shellcheck disable=SC2086 # TARGETS is a list on purpose
+          nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+            || echo "::warning::nix cache push failed (non-fatal)"
+          rm -f "$key"
+        shell: bash
+        env:
+          TARGETS: .#deployCargoArtifacts .#deploy-service-binaries-${{ inputs.service-name }} ${{ steps.build-inputs.outputs.paths }}
+          NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+          NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        timeout-minutes: 15
+        continue-on-error: true
+      - name: Upload handoff artifact
+        run: bun .github/scripts/upload-handoff-artifact.ts prebuilt-binaries.tar.gz "$DEST"
+        shell: bash
+        env:
+          DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}/prebuilt-binaries.tar.gz
+        timeout-minutes: 20
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   build-lambda-artifacts:
     needs:
-    - setup
-    if: ${{ needs.setup.outputs.has_lambdas == 'true' }}
+      - setup
+    if: needs.setup.outputs.has_lambdas == 'true'
     name: Build ${{ inputs.service-name }} Lambda artifacts
     runs-on: namespace-profile-linux-mid
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        clean: 'false'
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-      with:
-        bun-version: 1.3.13
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: ./.github/actions/setup-nix
-    - name: Build Lambda artifacts
-      run: .github/scripts/build-cloud-storage-lambdas-nix.sh
-      env:
-        SERVICE: ${{ inputs.service-name }}
-    - name: Log handoff receipt
-      run: |
-        set -euo pipefail
-        # The build script writes lambda-artifacts.tar.gz to the workspace
-        # root; the deploy job logs the same hash on read.
-        echo "handoff receipt: $(sha256sum lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s lambda-artifacts.tar.gz) bytes)"
-      shell: bash
-    - name: Upload handoff artifact
-      run: bun .github/scripts/upload-handoff-artifact.ts lambda-artifacts.tar.gz "$DEST"
-      shell: bash
-      env:
-        DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}/lambda-artifacts.tar.gz
-      timeout-minutes: 20
-    - name: Teardown Nix
-      if: always()
-      uses: ./.github/actions/teardown-nix
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+          clean: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.13'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build Lambda artifacts
+        run: .github/scripts/build-cloud-storage-lambdas-nix.sh
+        env:
+          SERVICE: ${{ inputs.service-name }}
+          NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+          NIX_CACHE_SIGNING_KEY: ${{ github.ref == 'refs/heads/main' && secrets.NIX_CACHE_SIGNING_KEY || '' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Log handoff receipt
+        run: |
+          set -euo pipefail
+          # The build script writes lambda-artifacts.tar.gz to the workspace
+          # root; the deploy job logs the same hash on read.
+          echo "handoff receipt: $(sha256sum lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s lambda-artifacts.tar.gz) bytes)"
+        shell: bash
+      - name: Upload handoff artifact
+        run: bun .github/scripts/upload-handoff-artifact.ts lambda-artifacts.tar.gz "$DEST"
+        shell: bash
+        env:
+          DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}/lambda-artifacts.tar.gz
+        timeout-minutes: 20
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   check-migrations:
     needs:
-    - setup
-    if: ${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}
+      - setup
+    if: needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true'
     name: Check ${{ inputs.service-name }} migrations are applied
     runs-on: db-migrator
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        sparse-checkout: .github/
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Check migrations
-      uses: ./.github/actions/check-macro-db-migrations
-      with:
-        environment: ${{ inputs.environment }}
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+          sparse-checkout: .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Check migrations
+        uses: ./.github/actions/check-macro-db-migrations
+        with:
+          environment: ${{ inputs.environment }}
   deploy:
     needs:
-    - setup
-    - build-service-binaries
-    - build-lambda-artifacts
-    - check-migrations
-    if: ${{ !failure() && !cancelled() }}
+      - setup
+      - build-service-binaries
+      - build-lambda-artifacts
+      - check-migrations
+    if: '!failure() && !cancelled()'
     name: Deploy ${{ inputs.service-name }}
     runs-on: namespace-profile-linux-small
     env:
       PULUMI_HOME: /pulumi
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - id: project-name
-      name: Get project name
-      if: ${{ inputs.pulumi-stack-name == '' }}
-      uses: ./.github/actions/get-project-name
-      with:
-        service-name: ${{ inputs.service-name }}
-    - name: Download handoff artifacts
-      if: ${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}
-      run: |
-        set -euo pipefail
-        if ! command -v nsc >/dev/null 2>&1; then
-          echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
-          exit 1
-        fi
-        mkdir -p "$RUNNER_TEMP/handoff"
-        if [[ "$HAS_BINARIES" == "true" ]]; then
-          nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
-        fi
-        if [[ "$HAS_LAMBDAS" == "true" ]]; then
-          nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
-        fi
-      shell: bash
-      env:
-        HAS_BINARIES: ${{ needs.setup.outputs.has_binaries }}
-        HAS_LAMBDAS: ${{ needs.setup.outputs.has_lambdas }}
-        BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}
-    - name: Cache Pulumi plugins
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        path: /pulumi/plugins
-      continue-on-error: true
-    - name: Ensure Pulumi home is writable
-      run: |
-        set -euo pipefail
-        sudo mkdir -p /pulumi
-        if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
-      shell: bash
-    - name: Deploy ${{ inputs.service-name }}
-      uses: ./.github/actions/deploy-cloud-storage-pulumi
-      with:
-        environment: ${{ inputs.environment }}
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
-        use-namespace-builder: 'true'
-        use-docker: ${{ inputs.use-docker }}
-        use-lfs: ${{ inputs.use-lfs }}
-        prebuilt-binaries-tar: ${{ needs.setup.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
-        lambda-artifacts-tar: ${{ needs.setup.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}
-        dd-app-key: ${{ secrets.DD_APP_KEY }}
-        dd-api-key: ${{ secrets.DD_API_KEY }}
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - id: project-name
+        name: Get project name
+        if: inputs.pulumi-stack-name == ''
+        uses: ./.github/actions/get-project-name
+        with:
+          service-name: ${{ inputs.service-name }}
+      - name: Download handoff artifacts
+        if: needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true'
+        run: |
+          set -euo pipefail
+          if ! command -v nsc >/dev/null 2>&1; then
+            echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/handoff"
+          if [[ "$HAS_BINARIES" == "true" ]]; then
+            nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
+          fi
+          if [[ "$HAS_LAMBDAS" == "true" ]]; then
+            nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
+          fi
+        shell: bash
+        env:
+          HAS_BINARIES: ${{ needs.setup.outputs.has_binaries }}
+          HAS_LAMBDAS: ${{ needs.setup.outputs.has_lambdas }}
+          BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}
+      - name: Cache Pulumi plugins
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: /pulumi/plugins
+        continue-on-error: true
+      - name: Ensure Pulumi home is writable
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /pulumi
+          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
+        shell: bash
+      - name: Deploy ${{ inputs.service-name }}
+        uses: ./.github/actions/deploy-cloud-storage-pulumi
+        with:
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+          environment: ${{ inputs.environment }}
+          use-namespace-builder: 'true'
+          use-docker: ${{ inputs.use-docker }}
+          use-lfs: ${{ inputs.use-lfs }}
+          prebuilt-binaries-tar: ${{ needs.setup.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
+          lambda-artifacts-tar: ${{ needs.setup.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}

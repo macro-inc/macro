@@ -258,6 +258,7 @@ impl CustomerRepositoryImpl {
             pool,
             team_locks,
             subscription_locks,
+            catalog_prices: CatalogPrices::default(),
         }
     }
 
@@ -333,9 +334,12 @@ impl CustomerRepositoryImpl {
         items: Vec<UpdateSubscriptionItems>,
         options: ItemUpdateOptions<'_>,
     ) -> Result<(), CustomerError> {
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(storage)?;
+        let subscription = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %subscription_id),
+            stripe::Subscription::retrieve(&self.client, subscription_id, &[]),
+        )
+        .await
+        .map_err(storage)?;
         self.update_retrieved_items(subscription, items, options)
             .await
     }
@@ -350,9 +354,12 @@ impl CustomerRepositoryImpl {
         let end_trial = subscription.status == stripe::SubscriptionStatus::Trialing
             && self.adds_first_max_seat(&subscription, &items)?;
         if let Some(schedule_id) = subscription.schedule.as_ref().map(|s| s.id()) {
-            let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, &schedule_id, &[])
-                .await
-                .map_err(storage)?;
+            let schedule = traced(
+                stripe_span!("stripe.subscription_schedule.retrieve", subscription_schedule_id = %schedule_id),
+                stripe::SubscriptionSchedule::retrieve(&self.client, &schedule_id, &[]),
+            )
+            .await
+            .map_err(storage)?;
             require_owned_schedule(&schedule)?;
             let pending = self.pending_changes(&schedule, &subscription).await?;
             // A Pro trial gaining Max ends now. With no Max seat before, no seat
@@ -448,9 +455,12 @@ impl CustomerRepositoryImpl {
                 .await;
         }
 
-        stripe::Subscription::update(&self.client, subscription_id, update_params)
-            .await
-            .map_err(|error| update_error(error, options.error_if_incomplete))?;
+        traced(
+            stripe_span!("stripe.subscription.update", subscription_id = %subscription_id),
+            stripe::Subscription::update(&self.client, subscription_id, update_params),
+        )
+        .await
+        .map_err(|error| update_error(error, options.error_if_incomplete))?;
 
         Ok(())
     }

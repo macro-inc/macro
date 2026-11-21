@@ -48,7 +48,7 @@ describe('sectionSteps', () => {
   it("reads a program as its observed operations, else its receipt's rows", () => {
     const parts = [program('p'), program('q')];
     const rows = [
-      row('p', 'Working in your workspace', 'running'),
+      row('p', 'Working on it', 'running'),
       row('q:0', 'Listed tasks'),
       row('q:1', 'Update task failed', 'failed'),
     ];

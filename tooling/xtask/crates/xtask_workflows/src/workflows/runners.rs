@@ -14,6 +14,11 @@ use std::fmt;
 /// off Namespace deliberately — migrations need to reach RDS.
 pub const DB_MIGRATOR: &str = "db-migrator";
 
+/// The GitHub-hosted larger runner that builds the Rust CI custom image. Its
+/// CPU, RAM and disk stay at or below the smallest runner size that should be
+/// allowed to use the image.
+pub const RUST_CI_IMAGE_GENERATION: &str = "linux-rust-ci-image-generation-small";
+
 /// A Namespace runner profile. The set of profiles we're allowed to target is
 /// closed; `Display` renders the `runs-on` label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +43,12 @@ pub enum Runner {
     MacOsArm,
     /// Larger Apple Silicon machine for desktop release builds.
     MacOsArmLarge,
+    /// Apple Silicon on Namespace's macOS Tahoe "slim" image, for iOS builds:
+    /// it installs Xcode 27.1 and the iOS 27.1 SDK beside newer Xcodes, which
+    /// the Sequoia image lacks. Pair it with
+    /// [`crate::workflows::steps::select_ios_xcode`], since the image's
+    /// default Xcode moves with each release.
+    MacOsTahoeArm,
     /// Windows Server on x86_64, for jobs that need the MSVC toolchain. A
     /// machine label like [`Runner::MacOsArm`].
     Windows,
@@ -53,6 +64,7 @@ impl fmt::Display for Runner {
             Runner::Large => "namespace-profile-linux-large-build",
             Runner::MacOsArm => "nscloud-macos-sequoia-arm64-6x14",
             Runner::MacOsArmLarge => "nscloud-macos-sequoia-arm64-12x28",
+            Runner::MacOsTahoeArm => "nscloud-macos-tahoe-slim-arm64-6x14",
             Runner::Windows => "nscloud-windows-2022-amd64-8x16",
         })
     }

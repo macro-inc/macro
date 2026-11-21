@@ -25,6 +25,7 @@ const CHANNEL_X: &str = "33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_M: &str = "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_Z: &str = "44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_S: &str = "44444444-5555-5555-5555-555555555555";
+const THREAD_A: &str = "44444444-0000-0000-0000-000000000000";
 const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PROJECT_1: &str = "66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const COMPANY_1: &str = "88888888-0000-0000-0000-000000000001";
@@ -78,6 +79,7 @@ fn req<'a>(
         hydratable: EVERYTHING,
         crm: false,
         only: None,
+        assume_attention: false,
     }
 }
 
@@ -270,6 +272,173 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
             (EntityType::Document, DOC_A.to_string()),
             (EntityType::ChannelMessage, THREAD_M.to_string()),
         ]
+    );
+
+    Ok(())
+}
+
+/// Copy each notification's entity onto its recipient rows, as notification
+/// ingress does; the fixtures insert recipient rows without it.
+async fn copy_entities_onto_recipient_rows(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE user_notification un \
+         SET event_item_type = n.event_item_type, \
+             event_item_id = n.event_item_id, \
+             notification_event_type = n.notification_event_type \
+         FROM notification n WHERE n.id = un.notification_id",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[test]
+fn only_a_probe_changes_the_query() {
+    let link_ids = [];
+    let sources = sources();
+    let normal = build_query(&req(ATTENTION, &link_ids, &sources));
+    assert_eq!(
+        normal,
+        format!(
+            include_str!("query.sql"),
+            attention_source = "pending",
+            pending = format!(
+                include_str!("pending.sql"),
+                thread_keyed = thread_keyed(AttentionKeying::ThreadScoped),
+                probe_skips_pending = "",
+            ),
+            own_work_ae = own_work("ae"),
+            own_work_newer = own_work("newer"),
+            email_inbox_gate = email_inbox_gate(),
+            document_gate = document_gate(ID_SQL, None),
+            chat_gate = chat_gate(ID_SQL, None),
+            project_gate = project_gate(ID_SQL, None),
+            initiative_gate = initiative_gate(ID_SQL, None),
+            channel_gate = channel_gate(ID_SQL, None),
+            channel_thread_gate = channel_thread_gate(ID_SQL, None),
+            email_gate = email_gate(ID_SQL, None),
+            calendar_event_gate = calendar_event_gate(None),
+            foreign_entity_gate = foreign_entity_gate(None),
+            agent_session_gate = agent_session_gate(None),
+            crm_company_gate = crm_company_gate(),
+            crm_contact_gate = crm_contact_gate(),
+            harness_gate = harness_gate(),
+            team_gate = team_gate(),
+        )
+    );
+    assert!(normal.contains("FROM pending\n            WHERE ($3::timestamptz"));
+
+    let mut probe = req(ATTENTION, &link_ids, &sources);
+    probe.assume_attention = true;
+    let probe = build_query(&probe);
+    assert_ne!(probe, normal);
+    // A probe reads neither the viewer's pending notifications nor reads
+    // its candidates from them, so its cost does not grow with them.
+    assert!(probe.contains("WHERE un.user_id = $1 AND FALSE"));
+    assert!(!normal.contains("AND FALSE\n    AND un.deleted_at"));
+    assert!(!probe.contains("FROM pending\n            WHERE ($3::timestamptz"));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_only_matches_the_whole_feed_for_every_item(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    for own_work in [ATTENTION, WORK] {
+        let mut whole = req(own_work, &link_ids, &sources);
+        whole.keying = AttentionKeying::FiledEntity;
+        let feed = attention_soup_page(&pool, whole).await?;
+        assert!(
+            feed.iter()
+                .any(|candidate| candidate.attention_at.is_some())
+        );
+
+        // Every item of the feed, and two the feed does not hold: one only
+        // ever opened and one that does not exist.
+        let mut only: Vec<Entity<'static>> = feed
+            .iter()
+            .map(|candidate| candidate.entity.clone())
+            .collect();
+        only.push(EntityType::Document.with_entity_string(DOC_F.to_string()));
+        only.push(EntityType::Channel.with_entity_string(Uuid::nil().to_string()));
+        let mut known = req(own_work, &link_ids, &sources);
+        known.keying = AttentionKeying::FiledEntity;
+        known.only = Some(&only);
+
+        assert_eq!(attention_soup_page(&pool, known).await?, feed);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_only_reads_one_item_of_the_feed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut whole = req(ATTENTION, &link_ids, &sources);
+    whole.keying = AttentionKeying::FiledEntity;
+    let feed = attention_soup_page(&pool, whole).await?;
+
+    for candidate in &feed {
+        let only = vec![candidate.entity.clone()];
+        let mut known = req(ATTENTION, &link_ids, &sources);
+        known.keying = AttentionKeying::FiledEntity;
+        known.only = Some(&only);
+        assert_eq!(
+            attention_soup_page(&pool, known).await?,
+            vec![candidate.clone()]
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_probe_lists_what_a_new_notification_would_place(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only: Vec<Entity<'static>> = vec![
+        // Already notified: listed once.
+        EntityType::Document.with_entity_string(DOC_A.to_string()),
+        // Never notified, but visible: a new notification would place it.
+        EntityType::Document.with_entity_string(DOC_F.to_string()),
+        // No such document.
+        EntityType::Document.with_entity_string(Uuid::nil().to_string()),
+        // Archived mail never places an item.
+        EntityType::EmailThread.with_entity_string(THREAD_A.to_string()),
+    ];
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.only = Some(&only);
+    request.assume_attention = true;
+    let page = attention_soup_page(&pool, request).await?;
+
+    let mut listed = keys(&page);
+    listed.sort_by(|a, b| a.1.cmp(&b.1));
+    assert_eq!(
+        listed,
+        vec![
+            (EntityType::Document, DOC_A.to_string()),
+            (EntityType::Document, DOC_F.to_string()),
+        ]
+    );
+
+    let mut without_probe = req(ATTENTION, &link_ids, &sources);
+    without_probe.only = Some(&only);
+    assert_eq!(
+        keys(&attention_soup_page(&pool, without_probe).await?),
+        vec![(EntityType::Document, DOC_A.to_string())]
     );
 
     Ok(())
@@ -472,6 +641,7 @@ async fn thread_scoped_keying_places_channel_notifications_on_their_threads(
 async fn filed_entity_keying_places_a_channel_and_its_threads_together(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
     let mut request = req(ATTENTION, &link_ids, &sources);
@@ -657,5 +827,81 @@ async fn a_cleared_team_request_leaves_attention_until_undone(
     .execute(&pool)
     .await?;
     assert!(team_page().await?.is_empty());
+    Ok(())
+}
+
+/// The planner's total cost for the attention query of `request`.
+async fn planned_cost(pool: &Pool<Postgres>, request: &AttentionCandidateRequest<'_>) -> f64 {
+    let types = requested_types(request);
+    let (only_types, only_ids): (Option<Vec<&str>>, Option<Vec<&str>>) = match request.only {
+        Some(only) => (
+            Some(only.iter().map(|e| e.entity_type.into()).collect()),
+            Some(only.iter().map(|e| e.entity_id.as_ref()).collect()),
+        ),
+        None => (None, None),
+    };
+    let plan: serde_json::Value = sqlx::QueryBuilder::<Postgres>::new(format!(
+        "EXPLAIN (FORMAT JSON) {}",
+        build_query(request)
+    ))
+    .build_query_scalar()
+    .bind(request.user_id.as_ref())
+    .bind(&types)
+    .bind(None::<chrono::DateTime<chrono::Utc>>)
+    .bind(None::<String>)
+    .bind(request.link_ids)
+    .bind(request.limit as i64)
+    .bind(Vec::<&str>::new())
+    .bind(Vec::<&str>::new())
+    .bind(request.own_work)
+    .bind(only_types)
+    .bind(only_ids)
+    .persistent(false)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    plan[0]["Plan"]["Total Cost"].as_f64().unwrap()
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_probe_costs_the_same_however_many_notifications_are_pending(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A viewer with a large inbox: 50,000 pending notifications.
+    sqlx::query!(
+        "WITH n AS (
+            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender)
+            SELECT gen_random_uuid(), 'document_mention', gen_random_uuid()::text, 'document', 'test'
+            FROM generate_series(1, 50000)
+            RETURNING id, event_item_id
+        )
+        INSERT INTO user_notification (user_id, notification_id, state, event_item_type, event_item_id, notification_event_type)
+        SELECT $1, id, 'unseen', 'document', event_item_id, 'document_mention' FROM n",
+        USER_1,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("ANALYZE").execute(&pool).await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::Document.with_entity_string(DOC_F.to_string())];
+    let mut probe = req(ATTENTION, &link_ids, &sources);
+    probe.only = Some(&only);
+    probe.assume_attention = true;
+    let mut page = req(ATTENTION, &link_ids, &sources);
+    page.only = Some(&only);
+
+    // Postgres JIT-compiles a query planned above `jit_above_cost` (100,000
+    // by default), which costs a probe hundreds of milliseconds. A probe
+    // never reads the pending notifications, so it stays far below it; a
+    // normal page, which reads them all, does not.
+    let probe_cost = planned_cost(&pool, &probe).await;
+    let page_cost = planned_cost(&pool, &page).await;
+    assert!(probe_cost < 1_000.0, "probe planned at {probe_cost}");
+    assert!(page_cost > 10_000.0, "page planned at {page_cost}");
     Ok(())
 }

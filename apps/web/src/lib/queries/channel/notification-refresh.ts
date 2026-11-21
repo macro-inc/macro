@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isTransientRequestError } from '@core/util/request-error';
+import {
+  isGraphqlServerFault,
+  isTransientRequestError,
+} from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, createRequest } from '@urql/core';
@@ -390,7 +393,12 @@ export class ChannelNotificationRefresh {
     } catch (error) {
       if (this.disposed || epoch !== this.epoch || !job.readers.size) return;
       job.failures += 1;
-      if (error instanceof Error && isTransientRequestError(error)) {
+      // A resolver fault answers 200 with uncoded GraphQL errors; it clears
+      // when the server recovers, so it backs off like a transport failure.
+      if (
+        error instanceof Error &&
+        (isTransientRequestError(error) || isGraphqlServerFault(error))
+      ) {
         this.settle(job, generation, error);
         job.retryAt =
           Date.now() +

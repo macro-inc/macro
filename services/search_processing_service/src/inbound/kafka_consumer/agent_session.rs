@@ -5,7 +5,7 @@ use ::agent_session::domain::events::{
 };
 use macro_event_broker::MacroEvent as _;
 
-use super::{EventOutcome, KafkaProcessingContext, MAX_PROCESSING_ATTEMPTS, retry_processing};
+use super::{Attempted, Attempts, KafkaProcessingContext};
 use crate::domain::agent_session_index::ReconcileTrigger;
 
 /// Whether `event` can change what search reads of its session.
@@ -46,24 +46,12 @@ pub(super) fn reread_key(event: &AgentSessionLifecycleMacroEvent) -> String {
 pub(super) async fn process_agent_session_event(
     context: &KafkaProcessingContext,
     event: &AgentSessionLifecycleMacroEvent,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let id = event.event().event.session_id();
     let trigger =
         ReconcileTrigger::Lifecycle(AgentSessionLifecycleEventName::from(&event.event().event));
-    match retry_processing(|attempt| async move {
-        context.agent_session_indexer.reconcile(id, None, trigger).await.inspect_err(|error| {
-            // An ERROR event marks the event's span failed even when a retry succeeds.
-            if attempt < MAX_PROCESSING_ATTEMPTS {
-                tracing::warn!(error=?error, session_id=%id, attempt, "agent session indexing failed, retrying");
-            }
-        })
-    })
-    .await
-    {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(error=?error, session_id=%id, "agent session indexing exhausted retries; repair with backfill");
-            EventOutcome::Dropped
-        }
-    }
+    attempts
+        .run(|_| context.agent_session_indexer.reconcile(id, None, trigger))
+        .await
 }

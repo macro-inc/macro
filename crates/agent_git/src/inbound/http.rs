@@ -125,6 +125,9 @@ fn text(status: StatusCode, message: String) -> Response {
         .into_response()
 }
 
+/// Seconds a client waits before retrying when every git slot is taken.
+const SERVER_BUSY_RETRY_AFTER_SECONDS: &str = "5";
+
 /// Error responses. Plain text, which git prints to the user as `remote: …`.
 pub struct AgentGitHttpError(AgentGitError);
 
@@ -154,6 +157,12 @@ impl IntoResponse for AgentGitHttpError {
             AgentGitError::RepoTooLarge { .. } => text(StatusCode::PAYLOAD_TOO_LARGE, message),
             AgentGitError::PushRateLimited => text(StatusCode::TOO_MANY_REQUESTS, message),
             AgentGitError::RepoBusy => text(StatusCode::CONFLICT, message),
+            AgentGitError::ServerBusy => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [(header::RETRY_AFTER, SERVER_BUSY_RETRY_AFTER_SECONDS)],
+                format!("{message}\n"),
+            )
+                .into_response(),
             AgentGitError::MissingCreator => text(StatusCode::UNPROCESSABLE_ENTITY, message),
             AgentGitError::Internal(report) => {
                 tracing::error!(error = ?report, "agent git request failed");
@@ -208,6 +217,7 @@ async fn serve<Service: AgentGitService>(
                 AgentGitError::RepoTooLarge { .. } => "repo_too_large",
                 AgentGitError::PushRateLimited => "rate_limited",
                 AgentGitError::RepoBusy => "busy",
+                AgentGitError::ServerBusy => "server_busy",
                 _ => "internal",
             };
             tracing::Span::current().record("git.rejected_reason", reason);
@@ -236,6 +246,7 @@ async fn serve<Service: AgentGitService>(
                 AgentGitError::RepoTooLarge { .. } => "repo_too_large",
                 AgentGitError::PushRateLimited => "rate_limited",
                 AgentGitError::RepoBusy => "busy",
+                AgentGitError::ServerBusy => "server_busy",
                 _ => "internal",
             };
             tracing::Span::current().record("git.rejected_reason", reason);

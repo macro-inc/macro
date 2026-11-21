@@ -34,6 +34,7 @@ use tracing::{Instrument as _, field::Empty};
 use uuid::Uuid;
 
 use self::classifications::Classifications;
+use crate::metrics::{FocusMetrics, Metric};
 
 mod classifications;
 #[cfg(test)]
@@ -70,6 +71,15 @@ fn event_age_ms(published_at_ms: Option<i64>) -> Option<i64> {
     published_at_ms.map(|published_at_ms| Utc::now().timestamp_millis() - published_at_ms)
 }
 
+/// Milliseconds as seconds, for a metric.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "an event's age is far below 2^52 ms"
+)]
+fn seconds(ms: i64) -> f64 {
+    ms as f64 / 1_000.0
+}
+
 fn outcome_name(outcome: &ClassifyOutcome) -> &'static str {
     match outcome {
         ClassifyOutcome::Classified(_) => "classified",
@@ -87,6 +97,7 @@ async fn classify<S, P, C, N, D, E>(
     service: &FocusService<S, P, C, N, D, E>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
+    metrics: &FocusMetrics,
 ) where
     S: FocusStore,
     P: ProfileSource,
@@ -107,13 +118,17 @@ async fn classify<S, P, C, N, D, E>(
         .classify_thread(thread_id)
         .instrument(span.clone())
         .await;
-    span.record("event_age_ms", event_age_ms(published_at_ms));
+    let age_ms = event_age_ms(published_at_ms);
+    span.record("event_age_ms", age_ms);
     let _in_span = span.enter();
     match result {
         Ok(outcome) => {
             span.record("outcome", outcome_name(&outcome));
             match outcome {
                 ClassifyOutcome::Classified(verdict) | ClassifyOutcome::Redecided(verdict) => {
+                    if let Some(age_ms) = age_ms {
+                        metrics.observe(Metric::EventToClassifiedSeconds, seconds(age_ms));
+                    }
                     tracing::info!(
                         %thread_id,
                         is_focus = verdict.is_focus,
@@ -142,6 +157,7 @@ fn classification<S, P, C, N, D, E>(
     service: Arc<FocusService<S, P, C, N, D, E>>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
+    metrics: FocusMetrics,
     event_span: tracing::Span,
 ) -> impl Future<Output = ()> + Send + 'static
 where
@@ -160,7 +176,7 @@ where
     );
     async move {
         drop(queued);
-        classify(&service, thread_id, published_at_ms).await;
+        classify(&service, thread_id, published_at_ms, &metrics).await;
     }
     .instrument(event_span)
 }
@@ -172,6 +188,7 @@ where
 pub async fn run_focus_consumer<S, P, C, N, D, E>(
     brokers: &str,
     service: Arc<FocusService<S, P, C, N, D, E>>,
+    metrics: FocusMetrics,
     shutdown: CancellationToken,
 ) -> Result<(), Report>
 where
@@ -218,7 +235,13 @@ where
             let published_at_ms = message.inner().timestamp().to_millis();
             classifications.submit(
                 thread_id,
-                classification(Arc::clone(&service), thread_id, published_at_ms, span),
+                classification(
+                    Arc::clone(&service),
+                    thread_id,
+                    published_at_ms,
+                    metrics.clone(),
+                    span,
+                ),
             );
         }
         if let Err(error) = consumer

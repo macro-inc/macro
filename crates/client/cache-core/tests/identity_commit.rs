@@ -1,7 +1,8 @@
 //! A successful server response with invalid identity data must never be replayed.
 
 use cache_core::engine::{
-    BeginOptimisticWrite, CommitOptimisticWriteResult, Engine, EngineError, ReadResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, Engine, EngineError, NetworkWrite,
+    ReadResult,
 };
 use cache_core::identity::IdentityBinding;
 use cache_core::link_patch::{
@@ -58,6 +59,136 @@ async fn claim(engine: &mut Engine<InMemoryStorage>) -> MutationClaimToken {
         owner: "runner".into(),
         generation: claimed.lease_generation,
     }
+}
+
+#[test]
+fn contentless_settlement_keeps_canonical_identity_and_never_replays_after_restart() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let transaction = enqueue(&mut engine, UUID).await;
+        let token = claim(&mut engine).await;
+        let outcome = engine
+            .settle_optimistic_response(
+                transaction,
+                token,
+                NetworkWrite {
+                    query: MUTATION,
+                    operation_name: None,
+                    variables: &Default::default(),
+                    data: &json!({"setEntityProperty": {
+                        "__typename": "GraphqlProperty", "id": "server", "displayName": "retired content"
+                    }}),
+                    identity: None,
+                },
+                Vec::new(),
+                false,
+            )
+            .await
+            .unwrap();
+        let CommitOptimisticWriteResult::Committed(committed) = outcome else {
+            panic!("a stale snapshot must still settle its server outcome");
+        };
+        assert_eq!(committed.mutation_uuid.as_deref(), Some(UUID));
+        assert!(committed.revalidations.is_empty());
+
+        let mut restarted = Engine::new(engine.into_storage());
+        let records = restarted
+            .storage()
+            .get_batch(&[
+                EntityKey("GraphqlProperty:local".into()),
+                EntityKey("GraphqlProperty:server".into()),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(
+            cache_core::identity::alias_target(records[0].as_ref().unwrap()),
+            Some(&EntityKey("GraphqlProperty:server".into()))
+        );
+        assert_eq!(
+            records[1].as_ref().unwrap().fields["id"],
+            CacheValue::String("server".into())
+        );
+        assert!(
+            !records[1]
+                .as_ref()
+                .unwrap()
+                .fields
+                .contains_key("displayName")
+        );
+        assert!(
+            restarted
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            restarted
+                .claim_next_mutation(MutationClaimRequest {
+                    owner: "restarted".into(),
+                    now_ms: 200,
+                    lease_expires_at_ms: 300,
+                })
+                .await
+                .unwrap()
+                .is_none()
+        );
+    });
+}
+
+#[test]
+fn contentless_settlement_preserves_newer_intent_for_a_fresh_attempt() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let transaction = enqueue(&mut engine, UUID).await;
+        let token = claim(&mut engine).await;
+        let newer = enqueue(&mut engine, UUID).await;
+        let outcome = engine.settle_optimistic_response(
+            transaction,
+            token,
+            NetworkWrite {
+                query: MUTATION, operation_name: None, variables: &Default::default(),
+                data: &json!({"setEntityProperty": {"__typename": "GraphqlProperty", "id": "server", "displayName": "old snapshot"}}),
+                identity: None,
+            },
+            Vec::new(), false,
+        ).await.unwrap();
+        let CommitOptimisticWriteResult::CommittedSuperseded(committed) = outcome else {
+            panic!("newer intent must survive settlement of the old attempt");
+        };
+        assert_eq!(committed.replacement_transaction_id, newer);
+
+        let mut restarted = Engine::new(engine.into_storage());
+        let token = claim(&mut restarted).await;
+        restarted.settle_optimistic_response(
+            newer,
+            token,
+            NetworkWrite {
+                query: MUTATION, operation_name: None, variables: &Default::default(),
+                data: &json!({"setEntityProperty": {"__typename": "GraphqlProperty", "id": "server", "displayName": "fresh snapshot"}}),
+                identity: None,
+            },
+            Vec::new(), true,
+        ).await.unwrap();
+        let records = restarted
+            .storage()
+            .get_batch(&[EntityKey("GraphqlProperty:server".into())])
+            .await
+            .unwrap();
+        assert_eq!(
+            records[0].as_ref().unwrap().fields["displayName"],
+            CacheValue::String("fresh snapshot".into())
+        );
+        assert!(
+            restarted
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    });
 }
 
 #[test]

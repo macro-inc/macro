@@ -1,7 +1,11 @@
 use crate::{
     OpensearchClient, Result, delete,
     retry::resend_on_lost_connection,
-    upsert::{self, calendar_event::UpsertCalendarEventArgs, properties::IndexedProperty},
+    upsert::{
+        self,
+        calendar_event::UpsertCalendarEventArgs,
+        properties::{IndexedProperty, PropertyUpdate},
+    },
 };
 
 impl OpensearchClient {
@@ -42,7 +46,7 @@ impl OpensearchClient {
         &self,
         event_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::calendar_event::update_calendar_event_properties(
                 &self.inner,

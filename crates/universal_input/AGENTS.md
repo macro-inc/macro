@@ -28,7 +28,9 @@ the due date read from an email thread for Focus.
   against the acting user as `AiFeature::EmailFocus`, which no allowance pays for:
   never open it to user credentials, or it becomes a free model proxy. It has no
   OpenAPI entry for the same reason. Mail is untrusted data: it stays in the user
-  message, and the fixed system prompt says so.
+  message, and the fixed system prompt says so. The response carries the read's
+  token usage (`DueDateUsage`), captured from what it records, so the worker
+  can chart Focus cost; the journal row is still the record of it.
 - Suggestions contain display text, never authorized entity identifiers.
   Submission and permission checks belong to the destination services.
 - `eval/baseline.json` and `eval/compare.py` compare live classification and

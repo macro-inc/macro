@@ -73,10 +73,9 @@ tools/HTTP/GraphQL surfaces over them.
   using the same isolated database as the tests.
 - For member-access changes, also run `cargo test -p crm --all-features member_access`;
   the HTTP, search and tool revocation test requires the `search` feature.
-- After tool input or description changes, regenerate frontend tool types and
-  public MCP reference pages using the
-  [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
-  CI checks both outputs.
+- After tool input or description changes, regenerate frontend tool types using
+  the [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
+  CI checks the output.
 
 ## Gotchas
 
@@ -91,6 +90,21 @@ tools/HTTP/GraphQL surfaces over them.
   available independently. Keep the flag off until all PR 5 gates pass.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
+
+- `domain/email_rule_discovery` owns bounded live-source discovery and work
+  accounting; `outbound/email_rule_discovery.rs` supplies factual PostgreSQL
+  reads on the caller's transaction. Reuse the same core for policy validation,
+  replacement admission and Team reads. Resolve each shared source once,
+  retain member visibility, and return a complete result or a named limit error.
+  Keep small/folded strategies within the same ceilings; a direct-pair threshold
+  switches strategy rather than rejecting an otherwise bounded policy.
+  Composition roots inject this adapter through `EmailRuleDiscoveryService`;
+  the lightweight `email_discovery` feature exposes it without the full CRM
+  service. Admission must precede grants and preserve withdrawal after overflow.
+  Batch first pages for more than eight distinct live sources; charge every
+  prefetched raw row before continuing a full source. Keep the total batch within
+  the remaining allowance plus one sentinel, including duplicate and foreign-team
+  values.
 
 - Private policy storage lives in `domain/email_policy.rs` and
   `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first
@@ -121,6 +135,13 @@ tools/HTTP/GraphQL surfaces over them.
   and conditional completion. Previewing never initializes consent. Matching
   edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
+
+- Company lists with at most 500 explicit IDs and policy target reads probe the
+  primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
+  predicate inside the probe lets stale plans scan the team per ID. For target
+  locks, resolve authorized IDs first, then lock that set in ID order; a locking
+  lateral can lock foreign rows before its outer filter and sort. Larger company
+  ID sets keep their set-based join; the output page limit does not cap input IDs.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -172,10 +193,32 @@ tools/HTTP/GraphQL surfaces over them.
 
 - Manual companies require a name and accept an optional domain; explicit
   contact creation accepts any valid email, including personal providers.
-  Email population still infers companies by domain. Do not apply manual
+  A contact created without naming a company (`create_team_contact`: New
+  contact, `POST /crm/contacts`, the SDK, the CreateContact tool) is filed by
+  its email domain as population files one: under the team's company for the
+  domain, created when missing (no name of its own, not `manually_created`,
+  directory entry ensured first). It stays without a company for a personal
+  or generic provider, a blocked domain or a hidden company, and records no
+  mailbox source. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
-- Contact setters add or remove an address, choose the primary, link/switch
-  company for a personal-provider primary, or unlink a company; the rules live
+- Contacts created before that rule are filed only by an operator:
+  `POST /internal/crm/teams/{team_id}/file-unfiled-contacts`
+  (`domain/contact_filing.rs`, internal credentials, mounted by storage) files
+  one batch of a team's `manually_created` contacts without a company (a
+  contact sync left without one, or an archived one, is counted and skipped;
+  sync never creates a company for an archived contact) by the
+  same rule, under a contact edit's locks, paging by address along
+  `crm_contacts_unfiled_email_idx`, and returns counts per outcome.
+  It defaults to a dry run and is safe to repeat. Never call it from a worker
+  or a migration: one import can hold thousands of domains.
+- `GET /crm/companies/by-domain` (SDK `crm.companyByDomain`) resolves the
+  team's company for one domain through `crm_domains_team_id_lower_domain_unique`
+  and reads it as `GET /crm/companies/{id}` does, without contacts; a member
+  gets nothing for a hidden company. It is exact and current, unlike the
+  indexed company search, so agents use it after a duplicate-domain 409.
+- Contact setters add or remove an address, choose the primary, link a first
+  company for any contact without one, switch company for a personal-provider
+  primary, or unlink a company; the rules live
   in `src/domain/contact_update.rs`. Validate under the contact lock and reject
   same-team duplicates without disclosing restricted matches. A new address
   must be free across the team; a link, switch or unlink re-checks every
@@ -204,18 +247,36 @@ tools/HTTP/GraphQL surfaces over them.
   opt-in response hint lets an open client retire stale snapshots. Only that
   hint has a three-second per-instance cache; receipts and the authority endpoint
   stay fresh. See `docs/CRM_EMAIL_PRIVACY.md` for the request header and latency.
+  Client retirement is shared by the browser/native cache owners in
+  `soup_filter_cache_adapter::permissions`; preserve authored queue state while
+  removing copied response content, including derived mail and property records.
 - Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
-  takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
-  then the domain advisory lock and entity rows. Never run the mailbox scan
-  under a domain lock: a team backfill queues every population of the domain
+  takes before its domain lock), parent team `KEY SHARE`, an unlocked admission
+  probe and mailbox scan, then fresh mailbox/member/consent guards before the
+  domain advisory lock and entity rows. Never hold the mailbox row lock through
+  the history scan: overlapping populations can starve an exclusive sync writer.
+  Recheck live mailbox, membership and captured consent generation after the scan
+  in `READ COMMITTED`; keep the privacy/contact guards across both phases so
+  exclusions and teardown cannot invalidate its results. Check the two message
+  witnesses and matched contacts by primary key after authority: changed evidence
+  returns `Contended` for an unlocked retry, never a history scan under the row
+  guard. This neither re-evaluates a witness thread's privacy rules nor freezes
+  other mailbox history. Never run the mailbox
+  scan under a domain lock: a team backfill queues every population of the domain
   behind it. Population transactions set a five-second `lock_timeout` and
   return `CrmError::Contended` so their job is deferred, not held. Privacy changes
   take the exclusive privacy lock before domain/entity locks. Keep locks through
   commit; never wait on a domain or privacy lock after acquiring CRM entity
   rows. Only shared team, mailbox and member row locks may precede a domain lock,
   and no domain-lock holder may lock those rows exclusively.
+  A population scans the address history once, inside that transaction:
+  `may_contribute_contact` is admission only, `populate_changes_nothing`
+  skips a company-domain job before any scan, and a personal-provider address
+  the team keeps out is refused before it. Email sync queues a job per message and
+  address, so a busy contact's jobs are mostly duplicates; a scan ahead of the
+  no-op check ran for each of them and hit the 15-second cap on large mailboxes.
   Manual creation retains domain/parent/entity ordering without email consent.
   Contact field edits take exclusive privacy coordination before discovery/domain
   locks because reassignment changes contribution eligibility; they never require
@@ -264,6 +325,10 @@ tools/HTTP/GraphQL surfaces over them.
   `companies_repo/test/previews.rs` compares them for every role and caller,
   including revocation and regrant on the same session and contact-page route.
 
+- Keep team/visibility filters outside the per-history-ID `LIMIT` in
+  `list_companies_for_soup.sql`, so stale team estimates cannot replace the
+  `crm_companies_id_text_idx` lookup with a team scan for every viewed record.
+
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
   homepage metadata through `unfurl`; every other
@@ -283,6 +348,9 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+  For a work address whose sole holder is a manual unfiled contact with that
+  primary address, sync refreshes the existing contact and preserves its company
+  choice. Domain company population still runs on its own.
 - Every address a contact is known by is a row in `crm_contact_emails`, stored
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
@@ -299,7 +367,10 @@ tools/HTTP/GraphQL surfaces over them.
   it. A mailbox source is recorded per contact and mailbox, not per address:
   `depopulate_contact` keeps it while that mailbox still has mail with another
   of the contact's addresses (`other_address_mail.sql`), checked before the
-  domain lock like population's mailbox scan.
+  domain lock like population's mailbox scan. Mail the provider no longer has
+  (`provider_missing`, an Outlook deletion) counts nowhere: not there, not in
+  the email service's cleanup gate, not in `interactions.sql`; keep the three
+  in step, as a Gmail deletion removes the row.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

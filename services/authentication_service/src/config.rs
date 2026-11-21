@@ -74,6 +74,10 @@ maybe_env_vars! {
     pub struct GtmInvitePromoCode;
     /// Hours a GTM invite link stays openable after creation. Defaults to 48.
     pub struct GtmInviteLinkTtlHours;
+    /// `true` where a Firecracker computer fleet runs: this service then takes
+    /// back the agent teammates of computers released after a failed first
+    /// start. Absent means off: no worker runs.
+    pub struct ComputersAgentEffects;
     /// Stripe price id for the Max plan seat. Optional so the service can
     /// deploy before the price exists in Stripe; until it is set, Max checkout
     /// and plan changes answer 400 and every subscription maps to Premium.
@@ -166,6 +170,9 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Dev only: comma-separated Macro user ids that get computers without the
+    /// PostHog flag. Refused in production.
+    pub computers_rollout_allowlist: Option<String>,
     /// The internal auth key used by other services
     pub service_internal_auth_key: ServiceInternalAuthKey,
     /// The github client id
@@ -207,6 +214,8 @@ pub struct Config {
     pub gtm_invite_promo_code: GtmInvitePromoCode,
     /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
     pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
+    /// Whether the computers agents worker runs (see [`ComputersAgentEffects`]).
+    pub computers_agent_effects: ComputersAgentEffects,
     /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
     /// The stripe price id for the Max plan seat (optional, see
@@ -310,6 +319,16 @@ impl Config {
         Ok(())
     }
 
+    /// The computers rollout allowlist; refused in production.
+    pub fn computer_rollout_allowlist(
+        &self,
+    ) -> anyhow::Result<hosted_runtimes::domain::rollout::RolloutAllowlist> {
+        Ok(hosted_runtimes::outbound::rollout_allowlist::configured(
+            self.computers_rollout_allowlist.as_deref(),
+            self.environment,
+        )?)
+    }
+
     /// Macro computers' retention and past-due grace.
     pub fn computer_billing_policy(
         &self,
@@ -320,6 +339,19 @@ impl Config {
                 self.computer_past_due_grace_days,
             )?,
         )
+    }
+
+    /// Whether this deployment runs the computers agents worker: off unless
+    /// `COMPUTERS_AGENT_EFFECTS` is `true`; any other value fails startup.
+    pub fn computer_agent_effects(&self) -> anyhow::Result<bool> {
+        match self.computers_agent_effects.value() {
+            None => Ok(false),
+            Some("true") => Ok(true),
+            Some("false") => Ok(false),
+            Some(other) => {
+                anyhow::bail!("COMPUTERS_AGENT_EFFECTS must be true or false, not {other:?}")
+            }
+        }
     }
 
     /// The Stripe price of each computer size per billing interval.

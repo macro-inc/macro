@@ -10,9 +10,11 @@ import {
   type HydrationScope,
   isStaleHydrationScopeError,
 } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ContactDirectoryByUserIdsDocument,
+  ContactDirectoryByUserIdsWithListsDocument,
   ContactDirectoryFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
 import { fetchContactDirectoryByIds } from '@service-storage/graphql-contacts';
@@ -25,6 +27,7 @@ import {
 } from './cache-scope';
 import { contactRecordKey } from './contact-key';
 import { contactToUser } from './directory';
+import { contactListsSelected } from './lists';
 
 export const MAX_CONTACT_LOOKUP = 500;
 export type ContactLookup = {
@@ -48,7 +51,18 @@ export type ContactResolution = {
   offline: boolean;
 };
 const SELECTION = selectRecords(ContactDirectoryFieldsFragmentDoc);
-const LOOKUP_DOCUMENT = print(ContactDirectoryByUserIdsDocument);
+// The cache stores what the lookup selected, so the hydrated document always
+// matches the one fetched.
+const LOOKUP = {
+  plain: {
+    query: print(ContactDirectoryByUserIdsDocument),
+    operationName: 'ContactDirectoryByUserIds',
+  },
+  lists: {
+    query: print(ContactDirectoryByUserIdsWithListsDocument),
+    operationName: 'ContactDirectoryByUserIdsWithLists',
+  },
+};
 
 /** Bound raw input before deduplication, preserving first-requested order. */
 export function contactLookupIds(lookup: ContactLookup): string[] {
@@ -152,7 +166,16 @@ export async function resolveContactDirectory(
       }
     }
     try {
-      const data = await fetchIds(ids, signal);
+      const generation = cacheSessionGeneration.capture();
+      // Lists matter only to the cache, so a lookup that will not write
+      // there never asks for them.
+      const lists =
+        guarded !== undefined &&
+        host?.search !== undefined &&
+        host.hydrateQuery !== undefined &&
+        contactListsSelected();
+      span.setAttr('contacts.lists', lists);
+      const data = await fetchIds(ids, signal, { lists });
       signal.throwIfAborted();
       if (data.user.id !== viewer) throw new ContactDirectoryScopeError();
       if (data.user.contactsByUserIds.length > ids.length)
@@ -176,9 +199,11 @@ export async function resolveContactDirectory(
           });
           signal.throwIfAborted();
           if ((capability.projectionVersion ?? 0) >= 5) {
+            const lookup = lists ? LOOKUP.lists : LOOKUP.plain;
             await host.hydrateQuery({
-              query: LOOKUP_DOCUMENT,
-              operationName: 'ContactDirectoryByUserIds',
+              generation,
+              query: lookup.query,
+              operationName: lookup.operationName,
               variables: { userIds: ids },
               data: { user: { id: viewer, contactsByUserIds: contacts } },
               identity: viewer,

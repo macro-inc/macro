@@ -8,7 +8,7 @@ use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use sqlx::PgPool;
 use sqs_client::search::project::UpsertProject;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
+use super::{Attempted, Attempts};
 use crate::process::{chat::remove_chat_message, project::upsert_project};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,54 +162,23 @@ pub(super) async fn process_project_event(
     event: &ProjectMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_project_event(&event.event().event);
-    let result = retry_processing(|attempt| {
-        let action = description.action.clone();
-        async move {
-            tracing::trace!(
-                project_id = description.project_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempt,
-                "processing project search-index event"
-            );
-            process_project_index_action(db, opensearch_client, action)
-                .await
-                .inspect_err(|error| {
-                    if attempt < MAX_PROCESSING_ATTEMPTS {
-                        let retry_delay =
-                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                        tracing::warn!(
-                            error = ?error,
-                            project_id = description.project_id,
-                            event_type = description.event_type,
-                            partition,
-                            offset,
-                            attempt,
-                            delay_secs = retry_delay.as_secs(),
-                            "project search-index processing failed, retrying"
-                        );
-                    }
-                })
-        }
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                project_id = description.project_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping project event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
+    attempts
+        .run(|attempt| {
+            let action = description.action.clone();
+            async move {
+                tracing::trace!(
+                    project_id = description.project_id,
+                    event_type = description.event_type,
+                    partition,
+                    offset,
+                    attempt,
+                    "processing project search-index event"
+                );
+                process_project_index_action(db, opensearch_client, action).await
+            }
+        })
+        .await
 }

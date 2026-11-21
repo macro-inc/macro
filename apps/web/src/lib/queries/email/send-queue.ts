@@ -214,7 +214,16 @@ export async function cancelEmailSendAndConfirm(
     );
     if (latest) current = latest;
     else {
-      // Another tab may have restored or retired it. Absence alone is not Undo.
+      // Recovery may finish before this poll. Its receipt confirms the same
+      // attempt without another request to the service.
+      try {
+        const session = await emailStorageSession();
+        if (await localDraftStore.takeCancellationReceipt(session, intent.uuid))
+          return;
+      } catch {
+        // The service can still confirm when local storage is unavailable.
+      }
+      // The row can also disappear after delivery or in an older tab.
       const attempt = await fetchEmailSendStatus(
         current.metadata.payload.input.attempt
       );
