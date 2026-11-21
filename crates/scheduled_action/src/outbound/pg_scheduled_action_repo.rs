@@ -15,6 +15,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use crate::domain::appearance::{AppearanceChooser, AppearanceSet};
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
@@ -61,6 +62,14 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
     match kind {
         ActionKind::Agent => "Agent",
     }
+}
+
+/// A stored look; none is the default look.
+fn stored_appearance(stored: Option<Value>) -> Result<EntityAppearance> {
+    Ok(stored
+        .map(serde_json::from_value)
+        .transpose()?
+        .unwrap_or_default())
 }
 
 /// One mapping for every action query, including management and dispatch.
@@ -215,6 +224,10 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             sub_routines::admit_child(&mut tx, link.parent_id).await?;
         }
         let link = action.sub_routine.as_ref();
+        // A new routine's look, its template's or an agent's pick, is not its
+        // owner's choice yet, and no agent has changed it. Replicas built
+        // before these columns leave them NULL, which `set_appearance` reads
+        // as a routine from before them.
         let row = sqlx::query_as!(
             ActionRow,
             r#"
@@ -222,9 +235,10 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
                  run_visibility, template_id, appearance, suggestion_id, description,
-                 parent_id, created_by_run_id, child_key, paused_by_parent)
+                 parent_id, created_by_run_id, child_key, paused_by_parent,
+                 appearance_chosen_by_owner, appearance_changes_by_agent)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                    $19, $20, $21, $22, $23)
+                    $19, $20, $21, $22, $23, false, 0)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
@@ -450,32 +464,75 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
     async fn set_appearance(
         &self,
         change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<EntityAppearance>> {
+    ) -> Result<AppearanceSet> {
+        let owners = change.chooser == AppearanceChooser::Owner;
         let mut tx = self.pool.begin().await?;
-        let previous = sqlx::query_scalar!(
-            "SELECT appearance FROM scheduled_action WHERE id = $1 FOR UPDATE",
+        let stored = sqlx::query!(
+            r#"
+            SELECT appearance, appearance_chosen_by_owner, appearance_changes_by_agent
+            FROM scheduled_action
+            WHERE id = $1
+            FOR UPDATE
+            "#,
             change.id,
         )
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(ActionPolicyError::NotFound)?;
-        let previous: EntityAppearance = previous
-            .map(serde_json::from_value)
-            .transpose()?
-            .unwrap_or_default();
-        let Some(activity) = change.activity(&previous) else {
-            return Ok(None);
-        };
+        let previous = stored_appearance(stored.appearance)?;
+        // A routine from before these columns, or one a replica built before
+        // them created, holds NULL; only the appearance endpoint and templates
+        // set a look then, so a look it has is kept as its owner's. And a
+        // replica built before them changes the look for the owner without
+        // marking it, but records each change in the routine's activity, as
+        // this code does for both choosers: changes beyond the agent's are the
+        // owner's. The activity is read in a statement of its own once the
+        // row is locked, so it holds a change that committed while this
+        // waited for the lock. Only an agent's pick reads it: the owner's
+        // choice is stored as theirs either way.
+        let chosen_by_owner = stored.appearance_chosen_by_owner == Some(true)
+            || (stored.appearance_chosen_by_owner.is_none() && !previous.is_default())
+            || (!owners
+                && activity::outbound::pg_activity_repo::appearance_changes_exceed(
+                    &mut *tx,
+                    EntityType::ScheduledAction,
+                    &change.id.to_string(),
+                    u32::try_from(stored.appearance_changes_by_agent.unwrap_or(0)).unwrap_or(0),
+                )
+                .await?);
+        // An agent's pick never replaces the owner's choice.
+        if chosen_by_owner && !owners {
+            return Ok(AppearanceSet::Kept { current: previous });
+        }
+        let activity = change.activity(&previous);
+        // The owner choosing the look it already has still makes it theirs.
+        if activity.is_none() && (chosen_by_owner || !owners) {
+            return Ok(AppearanceSet::Kept { current: previous });
+        }
+        let appearance = serde_json::to_value(&change.appearance)?;
+        let agents_change = i32::from(!owners && activity.is_some());
         sqlx::query!(
-            "UPDATE scheduled_action SET appearance = $2 WHERE id = $1",
+            r#"
+            UPDATE scheduled_action
+            SET appearance = $2,
+                appearance_chosen_by_owner = $3,
+                appearance_changes_by_agent = COALESCE(appearance_changes_by_agent, 0) + $4
+            WHERE id = $1
+            "#,
             change.id,
-            serde_json::to_value(&change.appearance)?,
+            appearance,
+            chosen_by_owner || owners,
+            agents_change,
         )
         .execute(&mut *tx)
         .await?;
+        let Some(activity) = activity else {
+            tx.commit().await?;
+            return Ok(AppearanceSet::Kept { current: previous });
+        };
         activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
         tx.commit().await?;
-        Ok(Some(previous))
+        Ok(AppearanceSet::Changed { previous })
     }
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {

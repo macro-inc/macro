@@ -48,7 +48,10 @@ export function ProjectUnavailable(props: {
   return (
     <Switch
       fallback={
-        <div role="alert" class="p-6">
+        <div
+          role="alert"
+          class="p-6 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)]"
+        >
           <p>
             Project unavailable. It may have been deleted, or you may no longer
             have access.

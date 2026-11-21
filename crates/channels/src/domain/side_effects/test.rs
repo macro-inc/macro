@@ -1,3 +1,6 @@
+mod interactions;
+mod mention_fallback;
+
 use super::*;
 use crate::domain::{
     events::ReactionNotificationContext,
@@ -121,6 +124,7 @@ impl ChannelNotificationSender for FakeNotifications {
 #[derive(Clone, Default)]
 struct FakeContacts {
     users: Arc<Mutex<Vec<HashSet<MacroUserIdStr<'static>>>>>,
+    interactions: Arc<Mutex<Vec<Interactions>>>,
 }
 
 impl ChannelContactsDispatcher for FakeContacts {
@@ -131,6 +135,18 @@ impl ChannelContactsDispatcher for FakeContacts {
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), Self::Err> {
         self.users.lock().unwrap().push(users);
+        Ok(())
+    }
+
+    async fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        self.interactions
+            .lock()
+            .unwrap()
+            .push(Interactions { users, peers });
         Ok(())
     }
 }
@@ -200,6 +216,7 @@ async fn added_reaction_notifies_message_author() {
                 metadata: ChannelMetadata {
                     channel_type: ChannelType::Public,
                     channel_name: "general".to_string(),
+                    named: true,
                 },
             },
         })
@@ -247,6 +264,7 @@ async fn self_reactions_do_not_notify() {
                 metadata: ChannelMetadata {
                     channel_type: ChannelType::Public,
                     channel_name: "general".to_string(),
+                    named: true,
                 },
             },
         })
@@ -389,6 +407,7 @@ async fn message_posted_derives_notification_effects_without_legacy_realtime() {
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Project".to_string(),
+                named: true,
             },
             participants: vec![
                 ChannelParticipant {
@@ -461,6 +480,7 @@ fn bot_message_posted_event(
         metadata: ChannelMetadata {
             channel_type: ChannelType::Private,
             channel_name: "Project".to_string(),
+            named: true,
         },
         participants: participant_principals
             .iter()
@@ -513,6 +533,7 @@ async fn silent_message_posted_skips_notifications_only() {
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Project".to_string(),
+                named: true,
             },
             participants: vec![
                 ChannelParticipant {
@@ -590,6 +611,7 @@ async fn mentions_only_skips_failing_invite_lookup_and_sends_mention() {
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Macro Support".to_string(),
+                named: true,
             },
             participants,
             message: MutatedMessage {
@@ -667,6 +689,44 @@ async fn bot_message_posted_sends_channel_message_notification() {
     );
     assert_eq!(recipient_ids.len(), 1);
     assert!(recipient_ids.contains(&recipient));
+}
+
+#[tokio::test]
+async fn an_agent_post_for_a_user_notifies_unless_silent() {
+    let recipient = user("recipient@example.com");
+    for (policy, notifies) in [
+        (PostMessageNotificationPolicy::Default, true),
+        (PostMessageNotificationPolicy::Silent, false),
+    ] {
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext::default(),
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeContacts::default(),
+        );
+        let mut event =
+            bot_message_posted_event(Uuid::new_v4(), Uuid::new_v4(), None, &[recipient.as_ref()]);
+        if let ChannelEvent::MessagePosted {
+            message,
+            mentions,
+            notification_policy,
+            ..
+        } = &mut event
+        {
+            message.triggered_by = Some("macro|sender@example.com".to_string());
+            *mentions = vec![SimpleMention::user(&recipient)];
+            *notification_policy = policy;
+        }
+
+        service.handle(event).await;
+
+        assert_eq!(
+            !notifications.effects.lock().unwrap().is_empty(),
+            notifies,
+            "{policy:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -847,6 +907,7 @@ async fn a_mention_of_someone_connected_to_the_threads_call_is_delivered() {
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Product".to_string(),
+                named: true,
             },
             participants: vec![],
             message: MutatedMessage {
@@ -940,6 +1001,7 @@ async fn document_mentions_notify_participants_except_sender() {
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Project".to_string(),
+                named: true,
             },
             participants: vec![
                 ChannelParticipant {
@@ -1041,6 +1103,7 @@ async fn document_mentions_in_a_reply_notify_only_thread_participants() {
             metadata: ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Project".to_string(),
+                named: true,
             },
             participants: [&sender, &participant, &outsider]
                 .into_iter()
@@ -1162,6 +1225,7 @@ fn contact_sync_ignores_bot_actor() {
         metadata: ChannelMetadata {
             channel_type: ChannelType::Team,
             channel_name: "team".to_string(),
+            named: true,
         },
         message_content: None,
     };
@@ -1180,6 +1244,7 @@ fn contact_sync_is_derived_from_team_participants_added() {
         metadata: ChannelMetadata {
             channel_type: ChannelType::Team,
             channel_name: "team".to_string(),
+            named: true,
         },
         message_content: None,
     };
@@ -1360,6 +1425,42 @@ async fn handle_publishes_no_channel_topic_facts_for_posted_messages() {
     );
 }
 
+#[tokio::test]
+async fn silent_message_posted_notifies_no_mention_but_still_publishes_it() {
+    let broker = TestEventBroker::default();
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext::default(),
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    )
+    .with_macro_event_broker(broker.clone());
+    let mut event = bot_message_posted_event(
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        None,
+        &["macro|alice@example.com"],
+    );
+    if let ChannelEvent::MessagePosted {
+        mentions,
+        notification_policy,
+        ..
+    } = &mut event
+    {
+        *mentions = vec![SimpleMention::user(&user("alice@example.com"))];
+        *notification_policy = PostMessageNotificationPolicy::Silent;
+    }
+
+    service.handle(event).await;
+
+    assert!(notifications.effects.lock().unwrap().is_empty());
+    let published = broker.published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].topic, "macro.mentions");
+    assert_eq!(published[0].key, "macro|alice@example.com");
+}
+
 #[test]
 fn broker_events_map_participant_joined_to_participant_added() {
     use macro_event_broker::MacroEvent as _;
@@ -1400,6 +1501,7 @@ fn broker_events_carry_the_requesters_name_on_a_request_to_join() {
         metadata: ChannelMetadata {
             channel_type: ChannelType::Private,
             channel_name: "design".to_string(),
+            named: true,
         },
     });
 
@@ -1471,6 +1573,7 @@ fn mention_broker_events_map_message_posted_mentions() {
         metadata: ChannelMetadata {
             channel_type: ChannelType::Team,
             channel_name: "Project".to_string(),
+            named: true,
         },
         participants: Vec::new(),
         message: MutatedMessage {
@@ -1774,4 +1877,143 @@ async fn first_dm_email_fallback_preserves_message_deduplication_key() {
             HashSet::from([recipient.clone()])
         );
     }
+}
+
+fn first_user_message_event(
+    channel_type: ChannelType,
+    named: bool,
+    sender: &MacroUserIdStr<'static>,
+    recipients: &[&MacroUserIdStr<'static>],
+) -> ChannelEvent {
+    let participants: Vec<&str> = std::iter::once(sender.as_ref())
+        .chain(recipients.iter().map(|recipient| recipient.as_ref()))
+        .collect();
+    let mut event = bot_message_posted_event(Uuid::new_v4(), Uuid::new_v4(), None, &participants);
+    if let ChannelEvent::MessagePosted {
+        metadata, message, ..
+    } = &mut event
+    {
+        metadata.channel_type = channel_type;
+        metadata.named = named;
+        message.sender_id = Sender::new_from_user(sender.clone());
+    }
+    event
+}
+
+#[tokio::test]
+async fn first_dm_message_notifies_the_recipient_as_a_message() {
+    let sender = user("sender@example.com");
+    let recipient = user("recipient@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+
+    service
+        .handle(first_user_message_event(
+            ChannelType::DirectMessage,
+            false,
+            &sender,
+            &[&recipient],
+        ))
+        .await;
+
+    let effects = notifications.effects.lock().unwrap();
+    assert_eq!(effects.len(), 1);
+    let ChannelNotificationEffect::ChannelMessage { recipient_ids, .. } = &effects[0] else {
+        panic!(
+            "expected a channel message notification, got {:?}",
+            effects[0]
+        );
+    };
+    assert_eq!(*recipient_ids, HashSet::from([recipient]));
+}
+
+#[tokio::test]
+async fn first_group_chat_message_notifies_members_and_invites_only_nonusers() {
+    let sender = user("sender@example.com");
+    let member = user("member@example.com");
+    let nonuser = user("new@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            unregistered_users: HashSet::from([nonuser.to_string()]),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+
+    service
+        .handle(first_user_message_event(
+            ChannelType::Private,
+            false,
+            &sender,
+            &[&member, &nonuser],
+        ))
+        .await;
+
+    let effects = notifications.effects.lock().unwrap();
+    assert_eq!(effects.len(), 2);
+    let ChannelNotificationEffect::ChannelMessage { recipient_ids, .. } = &effects[0] else {
+        panic!(
+            "expected a channel message notification, got {:?}",
+            effects[0]
+        );
+    };
+    assert_eq!(*recipient_ids, HashSet::from([member]));
+    let ChannelNotificationEffect::Invite {
+        registered_recipient_ids,
+        unregistered_recipient_ids,
+        ..
+    } = &effects[1]
+    else {
+        panic!("expected an invitation, got {:?}", effects[1]);
+    };
+    assert!(registered_recipient_ids.is_empty());
+    assert_eq!(*unregistered_recipient_ids, HashSet::from([nonuser]));
+}
+
+#[tokio::test]
+async fn first_message_in_a_named_channel_still_invites_its_members() {
+    let sender = user("sender@example.com");
+    let member = user("member@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+
+    service
+        .handle(first_user_message_event(
+            ChannelType::Private,
+            true,
+            &sender,
+            &[&member],
+        ))
+        .await;
+
+    let effects = notifications.effects.lock().unwrap();
+    assert_eq!(effects.len(), 1);
+    let ChannelNotificationEffect::Invite {
+        registered_recipient_ids,
+        ..
+    } = &effects[0]
+    else {
+        panic!("expected an invitation, got {:?}", effects[0]);
+    };
+    assert_eq!(*registered_recipient_ids, HashSet::from([member]));
 }

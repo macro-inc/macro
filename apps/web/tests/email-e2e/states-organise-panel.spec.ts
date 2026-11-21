@@ -22,7 +22,7 @@ import {
   sidePanel,
   THREAD_STATE,
 } from './harness/states-organise';
-import { PHONE } from './harness/ways-list1';
+import { openTouchTab, PHONE } from './harness/ways-list1';
 import { listShows, rowCheckbox } from './harness/ways-list2';
 import { deliverAll, row } from './harness/ways-organise';
 import { toolbarButton } from './harness/ways-organise-more';
@@ -230,7 +230,7 @@ test.describe('the details sheet and selection toolbar on a phone', () => {
     const reporting = await hold(page, THREAD_STATE, method('PATCH'));
 
     await mailbox.open();
-    await page.getByRole('button', { name: 'Spam', exact: true }).tap();
+    await openTouchTab(page, 'Spam');
     await listShows(page, [photos]);
     await row(page, photos)
       .getByRole('checkbox', { name: 'Select item' })

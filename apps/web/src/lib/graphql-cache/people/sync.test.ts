@@ -4,10 +4,39 @@ const invoke = vi.hoisted(() => vi.fn());
 const listen = vi.hoisted(() => vi.fn());
 const emit = vi.hoisted(() => vi.fn());
 const load = vi.hoisted(() => vi.fn());
-vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/api/core', async () => {
+  const { testAuthority } = await import('@graphql-cache/authority-fixture');
+  return {
+    invoke: (command: string, args: Record<string, unknown> = {}) => {
+      if (command === 'graphql_cache_current_authority')
+        return Promise.resolve(testAuthority(String(args.identity)));
+      const {
+        authority: _,
+        authorityGeneration: _generation,
+        ...request
+      } = args;
+      return invoke(command, request);
+    },
+  };
+});
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit }));
-vi.mock('../worker/wasm-module', () => ({ loadCacheWasm: load }));
+vi.mock('../worker/wasm-module', async () => {
+  const { testAuthority } = await import('../authority-fixture');
+  return {
+    loadCacheWasm: async () => {
+      const module = await load();
+      return {
+        ...module,
+        openCache: async (...args: unknown[]) => ({
+          currentAuthority: async (identity: string) => testAuthority(identity),
+          ...(await module.openCache(...args)),
+        }),
+      };
+    },
+  };
+});
 
+import { TEST_AUTHORITY_GENERATION } from '../authority-fixture';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import { createTauriCacheHost } from '../host/tauri-host';
 import { isCacheRequest } from '../worker/coordinator-protocol';
@@ -90,6 +119,7 @@ it('preserves contact fences through native hydration and never downgrades rejec
   expect(guarded).toEqual({ ...scope, contactFence: fence });
   await expect(
     host.hydrateQuery({
+      generation: (await host.authority!.current()).generation,
       query: '{user{id}}',
       data: {},
       identity: scope.identity,
@@ -120,9 +150,12 @@ it('older native sync is unsupported without disabling person context', async ()
   expect(
     await captureContactWriteScope(host, scope, new AbortController().signal)
   ).toBeUndefined();
-  await expect(host.people?.reconcile(reconcile)).rejects.toThrow(
-    'unsupported'
-  );
+  await expect(
+    host.people?.reconcile(
+      reconcile,
+      (await host.authority!.current()).generation
+    )
+  ).rejects.toThrow('unsupported');
   expect(await host.people?.context(scope)).toEqual({ kind: 'missing' });
   host.dispose();
 });
@@ -153,6 +186,7 @@ it('worker reconciliation fans out removed-record invalidation, not just a hydra
   await core.handleRequest(port, {
     id: 2,
     kind: 'contact-reconcile',
+    generation: TEST_AUTHORITY_GENERATION,
     request: reconcile,
   });
   expect(contactReconcile).toHaveBeenCalledWith(reconcile);
@@ -162,9 +196,11 @@ it('worker reconciliation fans out removed-record invalidation, not just a hydra
       keys: ['GraphqlContact:one'],
     })
   );
-  expect(port.postMessage).toHaveBeenCalledWith({
-    kind: 'cache-changed',
-    revision: '1',
-    searchChangedBuckets: ['person'],
-  });
+  expect(port.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'cache-changed',
+      revision: '1',
+      searchChangedBuckets: ['person'],
+    })
+  );
 });

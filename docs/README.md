@@ -22,8 +22,8 @@ Email: [frontend architecture](architecture/email.md) and
 
 Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
 
-Macro computers: [architecture](architecture/macro-computers.md) and the
-[setup trace runbook](runbooks/computer-setup-traces.md).
+[Firecracker security model](architecture/firecracker-computers-security.md), the
+[Firecracker rollout](runbooks/firecracker-computers-rollout.md), and the
 
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).

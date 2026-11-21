@@ -66,14 +66,9 @@ export function restoreEmailFolderThreads(input: RestoreFolderThreads) {
             .map(async (id) => {
               await span.run(() => refreshEmailThreadCache(id));
               await span.run(() =>
-                Promise.all([
-                  queryClient.invalidateQueries({
-                    queryKey: emailKeys.threadMessages(id).queryKey,
-                  }),
-                  queryClient.invalidateQueries({
-                    queryKey: emailKeys.threadOperations(id).queryKey,
-                  }),
-                ])
+                queryClient.invalidateQueries({
+                  queryKey: emailKeys.threadOperations(id).queryKey,
+                })
               );
             })
         );

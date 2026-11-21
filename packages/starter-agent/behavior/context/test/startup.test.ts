@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { addresses } from '../addresses.ts';
-import { runFiles, startup } from '../startup.ts';
+import {
+  configured,
+  exitCodes,
+  NotConfigured,
+  runFiles,
+  startFlushLimitMs,
+  startOrExit,
+  startup,
+} from '../startup.ts';
 
 const reserved = ['agent'];
 
@@ -314,5 +322,97 @@ describe('addresses', () => {
       kind: 'invalid',
       message: 'OVERRIDE_AUTH_SERVICE_URL is not a URL',
     });
+  });
+});
+
+const exited = (code: number): never => {
+  throw new Error(`exited ${code}`);
+};
+
+test('a start that is not configured exports its spans, then exits with the configuration code', async () => {
+  const events: string[] = [];
+
+  await expect(
+    startOrExit(
+      async () => {
+        throw new NotConfigured('no claude', { cause: new Error('ENOENT') });
+      },
+      {
+        flush: async () => {
+          events.push('flush');
+        },
+        wait: () => new Promise(() => undefined),
+        report: (message) => events.push(message),
+        exit: (code) => {
+          events.push(`exit ${code}`);
+          return exited(code);
+        },
+      }
+    )
+  ).rejects.toThrow('exited 78');
+
+  expect(events).toEqual([
+    'flush',
+    "can't start: no claude",
+    `exit ${exitCodes.configuration}`,
+  ]);
+});
+
+test('an unreachable collector delays a failed start only by the flush limit', async () => {
+  const waited: number[] = [];
+
+  await expect(
+    startOrExit(
+      async () => {
+        throw new NotConfigured('no key');
+      },
+      {
+        flush: () => new Promise(() => undefined),
+        wait: async (ms) => {
+          waited.push(ms);
+        },
+        report: () => undefined,
+        exit: exited,
+      }
+    )
+  ).rejects.toThrow('exited 78');
+
+  expect(waited).toEqual([startFlushLimitMs]);
+});
+
+test('any other failure of the start is exported too, then rethrown, not turned into an exit', async () => {
+  const failure = new Error('schedules unreachable');
+  let flushed = false;
+
+  await expect(
+    startOrExit(
+      async () => {
+        throw failure;
+      },
+      {
+        flush: async () => {
+          flushed = true;
+        },
+        wait: () => new Promise(() => undefined),
+        report: () => undefined,
+        exit: exited,
+      }
+    )
+  ).rejects.toBe(failure);
+
+  expect(flushed).toBe(true);
+});
+
+test('what is not configured keeps its cause', async () => {
+  const cause = new Error('ENOENT');
+  const error = await configured(() => {
+    throw cause;
+  }).catch((thrown: unknown) => thrown);
+
+  expect(error).toBeInstanceOf(NotConfigured);
+  expect(error).toMatchObject({
+    name: 'NotConfigured',
+    message: 'ENOENT',
+    cause,
   });
 });

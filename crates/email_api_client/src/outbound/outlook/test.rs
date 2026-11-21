@@ -42,7 +42,12 @@ async fn delta_preserves_removals_as_stream_events_and_keeps_opaque_continuation
         .mount(&server)
         .await;
     let page = api
-        .folder_changes(&token, &ProviderId::new("folder").unwrap(), None)
+        .folder_changes(
+            &token,
+            &ProviderId::new("folder").unwrap(),
+            None,
+            RoundStart::Unordered,
+        )
         .await
         .unwrap();
     assert_eq!(page.changed, vec![ProviderId::new("m1").unwrap()]);
@@ -67,6 +72,7 @@ async fn unsafe_cursors_are_rejected_before_sending_credentials() {
                 &token,
                 &ProviderId::new("inbox").unwrap(),
                 Some(&StreamToken::new(unsafe_url)),
+                RoundStart::Unordered,
             )
             .await;
         assert!(matches!(result, Err(EmailApiError::Permanent { .. })));
@@ -181,9 +187,14 @@ async fn expired_cursor_is_recoverable_without_deleting_existing_mail() {
         .mount(&server)
         .await;
     assert_eq!(
-        api.folder_changes(&token, &ProviderId::new("inbox").unwrap(), None)
-            .await
-            .unwrap_err(),
+        api.folder_changes(
+            &token,
+            &ProviderId::new("inbox").unwrap(),
+            None,
+            RoundStart::Unordered
+        )
+        .await
+        .unwrap_err(),
         EmailApiError::OutdatedCursor
     );
 }
@@ -372,6 +383,7 @@ async fn read_authentication_retry_keeps_the_same_mailbox_generation() {
             },
             &ProviderId::new("folder").unwrap(),
             None,
+            RoundStart::Unordered,
         )
         .await
         .unwrap();
@@ -899,6 +911,68 @@ async fn a_sender_or_recipient_without_an_address_is_left_out() {
     assert_eq!(to, [("me@example.com", Some("Me"))]);
     assert!(message.cc.is_empty());
     assert!(message.bcc.is_empty());
+}
+
+#[tokio::test]
+async fn null_read_and_draft_states_read_like_missing_ones() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/null-states"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"null-states", "conversationId":"conversation",
+            "isRead":null, "isDraft":null,
+            "createdDateTime":null, "lastModifiedDateTime":null, "receivedDateTime":null
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/missing-states"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"missing-states", "conversationId":"conversation"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/read-draft"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"read-draft", "conversationId":"conversation", "isRead":true, "isDraft":true
+        })))
+        .mount(&server)
+        .await;
+    for attachments in [
+        "/v1.0/me/messages/null-states/attachments",
+        "/v1.0/me/messages/missing-states/attachments",
+        "/v1.0/me/messages/read-draft/attachments",
+    ] {
+        Mock::given(method("GET"))
+            .and(path(attachments))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+            .mount(&server)
+            .await;
+    }
+
+    let read = |id: &'static str| {
+        let api = &api;
+        let token = &token;
+        async move {
+            api.message(token, Uuid::now_v7(), &ProviderId::new(id).unwrap(), &[])
+                .await
+                .unwrap()
+                .unwrap()
+        }
+    };
+    let null_states = read("null-states").await;
+    let missing_states = read("missing-states").await;
+    let read_draft = read("read-draft").await;
+
+    assert!(!null_states.state.is_read);
+    assert!(!null_states.state.is_draft);
+    assert!(!null_states.content.message.is_read);
+    assert!(!null_states.content.message.is_draft);
+    assert!(!missing_states.state.is_read);
+    assert!(!missing_states.state.is_draft);
+    assert!(read_draft.state.is_read);
+    assert!(read_draft.state.is_draft);
 }
 
 #[tokio::test]

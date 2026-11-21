@@ -1,7 +1,9 @@
 # Boots the guest module in a NixOS test VM and checks the macrod contract,
-# the agent tools, nix-ld, and the agent teammate's units and computer use. Incus enrollment cannot
-# run here, so macrod-enroll must fail with its readable reason. Then a
+# the agent tools, nix-ld, and the agent teammate's units and computer use. No enrollment file
+# is written, so macrod-enroll must fail with its readable reason. Then a
 # second image boots from the same data disk, as an image update does.
+# A last VM enrolls from a file against a fake Macro on loopback with
+# network-online.target held back, so macrod must connect without it.
 {
   pkgs,
   guest,
@@ -19,8 +21,6 @@ let
   # declared again here.
   dataDisk = {
     macro.box.dataDisk = "/dev/disk/by-id/virtio-data";
-    # No Incus here; do not wait the full minute for its socket.
-    systemd.services.macrod-enroll.environment.MACRO_INCUS_SOCKET_WAIT = "3";
     virtualisation.fileSystems."/home" = {
       device = "/dev/disk/by-id/virtio-data";
       fsType = "ext4";
@@ -113,6 +113,8 @@ pkgs.testers.runNixOSTest {
       dataDisk = null;
       # Prints the environment the `claude` wrapper hands it.
       claudeCode = pkgs.writeShellScriptBin "claude" "env";
+      # It has no first run to seed from.
+      claudeCodeFirstRunSeed = false;
     };
     virtualisation.memorySize = 4096;
     virtualisation.cores = 4;
@@ -124,6 +126,47 @@ pkgs.testers.runNixOSTest {
       serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./files/test-git-server.py}";
     };
   };
+  # A computer whose enrollment succeeds against a fake Macro on loopback
+  # while network-online.target is held back for good: enrollment, the claim
+  # and macrod's runtime connection must not wait for it.
+  nodes.enrolled = {
+    imports = [ guest ];
+    macro.box = {
+      inherit macrod;
+      harnessd.package = harnessd;
+      dataDisk = null;
+      enrollFrom = "file:/etc/macro-box-test/enrollment.json";
+    };
+    virtualisation.memorySize = 2048;
+    virtualisation.cores = 2;
+    virtualisation.diskSize = 4096;
+    environment.etc."macro-box-test/enrollment.json".text = builtins.toJSON {
+      generation = 1;
+      computer_id = "00000000-0000-0000-0000-00000000000c";
+      pairing_id = "00000000-0000-0000-0000-00000000000a";
+      device_secret = "mhds_test";
+      name = "Boot path";
+      role = "person";
+      deployment = {
+        agent_harness_url = "http://127.0.0.1:41009/agent-harness/";
+        document_storage_url = "http://127.0.0.1:41009/dss";
+        app_url = "http://127.0.0.1:41009";
+        egress_url = "http://127.0.0.1:41009";
+      };
+    };
+    systemd.services.fake-macro = {
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./files/test-fake-macro.py} 41009";
+    };
+    # network-online.target is never reached.
+    systemd.services.systemd-networkd-wait-online.serviceConfig = {
+      ExecStart = pkgs.lib.mkForce [
+        ""
+        "${pkgs.coreutils}/bin/sleep infinity"
+      ];
+      TimeoutStartSec = "infinity";
+    };
+  };
   testScript =
     { nodes, ... }:
     ''
@@ -131,9 +174,9 @@ pkgs.testers.runNixOSTest {
 
       machine.wait_for_unit("multi-user.target")
 
-      with subtest("enrollment fails with a reason when Incus is missing"):
+      with subtest("enrollment fails with a reason when the enrollment is missing"):
           machine.wait_until_fails("systemctl is-active --quiet macrod-enroll.service")
-          machine.succeed("journalctl -u macrod-enroll.service | grep -F '/dev/incus/sock is missing'")
+          machine.succeed("journalctl -u macrod-enroll.service | grep -F 'enrollment file /run/macro/enrollment.json is missing'")
 
       with subtest("macrod runs as macro after enrollment"):
           after = machine.succeed("systemctl show macrod.service --property=After --value")
@@ -180,6 +223,40 @@ pkgs.testers.runNixOSTest {
           machine.wait_for_open_port(9222)
           machine.succeed("curl --fail http://127.0.0.1:9222/json/version")
 
+      with subtest("sessions get chrome-devtools MCP servers from the socket"):
+          import json, shlex
+          user_systemctl = "systemctl --machine=macro@ --user"
+          machine.wait_until_succeeds(f"{user_systemctl} is-active macro-chrome-devtools-mcp.socket")
+          machine.wait_until_succeeds("su - macro -c 'test -S ~/.cache/macro-mcp/chrome-devtools.sock'")
+          # Nothing runs before the first session.
+          machine.fail(f"{user_systemctl} is-active macro-chrome-devtools-mcp.service")
+          # The connector in ~/.claude.json reaches a server that answers.
+          server = json.loads(machine.succeed("cat /home/macro/.claude.json"))["mcpServers"]["chrome-devtools"]
+          connector = shlex.join([server["command"], *server["args"]])
+          initialize = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "0"}}})
+          probe = f"(echo {shlex.quote(initialize)}; sleep 10) | timeout 15 {connector} | head -n 1"
+          for _ in range(2):
+              answer = json.loads(machine.succeed(f"su - macro -c {shlex.quote(probe)}"))
+              assert answer["result"]["serverInfo"]["name"], answer
+          machine.succeed(f"{user_systemctl} is-active macro-chrome-devtools-mcp.service")
+
+      with subtest("a browser call right after Chromium starts waits for its DevTools port"):
+          # As right after a restore: the session's first browser call comes
+          # before Chromium listens on 9222.
+          machine.succeed(f"{user_systemctl} stop macro-chromium.service")
+          machine.wait_until_fails("curl --silent http://127.0.0.1:9222/json/version")
+          calls = "\n".join(json.dumps(message) for message in [
+              {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "0"}}},
+              {"jsonrpc": "2.0", "method": "notifications/initialized"},
+              {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_pages", "arguments": {}}},
+          ])
+          call = f"(echo {shlex.quote(calls)}; sleep 20) | timeout 25 {connector} > /tmp/browser-call.out"
+          machine.succeed(f"su - macro -c {shlex.quote(call)} >&2 &")
+          machine.sleep(2)
+          machine.succeed(f"{user_systemctl} start macro-chromium.service")
+          answer = json.loads(machine.wait_until_succeeds("grep '\"id\":2' /tmp/browser-call.out", timeout=20))
+          assert not answer["result"].get("isError"), answer
+
       with subtest("an image update keeps homes, credentials and enrollment"):
           machine.succeed("findmnt --noheadings --output SOURCE /home | grep -F /dev/vd")
           machine.succeed("su - macro -c 'echo token > ~/.claude/.credentials.json && echo notes > ~/work/notes.txt'")
@@ -193,7 +270,10 @@ pkgs.testers.runNixOSTest {
           updated.succeed("grep -Fx mc-01900000000070008000000000000001 /var/lib/macrod/enrolled")
           # Enrollment runs on every boot; with a marker and no source the
           # check passes and leaves `macrod enroll` to keep the enrollment.
-          updated.wait_until_succeeds("systemctl show macrod-enroll.service --property=ExecStartPre | grep -F 'status=0/0'")
+          updated.wait_until_succeeds("test $(systemctl show macrod-enroll.service --property=ActiveState --value) = active")
+          updated.succeed("test $(systemctl show macrod-enroll.service --property=Result --value) = success")
+          updated.succeed("test $(systemctl show macrod-enroll.service --property=NRestarts --value) = 0")
+          updated.succeed("journalctl -u macrod-enroll.service | grep -F 'already enrolled'")
           updated.fail("journalctl -b -u macrod-enroll.service | grep -F 'macrod-enroll: '")
           updated.succeed("systemctl cat docker.service | grep -o -- '--config-file=[^ ]*' | cut -d= -f2 | xargs jq --exit-status '.\"data-root\" == \"/home/.system/docker\"'")
 
@@ -256,6 +336,10 @@ pkgs.testers.runNixOSTest {
           agent.succeed(
               "mkdir -p /srv/git && git init --quiet --bare -b main /srv/git/repo.git"
               + " && cp -r ${starterAgent} /tmp/seed && chmod -R u+w /tmp/seed"
+              # What bin/setup writes: without it the template's own commit
+              # fails to start, and those failed boots would count toward the
+              # rollback the test triggers later with a broken commit.
+              + " && cp /tmp/seed/agent.example.json /tmp/seed/agent.json"
               + " && git -C /tmp/seed init --quiet -b main && git -C /tmp/seed add -A"
               + " && git -C /tmp/seed -c user.name=seed -c user.email=seed@example.com commit --quiet -m seed"
               + " && git -C /tmp/seed push --quiet /srv/git/repo.git main"
@@ -383,5 +467,17 @@ pkgs.testers.runNixOSTest {
       with subtest("removing the agent environment stops the agent"):
           agent.succeed("rm /var/lib/macrod/agent.env")
           agent.wait_until_fails("systemctl is-active --quiet macro-agent.service")
+          agent.shutdown()
+
+      with subtest("enrollment and macrod connect without waiting for network-online"):
+          # Not multi-user.target: it waits for units ordered after network-online.
+          enrolled.wait_until_succeeds("journalctl -u fake-macro -o cat | grep -F 'runtime ws'")
+          enrolled.succeed("journalctl -u fake-macro -o cat | grep -F 'claim /dss/harness-pairings/00000000-0000-0000-0000-00000000000a/claim'")
+          enrolled.fail("systemctl is-active --quiet network-online.target")
+          for unit in ["macrod-enroll.service", "macrod.service"]:
+              ordering = enrolled.succeed(f"systemctl show {unit} --property=After,Wants --value")
+              assert "network-online.target" not in ordering, f"{unit}: {ordering}"
+          enrolled.succeed("[ \"$(sed -n 2p /var/lib/macrod/enrolled)\" = 1 ]")
+          print(enrolled.succeed("journalctl -b -o short-monotonic -u fake-macro"))
     '';
 }

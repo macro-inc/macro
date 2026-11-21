@@ -50,11 +50,10 @@ type RoutineSuggestionActions = Pick<
   'reviewRoutine' | 'turnOnRoutine'
 >;
 
-/** A card's actions over the app's splits, composer and routine suggestions. */
-export function createSuggestionActions(
-  layout: Pick<SplitManager, 'openWithSplit'>,
-  routines: RoutineSuggestionActions
-): SuggestionActions {
+/** Opens an item, or the part of it a suggestion is about, in the app's splits. */
+export function createItemOpener(
+  layout: Pick<SplitManager, 'openWithSplit'>
+): (target: SuggestionTarget) => void {
   const openItem = (target: SuggestionTarget) => {
     if (target.entityType === 'scheduled_action') {
       openAgentsPage(layout, 'routines', { routineId: target.entityId });
@@ -93,6 +92,16 @@ export function createSuggestionActions(
       { activate: true, preferNewSplit: true }
     );
   };
+
+  return openItem;
+}
+
+/** A card's actions over the app's splits, composer and routine suggestions. */
+export function createSuggestionActions(
+  layout: Pick<SplitManager, 'openWithSplit'>,
+  routines: RoutineSuggestionActions
+): SuggestionActions {
+  const openItem = createItemOpener(layout);
 
   return {
     ...routines,

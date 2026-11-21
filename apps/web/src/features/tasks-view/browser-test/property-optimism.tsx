@@ -196,10 +196,14 @@ function Fixture() {
   );
   onMount(async () => {
     if (!groupedMode) return;
-    const host = getGraphqlCacheHost()!;
+    const host = getGraphqlCacheHost();
+    if (!host?.authority)
+      throw new Error('Fixture cache authority is required');
+    const generation = (await host.authority.current()).generation;
     // Real historical query variants, none registered as an active view.
     for (let limit = 3; limit < 133; limit++) {
       await host.writeQuery({
+        generation,
         query: stringifyDocument(GroupSoupMembershipDocument),
         operationName: 'GroupSoupMembership',
         variables: { input: { initial: { ...groupedInput.initial, limit } } },

@@ -58,9 +58,14 @@ const soupPropertyToPropertyMock = vi.hoisted(() => vi.fn());
 const rollbackMock = vi.hoisted(() => vi.fn());
 const optimisticUpdateSoupEntityMock = vi.hoisted(() => vi.fn());
 const invalidateSoupEntityMock = vi.hoisted(() => vi.fn());
+const bumpSoupEntityTouchedAtMock = vi.hoisted(() => vi.fn());
 const refreshPropertyQueriesMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../soup/property-queries', () => ({
   refreshPropertyQueries: refreshPropertyQueriesMock,
+}));
+const refreshCrmListsMock = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../soup/crm-association', () => ({
+  refreshCrmAssociatedSoupQueries: refreshCrmListsMock,
 }));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
@@ -133,6 +138,7 @@ vi.mock('../soup/cache', () => ({
     frecency_score: 0,
   })),
   invalidateSoupEntity: invalidateSoupEntityMock,
+  bumpSoupEntityTouchedAt: bumpSoupEntityTouchedAtMock,
   optimisticUpdateSoupEntity: optimisticUpdateSoupEntityMock.mockImplementation(
     () => ({ rollback: rollbackMock })
   ),
@@ -158,7 +164,7 @@ let dispose: (() => void) | undefined;
 let graphqlExecutions: Array<{
   variables: unknown;
   context: unknown;
-  next: (result: unknown) => void;
+  next: (result: object) => void;
   ended: boolean;
 }>;
 
@@ -169,6 +175,7 @@ const property = {
   valueType: 'STRING',
   isMultiSelect: false,
   isSystemProperty: true,
+  owner: { scope: 'system' },
 } as unknown as Property;
 
 const variables = {
@@ -229,7 +236,8 @@ describe('useEntityPropertiesQuery transport', () => {
         const execution = {
           variables: request.variables,
           context,
-          next: subject.next,
+          next: (result: object) =>
+            subject.next({ ...result, operation: { context } }),
           ended: false,
         };
         graphqlExecutions.push(execution);
@@ -677,6 +685,24 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(toastFailureMock).toHaveBeenCalledOnce();
   });
 
+  // A saved property is the viewer's own touch: Recent moves the item now.
+  it('stamps the viewer’s touch on a saved property, and not on a failed one', async () => {
+    await mutation.mutateAsync(variables);
+    expect(bumpSoupEntityTouchedAtMock).toHaveBeenCalledExactlyOnceWith(
+      'task-1'
+    );
+
+    bumpSoupEntityTouchedAtMock.mockClear();
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
+      kind: 'permanently-failed',
+      error: new Error('invalid property'),
+    });
+    await expect(mutation.mutateAsync(variables)).rejects.toThrow(
+      'invalid property'
+    );
+    expect(bumpSoupEntityTouchedAtMock).not.toHaveBeenCalled();
+  });
+
   it('exposes transport-neutral pending state', async () => {
     let resolve!: (value: { kind: 'committed' }) => void;
     graphqlEntityPropertyMutationMock.mockImplementation(
@@ -708,6 +734,34 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def');
     expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('refreshes CRM record lists after a custom entity property is saved', async () => {
+    await mutation.mutateAsync(variables);
+    expect(refreshCrmListsMock).not.toHaveBeenCalled();
+
+    await mutation.mutateAsync({
+      properties: [
+        {
+          entityId: 'task-1',
+          entityType: 'TASK' as const,
+          property: {
+            propertyId: 'assignment-2',
+            propertyDefinitionId: 'contact-def',
+            displayName: 'Contact',
+            valueType: 'ENTITY',
+            isMultiSelect: true,
+            isSystemProperty: false,
+            owner: { scope: 'user', user_id: 'macro|owner@example.com' },
+          } as unknown as Property,
+          apiValues: {
+            valueType: 'ENTITY' as const,
+            refs: [{ entity_type: 'CONTACT' as const, entity_id: 'contact-1' }],
+          },
+        },
+      ],
+    });
+    expect(refreshCrmListsMock).toHaveBeenCalledOnce();
   });
 
   it('invalidates the REST projection for a new GraphQL attachment', async () => {

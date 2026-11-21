@@ -751,6 +751,34 @@ where
                 )
                 .await;
         }
+        // Opening a reply suggestion (its item or its draft) isn't answering
+        // it, whoever opens it: it is taken on and stays open until the
+        // person's own reply on the item makes it done (`resolution`).
+        // Opening it again, or once answered, changes nothing.
+        if matches!(
+            suggestion.kind,
+            SuggestionKind::Entity {
+                action: EntityAction::Reply,
+                ..
+            }
+        ) {
+            if matches!(
+                suggestion.state,
+                SuggestionState::Accepted | SuggestionState::Done
+            ) {
+                return Ok(());
+            }
+            self.move_as_shown(
+                user,
+                &suggestion,
+                &lifecycle::sources(LifecycleEvent::TakeOn),
+                SuggestionState::Accepted,
+                accept,
+            )
+            .await?;
+            tracing::info!(event = "suggestions.accepted", done = false);
+            return Ok(());
+        }
         // Anything else the person acts on themself (opens the item or the
         // composer) is done when they do; accepting a done suggestion
         // again changes nothing.

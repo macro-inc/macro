@@ -1,5 +1,8 @@
 use super::*;
 
+/// Lowercase address fact from the people SQL projection, present on every
+/// complete contact.
+const EMAIL: &str = "email_lower";
 pub(super) const RECORD_JOIN: &str = "CROSS JOIN records r INDEXED BY records_contacts_cover_idx ON r.__typename='GraphqlContact' AND r.id=substr(d.record_key,16)";
 #[derive(Default)]
 pub(super) struct Params {
@@ -14,6 +17,8 @@ impl Params {
 pub(super) enum Bounds {
     Equal(Vec<u8>),
     Prefix(Vec<u8>),
+    /// From the first value, up to but excluding the second when there is one.
+    Between(Vec<u8>, Option<Vec<u8>>),
     All,
 }
 pub(super) struct Seed {
@@ -34,6 +39,14 @@ impl Seed {
                 sql.push_str(&format!(" AND {alias}.value>={low}"));
                 if let Some(end) = prefix_end(value) {
                     let high = p.bind(Value::from_blob(end));
+                    sql.push_str(&format!(" AND {alias}.value<{high}"));
+                }
+            }
+            Bounds::Between(low, high) => {
+                let low = p.bind(Value::from_blob(low.clone()));
+                sql.push_str(&format!(" AND {alias}.value>={low}"));
+                if let Some(high) = high {
+                    let high = p.bind(Value::from_blob(high.clone()));
                     sql.push_str(&format!(" AND {alias}.value<{high}"));
                 }
             }
@@ -91,13 +104,10 @@ pub(super) fn seeds(read: &NameSearchRead<'_>, stage: NameStage) -> Vec<Seed> {
             bounds: Bounds::Equal(id.as_ref().as_bytes().to_vec()),
         }],
         (NameSearch::EmailPrefix(value), NameStage::EmailPrefix) => vec![Seed {
-            attribute: "email_lower",
+            attribute: EMAIL,
             bounds: Bounds::Prefix(value.as_bytes().to_vec()),
         }],
-        (NameSearch::Name(q), NameStage::ExactName) => vec![Seed {
-            attribute: names::NAME,
-            bounds: Bounds::Equal(q.normalized().as_bytes().to_vec()),
-        }],
+        (NameSearch::Name(q), NameStage::ExactName) => vec![exact_name(q.normalized())],
         (NameSearch::Name(q), NameStage::WordPrefix) => q
             .words()
             .map(|word| Seed {
@@ -113,7 +123,28 @@ pub(super) fn seeds(read: &NameSearchRead<'_>, stage: NameStage) -> Vec<Seed> {
             attribute: names::NAME,
             bounds: Bounds::All,
         }],
+        (_, NameStage::Address) => vec![Seed {
+            attribute: EMAIL,
+            bounds: Bounds::All,
+        }],
         _ => vec![],
+    }
+}
+/// A full name equal to the query, or for a one-term query a name starting with
+/// it and a space (its first name), sorts from the query up to the query and the
+/// byte after the space. The core recheck drops the few other names in between.
+fn exact_name(query: &str) -> Seed {
+    let query = query.as_bytes().to_vec();
+    if query.contains(&b' ') {
+        return Seed {
+            attribute: names::NAME,
+            bounds: Bounds::Equal(query),
+        };
+    }
+    let first_name = prefix_end(&[query.as_slice(), b" "].concat());
+    Seed {
+        attribute: names::NAME,
+        bounds: Bounds::Between(query, first_name),
     }
 }
 pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStage) -> String {
@@ -144,30 +175,17 @@ pub(super) fn matches(p: &mut Params, read: &NameSearchRead<'_>, stage: NameStag
             );
             format!("(({}) OR {overflow})", words.join(" AND "))
         }
-        (NameSearch::Name(q), NameStage::Contains) => {
-            let parts = q
-                .normalized()
-                .split_whitespace()
-                .map(|term| {
-                    let mut like = "%".to_owned();
-                    for c in term.chars() {
-                        if matches!(c, '%' | '_' | '\\') {
-                            like.push('\\');
-                        }
-                        like.push(c);
-                    }
-                    like.push('%');
-                    let pattern = p.bind(text(&like));
-                    format!("CAST(f.value AS TEXT) LIKE {pattern} ESCAPE '\\'")
-                })
-                .collect::<Vec<_>>();
-            if parts.is_empty() {
+        (NameSearch::Name(q), NameStage::Contains | NameStage::Address) => {
+            let attribute = if stage == NameStage::Contains {
+                names::NAME
+            } else {
+                EMAIL
+            };
+            let Some(terms) = contains_terms(p, q.normalized(), "f.value") else {
                 return "0".into();
-            }
+            };
             format!(
-                "EXISTS (SELECT 1 FROM exact_facts f INDEXED BY sqlite_autoindex_exact_facts_1 WHERE f.document_id=d.id AND f.attribute='{}' AND {})",
-                names::NAME,
-                parts.join(" AND ")
+                "EXISTS (SELECT 1 FROM exact_facts f INDEXED BY sqlite_autoindex_exact_facts_1 WHERE f.document_id=d.id AND f.attribute='{attribute}' AND {terms})"
             )
         }
         _ => seeds(read, stage)
@@ -219,23 +237,10 @@ pub(super) fn seed_filter(
     seed: &Seed,
 ) -> String {
     match (stage, read.query(), seed.attribute, &seed.bounds) {
-        (Some(NameStage::Contains), NameSearch::Name(q), names::NAME, _) => q
-            .normalized()
-            .split_whitespace()
-            .map(|term| {
-                let mut like = "%".to_owned();
-                for c in term.chars() {
-                    if matches!(c, '%' | '_' | '\\') {
-                        like.push('\\');
-                    }
-                    like.push(c);
-                }
-                like.push('%');
-                let pattern = p.bind(text(&like));
-                format!("CAST(seed.value AS TEXT) LIKE {pattern} ESCAPE '\\'")
-            })
-            .collect::<Vec<_>>()
-            .join(" AND "),
+        (Some(NameStage::Contains), NameSearch::Name(q), names::NAME, _)
+        | (Some(NameStage::Address), NameSearch::Name(q), EMAIL, _) => {
+            contains_terms(p, q.normalized(), "seed.value").unwrap_or_else(|| "0".into())
+        }
         (Some(NameStage::WordPrefix), NameSearch::Name(q), names::WORD, Bounds::Prefix(prefix)) => {
             let rest = q
                 .words()
@@ -271,4 +276,28 @@ pub(super) fn seed_filter(
         | (None, _, _, _) => "1".into(),
         (Some(stage), _, _, _) => matches(p, read, stage),
     }
+}
+
+/// Every whitespace-separated term of the normalized query occurs literally in `column`, a text
+/// fact value. None when the query has no terms.
+fn contains_terms(p: &mut Params, query: &str, column: &str) -> Option<String> {
+    let terms = query
+        .split_whitespace()
+        .map(|term| {
+            let mut like = "%".to_owned();
+            for c in term.chars() {
+                if matches!(c, '%' | '_' | '\\') {
+                    like.push('\\');
+                }
+                like.push(c);
+            }
+            like.push('%');
+            let pattern = p.bind(text(&like));
+            format!("CAST({column} AS TEXT) LIKE {pattern} ESCAPE '\\'")
+        })
+        .collect::<Vec<_>>();
+    if terms.is_empty() {
+        return None;
+    }
+    Some(terms.join(" AND "))
 }

@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
+import type { CacheHydrateArgs } from '@graphql-cache/host/types';
 import { createWorkerCacheHost } from '@graphql-cache/host/worker-host';
 import { captureContactWriteScope } from '@graphql-cache/people/sync';
-import type { HydrationScope } from '@graphql-cache/protocol';
 import {
   loadContactCheckpoint,
   runContactBackfill,
@@ -38,7 +38,7 @@ export function ContactRemovalFixture() {
   const [lateResult, setLateResult] = createSignal('');
   let removed = false;
   let hold: ReturnType<typeof Promise.withResolvers<void>> | undefined;
-  let stale: HydrationScope | undefined;
+  let stale: CacheHydrateArgs | undefined;
   let controller: AbortController | undefined;
   onCleanup(() => {
     controller?.abort();
@@ -75,6 +75,8 @@ export function ContactRemovalFixture() {
         runContactBackfill(viewer, host, {
           pageDelayMs: 0,
           fetchPage: async (cache, scope, after, signal) => {
+            if (!host.authority) throw new Error('Missing cache authority');
+            const generation = (await host.authority.current()).generation;
             const guarded = await captureContactWriteScope(
               cache,
               scope,
@@ -94,6 +96,7 @@ export function ContactRemovalFixture() {
             ).filter((node) => !removed || node.userId !== removedId);
             const nextCursor = end === 601 ? null : String(end);
             await cache.hydrateQuery({
+              generation,
               query: document,
               data: { user: { id: viewer, contacts: { nodes, nextCursor } } },
               identity: viewer,
@@ -103,7 +106,26 @@ export function ContactRemovalFixture() {
           },
           reconcilePage: async (cache, scope, after, signal) => {
             if (hold) {
-              stale = await captureContactWriteScope(host, scope, signal);
+              if (!host.authority) throw new Error('Missing cache authority');
+              const generation = (await host.authority.current()).generation;
+              const hydrationScope = await captureContactWriteScope(
+                cache,
+                scope,
+                signal
+              );
+              if (!hydrationScope) throw new Error('Missing held hydration');
+              stale = {
+                generation,
+                query: document,
+                data: {
+                  user: {
+                    id: viewer,
+                    contacts: { nodes: [person(removedId)], nextCursor: null },
+                  },
+                },
+                identity: viewer,
+                hydrationScope,
+              };
               await inspect();
               setStatus('verification held');
               const held = hold;
@@ -140,17 +162,7 @@ export function ContactRemovalFixture() {
   async function late() {
     if (!stale) throw new Error('Missing held hydration');
     try {
-      await host.hydrateQuery({
-        query: document,
-        data: {
-          user: {
-            id: viewer,
-            contacts: { nodes: [person(removedId)], nextCursor: null },
-          },
-        },
-        identity: viewer,
-        hydrationScope: stale,
-      });
+      await host.hydrateQuery(stale);
       setLateResult('incorrectly admitted');
     } catch (error) {
       setLateResult(String(error));

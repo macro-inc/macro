@@ -4,7 +4,7 @@ import type {
   UnifiedSearchRequest,
   UnifiedSearchResponseItem,
 } from '../../../generated/search/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { CalendarEvent } from '../calendar/event';
@@ -19,6 +19,7 @@ import { Project } from '../projects/project';
 import { visibleTags } from '../workspace/items';
 import { WorkspaceQuery } from '../workspace/query';
 import type { WorkspaceTag } from '../workspace/types';
+import { exclusions } from './exclusions';
 import type {
   SearchOptions,
   SearchPage,
@@ -27,33 +28,7 @@ import type {
   SearchType,
 } from './types';
 
-const nil = '00000000-0000-0000-0000-000000000000';
-
 const DEFAULT_PAGE_SIZE = 50;
-
-/** How each kind is left out of a search: a nil id in its primary filter. */
-const exclusions: Record<
-  Exclude<SearchType, 'company'>,
-  (filters: EntityFilters) => EntityFilters
-> = {
-  agent_session: (f) => ({
-    ...f,
-    agent_session_filters: { ...f.agent_session_filters, ids: [nil] },
-  }),
-  document: (f) => ({ ...f, document_filters: { document_ids: [nil] } }),
-  chat: (f) => ({ ...f, chat_filters: { chat_ids: [nil] } }),
-  email: (f) => ({
-    ...f,
-    email_filters: { ...f.email_filters, email_thread_ids: [nil] },
-  }),
-  channel: (f) => ({ ...f, channel_filters: { channel_ids: [nil] } }),
-  project: (f) => ({ ...f, project_filters: { project_ids: [nil] } }),
-  call: (f) => ({ ...f, call_filters: { channel_ids: [nil] } }),
-  calendar_event: (f) => ({
-    ...f,
-    calendar_event_filters: { calendar_event_ids: [nil] },
-  }),
-};
 
 const searchTypes: readonly SearchType[] = [
   ...(Object.keys(exclusions) as SearchType[]),
@@ -75,31 +50,36 @@ const searchTypes: readonly SearchType[] = [
  *
  * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
  *
+ * Every search, this one and every entity's, is a heavy request that often takes seconds; code mode sends at most four at once and queues the rest in call order. Search less rather than one at a time: search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each, don't split one question into near-duplicate queries, and run the independent searches that remain together with Promise.all or Promise.allSettled.
+ *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
- * ```javascript
- * export async function main({macro}) {
+ * ```typescript
+ * export async function main({macro}: CodeContext) {
  *   const queries = ['launch decision', 'release readiness'];
- *   const outcomes = await Promise.allSettled(queries.map(async query => {
+ *   const outcomes = await Promise.all(queries.map(async query => {
  *     const evidence = [];
  *     let stoppedEarly = false;
- *     for await (const result of macro.search.all(query, {searchOn:'content'})) {
- *       if (evidence.length === 5) { stoppedEarly = true; break; }
- *       evidence.push({type:result.type, id:result.entity.id, name:result.hit.name,
- *         text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
+ *     try {
+ *       for await (const result of macro.search.all(query, {searchOn:'content'})) {
+ *         if (evidence.length === 5) { stoppedEarly = true; break; }
+ *         evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
+ *           text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
+ *       }
+ *       return {query,evidence,stoppedEarly};
+ *     } catch (error) {
+ *       return {query,evidence,error:String(error)};
  *     }
- *     return {query,evidence,stoppedEarly};
  *   }));
- *   return {data: outcomes.map((item,index) => item.status === 'fulfilled'
- *     ? item.value : {query:queries[index],error:String(item.reason)}), reviews:[]};
+ *   return {data: outcomes, reviews:[]};
  * }
  * ```
- * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow rejected branches. Normal for/while/for-await with break and sequential dependent calls are supported.
+ * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow a failed query; record its error with the evidence gathered so far. Normal for/while/for-await with break and sequential dependent calls are supported.
  *
  * Skills are instructions to follow. When a request names a skill that is not attached, find it by name with macro.documents.skills({query}), which includes built-in skills, read its instructions with skill.content() before doing the task, and follow them for that request only.
  *
  * @example Find a contract across email and documents, in one inbox
- * ```js
+ * ```typescript
  * const page = await macro.search.page('"master services agreement"', {
  *   types: ['email', 'document'], inbox: 'me@example.com', matchType: 'exact',
  * });
@@ -130,14 +110,37 @@ export class SearchNamespace {
   }
 
   /**
-   * Every match across every kind of item, most relevant first, auto-paginated.
+   * Every match across every kind of item, most relevant first, auto-paginated; `maxItems` caps the total.
    * Break a `for await` loop to stop; no further page is fetched.
    *
    * @readonly
    */
-  async *all(
+  all(
     query: string,
-    options: SearchOptions = {},
+    options: SearchOptions & IterationOptions = {},
+  ): AsyncGenerator<SearchResult> {
+    const { maxItems: _maxItems, ...search } = options;
+    return iterate(
+      'search.all',
+      options,
+      {
+        types: true,
+        searchOn: true,
+        matchType: true,
+        tags: true,
+        tagsMatch: true,
+        inbox: true,
+        agentSessions: true,
+        calendarScope: true,
+        pageSize: true,
+      },
+      () => this.allPages(query, search),
+    );
+  }
+
+  private async *allPages(
+    query: string,
+    options: SearchOptions,
   ): AsyncGenerator<SearchResult> {
     const scope = new WorkspaceQuery(this.client);
     const body = await this.request(scope, query, options);

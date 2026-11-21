@@ -43,6 +43,10 @@ pub trait ConnectionLinks: Send + Sync + 'static {
         &self,
         email: &str,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
+    /// Whether the link is on its way out: its disconnect or purge has
+    /// started, or its owner's account is gone (a deleted account's inboxes
+    /// are removed later). A link deleted since it was read is departing.
+    fn link_departing(&self, link: Uuid) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     fn link_for_identity(
         &self,
         owner: &str,
@@ -57,10 +61,6 @@ pub trait ConnectionLinks: Send + Sync + 'static {
         &self,
         email: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
-    fn organization(
-        &self,
-        actor: &str,
-    ) -> impl Future<Output = Result<Option<i32>, Self::Err>> + Send;
     fn set_credential_owner(
         &self,
         link: Uuid,
@@ -92,12 +92,13 @@ pub trait ConnectionTransactions: Send + Sync + 'static {
         link: Link,
         cursor: &str,
     ) -> impl Future<Output = Result<Link, ConnectionError>> + Send;
+    /// Refuses with `InboxBeingRemoved` when the link turned out departing
+    /// inside the promotion's transaction.
     fn promote(
         &self,
         actor: &str,
         email: &str,
         existing: &Link,
-        organization: Option<i32>,
     ) -> impl Future<Output = Result<SharedInboxPromotion, ConnectionError>> + Send;
 }
 

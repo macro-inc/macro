@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT newest.event_item_id AS \"entity_id!\"\n            FROM (\n                SELECT un.event_item_id\n                FROM user_notification un\n                WHERE un.user_id = $1\n                AND un.deleted_at IS NULL\n                AND un.state <> 'done'\n                AND un.event_item_type = 'email_thread'\n                ORDER BY un.created_at DESC\n                LIMIT $2\n            ) newest\n            CROSS JOIN LATERAL (\n                SELECT 1\n                FROM email_threads et\n                WHERE et.id = CASE\n                    WHEN newest.event_item_id ~ $3 THEN newest.event_item_id::uuid\n                END\n                AND et.inbox_visible\n                AND NOT et.is_read\n                OFFSET 0\n            ) unread_thread\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "7ce3fed6ccb6e8bf23e411545f6505bf0bd65f9359836b7803c6941af6b09935"
+}

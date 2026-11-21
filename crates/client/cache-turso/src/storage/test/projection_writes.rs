@@ -1,6 +1,100 @@
 use super::*;
 
 #[test]
+fn deletion_rebases_ordered_pending_contributions_without_changing_other_keys_or_commands() {
+    block_on(async {
+        use predicate_index::{ExactAttributePatch, ExactValue, OptimisticProjectionMutation};
+        let mut storage = TursoStorage::open_in_memory("delete-projection-rebase").unwrap();
+        let a = PredicateRecordKey::new("Thing:a").unwrap();
+        let b = PredicateRecordKey::new("Thing:b").unwrap();
+        let original = authoritative_projection("Thing:a", "original");
+        let replacement = authoritative_projection("Thing:a", "first");
+        let other = authoritative_projection("Thing:b", "other");
+        let layers = [
+            vec![
+                OptimisticProjectionMutation::Replace(replacement.clone()),
+                OptimisticProjectionMutation::Replace(other.clone()),
+            ],
+            vec![OptimisticProjectionMutation::Patch {
+                record_key: a.clone(),
+                profile: replacement.profile.clone(),
+                partition: replacement.partition.clone(),
+                exact: vec![ExactAttributePatch {
+                    attribute: Token::new("owner").unwrap(),
+                    values: vec![ExactValue::utf8("last").unwrap()],
+                }],
+                integers: vec![],
+                sorts: vec![],
+            }],
+        ];
+        let mut last_owner = 0;
+        for layer in layers {
+            let mut mutation = queued("Pending");
+            mutation.optimistic.optimistic_data_json =
+                cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+                    client_metadata: Some(serde_json::json!({"authored":"kept"})),
+                    identity_bindings: vec![],
+                    mutation_data: serde_json::json!({}),
+                    link_patches: vec![],
+                    revalidations: vec![],
+                    projection_mutations: layer,
+                    uncertain_calendar_event_keys: vec![],
+                });
+            last_owner = storage.enqueue_mutation(mutation).await.unwrap();
+        }
+        storage
+            .put_batch_with_projections(
+                vec![],
+                vec![
+                    ProjectionMutation::Replace(original),
+                    ProjectionMutation::Replace(other),
+                ],
+            )
+            .await
+            .unwrap();
+        let commands = storage.load_mutation_queue().await.unwrap();
+        let previous = storage
+            .load_optimistic_projections(&[a.clone(), b.clone()])
+            .await
+            .unwrap();
+        assert_eq!(previous[0].as_ref().unwrap().owner, last_owner);
+        for _ in 0..2 {
+            storage
+                .put_batch_with_projections(vec![], vec![ProjectionMutation::Delete(a.clone())])
+                .await
+                .unwrap();
+            assert_eq!(
+                storage
+                    .load_projection_states(std::slice::from_ref(&a))
+                    .await
+                    .unwrap(),
+                vec![None]
+            );
+            assert_eq!(
+                storage
+                    .load_optimistic_projections(&[a.clone(), b.clone()])
+                    .await
+                    .unwrap(),
+                previous
+            );
+            assert_eq!(storage.load_mutation_queue().await.unwrap(), commands);
+        }
+        let OptimisticProjectionState::Complete(ref final_state) =
+            previous[0].as_ref().unwrap().state
+        else {
+            panic!("replace followed by patch remains complete")
+        };
+        assert!(
+            final_state
+                .exact_facts
+                .iter()
+                .any(|fact| fact.attribute == Token::new("owner").unwrap()
+                    && fact.value == ExactValue::utf8("last").unwrap())
+        );
+    });
+}
+
+#[test]
 fn normalized_updates_do_not_rewrite_unchanged_projection_facts() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("unchanged-projection-write").unwrap();

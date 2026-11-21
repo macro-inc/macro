@@ -125,3 +125,77 @@ test('a wide field owns the header and runs a recent search from the keyboard', 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'New' })).toBeVisible();
 });
+
+async function openInHeader(page: Page, width: number) {
+  const { field } = await open(page, `?surface=header&width=${width}`);
+  await field.pressSequentially('budget');
+  return field.evaluate((input) => {
+    const frame = input.closest('[data-search-bar]')!.getBoundingClientRect();
+    const row = input.closest('[data-view-shell-top-bar] > :last-child')!;
+    return {
+      width: frame.width,
+      right: frame.right,
+      rowRight: row.getBoundingClientRect().right,
+      overflow: row.scrollWidth - row.clientWidth,
+    };
+  });
+}
+
+test('narrows the open field to keep it whole beside the header actions', async ({
+  page,
+}) => {
+  const narrow = await openInHeader(page, 560);
+  expect(narrow.overflow).toBeLessThanOrEqual(0);
+  expect(narrow.right).toBeLessThanOrEqual(narrow.rowRight);
+  expect(narrow.width).toBeGreaterThanOrEqual(96);
+  await expect(
+    page.getByRole('button', { name: 'Close search' })
+  ).toBeInViewport({ ratio: 1 });
+
+  // With room beside the actions, the field keeps its full width.
+  const wide = await openInHeader(page, 700);
+  expect(wide.width).toBeCloseTo(224, 0);
+  expect(wide.right).toBeLessThanOrEqual(wide.rowRight);
+});
+
+test('New drops its label in a narrow header so the open field fits', async ({
+  page,
+}) => {
+  const narrow = await openInHeader(page, 550);
+  expect(narrow.overflow).toBeLessThanOrEqual(0);
+  expect(narrow.width).toBeGreaterThanOrEqual(96);
+  await expect(
+    page.getByRole('button', { name: 'Close search' })
+  ).toBeInViewport({ ratio: 1 });
+
+  const create = page.getByRole('button', { name: 'New' });
+  await expect(create).toBeInViewport({ ratio: 1 });
+  await expect(create.getByText('New')).toBeHidden();
+  // The plus icon and the menu caret both stay.
+  expect(
+    await create
+      .locator('svg')
+      .evaluateAll(
+        (icons) =>
+          icons.filter((icon) => icon.getBoundingClientRect().width > 0).length
+      )
+  ).toBe(2);
+  await create.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('New');
+
+  await openInHeader(page, 700);
+  await expect(
+    page.getByRole('button', { name: 'New' }).getByText('New')
+  ).toBeVisible();
+});
+
+test('a New without a menu becomes a 32px square in a narrow header', async ({
+  page,
+}) => {
+  await open(page, '?surface=header&width=550&plainNew');
+  const create = page.getByRole('button', { name: 'New' });
+  await expect(create.getByText('New')).toBeHidden();
+  const box = await create.boundingBox();
+  expect(box?.width).toBeCloseTo(32, 0);
+  expect(box?.height).toBeCloseTo(32, 0);
+});

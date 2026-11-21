@@ -55,9 +55,6 @@ vi.mock('@queries/soup/cache', () => ({
   invalidateSoupEntity: vi.fn(),
   refetchSoupEntity: vi.fn(async () => {}),
 }));
-vi.mock('@queries/email/draft-cache', () => ({
-  markThreadDraftSaved: vi.fn(),
-}));
 vi.mock('@queries/email/thread', () => ({ fetchAndCacheThread: vi.fn() }));
 
 let localDrafts: typeof import('@queries/email/local-drafts');

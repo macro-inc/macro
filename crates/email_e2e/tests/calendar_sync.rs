@@ -377,6 +377,85 @@ async fn a_refused_google_watch_is_not_retried_on_every_sync() -> Result<(), Rep
     stack.finish().await
 }
 
+/// A calendar holding a copy that a full read cannot verify keeps syncing
+/// incrementally: the stored copy differs from Google's and is newer, so a
+/// full read keeps it, and its role predates the calendar's current one.
+/// Fails while each sync round discards that calendar's sync token and reads
+/// the whole calendar again.
+/// (cal-google-unverifiable-copy-rebuilds-every-round)
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unverifiable_google_copy_does_not_rebuild_its_calendar_every_round()
+-> Result<(), Report> {
+    let stack = calendar_stack().await?;
+    let ada = stack.user("ada").await?;
+    let day = events::hour_in_days(3);
+    seed_google_calendars(
+        &stack,
+        &ada,
+        json!([
+            {},
+            { "id": TEAM_CALENDAR, "summary": "Team", "events": [events::google("Planning", day)] },
+        ]),
+    )?;
+    ada.link_gmail_with_calendar().await?;
+    let calendar = ada.calendar()?;
+    calendar.wait_for_event("Planning").await?;
+    calendar.wait_until_synced(ada.email()).await?;
+
+    let held = sqlx::query(
+        r#"
+        UPDATE calendar_event_sources source
+        SET provider_access_role = NULL,
+            source_sequence = source.source_sequence + 1,
+            normalized_payload = jsonb_set(
+                source.normalized_payload,
+                '{event,title}',
+                to_jsonb('Planning (newer)'::text)
+            )
+        FROM calendars calendar
+        WHERE calendar.id = source.calendar_id
+          AND calendar.provider_calendar_id = $1
+        "#,
+    )
+    .bind(TEAM_CALENDAR)
+    .execute(stack.db())
+    .await?
+    .rows_affected();
+    assert_eq!(held, 1);
+    let already_seen = stack.gmail().requests().len();
+
+    for round in 1..=3 {
+        let title = format!("Round {round}");
+        let event = events::google(&title, day + Duration::hours(round));
+        stack.gmail().add_event(ada.email(), PRIMARY, event)?;
+        calendar.wait_for_event(&title).await?;
+        calendar.wait_until_synced(ada.email()).await?;
+    }
+
+    let team = urlencoding::encode(TEAM_CALENDAR).into_owned();
+    let team_lists: Vec<_> = stack
+        .gmail()
+        .requests()
+        .into_iter()
+        .skip(already_seen)
+        .filter(|request| {
+            request.route == Some(Route::EventsList)
+                && (request.path.contains(TEAM_CALENDAR) || request.path.contains(&team))
+        })
+        .collect();
+    assert!(
+        !team_lists.is_empty(),
+        "the rounds polled the team calendar"
+    );
+    let full_reads: Vec<_> = team_lists
+        .iter()
+        .filter(|request| !request.path.contains("syncToken="))
+        .collect();
+    assert!(full_reads.is_empty(), "{full_reads:?}");
+
+    stack.finish().await
+}
+
 /// When Google answers a calendar sync with 429 and `Retry-After`, the
 /// service leaves that account's calendars alone for that long, whatever
 /// pushes arrive meanwhile, and catches up afterwards. Fails while the

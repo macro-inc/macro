@@ -116,7 +116,12 @@ function resolveParticipants(
     if (!participant.email) continue;
     if (isViewerAddress(participant.email, viewerEmail)) continue;
 
-    const macroDisplayName = getMacroDisplayName(participant.email);
+    // A sender's own display name wins, so look up the Macro name only
+    // when there is none.
+    const macroDisplayName =
+      participant.name && !isLikelyEmail(participant.name)
+        ? undefined
+        : getMacroDisplayName(participant.email);
     const displayName = resolveParticipantName(participant, macroDisplayName);
 
     if (seen.has(displayName)) continue;

@@ -45,6 +45,35 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
     }
 }
 
+/// Count previews and validation reveal no new content or sharing; policy
+/// writes can contribute mail and remain outside every scoped credential.
+#[test]
+fn scoped_sessions_inspect_email_rules_without_changing_contribution() {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
+        for prefix in ["", "/dss/v1"] {
+            for (method, path) in [
+                ("GET", "/crm/email-privacy/policy"),
+                ("POST", "/crm/email-privacy/policy/validate"),
+                ("POST", "/crm/email-privacy/policy/preview"),
+            ] {
+                assert!(scope.allows(method, &format!("{prefix}{path}")));
+            }
+            assert!(!scope.allows("PUT", &format!("{prefix}/crm/email-privacy/policy")));
+            assert_eq!(
+                scope.allows(
+                    "DELETE",
+                    &format!("{prefix}/crm/email-privacy/policy/preview/01a1"),
+                ),
+                scope == SessionScope::NoSend,
+            );
+        }
+    }
+}
+
 #[test]
 fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(matches(
@@ -137,7 +166,7 @@ fn a_scope_is_stored_by_name() {
 }
 
 /// A run that sends nothing changes the person's own items but never sends,
-/// posts, shares, invites, sets up a routine, or starts work with the
+/// posts, shares, invites, pings, sets up a routine, or starts work with the
 /// person's full access.
 #[test]
 fn a_run_that_sends_nothing_reaches_nobody() {
@@ -221,6 +250,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
             "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
         ),
         ("POST", "/team/invite"),
+        ("POST", "/notification/v1/user_notifications/send"),
+        ("POST", "/notification/user_notifications/send"),
+        ("POST", "/user_notifications/send"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }

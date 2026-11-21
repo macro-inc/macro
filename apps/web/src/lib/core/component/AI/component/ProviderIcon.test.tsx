@@ -15,6 +15,7 @@ describe('AI provider icons', () => {
     ['gpt-5.5', 'openai'],
     ['gpt-5.6-mini', 'openai'],
     ['o3', 'openai'],
+    ['cerebras/gpt-oss-120b', 'openai'],
     ['google/gemini-pro', 'google'],
     ['gemini-2.5-pro', 'google'],
     ['fireworks/kimi-k3', 'kimi'],

@@ -372,14 +372,9 @@ fn refreshes_to(stack: &Stack, user: &User) -> Vec<Value> {
     stack
         .service_requests()
         .iter()
-        .filter(|request| request.service == "connection-gateway" && request.path.contains(name))
-        .filter_map(|request| {
-            let body = request.body.as_ref()?;
-            (body["message_type"] == "refresh_calendar").then(|| match &body["message"] {
-                Value::String(text) => serde_json::from_str(text).unwrap_or(Value::Null),
-                message => message.clone(),
-            })
-        })
+        .flat_map(email_e2e::ServiceRequest::gateway_messages)
+        .filter(|sent| sent.message_type == "refresh_calendar" && sent.entity_id.contains(name))
+        .map(|sent| sent.message)
         .collect()
 }
 

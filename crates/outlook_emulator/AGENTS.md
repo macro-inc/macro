@@ -23,7 +23,12 @@ local stack, without Microsoft accounts.
   reported `@removed`. As measured against Graph, a page holds as many
   entries as the request's `Prefer: odata.maxpagesize` asks for (10 without
   it), the round ends on the first short page, and `$top` caps the whole
-  round. A token from before `expire_delta_tokens`, or older
+  round. The first request may also ask for `$orderby=receivedDateTime desc`
+  (every round of the chain then lists newest first) and a `$filter` of
+  `receivedDateTime ge` or `gt` a time (every round reports only the changes
+  of mail it admits, but every removal, as Graph does; a filtered round lists
+  at most 5,000 messages); the tokens carry them, as they carry `$select` and
+  `$top`. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
   `SyncStateNotFound`.
 - `POST /subscriptions` posts a validation token to the notification URL and
@@ -157,9 +162,17 @@ local stack, without Microsoft accounts.
   `--allow-http-notification-urls`. Put a TLS front before the service and
   pass its certificate authority with `--trust-certificate`.
 - New mail: `POST /_emulator/mailboxes/{email}/messages` (`deliver`). A change
-  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. Provider failure:
+  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. A folder emptied out of
+  Deleted Items: `DELETE …/folders/{id or name}` (`delete_folder`), which
+  takes its subfolders and their messages with it. Provider failure:
   `POST /_emulator/faults` (`inject_fault`) with a `route` such as
-  `messages.get` and an `error` such as `rate_limit`. Time:
+  `messages.get` and an `error` such as `rate_limit`. A `folder` (`inbox`)
+  with route `messages.list` or `messages.delta` fails only that folder's
+  listing or delta (a single-message read names no folder), and
+  `continuation: true` only requests carrying a `$skiptoken`, so a delta
+  round can be held after its first page while a new round of the folder
+  reads; faults apply in the order injected, so one with no `error` and
+  `times: 1` first lets one request through. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`;
   what it sent subscribers: `GET /_emulator/notifications`.
 - Calendars: seed them under a mailbox (`time_zone`, `calendars`, each with

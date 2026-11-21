@@ -1,6 +1,7 @@
 import { Cdp } from './cdp';
 import type { Device } from './device';
 import { type CapturedSpan, parseOtlpTraces } from './otlp';
+import { cpuProbe, throttleInForce } from './throttle';
 
 /**
  * The benchmark build exports traces to this same-origin path. Tauri's asset
@@ -8,6 +9,9 @@ import { type CapturedSpan, parseOtlpTraces } from './otlp';
  * (Fetch interception never sees requests the WebView serves itself).
  */
 const OTLP_PATH = '/__benchmark/otlp/v1/traces';
+
+/** Where to tap, in screen pixels, and whether the page scrolled to get there. */
+export type Located = { x: number; y: number; moved: boolean };
 
 /** One request the page started, seen through DevTools. */
 export type PageRequest = {
@@ -36,6 +40,10 @@ export class Session {
   exports = 0;
   /** Exports whose body could not be read: their spans are missing. */
   captureFailures = 0;
+  /** The CPU throttle this connection set; it ends with the connection. */
+  cpuThrottle = 1;
+  /** The CPU probe's fastest run before throttling, in milliseconds. */
+  #cpuBaselineMs: number | undefined;
   #listeners: (() => void)[] = [];
   /** Export bodies are read in request order, so a root never lands before its children. */
   #captures: Promise<void> = Promise.resolve();
@@ -195,13 +203,17 @@ export class Session {
 
   /**
    * Evaluates an expression that returns candidate elements (one, an array, a
-   * NodeList, or none) and returns the centre, in screen pixels, of the first
-   * one a touch would actually reach: retained hidden views keep copies of
-   * rows in the DOM. The WebView fills the screen edge to edge.
+   * NodeList, a promise of one of those, or none) and returns the centre, in
+   * screen pixels, of the first one a touch would actually reach: retained
+   * hidden views keep copies of rows in the DOM. The WebView fills the screen
+   * edge to edge. `moved` says the page scrolled to reach it, so it may not
+   * have come to rest yet.
    */
-  async locate(expression: string): Promise<{ x: number; y: number } | undefined> {
-    return this.cdp.evaluate<{ x: number; y: number } | undefined>(`(async () => {
-      const found = (${expression});
+  async locate(expression: string): Promise<Located | undefined> {
+    return this.cdp.evaluate<Located | undefined>(`(async () => {
+      window.__macroBenchmarkMoved = false;
+      const found = await (${expression});
+      let moved = window.__macroBenchmarkMoved === true;
       const candidates = found instanceof Element ? [found] : [...(found ?? [])];
       const frame = () => new Promise((done) => requestAnimationFrame(done));
       const reachable = (element) => {
@@ -220,20 +232,22 @@ export class Session {
           element.scrollIntoView({ block: 'center', behavior: 'instant' });
           await frame();
           await frame();
+          // Controls in the header stay put: only a scroll counts as a move.
+          if (element.getBoundingClientRect().top !== rect.top) moved = true;
         }
         const point = reachable(element);
-        if (point)
-          return { x: point.x * devicePixelRatio, y: point.y * devicePixelRatio };
+        if (point) {
+          // What guardTap checks the touch against.
+          window.__macroBenchmarkTarget = element;
+          return { x: point.x * devicePixelRatio, y: point.y * devicePixelRatio, moved };
+        }
       }
       return undefined;
     })()`);
   }
 
   /** Waits for an element and returns its centre in screen pixels. */
-  async waitFor(
-    expression: string,
-    timeoutMs = 15_000
-  ): Promise<{ x: number; y: number }> {
+  async waitFor(expression: string, timeoutMs = 15_000): Promise<Located> {
     const deadline = Date.now() + timeoutMs;
     let failure = 'no reachable element';
     while (Date.now() < deadline) {
@@ -245,6 +259,191 @@ export class Session {
       await sleep(100);
     }
     throw new Error(`Nothing to tap (${failure}): ${expression.slice(0, 120)}`);
+  }
+
+  /**
+   * From the next touch on, watches for the first element matching
+   * `selector` that a touch would reach, and records when the frame after
+   * it was painted: the same paint opportunity the app's spans end at.
+   * Checks run in animation frames after DOM changes, so an idle page does
+   * no work for them. Read the time with {@link contentPainted}.
+   */
+  async watchContent(selector: string): Promise<void> {
+    await this.cdp.evaluate(`(() => {
+      window.__macroBenchmarkContent?.stop();
+      const state = (window.__macroBenchmarkContent = { painted: undefined });
+      const selector = ${JSON.stringify(selector)};
+      let scheduled = false;
+      let observer;
+      let interval;
+      const visible = () => [...document.querySelectorAll(selector)].filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }).slice(0, 20).some((element) => {
+        const rect = element.getBoundingClientRect();
+        const y = rect.top + rect.height / 2;
+        if (y < 0 || y > innerHeight) return false;
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, y);
+        return hit && element.contains(hit);
+      });
+      const check = () => {
+        scheduled = false;
+        if (!observer || !visible()) return;
+        state.stop();
+        requestAnimationFrame(() => {
+          state.painted = performance.timeOrigin + performance.now();
+        });
+      };
+      const schedule = () => {
+        if (scheduled || !observer) return;
+        scheduled = true;
+        requestAnimationFrame(check);
+      };
+      const arm = () => {
+        observer = new MutationObserver(schedule);
+        observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+        // Layout can reveal a row without a DOM change.
+        interval = setInterval(schedule, 200);
+        schedule();
+      };
+      state.stop = () => {
+        removeEventListener('pointerdown', arm, true);
+        observer?.disconnect();
+        observer = undefined;
+        clearInterval(interval);
+      };
+      addEventListener('pointerdown', arm, { capture: true, once: true, passive: true });
+    })()`);
+  }
+
+  /**
+   * Guards the next touch: the list can move between finding the target and
+   * the touch landing (a row above it gets a message and moves up), and the
+   * touch would then open another row. Unless the touch lands inside the
+   * element the last {@link locate} returned, and that element shows no
+   * unread items when `refuseUnread` is set, the page drops the touch and the
+   * events that follow it. {@link tapRefused} says whether it did.
+   */
+  async guardTap(unreadSelector: string | undefined): Promise<void> {
+    await this.clearTapGuard();
+    await this.cdp.evaluate(`(() => {
+      const target = window.__macroBenchmarkTarget;
+      const unread = ${JSON.stringify(unreadSelector ?? null)};
+      const guard = (window.__macroBenchmarkGuard = { refused: undefined });
+      const drop = (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      };
+      const follow = ['pointerup', 'pointercancel', 'touchstart', 'touchend', 'mousedown', 'mouseup', 'click'];
+      const check = (event) => {
+        if (!target || !target.isConnected || !(event.target instanceof Node) || !target.contains(event.target))
+          guard.refused = 'the touch landed outside the target';
+        else if (unread && target.querySelector(unread))
+          guard.refused = 'the target shows unread items';
+        if (!guard.refused) return;
+        drop(event);
+        for (const type of follow) addEventListener(type, drop, { capture: true });
+        setTimeout(() => {
+          for (const type of follow) removeEventListener(type, drop, { capture: true });
+        }, 2000);
+      };
+      addEventListener('pointerdown', check, { capture: true, once: true });
+      guard.remove = () => removeEventListener('pointerdown', check, { capture: true });
+    })()`);
+  }
+
+  /** Removes a guard whose touch never arrived, so it cannot catch the next one. */
+  async clearTapGuard(): Promise<void> {
+    await this.cdp.evaluate('window.__macroBenchmarkGuard?.remove?.()');
+  }
+
+  /** Why the guarded touch was dropped, if it was. */
+  async tapRefused(): Promise<string | undefined> {
+    return (
+      (await this.cdp.evaluate<string | null>(
+        'window.__macroBenchmarkGuard?.refused ?? null'
+      )) ?? undefined
+    );
+  }
+
+  /**
+   * Waits until a list has finished reacting to a scroll: no element says it
+   * is loading (`aria-busy`) and the scroll containers' heights have held
+   * for half a second. Throws when that takes longer than `timeoutMs`: a
+   * step timed then would include the loading.
+   */
+  async waitForQuiet(timeoutMs = 10_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    let last = '';
+    let stableSince = Date.now();
+    while (Date.now() < deadline) {
+      const state = await this.cdp.evaluate<string>(`(() => {
+        const busy = document.querySelector('[aria-busy="true"]') !== null;
+        const heights = [...document.querySelectorAll('[data-soup-entity]')]
+          .slice(0, 1)
+          .map((row) => {
+            let scroller = row.parentElement;
+            while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+            return scroller ? scroller.scrollHeight : 0;
+          });
+        return (busy ? 'busy' : 'idle') + ':' + document.querySelectorAll('[data-soup-entity]').length + ':' + heights.join(',');
+      })()`);
+      if (state !== last) {
+        last = state;
+        stableSince = Date.now();
+      } else if (!state.startsWith('busy') && Date.now() - stableSince >= 500) return;
+      await sleep(100);
+    }
+    throw new Error(`The list did not come to rest within ${timeoutMs} ms`);
+  }
+
+  /** When the watched content was painted, waiting up to `timeoutMs`. */
+  async contentPainted(timeoutMs = 40_000): Promise<number | undefined> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const painted = await this.cdp.evaluate<number | undefined>(
+        'window.__macroBenchmarkContent?.painted'
+      );
+      if (painted !== undefined) return painted;
+      await sleep(100);
+    }
+    return undefined;
+  }
+
+  /** Stops watching for content, if a watch is still running. */
+  async stopWatchingContent(): Promise<void> {
+    await this.cdp.evaluate('window.__macroBenchmarkContent?.stop()');
+  }
+
+  /**
+   * Slows the WebView renderer by `rate` (1 leaves it alone) and checks that
+   * the rate took effect. Times the CPU probe first, unthrottled, as the
+   * reference for later checks; interference only adds time, so the fastest
+   * run is the reference.
+   */
+  async throttleCpu(rate: number): Promise<void> {
+    this.#cpuBaselineMs = Math.min(
+      ...(await this.cdp.evaluate<number[]>(cpuProbe(3)))
+    );
+    await this.cdp.send('Emulation.setCPUThrottlingRate', { rate });
+    this.cpuThrottle = rate;
+    await this.checkCpuThrottle();
+  }
+
+  /**
+   * Measures the slowdown in force by timing the CPU probe against its
+   * unthrottled time, and throws when it is not the rate this session set.
+   */
+  async checkCpuThrottle(): Promise<number> {
+    if (this.#cpuBaselineMs === undefined)
+      throw new Error('Call throttleCpu before measuring a step');
+    const [probeMs] = await this.cdp.evaluate<number[]>(cpuProbe(1));
+    const measured = probeMs / this.#cpuBaselineMs;
+    if (!throttleInForce(this.cpuThrottle, measured))
+      throw new Error(
+        `CPU throttle ${this.cpuThrottle}× is not in force: the page runs ${measured.toFixed(1)}× slower than unthrottled`
+      );
+    return measured;
   }
 
   async route(): Promise<string> {

@@ -122,6 +122,7 @@ async fn flat(pool: &PgPool, filter: EntityFilterAst) -> anyhow::Result<Vec<Uuid
             cursor: Query::Sort(SORT, filter),
             exclude_frecency: false,
         },
+        false,
     )
     .await?
     .iter()
@@ -148,6 +149,7 @@ async fn pages(
                 cursor,
                 exclude_frecency,
             },
+            false,
         )
         .await?;
         let Some(last) = page.last() else {
@@ -171,9 +173,15 @@ async fn same_pages_as_semi_join(
     let sql = |filter: &EntityFilterAst| {
         let sort = DynamicSort::Timestamp(sort);
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
-        build_query(filter, exclude_frecency, sort, &mut arrays)
-            .sql()
-            .to_owned()
+        build_query(
+            filter,
+            exclude_frecency,
+            sort,
+            DocumentGrants::Estimated,
+            &mut arrays,
+        )
+        .sql()
+        .to_owned()
     };
     assert!(sql(&bounded).contains("bounded_documents"));
     assert!(!sql(&joined).contains("bounded_documents"));
@@ -214,7 +222,7 @@ async fn grouped_ids(pool: &PgPool, filter: EntityFilterAst) -> anyhow::Result<V
 fn only_id_bounded_arms_check_access_after_their_filters() {
     let sql = |filter: &EntityFilterAst| {
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(SORT, false));
-        build_query(filter, false, SORT, &mut arrays)
+        build_query(filter, false, SORT, DocumentGrants::Estimated, &mut arrays)
             .sql()
             .to_owned()
     };
@@ -394,9 +402,15 @@ async fn named_notified_documents_match_the_semi_join(pool: PgPool) -> anyhow::R
     let (bounded, _) = bounded_and_joined(unseen.clone());
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(SORT, false));
     assert!(
-        build_query(&bounded, false, SORT, &mut arrays)
-            .sql()
-            .contains("INNER JOIN NotificationItems ni_document")
+        build_query(
+            &bounded,
+            false,
+            SORT,
+            DocumentGrants::Estimated,
+            &mut arrays
+        )
+        .sql()
+        .contains("INNER JOIN NotificationItems ni_document")
     );
     assert_eq!(
         same_pages_as_semi_join(&pool, SimpleSortMethod::UpdatedAt, unseen, false).await?,
@@ -451,7 +465,7 @@ async fn named_documents_probe_property_filters_per_candidate(pool: PgPool) -> a
     filter.properties_filter = Some(Arc::new(Expr::or(status(NOT_STARTED), status(IN_PROGRESS))));
 
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(SORT, false));
-    let sql = build_query(&filter, false, SORT, &mut arrays)
+    let sql = build_query(&filter, false, SORT, DocumentGrants::Estimated, &mut arrays)
         .sql()
         .to_owned();
     assert!(sql.contains("::text[] OFFSET 0\n        )"), "{sql}");

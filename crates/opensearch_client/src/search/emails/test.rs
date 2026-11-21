@@ -114,6 +114,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         thread_ids: vec![],
         required_thread_ids: vec![],
         link_ids: vec![],
+        exclude_link_ids: vec![],
         sender: vec![],
         cc: vec![],
         bcc: vec![],
@@ -154,6 +155,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         thread_ids: vec![],
         required_thread_ids: vec![],
         link_ids: vec![],
+        exclude_link_ids: vec![],
         sender: vec![],
         cc: vec![],
         bcc: vec![],
@@ -222,6 +224,24 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     assert!(!text_fields.contains(&serde_json::json!("sender")));
     assert!(!text_fields.contains(&serde_json::json!("sender.parts")));
 
+    Ok(())
+}
+
+#[test]
+fn an_excluded_link_s_mail_never_matches_whatever_grants_it() -> anyhow::Result<()> {
+    let json = EmailQueryBuilder::new(vec!["invoice".to_string()])
+        .user_ids(vec!["macro|owner@example.com".to_string()])
+        .ids(vec!["shared-thread".to_string()])
+        .exclude_link_ids(vec!["deleting-link".to_string()])
+        .build_bool_query()?
+        .build()
+        .to_json();
+
+    let must_not = json["bool"]["must_not"].as_array().unwrap();
+    assert!(
+        must_not.contains(&serde_json::json!({ "terms": { "link_id": ["deleting-link"] } })),
+        "{json}"
+    );
     Ok(())
 }
 

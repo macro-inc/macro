@@ -6,6 +6,7 @@ import { type Browser, remote } from 'webdriverio';
 import {
   assertNativeRecords,
   checkpoints,
+  expectAccountInitials,
   expectRows,
   nativeHttpReachable,
   selectTab,
@@ -214,6 +215,7 @@ try {
     'Expected the isolated native Turso database'
   );
   await expectRows(browser, matrixMode ? [6, 12, 60] : [6, 12]);
+  await expectAccountInitials(browser, 'OF');
   const onlineSoupRequests = fixture.requests.filter(
     (request) =>
       request.operation === 'Soup' &&
@@ -347,6 +349,10 @@ try {
     await expectRows(browser, [4, 6, 8, 9, 10, 12]);
     assert.equal(fixture.requests.length, requestsAtDisconnect);
     console.log('PASS: offline reload renders mail from the native cache');
+    // The restored identity keeps the user's name, so the avatar keeps its
+    // initials instead of falling back to the email's first letter.
+    await expectAccountInitials(browser, 'OF');
+    console.log('PASS: offline reload keeps the account name');
   } else {
     console.log(
       'PASS: disconnected API with native cache reads (filter regression not run)'

@@ -1,5 +1,6 @@
 import { makePersisted } from '@solid-primitives/storage';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { createSharedDrafts } from './shared-draft';
 import type { InputAttachmentData } from './types';
 
 export type InputAttachmentTracker = {
@@ -18,8 +19,25 @@ type CreateInputAttachmentTrackerOptions = {
   maxAttachments?: number;
 };
 
+const holdStoredAttachments = createSharedDrafts<InputAttachmentTracker>();
+
+/**
+ * The files attached to a draft. With a `persistenceKey`, every input holding
+ * that key shares one tracker; call it inside the owner that uses it.
+ */
 export function createInputAttachmentTracker(
   options: CreateInputAttachmentTrackerOptions = {}
+): InputAttachmentTracker {
+  const { persistenceKey } = options;
+  if (!persistenceKey) return buildAttachmentTracker(options);
+
+  return holdStoredAttachments(persistenceKey, () =>
+    buildAttachmentTracker(options)
+  );
+}
+
+function buildAttachmentTracker(
+  options: CreateInputAttachmentTrackerOptions
 ): InputAttachmentTracker {
   const raw = createSignal<InputAttachmentData[]>(
     options.initialAttachments ?? []
