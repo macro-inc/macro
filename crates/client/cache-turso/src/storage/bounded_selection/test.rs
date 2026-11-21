@@ -415,6 +415,60 @@ fn exhausted_windows_and_multi_partition_queries_match_the_original_plan() {
     });
 }
 
+/// Partitions with different cursors, or one without any, read from the
+/// loosest bound: no partition loses rows to another's tighter cursor.
+#[test]
+fn partitions_with_different_cursors_read_from_the_loosest_bound() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-cursors").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..80)
+                    .map(|n| {
+                        let mut doc = document(n, i64::from(n));
+                        if n % 2 == 1 {
+                            doc.partition = Token::new("other").unwrap();
+                        }
+                        ProjectionMutation::Replace(doc)
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let connection = storage.connection();
+        for direction in [SortDirection::Asc, SortDirection::Desc] {
+            let after = |value: i64| PredicateExpr::After {
+                attribute: Token::new("updated-at").unwrap(),
+                value,
+                key: PredicateRecordKey::new(format!("Thing:{value:05}")).unwrap(),
+                direction,
+                tie_direction: direction,
+            };
+            // Even records sit in "thing", odd ones in "other"; "other"'s
+            // first row lies past "thing"'s cursor only in the loose window.
+            let (thing, other, first) = match direction {
+                SortDirection::Asc => (after(50), [after(20), PredicateExpr::All], [21, 1]),
+                SortDirection::Desc => (after(30), [after(60), PredicateExpr::All], [59, 79]),
+            };
+            for (other, first) in other.into_iter().zip(first) {
+                let mut descriptor = query(thing.clone(), direction, direction)
+                    .as_query()
+                    .clone();
+                descriptor.partitions.push(PartitionPredicate {
+                    partition: Token::new("other").unwrap(),
+                    predicate: other,
+                });
+                let query = ValidatedIndexQuery::new(descriptor).unwrap();
+                assert!(try_select(&connection, &query, &[]).unwrap().is_some());
+                let page = hits(&connection, &query, &[]);
+                assert_eq!(page, reference(&connection, &query, &[]));
+                assert_eq!(page[0], (format!("Thing:{first:05}"), first));
+            }
+        }
+    });
+}
+
 fn query_with_limit(
     predicate: PredicateExpr,
     direction: SortDirection,

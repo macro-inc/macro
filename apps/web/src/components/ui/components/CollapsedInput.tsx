@@ -107,8 +107,10 @@ export function CollapsedInput(props: CollapsedInputProps) {
                   must not swallow the tap that opens the input. Mention chips
                   turn pointer events back on for themselves and stop the
                   click, so a long one filling the line left nothing to tap:
-                  turn them off on every descendant, over its own class. */}
-            <div class="pointer-events-none **:pointer-events-none! min-w-0 flex-1 truncate">
+                  turn them off on every descendant, over its own class.
+                  `[&_*]:` rather than `**:`, whose `:is(& *)` Chrome tests
+                  against every element in the app on each restyle. */}
+            <div class="pointer-events-none [&_*]:pointer-events-none! min-w-0 flex-1 truncate">
               {props.renderDraft ? props.renderDraft(text) : text()}
             </div>
           </Show>

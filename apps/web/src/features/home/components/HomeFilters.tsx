@@ -8,9 +8,9 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { Dropdown } from '@ui';
+import { CountBadge, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, type JSX } from 'solid-js';
 import { selectedHomeTypes, setHomeTypeSelected } from '../core/type-selection';
 import { HOME_TYPE_FILTER_GROUPS } from '../home-facets';
 import { useHomeView } from '../home-view-context';
@@ -191,16 +191,6 @@ function useHomeFilters() {
   };
 }
 
-function FilterCountBadge(props: { count: number }) {
-  return (
-    <Show when={props.count > 0}>
-      <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-3 translate-x-1/2 items-center justify-center rounded-full bg-panel text-[9px] font-medium leading-none text-ink-muted">
-        {props.count}
-      </span>
-    </Show>
-  );
-}
-
 const HOME_FILTER_GROUPS: ListFilterGroup<string, string>[] = [
   {
     id: 'read',
@@ -232,32 +222,30 @@ export function HomeFilterDropdown() {
   });
 
   return (
-    <div class="relative shrink-0">
-      <ListFilterDropdown
-        label="Filter Home"
-        customTrigger={
-          <Dropdown.Trigger
-            aria-label="Filter Home"
-            tooltip="Filter Home"
-            ref={tourTarget(HOME_TOUR.filter)}
-            variant="ghost"
-            size="icon-xs"
-          >
-            <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          </Dropdown.Trigger>
-        }
-        groups={filters.groups()}
-        open={open()}
-        onOpenChange={setOpen}
-        isSelected={filters.isSelected}
-        selectedIds={filters.selectedIds}
-        isGroupActive={filters.isGroupActive}
-        onSelectionChange={filters.setSelected}
-        onClear={filters.clear}
-        clearLabel="Reset filters"
-      />
-      <FilterCountBadge count={filters.activeCount()} />
-    </div>
+    <ListFilterDropdown
+      label="Filter Home"
+      customTrigger={
+        <Dropdown.Trigger
+          aria-label="Filter Home"
+          tooltip="Filter Home"
+          ref={tourTarget(HOME_TOUR.filter)}
+          variant="ghost"
+          size={filters.activeCount() ? 'xs' : 'icon-xs'}
+        >
+          <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          <CountBadge count={filters.activeCount()} />
+        </Dropdown.Trigger>
+      }
+      groups={filters.groups()}
+      open={open()}
+      onOpenChange={setOpen}
+      isSelected={filters.isSelected}
+      selectedIds={filters.selectedIds}
+      isGroupActive={filters.isGroupActive}
+      onSelectionChange={filters.setSelected}
+      onClear={filters.clear}
+      clearLabel="Reset filters"
+    />
   );
 }
 

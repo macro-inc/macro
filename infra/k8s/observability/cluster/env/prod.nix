@@ -14,10 +14,9 @@
   };
 
   macro.cluster = {
-    # Off for the first rollout: each application waits for a manual sync
-    # after its diff has been read in Argo CD (README "Bootstrap"). On once
-    # the cluster has been tested.
-    autoSync = false;
+    # Argo CD applies every merge to main. Off only while a rollout needs each
+    # application synced by hand (README "Bootstrap", "Going back").
+    autoSync = true;
     name = "observability";
     region = "us-east-2";
     kubernetesVersion = "1.37.0";

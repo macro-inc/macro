@@ -54,6 +54,10 @@ vi.mock('@app/features/calendar/hooks/use-event-editor', () => ({
     guestOptions: () => [],
   }),
 }));
+vi.mock('@app/features/calendar/views/event-replacement', () => ({
+  useEventReplacement: () => ({}),
+  EventReplacement: () => null,
+}));
 vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
   EventForm: (props: {
     controller: CalendarEventFormController;

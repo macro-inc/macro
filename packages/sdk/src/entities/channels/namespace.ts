@@ -2,7 +2,13 @@ import type {
   ApiChannelWithLatest,
   ChannelType,
 } from '../../../generated/storage/types.gen';
-import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
+import {
+  type IterationOptions,
+  iterate,
+  MacroError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
@@ -100,6 +106,41 @@ export class ChannelNamespace {
    */
   list(opts?: IterationOptions): AsyncGenerator<Channel> {
     return iterate('channels.list', opts, {}, () => this.listed());
+  }
+
+  /**
+   * The channels the authenticated user is a member of whose latest message
+   * or reply is at or after `after`: the ones worth reading after a gap,
+   * the most recently active first; `maxItems` caps how many. Pages through
+   * every channel before yielding; reads no messages.
+   *
+   * @readonly
+   */
+  activeSince(
+    after: Date | string,
+    opts?: IterationOptions,
+  ): AsyncGenerator<Channel> {
+    const since = (after instanceof Date ? after : new Date(after)).getTime();
+    if (Number.isNaN(since))
+      throw new MacroError(
+        `channels.activeSince: not an instant: ${String(after)}`,
+      );
+    return iterate('channels.activeSince', opts, {}, () => this.active(since));
+  }
+
+  private async *active(since: number): AsyncGenerator<Channel> {
+    const active: {
+      readonly latest: number;
+      readonly record: ApiChannelWithLatest;
+    }[] = [];
+    for await (const record of this.records(CHANNEL_PAGE_SIZE)) {
+      const latest = record.latest_message?.created_at;
+      if (latest !== undefined && Date.parse(latest) >= since)
+        active.push({ latest: Date.parse(latest), record });
+    }
+    active.sort((a, b) => b.latest - a.latest);
+    for (const { record } of active)
+      yield Channel.fromListing(this.client, record);
   }
 
   private async *listed(pageSize = CHANNEL_PAGE_SIZE): AsyncGenerator<Channel> {

@@ -288,7 +288,7 @@ fn native_settings_round_trip_and_agent_switch_resets_provider_defaults() {
         ["--config", "model_reasoning_effort=\"high\""]
     );
     assert_eq!(config.herdr.storage_path.as_ref(), Some(&storage));
-    assert!(!config.herdr.focus);
+    assert!(config.herdr.focus);
     assert!(!settings(&config).contains(&Setting::HerdrModel));
     let mut native = agent;
     native.launch.args = vec![
