@@ -62,6 +62,10 @@ pub struct SearchedPerson {
     pub is_teammate: bool,
     /// Whether the person is an agent rather than a human; false for non-Macro contacts.
     pub is_agent: bool,
+    /// The keys of the viewer's contact lists the person is in (`teammates`,
+    /// `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+    /// for the viewer and for a contact only the legacy directory knows.
+    pub lists: Vec<String>,
 }
 
 impl From<PersonMatch> for SearchedPerson {
@@ -71,6 +75,12 @@ impl From<PersonMatch> for SearchedPerson {
             name: person.contact.name,
             is_teammate: person.is_teammate,
             is_agent: person.is_agent,
+            lists: person
+                .contact
+                .lists
+                .iter()
+                .map(|list| list.as_ref().to_owned())
+                .collect(),
         }
     }
 }
@@ -78,7 +88,10 @@ impl From<PersonMatch> for SearchedPerson {
 /// Response body for GET /contacts/search.
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct SearchPeopleResponse {
-    /// Matches ranked teammates first, then prefix matches, then by name or email.
+    /// Matches ranked by group, then prefix matches, then by name or email.
+    /// Teammates come first. For a viewer on the list-aware directory,
+    /// `interacted` and `invited` people come next, then `gmail` and
+    /// `outlook` contacts.
     pub people: Vec<SearchedPerson>,
 }
 
