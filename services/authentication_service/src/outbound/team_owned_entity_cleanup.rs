@@ -33,7 +33,13 @@ pub trait TeamTeammateInstalls: Send + Sync {
 
 #[async_trait::async_trait]
 impl<Repository, ApiKeys, Repos, Installs, Runtimes> TeamTeammateInstalls
-    for team_agents::domain::service::TeamInstallRelease<Repository, ApiKeys, Repos, Installs, Runtimes>
+    for team_agents::domain::service::TeamInstallRelease<
+        Repository,
+        ApiKeys,
+        Repos,
+        Installs,
+        Runtimes,
+    >
 where
     Repository: team_agents::domain::ports::TeamAgentRepository,
     ApiKeys: team_agents::domain::ports::AgentApiKeys,

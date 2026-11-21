@@ -872,7 +872,11 @@ async fn a_move_of_a_parked_agent_hosts_it_again(pool: PgPool) {
         .unwrap();
 
     let new_id = Uuid::from_u128(0x05);
-    let moved = installs.finish_move(INSTALL, new_id).await.unwrap().unwrap();
+    let moved = installs
+        .finish_move(INSTALL, new_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     assert!(!moved.parked());
     assert_eq!(moved.harness_id, laptop);
@@ -889,7 +893,13 @@ async fn every_way_a_host_loses_its_right_lists_its_agent_until_it_is_parked(poo
     const OTHER_USER_ROW: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0013);
     let theirs = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0d03);
     fixture(&pool).await;
-    insert_user(&pool, OTHER_ADMIN, "other-admin@example.com", OTHER_USER_ROW).await;
+    insert_user(
+        &pool,
+        OTHER_ADMIN,
+        "other-admin@example.com",
+        OTHER_USER_ROW,
+    )
+    .await;
     insert_harness(&pool, theirs, "Theirs", OTHER_ADMIN).await;
     let installs = PgTeammateInstalls::new(pool.clone());
     installs

@@ -357,8 +357,10 @@ pub trait TeammateInstalls: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<TeammateInstallRecord>, TeamAgentError>> + Send;
 
     /// The agent's credentials were revoked: deliveries may resume.
-    fn revoked(&self, agent: &MacroUserIdStr<'_>)
-    -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+    fn revoked(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// Up to `limit` installs whose credentials are still due for revoking.
     fn revoke_pending(
@@ -373,8 +375,10 @@ pub trait TeammateInstalls: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
 
     /// Delete the agent's install; a missing one is success.
-    fn delete(&self, agent: &MacroUserIdStr<'_>)
-    -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+    fn delete(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 
 /// Telling the machines' service that a machine's installs changed, so the

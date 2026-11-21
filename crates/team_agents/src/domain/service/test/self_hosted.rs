@@ -607,7 +607,12 @@ async fn listed(service: &Service, agent: &TeamAgent) -> TeamAgent {
 fn assert_kept(service: &Service, journal: &Journal) {
     assert_eq!(service.repository.records().len(), 1);
     let entries = journal.entries();
-    for gone in ["team.take_back", "seat.remove", "repo.delete", "account.delete"] {
+    for gone in [
+        "team.take_back",
+        "seat.remove",
+        "repo.delete",
+        "account.delete",
+    ] {
         assert!(
             !entries.iter().any(|entry| entry.starts_with(gone)),
             "{gone}: {entries:?}"
@@ -903,7 +908,10 @@ async fn deleting_a_team_takes_its_agents_off_their_machines_and_revokes_their_k
     );
     let before = journal.entries().len();
 
-    release.release_team(Uuid::parse_str(TEAM).unwrap()).await.unwrap();
+    release
+        .release_team(Uuid::parse_str(TEAM).unwrap())
+        .await
+        .unwrap();
 
     assert_eq!(
         journal.entries()[before..],
@@ -917,7 +925,10 @@ async fn deleting_a_team_takes_its_agents_off_their_machines_and_revokes_their_k
     );
     assert!(service.installs.rows.lock().unwrap().is_empty());
     // Again: nothing left to do.
-    release.release_team(Uuid::parse_str(TEAM).unwrap()).await.unwrap();
+    release
+        .release_team(Uuid::parse_str(TEAM).unwrap())
+        .await
+        .unwrap();
     assert_eq!(journal.entries().len(), before + 5);
 }
 
@@ -934,7 +945,12 @@ async fn a_team_release_whose_revoke_fails_keeps_the_install_for_the_retry() {
         FakeRuntimes(journal.clone()),
     );
 
-    assert!(release.release_team(Uuid::parse_str(TEAM).unwrap()).await.is_err());
+    assert!(
+        release
+            .release_team(Uuid::parse_str(TEAM).unwrap())
+            .await
+            .is_err()
+    );
 
     let rows = service.installs.rows.lock().unwrap().clone();
     assert_eq!(rows.len(), 1);

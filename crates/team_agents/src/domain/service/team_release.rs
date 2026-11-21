@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use super::self_hosted::revoke_credentials;
 use crate::domain::models::TeamAgentError;
-use crate::domain::ports::{AgentApiKeys, AgentRepos, TeamAgentRepository, TeammateInstalls, TeammateRuntimes};
+use crate::domain::ports::{
+    AgentApiKeys, AgentRepos, TeamAgentRepository, TeammateInstalls, TeammateRuntimes,
+};
 
 /// Releases a team's own-machine installs ahead of its deletion. Needs only
 /// storage, keys, repositories and delivery nudges, so team deletion can
