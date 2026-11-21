@@ -268,7 +268,25 @@ export function ImportPlanRow(props: {
           <span class="truncate text-sm" title={props.node.title}>
             {props.node.title || 'Untitled'}
           </span>
+          <Show when={props.node.linkedFrom?.length}>
+            <span
+              class="truncate text-xs text-ink-muted"
+              title={props.node.linkedFrom?.join(', ')}
+            >
+              Linked from {props.node.linkedFrom?.join(', ')}
+            </span>
+          </Show>
           {/* The agent picks these up, so their reason is worth reading. */}
+          <Show
+            when={!props.node.linkedFrom?.length && props.node.inlineOn?.length}
+          >
+            <span
+              class="truncate text-xs text-ink-muted"
+              title={props.node.inlineOn?.join(', ')}
+            >
+              Shown inline on {props.node.inlineOn?.join(', ')}
+            </span>
+          </Show>
           <Show when={props.node.decision === 'hand' && props.node.reason}>
             <span class="truncate text-xs text-ink-muted">
               {props.node.reason}

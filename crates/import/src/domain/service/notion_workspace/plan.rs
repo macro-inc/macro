@@ -37,6 +37,14 @@ pub(in crate::domain::service) struct Node {
     pub parent: Option<NotionId>,
     /// For a data source: what planning learned about its rows.
     pub table: Option<TriageTable>,
+    /// Sources reached from other planned objects, requiring explicit review.
+    pub dependency_of: Vec<NotionId>,
+    /// Planned bodies showing this source, including sources already in scope.
+    pub inline_on: Vec<NotionId>,
+    /// An unavailable dependency cannot be included in the write.
+    pub unavailable: Option<String>,
+    /// Fidelity losses retained in the report.
+    pub warnings: Vec<String>,
 }
 
 /// The objects in scope, parents before children.
@@ -61,6 +69,10 @@ impl PlanTree {
                 url: page.url.clone(),
                 parent: parent_page(&page.parent),
                 table: None,
+                dependency_of: Vec::new(),
+                inline_on: Vec::new(),
+                unavailable: None,
+                warnings: Vec::new(),
             })
             .collect();
         nodes.extend(inventory.data_sources.iter().map(data_source_node));
@@ -78,6 +90,63 @@ impl PlanTree {
         Self {
             nodes: breadth_first(nodes),
         }
+    }
+
+    /// Add external sources and their provenance to the reviewed tree.
+    pub fn with_databases(discovery: &super::databases::discovery::Discovery) -> Self {
+        let mut tree = Self::new(&discovery.inventory);
+        for (id, dependency) in &discovery.dependencies {
+            if !tree.nodes.iter().any(|node| &node.id == id) {
+                tree.nodes.push(Node {
+                    id: id.clone(),
+                    kind: ImportKind::DataSource,
+                    title: titled(&dependency.title, UNTITLED_DATABASE),
+                    url: dependency.url.clone(),
+                    parent: None,
+                    table: None,
+                    dependency_of: Vec::new(),
+                    inline_on: Vec::new(),
+                    unavailable: None,
+                    warnings: Vec::new(),
+                });
+            }
+        }
+        let pages: HashSet<NotionId> = tree
+            .nodes
+            .iter()
+            .filter(|node| node.kind == ImportKind::Page)
+            .map(|node| node.id.clone())
+            .collect();
+        for node in &mut tree.nodes {
+            node.inline_on = discovery
+                .inline_on
+                .get(&node.id)
+                .cloned()
+                .unwrap_or_default();
+            if let Some(dependency) = discovery.dependencies.get(&node.id) {
+                node.dependency_of = dependency.referenced_by.clone();
+                node.unavailable = dependency.unavailable.map(|reason| {
+                    format!("Linked source unavailable: {reason}. Keep its Notion link.")
+                });
+                if node.parent.is_none() {
+                    node.parent = dependency
+                        .referenced_by
+                        .iter()
+                        .find(|id| pages.contains(*id))
+                        .cloned();
+                }
+            }
+            node.warnings.extend(
+                discovery
+                    .warnings
+                    .get(&node.id)
+                    .into_iter()
+                    .flatten()
+                    .cloned(),
+            );
+        }
+        tree.nodes = breadth_first(tree.nodes);
+        tree
     }
 
     /// The titles above `id`, outermost first.
@@ -107,7 +176,9 @@ impl PlanTree {
         let children = self.child_counts();
         self.nodes
             .iter()
-            .filter(|node| !already_imported.contains_key(node.id.as_str()))
+            .filter(|node| {
+                !already_imported.contains_key(node.id.as_str()) && node.unavailable.is_none()
+            })
             .map(|node| TriageItem {
                 key: node.id.to_string(),
                 kind: node.kind,
@@ -134,10 +205,18 @@ impl PlanTree {
             .iter()
             .map(|node| {
                 let key = node.id.to_string();
-                let copy = already_imported.get(&key).cloned();
-                let verdict = copy
-                    .as_ref()
-                    .map(|_| default_verdict(&triage_item(node, &key), ALREADY_IN_MACRO));
+                let copy = already_imported
+                    .get(&key)
+                    .filter(|_| node.unavailable.is_none())
+                    .cloned();
+                let verdict = if let Some(reason) = &node.unavailable {
+                    let mut verdict = default_verdict(&triage_item(node, &key), reason);
+                    verdict.decision = NotionDecision::Hand;
+                    Some(verdict)
+                } else {
+                    copy.as_ref()
+                        .map(|_| default_verdict(&triage_item(node, &key), ALREADY_IN_MACRO))
+                };
                 self.row(node, verdict, copy, sharing, team, &index)
             })
             .collect()
@@ -155,7 +234,16 @@ impl PlanTree {
         self.nodes
             .iter()
             .filter_map(|node| {
-                let verdict = verdicts.get(node.id.as_str())?.clone();
+                let mut verdict = verdicts.get(node.id.as_str())?.clone();
+                if node.kind == ImportKind::DataSource
+                    && !node.inline_on.is_empty()
+                    && node.unavailable.is_none()
+                {
+                    verdict.decision = NotionDecision::Copy;
+                    verdict.task_fields = None;
+                    verdict.reason =
+                        Some("Shown inline; copy the database so its cards work.".into());
+                }
                 Some(self.row(node, Some(verdict), None, sharing, team, &index))
             })
             .collect()
@@ -176,6 +264,8 @@ impl PlanTree {
             .as_ref()
             .map(|verdict| plan_sharing(sharing, verdict, team));
         let plan = NotionPlanItem {
+            dependency_of: node.dependency_of.iter().map(NotionId::to_string).collect(),
+            inline_on: node.inline_on.iter().map(NotionId::to_string).collect(),
             decision: verdict.as_ref().map(|verdict| verdict.decision),
             reason: verdict.as_ref().and_then(|verdict| verdict.reason.clone()),
             path: self.path(&node.id, index),
@@ -192,17 +282,22 @@ impl PlanTree {
                 .as_ref()
                 .filter(|verdict| verdict.decision == NotionDecision::Tasks)
                 .and_then(|verdict| verdict.task_fields.clone()),
-            shared: placed.as_ref().is_some_and(|placed| placed.shared),
+            shared: node.unavailable.is_none()
+                && placed.as_ref().is_some_and(|placed| placed.shared),
             shared_reason: placed.as_ref().and_then(|placed| placed.reason.clone()),
-            shareable: placed.as_ref().is_some_and(|placed| placed.shareable) && copy.is_none(),
+            shareable: node.unavailable.is_none()
+                && placed.as_ref().is_some_and(|placed| placed.shareable)
+                && copy.is_none(),
             already_imported: copy,
         };
         let metadata = NotionDocMeta::for_plan(node.title.clone(), node.url.clone(), plan);
+        let mut metadata = serde_json::to_value(metadata).unwrap_or_default();
+        metadata["warnings"] = serde_json::json!(node.warnings);
         PlanRow {
             kind: node.kind,
             foreign_id: node.id.to_string(),
             parent_foreign_id: node.parent.as_ref().map(NotionId::to_string),
-            metadata: serde_json::to_value(metadata).unwrap_or_default(),
+            metadata,
         }
     }
 
@@ -247,6 +342,24 @@ fn data_source_node(summary: &DataSourceSummary) -> Node {
         title: titled(&source.title, UNTITLED_DATABASE),
         url: source.database_id.url(),
         parent: parent_page(&source.database_parent),
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
+        unavailable: None,
+        warnings: source
+            .properties
+            .iter()
+            .filter_map(|property| match property.kind {
+                NotionPropertyKind::Formula => Some(format!(
+                    "Source {}: {} (Notion formula snapshot)",
+                    source.id, property.name
+                )),
+                NotionPropertyKind::Rollup => Some(format!(
+                    "Source {}: {} (Notion rollup snapshot)",
+                    source.id, property.name
+                )),
+                _ => None,
+            })
+            .collect(),
         table: Some(TriageTable {
             columns,
             rows: summary.row_count,

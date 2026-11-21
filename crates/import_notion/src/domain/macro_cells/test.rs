@@ -63,7 +63,7 @@ fn a_status_column_becomes_a_select_and_its_cells_point_at_the_planned_options()
     let in_progress = options[1].0;
     assert_eq!(
         cell(
-            &NotionValue::Option("in progress".to_string()),
+            &NotionValue::Option("in progress".into()),
             &column,
             &PeopleMap::new()
         ),
@@ -71,7 +71,7 @@ fn a_status_column_becomes_a_select_and_its_cells_point_at_the_planned_options()
     );
     assert_eq!(
         cell(
-            &NotionValue::Option("Blocked".to_string()),
+            &NotionValue::Option("Blocked".into()),
             &column,
             &PeopleMap::new()
         ),
@@ -218,10 +218,7 @@ fn text_snapshots_render_every_value_a_reader_would_recognize() {
     assert_eq!(text(&NotionValue::Number(16.0)), Some("16".to_string()));
     assert_eq!(text(&NotionValue::Number(2.5)), Some("2.5".to_string()));
     assert_eq!(
-        text(&NotionValue::Options(vec![
-            "Q3".to_string(),
-            "Infra".to_string()
-        ])),
+        text(&NotionValue::Options(vec!["Q3".into(), "Infra".into()])),
         Some("Q3, Infra".to_string())
     );
     assert_eq!(
@@ -321,6 +318,11 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
             title: Some("Name".to_string()),
             columns: vec![
                 PlannedColumn {
+                    property_id: "stat".into(),
+                    option_ids: HashMap::from([
+                        ("id-Doing".into(), doing),
+                        ("id-Done".into(), done)
+                    ]),
                     id: status,
                     property: "Status".to_string(),
                     name: "Status".to_string(),
@@ -330,6 +332,8 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
                     },
                 },
                 PlannedColumn {
+                    property_id: "pts".into(),
+                    option_ids: HashMap::new(),
                     id: points,
                     property: "Points".to_string(),
                     name: "Points".to_string(),
@@ -397,10 +401,7 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
         created: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
         in_trash: false,
         properties: BTreeMap::from([
-            (
-                "Status".to_string(),
-                NotionValue::Option("done".to_string()),
-            ),
+            ("Status".to_string(), NotionValue::Option("done".into())),
             ("Points".to_string(), NotionValue::Empty),
             (
                 "Projects".to_string(),
@@ -424,4 +425,147 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
         ],
         "an empty value leaves its cell empty and relations wait for every table"
     );
+}
+
+#[test]
+fn formula_and_rollup_columns_label_their_values_as_notion_snapshots() {
+    let properties = vec![
+        NotionPropertySchema {
+            id: "calc".to_string(),
+            name: "Estimate".to_string(),
+            kind: NotionPropertyKind::Formula,
+        },
+        NotionPropertySchema {
+            id: "sum".to_string(),
+            name: "Total".to_string(),
+            kind: NotionPropertyKind::Rollup,
+        },
+    ];
+    let names = ColumnNames::new(&properties);
+    let formula = planned_column(&properties[0], &names, Uuid::from_u128(500)).unwrap();
+    let rollup = planned_column(&properties[1], &names, Uuid::from_u128(500)).unwrap();
+    assert_eq!(formula.name, "Estimate (Notion formula snapshot)");
+    assert_eq!(rollup.name, "Total (Notion rollup snapshot)");
+    assert_eq!(
+        cell(&NotionValue::Number(42.0), &formula, &PeopleMap::new()),
+        Some(CellValue::Text("42".to_string()))
+    );
+    assert_eq!(
+        cell(
+            &NotionValue::List(vec![NotionValue::Number(7.0)]),
+            &rollup,
+            &PeopleMap::new()
+        ),
+        Some(CellValue::Text("7".to_string()))
+    );
+}
+
+#[test]
+fn timeline_dates_and_rows_with_ends_keep_their_full_date_range() {
+    let source = NotionDataSource {
+        id: NotionId::parse("00000000-0000-4000-8000-000000000001").unwrap(),
+        database_id: NotionId::parse("00000000-0000-4000-8000-000000000002").unwrap(),
+        title: "Work".into(),
+        database_parent: NotionParent::Workspace,
+        in_trash: false,
+        properties: vec![NotionPropertySchema {
+            id: "date".into(),
+            name: "When".into(),
+            kind: NotionPropertyKind::Date,
+        }],
+    };
+    let row = NotionPage {
+        id: NotionId::parse("00000000-0000-4000-8000-000000000003").unwrap(),
+        title: "Span".into(),
+        url: String::new(),
+        parent: NotionParent::DataSource {
+            data_source: source.id.clone(),
+            database: source.database_id.clone(),
+        },
+        created: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+        last_edited: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+        in_trash: false,
+        properties: BTreeMap::from([(
+            "When".into(),
+            NotionValue::Date {
+                start: "2026-01-02".into(),
+                end: Some("2026-01-05".into()),
+            },
+        )]),
+    };
+    let ranges = date_range_properties(&source, &[row]);
+    assert_eq!(ranges, HashSet::from(["date".to_owned()]));
+    let ordinary = ColumnPlan::new(&source, Uuid::from_u128(5));
+    assert_eq!(ordinary.columns[0].shape.kind(), ColumnKind::Date);
+    let plan = ColumnPlan::new_with_date_ranges(&source, Uuid::from_u128(5), &ranges);
+    assert_eq!(plan.columns[0].shape.kind(), ColumnKind::DateRange);
+    assert_eq!(
+        cell(
+            &NotionValue::Date {
+                start: "2026-01-02".into(),
+                end: Some("2026-01-05".into())
+            },
+            &plan.columns[0],
+            &PeopleMap::new()
+        ),
+        Some(CellValue::DateRange(models_databases::DateRange {
+            start: Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 1, 5, 0, 0, 0).unwrap(),
+        }))
+    );
+    assert_eq!(
+        cell(
+            &NotionValue::Date {
+                start: "2026-01-02T01:00:00+01:00".into(),
+                end: None
+            },
+            &plan.columns[0],
+            &PeopleMap::new()
+        ),
+        Some(CellValue::DateRange(models_databases::DateRange {
+            start: Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap(),
+        }))
+    );
+    assert_eq!(
+        cell(
+            &NotionValue::Date {
+                start: "2026-01-05".into(),
+                end: Some("2026-01-02".into())
+            },
+            &plan.columns[0],
+            &PeopleMap::new()
+        ),
+        None
+    );
+}
+
+#[test]
+fn snapshot_labels_survive_long_names_and_do_not_collide_with_existing_columns() {
+    let properties = vec![
+        NotionPropertySchema {
+            id: "long".into(),
+            name: "x".repeat(220),
+            kind: NotionPropertyKind::Formula,
+        },
+        NotionPropertySchema {
+            id: "calc".into(),
+            name: "Total".into(),
+            kind: NotionPropertyKind::Rollup,
+        },
+        NotionPropertySchema {
+            id: "text".into(),
+            name: "Total (Notion rollup snapshot)".into(),
+            kind: NotionPropertyKind::RichText,
+        },
+    ];
+    let names = ColumnNames::new(&properties);
+    assert!(
+        names
+            .of(&properties[0])
+            .ends_with(" (Notion formula snapshot)")
+    );
+    assert_eq!(names.of(&properties[0]).chars().count(), MAX_NAME);
+    assert_ne!(names.of(&properties[1]), names.of(&properties[2]));
+    assert_eq!(names, ColumnNames::new(&properties));
 }

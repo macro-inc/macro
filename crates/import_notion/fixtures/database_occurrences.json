@@ -1,0 +1,49 @@
+{
+  "_fixture": {
+    "notion_version": "2026-03-11",
+    "markdown_version": "v1",
+    "synthetic": true,
+    "documentation": [
+      "https://developers.notion.com/reference/retrieve-page-markdown",
+      "https://developers.notion.com/guides/data-apis/enhanced-markdown#page-and-database-references",
+      "https://developers.notion.com/reference/database",
+      "https://developers.notion.com/reference/data-source"
+    ],
+    "note": "Documented response shapes, not captured responses. Linked placement serialization still needs workspace verification."
+  },
+  "page_markdown": {
+    "object": "page_markdown",
+    "markdown": "Before\n<database url=\"https://www.notion.so/d9824bdc84454327be8b5b47500af6ce?v=c7f0aa501f0e4a529a17e2f6f3a3b0c1#section\" inline=\"true\">Tasks</database>\nAfter",
+    "unknown_block_ids": [],
+    "truncated": false
+  },
+  "database": {
+    "object": "database",
+    "id": "d9824bdc-8445-4327-be8b-5b47500af6ce",
+    "parent": { "type": "page_id", "page_id": "59833787-2cf9-4fdf-8782-e53db20768a5" },
+    "title": [{ "type": "text", "text": { "content": "Tasks" }, "plain_text": "Tasks" }],
+    "is_inline": true,
+    "data_sources": [
+      { "id": "1a44be12-0953-4631-a1d6-7d4c2b1b4a2f", "name": "Tasks" },
+      { "id": "ee5f0f84-409a-440f-983a-a5315961c6e4", "name": "Tasks" }
+    ]
+  },
+  "owned_source": {
+    "object": "data_source",
+    "id": "1a44be12-0953-4631-a1d6-7d4c2b1b4a2f",
+    "title": [{ "type": "text", "text": { "content": "Tasks" }, "plain_text": "Tasks" }],
+    "parent": { "type": "database_id", "database_id": "d9824bdc-8445-4327-be8b-5b47500af6ce" },
+    "database_parent": { "type": "page_id", "page_id": "59833787-2cf9-4fdf-8782-e53db20768a5" },
+    "in_trash": false,
+    "properties": { "Name": { "id": "title", "name": "Name", "type": "title", "title": {} } }
+  },
+  "linked_source": {
+    "object": "data_source",
+    "id": "ee5f0f84-409a-440f-983a-a5315961c6e4",
+    "title": [{ "type": "text", "text": { "content": "Tasks" }, "plain_text": "Tasks" }],
+    "parent": { "type": "database_id", "database_id": "9a3b5ae0-c6e6-482d-b0e1-ed315ee6dc57" },
+    "database_parent": { "type": "workspace", "workspace": true },
+    "in_trash": false,
+    "properties": { "Name": { "id": "title", "name": "Name", "type": "title", "title": {} } }
+  }
+}

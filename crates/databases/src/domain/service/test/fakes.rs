@@ -117,53 +117,30 @@ impl DatabasesRepo for FakeRepo {
     }
     async fn create_database(
         &self,
+        id: DatabaseId,
         command: &CreateDatabase,
         first_table: FirstTable,
     ) -> Result<Database, FakeError> {
-        let database = Database {
-            appearance: None,
-            id: DatabaseId::new(),
-            name: command.name.clone(),
-            owner_id: command.owner_id.as_ref().to_string(),
-            created_at: Utc::now(),
-            trashed_at: None,
-            project_id: None,
-        };
-        let title = definition(
-            first_table.title_column,
-            DataType::String,
-            false,
-            PropertyOwner::Database {
-                database_id: database.id.into_uuid(),
-            },
-        );
-        let table = Table {
-            id: TableId::new(),
-            database_id: database.id,
-            name: first_table.name.to_string(),
-            position: key_between(None, None).unwrap(),
-            version: TableVersion(0),
-        };
+        self.create_database_with_id(id, command, first_table).await
+    }
+    async fn create_database_in_project(
+        &self,
+        id: DatabaseId,
+        command: &CreateDatabase,
+        first_table: FirstTable,
+        project_id: &str,
+    ) -> Result<Database, FakeError> {
+        let mut database = self
+            .create_database_with_id(id, command, first_table)
+            .await?;
+        database.project_id = Some(project_id.to_string());
         let mut world = self.0.lock().unwrap();
-        world.databases.push(database.clone());
-        world.columns.push(Column {
-            protections: vec![],
-            nullable: true,
-            id: ColumnId::new(),
-            table_id: table.id,
-            property_definition_id: title.definition.id,
-            display_name: None,
-            position: key_between(None, None).unwrap(),
-            infer_type: true,
-            config: None,
-        });
-        world.definitions.insert(title.definition.id, title);
-        world.tables.push(table);
-        world
-            .grants
-            .entry(command.owner_id.as_ref().to_string())
-            .or_default()
-            .push((database.id, AccessLevel::Owner));
+        let stored = world
+            .databases
+            .iter_mut()
+            .find(|stored| stored.id == database.id)
+            .ok_or(FakeError)?;
+        stored.project_id = database.project_id.clone();
         Ok(database)
     }
     async fn get_database(
@@ -818,5 +795,66 @@ impl MacroEventBroker for RecordingBroker {
             serde_json::to_value(event.event()).map_err(EventBrokerError::Serialization)?;
         self.0.lock().unwrap().broker_events.push(envelope);
         Ok(tokio::spawn(async { Ok(()) }))
+    }
+}
+
+impl FakeRepo {
+    async fn create_database_with_id(
+        &self,
+        id: DatabaseId,
+        command: &CreateDatabase,
+        first_table: FirstTable,
+    ) -> Result<Database, FakeError> {
+        let database = Database {
+            appearance: None,
+            id,
+            name: command.name.clone(),
+            owner_id: command.owner_id.as_ref().to_string(),
+            created_at: Utc::now(),
+            trashed_at: None,
+            project_id: None,
+        };
+        let title = definition(
+            first_table.title_column,
+            DataType::String,
+            false,
+            PropertyOwner::Database {
+                database_id: database.id.into_uuid(),
+            },
+        );
+        let table = Table {
+            id: first_table
+                .ids
+                .map(|ids| ids.table)
+                .unwrap_or_else(TableId::new),
+            database_id: database.id,
+            name: first_table.name.to_string(),
+            position: key_between(None, None).unwrap(),
+            version: TableVersion(0),
+        };
+        let mut world = self.0.lock().unwrap();
+        world.databases.push(database.clone());
+        world.columns.push(Column {
+            protections: vec![],
+            nullable: true,
+            id: first_table
+                .ids
+                .map(|ids| ids.title_column)
+                .unwrap_or_else(ColumnId::new),
+            table_id: table.id,
+            property_definition_id: title.definition.id,
+            display_name: None,
+            position: key_between(None, None).unwrap(),
+            infer_type: true,
+            config: None,
+        });
+        world.definitions.insert(title.definition.id, title);
+        world.tables.push(table);
+        world
+            .grants
+            .entry(command.owner_id.as_ref().to_string())
+            .or_default()
+            .push((database.id, AccessLevel::Owner));
+        Ok(database)
     }
 }

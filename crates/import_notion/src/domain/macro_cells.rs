@@ -16,7 +16,8 @@ use models_databases::{
 use uuid::Uuid;
 
 use super::model::{
-    NotionDataSource, NotionId, NotionPage, NotionPropertyKind, NotionPropertySchema, NotionValue,
+    NotionDataSource, NotionId, NotionOptionValue, NotionPage, NotionPropertyKind,
+    NotionPropertySchema, NotionValue, OptionMatch,
 };
 
 #[cfg(test)]
@@ -49,6 +50,16 @@ pub struct ColumnPlan {
 impl ColumnPlan {
     /// The columns `source` becomes in the database `namespace` names.
     pub fn new(source: &NotionDataSource, namespace: Uuid) -> Self {
+        Self::new_with_date_ranges(source, namespace, &HashSet::new())
+    }
+
+    /// Plan date properties named by stable Notion id as date-range columns.
+    /// The caller unions timeline usage with `date_range_properties` from rows.
+    pub fn new_with_date_ranges(
+        source: &NotionDataSource,
+        namespace: Uuid,
+        range_properties: &HashSet<String>,
+    ) -> Self {
         let names = ColumnNames::new(&source.properties);
         let title = source
             .properties
@@ -58,7 +69,15 @@ impl ColumnPlan {
         let columns = source
             .properties
             .iter()
-            .filter_map(|property| planned_column(property, &names, namespace))
+            .filter_map(|property| {
+                let mut column = planned_column(property, &names, namespace)?;
+                if property.kind == NotionPropertyKind::Date
+                    && range_properties.contains(&property.id)
+                {
+                    column.shape = ColumnShape::DateRange;
+                }
+                Some(column)
+            })
             .collect();
         Self { title, columns }
     }
@@ -123,9 +142,98 @@ impl ColumnPlan {
     }
 }
 
+/// A value omitted because the reserved select schema has no matching option.
+#[derive(Debug, Clone)]
+pub struct OmittedOption {
+    /// Stable property identity.
+    pub property_id: String,
+    /// Display name for the report.
+    pub property: String,
+    /// The omitted value's identity and label.
+    pub value: NotionOptionValue,
+    /// The available matching identity.
+    pub matched_by: OptionMatch,
+}
+
+impl ColumnPlan {
+    /// Report precisely the select values that row_cells leaves empty.
+    pub fn option_losses(&self, row: &NotionPage) -> Vec<OmittedOption> {
+        self.columns
+            .iter()
+            .flat_map(|column| {
+                let ColumnShape::Select { options, .. } = &column.shape else {
+                    return Vec::new();
+                };
+                row.properties
+                    .get(&column.property)
+                    .into_iter()
+                    .flat_map(option_values)
+                    .filter(|value| option_id(value, column, options).is_none())
+                    .map(|value| OmittedOption {
+                        property_id: column.property_id.clone(),
+                        property: column.property.clone(),
+                        value: value.clone(),
+                        matched_by: if value.id.is_some() {
+                            OptionMatch::Id
+                        } else {
+                            OptionMatch::Name
+                        },
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+}
+
+fn option_values(value: &NotionValue) -> Vec<&NotionOptionValue> {
+    match value {
+        NotionValue::Option(value) => vec![value],
+        NotionValue::Options(values) => values.iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn option_id(
+    value: &NotionOptionValue,
+    column: &PlannedColumn,
+    options: &[(OptionId, String)],
+) -> Option<OptionId> {
+    if let Some(id) = &value.id {
+        return column.option_ids.get(id).copied();
+    }
+    let label = capped_name(&value.name);
+    options
+        .iter()
+        .find(|(_, known)| known.eq_ignore_ascii_case(&label))
+        .map(|(id, _)| *id)
+}
+
+/// Stable property ids whose rows contain date end values. Union this set
+/// with properties used by timeline views before planning columns.
+pub fn date_range_properties(source: &NotionDataSource, rows: &[NotionPage]) -> HashSet<String> {
+    source
+        .properties
+        .iter()
+        .filter(|property| {
+            property.kind == NotionPropertyKind::Date
+                && rows.iter().any(|row| {
+                    matches!(
+                        row.properties.get(&property.name),
+                        Some(NotionValue::Date { end: Some(_), .. })
+                    )
+                })
+        })
+        .map(|property| property.id.clone())
+        .collect()
+}
+
 /// A Macro column planned for a Notion property.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlannedColumn {
+    /// Stable source property identity, independent of its display name.
+    pub property_id: String,
+    /// Stable Notion option identities mapped to reserved Macro options.
+    pub option_ids: HashMap<String, OptionId>,
     /// The column id, minted before the column is created.
     pub id: ColumnId,
     /// The Notion property it holds, by name.
@@ -159,6 +267,8 @@ pub enum ColumnShape {
     Boolean,
     /// A date.
     Date,
+    /// A date with its end preserved, also used by timeline views.
+    DateRange,
     /// URLs.
     Link,
     /// Options declared up front.
@@ -183,6 +293,7 @@ impl ColumnShape {
             Self::Number => ColumnKind::Number,
             Self::Boolean => ColumnKind::Boolean,
             Self::Date => ColumnKind::Date,
+            Self::DateRange => ColumnKind::DateRange,
             Self::Link => ColumnKind::Link,
             Self::Select { multi, .. } => ColumnKind::Select { multi: *multi },
             Self::People { multi } => ColumnKind::Entity {
@@ -206,6 +317,7 @@ impl ColumnShape {
             | Self::Number
             | Self::Boolean
             | Self::Date
+            | Self::DateRange
             | Self::Link
             | Self::People { .. } => Vec::new(),
         }
@@ -262,7 +374,27 @@ pub fn planned_column(
             ColumnShape::People { multi: false }
         }
     };
+    let source_options = match &property.kind {
+        NotionPropertyKind::Select { options }
+        | NotionPropertyKind::MultiSelect { options }
+        | NotionPropertyKind::Status { options } => options.as_slice(),
+        _ => &[],
+    };
+    let option_ids = source_options
+        .iter()
+        .filter_map(|option| {
+            let ColumnShape::Select { options, .. } = &shape else {
+                return None;
+            };
+            options
+                .iter()
+                .find(|(_, label)| label.eq_ignore_ascii_case(&capped_name(&option.name)))
+                .map(|(id, _)| (option.id.clone(), *id))
+        })
+        .collect();
     Some(PlannedColumn {
+        property_id: property.id.clone(),
+        option_ids,
         id: ColumnId::from_uuid(derived_id(namespace, &format!("column/{}", property.id))),
         property: property.name.clone(),
         name: names.of(property),
@@ -284,12 +416,29 @@ impl ColumnNames {
     pub fn new(properties: &[NotionPropertySchema]) -> Self {
         let mut taken: HashSet<String> = properties
             .iter()
-            .map(|property| capped_name(&property.name).to_lowercase())
+            .map(|property| snapshot_column_name(property).to_lowercase())
             .collect();
+        let mut assigned = HashSet::new();
         let names = properties
             .iter()
             .map(|property| {
-                let mut name = capped_name(&property.name);
+                let mut name = snapshot_column_name(property);
+                if !name.is_empty() && !assigned.insert(name.to_lowercase()) {
+                    let original = name.clone();
+                    for index in 2.. {
+                        let suffix = format!(" {index}");
+                        name = original
+                            .chars()
+                            .take(MAX_NAME - suffix.len())
+                            .collect::<String>()
+                            + &suffix;
+                        if !taken.contains(&name.to_lowercase()) {
+                            break;
+                        }
+                    }
+                    taken.insert(name.to_lowercase());
+                    assigned.insert(name.to_lowercase());
+                }
                 if name.is_empty() {
                     name = std::iter::once(Self::UNTITLED.to_string())
                         .chain((2..).map(|index| format!("{} {index}", Self::UNTITLED)))
@@ -308,8 +457,27 @@ impl ColumnNames {
         self.0
             .get(&property.id)
             .cloned()
-            .unwrap_or_else(|| capped_name(&property.name))
+            .unwrap_or_else(|| snapshot_column_name(property))
     }
+}
+
+// Keep the snapshot marker inside the name limit even for long source names.
+fn snapshot_column_name(property: &NotionPropertySchema) -> String {
+    let suffix = match property.kind {
+        NotionPropertyKind::Formula => " (Notion formula snapshot)",
+        NotionPropertyKind::Rollup => " (Notion rollup snapshot)",
+        _ => return capped_name(&property.name),
+    };
+    let name = property.name.trim();
+    let name = if name.is_empty() {
+        ColumnNames::UNTITLED
+    } else {
+        name
+    };
+    name.chars()
+        .take(MAX_NAME - suffix.len())
+        .collect::<String>()
+        + suffix
 }
 
 /// Options with usable, distinct labels, ids minted.
@@ -351,25 +519,26 @@ pub fn cell(value: &NotionValue, column: &PlannedColumn, people: &PeopleMap) -> 
             _ => None,
         },
         ColumnShape::Date => date(value).map(CellValue::Date),
+        ColumnShape::DateRange => {
+            let NotionValue::Date { start, end } = value else {
+                return None;
+            };
+            let start = parse_instant(start)?;
+            let end = match end {
+                Some(end) => parse_instant(end)?,
+                None => start,
+            };
+            let range = models_databases::DateRange { start, end };
+            range.is_ordered().then_some(CellValue::DateRange(range))
+        }
         ColumnShape::Link => match value {
             NotionValue::Url(url) if is_web_url(url) => Some(CellValue::Link(vec![url.clone()])),
             _ => None,
         },
         ColumnShape::Select { multi, options } => {
-            let labels: Vec<&str> = match value {
-                NotionValue::Option(label) => vec![label.as_str()],
-                NotionValue::Options(labels) => labels.iter().map(String::as_str).collect(),
-                _ => Vec::new(),
-            };
-            let refs: Vec<OptionRef> = labels
+            let refs: Vec<OptionRef> = option_values(value)
                 .into_iter()
-                .filter_map(|label| {
-                    let label = capped_name(label);
-                    options
-                        .iter()
-                        .find(|(_, known)| known.eq_ignore_ascii_case(&label))
-                        .map(|(id, _)| OptionRef::Id(*id))
-                })
+                .filter_map(|value| option_id(value, column, options).map(OptionRef::Id))
                 .take(if *multi { usize::MAX } else { 1 })
                 .collect();
             (!refs.is_empty()).then_some(CellValue::Options(refs))
@@ -397,14 +566,18 @@ pub fn cell(value: &NotionValue, column: &PlannedColumn, people: &PeopleMap) -> 
 pub fn text(value: &NotionValue) -> Option<String> {
     let rendered = match value {
         NotionValue::Text(text)
-        | NotionValue::Option(text)
         | NotionValue::Url(text)
         | NotionValue::Email(text)
         | NotionValue::Phone(text)
         | NotionValue::Timestamp(text)
         | NotionValue::UniqueId(text) => text.clone(),
+        NotionValue::Option(option) => option.name.clone(),
         NotionValue::Number(number) => format_number(*number),
-        NotionValue::Options(labels) => labels.join(", "),
+        NotionValue::Options(labels) => labels
+            .iter()
+            .map(|option| option.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
         NotionValue::Date { start, end } => match end {
             Some(end) => format!("{start} → {end}"),
             None => start.clone(),

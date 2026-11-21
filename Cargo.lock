@@ -11412,6 +11412,7 @@ dependencies = [
  "lazy-regex",
  "macro_user_id",
  "models_databases",
+ "nom 8.0.0",
  "pipedream_mcp",
  "rand 0.9.4",
  "rootcause",

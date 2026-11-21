@@ -10,6 +10,8 @@ use super::model::{
     SearchObject,
 };
 
+use super::views::{NotionView, ViewScope};
+
 /// Why a Notion request failed.
 #[derive(Debug, thiserror::Error)]
 pub enum NotionError {
@@ -75,6 +77,20 @@ pub trait NotionApi: Send + Sync + 'static {
         &self,
         database: &NotionId,
     ) -> impl Future<Output = Result<Vec<NotionId>, NotionError>> + Send;
+
+    /// One page of view references, scoped to a container or data source.
+    /// Retrieve each reference separately to read its full configuration.
+    fn list_views(
+        &self,
+        scope: &ViewScope,
+        cursor: Option<String>,
+    ) -> impl Future<Output = Result<Paged<NotionId>, NotionError>> + Send;
+
+    /// One saved view, including its source, predicate, sorts and configuration.
+    fn retrieve_view(
+        &self,
+        id: &NotionId,
+    ) -> impl Future<Output = Result<NotionView, NotionError>> + Send;
 
     /// One page of a data source's rows, oldest first, saying whether more
     /// follow or Notion's result cap cut the rest off.

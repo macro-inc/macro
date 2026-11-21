@@ -180,6 +180,7 @@ pub(super) struct WireText {
 
 #[derive(Deserialize)]
 pub(super) struct WireName {
+    id: Option<String>,
     name: String,
 }
 
@@ -445,14 +446,24 @@ impl WireValue {
                 non_empty(plain_text(&runs)).map_or(NotionValue::Empty, NotionValue::Text)
             }
             Self::Number { number } => number.map_or(NotionValue::Empty, NotionValue::Number),
-            Self::Select { select: option } | Self::Status { status: option } => option
-                .map_or(NotionValue::Empty, |option| {
-                    NotionValue::Option(option.name)
-                }),
-            Self::MultiSelect { multi_select } if multi_select.is_empty() => NotionValue::Empty,
-            Self::MultiSelect { multi_select } => {
-                NotionValue::Options(multi_select.into_iter().map(|option| option.name).collect())
+            Self::Select { select: option } | Self::Status { status: option } => {
+                option.map_or(NotionValue::Empty, |option| {
+                    NotionValue::Option(crate::domain::model::NotionOptionValue {
+                        id: option.id,
+                        name: option.name,
+                    })
+                })
             }
+            Self::MultiSelect { multi_select } if multi_select.is_empty() => NotionValue::Empty,
+            Self::MultiSelect { multi_select } => NotionValue::Options(
+                multi_select
+                    .into_iter()
+                    .map(|option| crate::domain::model::NotionOptionValue {
+                        id: option.id,
+                        name: option.name,
+                    })
+                    .collect(),
+            ),
             Self::Date { date } => date_value(date),
             Self::People { people, .. } if people.is_empty() => NotionValue::Empty,
             Self::People { people, .. } => {
@@ -534,8 +545,10 @@ impl WireValue {
 
 impl WireDataSource {
     pub fn into_data_source(self) -> Result<NotionDataSource, String> {
-        let WireParent::DatabaseId { database_id } = self.parent else {
-            return Err(format!("data source {} is not under a database", self.id));
+        let database_id = match self.parent {
+            WireParent::DatabaseId { database_id }
+            | WireParent::DataSourceId { database_id, .. } => database_id,
+            _ => return Err(format!("data source {} is not under a database", self.id)),
         };
         let properties = self
             .properties

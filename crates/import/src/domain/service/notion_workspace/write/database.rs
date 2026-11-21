@@ -5,9 +5,9 @@
 use std::collections::{HashMap, HashSet};
 
 use futures::{FutureExt, StreamExt, stream};
-use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::inventory::all_rows;
 use import_notion::domain::macro_cells::{
-    ColumnNames, ColumnPlan, PeopleMap, capped_name, derived_id,
+    ColumnNames, ColumnPlan, ColumnShape, PeopleMap, capped_name, derived_id,
 };
 use import_notion::domain::model::{
     NotionDataSource, NotionId, NotionPage, NotionPropertyKind, NotionPropertySchema, NotionValue,
@@ -30,6 +30,10 @@ use crate::domain::ports::{
 
 #[cfg(test)]
 mod test;
+
+mod prepare;
+mod schema;
+pub(in super::super) use prepare::{PreparedDatabase, prepare_database};
 
 /// Rows per insert batch, well under the 10,000-row batch limit.
 const ROWS_PER_BATCH: usize = 500;
@@ -90,6 +94,7 @@ pub(in super::super) struct WrittenDatabase {
     clippy::too_many_arguments,
     reason = "a database needs its source, destination, people, links and progress"
 )]
+#[cfg(test)]
 pub(in super::super) async fn write_database<
     Api: NotionApi,
     Writer: WorkspaceWriter,
@@ -107,10 +112,108 @@ pub(in super::super) async fn write_database<
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
 ) -> anyhow::Result<WrittenDatabase> {
-    let source = api.data_source(&item.notion_id).await?;
-    let created = database_once(writer, user, item, progress).await?;
-    // Shared before its rows are written; shared again on resume, which is
-    // harmless.
+    let prepared = prepare_database(api, writer, user, item, Some(folder), progress).await;
+    progress.flush_warnings().await?;
+    let prepared = prepared?;
+    let result = write_prepared_database(
+        api,
+        writer,
+        user,
+        item,
+        share,
+        people,
+        links,
+        progress,
+        cancel,
+        &prepared,
+        &HashMap::new(),
+        personal_folder,
+    )
+    .await;
+    progress.flush_warnings().await?;
+    result
+}
+
+/// Fill a reserved database only after every source and saved view exists.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the approved source, its destination and ledger progress"
+)]
+#[tracing::instrument(name = "notion.write_database", skip_all, fields(source_id = %item.notion_id, database_id = %prepared.created.database_id, rows_read_write = tracing::field::Empty), err)]
+pub(in super::super) async fn write_prepared_database<
+    Api: NotionApi,
+    Writer: WorkspaceWriter,
+    Store: WrittenObjects,
+>(
+    api: &Api,
+    writer: &Writer,
+    user: &MacroUserIdStr<'static>,
+    item: &WriteItem,
+    share: bool,
+    people: &PeopleMap,
+    links: &tokio::sync::RwLock<NotionLinks>,
+    progress: &Progress<'_, Store>,
+    cancel: &Cancel,
+    prepared: &PreparedDatabase,
+    destinations: &super::super::databases::DatabaseDestinations,
+    personal_folder: Option<Uuid>,
+) -> anyhow::Result<WrittenDatabase> {
+    let PreparedDatabase {
+        source,
+        created,
+        plan,
+        folder,
+        ..
+    } = prepared;
+    cancel.ensure_running()?;
+    let current = api.data_source(&item.notion_id).await?;
+    let mut losses = Vec::new();
+    let mut plan = plan.clone();
+    for column in &mut plan.columns {
+        if let Some(property) = current
+            .properties
+            .iter()
+            .find(|property| property.id == column.property_id)
+        {
+            column.property = property.name.clone();
+        }
+    }
+    for property in &source.properties {
+        if !current.properties.iter().any(|now| now == property) {
+            losses.push(format!("Database {}: property {} changed after planning; only values fitting the planned schema are written", item.title, property.name));
+        }
+    }
+    for property in &current.properties {
+        if !source
+            .properties
+            .iter()
+            .any(|before| before.id == property.id)
+        {
+            losses.push(format!("Database {}: property {} added after planning; values are omitted from the reserved schema", item.title, property.name));
+        }
+    }
+    let drained = all_rows(api, &item.notion_id).await?;
+    tracing::Span::current().record("rows_read_write", drained.rows_read as i64);
+    if !drained.complete {
+        losses.push(format!(
+            "Database {}: Notion returned an incomplete write-time row query",
+            item.title
+        ));
+    }
+    let rows = &drained.rows;
+    for column in &plan.columns {
+        if column.shape == ColumnShape::Date
+            && rows.iter().any(|row| {
+                matches!(
+                    row.properties.get(&column.property),
+                    Some(NotionValue::Date { end: Some(_), .. })
+                )
+            })
+        {
+            losses.push(format!("Database {}: property {} acquired an end date after planning; only its start date fits the reserved Date column", item.title, column.property));
+        }
+    }
+    progress.warn(&losses).await?;
     if share {
         writer
             .share_with_team(user, SharedEntity::Database(created.database_id))
@@ -125,26 +228,13 @@ pub(in super::super) async fn write_database<
         }
     }
     let table = created.table;
-    let plan = ColumnPlan::new(&source, created.database_id);
     let page_column = PageColumn {
         id: ColumnId::from_uuid(derived_id(created.database_id, "column/page")),
         name: page_column_name(&source.properties),
-        // First, then the title and the data source's own columns.
         order: std::iter::once(created.title_column)
             .chain(plan.columns.iter().map(|column| column.id))
             .collect(),
     };
-
-    if progress.get(WrittenKind::Schema).is_none() {
-        writer
-            .apply_database_ops(user, created.database_id, schema_ops(item, &plan, &created))
-            .await?;
-        progress
-            .record(WrittenKind::Schema, created.database_id)
-            .await?;
-    }
-
-    let rows = all_rows(api, &item.notion_id).await?.rows;
     let database = DatabaseId::from_uuid(created.database_id);
     let mut written = WrittenDatabase {
         import_id: item.import_id,
@@ -153,6 +243,16 @@ pub(in super::super) async fn write_database<
         rows: recorded_rows(progress, database, table),
         ..WrittenDatabase::default()
     };
+    // Reservation can precede this phase by many sources. Recheck the actual
+    // filed folder, not a newly resolved mirror, before adding personal rows.
+    if !item.shared
+        && let Some(folder) = folder
+        && writer.folder_has_explicit_grant(user, *folder).await?
+    {
+        let reason = crate::domain::models::SourceStopReason::PersonalFolderShared;
+        progress.source_stopped(&item.title, reason).await?;
+        return Err(reason.into());
+    }
     let unwritten: Vec<NotionPage> = rows
         .iter()
         .filter(|row| !written.rows.contains_key(&row.id))
@@ -160,6 +260,20 @@ pub(in super::super) async fn write_database<
         .collect();
     for batch in owned_batches(&unwritten) {
         cancel.ensure_running()?;
+        for row in &batch {
+            for loss in plan.option_losses(row) {
+                progress.loss(crate::domain::models::SourceLossFact {
+                    object: row.id.clone(),
+                    detail: crate::domain::models::SourceLossDetail::Option {
+                        property_id: loss.property_id,
+                        property: loss.property,
+                        option_id: loss.value.id,
+                        option: loss.value.name,
+                        matched_by: loss.matched_by,
+                    },
+                })?;
+            }
+        }
         let cells: Vec<Vec<CellWrite>> = batch
             .iter()
             .map(|row| plan.row_cells(row, created.title_column, people))
@@ -190,13 +304,18 @@ pub(in super::super) async fn write_database<
                     .iter()
                     .zip(&ids)
                     .map(|(row, id)| {
-                        WrittenObject::for_row(
+                        let mut markers = progress.loss_markers(&row.id)?;
+                        markers.push(WrittenObject::for_row(
                             item.import_id,
                             WrittenKind::Row,
                             &row.id,
                             id.into_uuid(),
-                        )
+                        ));
+                        Ok(markers)
                     })
+                    .collect::<anyhow::Result<Vec<_>>>()?
+                    .into_iter()
+                    .flatten()
                     .collect(),
             )
             .await?;
@@ -212,19 +331,20 @@ pub(in super::super) async fn write_database<
         }
     }
 
-    written.relations = pending_relations(&source, &rows, &written);
+    written.relations = pending_relations(source, rows, &written);
 
     write_row_bodies(
         api,
         writer,
         user,
         item,
-        folder,
+        *folder,
         share,
-        &rows,
+        rows,
         &written,
         page_column,
         links,
+        destinations,
         progress,
         cancel,
         personal_folder,
@@ -239,6 +359,7 @@ async fn database_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
     writer: &Writer,
     user: &MacroUserIdStr<'static>,
     item: &WriteItem,
+    folder: Option<Uuid>,
     progress: &Progress<'_, Store>,
 ) -> anyhow::Result<NewDatabase> {
     if let (Some(database_id), Some(table), Some(title_column)) = (
@@ -253,7 +374,12 @@ async fn database_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
         });
     }
     let created = writer
-        .create_database(user, &capped_name(&item.title))
+        .create_database(
+            user,
+            derived_id(item.import_id, "database"),
+            &capped_name(&item.title),
+            folder,
+        )
         .await?;
     progress
         .record_all(vec![
@@ -408,17 +534,19 @@ fn inserted_rows(results: &[OpResult]) -> Vec<RowId> {
     clippy::too_many_arguments,
     reason = "row bodies need the rows, their database, links and progress"
 )]
+#[tracing::instrument(name = "notion.database_row_bodies", skip_all, fields(source_id = %item.notion_id, rows = rows.len() as i64), err)]
 async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: WrittenObjects>(
     api: &Api,
     writer: &Writer,
     user: &MacroUserIdStr<'static>,
     item: &WriteItem,
-    folder: Uuid,
+    folder: Option<Uuid>,
     share: bool,
     rows: &[NotionPage],
     written: &WrittenDatabase,
     page_column: PageColumn,
     links: &tokio::sync::RwLock<NotionLinks>,
+    destinations: &super::super::databases::DatabaseDestinations,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
@@ -449,8 +577,26 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                 if let Some(document) = progress.get_for(WrittenKind::Body, row.id.as_str()) {
                     return Ok(Some(change(document)));
                 }
-                let markdown = full_markdown(api, &row.id).await?;
+                let (markdown, database_links) =
+                    match super::super::databases::body_links(api, &row.id, destinations, progress)
+                        .await
+                    {
+                        Ok(body) => body,
+                        Err(error) => {
+                            progress.loss(crate::domain::models::SourceLossFact {
+                            object: row.id.clone(),
+                            detail: crate::domain::models::SourceLossDetail::Text {
+                                message: format!(
+                                    "Page {}: content could not be read; its database row was kept",
+                                    row.title
+                                ),
+                            },
+                        })?;
+                            return Err(error);
+                        }
+                    };
                 if markdown.trim().is_empty() {
+                    progress.record_all(progress.loss_markers(&row.id)?).await?;
                     return Ok(None);
                 }
                 let folder = *bodies_folder
@@ -481,14 +627,15 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     row.title.trim().to_string()
                 };
                 let id = derived_id(item.import_id, &format!("body/{}", row.id.as_str()));
-                let links = links.read().await.clone();
+                let mut row_links = links.read().await.clone();
+                row_links.databases = database_links;
                 let document: Uuid = writer
                     .create_document(
                         user,
                         id,
                         &title,
                         &markdown,
-                        &links,
+                        &row_links,
                         &ImportedDocumentProperties::default(),
                         Some(folder),
                         Some(SourceDates::from(&row)),

@@ -45,6 +45,10 @@ import {
   DateMentionNode,
 } from '../nodes/DateMentionNode';
 import {
+  $createDocumentCardNode,
+  DocumentCardNode,
+} from '../nodes/DocumentCardNode';
+import {
   $createDocumentMentionNode,
   DocumentMentionNode,
 } from '../nodes/DocumentMentionNode';
@@ -54,14 +58,21 @@ import {
   UserMentionNode,
 } from '../nodes/UserMentionNode';
 import { ALL_TRANSFORMERS } from '../transformers';
-import { findNotionPage, findNotionUser, type NotionLinks } from './links';
+import {
+  findNotionPage,
+  findNotionUser,
+  type NotionLinks,
+  notionIdsIn,
+} from './links';
 
 type Attributes = Record<string, string>;
 
 function attributes(raw: string | undefined): Attributes {
   const parsed: Attributes = {};
-  for (const [, name, value] of (raw ?? '').matchAll(/([\w-]+)="([^"]*)"/g)) {
-    parsed[name] = value
+  for (const [, name, doubleQuoted, singleQuoted] of (raw ?? '').matchAll(
+    /([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  )) {
+    parsed[name] = (doubleQuoted ?? singleQuoted)
       .replaceAll('&quot;', '"')
       .replaceAll('&lt;', '<')
       .replaceAll('&gt;', '>')
@@ -217,16 +228,67 @@ function textMatch(
   };
 }
 
+function databaseTransformer(links: NotionLinks): ElementTransformer {
+  const ordinals = new Map<string, number>();
+  return {
+    dependencies: [DocumentCardNode],
+    type: 'element',
+    regExp: /^\s*<database\b([^>]*?)(?:\/>|>(.*?)<\/database>)\s*$/,
+    export: () => null,
+    replace: (parent, _children, [, raw, label]) => {
+      const attrs = attributes(raw);
+      // A view UUID in ?v= selects presentation; only the path identifies the container.
+      const path = (attrs.url ?? '').split(/[?#]/, 1)[0];
+      const containerId = notionIdsIn(path)[0] ?? '';
+      const ordinal = ordinals.get(containerId) ?? 0;
+      ordinals.set(containerId, ordinal + 1);
+      const occurrence = links.databases?.find(
+        (entry) =>
+          entry.containerId === containerId && entry.ordinal === ordinal
+      );
+      const title =
+        withoutTags(label ?? '') || attrs.title?.trim() || 'Notion database';
+      if (occurrence && 'databaseId' in occurrence.target) {
+        const target = occurrence.target;
+        const card = $createDocumentCardNode({
+          documentId: target.databaseId,
+          documentName: title,
+          blockName: 'database',
+          blockParams: {
+            tableId: target.tableId,
+            ...(target.viewId ? { viewId: target.viewId } : {}),
+          },
+        });
+        parent.replace(card);
+        return;
+      }
+      const reason =
+        occurrence && 'reason' in occurrence.target
+          ? occurrence.target.reason
+          : 'unresolved';
+      const explanation = match(reason)
+        .with('noAccess', () => 'no access')
+        .with('notFound', () => 'not found')
+        .with('notImported', () => 'not imported')
+        .with('unresolved', () => 'unresolved database')
+        .exhaustive();
+      const node = $createTextNode('');
+      parent.clear().append(node);
+      $replaceWithLink(node, attrs.url, `${title} (${explanation})`);
+    },
+  };
+}
+
 function inlineTransformers(links: NotionLinks): TextMatchTransformer[] {
   return [
     textMatch(
-      /<(mention-page|page|database|mention-database|mention-data-source)\b([^>]*)>(.*?)<\/\1>/,
+      /<(mention-page|page|mention-database|mention-data-source)\b([^>]*)>(.*?)<\/\1>/,
       [DocumentMentionNode],
       (node, [, , attrs, label]) =>
         $replaceWithPageReference(node, links, attributes(attrs), label)
     ),
     textMatch(
-      /<(?:mention-page|page|database|mention-database|mention-data-source)\b([^>]*?)\/>/,
+      /<(?:mention-page|page|mention-database|mention-data-source)\b([^>]*?)\/>/,
       [DocumentMentionNode],
       (node, [, attrs]) =>
         $replaceWithPageReference(node, links, attributes(attrs), '')
@@ -583,6 +645,68 @@ function containerTransformer(
   };
 }
 
+/** Put database blocks on their own lines without touching code, comments or escapes. */
+function databaseBlocks(markdown: string): string {
+  const tag =
+    /<database((?:\s+[\w-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(?:\/>|>([\s\S]*?)<\/database>)/y;
+  const output: string[] = [];
+  let cursor = 0;
+  let retained = 0;
+  while (cursor < markdown.length) {
+    if (markdown[cursor] === '\\') {
+      cursor += 2;
+      continue;
+    }
+    if (markdown.startsWith('<!--', cursor)) {
+      const end = markdown.indexOf('-->', cursor + 4);
+      cursor = end < 0 ? markdown.length : end + 3;
+      continue;
+    }
+    const character = markdown[cursor];
+    if (character === '`' || character === '~') {
+      let end = cursor;
+      while (markdown[end] === character) end++;
+      const width = end - cursor;
+      if (width >= 3) {
+        const newline = markdown.indexOf('\n', end);
+        const closing = new RegExp(
+          `^[ \\t]*${character}{${width},}[ \\t]*\\r?$`,
+          'gm'
+        );
+        closing.lastIndex = newline < 0 ? markdown.length : newline + 1;
+        const found = closing.exec(markdown);
+        cursor = found ? found.index + found[0].length : markdown.length;
+        continue;
+      }
+      if (character === '`') {
+        const close = markdown.indexOf(character.repeat(width), end);
+        cursor = close < 0 ? end : close + width;
+        continue;
+      }
+      cursor = end;
+      continue;
+    }
+    if (markdown.startsWith('<database', cursor)) {
+      tag.lastIndex = cursor;
+      const found = tag.exec(markdown);
+      if (found) {
+        output.push(
+          markdown.slice(retained, cursor),
+          '\n',
+          found[0].replace(/\r?\n/g, ' '),
+          '\n'
+        );
+        cursor = tag.lastIndex;
+        retained = cursor;
+        continue;
+      }
+    }
+    cursor++;
+  }
+  output.push(markdown.slice(retained));
+  return output.join('');
+}
+
 /**
  * Notion markdown with blank lines dropped (Notion separates blocks by line,
  * and spells an empty block `<empty-block/>`), indentation kept only where
@@ -592,7 +716,7 @@ function containerTransformer(
 export function notionLines(markdown: string): string {
   const output: string[] = [];
   let fence: string | undefined;
-  for (const raw of markdown.split('\n')) {
+  for (const raw of databaseBlocks(markdown).split('\n')) {
     const line = raw.replace(/\r$/, '');
     const marker = line.match(FENCE)?.[1];
     if (fence) {
@@ -631,6 +755,7 @@ export function notionTransformers(links: NotionLinks): Transformer[] {
     EMPTY_BLOCK,
     DROPPED_BLOCK,
     IMAGE_BLOCK,
+    databaseTransformer(links),
     ...inlineTransformers(links),
     ...ALL_TRANSFORMERS
   );

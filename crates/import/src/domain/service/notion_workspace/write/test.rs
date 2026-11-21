@@ -9,6 +9,7 @@ fn id(hex: char) -> NotionId {
 
 fn item(import: u128, parent: Option<u128>, title: &str) -> WriteItem {
     WriteItem {
+        dependency_of: Vec::new(),
         import_id: Uuid::from_u128(import),
         parent: parent.map(Uuid::from_u128),
         notion_id: id('a'),

@@ -450,6 +450,7 @@ async fn stored_settlements_read_back_as_the_kind_they_were_written(pool: PgPool
     let store = PgNotificationStore(pool.clone());
     let import = ReviewSettlement::Import {
         import: ImportSettlement {
+            warnings: Vec::new(),
             source: ImportWorkspace::Notion,
             outcome: ImportOutcome::Cancelled,
             error: Some("Cancelled".into()),

@@ -92,7 +92,7 @@ from this import's other databases into it are not linked.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
   group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
-  `object`, `write`, `values`, `report`): the Notion workspace import —
+  `object`, `databases`, `reserve`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
   link or write), cancel and the report. Database columns and cells come
   from `import_notion::domain::macro_cells`.
@@ -162,16 +162,16 @@ from this import's other databases into it are not linked.
   restarts, writing continues with the rows still `importing`. After five
   adoptions the run fails. Stale-run and stale-row reapers skip Notion
   workspace imports for this reason.
-- A resumed write never creates anything twice: documents, row bodies and
-  tasks get UUIDv5 ids from their ledger row (`WorkspaceWriter` treats an id
-  in use as already written), database columns and options UUIDv5 ids from
-  their database, and folders, databases, inserted rows, the Page column and
-  relation columns are recorded in `import_entity_written` as they are made.
+- Resumed documents, row bodies and tasks use UUIDv5 ids from their ledger
+  generation. Databases, starter tables, title columns and saved views also
+  use deterministic ids, so replay after a lost create response reuses them.
+  Database columns and options derive ids from their database; written markers
+  record folders, inserted rows, the Page column and relation columns.
   Every import reuses the user's "Notion" folder (`import_run.root_folder_id`)
-  while it exists outside trash; a deleted root is replaced on the next write. Left open: a crash between creating a folder, a database
-  or a row batch and recording it duplicates that one object or batch, and a
-  crash between applying a schema op and recording it fails that database on
-  resume (Macro refuses the column id).
+  while it exists outside trash; a deleted root is replaced on the next write.
+  Remaining gaps: a crash between creating a folder or inserting a row batch
+  and recording it can duplicate that folder or batch; a crash between applying
+  a schema operation and recording it can fail that source on resume.
 - `team_id` on a Notion row means "the team's copy": only shared objects take
   it, at `claim_importing` (staged → importing) before anything is written, so
   `import_entity_team_object_key` makes a second teammate's claim fail. A
@@ -200,6 +200,8 @@ from this import's other databases into it are not linked.
   copy, and clears the review's obsolete `alreadyImported` target. Page, task
   and database-body writes read the run's shared destinations immediately before
   creation, so later writes use a replacement's id while live team ids stay put.
+  Read the live page-link map after awaiting body resolution, which can wait
+  while another write publishes a replacement id.
   A missing linked data source requires a fresh plan instead of guessing between
   a database and tasks folder without its original task mapping. Transient
   read errors preserve claims. A finished object deleted during a resumed write
@@ -307,3 +309,65 @@ contract; original source values remain in the task body.
 Jira ids include the cloud id. Epic groups have a separate identity from their
 issue task. Tracker imports never use the generic accept/finalize paths; those
 paths reject workspace-plan rows so approval cannot be bypassed.
+
+## Inline and linked Notion databases
+
+- Scan standalone page bodies before triage with at most four concurrent reads.
+  Reuse inventory's search row counts/titles; do not query source rows during
+  dependency discovery. Check cancellation and publish scan counters inside the
+  loops, and discard each markdown body after extracting its references. Object
+  read failures become named warnings instead of aborting the plan.
+  `plan.dependencyOf` names the pages referencing an external source; readable
+  dependencies start included, and
+  unavailable dependencies are visible by-hand rows without sharing controls.
+  `plan.inlineOn` includes referenced sources already in selected roots; suggest
+  Copy for every inline source. Preserve approved Tasks or exclusion choices at
+  write time and report their `notImported` occurrence fallbacks.
+- Finish ancestor folder sharing, then reserve every approved database and saved
+  view before converting any body. Use the source UUID as identity within the
+  user/team ledger; globally unique Notion source UUIDs never dedupe by title.
+- File owner-only databases with their page when safe. Keep each database's
+  reviewed sharing separate. Before filing a Personal source, use the shared
+  `personal_item_folder` / `personal_mirror_folder` path: explicit grants on a
+  folder or ancestor relocate it to the persistent owner-only `Notion (personal)`
+  mirror, with a report note. Derive visibility from the reviewed verdict, never
+  the team claim. A folder's link-only setting does not grant database access.
+- `databases::body_links` builds a separate occurrence map for each page or row;
+  `?v` selects the saved view, otherwise the first container tab is assumed and
+  reported. Excluded sources retain `notImported` links. Keep permanently unreadable
+  tab slots in list order; a missing default never silently selects the next tab.
+  Retain other readable tabs and propagate transient detail failures.
+- Stream rows once to collect date-range property ids, union timeline usage,
+  and retain schemas/ids/views only until writing. Re-read rows under the normal
+  write pacer and concurrency bound; report schema or date-shape drift and write
+  the values fitting the reserved schema. Record API row counts per pass. Persist
+  `SchemaPlan` and `DateRangeProperty` markers atomically before applying schema
+  operations, and reuse them on resume instead of changing Date/DateRange shapes.
+  `SchemaPlan` fingerprints sorted property ids and kinds only: on structural
+  mismatch fail that source and report unresolved card fallbacks. Names and option
+  metadata drift warn instead. `ColumnOption` facts preserve the reserved option
+  ids and labels; match row values by option id when present, otherwise by name.
+  Omit unmatched values with counted losses naming the matching method. Keep
+  other sources and pages running; never rebuild columns or store full snapshots.
+  An older interrupted database without planning facts stops with a typed warning
+  asking the user to re-import it; do not guess live schema through a new port.
+- Discover row-body references only when writing. Sources absent from the review
+  remain named Notion links with typed reasons and counted report losses; never
+  import an unreviewed dependency while writing. Page-level dependencies remain
+  in the review. Span page scans and dependency metadata as separate phases.
+  Approximate filters preserve a superset of source rows and visibly mark the
+  saved view name. Reserve readable, unique view names before creation; never
+  display a source UUID. A ready database with an unavailable selected view keeps
+  a default-view card and reports the approximation. Record typed occurrence and
+  option loss facts in the same ledger batch as their completed row/body/task.
+  Flush counted, human-readable warnings at most twice per source attempt
+  (reservation and after writing, including failures), before marking it imported.
+  Reports merge cumulative snapshots by maximum count across retries; settlement
+  events carry the same warning lines. Keep formulas and rollups labelled snapshots.
+- Database ids derive from the ledger row; view ids derive from database and
+  source-view ids. Record their written markers and reuse an existing caller id
+  after a lost create response. Reuse the privacy helpers and persisted mirror
+  ids used by pages and tasks; do not create a second personal root or guard.
+  Before inserting Personal rows, recheck the reserved database's actual folder
+  and ancestors for explicit grants. Stop that source with a typed sharing-change
+  warning if a grant appeared after reservation; do not relocate it implicitly.

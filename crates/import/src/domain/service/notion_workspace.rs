@@ -38,10 +38,12 @@ use mcp_select::ConnectorSelect;
 use object::{Outcome, Target};
 use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 
+mod databases;
 mod object;
 mod personal;
 pub(super) mod plan;
 mod report;
+mod reserve;
 use super::workspace::Importer;
 use super::workspace::run;
 use super::workspace::scan;
@@ -76,6 +78,21 @@ impl NotionConnections for NoNotionConnections {
 }
 
 impl NotionApi for NoNotionApi {
+    async fn list_views(
+        &self,
+        _scope: &import_notion::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        match *self {}
+    }
+
+    async fn retrieve_view(
+        &self,
+        _id: &NotionId,
+    ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
+        match *self {}
+    }
+
     async fn search(
         &self,
         _object: SearchObject,
@@ -402,7 +419,6 @@ where
         let span = tracing::info_span!(
             "workspace_import.plan",
             source = self.workspace_source.as_ref(),
-            %user,
             sharing = sharing.as_ref(),
             already_in_macro = tracing::field::Empty,
             stopped = tracing::field::Empty,
@@ -458,27 +474,34 @@ where
             .await?
             .ok_or(ImportError::NotionNotConnected)?;
         let (counts, scanned) = tokio::sync::watch::channel(ScanCounts::default());
-        let walk = async move {
-            let found = inventory(&api, &scope, &|progress| {
+        let walk = async {
+            let publish = |progress: import_notion::domain::model::InventoryProgress| {
                 counts.send_replace(ScanCounts {
                     pages: u32::try_from(progress.pages).unwrap_or(u32::MAX),
                     data_sources: u32::try_from(progress.data_sources).unwrap_or(u32::MAX),
                 });
-            })
-            .await;
-            // Dropping `counts` here lets the recorder write the final counts.
+            };
+            let found = inventory(&api, &scope, &publish).await?;
+            if control.reason().is_some() {
+                drop(counts);
+                return Ok(None);
+            }
+            let discovery = databases::discover(&api, found, &control.cancel, &publish).await?;
+            // Keep the recorder alive through both the search and page-reference phases.
             drop(counts);
-            found
+            Ok::<_, ImportError>(Some(discovery))
         };
         let (found, ()) = tokio::join!(
             walk,
             scan::record_scan(&self.repo, user, scanned, ImportSource::Notion)
         );
-        let found = found?;
+        let Some(discovery) = found? else {
+            return Ok(());
+        };
         if control.reason().is_some() {
             return Ok(());
         }
-        let tree = plan::PlanTree::new(&found);
+        let tree = plan::PlanTree::with_databases(&discovery);
         let team = self.repo.user_team_id(user).await?.is_some();
         let already_imported = self.already_in_macro(user, &tree).await?;
         tracing::Span::current().record("already_in_macro", already_imported.len());
@@ -709,34 +732,41 @@ where
         let throttle = Throttle::new();
         let databases: tokio::sync::Mutex<HashMap<NotionId, write::WrittenDatabase>> =
             tokio::sync::Mutex::new(HashMap::new());
+        let place = Place {
+            folders: &folders,
+            parents: &parents,
+            paths: &folder_paths,
+            root,
+        };
+        let reservations = self
+            .reserve_databases(&api, user, set, &place, team_id, &written, cancel)
+            .await?;
+        // Reservation records must be visible to every object writer in this attempt.
+        let written = self.repo.written(user, &ids).await?;
         let target = Target {
             api: &api,
             team_id,
-            place: Place {
-                folders: &folders,
-                parents: &parents,
-                paths: &folder_paths,
-                root,
-            },
+            place,
+            reservations: &reservations,
             people: &people,
             links: &links,
             databases: &databases,
             written: &written,
             cancel,
         };
-        let outcomes: Vec<Outcome> = stream::iter(set.pending.iter().cloned())
+        let outcomes: Vec<(write::WriteItem, Outcome)> = stream::iter(set.pending.iter().cloned())
             .map(|item| {
                 let target = &target;
                 let throttle = &throttle;
                 async move {
                     if cancel.stopped() {
-                        return Outcome::Done;
+                        return (item, Outcome::Done);
                     }
                     let outcome = self.write_or_fail(user, &item, target, control).await;
                     if throttle.due() {
                         self.notify(user).await;
                     }
-                    outcome
+                    (item, outcome)
                 }
                 .boxed()
             })
@@ -748,7 +778,7 @@ where
         // over what they gave up, and wait on the rest.
         let mut failed = unavailable;
         let mut waiting = Vec::new();
-        for (item, outcome) in set.pending.iter().zip(outcomes) {
+        for (item, outcome) in outcomes {
             match outcome {
                 Outcome::Done => {}
                 Outcome::Failed => failed += 1,
@@ -760,7 +790,7 @@ where
             if cancel.stopped() {
                 break;
             }
-            if self.settle_waiting(user, item, &target, control).await == Outcome::Failed {
+            if self.settle_waiting(user, &item, &target, control).await == Outcome::Failed {
                 failed += 1;
             }
         }

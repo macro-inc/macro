@@ -51,6 +51,73 @@ describe('notion snapshot endpoint', () => {
     );
   });
 
+  it('preserves a database placement map in the snapshot and exported markdown', async () => {
+    const response = await request({
+      markdown:
+        'Before\n<database url="https://www.notion.so/11111111111141118111111111111111" inline="true">Tasks</database>\nAfter',
+      links: {
+        pages: {},
+        users: {},
+        databases: [
+          {
+            containerId: '11111111111141118111111111111111',
+            ordinal: 0,
+            target: { databaseId: 'db', tableId: 'table', viewId: 'view' },
+          },
+        ],
+      },
+    });
+    expect(response.status).toBe(200);
+    const body: { snapshot: string; markdown: string } = await response.json();
+    const doc = new LoroDoc();
+    doc.import(Buffer.from(body.snapshot, 'base64'));
+    expect(JSON.stringify(doc.toJSON())).toContain('document-card');
+    expect(body.markdown).toContain('<m-document-card>');
+    expect(body.markdown).toContain('"documentId":"db"');
+    expect(body.markdown).toContain(
+      '"blockParams":{"tableId":"table","viewId":"view"}'
+    );
+  });
+
+  it('rejects unknown fallback reasons and invalid occurrence ordinals', async () => {
+    expect(
+      (
+        await request({
+          markdown: '',
+          links: {
+            pages: {},
+            users: {},
+            databases: [
+              {
+                containerId: '11111111111141118111111111111111',
+                ordinal: 0,
+                target: { reason: 'arbitrary' },
+              },
+            ],
+          },
+        })
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await request({
+          markdown: '',
+          links: {
+            pages: {},
+            users: {},
+            databases: [
+              {
+                containerId: '11111111111141118111111111111111',
+                ordinal: -1,
+                target: { reason: 'noAccess' },
+              },
+            ],
+          },
+        })
+      ).status
+    ).toBe(400);
+  });
+
   it('requires internal authentication', async () => {
     expect((await request(page, false)).status).toBe(401);
   });

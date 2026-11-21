@@ -10,6 +10,7 @@ futures = { workspace = true }
 http = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
+nom = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_databases = { path = "../models_databases" }
 pipedream_mcp = { path = "../pipedream_mcp" }

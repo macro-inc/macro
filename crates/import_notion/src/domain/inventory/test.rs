@@ -26,6 +26,8 @@ struct FakeWorkspace {
     /// Ids that are databases, which Notion refuses to render as markdown.
     databases_not_pages: Vec<NotionId>,
     markdown_requests: Mutex<Vec<NotionId>>,
+    database_requests: Mutex<Vec<NotionId>>,
+    source_requests: Mutex<Vec<NotionId>>,
     /// Every search, by object type.
     searches: Mutex<Vec<SearchObject>>,
     /// Every data source query, by data source id.
@@ -33,6 +35,21 @@ struct FakeWorkspace {
 }
 
 impl NotionApi for FakeWorkspace {
+    async fn list_views(
+        &self,
+        _scope: &crate::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
+    async fn retrieve_view(
+        &self,
+        _id: &NotionId,
+    ) -> std::result::Result<crate::domain::views::NotionView, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
     async fn search(
         &self,
         object: SearchObject,
@@ -74,6 +91,7 @@ impl NotionApi for FakeWorkspace {
     }
 
     async fn data_source(&self, id: &NotionId) -> Result<NotionDataSource, NotionError> {
+        self.source_requests.lock().unwrap().push(id.clone());
         self.data_sources
             .iter()
             .find(|source| &source.id == id)
@@ -82,6 +100,10 @@ impl NotionApi for FakeWorkspace {
     }
 
     async fn database_sources(&self, database: &NotionId) -> Result<Vec<NotionId>, NotionError> {
+        self.database_requests
+            .lock()
+            .unwrap()
+            .push(database.clone());
         self.databases
             .get(database)
             .cloned()
@@ -363,6 +385,21 @@ async fn a_database_root_missing_from_search_is_expanded_into_its_data_sources()
     // sources are reachable by id.
     struct PartialSearch(FakeWorkspace);
     impl NotionApi for PartialSearch {
+        async fn list_views(
+            &self,
+            _scope: &crate::domain::views::ViewScope,
+            _cursor: Option<String>,
+        ) -> std::result::Result<Paged<NotionId>, NotionError> {
+            Err(NotionError::NotFound)
+        }
+
+        async fn retrieve_view(
+            &self,
+            _id: &NotionId,
+        ) -> std::result::Result<crate::domain::views::NotionView, NotionError> {
+            Err(NotionError::NotFound)
+        }
+
         async fn search(
             &self,
             object: SearchObject,
@@ -669,5 +706,161 @@ async fn a_database_embedded_in_a_page_keeps_its_placeholder_instead_of_failing_
     assert_eq!(
         markdown,
         "Welcome <unknown alt=\"e617ab741aa546b19d317930ff338b29\"/> Outro"
+    );
+}
+
+#[tokio::test]
+async fn database_occurrences_preserve_position_and_repeat_identity() {
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let container = NotionId::parse("d9824bdc84454327be8b5b47500af6ce").unwrap();
+    let source = NotionId::parse("1a44be1209534631a1d67d4c2b1b4a2f").unwrap();
+    let workspace = FakeWorkspace {
+        markdown: HashMap::from([(page.clone(), PageMarkdown {
+            markdown: "Before\n<database url=\"https://www.notion.so/d9824bdc84454327be8b5b47500af6ce\" inline=\"true\">Tasks</database>\nBetween\n<database url=\"https://www.notion.so/d9824bdc84454327be8b5b47500af6ce?v=ee5f0f84409a440f983aa5315961c6e4#c7f0aa501f0e4a529a17e2f6f3a3b0c1\" inline=\"true\">Tasks again</database>\nAfter".into(),
+            unknown_block_ids: vec![],
+        })]),
+        databases: HashMap::from([(container.clone(), vec![source.clone()])]),
+        data_sources: vec![NotionDataSource {
+            id: source.clone(), database_id: container.clone(), title: "Tasks".into(),
+            database_parent: NotionParent::Page { id: page.clone() },
+            in_trash: false, properties: vec![],
+        }],
+        ..Default::default()
+    };
+    let body = crate::domain::databases::read_page_databases(&workspace, &page)
+        .await
+        .unwrap();
+    assert_eq!(body.occurrences.len(), 2);
+    assert_eq!(
+        body.occurrences[0].key.as_ref().unwrap().container_id,
+        container
+    );
+    assert_eq!(body.occurrences[0].key.as_ref().unwrap().ordinal, 0);
+    assert_eq!(body.occurrences[1].key.as_ref().unwrap().ordinal, 1);
+    assert_eq!(
+        body.occurrences[1].view_id,
+        NotionId::parse("ee5f0f84409a440f983aa5315961c6e4")
+    );
+    assert_eq!(body.occurrences[0].sources[0].id, source);
+    assert_eq!(
+        body.occurrences[0].sources[0].ownership,
+        Some(crate::domain::databases::SourceOwnership::Owned)
+    );
+    assert_eq!(
+        &body.markdown[..body.occurrences[0].range.start],
+        "Before\n"
+    );
+    assert_eq!(&body.markdown[body.occurrences[1].range.end..], "\nAfter");
+    assert!(body.occurrences[0].losses.is_empty());
+    assert_eq!(workspace.database_requests.lock().unwrap().len(), 1);
+    assert_eq!(workspace.source_requests.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn database_dependencies_are_separate_deduplicated_and_keep_fallbacks() {
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let container = NotionId::parse("d9824bdc84454327be8b5b47500af6ce").unwrap();
+    let source = NotionDataSource {
+        id: NotionId::parse("1a44be1209534631a1d67d4c2b1b4a2f").unwrap(),
+        database_id: NotionId::parse("ee5f0f84409a440f983aa5315961c6e4").unwrap(),
+        title: "External tasks".into(),
+        database_parent: NotionParent::Workspace,
+        in_trash: false,
+        properties: vec![],
+    };
+    let workspace = FakeWorkspace {
+        pages: vec![NotionPage {
+            id: page.clone(),
+            title: "Plan".into(),
+            url: page.url(),
+            parent: NotionParent::Workspace,
+            in_trash: false,
+            created: Utc.timestamp_opt(0, 0).unwrap(),
+            last_edited: Utc.timestamp_opt(0, 0).unwrap(),
+            properties: BTreeMap::new(),
+        }],
+        markdown: HashMap::from([(
+            page.clone(),
+            PageMarkdown {
+                markdown: include_str!("../../../fixtures/database_occurrences.md").into(),
+                unknown_block_ids: vec![],
+            },
+        )]),
+        databases: HashMap::from([(container.clone(), vec![source.id.clone()])]),
+        data_sources: vec![source.clone()],
+        ..Default::default()
+    };
+    let selected = inventory(
+        &workspace,
+        &ImportScope::Roots {
+            ids: vec![page.clone()],
+        },
+        &|_| {},
+    )
+    .await
+    .unwrap();
+    assert!(selected.data_sources.is_empty());
+    let discovered =
+        crate::domain::databases::discover_database_dependencies(&workspace, &selected)
+            .await
+            .unwrap();
+    assert_eq!(discovered.dependencies.len(), 1);
+    assert_eq!(discovered.dependencies[0].source, source);
+    assert_eq!(discovered.dependencies[0].referenced_by, vec![page]);
+    let body = &discovered.pages[0];
+    assert_eq!(body.occurrences.len(), 7);
+    assert_eq!(
+        body.occurrences[0].sources[0].ownership,
+        Some(crate::domain::databases::SourceOwnership::Linked)
+    );
+    assert_eq!(body.occurrences[1].key.as_ref().unwrap().ordinal, 1);
+    assert_eq!(body.occurrences[2].title, "Unavailable tasks");
+    assert!(!body.occurrences[2].losses.is_empty());
+    assert_eq!(body.occurrences[3].title, "Unknown database");
+    assert!(!body.occurrences[3].losses.is_empty());
+    assert!(selected.data_sources.is_empty());
+}
+
+#[tokio::test]
+async fn database_occurrences_keep_all_sources_and_report_partial_resolution() {
+    use crate::domain::databases::{
+        DatabaseLoss, ReadFailure, SourceOwnership, read_page_databases,
+    };
+
+    let page = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+    let container = NotionId::parse("d9824bdc84454327be8b5b47500af6ce").unwrap();
+    let owned = NotionId::parse("1a44be1209534631a1d67d4c2b1b4a2f").unwrap();
+    let missing = NotionId::parse("ee5f0f84409a440f983aa5315961c6e4").unwrap();
+    let workspace = FakeWorkspace {
+        markdown: HashMap::from([(page.clone(), PageMarkdown {
+            markdown: "<database url=\"https://www.notion.so/d9824bdc84454327be8b5b47500af6ce\" inline=\"false\">Multiple sources</database>".into(), unknown_block_ids: vec![],
+        })]),
+        databases: HashMap::from([(container.clone(), vec![owned.clone(), missing.clone(), owned.clone()])]),
+        data_sources: vec![NotionDataSource {
+            id: owned.clone(), database_id: container, title: "Readable".into(),
+            database_parent: NotionParent::Workspace, in_trash: false, properties: vec![],
+        }], ..Default::default()
+    };
+    let body = read_page_databases(&workspace, &page).await.unwrap();
+    let occurrence = &body.occurrences[0];
+    assert_eq!(occurrence.inline, Some(false));
+    assert_eq!(occurrence.sources.len(), 2);
+    assert_eq!(occurrence.sources[0].id, owned);
+    assert_eq!(
+        occurrence.sources[0].ownership,
+        Some(SourceOwnership::Owned)
+    );
+    assert_eq!(occurrence.sources[1].id, missing);
+    assert_eq!(occurrence.sources[1].ownership, None);
+    assert_eq!(
+        occurrence.losses,
+        vec![DatabaseLoss::SourceUnavailable {
+            source_id: missing,
+            reason: ReadFailure::NotFound
+        }]
+    );
+    assert_eq!(
+        &body.markdown[occurrence.range.clone()],
+        "<database url=\"https://www.notion.so/d9824bdc84454327be8b5b47500af6ce\" inline=\"false\">Multiple sources</database>"
     );
 }

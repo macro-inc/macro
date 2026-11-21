@@ -5961,7 +5961,7 @@
           },
           "entityType": {
             "type": "string",
-            "description": "That entity's type (`md`, `project`)."
+            "description": "That entity's type (`md`, `project`, `database`)."
           }
         }
       },
@@ -6240,6 +6240,20 @@
                 "description": "What the import does with it; absent while planning has staged the\nobject but the decision model has not answered for it yet."
               }
             ]
+          },
+          "dependencyOf": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Notion objects whose bodies require this external data source."
+          },
+          "inlineOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Planned objects whose bodies display this source inline."
           },
           "path": {
             "type": "array",

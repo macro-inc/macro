@@ -46,6 +46,44 @@ impl LexicalSnapshotPort for LexicalClient {
         let request = NotionSnapshotRequest {
             markdown: &notion.markdown,
             links: NotionSnapshotLinks {
+                databases: notion
+                    .databases
+                    .iter()
+                    .map(|occurrence| {
+                        use crate::domain::notion_markdown::{
+                            NotionDatabaseFallback as Reason, NotionDatabaseTarget as Source,
+                        };
+                        use lexical_client::notion::{
+                            NotionSnapshotDatabaseFallback as Fallback,
+                            NotionSnapshotDatabaseOccurrence,
+                            NotionSnapshotDatabaseTarget as Target,
+                        };
+                        let target = match &occurrence.target {
+                            Source::Resolved {
+                                database_id,
+                                table_id,
+                                view_id,
+                            } => Target::Resolved {
+                                database_id: database_id.to_string(),
+                                table_id: table_id.to_string(),
+                                view_id: view_id.map(|id| id.to_string()),
+                            },
+                            Source::Fallback { reason } => Target::Fallback {
+                                reason: match reason {
+                                    Reason::NoAccess => Fallback::NoAccess,
+                                    Reason::NotFound => Fallback::NotFound,
+                                    Reason::NotImported => Fallback::NotImported,
+                                    Reason::Unresolved => Fallback::Unresolved,
+                                },
+                            },
+                        };
+                        NotionSnapshotDatabaseOccurrence {
+                            container_id: occurrence.container_id.clone(),
+                            ordinal: occurrence.ordinal,
+                            target,
+                        }
+                    })
+                    .collect(),
                 pages: notion
                     .pages
                     .iter()

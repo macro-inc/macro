@@ -13,6 +13,6 @@ export interface NotionAlreadyImported {
   by: string;
   /** The Macro entity it became. */
   entityId: string;
-  /** That entity's type (`md`, `project`). */
+  /** That entity's type (`md`, `project`, `database`). */
   entityType: string;
 }

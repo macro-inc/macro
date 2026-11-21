@@ -85,6 +85,9 @@ pub enum ReviewSettlement {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSettlement {
+    /// Fidelity losses and source snapshot labels retained by the import.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     /// The workspace the import read.
     #[serde(default)]
     pub source: ImportWorkspace,

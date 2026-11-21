@@ -166,7 +166,7 @@ async fn a_plan_that_fails_tells_no_session_it_is_ready(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgPool) {
     let owner = user("settled");
-    let (review, session, _) = presented_while_planning(&pool, &owner).await;
+    let (review, session, rows) = presented_while_planning(&pool, &owner).await;
     let repo = PgImportRepo::new(pool.clone());
     repo.transition_run(
         &owner,
@@ -174,6 +174,16 @@ async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgP
         &[RunStatus::Running],
         RunStatus::Ready,
         None,
+    )
+    .await
+    .unwrap();
+    repo.record_warnings(
+        &owner,
+        rows[0],
+        &[
+            "View filter approximated".into(),
+            "Notion formula snapshot".into(),
+        ],
     )
     .await
     .unwrap();
@@ -209,6 +219,17 @@ async fn a_finished_write_tells_its_session_once_with_the_final_report(pool: PgP
     assert_eq!(settled.planned, 2);
     assert_eq!(settled.not_written, 0);
     assert!(settled.root_folder_id.is_some());
+    assert_eq!(settled.warnings.len(), 2);
+    assert!(
+        settled
+            .warnings
+            .contains(&"View filter approximated".to_string())
+    );
+    assert!(
+        settled
+            .warnings
+            .contains(&"Notion formula snapshot".to_string())
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

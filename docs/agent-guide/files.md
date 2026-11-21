@@ -128,14 +128,41 @@ decided` as the decisions fill in, with **Import** disabled until the plan is
 ready. The card shows totals (Documents, Databases with rows, Task lists with
 tasks, Skipped, Already in Macro), a **Team** / **Only you** badge on every
 written row (the owner clicks it to flip it, and a folder flips what is below
-it; databases stay **Only you**, and the card says "Databases can't be shared
-with the team yet, so they stay with you."), a sharing summary line (without
+it; each database keeps its own reviewed sharing choice), a sharing summary line (without
 a team: `N only you — you're not on a team, so nothing is shared`), and a
 collapsed **Already in Macro** section linking to copies teammates already
 imported and shared, which are not imported again. A database or task-list
 row's caret (**Show rows of …**) shows its row count with a few sample row
 titles and, for a task list, which Notion columns become status, priority,
-due date and assignee. **Open full review** shows the whole plan in a dialog
+due date and assignee. Linked sources outside the selected roots appear as
+**Linked from <page title>** dependencies when a selected standalone page refers
+to them, included when readable. Sources already
+inside the selection show **Shown inline on <page title>**. Every source shown
+inline defaults to a database copy; an approved task-list choice or exclusion
+keeps Notion links in its cards and reports why. Excluding one
+keeps a named Notion link in the page; unreadable dependencies show the reason
+and cannot be included. The same source is copied once across repeated inline
+and linked placements. Each placement becomes an editable database card at its
+original position, including in row bodies, with its translated saved view.
+Row bodies are checked while importing: a reference to a source absent from the
+review stays a named Notion link, with the reason and count in the report.
+A missing selected-tab hint uses the first Notion tab and reports that assumption.
+If a selected saved view is unavailable but its database is ready, the card stays
+editable on the default view and the report names that approximation. Saved view
+names are readable and unique, without source identifiers.
+Unsupported filter clauses broaden the view rather than hide source rows; its
+name says **filter approximated** and the report lists every translation loss.
+Formula and rollup columns are labelled snapshots. Database sharing is separate
+from page sharing; if a personal database's folder or an ancestor has explicit
+sharing grants, it uses the owner-only **Notion (personal)** folder and mirrored
+subfolder path, with a placement note in the report. Renamed properties and options
+warn on resume; values missing from the reserved option schema are omitted and
+counted, with the matching method. Structural property changes stop only that
+source and leave named Notion links in affected placements. An older interrupted
+database without planning facts asks for a re-import. A Personal source stops
+before writing rows if its reserved folder gains an explicit sharing grant, with
+a sharing-change warning. A resumed run reuses reserved
+databases and saved views. **Open full review** shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

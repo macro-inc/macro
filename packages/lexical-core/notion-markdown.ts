@@ -10,6 +10,8 @@ import { $updateAllNodeIds } from './plugins/nodeIdPlugin';
 import { serializedEditorStateToMarkdown } from './utils/markdown-state';
 
 export type {
+  NotionDatabaseFallbackReason,
+  NotionDatabaseOccurrence,
   NotionLinks,
   NotionPageLink,
   NotionUserLink,
@@ -17,7 +19,7 @@ export type {
 
 /**
  * Converts Notion enhanced markdown to a serialized Lexical editor state with
- * durable node ids. Page and people references resolve through `links`.
+ * durable node ids. Page, people and database placements resolve through `links`.
  */
 export function notionMarkdownToSerializedEditorState(
   markdown: string,

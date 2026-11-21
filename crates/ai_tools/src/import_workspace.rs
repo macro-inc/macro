@@ -4,7 +4,7 @@
 use crate::ToolEntityCreator;
 use crate::tool_context::ImportedContent;
 use databases::domain::models::{CreateDatabase, DatabaseDetail, DatabaseId, OpBatch, Viewer};
-use databases::domain::ports::DatabasesService as _;
+use databases::domain::ports::{DatabasesProjectService as _, DatabasesService as _};
 use databases::domain::receipt::database_receipt;
 use databases::domain::sharing::DatabaseSharingService as _;
 use documents::domain::models::DocumentError;
@@ -50,6 +50,43 @@ fn team_share() -> UpdateSharePermissionRequestV2 {
 pub(crate) fn notion_markdown(markdown: &str, links: &NotionLinks) -> NotionMarkdown {
     NotionMarkdown {
         markdown: markdown.to_string(),
+        databases: links
+            .databases
+            .iter()
+            .map(|occurrence| {
+                use documents::domain::notion_markdown::{
+                    NotionDatabaseFallback as Fallback, NotionDatabaseOccurrence,
+                    NotionDatabaseTarget as Target,
+                };
+                use import::domain::ports::{
+                    NotionDatabaseFallback as Reason, NotionDatabaseTarget as Source,
+                };
+                let target = match &occurrence.target {
+                    Source::Resolved {
+                        database_id,
+                        table_id,
+                        view_id,
+                    } => Target::Resolved {
+                        database_id: *database_id,
+                        table_id: table_id.into_uuid(),
+                        view_id: view_id.map(|id| id.into_uuid()),
+                    },
+                    Source::Fallback(reason) => Target::Fallback {
+                        reason: match reason {
+                            Reason::NoAccess => Fallback::NoAccess,
+                            Reason::NotFound => Fallback::NotFound,
+                            Reason::NotImported => Fallback::NotImported,
+                            Reason::Unresolved => Fallback::Unresolved,
+                        },
+                    },
+                };
+                NotionDatabaseOccurrence {
+                    container_id: occurrence.container_id.to_string(),
+                    ordinal: occurrence.ordinal,
+                    target,
+                }
+            })
+            .collect(),
         pages: links
             .pages
             .iter()
@@ -97,11 +134,20 @@ pub(crate) fn already_created(created: anyhow::Result<String>, id: Uuid) -> anyh
 /// only column that table starts with.
 fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
     let database_id = *detail.database.id.as_uuid();
-    let Some(table) = detail.tables.first() else {
-        anyhow::bail!("new database {database_id} has no table");
+    let ids = databases::domain::models::FirstTableIds::for_database(detail.database.id);
+    let Some(table) = detail
+        .tables
+        .iter()
+        .find(|entry| entry.table.id == ids.table)
+    else {
+        anyhow::bail!("reserved database {database_id} has no recorded starter table");
     };
-    let Some(title_column) = table.columns.first() else {
-        anyhow::bail!("new database {database_id}'s starter table has no column");
+    let Some(title_column) = table
+        .columns
+        .iter()
+        .find(|entry| entry.column.id == ids.title_column)
+    else {
+        anyhow::bail!("reserved database {database_id} has no original title column");
     };
     Ok(NewDatabase {
         database_id,
@@ -364,22 +410,108 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(database_id = %id), err)]
+    async fn database_access(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> anyhow::Result<bool> {
+        use entity_access::domain::models::AccessError;
+        match database_receipt::<ViewAccessLevel, _>(
+            self.entity_access_service.as_ref(),
+            &viewer(user),
+            DatabaseId::from_uuid(id),
+        )
+        .await
+        {
+            Ok(_) => Ok(true),
+            Err(
+                AccessError::Unauthorized
+                | AccessError::UnauthorizedWithMessage(_)
+                | AccessError::NotFound(_),
+            ) => Ok(false),
+            Err(error) => Err(anyhow::anyhow!("database access check failed: {error:?}")),
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(database_id = %id, table_id = %table), err)]
+    async fn database(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        table: models_databases::TableId,
+    ) -> anyhow::Result<import::domain::ports::ImportedDatabase> {
+        imported_database(&self.import_database_detail(user, id).await?, table)
+    }
+
+    #[tracing::instrument(name = "notion.persist_database_view", skip_all, fields(database_id = %database, view_id = %id), err)]
+    async fn ensure_database_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        database: Uuid,
+        table: models_databases::TableId,
+        id: models_databases::views::ViewId,
+        view: models_databases::views::NewView,
+    ) -> anyhow::Result<()> {
+        let exists = |detail: &DatabaseDetail| {
+            detail.tables.iter().any(|entry| {
+                entry.table.id == table && entry.views.iter().any(|view| view.id == id)
+            })
+        };
+        let result = import::domain::ports::WorkspaceWriter::apply_database_ops(
+            self,
+            user,
+            database,
+            vec![models_databases::DatabaseOp::View {
+                table,
+                view: id,
+                change: models_databases::ViewChange::Create { view },
+            }],
+        )
+        .await;
+        if let Err(error) = result {
+            // A committed create whose response/marker was lost is already complete.
+            if !exists(&self.import_database_detail(user, database).await?) {
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, user, name), err)]
     async fn create_database(
         &self,
         user: &MacroUserIdStr<'static>,
+        id: Uuid,
         name: &str,
+        folder: Option<Uuid>,
     ) -> anyhow::Result<NewDatabase> {
         let viewer = viewer(user);
-        let database = self
-            .databases_service
-            .create_database(CreateDatabase {
-                name: name.to_string(),
-                owner_id: user.clone(),
-                acting_bot: viewer.acting_bot,
-                first_table: None,
-            })
-            .await?;
+        let command = CreateDatabase {
+            name: name.to_string(),
+            owner_id: user.clone(),
+            acting_bot: viewer.acting_bot,
+            first_table: None,
+        };
+        let database = if let Some(folder) = folder {
+            let project = self
+                .entity_access_service
+                .generate_entity_access_receipt::<OwnerAccessLevel>(
+                    user,
+                    None,
+                    &folder.to_string(),
+                    model_entity::EntityType::Project,
+                )
+                .await
+                .map_err(|error| anyhow::anyhow!("no owner access to filing folder: {error:?}"))?;
+            self.databases_service
+                .create_database_in_project(DatabaseId::from_uuid(id), command, project)
+                .await?
+        } else {
+            self.databases_service
+                .create_database_with_id(DatabaseId::from_uuid(id), command)
+                .await?
+        };
         let receipt = database_receipt::<ViewAccessLevel, _>(
             self.entity_access_service.as_ref(),
             &viewer,
@@ -516,4 +648,40 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             })
             .collect())
     }
+}
+
+impl ToolEntityCreator {
+    async fn import_database_detail(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> anyhow::Result<DatabaseDetail> {
+        let receipt = database_receipt::<ViewAccessLevel, _>(
+            self.entity_access_service.as_ref(),
+            &viewer(user),
+            DatabaseId::from_uuid(id),
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("no view access to imported database: {error:?}"))?;
+        Ok(self.databases_service.get_database(receipt).await?)
+    }
+}
+
+/// Reused copies follow their holder's marker, independent of UI tab order.
+fn imported_database(
+    detail: &DatabaseDetail,
+    table: models_databases::TableId,
+) -> anyhow::Result<import::domain::ports::ImportedDatabase> {
+    let table = detail
+        .tables
+        .iter()
+        .find(|entry| entry.table.id == table)
+        .ok_or_else(|| {
+            anyhow::anyhow!("the recorded source table no longer exists in this database")
+        })?;
+    Ok(import::domain::ports::ImportedDatabase {
+        database_id: detail.database.id.into_uuid(),
+        table: table.table.id,
+        views: table.views.iter().map(|view| view.id).collect(),
+    })
 }

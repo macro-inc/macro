@@ -106,12 +106,26 @@ pub enum WrittenKind {
     Document,
     /// The database a data source became.
     Database,
+    /// A saved view, keyed by the original view id.
+    View,
+    /// Reserved human-readable saved view name, recorded before creating it.
+    ViewName,
+    /// Durable fidelity fact recorded atomically with its completed object.
+    Loss,
     /// That database's starter table.
     Table,
     /// That table's title column.
     TitleColumn,
     /// The database's columns were created (the id is the database).
     Schema,
+    /// UUIDv5 fingerprint of reserved properties; date-shape facts are durable too.
+    SchemaPlan,
+    /// Fingerprint of display names and option metadata, for soft drift warnings.
+    SchemaMetadata,
+    /// Reserved select option identity and original label.
+    ColumnOption,
+    /// A stable Notion property id reserved as a DateRange column.
+    DateRangeProperty,
     /// A data source row, by its Notion id, and the database row it became.
     Row,
     /// The folder holding a database's row bodies.
@@ -132,7 +146,7 @@ pub enum WrittenKind {
     RelationLinked,
 }
 
-/// One thing a write created: `kind` for ledger row `import_id` (and, for
+/// One durable identity or planning fact: `kind` for ledger row `import_id` (and, for
 /// per-row kinds, the Notion `object` it stands for) is Macro's `macro_id`.
 /// Structural folders may also name a visibility branch in `object`.
 #[derive(Debug, Clone, PartialEq, Eq)]

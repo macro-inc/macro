@@ -104,6 +104,8 @@ fn row(
         ),
     };
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: None,
         reason: None,
         path: Vec::new(),

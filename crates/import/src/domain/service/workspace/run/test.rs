@@ -60,6 +60,21 @@ struct Pages {
 }
 
 impl NotionApi for Pages {
+    async fn list_views(
+        &self,
+        _scope: &import_notion::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
+    async fn retrieve_view(
+        &self,
+        _id: &NotionId,
+    ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
     async fn search(
         &self,
         _: SearchObject,
@@ -213,6 +228,8 @@ fn page(hex: char, title: &str) -> PlanRow {
 /// A page planned as a document, shared with the team or not.
 fn planned_page(hex: char, title: &str, shared: bool) -> PlanRow {
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: Some(NotionDecision::Copy),
         reason: None,
         path: Vec::new(),
@@ -887,6 +904,7 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
 }
 
 mod events;
+mod inline;
 mod reimport;
 /// The session events the import produces, in order.
 mod root;

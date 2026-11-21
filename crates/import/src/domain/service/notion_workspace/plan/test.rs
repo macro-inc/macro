@@ -219,3 +219,79 @@ fn objects_a_teammate_already_imported_skip_the_model_and_link_to_their_copy() {
         "decided as soon as it is staged"
     );
 }
+
+#[test]
+fn unreadable_dependencies_are_visible_but_cannot_be_included_or_shared() {
+    use super::super::databases::discovery::{Dependency, Discovery};
+    use import_notion::domain::databases::ReadFailure;
+    let discovery = Discovery {
+        inventory: Inventory {
+            pages: vec![page('a', "Project", NotionParent::Workspace)],
+            data_sources: vec![],
+        },
+        dependencies: [(
+            id('d'),
+            Dependency {
+                title: "Linked work".into(),
+                url: id('d').url(),
+                referenced_by: vec![id('a')],
+                unavailable: Some(ReadFailure::Forbidden),
+            },
+        )]
+        .into(),
+        warnings: HashMap::new(),
+        inline_on: HashMap::new(),
+    };
+    let tree = PlanTree::with_databases(&discovery);
+    assert_eq!(
+        tree.triage_items(&HashMap::new()).len(),
+        1,
+        "the model sees only the readable page"
+    );
+    let rows = tree.staged_rows(NotionSharing::Team, true, &HashMap::new());
+    let dependency = rows
+        .iter()
+        .find(|row| row.foreign_id == id('d').as_str())
+        .unwrap();
+    let meta: NotionDocMeta = serde_json::from_value(dependency.metadata.clone()).unwrap();
+    let plan = meta.plan.unwrap();
+    assert_eq!(plan.dependency_of, vec![id('a').to_string()]);
+    assert_eq!(plan.decision, Some(NotionDecision::Hand));
+    assert!(!plan.shareable);
+    assert!(!plan.shared);
+    assert!(plan.reason.unwrap().contains("access"));
+}
+
+#[test]
+fn readable_dependencies_default_to_copy_even_when_triage_prefers_tasks() {
+    let mut tree = PlanTree::new(&Inventory {
+        pages: vec![page('a', "Project", NotionParent::Workspace)],
+        data_sources: vec![DataSourceSummary {
+            source: NotionDataSource {
+                id: id('d'),
+                database_id: id('f'),
+                title: "Work".into(),
+                database_parent: NotionParent::Workspace,
+                in_trash: false,
+                properties: vec![],
+            },
+            row_count: 2,
+            sample_titles: vec![],
+        }],
+    });
+    let node = tree
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == id('d'))
+        .unwrap();
+    node.inline_on = vec![id('a')];
+    let mut verdict = default_verdict(&triage_item(node, id('d').as_str()), "Task shaped table");
+    verdict.decision = NotionDecision::Tasks;
+    let rows = tree.decided_rows(
+        &[(id('d').to_string(), verdict)].into(),
+        NotionSharing::Personal,
+        false,
+    );
+    let meta: NotionDocMeta = serde_json::from_value(rows[0].metadata.clone()).unwrap();
+    assert_eq!(meta.plan.unwrap().decision, Some(NotionDecision::Copy));
+}
