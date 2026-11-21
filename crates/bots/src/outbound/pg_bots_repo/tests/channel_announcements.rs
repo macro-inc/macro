@@ -21,7 +21,25 @@ fn channel_updates(broker: &RecordingEventBroker) -> Vec<(String, Value)> {
     updates
 }
 
-/// The update of `channel_ids` by `actor`, each named "alarms" before and after.
+/// The name `name_channels` gives a channel: each channel its own, so an
+/// update carrying another channel's name fails.
+fn channel_name(channel_id: &Uuid) -> String {
+    format!("alarms {channel_id}")
+}
+
+/// Renames each channel to `channel_name`.
+async fn name_channels(pool: &PgPool, channel_ids: &[Uuid]) -> anyhow::Result<()> {
+    for channel_id in channel_ids {
+        sqlx::query("UPDATE comms_channels SET name = $2 WHERE id = $1")
+            .bind(channel_id)
+            .bind(channel_name(channel_id))
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
+}
+
+/// The update of `channel_ids` by `actor`, each keeping its `channel_name`.
 fn unchanged(actor: &str, channel_ids: &[Uuid]) -> Vec<(String, Value)> {
     let mut updates: Vec<(String, Value)> = channel_ids
         .iter()
@@ -31,8 +49,8 @@ fn unchanged(actor: &str, channel_ids: &[Uuid]) -> Vec<(String, Value)> {
                 json!({
                     "channel_id": channel_id,
                     "actor": actor,
-                    "previous_name": "alarms",
-                    "channel_name": "alarms",
+                    "previous_name": channel_name(channel_id),
+                    "channel_name": channel_name(channel_id),
                 }),
             )
         })
@@ -45,8 +63,9 @@ fn unchanged(actor: &str, channel_ids: &[Uuid]) -> Vec<(String, Value)> {
 async fn adding_or_removing_a_bot_updates_its_channel(pool: PgPool) -> anyhow::Result<()> {
     let broker = RecordingEventBroker::default();
     let service = recording_service(&pool, broker.clone());
-    let channel_id = Uuid::new_v4();
+    let channel_id = Uuid::now_v7();
     insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    name_channels(&pool, &[channel_id]).await?;
     let bot = service
         .create_bot(user_id(USER_OWNER), create_req("announced"))
         .await?;
@@ -83,7 +102,7 @@ async fn adding_or_removing_a_bot_updates_its_channel(pool: PgPool) -> anyhow::R
 async fn a_channel_without_a_name_is_announced_without_one(pool: PgPool) -> anyhow::Result<()> {
     let broker = RecordingEventBroker::default();
     let service = recording_service(&pool, broker.clone());
-    let channel_id = Uuid::new_v4();
+    let channel_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
     )
@@ -118,8 +137,9 @@ async fn a_channel_without_a_name_is_announced_without_one(pool: PgPool) -> anyh
 async fn a_channel_scoped_bot_updates_its_channel(pool: PgPool) -> anyhow::Result<()> {
     let broker = RecordingEventBroker::default();
     let service = recording_service(&pool, broker.clone());
-    let channel_id = Uuid::new_v4();
+    let channel_id = Uuid::now_v7();
     insert_channel(&pool, channel_id).await?;
+    name_channels(&pool, &[channel_id]).await?;
 
     let created = service
         .create_channel_scoped_bot(
@@ -140,10 +160,11 @@ async fn a_channel_scoped_bot_updates_its_channel(pool: PgPool) -> anyhow::Resul
 async fn an_agent_updates_every_channel_its_selection_touches(pool: PgPool) -> anyhow::Result<()> {
     let broker = RecordingEventBroker::default();
     let service = recording_service(&pool, broker.clone());
-    let [first, second, third] = [Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+    let [first, second, third] = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
     for channel_id in [first, second, third] {
         insert_channel_member(&pool, channel_id, USER_OWNER).await?;
     }
+    name_channels(&pool, &[first, second, third]).await?;
 
     let mut create = create_agent_req("selected-announced", AgentChannelScope::Selected);
     create.channel_ids = vec![first, second];
@@ -199,10 +220,11 @@ async fn deleting_a_harness_updates_its_agents_channels(pool: PgPool) -> anyhow:
     let service = recording_service(&pool, broker.clone());
     insert_user(&pool, USER_OWNER).await?;
     let harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
-    let [first, second] = [Uuid::new_v4(), Uuid::new_v4()];
+    let [first, second] = [Uuid::now_v7(), Uuid::now_v7()];
     for channel_id in [first, second] {
         insert_channel_member(&pool, channel_id, USER_OWNER).await?;
     }
+    name_channels(&pool, &[first, second]).await?;
     for (handle, channel_ids) in [
         ("harness-one", vec![first]),
         ("harness-two", vec![first, second]),

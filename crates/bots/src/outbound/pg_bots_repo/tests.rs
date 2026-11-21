@@ -2011,6 +2011,10 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
     service
         .remove_bot_from_channel(user_id(USER_OWNER), channel_id, bot.id)
         .await?;
+    // Adding and removing the bot announce its channel on the channel topic
+    // (`channel_announcements`); nothing after them publishes anything.
+    let announced = broker.events().len();
+    assert_eq!(announced, 2);
 
     let token = service
         .create_token(
@@ -2056,9 +2060,8 @@ async fn non_lifecycle_and_failed_operations_do_not_publish(pool: PgPool) -> any
         )
         .await;
     assert!(matches!(repository_failure, Err(BotError::Repo(_))));
-    // Adding and removing the bot announce its channel on the channel topic
-    // (`channel_announcements`); none of these is a bot lifecycle event.
     assert!(broker.bot_events().is_empty());
+    assert_eq!(broker.events().len(), announced);
 
     Ok(())
 }
