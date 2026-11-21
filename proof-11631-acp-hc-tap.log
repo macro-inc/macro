@@ -1,0 +1,19 @@
+20:52:47.631 hc run t2r  -> ok 
+20:52:49.307 hc run t2s  -> ok 
+20:52:52.663 hc send t2r "exec claude --model haiku --session-id 2" -> REFUSED rc=5 t2r is still starting: its output has not settled
+20:52:54.413 hc send t2s "exec claude --model haiku --session-id 1" -> REFUSED rc=5 t2s is still starting: its output has not settled
+--- main ---
+20:53:18.583 hc run t2v  -> ok 
+20:53:19.311 hc run t2w  -> ok 
+20:53:27.276 hc send t2v "exec claude --model haiku --session-id 8" -> REFUSED rc=5 t2v is still starting: its output has not settled
+20:53:27.276 hc send t2w "exec claude --model haiku --session-id 5" -> REFUSED rc=5 t2w is still starting: its output has not settled
+20:53:31.374 hc send t2v "exec claude --model haiku --session-id 8" -> ok 
+20:53:31.375 hc send t2w "exec claude --model haiku --session-id 5" -> ok 
+20:53:45.691 hc send macro-877987329daa "<macrod-runtime>
+You are running through macrod (hidden h
+</macrod-runtime>
+20:53:45.691 hc send macro-5c32e844bc7b "<macrod-runtime>
+You are running through macrod (hidden h
+</macrod-runtime>
+Session one: reply with the single word " -> ok 
+Session two: reply with the single word " -> ok 
