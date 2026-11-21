@@ -54,7 +54,7 @@ its thresholds many times a day.
 `outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts` and `search-freshness.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics, except those `queues.ts` marks Datadog only, have
 hand-written copies in Grafana
-(`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
+(`infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
 Notify service), so one incident pages once. Keep thresholds and windows in sync by hand. The error-logs
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in

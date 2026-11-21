@@ -17,7 +17,32 @@ impl MailboxCredentialHealthRepository for PgMailboxSync {
                 DatabaseFailure::from(&error)
             ),
         };
-        let mut tx = self.db.begin().await.map_err(failed)?;
+        // Nearly every token fetch reports the health already stored. Reading
+        // it without the link lock keeps those fetches, and the Graph calls
+        // behind them, from timing out behind a CRM population's share lock;
+        // only a change takes the lock and writes.
+        let scopes: &[String] = match &health {
+            CredentialHealth::Available(scopes) => scopes,
+            CredentialHealth::ReauthorizationRequired => &[],
+        };
+        let stored = sqlx::query!(r#"SELECT l.needs_reauth,
+            EXISTS(SELECT 1 FROM email_link_microsoft_scopes s WHERE s.link_id = l.id AND s.grant_generation = $2
+                AND s.granted_scopes IS NOT DISTINCT FROM $4) AS "scopes_stored!",
+            NOT EXISTS(SELECT 1 FROM email_mailbox_custodians c WHERE c.link_id = l.id AND c.grant_id = l.grant_id
+                AND c.grant_generation = $2 AND c.granted_scopes IS DISTINCT FROM $4) AS "custodians_stored!"
+            FROM email_links l WHERE l.id = $1 AND l.grant_generation = $2 AND l.is_sync_active AND l.provider = 'OUTLOOK' AND l.sync_generation = $3"#,
+            mailbox.link_id,mailbox.grant_generation,mailbox.sync_generation,scopes)
+            .fetch_optional(&self.db).await.map_err(failed)?.ok_or(TokenError::ReauthRequired)?;
+        let unchanged = match &health {
+            CredentialHealth::Available(_) => {
+                !stored.needs_reauth && stored.scopes_stored && stored.custodians_stored
+            }
+            CredentialHealth::ReauthorizationRequired => stored.needs_reauth,
+        };
+        if unchanged {
+            return Ok(());
+        }
+        let mut tx = self.begin().await.map_err(failed)?;
         let current = sqlx::query!("SELECT sync_generation,needs_reauth FROM email_links WHERE id = $1 AND grant_generation = $2 AND is_sync_active AND provider = 'OUTLOOK' AND sync_generation = $3 FOR UPDATE",mailbox.link_id,mailbox.grant_generation,mailbox.sync_generation)
             .fetch_optional(&mut *tx).await.map_err(failed)?.ok_or(TokenError::ReauthRequired)?;
         let reauth = matches!(health, CredentialHealth::ReauthorizationRequired);

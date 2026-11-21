@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: webhook
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/instance: cert-manager
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: webhook
+    app.kubernetes.io/version: v1.21.3
+    helm.sh/chart: cert-manager-v1.21.3
+  name: cert-manager-webhook:dynamic-serving
+  namespace: cert-manager
+rules:
+  - apiGroups:
+      - ""
+    resourceNames:
+      - cert-manager-webhook-ca
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create

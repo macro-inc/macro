@@ -1,5 +1,6 @@
 import { type LoadErrors, loadResult } from '@core/block';
 import { catchToResult, type ResultError, throwOnErr } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { storageServiceClient } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -62,10 +63,21 @@ export function fetchDocumentLoadBundle(
 
 export function seedDocumentLoadBundle(
   documentId: string,
-  bundle: DocumentLoadBundle
+  bundle: DocumentLoadBundle,
+  generation: string
 ) {
+  if (!cacheSessionGeneration.isCurrent(generation)) return;
   queryClient.setQueryData(
     documentLoadKeys.bundle(documentId).queryKey,
     bundle
   );
+}
+
+/** A recovered identity load must reacquire its authorization credentials. */
+export function invalidateDocumentLoadBundle(documentId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: documentLoadKeys.bundle(documentId).queryKey,
+    exact: true,
+    refetchType: 'none',
+  });
 }

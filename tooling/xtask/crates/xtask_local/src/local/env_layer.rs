@@ -171,6 +171,12 @@ pub fn resolve(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
                 "http://otel-collector:4317".into(),
             );
+            // Macro computers export OTLP/HTTP to the telemetry intake their
+            // enrollment names; on the compose network that is the collector.
+            env.insert(
+                "OVERRIDE_TELEMETRY_INTAKE_URL".into(),
+                "http://otel-collector:4318".into(),
+            );
             // Forwarded to the hosted Grafana, a machine's stacks share one
             // `host.name`: the instance tells them apart.
             let existing = env.get("OTEL_RESOURCE_ATTRIBUTES").map(String::as_str);

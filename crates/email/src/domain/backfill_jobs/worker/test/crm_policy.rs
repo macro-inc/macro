@@ -97,3 +97,22 @@ async fn missing_or_replaced_generation_does_no_contact_work() {
     ));
     assert_eq!(fake.calls(), ["acquire", "hold", "policy_page", "release"]);
 }
+
+#[tokio::test]
+async fn a_page_refused_its_teams_slot_is_deferred_for_minutes_without_reading() {
+    let (service, fake) = setup();
+    fake.0.lock().unwrap().slot = false;
+    let data = input(BackfillOperation::PopulateCrmPolicy(request()));
+
+    let BackfillDisposition::Defer { retry_after, .. } = service.process(&data).await else {
+        panic!("deferred")
+    };
+
+    assert_eq!(fake.calls(), ["acquire"]);
+    let retry_after = retry_after.expect("a refused team defers for its own delay");
+    assert!(
+        (std::time::Duration::from_secs(600)..=std::time::Duration::from_secs(900))
+            .contains(&retry_after),
+        "{retry_after:?}"
+    );
+}

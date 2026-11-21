@@ -63,7 +63,7 @@ A host file next to the module sets what is particular to it, and is added to
     datadog.apiKeyFile = "/var/lib/macro/datadog-api-key";
     # Host and per-computer metrics for the Grafana fleet dashboard.
     alloy = { enable = true; passwordFile = "/var/lib/macro/metrics-remote-write-password"; };
-    # ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/size.rs.
+    # ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/image.rs.
     storage.goldenRootDiskGib = 32;
     environment = "production";
   };

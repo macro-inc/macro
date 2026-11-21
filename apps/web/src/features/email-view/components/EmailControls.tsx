@@ -28,27 +28,21 @@ export function EmailControls(props: EmailControlsProps) {
       <div class="contents @max-[640px]/split-header:hidden">
         <HeaderActionGroup label="Email filters" size="md">
           <EmailInboxMenu grouped />
-          <div class="relative flex shrink-0 items-center">
-            <ListFilterDropdown
-              grouped
-              size="icon-md"
-              label="Filter email"
-              open={props.filterOpen}
-              onOpenChange={props.onFilterOpenChange}
-              groups={filters.groups()}
-              isSelected={filters.isSelected}
-              selectedIds={filters.selectedIds}
-              isGroupActive={filters.isGroupActive}
-              onSelectionChange={filters.setSelected}
-              onGroupSelectionChange={filters.setGroupSelection}
-              onClear={filters.clear}
-            />
-            <Show when={filters.activeCount() > 0}>
-              <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 not-touch:top-0.5 not-touch:right-0.5 not-touch:size-3.5 not-touch:translate-x-0 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-                {filters.activeCount()}
-              </span>
-            </Show>
-          </div>
+          <ListFilterDropdown
+            grouped
+            size={filters.activeCount() ? 'md' : 'icon-md'}
+            label="Filter email"
+            activeCount={filters.activeCount()}
+            open={props.filterOpen}
+            onOpenChange={props.onFilterOpenChange}
+            groups={filters.groups()}
+            isSelected={filters.isSelected}
+            selectedIds={filters.selectedIds}
+            isGroupActive={filters.isGroupActive}
+            onSelectionChange={filters.setSelected}
+            onGroupSelectionChange={filters.setGroupSelection}
+            onClear={filters.clear}
+          />
         </HeaderActionGroup>
       </div>
       <HeaderActionGroup label="Email view options" size="md">

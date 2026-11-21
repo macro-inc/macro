@@ -3,6 +3,7 @@ import { usePending } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { deepEqual } from '@core/util/compareUtils';
 import type { ResultError } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { Span } from '@macro-inc/observability';
 import { Result } from 'neverthrow';
 import { type Accessor, onCleanup } from 'solid-js';
@@ -328,6 +329,7 @@ export function createEmailPolicySettings(
       setState('busy', false);
       return;
     }
+    const generation = cacheSessionGeneration.capture();
     const result = await parent.run(() =>
       source.startPreview({
         if_policy: token,
@@ -338,6 +340,12 @@ export function createEmailPolicySettings(
     if (!current()) return;
     setState('busy', false);
     if (result.isErr()) return failure(result.error, 'previewError');
+    // The POST succeeded; re-read its result after retirement instead of
+    // publishing old response content or replaying the command.
+    if (!cacheSessionGeneration.isCurrent(generation)) {
+      await parent.run(() => inspectPreview());
+      return;
+    }
     setState({ preview: result.value, previewDraft: draft });
   }
 

@@ -464,7 +464,9 @@ export function createInputActions(
         });
         return {
           message: 'Event created',
-          open: () => host.navigate(calendarViewContent({ eventId: event.id })),
+          open: event
+            ? () => host.navigate(calendarViewContent({ eventId: event.id }))
+            : undefined,
         };
       })
       .with('message', async () => {

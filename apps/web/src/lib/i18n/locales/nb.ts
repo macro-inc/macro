@@ -516,6 +516,10 @@ export default {
       other: 'Slettet {{count}} elementer',
     },
     toastDeleteFailed: 'Kunne ikke slette',
+    toastPropertySet: {
+      one: '{{property}} angitt',
+      other: '{{property}} angitt for {{count}} elementer',
+    },
     toastAddedToFavorites: 'Lagt til i favoritter',
     toastAddedCountToFavorites: {
       one: 'La til {{count}} element i favoritter',
