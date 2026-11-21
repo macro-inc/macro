@@ -3307,6 +3307,28 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(())
     }
 
+    async fn get_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channel_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        // One row of the (user_id, channel_id) unique index. The column is a
+        // timestamp without zone, read as UTC as `get_activities` reads it:
+        // `query!` decodes an overridden column without the zone check.
+        let row = sqlx::query!(
+            r#"
+        SELECT a.viewed_at as "viewed_at?: DateTime<Utc>"
+        FROM comms_activity a
+        WHERE a.user_id = $1 AND a.channel_id = $2
+        "#,
+            user_id.as_ref(),
+            channel_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|row| row.viewed_at))
+    }
+
     async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, Self::Err> {
         let activities = sqlx::query!(
             r#"

@@ -484,6 +484,14 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
+    async fn get_viewed_at(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        _channel_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<Utc>>, Self::Err> {
+        Ok(None)
+    }
+
     async fn get_activities(&self, _user_id: String) -> Result<Vec<Activity>, Self::Err> {
         Ok(Vec::new())
     }
@@ -1192,6 +1200,27 @@ async fn find_direct_message_with_yourself_is_none() {
         .unwrap();
 
     assert_eq!(found, None);
+}
+
+#[tokio::test]
+async fn channel_viewed_at_reads_the_viewers_own_activity_row() {
+    let channel_id = Uuid::new_v4();
+    let viewed_at = chrono::DateTime::parse_from_rfc3339("2026-11-20T10:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let viewer = macro_id("macro|viewer@example.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_viewed_at()
+        .once()
+        .withf(move |user, channel| {
+            user.as_ref() == "macro|viewer@example.com" && *channel == channel_id
+        })
+        .returning(move |_, _| Box::pin(async move { Ok(Some(viewed_at)) }));
+    let service = ChannelServiceImpl::new(repo);
+
+    let found = service.channel_viewed_at(viewer, channel_id).await.unwrap();
+
+    assert_eq!(found, Some(viewed_at));
 }
 
 #[tokio::test]

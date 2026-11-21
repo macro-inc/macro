@@ -432,6 +432,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: String,
     ) -> impl Future<Output = Result<Vec<Activity>, Self::Err>> + Send;
 
+    /// When the user last viewed the channel, from their activity row:
+    /// `None` when they never did.
+    fn get_viewed_at<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
     /// Upsert the user's activity for a channel with the given type, returning the row.
     fn set_activity(
         &self,
@@ -630,6 +638,21 @@ pub trait ChannelService: Send + Sync + 'static {
         async move {
             Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
                 "find_direct_message is not configured"
+            )))
+        }
+    }
+
+    /// When `user_id` last viewed `channel_id`, whether or not they are
+    /// still in it: `None` when they never did. A viewer's own activity row
+    /// needs no access check, as the activity list needs none.
+    fn channel_viewed_at(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ChannelMessagesErr>> + Send {
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "channel_viewed_at is not configured"
             )))
         }
     }

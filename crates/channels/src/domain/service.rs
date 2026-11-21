@@ -1320,6 +1320,21 @@ where
         Ok(channel_id)
     }
 
+    #[tracing::instrument(err, skip_all, fields(channel_id = %channel_id, viewed = tracing::field::Empty))]
+    async fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ChannelMessagesErr> {
+        let viewed_at = self
+            .repo
+            .get_viewed_at(user_id, channel_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        tracing::Span::current().record("viewed", viewed_at.is_some());
+        Ok(viewed_at)
+    }
+
     async fn get_or_create_private(
         &self,
         actor: Sender,
