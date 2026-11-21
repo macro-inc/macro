@@ -4,6 +4,7 @@ import {
   type Client,
   CombinedError,
   createClient,
+  createRequest,
   fetchExchange,
 } from '@urql/core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -309,6 +310,28 @@ it('rejects an auth failure with the code the retry policy reads', async () => {
   await expect(listTagSets()).rejects.toSatisfy((error: unknown) =>
     thrownResultErrorHasCode(error, 'UNAUTHORIZED')
   );
+});
+
+it('gives every read a key of its own that no hashed operation can have', async () => {
+  network.executeQuery.mockImplementation(() => ({
+    toPromise: async () => ({
+      data: { user: { id: 'viewer', tagSets: [] } },
+      error: undefined,
+    }),
+  }));
+
+  await listTagSets();
+  await listTagSets();
+
+  const keys: unknown[] = network.executeQuery.mock.calls.map(
+    ([request]) => request.key
+  );
+  expect(new Set(keys).size).toBe(2);
+  // urql's hashed keys are integers, however long the document.
+  expect(
+    Number.isInteger(createRequest(PropertyCatalogTagSetsDocument, {}).key)
+  ).toBe(true);
+  for (const key of keys) expect(Math.abs(Number(key) % 1)).toBe(0.5);
 });
 
 // A server whose catalog reads answer with the definitions there when the
