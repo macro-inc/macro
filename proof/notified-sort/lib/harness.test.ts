@@ -99,6 +99,18 @@ describe('comparison', () => {
     );
   });
 
+  it("names main's request deadline apart from every other error, and compares no rows past an error", () => {
+    const failed = (error: string, transport = 'rest'): Snapshot => ({ ...snap([]), error, transport });
+    const sigs = (a: Snapshot, b: Snapshot) => compareSnapshots(a, b, { label: 'reload spec0' }).map((d) => d.signature);
+    expect(sigs(failed('An unknown error occurred: TimeoutError: signal timed out'), snap(base))).toEqual(['reload spec0 error:old:deadline']);
+    expect(sigs(failed('An unknown error occurred: AbortError: The user aborted a request.'), snap(base))).toEqual(['reload spec0 error:old:deadline']);
+    expect(sigs(failed('Network error occurred'), snap(base))).toEqual(['reload spec0 error:old']);
+    // Only main's REST reader has the deadline; the branch erroring stays open.
+    expect(sigs(snap(base), failed('TimeoutError: signal timed out', 'graphql'))).toEqual(['reload spec0 error:new']);
+    expect(closureOf('reload spec0 error:old:deadline')?.id).toBe('T9');
+    for (const open of ['reload spec0 error:old', 'raw spec1 error:new', 'reload spec0 error:new:deadline']) expect(closureOf(open), open).toBeUndefined();
+  });
+
   it('catches a dropped row, a swapped pair and an altered notification time', () => {
     expect(open(base, base.filter((_, i) => i !== 2))).toEqual(['membership:missing-in-new:document']);
     expect(open(base, [base[1], base[0], ...base.slice(2)])).toEqual(['order']);

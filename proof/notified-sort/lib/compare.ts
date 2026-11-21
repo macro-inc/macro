@@ -79,6 +79,9 @@ export function diffValues(
 
 const erase = (path: string) => path.replace(/\[\d+\]/g, '[]');
 
+/** What main's REST Soup reader reports when its request deadline fires. */
+export const OLD_DEADLINE = /TimeoutError: signal timed out|AbortError: The user aborted a request\./;
+
 export function compareSnapshots(
   oldSnap: Snapshot,
   newSnap: Snapshot,
@@ -88,11 +91,19 @@ export function compareSnapshots(
   const label = options.label ? `${options.label} ` : '';
 
   if ((oldSnap.error === null) !== (newSnap.error === null)) {
+    // Main's REST reader gives up on its own 12 s deadline: the timeout
+    // fires before the headers (TimeoutError) or while the body streams
+    // (Chromium then says AbortError, dbg-body-timeout.ts). Named apart so
+    // it closes on its own; every other error stays open.
+    const deadline = oldSnap.error !== null && oldSnap.transport === 'rest' && OLD_DEADLINE.test(oldSnap.error);
     diffs.push({
-      signature: `${label}error:${oldSnap.error ? 'old' : 'new'}`,
+      signature: `${label}error:${oldSnap.error ? 'old' : 'new'}${deadline ? ':deadline' : ''}`,
       kind: 'error',
       detail: `old=${oldSnap.error} new=${newSnap.error}`,
     });
+    // An errored read has no rows to compare: the other side's rows would
+    // all read as membership differences of the error.
+    return diffs;
   }
   // Main's REST reader keeps every page a reader with the same key loaded
   // (TanStack infinite query), so a second read of a list starts with those

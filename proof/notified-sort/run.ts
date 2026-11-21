@@ -34,7 +34,7 @@ import {
 } from './lib/browser.ts';
 import { classify, sameInstant, type Classified } from './lib/classify.ts';
 import { closureOf } from './lib/closed.ts';
-import { compareSnapshots, entityKey, refCheck, type DomRow } from './lib/compare.ts';
+import { compareSnapshots, entityKey, OLD_DEADLINE, refCheck, type DomRow } from './lib/compare.ts';
 import { compareHomeDom } from './lib/dom.ts';
 import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
@@ -456,7 +456,8 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             const diffs = compareSnapshots(pairRead[0], pairRead[1], { label: `raw spec${i}` }).map(classify);
             tallyInto(classes, diffs, 'sequences');
             raw.push([project(pairRead[0]), project(pairRead[1])]);
-            checks[`raw${i}`] = { tries, classes: [...new Set(diffs.map((d) => d.cls))], rows: [pairRead[0].entities.length, pairRead[1].entities.length] };
+            const errors = diffs.filter((d) => d.kind === 'error').map((d) => d.detail.slice(0, 200));
+            checks[`raw${i}`] = { tries, classes: [...new Set(diffs.map((d) => d.cls))], rows: [pairRead[0].entities.length, pairRead[1].entities.length], ...(errors.length ? { errors } : {}) };
           }
 
           // 2. Live: each side's mounted list must reach its own fresh read
@@ -520,7 +521,15 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             // The branch missed something main did not: never closed.
             if (held.length) emit(`live:${tag}:new-held-notified-stamp`, note(1, held));
             const newOnly = tNew.filter((t) => !tOld.includes(t) || t === 'unread');
-            if (newOnly.length) emit(`live:${tag}:new-not-within-bound${changed[1]}`, note(1, newOnly));
+            if (newOnly.length) {
+              emit(`live:${tag}:new-not-within-bound${changed[1]}`, note(1, newOnly));
+              // The evidence for an open difference: each side's mounted rows
+              // and its fresh read, as key@notifiedAt in list order.
+              const compact = (rows: Row[] | null) => (rows ?? []).map((r) => `${r.key}@${r.notifiedAt ?? '-'}`);
+              const evidence = (checks.liveRows as unknown[] | undefined) ?? [];
+              evidence.push({ spec: i, oldLive: compact(lastLive[i][0]), oldFresh: compact(raw[i][0]), newLive: compact(lastLive[i][1]), newFresh: compact(raw[i][1]) });
+              checks.liveRows = evidence;
+            }
             else if (tOld.length || tNew.length) {
               if (!freshAgree) emit(`live:${tag}:fresh-reads-differ`, `${note(0, tOld)} | ${note(1, tNew)}`);
               else {
@@ -555,6 +564,8 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             const diffs = compareSnapshots(read[0].value, read[1].value, { label: `reload spec${i}` }).map(classify);
             tallyInto(classes, diffs, 'sequences');
             checks[`reload${i}`] = [...new Set(diffs.map((d) => d.cls))];
+            const errors = diffs.filter((d) => d.kind === 'error').map((d) => d.detail.slice(0, 200));
+            if (errors.length) checks[`reload${i}errors`] = errors;
           }
 
           // 4. Every few steps, Home on screen (touch): the rows the viewer sees.
@@ -595,7 +606,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             tallyInto(classes, diffs, 'sequences');
             checks.dom = { rows: [rows[0].length, rows[1].length], classes: diffs.map((d) => d.cls) };
           }
-          record('steps.jsonl', { ...at, ok: step.ok, status: step.status, note: step.note, checks });
+          record('steps.jsonl', { ...at, time: new Date().toISOString(), ok: step.ok, status: step.status, note: step.note, checks });
         }
         await Promise.all(lanes.live.map((lane) => lane.page.evaluate(() => (window as never as { __proofProbe: { closeAllLive: () => void } }).__proofProbe.closeAllLive())));
         sequences += 1;
@@ -670,11 +681,18 @@ async function readUntilAnswered(where: string, lanes: Lane[], attempt: () => Pr
     const results = await attempt();
     const unanswered = results.flatMap((r, i) => {
       const message = r.status === 'rejected' ? String(r.reason) : r.value.error ? String(r.value.error) : '';
-      return NO_ANSWER.test(message) ? [{ read: i, message: message.slice(0, 160) }] : [];
+      // Main's own 12 s deadline (closure T9) is no answer either: the read
+      // is tallied as error:old:deadline only if every retry hits it too.
+      const deadline = i === 0 && OLD_DEADLINE.test(message);
+      return NO_ANSWER.test(message) || deadline ? [{ read: i, deadline, message: message.slice(0, 160) }] : [];
     });
     if (!unanswered.length || tries > 2) return results;
     const requests: RequestFailure[] = lanes.flatMap((lane, i) => lane.failed.slice(marks[i]));
-    const key = requests.length ? [...new Set(requests.map((r) => `${r.side}:${r.error}`))].sort().join('+') : `no-failed-request:${unanswered.map((u) => (u.read === 1 ? 'new' : 'old')).join('+')}`;
+    const key = unanswered.some((u) => u.deadline)
+      ? 'old:deadline'
+      : requests.length
+        ? [...new Set(requests.map((r) => `${r.side}:${r.error}`))].sort().join('+')
+        : `no-failed-request:${unanswered.map((u) => (u.read === 1 ? 'new' : 'old')).join('+')}`;
     retries[key] = (retries[key] ?? 0) + 1;
     record('retries.jsonl', { at: new Date().toISOString(), where, tries, unanswered, requests: requests.slice(0, 12) });
     await new Promise((r) => setTimeout(r, 3000));

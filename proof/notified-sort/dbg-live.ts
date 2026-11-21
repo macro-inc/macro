@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runStep, type ActionContext, type StepKind } from './lib/actions.ts';
 import { launchBrowser, openLane, probeOpenLive, probeRead, probeSnapLive, startApp, stopApp, type ReadSpec } from './lib/browser.ts';
-import { project, rowsDiff, sameRows } from './lib/project.ts';
+import { discrepancies, project, rowsDiff, sameRows } from './lib/project.ts';
 import { Rng } from './lib/rng.ts';
 import { seedWorld } from './lib/setup.ts';
 import { stackFromEnv } from './lib/stack.ts';
@@ -59,21 +59,27 @@ try {
         const b = project(fresh[side]);
         const where = (rows: typeof a) => { const at = rows.findIndex((r) => r.key.endsWith(watched!)); return at < 0 ? "-" : `${at}@${rows[at].notifiedAt}`; };
         const has = watched ? ` live=${where(a)} fresh=${where(b)}` : "";
-        return `${side ? 'new' : 'old'}${has} ${sameRows(a, b) ? 'same' : `live ${a.length} fresh ${b.length} settled=${snaps[side]?.settled} ${rowsDiff(a, b)}`}`;
+        return `${side ? 'new' : 'old'}${has} ${sameRows(a, b) ? 'same' : `live ${a.length} fresh ${b.length} settled=${snaps[side]?.settled} ${rowsDiff(a, b)} tokens=${discrepancies(a, b).join(",")}${process.env.DBG_ROWS ? `\n    live:  ${a.map((r) => `${r.key.split(":")[0]}:${r.key.slice(-6)}@${r.notifiedAt?.slice(11, 23)}`).join(" ")}\n    fresh: ${b.map((r) => `${r.key.split(":")[0]}:${r.key.slice(-6)}@${r.notifiedAt?.slice(11, 23)}`).join(" ")}` : ""}`}`;
       });
       console.log(`${label} t=${t}s | ${line.join(' | ')}`);
       await new Promise((r) => setTimeout(r, 2000));
     }
   };
-  if (process.env.DBG_ENTITY) watched = seeded.world.entities.find((e) => e.key === process.env.DBG_ENTITY)?.id;
+  // DBG_KIND and DBG_ENTITY may list several steps, comma-separated, run in
+  // order with a watch after each; DBG_ROWS=1 prints both lists when they part.
+  const kinds = (process.env.DBG_KIND ?? 'done').split(',');
+  const only = (process.env.DBG_ENTITY ?? '').split(',');
+  if (only[0]) watched = seeded.world.entities.find((e) => e.key === only[0])?.id;
   await watch('before', 6);
-  const only = process.env.DBG_ENTITY;
-  const world = only ? { ...seeded.world, entities: seeded.world.entities.filter((e) => e.key === only) } : seeded.world;
-  const ctx: ActionContext = { stack, queueUrl: process.env.PROOF_QUEUE_URL ?? '', world, users: seeded.users, viewer: viewerKey, rng: new Rng(Number(process.env.DBG_RNG ?? 7)), created: [] };
-  const step = await runStep(ctx, (process.env.DBG_KIND ?? 'done') as StepKind);
-  watched = (seeded.world.entities.find((e) => e.key === step.entity) ?? ctx.created.find((e) => e.key === step.entity))?.id;
-  console.log(`step ${JSON.stringify(step)}`);
-  await watch('after', Number(process.env.DBG_AFTER ?? 16));
+  for (const [n, kind] of kinds.entries()) {
+    const key = only[n] || only[0];
+    const world = key ? { ...seeded.world, entities: seeded.world.entities.filter((e) => e.key === key) } : seeded.world;
+    const ctx: ActionContext = { stack, queueUrl: process.env.PROOF_QUEUE_URL ?? '', world, users: seeded.users, viewer: viewerKey, rng: new Rng(Number(process.env.DBG_RNG ?? 7) + n), created: [] };
+    const step = await runStep(ctx, kind as StepKind);
+    watched = (seeded.world.entities.find((e) => e.key === step.entity) ?? ctx.created.find((e) => e.key === step.entity))?.id;
+    console.log(`step ${n} ${JSON.stringify(step)} id ${watched}`);
+    await watch(`after${n}`, Number(process.env.DBG_AFTER ?? 16));
+  }
 } finally {
   await browser.close();
   for (const app of apps) stopApp(app);
