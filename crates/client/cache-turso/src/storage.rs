@@ -920,8 +920,10 @@ impl TursoStorage {
             .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
     }
 
-    /// The end of the WAL. A caller that computed something from storage
-    /// compares two positions to learn whether a write committed in between.
+    /// The end of the WAL as this storage's connection sees it. A caller
+    /// that computed something from storage compares two positions to learn
+    /// whether this storage committed a write in between. A write through
+    /// another connection may not show until this one next reads.
     pub fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
         self.require_healthy()?;
         self.connection.wal_position()
