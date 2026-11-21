@@ -306,8 +306,9 @@ it('rejects an auth failure with the code the retry policy reads', async () => {
     }),
   });
 
-  const rejection = listTagSets().catch((error: unknown) => error);
-  expect(thrownResultErrorHasCode(await rejection, 'UNAUTHORIZED')).toBe(true);
+  await expect(listTagSets()).rejects.toSatisfy((error: unknown) =>
+    thrownResultErrorHasCode(error, 'UNAUTHORIZED')
+  );
 });
 
 // A server whose catalog reads answer with the definitions there when the
