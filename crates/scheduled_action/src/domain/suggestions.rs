@@ -61,7 +61,10 @@ use self::ports::{
     BriefPart, GenerationStatuses, Kept, SuggestionRepo, SuggestionSources, WorkModel,
 };
 use self::state::{RoutineSuggestionState, Transition};
-use self::work::{WORK_DAYS, WORK_MESSAGES, WORK_MODEL, WORK_TEXTS, WORK_TRIES, WorkList};
+use self::work::{
+    SENT_MESSAGES, SENT_TEXTS, WORK_DAYS, WORK_MESSAGES, WORK_MODEL, WORK_TEXTS, WORK_TRIES,
+    WorkList,
+};
 use super::event_rollout::EVENT_ROUTINES_FLAG;
 use super::models::ActionPolicyError;
 use super::ports::{
@@ -499,6 +502,7 @@ where
         routine.suggestions.model = WORK_MODEL,
         routine.suggestions.messages = tracing::field::Empty,
         routine.suggestions.texts = tracing::field::Empty,
+        routine.suggestions.sent = tracing::field::Empty,
         routine.suggestions.streams = tracing::field::Empty,
         routine.suggestions.tries = tracing::field::Empty,
     ), err)]
@@ -507,12 +511,17 @@ where
             bail!("nothing here finds the work in a person's mail");
         };
         let span = tracing::Span::current();
-        let messages = self
-            .sources
-            .inbox_window(user, WORK_DAYS, WORK_MESSAGES, WORK_TEXTS)
-            .instrument(tracing::info_span!("routine.suggestions.read_month"))
-            .await?;
+        // What reached them and what they sent, read side by side.
+        let (messages, sent) = tokio::try_join!(
+            self.sources
+                .inbox_window(user, WORK_DAYS, WORK_MESSAGES, WORK_TEXTS)
+                .instrument(tracing::info_span!("routine.suggestions.read_month")),
+            self.sources
+                .sent_window(user, WORK_DAYS, SENT_MESSAGES, SENT_TEXTS)
+                .instrument(tracing::info_span!("routine.suggestions.read_sent")),
+        )?;
         span.record("routine.suggestions.messages", messages.len());
+        span.record("routine.suggestions.sent", sent.len());
         span.record(
             "routine.suggestions.texts",
             messages
@@ -520,7 +529,7 @@ where
                 .filter(|message| message.snippet.is_some())
                 .count(),
         );
-        let prompt = work::prompt(&messages, Utc::now());
+        let prompt = work::prompt(&messages, &sent, Utc::now());
         let mut tries = 0;
         let list = loop {
             tries += 1;

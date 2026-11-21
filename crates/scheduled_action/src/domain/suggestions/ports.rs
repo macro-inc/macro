@@ -186,6 +186,16 @@ pub trait SuggestionSources: Send + Sync + 'static {
         texts: u16,
     ) -> impl Future<Output = Result<Vec<InboxMessage>>> + Send;
 
+    /// What the person sent in the last `days` days from their own
+    /// accounts, newest first, read like [`Self::inbox_window`].
+    fn sent_window(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        days: u16,
+        limit: u16,
+        texts: u16,
+    ) -> impl Future<Output = Result<Vec<InboxMessage>>> + Send;
+
     /// The apps the person connected for tool use, by slug.
     fn apps(
         &self,

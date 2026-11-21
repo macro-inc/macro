@@ -1,10 +1,12 @@
 //! The work a person's mail shows: the streams of mail they act on, found
-//! in one model call over their last month of mail, for the session that
-//! drafts routines for them at onboarding.
+//! in one model call over their last month of mail (what reached them and
+//! what they sent), for the sessions that draft routines for them at
+//! onboarding.
 //!
-//! The list is hidden: it is passed into that session's brief and stored
+//! The list is hidden: it is passed into those sessions' briefs and stored
 //! nowhere. Each stream says who sends it, how often, what it asks and what
-//! the person does with it, so suggestions for setting up the rest of the
+//! the person does with it (answers it, forwards it to whom, files it,
+//! leaves it to someone, or starts it themselves), so suggestions for setting up the rest of the
 //! workspace (tags, a wiki, a database, a CRM, channels) could read it too.
 
 use chrono::{DateTime, Utc};
@@ -26,6 +28,11 @@ pub const WORK_MESSAGES: u16 = 500;
 /// Newest messages it reads the text of; the rest by sender, subject and
 /// date alone.
 pub const WORK_TEXTS: u16 = 100;
+/// Most messages it reads of what the person sent in those days: what they
+/// do with their mail shows there.
+pub const SENT_MESSAGES: u16 = 200;
+/// Newest sent messages it reads the text of.
+pub const SENT_TEXTS: u16 = 50;
 /// The model the finding call runs on, thinking little: as good at finding
 /// streams as a larger model, in a third of the time.
 pub const WORK_MODEL: &str = "google/gemini-3.8-flash";
@@ -39,6 +46,8 @@ pub const MAX_STREAMS: usize = 20;
 const MAX_SUBJECT_CHARS: usize = 200;
 /// Longest sender it reads, in characters.
 const MAX_SENDER_CHARS: usize = 120;
+/// Recipients it reads per sent message.
+const MAX_RECIPIENTS: usize = 3;
 /// Longest text it reads of a message, in characters.
 const MAX_TEXT_CHARS: usize = 500;
 /// Labels it reads per message.
@@ -81,6 +90,14 @@ pub struct WorkStream {
     /// What the person does with each message; "not shown" when the mail
     /// doesn't show it.
     pub action: String,
+    /// What the person does with it, in one word.
+    pub does: Does,
+    /// Whom they forward it to, who handles it for them, or whom they send
+    /// it to.
+    pub to: Vec<String>,
+    /// Messages of it they sent in the month: replies, forwards, or the
+    /// mail they started.
+    pub sent: u32,
     /// Who or what already handles it; empty when nobody does.
     pub handled_by: String,
     /// Labels of their own its messages carry.
@@ -90,6 +107,30 @@ pub struct WorkStream {
     pub keeps: String,
     /// Subjects of a few of its messages, newest first.
     pub examples: Vec<String>,
+}
+
+/// What a person does with a stream of mail, as what they sent shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Does {
+    /// They reply to the sender.
+    Answers,
+    /// They send it on to someone.
+    Forwards,
+    /// They label or keep it and send nothing.
+    Files,
+    /// A colleague or a tool handles it and they send nothing.
+    Leaves,
+    /// They start this mail themselves.
+    Sends,
+    /// The mail doesn't show it; also any word the call answers outside
+    /// these.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Does {
+    const WORDS: [&str; 6] = ["answers", "forwards", "files", "leaves", "sends", "unknown"];
 }
 
 /// One who sends a stream.
@@ -123,6 +164,9 @@ pub fn schema() -> Value {
         "cadence": string,
         "what": string,
         "action": string,
+        "does": { "type": "string", "enum": Does::WORDS },
+        "to": strings,
+        "sent": { "type": "integer" },
         "handled_by": string,
         "labels": strings,
         "keeps": string,
@@ -134,32 +178,66 @@ pub fn schema() -> Value {
     }))
 }
 
-/// What the finding call reads: the instructions, then `messages` (newest
-/// first) as untrusted data, a line each and the text under the newest.
-pub fn prompt(messages: &[InboxMessage], now: DateTime<Utc>) -> String {
-    let lines: Vec<String> = messages.iter().map(line).collect();
+/// What the finding call reads: the instructions, then the mail that
+/// reached the person (`messages`) and what they sent (`sent`), each newest
+/// first, as untrusted data, a line each and the text under the newest.
+pub fn prompt(messages: &[InboxMessage], sent: &[InboxMessage], now: DateTime<Utc>) -> String {
+    let lines: Vec<String> = messages
+        .iter()
+        .map(|message| line(message, Who::Sender))
+        .collect();
+    let sent_lines: Vec<String> = sent
+        .iter()
+        .map(|message| line(message, Who::Recipients))
+        .collect();
     format!(
         "{INSTRUCTIONS}
-It is now {now} UTC. Their mail of the last {WORK_DAYS} days, newest first: a line per message (when, from, subject and labels), and the text of the newest {WORK_TEXTS} under its line.
+It is now {now} UTC. The mail that reached them in the last {WORK_DAYS} days, newest first: a line per message (when, from, subject and labels), and the text of the newest {WORK_TEXTS} under its line.
 
 <untrusted>
 {mail}
+</untrusted>
+
+What they sent in those days, newest first: a line per message (when, to whom, subject), and the text of the newest {SENT_TEXTS} under its line.
+
+<untrusted>
+{sent}
 </untrusted>",
         now = now.format("%Y-%m-%d %H:%M"),
         mail = lines.join("\n"),
+        sent = if sent_lines.is_empty() { "(nothing)".to_owned() } else { sent_lines.join("\n") },
     )
 }
 
+/// Who a message's line names: its sender, for mail that reached the
+/// person, or its recipients, for mail they sent.
+#[derive(Clone, Copy)]
+enum Who {
+    Sender,
+    Recipients,
+}
+
 /// One message as the finding call reads it.
-fn line(message: &InboxMessage) -> String {
+fn line(message: &InboxMessage, who: Who) -> String {
     let at = message
         .received_at
         .map(|at| at.format("%Y-%m-%d %H:%M").to_string())
         .unwrap_or_else(|| "undated".to_owned());
-    let from = message
-        .from
-        .as_deref()
-        .map_or_else(String::new, |from| truncate(from, MAX_SENDER_CHARS));
+    let from = match who {
+        Who::Sender => message
+            .from
+            .as_deref()
+            .map_or_else(String::new, |from| truncate(from, MAX_SENDER_CHARS)),
+        Who::Recipients => {
+            let to: Vec<String> = message
+                .to
+                .iter()
+                .take(MAX_RECIPIENTS)
+                .map(|to| truncate(to, MAX_SENDER_CHARS))
+                .collect();
+            format!("to {}", to.join(", "))
+        }
+    };
     let subject = message
         .subject
         .as_deref()
@@ -248,6 +326,9 @@ impl WorkStream {
             cadence: short(&self.cadence),
             what: truncate(&self.what, MAX_TEXT_FIELD_CHARS),
             action: truncate(&self.action, MAX_TEXT_FIELD_CHARS),
+            does: self.does,
+            to: self.to.iter().take(MAX_ITEMS).map(|to| short(to)).collect(),
+            sent: self.sent,
             handled_by: short(&self.handled_by),
             labels: list(self.labels),
             keeps: truncate(&self.keeps, MAX_TEXT_FIELD_CHARS),

@@ -13,7 +13,7 @@ use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
     RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
-use scheduled_action::domain::suggestions::work::WorkStream;
+use scheduled_action::domain::suggestions::work::{Does, WorkStream};
 use suggestions::domain::model::{
     AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionCaller,
     SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
@@ -229,6 +229,9 @@ fn stream(n: usize) -> WorkStream {
         cadence: "weekly".to_owned(),
         what: String::new(),
         action: String::new(),
+        does: Does::Unknown,
+        to: Vec::new(),
+        sent: 0,
         handled_by: String::new(),
         labels: Vec::new(),
         keeps: String::new(),

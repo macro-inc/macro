@@ -223,6 +223,9 @@ fn a_drafting_session_drafts_for_each_stream_found() {
     assert!(brief.contains(&format!("A routine the catalog lacks, {LISTED_STREAM}:")));
     assert!(!brief.contains(WEEKLY_STREAM));
     assert!(brief.contains("only when none of its messages is in that newest mail"));
+    // The list says what the person does with each stream, and each draft does that job.
+    assert!(brief.contains("what they do with it (`does`"));
+    assert!(brief.contains("for mail they answer, their reply ready to send"));
     let from_mail = part_brief(BriefPart::Drafts(None));
     assert!(from_mail.contains(&format!("A routine the catalog lacks, {WEEKLY_STREAM}:")));
     assert!(from_mail.contains("each stream of mail they act on"));

@@ -8,7 +8,7 @@ use agent_session::domain::routines::ConnectedApps;
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use crm::domain::auth::CrmMemberAccess;
 use email_service_client::EmailServiceClient;
-use email_service_client::get_recent_inbox_messages::InboxWindow;
+use email_service_client::get_recent_inbox_messages::{InboxWindow, RecentMailFolder};
 use entity_access::domain::ports::AccessRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::message::RecentInboxMessage;
@@ -58,14 +58,19 @@ where
         limit: u16,
         texts: u16,
     ) -> anyhow::Result<Vec<InboxMessage>> {
-        let window = InboxWindow {
-            days,
-            limit,
-            texts,
-            snippet_chars: SNIPPET_CHARS,
-        };
-        let response = self.email.get_inbox_window(user.as_ref(), window).await?;
-        Ok(response.messages.into_iter().map(inbox_message).collect())
+        self.window(user, RecentMailFolder::Inbox, days, limit, texts)
+            .await
+    }
+
+    async fn sent_window(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        days: u16,
+        limit: u16,
+        texts: u16,
+    ) -> anyhow::Result<Vec<InboxMessage>> {
+        self.window(user, RecentMailFolder::Sent, days, limit, texts)
+            .await
     }
 
     async fn apps(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<String>> {
@@ -74,6 +79,28 @@ where
 
     async fn crm(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<bool> {
         team_crm_access(&self.teams, &self.crm, user).await
+    }
+}
+
+impl<Connections, Connect, Teams, Crm> HarnessSuggestionSources<Connections, Connect, Teams, Crm> {
+    /// The person's mail in `folder` over the last `days` days.
+    async fn window(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: RecentMailFolder,
+        days: u16,
+        limit: u16,
+        texts: u16,
+    ) -> anyhow::Result<Vec<InboxMessage>> {
+        let window = InboxWindow {
+            folder,
+            days,
+            limit,
+            texts,
+            snippet_chars: SNIPPET_CHARS,
+        };
+        let response = self.email.get_inbox_window(user.as_ref(), window).await?;
+        Ok(response.messages.into_iter().map(inbox_message).collect())
     }
 }
 

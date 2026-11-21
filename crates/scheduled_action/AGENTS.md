@@ -245,10 +245,13 @@ each run.
   one model call (`WORK_TRIES`: asked once more when its answer strays
   from the list's shape), `WORK_MODEL` thinking little, over the person's last 30
   days of mail, up to 500 messages, the text of the newest 100, read through
-  `SuggestionSources::inbox_window`; the answer bounded by `WorkList::from_answer`
+  `SuggestionSources::inbox_window`, beside what they sent in those days, up
+  to `SENT_MESSAGES` with the text of the newest `SENT_TEXTS`, through
+  `SuggestionSources::sent_window`; the answer bounded by `WorkList::from_answer`
   and passed inside `<untrusted>` tags), and drafts one routine per stream
   the catalog lacks, at most `MAX_DRAFTS`. The list is stored nowhere; its
-  fields (senders, cadence, what each asks, who already handles it) are
+  fields (senders, cadence, what each asks, what the person does with it and
+  to whom, who already handles it) are
   meant to serve other setup suggestions later. A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
@@ -297,7 +300,7 @@ each run.
   generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Spans:
   `routine.suggestions.brief` (with its `part`), `.find_work` (with
-  `.read_month` and `.list_work` under it), `.suggest`, `.review`,
+  `.read_month`, `.read_sent` and `.list_work` under it), `.suggest`, `.review`,
   `.retire`, `.texts`; log events
   `routine_suggestions.generated` and `.surface` (from `record`, after a
   generation's routines sessions), `.suggested`, `.retired`, `.dismissed`,

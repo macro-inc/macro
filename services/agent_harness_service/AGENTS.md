@@ -284,7 +284,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route, and at onboarding with
-  `routine-suggestions-find-work` on the last 30 days of it
+  `routine-suggestions-find-work` on the last 30 days of it and of the
+  person's sent mail (`folder=sent`)
   for finding the work in it (`RouterWorkModel`, a structured completion
   recorded as the first drafting session's non-billable usage), the person's connected
   Pipedream apps, and whether CRM's company tools would let them add a

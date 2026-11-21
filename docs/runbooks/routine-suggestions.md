@@ -19,7 +19,8 @@ Routine suggestions are behind the `enable-routine-suggestions` flag.
 With `routine-suggestions-find-work` also on, an onboarding runs one
 routines session that picks catalog routines at once and, once one model
 call (asked once more when its answer strays from the list's shape) has
-listed the recurring work in the person's last 30 days of mail, up to three
+listed the recurring work in the person's last 30 days of mail (what reached
+them and what they sent), up to three
 that draft, each from its share of the streams; one drafts from the newest
 mail when none are found (`suggestion.session.part` is `picks` or
 `drafts`; `whole` otherwise). Nightly and manual runs keep one session.
@@ -72,8 +73,9 @@ only. It notifies; it does not page.
   one drafting session to the newest mail alone, in place of up to three
   drafting from shares of the streams found. Under it,
   `routine.suggestions.find_work` counts the messages read (`.messages`,
-  `.texts`), the streams and the model calls (`.tries`); its
-  `routine.suggestions.read_month` child times the mail read and
+  `.texts`, `.sent`), the streams and the model calls (`.tries`); its
+  `routine.suggestions.read_month` and `.read_sent` children time the mail
+  reads (a failed read of either fails the finding) and
   `routine.suggestions.list_work` each model call. Check email-service health
   for the first and the model provider for the second.
 - Levers: a person keeps Macro's templates either way. Onboarding runs once
