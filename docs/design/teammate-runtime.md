@@ -297,6 +297,16 @@ Because the filter sees the connection, not the lookup, DNS rebinding, a
 redirect, a proxy `CONNECT` to a private target and odd IP spellings all end
 in a dropped connect.
 
+What the rules don't cover:
+
+- **Facts from the start.** macrod reads the host's addresses, prefixes,
+  routes and engine networks when a teammate starts. An interface, a route
+  or an engine network on a public subnet that appears later is covered only
+  from that teammate's next start.
+- **The LAN resolver's DNS port.** When the engine forwards DNS to a resolver
+  on the LAN (a home router, say), port 53 on that one address is reachable
+  from the agent, as DNS needs. Nothing else on that address is.
+
 macrod picks the engine with `[teammates] engine = "auto" | "docker" |
 "podman"`. `auto` tries Docker, then Podman, and takes the first whose
 isolation probe passes. The host report names the engine, and a machine
@@ -660,7 +670,7 @@ is lowered.
 | Linux x86-64 | Docker Engine | Target. Status: see *Test log*. |
 | Linux x86-64 | Rootless Podman | Target. Status: see *Test log*. |
 | Linux arm64 | Docker or Podman | Target (image built for `aarch64-linux`). Status: see *Test log*. |
-| macOS, Windows | Docker Desktop, Podman machine | Detected and allowed, labelled experimental. Not tested. |
+| macOS, Windows | Docker Desktop, Podman machine | Detected, but no teammate runs there: macrod can't read the host's addresses and routes the rules need (`ip` is missing), so the machine reports `networkIsolationUnavailable` and the Invite form shows it disabled with *Can't lock down an agent's network on this machine.* |
 
 ### Provider sign-in and sessions
 
@@ -714,7 +724,7 @@ so it is off everywhere.
 
 - No erase path: nothing here converts or erases a person's computer.
 - No container on hosted computers.
-- No registry publishing, and no egress restriction (see *Network*).
+- No registry publishing.
 
 ## Acceptance checks
 
