@@ -8,6 +8,7 @@ mod test;
 
 use std::time::Duration;
 
+use crate::domain::delivery::MAX_HTTP_ATTEMPTS;
 use crate::domain::{
     mcp::{
         models::McpEventQueueMessage,
@@ -174,9 +175,15 @@ where
             return;
         };
 
-        // The queue reports the count when asked; without it, count this as a
-        // first attempt and let the queue's redrive policy bound retries.
-        let receive_count = message.receive_count.unwrap_or(1);
+        // The count is always asked for. Without it the attempts cannot be
+        // bounded, so this receipt is the last: one POST, no retry.
+        let receive_count = message.receive_count.unwrap_or_else(|| {
+            tracing::warn!(
+                mcp_subscription_id = %mcp_message.mcp_subscription_id,
+                "mcp event message without a receive count; treating it as the last attempt"
+            );
+            MAX_HTTP_ATTEMPTS
+        });
         let disposition = self.mcp.deliver(mcp_message, receive_count).await;
         self.settle(receipt_handle, disposition).await;
     }

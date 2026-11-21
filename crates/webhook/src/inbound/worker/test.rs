@@ -456,9 +456,9 @@ async fn mcp_messages_go_to_mcp_delivery_with_their_receive_count() {
 }
 
 #[tokio::test]
-async fn mcp_retries_change_visibility_and_a_missing_count_is_a_first_attempt() {
+async fn mcp_retries_change_visibility() {
     let delay = Duration::from_secs(60);
-    let (message, raw) = mcp_raw_message("receipt-mcp", None);
+    let (message, raw) = mcp_raw_message("receipt-mcp", Some(1));
     let queue = TestQueue::with_receive_result(Ok(vec![raw]));
     let mcp = TestMcpDelivery::new(WebhookWorkerDisposition::RetryAfter(delay));
     let worker = WebhookEventWorker::new(queue.clone(), TestDeliveryService::new([]))
@@ -468,6 +468,19 @@ async fn mcp_retries_change_visibility_and_a_missing_count_is_a_first_attempt() 
 
     assert_eq!(mcp.received(), [(message, 1)]);
     assert_eq!(queue.delay_requests(), [("receipt-mcp".to_string(), delay)]);
+}
+
+#[tokio::test]
+async fn a_missing_receive_count_is_the_last_attempt() {
+    let (message, raw) = mcp_raw_message("receipt-mcp", None);
+    let queue = TestQueue::with_receive_result(Ok(vec![raw]));
+    let mcp = TestMcpDelivery::new(WebhookWorkerDisposition::Acknowledge);
+    let worker = WebhookEventWorker::new(queue.clone(), TestDeliveryService::new([]))
+        .with_mcp_delivery(mcp.clone());
+
+    worker.poll_and_process_batch().await;
+
+    assert_eq!(mcp.received(), [(message, MAX_HTTP_ATTEMPTS)]);
 }
 
 #[tokio::test]
