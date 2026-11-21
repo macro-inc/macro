@@ -152,7 +152,10 @@ export async function missedLive(arriving: Locator): Promise<boolean> {
     return false;
   } catch (error) {
     if ((await arriving.count()) > 0) {
-      throw error;
+      // On the page after all: it arrived as the wait ended, or it is there
+      // twice or hidden, which this check then fails for.
+      await expect(arriving).toBeVisible();
+      return false;
     }
     await failsSometimes(async () => {
       throw error;

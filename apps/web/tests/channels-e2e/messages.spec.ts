@@ -121,6 +121,7 @@ test('MSG-03 a quick back-and-forth between two people reads in the same order f
     try {
       await expect
         .poll(async () => {
+          shown = [];
           shown = await view.topLevelByAuthor();
           return shown;
         })

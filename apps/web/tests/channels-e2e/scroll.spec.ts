@@ -125,6 +125,7 @@ test('SCROLL-04 scrolled up, a message from someone else does not move what is b
     }
   });
   if (missed) {
+    expect(await view.list.evaluate((list) => list.scrollHeight)).toBe(height);
     expect(await view.topVisible()).toEqual(reading);
     await page.reload();
     await view.shown();
