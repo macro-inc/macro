@@ -46,11 +46,11 @@ export default {
   failedNetworkIsolation:
     "Couldn't lock down its network on {{host}}, so it isn't running.",
   failedEgressBlocked:
-    "{{host}} has no route to the internet, so it isn't running.",
+    "{{host}} has no route to the internet, so it isn't running. It starts once {{host}} is back online.",
   failedHostUnsupported:
     "Agents can't run on {{host}}. Move it to another computer.",
   hostRemoved:
-    'Stopped: {{host}} can no longer host it. Move it to one of your computers to run it again.',
+    "Stopped: {{host}}'s owner can no longer host it for this team. Its chats and memory are kept; an admin can move it to one of their computers.",
   rolledBackCrashLoop:
     'Running the previous version: the update kept crashing.',
   rolledBackImageUnavailable:

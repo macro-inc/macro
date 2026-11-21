@@ -26,7 +26,7 @@ describe('installProblemLine', () => {
       "Couldn't lock down its network on demo-laptop, so it isn't running."
     );
     expect(line('egressBlocked')).toBe(
-      "demo-laptop has no route to the internet, so it isn't running."
+      "demo-laptop has no route to the internet, so it isn't running. It starts once demo-laptop is back online."
     );
     expect(line('hostUnsupported')).toBe(
       "Agents can't run on demo-laptop. Move it to another computer."
@@ -35,7 +35,7 @@ describe('installProblemLine', () => {
 
   it('says a parked agent was stopped because its machine may no longer host it', () => {
     expect(installProblemLine({ kind: 'hostRemoved' }, 'demo-laptop')).toBe(
-      'Stopped: demo-laptop can no longer host it. Move it to one of your computers to run it again.'
+      "Stopped: demo-laptop's owner can no longer host it for this team. Its chats and memory are kept; an admin can move it to one of their computers."
     );
   });
 

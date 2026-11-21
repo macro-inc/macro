@@ -316,6 +316,12 @@ What the rules don't cover:
 - **The LAN resolver's DNS port.** When the engine forwards DNS to a resolver
   on the LAN (a home router, say), port 53 on that one address is reachable
   from the agent, as DNS needs. Nothing else on that address is.
+- **Macro reached through a specific route.** A host that reaches Macro only
+  through a narrower route (a VPN that routes just Macro's addresses, with no
+  default or split default) has that route's network dropped like any other,
+  so the agent can't reach Macro. It isn't reported as `egressBlocked`, which
+  covers only a host with no route to the internet at all; the agent shows
+  as offline.
 
 macrod picks the engine with `[teammates] engine = "auto" | "docker" |
 "podman"`. `auto` tries Docker, then Podman, and takes the first whose
