@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mcp::ports::McpSubscriptionError;
 use crate::domain::{
     events::{
         WebhookCreatedMetadata, WebhookDeletedMetadata, WebhookTopicEvent, WebhookUpdatedMetadata,
@@ -2230,24 +2231,32 @@ async fn mcp_fan_out_gets_the_webhook_audience_after_webhooks_are_queued() {
     );
 }
 
-#[tokio::test]
-async fn mcp_fan_out_failure_is_transient() {
-    let TestBrokerEvent::Document(document_event) = document_event_cases().remove(0).event else {
+#[tokio::test(start_paused = true)]
+async fn a_failing_mcp_fan_out_is_retried_then_dropped_without_failing_ingestion() {
+    let TestBrokerEvent::Document(document_event) = document_event_cases().remove(3).event else {
         panic!("a document case");
     };
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
-    let repository = MockRepository::new(vec![PERSONAL_WORKSPACE_ID.to_string()], Vec::new());
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_personal", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
     let mcp = RecordingMcpFanout {
         fail: true,
         ..RecordingMcpFanout::default()
     };
-    let service = service(access, repository, MockEnqueuer::default()).with_mcp_fanout(mcp);
+    let service = service(access, repository, enqueuer.clone()).with_mcp_fanout(mcp.clone());
 
-    let error = service
+    service
         .ingest_document_event(document_event)
         .await
-        .expect_err("fan-out failure fails ingestion");
+        .expect("an MCP Events failure does not fail ingestion");
 
-    assert!(matches!(error, WebhookEventIngestionError::McpFanout(_)));
-    assert!(error.is_transient());
+    assert_eq!(lock(&mcp.calls).len(), 3, "tried three times");
+    assert_eq!(
+        lock(&enqueuer.state).attempted_messages.len(),
+        1,
+        "the webhook was queued once"
+    );
 }
