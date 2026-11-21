@@ -212,3 +212,35 @@ describe('responsive dialog', () => {
     expect(open()).toBe(false);
   });
 });
+
+it('keeps drawer actions outside scrolling content while submitting its form', async () => {
+  const submitted = vi.fn();
+  render(() => (
+    <Dialog open onOpenAutoFocus={(event) => event.preventDefault()}>
+      <Dialog.Title>Edit details</Dialog.Title>
+      <form
+        id="pinned-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitted();
+        }}
+      >
+        <input aria-label="Name" required value="Test content" />
+      </form>
+      <Dialog.Footer>
+        <Button type="submit" form="pinned-form">
+          Save details
+        </Button>
+      </Dialog.Footer>
+    </Dialog>
+  ));
+  const action = await screen.findByRole('button', { name: 'Save details' });
+  expect(action.closest('[data-drawer-scroll-body]')).toBeNull();
+  expect(
+    screen
+      .getByRole('textbox', { name: 'Name' })
+      .closest('[data-drawer-scroll-body]')
+  ).not.toBeNull();
+  fireEvent.click(action);
+  expect(submitted).toHaveBeenCalledOnce();
+});

@@ -74,8 +74,9 @@ read their code, and follow that pattern rather than inventing a new one.
   target with `initialFocusEl` or `onInitialFocus`, never an autofocus of your
   own.
 - Actions that must stay in reach while a sheet scrolls sit in its pinned
-  chrome between the handle and `MobileDrawer.ScrollBody`, never in a sticky
-  band inside the scroll. A touch popover split exposes that slot as
+  chrome outside `MobileDrawer.ScrollBody`, never in a sticky band inside
+  the scroll. Use `Dialog.Footer` for dialog actions; it renders in the desktop panel
+  and stays pinned outside the phone drawer body. A touch popover split exposes that slot as
   `drawerHeader` on its panel context; see `MobileEventForm`. Content that
   grows to fill its sheet (a composer's description) calls `fillDrawer` from
   that context to open at a fixed height; see `MobileTaskComposer`.

@@ -98,17 +98,21 @@ it('keeps Inbox included and drops the extra watch when its folder is excluded',
   const watched = await screen.findByLabelText(
     'Watch for new mail alongside Inbox'
   );
-  expect(watched).toHaveProperty('value', 'review');
+  expect(watched.textContent).toContain('Review');
   expect(screen.getByText('Outside the latest sync')).toBeTruthy();
   expect(screen.getByText('IDLE, UIDPLUS, SMTPUTF8')).toBeTruthy();
   expect(screen.getByText('5,000,000 bytes')).toBeTruthy();
   expect(screen.queryByLabelText('Sync Inbox')).toBeNull();
   expect(screen.queryByLabelText(/password/i)).toBeNull();
-  fireEvent.change(screen.getByLabelText('Role for Review'), {
-    target: { value: 'archive' },
-  });
-  fireEvent.click(screen.getByLabelText('Sync Review'));
-  expect(watched).toHaveProperty('value', '');
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: /^Role for Review\b/ }),
+    {
+      key: 'ArrowDown',
+    }
+  );
+  fireEvent.click(await screen.findByRole('option', { name: 'Archive' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Sync Review' }));
+  expect(watched.textContent).toContain('Inbox only');
   fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
   await waitFor(() =>
     expect(api.update).toHaveBeenCalledWith(

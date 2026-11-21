@@ -4,6 +4,8 @@ import { startUiOperation } from '@app/observability/ui-operation';
 import { useEmail } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import { Collapsible } from '@kobalte/core/collapsible';
 import type { Span } from '@macro-inc/observability';
 import {
   currentQueryAccount,
@@ -15,12 +17,14 @@ import { imapConnect, imapDiscover } from '@queries/email/imap';
 import type { Discovery, Endpoint } from '@service-email/generated/schemas';
 import {
   Button,
+  Checkbox,
   Dialog,
   Input,
   type ManagedDialogProps,
   openDialog,
   Panel,
   SecretInput,
+  Select,
 } from '@ui';
 import {
   createEffect,
@@ -41,6 +45,7 @@ function blankEndpoint(email: string, port: number): Endpoint {
 function EndpointFields(props: {
   protocol: 'IMAP' | 'SMTP';
   endpoint: Endpoint;
+  disabled?: boolean;
   onChange: (endpoint: Endpoint) => void;
 }) {
   const implicit = props.protocol === 'IMAP' ? 993 : 465;
@@ -65,28 +70,41 @@ function EndpointFields(props: {
           }
         />
       </label>
-      <label class="grid gap-1 text-sm">
-        {t('imap.connection')}
-        <select
-          class="rounded border border-edge-frame bg-control px-3 py-2 text-ink"
-          value={props.endpoint.port}
-          onChange={(event) => {
-            const port = Number(event.currentTarget.value);
-            props.onChange({
-              ...props.endpoint,
-              port,
-              tls: port === implicit ? 'implicit' : 'start_tls',
-            });
-          }}
-        >
-          <option value={implicit}>
-            {t('imap.tlsPort', { port: String(implicit) })}
-          </option>
-          <option value={startTls}>
-            {t('imap.startTlsPort', { port: String(startTls) })}
-          </option>
-        </select>
-      </label>
+      <Select<number>
+        class="grid gap-1 text-sm"
+        options={[implicit, startTls]}
+        value={props.endpoint.port}
+        optionTextValue={(port) =>
+          port === implicit
+            ? t('imap.tlsPort', { port: String(port) })
+            : t('imap.startTlsPort', { port: String(port) })
+        }
+        disabled={props.disabled}
+        disallowEmptySelection
+        onChange={(port) => {
+          if (port == null) return;
+          props.onChange({
+            ...props.endpoint,
+            port,
+            tls: port === implicit ? 'implicit' : 'start_tls',
+          });
+        }}
+      >
+        <Select.Label>{t('imap.connection')}</Select.Label>
+        <Select.Trigger>
+          <Select.Value<number>>
+            {(state) =>
+              state.selectedOption() === implicit
+                ? t('imap.tlsPort', { port: String(implicit) })
+                : t('imap.startTlsPort', { port: String(startTls) })
+            }
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+        <Select.Content portalScope="local">
+          <Select.Listbox />
+        </Select.Content>
+      </Select>
       <label class="grid gap-1 text-sm">
         {t('imap.username')}
         <Input
@@ -171,6 +189,7 @@ function ConnectForm(props: ImapConnectProps) {
   const [separatePassword, setSeparatePassword] = createSignal(false);
   const [confirmed, setConfirmed] = createSignal(false);
   const [manual, setManual] = createSignal(false);
+  const formId = createUniqueId();
   const passwordId = createUniqueId();
   const smtpPasswordId = createUniqueId();
   const [password, setPassword] = createSignal('');
@@ -373,25 +392,50 @@ function ConnectForm(props: ImapConnectProps) {
     }
   };
 
+  const actions = () => (
+    <div class="flex justify-end gap-2">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => props.onOpenChange(false)}
+      >
+        {t('imap.cancel')}
+      </Button>
+      <Show when={phase() === 'address' || canUsePassword()}>
+        <Button
+          type="submit"
+          form={formId}
+          variant="primary"
+          loading={busy()}
+          disabled={phase() === 'servers' && !confirmed()}
+        >
+          {phase() === 'address'
+            ? t('imap.findSettings')
+            : t('imap.connectInbox')}
+        </Button>
+      </Show>
+    </div>
+  );
+
   return (
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
       position="center"
-      fullscreen={isMobile()}
-      class={isMobile() ? 'pt-(--safe-top) pb-(--safe-bottom)' : 'w-118'}
+      class={isMobile() ? undefined : 'w-118'}
     >
       <Panel
         depth={2}
-        class={isMobile() ? 'h-full' : 'max-h-[85dvh] rounded-xl'}
+        class={isMobile() ? undefined : 'max-h-[85dvh] rounded-xl'}
       >
         <Panel.Header class="px-5">
           <Dialog.Title class="font-semibold">
             {props.linkId ? t('imap.reconnect') : t('imap.connectEmail')}
           </Dialog.Title>
         </Panel.Header>
-        <Panel.Body scroll class="p-5">
+        <Panel.Body scroll={!isMobile()} class="p-5">
           <form
+            id={formId}
             class="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
@@ -465,44 +509,55 @@ function ConnectForm(props: ImapConnectProps) {
                       {discovery()?.provider}
                     </span>
                   </Show>
-                  <details
+                  <Collapsible
+                    forceMount
                     open={manual()}
-                    onToggle={(event) => setManual(event.currentTarget.open)}
+                    onOpenChange={setManual}
                   >
-                    <summary class="text-sm font-medium">
+                    <Collapsible.Trigger
+                      as={Button}
+                      type="button"
+                      variant="ghost"
+                      class="group justify-start"
+                    >
                       {t('imap.serverSettings')}
-                    </summary>
-                    <div class="mt-3 grid gap-4 sm:grid-cols-2">
-                      <EndpointFields
-                        protocol="IMAP"
-                        endpoint={imap()}
-                        onChange={(value) => {
-                          changeSettings();
-                          setImap(value);
-                        }}
-                      />
-                      <EndpointFields
-                        protocol="SMTP"
-                        endpoint={smtp()}
-                        onChange={(value) => {
-                          changeSettings();
-                          setSmtp(value);
-                        }}
-                      />
-                    </div>
-                  </details>
-                  <label class="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      required
-                      disabled={!imap().host || !smtp().host}
-                      checked={confirmed()}
-                      onChange={(event) => {
-                        setConfirmed(event.currentTarget.checked);
-                        clearPasswords();
-                      }}
-                    />
-                    <span>
+                      <CaretDownIcon class="size-3 group-data-expanded:rotate-180" />
+                    </Collapsible.Trigger>
+                    <Collapsible.Content class="data-closed:hidden">
+                      <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                        <EndpointFields
+                          disabled={busy()}
+                          protocol="IMAP"
+                          endpoint={imap()}
+                          onChange={(value) => {
+                            changeSettings();
+                            setImap(value);
+                          }}
+                        />
+                        <EndpointFields
+                          disabled={busy()}
+                          protocol="SMTP"
+                          endpoint={smtp()}
+                          onChange={(value) => {
+                            changeSettings();
+                            setSmtp(value);
+                          }}
+                        />
+                      </div>
+                    </Collapsible.Content>
+                  </Collapsible>
+                  <Checkbox
+                    required
+                    disabled={busy() || !imap().host || !smtp().host}
+                    checked={confirmed()}
+                    onChange={(checked) => {
+                      setConfirmed(checked);
+                      clearPasswords();
+                    }}
+                    class="items-start text-sm"
+                  >
+                    <Checkbox.Control />
+                    <Checkbox.Label>
                       {imap().host === smtp().host
                         ? t('imap.trustServer', {
                             server: imap().host || t('imap.incomingServer'),
@@ -511,8 +566,8 @@ function ConnectForm(props: ImapConnectProps) {
                             incoming: imap().host || t('imap.incomingServer'),
                             outgoing: smtp().host || t('imap.outgoingServer'),
                           })}
-                    </span>
-                  </label>
+                    </Checkbox.Label>
+                  </Checkbox>
                   <Show when={helpUrl()}>
                     {(url) => (
                       <a
@@ -536,17 +591,20 @@ function ConnectForm(props: ImapConnectProps) {
                       onValueChange={setPassword}
                     />
                   </div>
-                  <label class="flex gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={separatePassword()}
-                      onChange={(event) => {
-                        setSmtpPassword('');
-                        setSeparatePassword(event.currentTarget.checked);
-                      }}
-                    />
-                    {t('imap.separatePassword')}
-                  </label>
+                  <Checkbox
+                    disabled={busy()}
+                    checked={separatePassword()}
+                    onChange={(checked) => {
+                      setSmtpPassword('');
+                      setSeparatePassword(checked);
+                    }}
+                    class="text-sm"
+                  >
+                    <Checkbox.Control />
+                    <Checkbox.Label>
+                      {t('imap.separatePassword')}
+                    </Checkbox.Label>
+                  </Checkbox>
                   <Show when={separatePassword()}>
                     <div class="grid gap-1 text-sm">
                       <label for={smtpPasswordId}>
@@ -574,29 +632,9 @@ function ConnectForm(props: ImapConnectProps) {
                 </Show>
               </div>
             </fieldset>
-            <div class="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => props.onOpenChange(false)}
-              >
-                {t('imap.cancel')}
-              </Button>
-              <Show when={phase() === 'address' || canUsePassword()}>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  loading={busy()}
-                  disabled={phase() === 'servers' && !confirmed()}
-                >
-                  {phase() === 'address'
-                    ? t('imap.findSettings')
-                    : t('imap.connectInbox')}
-                </Button>
-              </Show>
-            </div>
           </form>
         </Panel.Body>
+        <Dialog.Footer class="justify-end px-5 py-3">{actions()}</Dialog.Footer>
       </Panel>
     </Dialog>
   );

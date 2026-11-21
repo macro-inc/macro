@@ -21,16 +21,16 @@ import type {
   ServerFeatures,
   UpdateFolderSettings,
 } from '@service-email/generated/schemas';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Checkbox, Dialog, Panel } from '@ui';
 import {
   createEffect,
   createSignal,
   For,
-  type JSX,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
+import { SettingsSelect } from './components/settings-select';
 import { SettingsButton } from './primitives';
 
 const roleLabels: Record<FolderRole, TranslationKey> = {
@@ -50,14 +50,6 @@ const selectableRoles = [
   'junk',
   'other',
 ] as const;
-function FolderSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...props}
-      class="rounded border border-edge-frame bg-control px-2 py-1 text-sm text-ink"
-    />
-  );
-}
 
 function ServerDetails(props: { name: string; endpoint: Endpoint }) {
   return (
@@ -257,26 +249,41 @@ function SettingsDialog(props: {
     if (currentWatch && plannedRole(currentWatch) === 'drafts') setWatch('');
   }
 
+  const actions = () => (
+    <div class="flex justify-end gap-2">
+      <Button variant="secondary" onClick={props.close}>
+        {t('imap.close')}
+      </Button>
+      <Button
+        variant="primary"
+        loading={saving()}
+        disabled={!settings() || saving()}
+        onClick={(event) => fireAndForget(save(event), 'imap-save-settings')}
+      >
+        {t('imap.saveSettings')}
+      </Button>
+    </div>
+  );
+
   return (
     <Dialog
       open
       onOpenChange={(open) => {
         if (!open) props.close();
       }}
-      fullscreen={isMobile()}
       position="center"
-      class={isMobile() ? 'pt-(--safe-top) pb-(--safe-bottom)' : 'w-128'}
+      class={isMobile() ? undefined : 'w-128'}
     >
       <Panel
         depth={2}
-        class={isMobile() ? 'h-full' : 'max-h-[85dvh] rounded-xl'}
+        class={isMobile() ? undefined : 'max-h-[85dvh] rounded-xl'}
       >
         <Panel.Header class="px-5">
           <Dialog.Title class="font-semibold">
             {t('imap.mailServerSettings')}
           </Dialog.Title>
         </Panel.Header>
-        <Panel.Body scroll class="flex flex-col gap-4 p-5">
+        <Panel.Body scroll={!isMobile()} class="flex flex-col gap-4 p-5">
           <Dialog.Description class="ph-no-capture text-sm text-ink-muted">
             {props.emailAddress}
           </Dialog.Description>
@@ -377,82 +384,92 @@ function SettingsDialog(props: {
                             }
                           >
                             <div class="flex flex-wrap items-center gap-3">
-                              <label class="flex items-center gap-2">
-                                {t('imap.role')}
-                                <FolderSelect
-                                  aria-label={t('imap.roleFor', {
+                              <div class="grid min-w-0 gap-1">
+                                <span>{t('imap.role')}</span>
+                                <SettingsSelect
+                                  label={t('imap.roleFor', {
                                     folder: folder.name,
                                   })}
-                                  value={roles()[folder.id] ?? ''}
-                                  onChange={(e) =>
-                                    changeRole(folder.id, e.currentTarget.value)
+                                  value={roles()[folder.id] ?? 'automatic'}
+                                  disabled={saving()}
+                                  options={[
+                                    {
+                                      id: 'automatic',
+                                      name: t('imap.automaticRole', {
+                                        role: t(
+                                          roleLabels[folder.detectedRole]
+                                        ),
+                                      }),
+                                    },
+                                    ...selectableRoles.map((role) => ({
+                                      id: role,
+                                      name: t(roleLabels[role]),
+                                    })),
+                                  ]}
+                                  onChange={(role) =>
+                                    changeRole(folder.id, role)
                                   }
-                                >
-                                  <option value="">
-                                    {t('imap.automaticRole', {
-                                      role: t(roleLabels[folder.detectedRole]),
-                                    })}
-                                  </option>
-                                  <For each={selectableRoles}>
-                                    {(role) => (
-                                      <option value={role}>
-                                        {t(roleLabels[role])}
-                                      </option>
-                                    )}
-                                  </For>
-                                </FolderSelect>
-                              </label>
-                              <label class="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  aria-label={t('imap.syncNamedFolder', {
-                                    folder: folder.name,
-                                  })}
-                                  checked={!excluded().includes(folder.id)}
-                                  onChange={(e) => {
-                                    if (e.currentTarget.checked)
-                                      setExcluded((previous) =>
-                                        previous.filter(
-                                          (id) => id !== folder.id
-                                        )
-                                      );
-                                    else {
-                                      setExcluded((previous) => [
-                                        ...previous,
-                                        folder.id,
-                                      ]);
-                                      if (watch() === folder.id) setWatch('');
-                                    }
-                                  }}
                                 />
-                                {t('imap.syncFolder')}
-                              </label>
+                              </div>
+                              <Checkbox
+                                disabled={saving()}
+                                checked={!excluded().includes(folder.id)}
+                                onChange={(checked) => {
+                                  if (checked)
+                                    setExcluded((previous) =>
+                                      previous.filter((id) => id !== folder.id)
+                                    );
+                                  else {
+                                    setExcluded((previous) => [
+                                      ...previous,
+                                      folder.id,
+                                    ]);
+                                    if (watch() === folder.id) setWatch('');
+                                  }
+                                }}
+                              >
+                                <Checkbox.Control />
+                                <Checkbox.Label>
+                                  <span aria-hidden="true">
+                                    {t('imap.syncFolder')}
+                                  </span>
+                                  <span class="sr-only">
+                                    {t('imap.syncNamedFolder', {
+                                      folder: folder.name,
+                                    })}
+                                  </span>
+                                </Checkbox.Label>
+                              </Checkbox>
                             </div>
                           </Show>
                         </div>
                       )}
                     </For>
-                    <label class="flex flex-col gap-1 text-sm">
-                      {t('imap.watchFolder')}
-                      <FolderSelect
-                        value={watch()}
-                        onChange={(e) => setWatch(e.currentTarget.value)}
-                      >
-                        <option value="">{t('imap.inboxOnly')}</option>
-                        <For
-                          each={data().folders.filter(
-                            (f) =>
-                              f.detectedRole !== 'inbox' &&
-                              plannedRole(f) !== 'drafts' &&
-                              !excluded().includes(f.id)
-                          )}
-                        >
-                          {(folder) => (
-                            <option value={folder.id}>{folder.name}</option>
-                          )}
-                        </For>
-                      </FolderSelect>
-                    </label>
+                    <div class="grid gap-1 text-sm">
+                      <span>{t('imap.watchFolder')}</span>
+                      <SettingsSelect
+                        label={t('imap.watchFolder')}
+                        value={watch() || 'inbox-only'}
+                        disabled={saving()}
+                        onChange={(id) =>
+                          setWatch(id === 'inbox-only' ? '' : id)
+                        }
+                        options={[
+                          { id: 'inbox-only', name: t('imap.inboxOnly') },
+                          ...data()
+                            .folders.filter(
+                              (folder) =>
+                                folder.detectedRole !== 'inbox' &&
+                                plannedRole(folder) !== 'drafts' &&
+                                !excluded().includes(folder.id)
+                            )
+                            .map((folder) => ({
+                              id: folder.id,
+                              name: folder.name,
+                            })),
+                        ]}
+                      />
+                    </div>
                   </Show>
                 </fieldset>
               </>
@@ -465,21 +482,8 @@ function SettingsDialog(props: {
               </p>
             )}
           </Show>
-          <div class="flex justify-end gap-2">
-            <Button variant="secondary" onClick={props.close}>
-              {t('imap.close')}
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!settings() || saving()}
-              onClick={(event) =>
-                fireAndForget(save(event), 'imap-save-settings')
-              }
-            >
-              {saving() ? t('imap.saving') : t('imap.saveSettings')}
-            </Button>
-          </div>
         </Panel.Body>
+        <Dialog.Footer class="justify-end px-5 py-3">{actions()}</Dialog.Footer>
       </Panel>
     </Dialog>
   );

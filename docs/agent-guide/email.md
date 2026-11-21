@@ -123,11 +123,13 @@ Google- and Microsoft-hosted discovery offers consent first when available,
 with **Use an app password instead** as a secondary path. Without provider
 consent availability, the app-password form opens directly. Reconnecting an
 existing IMAP link keeps its bound password workflow and never starts a new
-OAuth link.
+OAuth link. OAuth-first ordering is a user-interface choice; the server
+also accepts authorized IMAP/app-password connections.
 Fastmail opens the direct password flow. Onboarding retains its Google and
 Microsoft actions; a suggested IMAP inbox is an additional secondary choice.
-Phone connection and server-settings dialogs reserve both top and bottom safe
-areas so the final actions stay above the home indicator.
+Connection and server-settings dialogs use Macro selects and checkboxes.
+Desktop actions stay outside the scroll body. Phones use the standard drawer
+with pinned actions above the home indicator.
 
 The IMAP connection and server settings dialogs use the interface language,
 including connection errors, folder roles and accessible labels. Password fields

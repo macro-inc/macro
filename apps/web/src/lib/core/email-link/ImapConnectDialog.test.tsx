@@ -92,6 +92,7 @@ it('binds reconnect to its inbox, requires confirmation again when a destination
   fireEvent.input(incomingPassword, {
     target: { value: 'first-app-password' },
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
   const smtp = screen.getByRole('group', {
     name: 'Outgoing mail (SMTP)',
     hidden: true,
@@ -192,6 +193,7 @@ it('retains confirmed settings and provider help after a rejected login, then re
       .getByRole('link', { name: 'Create an app password' })
       .getAttribute('href')
   ).toBe('https://example.com/app-password');
+  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
   const imap = screen.getByRole('group', { name: 'Incoming mail (IMAP)' });
   expect(within(imap).getByLabelText('Server name')).toHaveProperty(
     'value',
