@@ -13,6 +13,7 @@ import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
 import { createEffect, createMemo, on, onCleanup, onMount } from 'solid-js';
 import { joinChannelCall } from './join-channel-call';
 import { requestIosMicrophonePermission } from './microphone-access';
+import { meetingCallIdOfNativeCallKey } from './native-call-key';
 import { isNativeCallEnabled } from './native-call-platform';
 import {
   type NativeCallSnapshot,
@@ -22,7 +23,10 @@ import {
 import { openChannelCallTab } from './open-channel-call-tab';
 import { useCallKitThemeSync } from './use-callkit-theme-sync';
 
-export { isNativeCallEnabled } from './native-call-platform';
+export {
+  isNativeCallEnabled,
+  isNativeIosCallKitEnabled,
+} from './native-call-platform';
 
 // The 'iosvoip' variant exists in the backend but the generated schema has not been
 // regenerated to include it yet. Cast until a regeneration picks it up.
@@ -223,12 +227,21 @@ export function registerCallKitCallEndedHandler(
   };
 }
 
-function getActiveCallEndedHandler(): CallEndedHandler | undefined {
-  return callEndedHandlers[callEndedHandlers.length - 1];
+/**
+ * Calls `onEnded` with the call's (lowercase) id when the native call screen
+ * ends a call. Register only while a native call of the caller's is live: the
+ * latest handler takes the event from the ones before it.
+ */
+export function watchNativeCallEnded(
+  onEnded: (callId: string) => void
+): () => void {
+  return registerCallKitCallEndedHandler(({ callId }) =>
+    onEnded(callId.toLowerCase())
+  );
 }
 
-export function isNativeIosCallKitEnabled(): boolean {
-  return isNativeCallEnabled() && isPlatform('ios');
+function getActiveCallEndedHandler(): CallEndedHandler | undefined {
+  return callEndedHandlers[callEndedHandlers.length - 1];
 }
 
 // Fresh CallKit launches can receive answer events before the router tree mounts.
@@ -270,6 +283,35 @@ async function joinChannelCallWhenReady(
     return openChannelCallTab(channelId);
   }
   return joinChannelCall(channelId, { kind: 'join', callId });
+}
+
+type NativeMeetingOpener = (callId: string) => boolean;
+
+const nativeMeetingOpeners: NativeMeetingOpener[] = [];
+
+/**
+ * Registers what returns to a meeting's page when its native call screen
+ * opens. This setup runs outside the router, so a component inside it that
+ * can find the meeting registers. The latest opener that knows the call wins.
+ */
+export function registerNativeMeetingOpener(
+  open: NativeMeetingOpener
+): () => void {
+  if (!isNativeCallEnabled()) return () => {};
+  nativeMeetingOpeners.push(open);
+  return () => {
+    const index = nativeMeetingOpeners.lastIndexOf(open);
+    if (index !== -1) nativeMeetingOpeners.splice(index, 1);
+  };
+}
+
+function openNativeMeeting(callId: string) {
+  const opened = nativeMeetingOpeners.findLast((open) => open(callId));
+  if (!opened) {
+    console.warn('[callkit] no meeting page found for native call', {
+      callId,
+    });
+  }
 }
 
 /**
@@ -531,6 +573,11 @@ export function useCallKitSetup() {
         });
         markNativeCallActivity();
         nativeCall.setBootstrapChannelId(channelId);
+        const meetingCallId = meetingCallIdOfNativeCallKey(channelId);
+        if (meetingCallId) {
+          openNativeMeeting(meetingCallId);
+          return;
+        }
         joinChannelCallWhenReady(channelId, true).catch((err) =>
           console.error(
             '[callkit] joinChannelCallWhenReady (drawer opened) failed',
@@ -948,7 +995,6 @@ export async function startNativeCallKitOutgoingCall(
   console.info('[callkit] starting native outgoing call', {
     channelId: args.channelId,
     callId: args.callId,
-    channelTitle: args.channelTitle,
   });
   await invoke('plugin:call-kit|start_outgoing_call', {
     ...args,

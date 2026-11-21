@@ -377,6 +377,29 @@ right before backgrounding the app each end the call without a PiP or drawer
 returning, and that tapping Join afterwards still rejoins a call that is
 still running.
 
+In the iOS app, a signed-in member's quick calls and meeting links run on the
+same native CallKit session as channel calls, so they keep going while the app
+is in the background; iOS suspends the web view's own media there. Signed-out
+guests, the web, desktop and Android keep browser media
+(`meetings/core/meeting-media-path.ts`). So do channel-linked meeting links,
+which may reach people outside the channel; such a call still drops in the
+background unless it is joined from the channel itself. The native call is keyed
+`meeting:<callId>` instead of a channel (`Call/native-call-key.ts`), so the
+channel lifecycle ignores it and opening the drawer or PiP returns to the
+meeting page. That page shows the meeting's chat with **Open call** and
+**Leave** behind the native drawer, which it opens on arrival; ending the call
+from the drawer or CallKit leaves the meeting like **Leave**, without ending
+whichever call replaced it. A joined meeting holds off automatic reloads; if
+the web view reloads anyway, the call island's Leave still ends the orphaned
+native call. Native media
+starts with the microphone on and the camera off, so the waiting room offers
+no device choices there and says so instead, and asks for no microphone or
+camera, even while sign-in is still loading; mute or turn on the camera on the
+call screen. `meeting.join` records `call.media.path` (`native` or `browser`).
+Verify on a physical iPhone: start a quick call and join a meeting link, open
+another app for a minute, and come back still in the call; reopen the meeting
+from PiP and from the drawer's thumbnail; and end it from the drawer.
+
 Native call logs go to the unified log (subsystem: the app's bundle id,
 category `CallKit`) at notice level, so they survive on the device. Collect
 them from a connected iPhone with

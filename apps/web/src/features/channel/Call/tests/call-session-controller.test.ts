@@ -1,12 +1,30 @@
 import type { CallTokenResponse } from '@service-call/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCallSessionController } from '../CallSessionController';
-import type { NativeCallState } from '../native-call-state';
+import { createRoot } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createCallSessionController,
+  NATIVE_MEETING_START_TIMEOUT_MS,
+} from '../CallSessionController';
+import {
+  createNativeCallState,
+  type NativeCallState,
+} from '../native-call-state';
 
 const native = vi.hoisted(() => ({
   enabled: false,
-  start: vi.fn(async () => undefined),
+  // Like the real call, records the call's key until native reports it.
+  start: vi.fn(
+    async (
+      args: { channelId: string },
+      nativeCall: { setBootstrapChannelId: (key: string) => void }
+    ) => {
+      nativeCall.setBootstrapChannelId(args.channelId);
+    }
+  ),
   end: vi.fn(async () => undefined),
+}));
+vi.mock('../callkit-drawer-theme', () => ({
+  createCallKitDrawerTheme: () => () => ({}),
 }));
 vi.mock('../use-callkit', () => ({
   isNativeCallEnabled: () => native.enabled,
@@ -29,22 +47,37 @@ const token: CallTokenResponse = {
 function setup() {
   const jsConnect = vi.fn(async () => undefined);
   const jsDisconnect = vi.fn(async () => undefined);
+  const nativeCall = createRoot(() => createNativeCallState());
   const controller = createCallSessionController({
-    nativeCall: {
-      snapshot: () => null,
-      bootstrapChannelId: () => null,
-    } as unknown as NativeCallState,
+    nativeCall,
     jsConnect,
     jsDisconnect,
     clearOptimisticJoin: vi.fn(),
   });
-  return { controller, jsConnect, jsDisconnect };
+  return { controller, jsConnect, jsDisconnect, nativeCall };
+}
+
+/** What iOS reports once CallKit starts a call: its id as an uppercase UUID. */
+function reportNativeCall(
+  nativeCall: NativeCallState,
+  key: string,
+  callId: string
+) {
+  nativeCall.setSnapshot({
+    channelId: key,
+    callId: callId.toUpperCase(),
+    connectionState: 'connecting',
+    isAudioMuted: false,
+    isVideoMuted: true,
+    videoOverlayMode: 'hidden',
+  });
 }
 
 beforeEach(() => {
   native.enabled = false;
   vi.clearAllMocks();
 });
+afterEach(() => vi.useRealTimers());
 
 describe('call session platform selection', () => {
   it('passes prejoin media preferences to the browser controller', async () => {
@@ -80,6 +113,105 @@ describe('call session platform selection', () => {
       { ...token, channelId: 'channel-1' },
       { useBrowserSession: true }
     );
+    expect(jsConnect).toHaveBeenCalledOnce();
+    expect(native.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('meetings on native media', () => {
+  const meetingKey = 'meeting:01a1f517-3048-7a99-afa9-5de4b147bf2f';
+  const meetingToken = {
+    ...token,
+    callId: '01a1f517-3048-7a99-afa9-5de4b147bf2f',
+  };
+
+  it('starts CallKit under the meeting key and resolves once native reports the call', async () => {
+    native.enabled = true;
+    const { controller, jsConnect, nativeCall } = setup();
+    native.start.mockImplementationOnce(async () => {
+      reportNativeCall(nativeCall, meetingKey, meetingToken.callId);
+    });
+    await controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+      channelTitle: 'Quick Call',
+    });
+    expect(native.start).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        channelId: meetingKey,
+        callId: meetingToken.callId,
+        channelTitle: 'Quick Call',
+      }),
+      nativeCall
+    );
+    expect(jsConnect).not.toHaveBeenCalled();
+  });
+
+  it('ends the CallKit call and fails the join when native never reports it', async () => {
+    vi.useFakeTimers();
+    native.enabled = true;
+    const { controller } = setup();
+    const connecting = controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
+    const result = expect(connecting).rejects.toThrow(
+      'Native call did not start'
+    );
+    await vi.advanceTimersByTimeAsync(NATIVE_MEETING_START_TIMEOUT_MS);
+    await result;
+    expect(native.end).toHaveBeenCalledOnce();
+  });
+
+  it('does not end a newer call when the meeting never started', async () => {
+    vi.useFakeTimers();
+    native.enabled = true;
+    const { controller, nativeCall } = setup();
+    const connecting = controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
+    const result = expect(connecting).rejects.toThrow(
+      'Native call did not start'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    reportNativeCall(nativeCall, 'channel-2', 'call-2');
+    await vi.advanceTimersByTimeAsync(NATIVE_MEETING_START_TIMEOUT_MS);
+    await result;
+    expect(native.end).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting for the call when the meeting is left', async () => {
+    native.enabled = true;
+    const { controller } = setup();
+    const connecting = controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
+    const result = expect(connecting).rejects.toThrow(
+      'Native call start cancelled'
+    );
+    await Promise.resolve();
+    await controller.disconnect();
+    await result;
+    expect(native.end).toHaveBeenCalledOnce();
+  });
+
+  it('leaves a native meeting through CallKit', async () => {
+    native.enabled = true;
+    const { controller, jsConnect, nativeCall } = setup();
+    native.start.mockImplementationOnce(async () => {
+      reportNativeCall(nativeCall, meetingKey, meetingToken.callId);
+    });
+    await controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
+    await controller.disconnect();
+    expect(native.end).toHaveBeenCalledOnce();
+    expect(jsConnect).not.toHaveBeenCalled();
+  });
+
+  it('keeps browser media for a meeting key off native platforms', async () => {
+    const { controller, jsConnect } = setup();
+    await controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
     expect(jsConnect).toHaveBeenCalledOnce();
     expect(native.start).not.toHaveBeenCalled();
   });

@@ -41,6 +41,11 @@ export type CallSessionConnectMetadata = {
   localTracks?: CallPrejoinTracks;
   /** Public meeting pages use the browser media controls on every platform. */
   useBrowserSession?: boolean;
+  /**
+   * Runs a meeting on native media under this key instead of a channel id;
+   * see `native-call-key.ts`.
+   */
+  nativeCallKey?: string;
   /** Reconnects and restored visits must not announce a new participant. */
   recovery?: boolean;
 };
@@ -57,6 +62,25 @@ export type CallSessionController = {
   ) => Promise<void>;
   disconnect: (options?: CallSessionDisconnectOptions) => Promise<void>;
 };
+
+export type CallMediaPath = 'native' | 'browser';
+
+/**
+ * Where a call's media runs when native calls are available: channel calls
+ * and meetings given a native key go native; channel-less tokens and pages
+ * that ask for browser media stay in the web view.
+ */
+export function nativeCallMediaPath(
+  token: Pick<CallTokenResponse, 'channelId'>,
+  metadata: CallSessionConnectMetadata | undefined
+): CallMediaPath {
+  if (metadata?.useBrowserSession) return 'browser';
+  if (metadata?.nativeCallKey) return 'native';
+  return token.channelId === null ? 'browser' : 'native';
+}
+
+/** How long a meeting waits for native to report the call it started. */
+export const NATIVE_MEETING_START_TIMEOUT_MS = 15_000;
 
 export function createCallSessionController(
   options: CallSessionControllerOptions
@@ -78,9 +102,7 @@ export function createCallSessionController(
       shouldRequestToken: native.shouldRequestToken,
       connectWithToken: (token, metadata) => {
         active =
-          token.channelId === null || metadata?.useBrowserSession
-            ? browser
-            : native;
+          nativeCallMediaPath(token, metadata) === 'native' ? native : browser;
         return active.connectWithToken(token, metadata);
       },
       disconnect: (disconnectOptions) => active.disconnect(disconnectOptions),
@@ -110,6 +132,7 @@ function createNativeCallKitSessionController(options: {
   jsDisconnect: () => Promise<void>;
   clearOptimisticJoin: () => void;
 }): CallSessionController {
+  let pendingMeetingStart: AbortController | undefined;
   return {
     shouldRequestToken: (channelId) => {
       const native = options.nativeCall.snapshot();
@@ -135,13 +158,14 @@ function createNativeCallKitSessionController(options: {
     connectWithToken: async (tokenResponse, metadata) => {
       // The native call captures its own media.
       stopPrejoinTracks(metadata?.localTracks);
-      if (!tokenResponse.channelId) {
-        throw new Error('Native channel calls require a channel');
+      const key = metadata?.nativeCallKey ?? tokenResponse.channelId;
+      if (!key) {
+        throw new Error('Native calls require a channel or a meeting key');
       }
       const channelTitle = metadata?.channelTitle ?? null;
       await startNativeCallKitOutgoingCall(
         {
-          channelId: tokenResponse.channelId,
+          channelId: key,
           callId: tokenResponse.callId,
           channelTitle,
           callerName: channelTitle,
@@ -151,8 +175,39 @@ function createNativeCallKitSessionController(options: {
         options.nativeCall
       );
       options.clearOptimisticJoin();
+
+      // A meeting reads the active call id as soon as connect resolves (to
+      // show the call, keep it across pages, and ring invitees), and native
+      // reports it only in its first snapshot. Channel calls are tracked by
+      // the call lifecycle instead.
+      if (metadata?.nativeCallKey) {
+        pendingMeetingStart?.abort();
+        const start = new AbortController();
+        pendingMeetingStart = start;
+        try {
+          await nativeCallReported(
+            options.nativeCall,
+            tokenResponse.callId,
+            NATIVE_MEETING_START_TIMEOUT_MS,
+            start.signal
+          );
+        } catch (error) {
+          // A leave that cancelled the wait ends the call itself. A timeout
+          // ends it only while it is still this meeting's call.
+          if (
+            !start.signal.aborted &&
+            options.nativeCall.activeChannelId() === key
+          ) {
+            await endCallKitCall();
+          }
+          throw error;
+        } finally {
+          if (pendingMeetingStart === start) pendingMeetingStart = undefined;
+        }
+      }
     },
     disconnect: async (disconnectOptions) => {
+      pendingMeetingStart?.abort();
       // Captured before any teardown: the post-leave sync may clear exactly
       // this state — a newer call's state appearing mid-leave must survive.
       const stateBeforeLeave = {
@@ -185,4 +240,45 @@ function createNativeCallKitSessionController(options: {
       }
     },
   };
+}
+
+/** Resolves once native reports `callId` as its live call. */
+function nativeCallReported(
+  nativeCall: Pick<NativeCallState, 'onSnapshot'>,
+  callId: string,
+  timeoutMs: number,
+  signal: AbortSignal
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsubscribe: (() => void) | undefined;
+    const cancel = () => finish(new Error('Native call start cancelled'));
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener('abort', cancel);
+      unsubscribe?.();
+      if (error) reject(error);
+      else resolve();
+    };
+    signal.addEventListener('abort', cancel);
+    const timer = setTimeout(
+      () => finish(new Error('Native call did not start')),
+      timeoutMs
+    );
+
+    // onSnapshot reports the current snapshot before it returns.
+    unsubscribe = nativeCall.onSnapshot((snapshot) => {
+      if (
+        snapshot !== null &&
+        snapshot.callId.toLowerCase() === callId.toLowerCase() &&
+        snapshot.connectionState !== 'disconnected' &&
+        snapshot.connectionState !== 'disconnecting'
+      ) {
+        finish();
+      }
+    });
+    if (settled) unsubscribe();
+  });
 }

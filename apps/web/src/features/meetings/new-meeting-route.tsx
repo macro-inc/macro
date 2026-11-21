@@ -3,6 +3,10 @@ import { CallOverlay } from '@channel/Call/CallOverlay';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { CallDiscussionContent } from '@channel/Call/discussion/CallDiscussionContent';
 import { callDiscussionOf } from '@channel/Call/discussion/call-discussion';
+import {
+  isNativeIosCallKitEnabled,
+  watchNativeCallEnded,
+} from '@channel/Call/use-callkit';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
@@ -26,10 +30,15 @@ import { browserMeetingMedia } from './browser/meeting-media';
 import { preloadMeetingRuntime } from './browser/meeting-runtime';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
+import {
+  meetingConnectMetadata,
+  meetingMediaPath,
+} from './core/meeting-media-path';
 import { createNewMeeting } from './primitives/new-meeting';
 import { useMeetingTeammatesSource } from './queries/meeting-teammates';
 import { MeetingInvite } from './views/meeting-invite';
 import { MeetingPage } from './views/meeting-page';
+import { NativeMeetingCall } from './views/native-meeting-call';
 
 function NewMeetingSetup(props: {
   userId: string;
@@ -73,6 +82,12 @@ function NewMeetingSetup(props: {
     record.data.callId === call.activeCallId() &&
     record.data.createdBy === props.userId;
   const url = () => (shareToken() ? getMeetingUrl(shareToken()) : undefined);
+  const mediaPath = () =>
+    meetingMediaPath({
+      member: true,
+      channelId: null,
+      nativeIosCalls: isNativeIosCallKitEnabled(),
+    });
   const source = (): MeetingPageState => ({
     kind: 'ready',
     title: meeting.isSuccess ? meeting.data.title : 'Quick Call',
@@ -80,6 +95,25 @@ function NewMeetingSetup(props: {
     scheduledEnd: null,
     channelId: null,
   });
+
+  const inviteError = () => (
+    <Show when={draft.inviteError()}>
+      <div
+        role="alert"
+        class="mb-3 flex items-center justify-between gap-3 rounded-lg bg-hover p-3 text-sm"
+      >
+        <span>{draft.inviteError()}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={draft.inviting()}
+          onClick={() => fireAndForget(draft.ring(), 'meetings')}
+        >
+          {draft.inviting() ? 'Sending…' : 'Retry invites'}
+        </Button>
+      </div>
+    </Show>
+  );
 
   async function rename(title: string) {
     const created = draft.meeting();
@@ -146,7 +180,10 @@ function NewMeetingSetup(props: {
         connect: async (credentials, preferences) => {
           await call.meetingSession.connectWithToken(credentials, {
             ...preferences,
-            useBrowserSession: true,
+            ...meetingConnectMetadata(mediaPath(), {
+              callId: credentials.callId,
+              title: meeting.isSuccess ? meeting.data.title : 'Quick Call',
+            }),
           });
           if (call.isInCall() && call.activeCallId() === credentials.callId) {
             // Invitations report failures in the call; they must not hold
@@ -155,47 +192,54 @@ function NewMeetingSetup(props: {
           }
         },
         disconnect: call.meetingSession.disconnect,
+        mediaPath,
+        watchNativeCallEnded: (onEnded) =>
+          mediaPath() === 'native' ? watchNativeCallEnded(onEnded) : () => {},
       }}
       renderCall={(onLeave, name, _credentials, copyButton) => (
-        <div class="flex h-full min-h-0 flex-col">
-          <Show when={draft.inviteError()}>
-            <div
-              role="alert"
-              class="mb-3 flex items-center justify-between gap-3 rounded-lg bg-hover p-3 text-sm"
-            >
-              <span>{draft.inviteError()}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={draft.inviting()}
-                onClick={() => fireAndForget(draft.ring(), 'meetings')}
-              >
-                {draft.inviting() ? 'Sending…' : 'Retry invites'}
-              </Button>
-            </div>
-          </Show>
-          <div class="min-h-0 flex-1">
-            <CallOverlay
+        <Show
+          when={mediaPath() === 'browser'}
+          fallback={
+            <NativeMeetingCall
               onLeave={onLeave}
-              localName={name()}
-              footerLeading={copyButton}
-              showTeamSharing={false}
-              discussion={{
-                label: () => undefined,
-                opensByDefault: () => false,
-                hasUpdates: () => false,
-                render: (panel) => (
-                  <CallDiscussionContent
-                    discussion={discussion}
-                    access={{ kind: 'member' }}
-                    panel={panel}
-                    onViewChannel={() => undefined}
-                  />
-                ),
-              }}
-            />
+              discussion={(panel) => (
+                <CallDiscussionContent
+                  discussion={discussion}
+                  access={{ kind: 'member' }}
+                  panel={panel}
+                  onViewChannel={() => undefined}
+                />
+              )}
+            >
+              {inviteError()}
+            </NativeMeetingCall>
+          }
+        >
+          <div class="flex h-full min-h-0 flex-col">
+            {inviteError()}
+            <div class="min-h-0 flex-1">
+              <CallOverlay
+                onLeave={onLeave}
+                localName={name()}
+                footerLeading={copyButton}
+                showTeamSharing={false}
+                discussion={{
+                  label: () => undefined,
+                  opensByDefault: () => false,
+                  hasUpdates: () => false,
+                  render: (panel) => (
+                    <CallDiscussionContent
+                      discussion={discussion}
+                      access={{ kind: 'member' }}
+                      panel={panel}
+                      onViewChannel={() => undefined}
+                    />
+                  ),
+                }}
+              />
+            </div>
           </div>
-        </div>
+        </Show>
       )}
     />
   );

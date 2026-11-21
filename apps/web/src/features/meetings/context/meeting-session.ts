@@ -1,3 +1,4 @@
+import type { CallMediaPath } from '@channel/Call/CallSessionController';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import type { Accessor } from 'solid-js';
 import type { MeetingSessionLifecycle } from './meeting-session-lifecycle';
@@ -67,7 +68,15 @@ export type MeetingSessionCapabilities = {
     credentials: MeetingCredentials,
     preferences: MeetingMediaPreferences
   ) => Promise<void>;
-  disconnect: () => Promise<void>;
+  /** `endNativeCall: false` when the native call screen already ended it. */
+  disconnect: (options?: { endNativeCall?: boolean }) => Promise<void>;
+  /** Where `connect` runs the call's media; see `core/meeting-media-path.ts`. */
+  mediaPath: Accessor<CallMediaPath>;
+  /**
+   * Native media only: calls `onEnded` with the call id when the call is hung
+   * up from the native call screen. Returns the unsubscribe.
+   */
+  watchNativeCallEnded?: (onEnded: (callId: string) => void) => () => void;
 };
 
 export type MeetingPageState =

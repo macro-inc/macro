@@ -64,6 +64,9 @@ export default {
   callingYou: 'Calling you',
   join: 'Join',
   openCall: 'Open call',
+  nativeMediaSetup: 'Call audio and video',
+  nativeMediaNote:
+    'You join with your microphone on and camera off. Mute or turn on your camera on the call screen.',
   emptyChat: 'Start the conversation.',
   leave: 'Leave call',
   copyLink: 'Copy meeting link',

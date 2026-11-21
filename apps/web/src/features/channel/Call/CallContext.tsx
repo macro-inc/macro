@@ -60,6 +60,7 @@ import {
 } from './livekit-loader';
 import { isMicrophoneAccessError } from './microphone-access';
 import { showMicrophoneBlockedToast } from './microphone-blocked-toast';
+import { channelIdOfNativeCallKey } from './native-call-key';
 import { bindNativeCallLifecycle } from './native-call-lifecycle';
 import {
   type NativeCallConnectionState,
@@ -1137,14 +1138,19 @@ function createCallState() {
       : store.connectionState;
   };
 
-  const currentActiveChannelId = () =>
-    currentNativeCallSnapshot()?.channelId ??
-    nativeCall?.bootstrapChannelId() ??
-    store.activeChannelId ??
-    store.optimisticJoinChannelId;
+  const currentActiveChannelId = () => {
+    const nativeKey =
+      currentNativeCallSnapshot()?.channelId ??
+      nativeCall?.bootstrapChannelId() ??
+      null;
+    // A native meeting is in a call but in no channel, like a browser one.
+    if (nativeKey !== null) return channelIdOfNativeCallKey(nativeKey);
+    return store.activeChannelId ?? store.optimisticJoinChannelId;
+  };
 
+  // iOS reports call ids as uppercase UUIDs; the server's are lowercase.
   const currentActiveCallId = () =>
-    currentNativeCallSnapshot()?.callId ?? store.activeCallId;
+    currentNativeCallSnapshot()?.callId.toLowerCase() ?? store.activeCallId;
 
   const currentIsAudioMuted = () =>
     currentNativeCallSnapshot()?.isAudioMuted ?? store.isAudioMuted;

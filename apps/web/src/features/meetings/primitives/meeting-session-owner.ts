@@ -128,5 +128,13 @@ export function createMeetingSessionOwner() {
       leave: entry.session.leave,
     };
   }
-  return { acquire, forCall };
+  /** Whether a session is still joining `callId`, before it owns the call. */
+  function isJoining(callId: string) {
+    return [...sessions].some(
+      (entry) =>
+        entry.session.joining() &&
+        entry.session.credentials()?.callId === callId
+    );
+  }
+  return { acquire, forCall, isJoining };
 }

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isNativeCallEnabled } from '../native-call-platform';
+import {
+  isNativeCallEnabled,
+  isNativeIosCallKitEnabled,
+} from '../native-call-platform';
 
 const platform = vi.hoisted(() => ({
   os: 'android',
@@ -61,6 +64,15 @@ describe('native call binary compatibility', () => {
       expect(isNativeCallEnabled()).toBe(false);
     }
   );
+  it('runs meetings natively only in the iOS app, not on native Android', () => {
+    window.__MACRO_ANDROID_CALL_KIT__ = true;
+    expect(isNativeCallEnabled()).toBe(true);
+    expect(isNativeIosCallKitEnabled()).toBe(false);
+    platform.os = 'ios';
+    expect(isNativeIosCallKitEnabled()).toBe(true);
+    platform.native = false;
+    expect(isNativeIosCallKitEnabled()).toBe(false);
+  });
   it('honors the existing native calling feature flag', () => {
     platform.os = 'ios';
     platform.enabled = false;

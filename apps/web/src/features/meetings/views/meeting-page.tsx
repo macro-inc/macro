@@ -26,6 +26,7 @@ import {
   MeetingParticipants,
   type MeetingParticipantsState,
 } from '../components/meeting-participants';
+import { NativeMediaNote } from '../components/native-media-note';
 import type {
   MeetingCredentials,
   MeetingPageState,
@@ -81,6 +82,9 @@ export function MeetingPage(props: {
     disposed = true;
   });
   const media = createMeetingMedia(props.mediaAccess, props.initialBackground);
+  // Native media can't take the waiting room's device choices, so the page
+  // offers none rather than ones the call would ignore.
+  const nativeMedia = () => props.session.mediaPath() === 'native';
   const [uploadingBackground, setUploadingBackground] = createSignal(false);
   const ready = () => {
     const state = props.source();
@@ -115,8 +119,12 @@ export function MeetingPage(props: {
 
   createEffect(
     on(
+      // Native media captures its own devices, so the page asks for none,
+      // and releases any it took before the media path was known.
       () =>
         Boolean(ready()) &&
+        props.authenticated() !== undefined &&
+        !nativeMedia() &&
         !membersOnly() &&
         !inCall() &&
         !session.joining() &&
@@ -132,6 +140,13 @@ export function MeetingPage(props: {
   const join = () => {
     if (membersOnly() || leaving() || media.pending() || uploadingBackground())
       return;
+    if (nativeMedia()) {
+      // What native media starts with, as the page tells the user.
+      return session.join(props.authenticated() ? undefined : name(), {
+        microphoneEnabled: true,
+        cameraEnabled: false,
+      });
+    }
     // The call publishes the preview tracks rather than re-opening the
     // devices, so the waiting room is the only place permission is asked.
     return session.join(
@@ -148,7 +163,7 @@ export function MeetingPage(props: {
       media.diagnostics()
     );
   };
-  async function leave() {
+  async function leave(options?: { nativeCallEnded?: boolean }) {
     if (leaving()) return;
     const callId = session.joinedCallId();
     const channelId = ready()?.channelId;
@@ -157,7 +172,7 @@ export function MeetingPage(props: {
     setLeaving(true);
     await Telemetry.span('meeting.leave', async (span) => {
       if (callId) span.setAttr('call.id', callId);
-      const result = await session.leave();
+      const result = await session.leave(options);
       if (disposed) return;
       const path = getCallExitPath({
         authenticated,
@@ -171,6 +186,21 @@ export function MeetingPage(props: {
       props.onLeave?.(path);
     });
   }
+
+  // Hanging up on the native call screen is a Leave, not a lost connection.
+  // Watch from join until leave, since the end event and the native state
+  // that drops the call can arrive in either order.
+  createEffect(() => {
+    const callId = session.joinedCallId();
+    const watch = props.session.watchNativeCallEnded;
+    if (!callId || !watch) return;
+    onCleanup(
+      watch((endedCallId) => {
+        if (endedCallId === callId)
+          fireAndForget(leave({ nativeCallEnded: true }), 'meetings');
+      })
+    );
+  });
 
   return (
     <main
@@ -312,14 +342,19 @@ export function MeetingPage(props: {
               viewport, as on phones. */}
           <div class="flex min-h-0 flex-1 overflow-y-auto">
             <div class="m-auto grid w-full max-w-6xl gap-8 py-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)] md:items-center">
-              <MeetingMediaSetup
-                media={media}
-                name={displayName()}
-                avatar={props.avatar}
-                disabled={session.joining()}
-                readBackgroundImage={props.readBackgroundImage}
-                onUploading={setUploadingBackground}
-              />
+              <Show
+                when={!nativeMedia()}
+                fallback={<NativeMediaNote avatar={props.avatar} />}
+              >
+                <MeetingMediaSetup
+                  media={media}
+                  name={displayName()}
+                  avatar={props.avatar}
+                  disabled={session.joining()}
+                  readBackgroundImage={props.readBackgroundImage}
+                  onUploading={setUploadingBackground}
+                />
+              </Show>
               <form
                 class="flex flex-col gap-5"
                 onSubmit={(event) => {
