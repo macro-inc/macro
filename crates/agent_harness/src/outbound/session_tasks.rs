@@ -214,11 +214,6 @@ impl<Repo: GithubSyncRepo> TaskPullRequestLinker for GithubTaskPullRequestLinker
     }
 }
 
-/// The source type a session's entity mentions are stored under.
-const AGENT_SESSION_SOURCE: &str = "agent_session";
-/// The entity type tasks are stored under: a task is a document.
-const TASK_ENTITY: &str = "document";
-
 /// [`SessionTaskReferences`] over the comms entity-mention store, where a task's References
 /// list reads entries from non-message sources. The session is the entry's source, its owner
 /// the user who added it.
@@ -234,7 +229,7 @@ impl CommsSessionTaskReferences {
 }
 
 impl SessionTaskReferences for CommsSessionTaskReferences {
-    #[tracing::instrument(err, skip(self, owner), fields(agent.session.id = %session, task.id = task.as_str()))]
+    #[tracing::instrument(err, skip_all, fields(agent.session.id = %session, task.id = task.as_str()))]
     async fn replace(
         &self,
         session: AgentSessionId,
@@ -243,11 +238,12 @@ impl SessionTaskReferences for CommsSessionTaskReferences {
     ) -> Result<(), SessionTaskError> {
         replace_source_mention(
             &self.pool,
-            AGENT_SESSION_SOURCE,
+            EntityType::AgentSession.as_ref(),
             &session.to_string(),
             Some(owner.as_ref()),
             &NewEntityMention {
-                entity_type: TASK_ENTITY.to_owned(),
+                // A task is a document.
+                entity_type: EntityType::Document.as_ref().to_owned(),
                 entity_id: task.as_str().to_owned(),
             },
         )

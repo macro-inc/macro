@@ -32,7 +32,7 @@ consumer talks to.
   `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
   share `SessionTasks::link_task`, which also lists the session under the task's
   References (`SessionTaskReferences`; the harness writes one `agent_session`
-  source row in `comms_entity_mentions`, replaced on relink).
+  source row in `comms_entity_mentions`, replaced on relink and removed when the session is deleted).
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
