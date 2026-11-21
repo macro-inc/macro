@@ -133,6 +133,14 @@ impl Faker {
         condition == concrete || self.schema.is_subtype(condition, concrete)
     }
 
+    fn may_hold_focus(&self, ty: &Name, plan: &Plan<'_>) -> bool {
+        plan.focus.is_some_and(|spec| {
+            self.concrete_types(ty)
+                .iter()
+                .any(|concrete| concrete.as_str() == spec.typename)
+        })
+    }
+
     fn concrete_types(&self, ty: &Name) -> Vec<Name> {
         match self.schema.types.get(ty) {
             Some(ExtendedType::Interface(_)) => self
@@ -249,7 +257,12 @@ impl Faker {
     ) -> Value {
         match ty {
             Type::Named(inner) => {
-                if !in_list && self.null_chance(inner, name, rng) {
+                // The planned focus is always generated. The roll still happens so the
+                // rest of the response keeps the same bytes.
+                if !in_list
+                    && self.null_chance(inner, name, rng)
+                    && !self.may_hold_focus(inner, plan)
+                {
                     return Value::Null;
                 }
                 self.named(document, parent, inner, name, sets, ctx, rng, plan)

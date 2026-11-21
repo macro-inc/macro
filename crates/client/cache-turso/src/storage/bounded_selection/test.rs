@@ -469,6 +469,152 @@ fn partitions_with_different_cursors_read_from_the_loosest_bound() {
     });
 }
 
+/// Predicates `levels` deep in each nesting the window's SQL can take, every
+/// one matching all records: negated and plain owner tests chained down to a
+/// cursor probe (the deepest fact probe), the negated chain nested to the
+/// left, and an `Or` over distinct attributes.
+fn nested_predicates(levels: usize) -> [(&'static str, PredicateExpr); 4] {
+    let cursor = PredicateExpr::After {
+        attribute: Token::new("updated-at").unwrap(),
+        value: 1_000,
+        key: PredicateRecordKey::new("Thing:99999").unwrap(),
+        direction: SortDirection::Desc,
+        tie_direction: SortDirection::Asc,
+    };
+    let not_owner = |level: usize| PredicateExpr::Not(Box::new(owner(&format!("x{level}"))));
+    let right = (0..levels).fold(cursor.clone(), |rest, level| {
+        PredicateExpr::And(Box::new(not_owner(level)), Box::new(rest))
+    });
+    let positive = (0..levels).fold(cursor.clone(), |rest, _| {
+        PredicateExpr::And(Box::new(owner("owner")), Box::new(rest))
+    });
+    let left = (0..levels).fold(cursor, |rest, level| {
+        PredicateExpr::And(Box::new(rest), Box::new(not_owner(level)))
+    });
+    let or = (0..levels).fold(owner("owner"), |rest, level| {
+        PredicateExpr::Or(
+            Box::new(PredicateExpr::Exact {
+                attribute: Token::new(format!("attribute-{level}")).unwrap(),
+                value: ExactValue::utf8("v").unwrap(),
+            }),
+            Box::new(rest),
+        )
+    });
+    [
+        ("right", right),
+        ("positive", positive),
+        ("left", left),
+        ("or", or),
+    ]
+}
+
+/// Turso refuses SQL nested past its parser's limits, and the window joins
+/// every partition's predicate into one expression. Across predicate depths
+/// up to the deepest a query may hold and partition counts past 64, the window
+/// runs exactly when Turso prepares its SQL, never fails, and pages like the
+/// set-based plan, which serves the queries just past the limit.
+#[test]
+fn many_partitions_with_deep_predicates_stay_within_the_expression_limit() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-depth").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..240)
+                    .map(|n| {
+                        let mut doc = document(n, i64::from(n));
+                        doc.partition = Token::new(format!("p{}", n % 8)).unwrap();
+                        ProjectionMutation::Replace(doc)
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let connection = storage.connection();
+        let query = |predicate: &PredicateExpr, count: usize| {
+            let mut descriptor = query(PredicateExpr::All, SortDirection::Desc, SortDirection::Asc)
+                .as_query()
+                .clone();
+            descriptor.partitions = (0..count)
+                .map(|n| PartitionPredicate {
+                    partition: Token::new(format!("p{n}")).unwrap(),
+                    predicate: predicate.clone(),
+                })
+                .collect();
+            ValidatedIndexQuery::new(descriptor).ok()
+        };
+        let refused = |query: &ValidatedIndexQuery| {
+            let (sql, _) = candidate_sql(
+                query.as_query(),
+                conjunction::FactSource::Authority,
+                &[],
+                None,
+                64,
+            );
+            driver::prepare_unless_refused(&connection, &sql)
+                .unwrap()
+                .is_none()
+        };
+        let mut sides = std::collections::HashMap::new();
+        for count in [1, 2, 3, 5, 9, 65, 129] {
+            for shape in 0..nested_predicates(0).len() {
+                let queries = (0..predicate_index::MAX_EXPRESSION_DEPTH)
+                    .filter_map(|levels| {
+                        let (name, predicate) = nested_predicates(levels)[shape].clone();
+                        query(&predicate, count).map(|query| (name, levels, query))
+                    })
+                    .collect::<Vec<_>>();
+                let refusals = queries
+                    .iter()
+                    .map(|(_, _, query)| refused(query))
+                    .collect::<Vec<_>>();
+                // Once Turso refuses a nesting, it refuses every deeper one.
+                let first_refused = refusals.iter().position(|refused| *refused);
+                if let Some(first) = first_refused {
+                    assert!(refusals[first..].iter().all(|refused| *refused));
+                }
+                let limit = first_refused.unwrap_or(queries.len());
+                for (index, (name, levels, query)) in queries.iter().enumerate() {
+                    // Both sides of the limit, and the shallowest queries; the
+                    // set-based reference for deep predicates over many
+                    // partitions takes seconds in a debug build.
+                    let near_limit = index + 2 >= limit && index <= limit + 1;
+                    if !(index < 2 || near_limit)
+                        || (*name == "or" && count > 3)
+                        || (count > 65 && index > 0)
+                    {
+                        continue;
+                    }
+                    let label = format!("{name} × {levels} levels × {count} partitions");
+                    let windowed = try_select(&connection, query, &[])
+                        .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+                    assert_eq!(windowed.is_some(), index < limit, "{label}");
+                    let page = match windowed {
+                        Some(windowed) => windowed
+                            .into_iter()
+                            .map(|hit| (hit.record_key.as_str().to_owned(), hit.sort_value))
+                            .collect::<Vec<_>>(),
+                        None => hits(&connection, query, &[]),
+                    };
+                    assert_eq!(page.len(), 20, "{label}");
+                    assert_eq!(page, reference(&connection, query, &[]), "{label}");
+                    sides.entry((*name, count)).or_insert([false; 2])
+                        [usize::from(index >= limit)] = true;
+                }
+            }
+        }
+        // A single partition reaches the limit in every nesting: the window
+        // serves the deepest queries Turso prepares, and the set-based plan
+        // the shallowest it refuses.
+        for name in ["right", "positive", "left", "or"] {
+            assert_eq!(sides.get(&(name, 1)), Some(&[true, true]), "{name}");
+        }
+        // The balanced `OR` keeps 129 partitions windowed: joined in one chain,
+        // they alone pass the limit.
+        assert_eq!(sides.get(&("right", 129)).map(|sides| sides[0]), Some(true));
+    });
+}
+
 fn query_with_limit(
     predicate: PredicateExpr,
     direction: SortDirection,
