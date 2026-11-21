@@ -552,16 +552,11 @@ export async function createChannelDirectoryBackfillFetcher(
       : Promise.resolve(0);
 
   return async (input, options) => {
-    if (firstPage) {
-      // A delete an earlier pass, fetcher or tab made and never read again
-      // is read now: the cache no longer holds it, so this pass cannot
-      // find it. A failed read fails the page, which is read again.
-      await rereadOwed(options?.signal);
-      firstPage = false;
-      // A resumed pass never saw the pages before its cursor.
-      if (input.initial) lane = input.initial;
-      else completeEvidence = false;
-    }
+    // A delete an earlier pass, fetcher or tab made and never read again is
+    // read now: the cache no longer holds it, so this pass cannot find it. A
+    // failed read fails the page, which is read again.
+    const starting = firstPage;
+    if (starting) await rereadOwed(options?.signal);
     // Continuing from the staged page's cursor keeps it; any other read is
     // that page read again.
     if (staged && input.continuation?.cursor === staged.next) {
@@ -571,6 +566,14 @@ export async function createChannelDirectoryBackfillFetcher(
     staged = undefined;
     const page = await fetch(input, options);
     options?.signal?.throwIfAborted();
+    // The pass starts with the first page it read, so a first read that
+    // failed decides nothing about the next one.
+    if (starting) {
+      firstPage = false;
+      // A resumed pass never saw the pages before its cursor.
+      if (input.initial) lane = input.initial;
+      else completeEvidence = false;
+    }
     const ids = page.entityIds ?? [];
     const evidence = page.entityIds !== undefined;
     if (page.nextCursor !== null) {

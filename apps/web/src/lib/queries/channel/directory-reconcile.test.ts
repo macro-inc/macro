@@ -298,6 +298,20 @@ describe('channel directory reconciliation', () => {
     expect(host.deleteRecords).not.toHaveBeenCalled();
   });
 
+  it('treats a pass whose first read failed as resumed when it goes on from a saved cursor', async () => {
+    const { host } = reconcileHost(['removed']);
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    fetch.mockRejectedValueOnce(new Error('first page failed'));
+    const fetchPage = await fetcher(host, fetch);
+
+    await expect(fetchPage(FIRST)).rejects.toThrow('first page failed');
+    // Another tab saved a cursor in the meantime, and the lane goes on from it.
+    await expect(
+      fetchPage({ continuation: { cursor: 'saved', expand: true } })
+    ).rejects.toEqual(new ChannelDirectoryPassUnproven('partial_pass'));
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
   it('returns the pages before the last of a resumed pass', async () => {
     const { host } = reconcileHost(['removed']);
     const page = { nextCursor: 'next', entityIds: ['a'] };

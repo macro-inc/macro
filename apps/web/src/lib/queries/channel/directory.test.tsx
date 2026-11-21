@@ -1975,6 +1975,54 @@ describe('cached channel directory', () => {
       expect(pageAll).not.toHaveBeenCalled();
     });
 
+    it('shows the network pages when reading the cache back never answers, and reads again past its deadline', async () => {
+      // The read's deadline aborts when the test says, as `SCAN_DEADLINE_MS`
+      // passing would.
+      const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+      const scanDeadlines: AbortController[] = [];
+      const timeout = vi
+        .spyOn(AbortSignal, 'timeout')
+        .mockImplementation((ms) => {
+          if (ms !== 60_000) return realTimeout(ms);
+          const deadline = new AbortController();
+          scanDeadlines.push(deadline);
+          return deadline.signal;
+        });
+      try {
+        const { cache, directory, host, pageAll, reopen } =
+          mountCachedDirectory([channelRecord('c')], {
+            pageAll: async () => [directoryChannel('a'), directoryChannel('b')],
+          });
+        cache.put(channelRecord('a'));
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(ids(directory.channels())).toEqual(['a']);
+        // The next listing never answers, and the lane saves nothing.
+        host.search.mockImplementationOnce(() => new Promise(() => {}));
+        await vi.advanceTimersByTimeAsync(29_000);
+        expect(pageAll).toHaveBeenCalledOnce();
+        expect(ids(directory.channels())).toEqual(['a']);
+
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        // The network's pages stand alone rather than the directory pending.
+        expect(ids(directory.channels())).toEqual(['a', 'b']);
+
+        // A read asked for meanwhile, and the by-id read of a join the pages
+        // did not list, wait on the one that never answered until its
+        // deadline lets it go.
+        cache.put(channelRecord('c'));
+        reopen();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(ids(directory.channels())).not.toContain('c');
+        expect(scanDeadlines.length).toBeGreaterThan(0);
+        for (const deadline of scanDeadlines) deadline.abort();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(ids(directory.channels())).toContain('c');
+      } finally {
+        timeout.mockRestore();
+      }
+    });
+
     it('never pages the network after the lane finished', async () => {
       completeLane('g1');
       const { directory, pageAll } = mountCachedDirectory([]);

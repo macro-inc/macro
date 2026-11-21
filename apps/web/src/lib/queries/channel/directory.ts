@@ -156,6 +156,10 @@ const LANE_STALL_MS = 30_000;
  * read before reading them back: each channel the cache still lacks then
  * waits on a by-id read. */
 const FALLBACK_PERSIST_WAIT_MS = 10_000;
+// A read of the cached directory still running after this is left behind:
+// a record read takes no abort, so one that never answers would otherwise
+// hold every later read, the fallback's included.
+const SCAN_DEADLINE_MS = 60_000;
 const CHANNEL_SEARCH_BUCKET_LIST: readonly string[] = CHANNEL_SEARCH_BUCKETS;
 
 /** One channel as the directory can answer for it now. */
@@ -1979,8 +1983,16 @@ export function createCachedChannelDirectory(
         // -1 when the writes did not all settle in time.
         span.setAttr('channel_directory.fallback_pages_written', written ?? -1);
         if (signal.aborted || run !== fallbackRun) return;
-        // The span stopped being the active context at the first await.
-        await span.run(() => refresh());
+        // The span stopped being the active context at the first await. A
+        // read that cannot finish leaves the network's pages to stand alone
+        // rather than the directory pending.
+        const readBack = await span.run(() =>
+          settledWithin(refreshed(), SCAN_DEADLINE_MS, signal)
+        );
+        span.setAttr(
+          'channel_directory.fallback_read_back',
+          readBack ? 'read' : 'timed_out'
+        );
         if (signal.aborted || run !== fallbackRun) return;
         fallback = { status: 'loaded', channels: walk.channels };
         span.setAttr('channel_directory.fallback_outcome', 'loaded');
@@ -2046,9 +2058,10 @@ export function createCachedChannelDirectory(
     return scope;
   };
 
-  const readIndex = () =>
+  // Each step that writes what a read found follows a check of `signal`, so a
+  // read left behind at its deadline changes nothing once it moves again.
+  const readIndex = (signal: AbortSignal) =>
     Telemetry.span('channel_directory.refresh', async (span) => {
-      const signal = controller.signal;
       const scope = await adoptScope(signal);
       if (scope === undefined) {
         span.setAttr('channel_directory.scope', 'other_viewer');
@@ -2073,10 +2086,9 @@ export function createCachedChannelDirectory(
 
   /** Rereads these records; false when a full read has to run instead. One
    * that finds every record as the index held it publishes nothing. */
-  const readKeys = (keys: readonly string[]) =>
+  const readKeys = (keys: readonly string[], signal: AbortSignal) =>
     Telemetry.span('channel_directory.read_keys', async (span) => {
       span.setAttr('channel_directory.keys', keys.length);
-      const signal = controller.signal;
       const scope = await readContactCacheScope(host, userId, signal);
       if (scope === undefined || scope !== generation) {
         span.setAttr('channel_directory.keys_outcome', 'scope_changed');
@@ -2095,18 +2107,29 @@ export function createCachedChannelDirectory(
     });
 
   const runner = createSerialRunner(async () => {
+    const deadline = AbortSignal.timeout(SCAN_DEADLINE_MS);
+    const signal = anyAbortSignal([controller.signal, deadline]);
     try {
       if (wantFull || generation === undefined) {
         wantFull = false;
         wantKeys.clear();
-        await readIndex();
+        await untilAborted(readIndex(signal), signal);
       } else if (wantKeys.size > 0) {
         const keys = [...wantKeys];
         wantKeys.clear();
-        if (!(await readKeys(keys))) wantFull = true;
+        if (!(await untilAborted(readKeys(keys, signal), signal)))
+          wantFull = true;
       }
     } catch (error) {
       if (controller.signal.aborted) return false;
+      if (deadline.aborted) {
+        // What it was asked to read waits for the next one, which runs when
+        // something asks: running again now would only pile another read
+        // behind the one that never answered.
+        wantFull = true;
+        Telemetry.error(error, { surface: 'channel-directory-refresh' });
+        return false;
+      }
       // Read again in the cache's new hands.
       if (error instanceof ContactDirectoryScopeError) wantFull = true;
       else Telemetry.error(error, { surface: 'channel-directory-refresh' });
@@ -2116,6 +2139,11 @@ export function createCachedChannelDirectory(
   const refresh = () => {
     wantFull = true;
     return runner();
+  };
+  /** True once a full read that started after the call has ended. */
+  const refreshed = async () => {
+    await refresh();
+    return true;
   };
   // Never rejects: a failed read is reported inside.
   const refreshNow = () =>
