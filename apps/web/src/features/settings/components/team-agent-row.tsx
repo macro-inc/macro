@@ -45,14 +45,15 @@ export function TeamAgentRow(props: {
           <div class="text-xs text-ink-muted truncate">
             {props.agent.jobDescription}
           </div>
-          {props.runsOn}
-          {/* Its summary line, where a person's role and plan are. */}
-          <div class="flex">
+          {/* Its summary line, where a person's role and plan are: its
+              status, then the machine it runs on. */}
+          <div class="flex min-w-0 items-center gap-1.5">
             <TeamAgentStatusLabel status={props.agent.status} />
+            {props.runsOn}
           </div>
           <Show when={props.problem}>
             {(problem) => (
-              <div data-agent-problem class="text-xs text-ink-muted">
+              <div data-agent-problem class="text-xs text-failure">
                 {problem()}
               </div>
             )}

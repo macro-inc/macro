@@ -43,7 +43,7 @@ export default {
     '{{name}} saves its memory and stops on {{from}}, then starts on the computer you choose. Its browser sign-ins and its Claude sign-in stay behind.',
   moveConfirm: 'Move',
   moveFailed: "Couldn't move {{name}}. Try again.",
-  runsOn: 'Runs on {{host}}',
+  runsOn: '· on {{host}}',
   hostFailed:
     "{{name}} didn't start on {{host}}, and nothing was bought. To see why, run this there:",
   removeBodyOwn:
