@@ -636,10 +636,8 @@ fn runtime_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue>
 
 fn decode_bundled_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
     let tables = postcard::from_bytes(BUNDLED_SCHEMA_TABLES).map_err(err_js)?;
-    Ok(cache_core::meta::Schema::from_canonical_parts(
-        tables,
-        BUNDLED_SCHEMA_HASH.to_owned(),
-    ))
+    cache_core::meta::Schema::from_build_output(tables, BUNDLED_SCHEMA_HASH.to_owned())
+        .map_err(err_js)
 }
 
 fn build_engine(

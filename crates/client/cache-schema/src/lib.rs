@@ -119,13 +119,7 @@ impl Schema {
     }
     /// Validate metadata and compute its canonical identity.
     pub fn from_artifact(mut artifact: SchemaArtifact) -> Result<Arc<Self>, SchemaError> {
-        if artifact.format_version != 1
-            || artifact.compatibility_epoch != CACHE_SCHEMA_COMPATIBILITY_EPOCH
-        {
-            return Err(SchemaError(
-                "unsupported format or compatibility epoch; a native update is required".into(),
-            ));
-        }
+        check_version(&artifact)?;
         artifact.types.sort_by(|a, b| a.name.cmp(&b.name));
         for ty in &mut artifact.types {
             ty.fields.sort_by(|a, b| a.name.cmp(&b.name));
@@ -140,19 +134,26 @@ impl Schema {
         let hash = format!("{:x}", Sha256::digest(bytes));
         Ok(Arc::new(Self { hash, ..schema }))
     }
-    /// Rebuilds a schema from the artifact and hash of one that `from_artifact`
-    /// already built, such as tables written at build time, without sorting,
-    /// validating or hashing it again. Pass only a pair taken from the same
-    /// `Schema`; anything else goes through `from_artifact`.
-    pub fn from_canonical_parts(artifact: SchemaArtifact, hash: String) -> Arc<Self> {
-        debug_assert_eq!(
-            Self::from_artifact(artifact.clone())
-                .map(|schema| schema.hash.clone())
-                .ok(),
-            Some(hash.clone()),
-            "canonical parts come from one validated schema"
-        );
-        Arc::new(Self { artifact, hash })
+    /// Rebuilds the schema a build script wrote out (`artifact()` and `hash()` of
+    /// one `Schema`, as `cache-wasm/build.rs` does) without sorting, validating
+    /// or hashing it again. Only the format and epoch are checked; anything that
+    /// is not that build output goes through `from_artifact`.
+    pub fn from_build_output(
+        artifact: SchemaArtifact,
+        hash: String,
+    ) -> Result<Arc<Self>, SchemaError> {
+        check_version(&artifact)?;
+        #[cfg(debug_assertions)]
+        {
+            let canonical = Self::from_artifact(artifact.clone())?;
+            assert!(
+                canonical.hash == hash
+                    && serde_json::to_vec(&canonical.artifact).ok()
+                        == serde_json::to_vec(&artifact).ok(),
+                "build output is one validated schema's canonical artifact and hash"
+            );
+        }
+        Ok(Arc::new(Self { artifact, hash }))
     }
     /// Combines compatible bundle versions, retaining definitions needed by queued work.
     /// Shape and identity changes require an explicit engine/storage migration.
@@ -324,6 +325,17 @@ impl Schema {
                 .type_meta(condition)
                 .is_some_and(|t| t.possible_types.iter().any(|name| name == concrete))
     }
+}
+/// Rejects artifacts of another format or compatibility epoch.
+fn check_version(artifact: &SchemaArtifact) -> Result<(), SchemaError> {
+    if artifact.format_version != 1
+        || artifact.compatibility_epoch != CACHE_SCHEMA_COMPATIBILITY_EPOCH
+    {
+        return Err(SchemaError(
+            "unsupported format or compatibility epoch; a native update is required".into(),
+        ));
+    }
+    Ok(())
 }
 /// Bump when a GraphQL schema change makes existing normalized records unsafe.
 ///

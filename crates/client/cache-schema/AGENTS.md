@@ -23,7 +23,7 @@ engine reads, derived from the GraphQL SDL. `cache-core` re-exports it as
 - Depends on: `apollo-compiler`, `serde`, `serde_json`, `sha2` only.
 - Used by: `cache-core` (re-export), `cache-wasm`'s `build.rs` (encodes the
   bundled tables and their hash at build time; the worker rebuilds the schema
-  from both with `Schema::from_canonical_parts`).
+  from both with `Schema::from_build_output`).
 
 ## Checks
 

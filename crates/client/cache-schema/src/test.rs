@@ -262,9 +262,10 @@ fn runtime_sdl_identity_ignores_formatting_and_definition_order() {
 }
 
 #[test]
-fn canonical_parts_rebuild_the_schema_they_came_from() {
+fn build_output_rebuilds_the_schema_it_came_from() {
     let parsed = bundled_schema();
-    let rebuilt = Schema::from_canonical_parts(parsed.artifact().clone(), parsed.hash().to_owned());
+    let rebuilt =
+        Schema::from_build_output(parsed.artifact().clone(), parsed.hash().to_owned()).unwrap();
     assert_eq!(rebuilt.hash(), parsed.hash());
     assert_eq!(
         serde_json::to_value(rebuilt.artifact()).unwrap(),
@@ -273,9 +274,33 @@ fn canonical_parts_rebuild_the_schema_they_came_from() {
 }
 
 #[test]
-#[should_panic(expected = "canonical parts come from one validated schema")]
-#[cfg(debug_assertions)]
-fn canonical_parts_with_another_hash_fail_debug_builds() {
+fn build_output_of_another_epoch_is_rejected() {
     let parsed = bundled_schema();
-    Schema::from_canonical_parts(parsed.artifact().clone(), "0".repeat(64));
+    let mut artifact = parsed.artifact().clone();
+    artifact.compatibility_epoch += 1;
+    assert!(Schema::from_build_output(artifact, parsed.hash().to_owned()).is_err());
+}
+
+#[test]
+#[should_panic(expected = "canonical artifact and hash")]
+#[cfg(debug_assertions)]
+fn build_output_with_another_hash_fails_debug_builds() {
+    let parsed = bundled_schema();
+    let _ = Schema::from_build_output(parsed.artifact().clone(), "0".repeat(64));
+}
+
+#[test]
+#[should_panic(expected = "canonical artifact and hash")]
+#[cfg(debug_assertions)]
+fn build_output_out_of_order_fails_debug_builds() {
+    // Sorting would give the same hash, but lookups binary-search the order as given.
+    let parsed = bundled_schema();
+    let mut artifact = parsed.artifact().clone();
+    let ty = artifact
+        .types
+        .iter_mut()
+        .find(|ty| ty.fields.len() > 1)
+        .unwrap();
+    ty.fields.reverse();
+    let _ = Schema::from_build_output(artifact, parsed.hash().to_owned());
 }
