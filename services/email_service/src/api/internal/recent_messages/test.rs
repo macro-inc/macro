@@ -48,6 +48,7 @@ fn days_ask_for_a_window_with_text_on_the_newest() {
             snippet_chars: Some(300),
             days: Some(30),
             texts: Some(100),
+            folder: None,
         },
     )
     .unwrap();
@@ -55,6 +56,7 @@ fn days_ask_for_a_window_with_text_on_the_newest() {
     assert_eq!(
         read,
         Read::Window(WindowRead {
+            folder: RecentMailFolder::Inbox,
             days: 30,
             limit: 500,
             texts: 100,
@@ -75,12 +77,54 @@ fn days_ask_for_a_window_with_text_on_the_newest() {
     assert_eq!(
         read,
         Read::Window(WindowRead {
+            folder: RecentMailFolder::Inbox,
             days: 7,
             limit: DEFAULT_RECENT_MESSAGES,
             texts: DEFAULT_RECENT_MESSAGES,
             snippet_chars: DEFAULT_SNIPPET_CHARS,
         })
     );
+}
+
+#[test]
+fn a_window_accepts_explicit_inbox_or_sent() {
+    for (uri, folder) in [
+        ("/?days=30&folder=inbox", RecentMailFolder::Inbox),
+        ("/?days=30&folder=sent", RecentMailFolder::Sent),
+    ] {
+        let Query(query) = Query::try_from_uri(&uri.parse().unwrap()).unwrap();
+        let (_, read) = parse_request("macro|owner@example.com".to_owned(), query).unwrap();
+
+        assert_eq!(
+            read,
+            Read::Window(WindowRead {
+                folder,
+                days: 30,
+                limit: DEFAULT_RECENT_MESSAGES,
+                texts: DEFAULT_RECENT_MESSAGES,
+                snippet_chars: DEFAULT_SNIPPET_CHARS,
+            })
+        );
+    }
+}
+
+#[test]
+fn an_unknown_or_empty_folder_is_a_400() {
+    for uri in ["/?days=30&folder=archive", "/?days=30&folder="] {
+        let error = Query::<RecentMessagesQuery>::try_from_uri(&uri.parse().unwrap()).unwrap_err();
+
+        assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
+    }
+}
+
+#[test]
+fn a_folder_without_days_is_a_400() {
+    for uri in ["/?folder=inbox", "/?folder=sent"] {
+        let Query(query) = Query::try_from_uri(&uri.parse().unwrap()).unwrap();
+        let error = parse_request("macro|owner@example.com".to_owned(), query).unwrap_err();
+
+        assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
+    }
 }
 
 #[test]

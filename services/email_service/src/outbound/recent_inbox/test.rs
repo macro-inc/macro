@@ -1,8 +1,87 @@
 use std::cell::Cell;
 
 use email_api_client::domain::models::{MessageWithCalendarParts, RateLimitOrigin};
+use email_api_client::domain::ports::AlwaysAllowRateLimiter;
+use serde_json::json;
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path, query_param, query_param_is_missing},
+};
 
 use super::*;
+use crate::outbound::email_api::StaticTokenSource;
+
+#[tokio::test]
+async fn gmail_lists_sent_mail_with_the_same_window_filter_as_inbox() {
+    let live = MockServer::start().await;
+    let window = MockServer::start().await;
+    let gmail = |server: &MockServer| {
+        EmailApiClientServiceImpl::new(
+            GmailApiClientRepository::new(gmail_client::GmailClient::new_with_urls(
+                None,
+                server.uri(),
+                server.uri(),
+                server.uri(),
+                "test".to_owned(),
+            )),
+            StaticTokenSource::new("token"),
+            AlwaysAllowRateLimiter,
+        )
+    };
+    let gmail_live = gmail(&live);
+    let gmail_window = gmail(&window);
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .and(query_param("labelIds", "INBOX"))
+        .and(query_param("maxResults", "10"))
+        .and(query_param_is_missing("q"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"messages": []})))
+        .expect(1)
+        .mount(&live)
+        .await;
+
+    let since: chrono::DateTime<chrono::Utc> = "2026-10-21T09:30:00Z".parse().unwrap();
+    for (folder, label) in [
+        (RecentMailFolder::Inbox, "INBOX"),
+        (RecentMailFolder::Sent, "SENT"),
+    ] {
+        Mock::given(method("GET"))
+            .and(path("/users/me/messages"))
+            .and(query_param("labelIds", label))
+            .and(query_param("maxResults", "500"))
+            .and(query_param("q", format!("after:{}", since.timestamp() - 1)))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"messages": []})))
+            .expect(1)
+            .mount(&window)
+            .await;
+
+        gmail_recent_messages(
+            &gmail_live,
+            &gmail_window,
+            Uuid::now_v7(),
+            RecentRead {
+                folder,
+                limit: 500,
+                since: Some(since),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    gmail_recent_messages(
+        &gmail_live,
+        &gmail_window,
+        Uuid::now_v7(),
+        RecentRead {
+            folder: RecentMailFolder::Inbox,
+            limit: 10,
+            since: None,
+        },
+    )
+    .await
+    .unwrap();
+}
 
 type Read = std::future::Ready<Result<Option<MessageWithCalendarParts>, EmailApiError>>;
 

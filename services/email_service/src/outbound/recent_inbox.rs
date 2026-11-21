@@ -1,4 +1,4 @@
-//! Storage and provider adapters for reading a user's newest inbox messages
+//! Storage and provider adapters for reading a user's recent mail
 //! straight from Gmail and Outlook.
 
 use std::future::Future;
@@ -6,17 +6,20 @@ use std::time::Duration;
 
 use email::domain::mailbox::{MailboxError, MailboxKey};
 use email::domain::recent_inbox::{
-    RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader, RecentRead,
+    RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader, RecentMailFolder, RecentRead,
 };
+use email_api_client::GmailApiClientRepository;
 use email_api_client::domain::{
     models::{EmailApiError, MailboxAccess, RateLimitOrigin},
     ports::{
-        MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ScopedMailboxRepository,
+        MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ProviderRequestGate,
+        ProviderTokenSource, ScopedMailboxRepository,
     },
-    service::mailbox::MailboxApiService,
+    service::{EmailApiClientServiceImpl, mailbox::MailboxApiService},
 };
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_email::email::service::label::system_labels;
 use models_email::email::service::message::{Message, RecentInboxMessage};
 use models_email::service::link::UserProvider;
 use tokio::time::Instant;
@@ -91,7 +94,10 @@ where
         read: RecentRead,
     ) -> Result<Vec<RecentInboxMessage>, EmailApiError> {
         let messages = match mailbox.provider {
-            UserProvider::Gmail => self.gmail_inbox(mailbox.key.link_id, read).await?,
+            UserProvider::Gmail => {
+                gmail_recent_messages(&self.gmail, &self.gmail_window, mailbox.key.link_id, read)
+                    .await?
+            }
             UserProvider::Outlook => self
                 .outlook
                 .recent_inbox_messages(
@@ -100,6 +106,7 @@ where
                         sync_generation: mailbox.key.sync_generation,
                         grant_generation: mailbox.key.grant_generation,
                     },
+                    read.folder,
                     read.limit,
                     read.since,
                     &[],
@@ -117,36 +124,42 @@ where
     }
 }
 
-impl<R, T, L> ProviderRecentInbox<R, T, L> {
-    /// Lists the newest inbox ids, received since `read.since` when it is
-    /// given, then reads each message, newest first. A message that fails to
-    /// read is left out and counted, so one bad read keeps the rest. A window
-    /// read (`read.since`) goes through [`Self::gmail_window`] and waits out
-    /// the gate's refusals for [`GMAIL_WINDOW_WAIT`] from its list; the
-    /// newest few read as before, refused at once.
-    async fn gmail_inbox(
-        &self,
-        link_id: Uuid,
-        read: RecentRead,
-    ) -> Result<Vec<Message>, EmailApiError> {
-        let limit = u32::from(read.limit);
-        let (gmail, ids, deadline) = match read.since {
-            Some(since) => {
-                let deadline = Instant::now() + GMAIL_WINDOW_WAIT;
-                let gmail = &self.gmail_window;
-                let ids = wait_out_refusals(Some(deadline), || {
-                    gmail.list_messages_since(link_id, limit, &["INBOX"], since)
-                })
-                .await?;
-                (gmail, ids, Some(deadline))
-            }
-            None => (
-                &self.gmail,
-                self.gmail.list_messages(link_id, limit, &["INBOX"]).await?,
-                None,
-            ),
-        };
-        let reads: Vec<_> = futures::stream::iter(ids)
+/// Lists the newest message ids, dated since `read.since` when it is given,
+/// then reads each message, newest first. A message that fails to read is
+/// left out and counted. A window read goes through `gmail_window` and waits
+/// out the gate's refusals for [`GMAIL_WINDOW_WAIT`] from its list. The
+/// newest few use `gmail_live` and are refused at once.
+async fn gmail_recent_messages<T: ProviderTokenSource, L: ProviderRequestGate>(
+    gmail_live: &EmailApiClientServiceImpl<GmailApiClientRepository, T, L>,
+    gmail_window: &EmailApiClientServiceImpl<GmailApiClientRepository, T, L>,
+    link_id: Uuid,
+    read: RecentRead,
+) -> Result<Vec<Message>, EmailApiError> {
+    let limit = u32::from(read.limit);
+    let (gmail, ids, deadline) = match read.since {
+        Some(since) => {
+            let deadline = Instant::now() + GMAIL_WINDOW_WAIT;
+            let label = match read.folder {
+                RecentMailFolder::Inbox => system_labels::INBOX,
+                RecentMailFolder::Sent => system_labels::SENT,
+            };
+            let labels = [label];
+            let ids = wait_out_refusals(Some(deadline), || {
+                gmail_window.list_messages_since(link_id, limit, &labels, since)
+            })
+            .await?;
+            (gmail_window, ids, Some(deadline))
+        }
+        None => (
+            gmail_live,
+            gmail_live
+                .list_messages(link_id, limit, &[system_labels::INBOX])
+                .await?,
+            None,
+        ),
+    };
+    let reads: Vec<_> =
+        futures::stream::iter(ids)
             .map(|id| async move {
                 wait_out_refusals(deadline, || gmail.get_message(link_id, &id)).await
             })
@@ -154,25 +167,24 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
             .collect()
             .await;
 
-        let mut messages = Vec::new();
-        let mut failed = 0usize;
-        for read in reads {
-            match read {
-                Ok(Some(message)) => messages.push(message.message),
-                Ok(None) => {}
-                Err(error) => {
-                    failed += 1;
-                    tracing::debug!(%link_id, error = %error, "could not read a recent Gmail message");
-                }
+    let mut messages = Vec::new();
+    let mut failed = 0usize;
+    for read in reads {
+        match read {
+            Ok(Some(message)) => messages.push(message.message),
+            Ok(None) => {}
+            Err(error) => {
+                failed += 1;
+                tracing::debug!(%link_id, error = %error, "could not read a recent Gmail message");
             }
         }
-
-        if failed > 0 {
-            tracing::warn!(%link_id, failed_message_count = failed, "left out recent Gmail messages that failed to read");
-        }
-
-        Ok(messages)
     }
+
+    if failed > 0 {
+        tracing::warn!(%link_id, failed_message_count = failed, "left out recent Gmail messages that failed to read");
+    }
+
+    Ok(messages)
 }
 
 /// Runs `read` until it is not refused. Until `deadline`, a refusal by the

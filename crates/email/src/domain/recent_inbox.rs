@@ -1,7 +1,6 @@
-//! The newest messages across a user's own inboxes, read straight from Gmail
-//! and Outlook so they can be read before Macro has synchronized the mailbox:
-//! the newest few, or the messages of the last days, with text for only the
-//! newest of them.
+//! Recent mail across a user's own mailboxes, read straight from Gmail and
+//! Outlook before Macro has synchronized them: the newest inbox messages or
+//! the last days of inbox or sent mail, with text for only the newest.
 
 use std::future::Future;
 
@@ -11,6 +10,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::message::RecentInboxMessage;
 use models_email::service::link::UserProvider;
 use tracing::{Instrument, Span};
+
+pub use models_email::email::service::message::RecentMailFolder;
 
 use super::mailbox::{MailboxError, MailboxKey};
 
@@ -36,9 +37,11 @@ pub const MAX_WINDOW_DAYS: u16 = 30;
 /// Most messages one window read returns, across inboxes.
 pub const MAX_WINDOW_MESSAGES: u16 = 500;
 
-/// What one inbox read asks its provider for.
+/// What one mailbox read asks its provider for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RecentRead {
+    /// Folder to read.
+    pub folder: RecentMailFolder,
     /// Messages at most.
     pub limit: u16,
     /// Only messages received at or after this time, when given.
@@ -48,6 +51,8 @@ pub struct RecentRead {
 /// A read of the messages of the last `days` days.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowRead {
+    /// Folder to read across the actor's mailboxes.
+    pub folder: RecentMailFolder,
     /// 1 to [`MAX_WINDOW_DAYS`].
     pub days: u16,
     /// 1 to [`MAX_WINDOW_MESSAGES`].
@@ -78,8 +83,8 @@ pub trait RecentInboxMailboxes: Send + Sync + 'static {
 }
 
 pub trait RecentInboxReader: Send + Sync + 'static {
-    /// Up to `read.limit` of the inbox's newest messages, newest first,
-    /// received no earlier than `read.since` when it is given.
+    /// Up to `read.limit` messages from `read.folder`, newest first,
+    /// dated no earlier than `read.since` when it is given.
     fn recent(
         &self,
         mailbox: &RecentInboxMailbox,
@@ -90,6 +95,7 @@ pub trait RecentInboxReader: Send + Sync + 'static {
 /// What the service reads, past its callers' clamps.
 #[derive(Debug, Clone, Copy)]
 struct Read {
+    folder: RecentMailFolder,
     limit: u16,
     /// The window's length, when it is one.
     days: Option<u16>,
@@ -125,6 +131,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         self.read_messages(
             actor,
             Read {
+                folder: RecentMailFolder::Inbox,
                 limit,
                 days: None,
                 since: None,
@@ -135,8 +142,8 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         .await
     }
 
-    /// The messages across the actor's own inboxes received in the
-    /// `window.days` days before `now`, newest first, at most
+    /// The messages in `window.folder` across the actor's own mailboxes in
+    /// the `window.days` days before `now`, newest first, at most
     /// `window.limit` of them, read as [`Self::read`] reads. Only the newest
     /// `window.texts` carry a snippet: a reader of a month needs every
     /// message's sender, subject and date, and the text of the newest.
@@ -151,6 +158,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         self.read_messages(
             actor,
             Read {
+                folder: window.folder,
                 limit,
                 days: Some(days),
                 since: Some(now - Duration::days(i64::from(days))),
@@ -165,6 +173,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         name = "email.recent_inbox",
         skip_all,
         fields(
+            folder = read.folder.as_ref(),
             limit = i64::from(read.limit),
             snippet_chars = i64::from(read.snippet_chars),
             days = read.days.map(i64::from),
@@ -186,6 +195,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         span.record("inbox_count", span_count(inboxes.len()));
 
         let asked = RecentRead {
+            folder: read.folder,
             limit: read.limit,
             since: read.since,
         };
@@ -267,7 +277,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
                     link_id = %inbox.key.link_id,
                     provider = ?inbox.provider,
                     error = %error,
-                    "could not read recent inbox messages; skipping the inbox"
+                    "could not read recent messages; skipping the mailbox"
                 );
                 None
             }

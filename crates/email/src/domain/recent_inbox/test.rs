@@ -134,7 +134,7 @@ async fn merges_inboxes_newest_first_and_skips_one_that_fails() {
             .lock()
             .unwrap()
             .iter()
-            .all(|read| read.since.is_none())
+            .all(|read| read.since.is_none() && read.folder == RecentMailFolder::Inbox)
     );
 }
 
@@ -246,12 +246,13 @@ fn at(time: &str) -> DateTime<Utc> {
 }
 
 #[tokio::test]
-async fn a_window_read_keeps_the_last_days_and_text_for_only_the_newest() {
+async fn a_sent_window_merges_mailboxes_and_keeps_text_for_only_the_newest() {
     let gmail = mailbox("owner@example.com", UserProvider::Gmail);
     let outlook = mailbox("work@example.com", UserProvider::Outlook);
     let texted = |inbox: &str, subject: &str, received_at: &str| {
         let mut message = message(inbox, subject, received_at);
         message.snippet = Some(format!("{subject} text"));
+        message.body = Some(format!("  {subject} text\nwith detail  "));
         message
     };
     let mut undated = texted("owner@example.com", "Undated", "2026-11-20T00:00:00Z");
@@ -284,10 +285,11 @@ async fn a_window_read_keeps_the_last_days_and_text_for_only_the_newest() {
         service.read_window(
             &owner,
             WindowRead {
+                folder: RecentMailFolder::Sent,
                 days: 10,
                 limit,
                 texts: 2,
-                snippet_chars: DEFAULT_SNIPPET_CHARS,
+                snippet_chars: MAX_SNIPPET_CHARS,
             },
             at("2026-11-20T00:00:00Z") + Duration::hours(12),
         )
@@ -298,7 +300,12 @@ async fn a_window_read_keeps_the_last_days_and_text_for_only_the_newest() {
             .map(|message| (message.subject, message.snippet))
             .collect::<Vec<_>>()
     };
-    let text = |subject: &str| (Some(subject.to_owned()), Some(format!("{subject} text")));
+    let text = |subject: &str| {
+        (
+            Some(subject.to_owned()),
+            Some(format!("{subject} text with detail")),
+        )
+    };
 
     // Room for every message: only those of the window are kept.
     assert_eq!(
@@ -314,15 +321,14 @@ async fn a_window_read_keeps_the_last_days_and_text_for_only_the_newest() {
         subjects(read(2).await.unwrap()),
         vec![text("Today"), text("Yesterday")]
     );
-    let since = Some(at("2026-11-10T12:00:00Z"));
+    let read = |limit| RecentRead {
+        folder: RecentMailFolder::Sent,
+        limit,
+        since: Some(at("2026-11-10T12:00:00Z")),
+    };
     assert_eq!(
         *service.reader.reads.lock().unwrap(),
-        vec![
-            RecentRead { limit: 10, since },
-            RecentRead { limit: 10, since },
-            RecentRead { limit: 2, since },
-            RecentRead { limit: 2, since }
-        ]
+        vec![read(10), read(10), read(2), read(2)]
     );
 }
 
@@ -336,6 +342,7 @@ async fn a_window_read_reaches_back_a_month_and_five_hundred_messages_at_most() 
     let service = RecentInboxService::new(Mailboxes(Ok(vec![inbox])), reader);
     let now = at("2026-11-20T00:00:00Z");
     let window = |days, limit| WindowRead {
+        folder: RecentMailFolder::default(),
         days,
         limit,
         texts: 100,
@@ -355,10 +362,12 @@ async fn a_window_read_reaches_back_a_month_and_five_hundred_messages_at_most() 
         *service.reader.reads.lock().unwrap(),
         vec![
             RecentRead {
+                folder: RecentMailFolder::Inbox,
                 limit: MAX_WINDOW_MESSAGES,
                 since: Some(now - Duration::days(i64::from(MAX_WINDOW_DAYS))),
             },
             RecentRead {
+                folder: RecentMailFolder::Inbox,
                 limit: 1,
                 since: Some(now - Duration::days(1)),
             },

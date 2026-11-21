@@ -1,6 +1,5 @@
-//! The newest messages across a user's own inboxes, or their messages of the
-//! last days, read straight from Gmail and Outlook so callers get results
-//! before the mailbox has synchronized.
+//! The newest inbox messages or the last days of inbox or sent mail, read
+//! straight from Gmail and Outlook before the user's mailboxes synchronize.
 
 use axum::{
     Json,
@@ -10,7 +9,7 @@ use axum::{
 };
 use email::domain::{
     mailbox::MailboxError,
-    recent_inbox::{DEFAULT_RECENT_MESSAGES, DEFAULT_SNIPPET_CHARS, WindowRead},
+    recent_inbox::{DEFAULT_RECENT_MESSAGES, DEFAULT_SNIPPET_CHARS, RecentMailFolder, WindowRead},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -34,6 +33,8 @@ pub(crate) struct RecentMessagesQuery {
     /// Read the messages of the last `days` days (1 to 30) instead of the
     /// newest `limit`.
     pub days: Option<u16>,
+    /// With `days`: `inbox` by default, or `sent`.
+    pub folder: Option<RecentMailFolder>,
     /// With `days`: how many of the newest carry a snippet; defaults to all.
     pub texts: Option<u16>,
 }
@@ -49,6 +50,8 @@ pub(crate) enum Read {
 pub(crate) enum RecentMessagesError {
     #[error("invalid user id")]
     InvalidUser,
+    #[error("folder requires days")]
+    FolderRequiresDays,
     #[error("the user's inboxes could not be read")]
     Inboxes(#[from] MailboxError),
 }
@@ -56,7 +59,7 @@ pub(crate) enum RecentMessagesError {
 impl IntoResponse for RecentMessagesError {
     fn into_response(self) -> Response {
         let status = match &self {
-            Self::InvalidUser => StatusCode::BAD_REQUEST,
+            Self::InvalidUser | Self::FolderRequiresDays => StatusCode::BAD_REQUEST,
             Self::Inboxes(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -78,11 +81,13 @@ fn parse_request(
     let limit = query.limit.unwrap_or(DEFAULT_RECENT_MESSAGES);
     let snippet_chars = query.snippet_chars.unwrap_or(DEFAULT_SNIPPET_CHARS);
     let read = match query.days {
+        None if query.folder.is_some() => return Err(RecentMessagesError::FolderRequiresDays),
         None => Read::Newest {
             limit,
             snippet_chars,
         },
         Some(days) => Read::Window(WindowRead {
+            folder: query.folder.unwrap_or_default(),
             days,
             limit,
             texts: query.texts.unwrap_or(limit),
@@ -93,7 +98,7 @@ fn parse_request(
 }
 
 /// Up to `limit` of the newest messages across the user's own inboxes, newest
-/// first, or with `days` their messages of those days. An inbox whose
+/// first, or with `days` the messages in the chosen folder. A mailbox whose
 /// provider read fails is left out.
 #[tracing::instrument(skip_all, err)]
 pub(crate) async fn handler(

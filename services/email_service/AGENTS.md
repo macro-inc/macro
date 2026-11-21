@@ -334,13 +334,16 @@ the gateway `/email` prefix.
   Outlook sync monitors in `infra/stacks/monitoring`; rename them only
   together. Loops whose domain service logs its own deferrals use `reported`,
   the others `record`, which logs gate refusals at DEBUG.
-- `GET /internal/recent_messages/{user_id}` reads the user's own syncing
-  inboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`), not
-  the synced mailbox, so it answers before a backfill finishes: the newest
-  `limit` (at most 100), or with `days` the mail of those days (at most 30
-  days and 500 messages, with snippets on only the newest `texts`). Every
-  call spends provider quota; Gmail reads three messages at a time. The
-  newest-`limit` read takes the live share and is refused at once. A month
+- `GET /internal/recent_messages/{user_id}` reads from the user's own syncing
+  mailboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`) so
+  it answers before a backfill finishes. It reads the newest `limit` inbox
+  messages (at most 100), or a window with `days` (at most 30 days and 500
+  messages, with snippets on only the newest `texts`). Only a window accepts
+  `folder`, which may be `inbox` (the default) or `sent`. A sent window lists
+  Gmail's `SENT` label or Outlook's `sentitems` folder. Both Outlook folders
+  filter and sort by `receivedDateTime`. Each call spends provider quota.
+  Gmail reads three messages at a time. The newest-`limit` read takes the
+  live share and is refused at once. A month
   of 500 is bulk work: a dated list (`after:`, each page its own gated
   call) and 500 reads, about 2,505 quota units, through a second Gmail
   client in the `Backfill` share, so sync and user writes keep the slots
@@ -352,9 +355,9 @@ the gateway `/email` prefix.
   fails keeps the ids listed before it. Outlook pages through
   `@odata.nextLink` past empty pages (at most ten pages, never one twice,
   its query in any order) and keeps what earlier pages read when a later
-  one, or its link, fails. Don't record message content
-  or addresses on its spans; `{user_id}` is an email address, which
-  `macro_tower_layers` keeps out of `url.path`.
+  one, or its link, fails. The `email.recent_inbox` span records the folder.
+  Keep message content and addresses off its spans. `macro_tower_layers`
+  keeps the `{user_id}` email address out of `url.path`.
 - Connecting an inbox writes its `email_links` row, which a CRM contact
   population share-locks for its whole transaction. The connect transactions
   (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)
