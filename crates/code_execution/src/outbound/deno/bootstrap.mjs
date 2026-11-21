@@ -28,9 +28,16 @@ function emit(frame) {
 // run reads only "Deno exited without a result". Report the rejection instead.
 globalThis.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
+  // A reason whose string form throws (a null-prototype object) still reports.
+  let reason;
+  try {
+    reason = String(event.reason);
+  } catch {
+    reason = inspect(event.reason, {colors: false, depth: 4, customInspect: false});
+  }
   emit({
     type: "error",
-    message: `${String(event.reason)}\nThis promise rejected before the program awaited or caught it, which ends the run. Await or catch each promise where it starts, or collect them with Promise.allSettled.`,
+    message: `${reason}\nThis promise rejected before the program awaited or caught it, which ends the run. Await or catch each promise where it starts, or collect them with Promise.allSettled.`,
   });
   exit(0);
 });
