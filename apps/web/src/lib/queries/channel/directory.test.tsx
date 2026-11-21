@@ -2,16 +2,21 @@
  * @vitest-environment jsdom
  */
 
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { createCacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import type {
   CacheChangeListener,
   CacheGenerationChange,
+  CacheHost,
 } from '@graphql-cache/host/types';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
-import type {
-  ChannelDirectoryEntityQuery,
-  ChannelDirectoryFieldsFragment,
-  ChannelDirectoryPageQuery,
-  SoupEntityInput,
+import {
+  type ChannelDirectoryEntityQuery,
+  type ChannelDirectoryFieldsFragment,
+  type ChannelDirectoryPageQuery,
+  type SoupEntityInput,
+  SoupUpdatesDocument,
 } from '@service-storage/graphql/generated/graphql';
 import type {
   GraphqlSoupHydrationPage,
@@ -23,7 +28,14 @@ import {
   QueryClientProvider,
   QueryObserver,
 } from '@tanstack/solid-query';
-import type { Client } from '@urql/core';
+import {
+  type Client,
+  createClient,
+  type Exchange,
+  makeResult,
+  type Operation,
+  type OperationResult,
+} from '@urql/core';
 import {
   createComputed,
   createRenderEffect,
@@ -39,7 +51,20 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import { fromPromise, make, pipe, type Source, toPromise } from 'wonka';
+import {
+  filter,
+  fromPromise,
+  make,
+  makeSubject,
+  map,
+  merge,
+  mergeMap,
+  pipe,
+  type Source,
+  share,
+  subscribe,
+  toPromise,
+} from 'wonka';
 import {
   initialSoupBackfillCheckpoint,
   markSoupBackfillLaneFailed,
@@ -3086,6 +3111,141 @@ function heldNetwork(network: Pick<ReturnType<typeof fakeNetwork>, 'client'>) {
   };
 }
 
+/**
+ * The app's soup client over `cache`, wired as production wires it: the
+ * real cache exchange writes each read's answer into the records the
+ * directory reads, and a soup update's deletion takes one out. The server
+ * answers a read of one channel with what `primary` shows when the read is
+ * sent, and holds every answer until `land` while `holding` is set. Soup
+ * updates arrive through `push`.
+ */
+function writeThroughSoup(
+  cache: ReturnType<typeof fakeChannelCache>,
+  primary: () => ChannelDirectoryFieldsFragment | null
+) {
+  let written = 0;
+  const host = {
+    clientId: 'directory-test',
+    onOpsAffected: () => () => {},
+    onCacheGenerationChanged: () => () => {},
+    onMutationSettled: () => () => {},
+    claimNextMutation: async () => undefined,
+    readQuery: async () => ({ kind: 'miss' as const }),
+    writeQuery: async ({ data }: { data: unknown }) => {
+      const visit = (value: unknown) => {
+        if (typeof value !== 'object' || value === null) return;
+        if (
+          '__typename' in value &&
+          value.__typename === 'GraphqlSoupChannel'
+        ) {
+          written += 1;
+          cache.put(structuredClone(value) as ChannelDirectoryFieldsFragment, {
+            sourceHash: `network-${written}`,
+          });
+          return;
+        }
+        for (const child of Object.values(value)) visit(child);
+      };
+      visit(data);
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
+        affectedOps: [],
+        changed: [],
+        reset: false,
+      };
+    },
+    deleteRecords: async (keys: string[]) => {
+      for (const key of keys) cache.records.delete(key);
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    },
+    teardown: async () => {},
+  };
+  const updates = makeSubject<OperationResult>();
+  const sent: Operation[] = [];
+  let holding: Promise<void> | undefined;
+  let land = () => {};
+  const transport: Exchange =
+    () =>
+    (operations): Source<OperationResult> => {
+      const shared = share(operations);
+      return merge([
+        pipe(
+          shared,
+          filter((operation) => operation.kind === 'query'),
+          mergeMap((operation) => {
+            sent.push(operation);
+            const answer = primary();
+            const held = holding;
+            return fromPromise(
+              (async () => {
+                await held;
+                return makeResult(operation, {
+                  data: {
+                    __typename: 'Query',
+                    user: {
+                      __typename: 'GraphqlUser',
+                      id: VIEWER,
+                      soupEntity: answer ? structuredClone(answer) : null,
+                    },
+                  },
+                });
+              })()
+            );
+          })
+        ),
+        pipe(
+          shared,
+          filter((operation) => operation.kind === 'subscription'),
+          mergeMap((operation) =>
+            pipe(
+              updates.source,
+              map((result) => ({ ...result, operation }))
+            )
+          )
+        ),
+      ]);
+    };
+  const client = createClient({
+    url: 'http://directory.test/graphql',
+    exchanges: [
+      createCacheSessionExchange(),
+      normalizedCacheExchange(host as unknown as CacheHost),
+      transport,
+    ],
+  });
+  const subscription = pipe(
+    client.subscription(SoupUpdatesDocument, {}),
+    subscribe(() => {})
+  );
+  onTestFinished(() => subscription.unsubscribe());
+  return {
+    client,
+    sent,
+    /** Holds the server's answers to reads sent from now on. */
+    hold() {
+      holding = new Promise((done) => {
+        land = done;
+      });
+    },
+    land: () => land(),
+    /** A soup update that takes `name`'s record out of the cache. */
+    removeChannel(name: string) {
+      updates.next({
+        data: {
+          soupUpdates: [
+            {
+              __typename: 'GraphqlCacheDeletion',
+              graphqlTypeName: 'GraphqlSoupChannel',
+              entityId: channelUuid(name),
+            },
+          ],
+        },
+      } as unknown as OperationResult);
+    },
+  };
+}
+
 /** Public channel `a`, named `name`, with the viewer in it since `joinedAt`
  * or, without it, not in it. */
 function publicChannel(name: string, updatedAt: string, joinedAt?: string) {
@@ -3386,6 +3546,50 @@ describe("the viewer's own channel writes", () => {
     await write;
 
     await new Promise((done) => setTimeout(done, 20));
+    expect(nameOf(directory, 'a')).toBe('missing');
+    expect(ids(directory.channels())).toEqual([]);
+  });
+
+  it('does not let a rename read sent before a removal write the channel back into the cache', async () => {
+    const client = queryClient();
+    const { cache, directory, reopen } = mountCachedDirectory([], {
+      queryClient: client,
+    });
+    cache.put(channelRecord('a', { name: 'before' }));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    let primary: ChannelDirectoryFieldsFragment | null = channelRecord('a', {
+      name: 'after',
+      updatedAt: UPDATED_MID,
+    });
+    const soup = writeThroughSoup(cache, () => primary);
+
+    // The rename's read takes the primary's snapshot, then the viewer is
+    // removed: the server's soup update deletes the record before the
+    // read's answer lands.
+    soup.hold();
+    const write = writeOf(client, soup, ['a']);
+    await vi.waitFor(() => expect(soup.sent).toHaveLength(1));
+    primary = null;
+    soup.removeChannel('a');
+    await vi.waitFor(() =>
+      expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('a')}`)).toBe(
+        false
+      )
+    );
+    soup.land();
+    await write;
+
+    // The old answer was dropped and the channel read again.
+    expect(soup.sent).toHaveLength(2);
+    expect(cache.records.has(`GraphqlSoupChannel:${channelUuid('a')}`)).toBe(
+      false
+    );
+    reopen();
+    await vi.waitFor(() => expect(nameOf(directory, 'a')).toBe('missing'));
+    await vi.waitFor(() =>
+      expect(ownChannelWrites(client).writes()).toEqual({})
+    );
     expect(nameOf(directory, 'a')).toBe('missing');
     expect(ids(directory.channels())).toEqual([]);
   });

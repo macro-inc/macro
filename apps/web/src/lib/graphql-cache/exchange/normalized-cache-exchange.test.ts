@@ -60,7 +60,7 @@ import {
 } from '../protocol';
 import { cacheSessionGeneration } from '../session-generation';
 import { entityFromArgument } from './entity-resolvers';
-import { recordExternalWrite } from './external-writes';
+import { recordExternalDeletion, recordExternalWrite } from './external-writes';
 import { liveQueryData } from './live-query';
 import { NOOP_MUTATION_QUEUE_TELEMETRY } from './mutation-queue-telemetry';
 import {
@@ -3942,6 +3942,114 @@ describe('normalizedCacheExchange', () => {
       await tick();
       expect(results.at(-1)?.data).toEqual(document);
       expect(forwarded).toHaveLength(1);
+    });
+
+    const channel = (id: string, name: string) => ({
+      item: { __typename: 'GraphqlSoupChannel', id, name },
+    });
+    const channelDeletion = (id: string) => ({
+      soupUpdates: [
+        {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupChannel',
+          entityId: id,
+        },
+      ],
+    });
+    const queryResults = (results: OperationResult[]) =>
+      results.filter(({ operation }) => operation.kind === 'query');
+
+    it.each([false, true])(
+      'reads again instead of restoring a record a soup update deleted after the read was sent (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        ops.next(makeSubscriptionOp(2));
+        await tick();
+        const [read, subscription] = forwarded;
+        network.next(queryResult(subscription!, channelDeletion('channel-1')));
+        await tick();
+        expect(host.invalidations).toEqual([['GraphqlSoupChannel:channel-1']]);
+
+        network.next(queryResult(read!, channel('channel-1', 'before')));
+        await tick();
+        expect(queryResults(results)).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(3);
+        const fresh = { item: null };
+        network.next(queryResult(forwarded[2]!, fresh));
+        await tick();
+        expect(queryResults(results).at(-1)?.data).toEqual(fresh);
+      }
+    );
+
+    it.each([false, true])(
+      'reads again instead of restoring a record a direct deletion removed after the read was sent (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        recordExternalDeletion(host, ['GraphqlSoupChannel:channel-1']);
+        network.next(
+          queryResult(forwarded[0]!, {
+            items: [{ wrapper: channel('channel-1', 'before') }],
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+      }
+    );
+
+    it('keeps in-flight responses that hold none of the deleted records', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      recordExternalDeletion(host, ['GraphqlSoupChannel:channel-1']);
+      const other = channel('channel-2', 'other');
+      network.next(queryResult(forwarded[0]!, other));
+      await tick();
+      expect(results.at(-1)?.data).toEqual(other);
+      expect(forwarded).toHaveLength(1);
+    });
+
+    it('keeps a read sent after the deletion that holds the record again', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      recordExternalDeletion(host, ['GraphqlSoupChannel:channel-1']);
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      const rejoined = channel('channel-1', 'rejoined');
+      network.next(queryResult(forwarded[0]!, rejoined));
+      await tick();
+      expect(results.at(-1)?.data).toEqual(rejoined);
+      expect(forwarded).toHaveLength(1);
+    });
+
+    it('fences records that a response reports deleted for the reads still in flight', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(
+        host,
+        {
+          deletedRecordKeys: ({ data }) =>
+            (data as { deleted?: string[] }).deleted ?? [],
+        }
+      );
+      ops.next(makeOp(1, 'network-only'));
+      ops.next(makeOp(2, 'network-only'));
+      await tick();
+      network.next(
+        queryResult(forwarded[0]!, {
+          deleted: ['GraphqlSoupChannel:channel-1'],
+        })
+      );
+      await tick();
+      network.next(queryResult(forwarded[1]!, channel('channel-1', 'before')));
+      await tick();
+      expect(results.map(({ operation }) => operation.key)).toEqual([1]);
+      expect(forwarded).toHaveLength(3);
+      expect(forwarded[2]?.key).toBe(2);
     });
 
     it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {

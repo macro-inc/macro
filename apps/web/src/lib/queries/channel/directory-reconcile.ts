@@ -1,4 +1,5 @@
 import { sleep } from '@core/util/sleep';
+import { recordExternalDeletion } from '@graphql-cache/exchange/external-writes';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -364,12 +365,10 @@ async function removeUnreadableChannels(
       const stale = decided.filter((id) => after.get(id) === before.get(id));
       for (const batch of chunks(stale, DELETE_BATCH)) {
         input.signal?.throwIfAborted();
-        await span.run(() =>
-          input.host.deleteRecords(
-            batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`),
-            session
-          )
-        );
+        const keys = batch.map((id) => `${CHANNEL_RECORD_PREFIX}${id}`);
+        // A read sent before this deletion must not write the channel back.
+        recordExternalDeletion(input.host, keys);
+        await span.run(() => input.host.deleteRecords(keys, session));
       }
       removed += stale.length;
       progress.deleted = stale;
