@@ -1,0 +1,21 @@
+.github/workspace-dep-closures.json
+  s_86a3b382b10917::t_185e67d01a07f2 413-414,977-978,1204-1205,1398-1445,2138-2139,3528-3529,5829-5830
+crates/folds/agent_fold/src/domain/model/search/test.rs
+  s_86a3b382b10917::t_72533718b852c5 311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3a03adfed0f575b802accd65d609d4442be23048",
+  "prompts": {},
+  "sessions": {
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
