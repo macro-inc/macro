@@ -1,4 +1,5 @@
 use chrono::Utc;
+use models_email::email::service::message::RecentMailFolder;
 use models_email::service::{address::ContactInfo, attachment::Attachment, message::Message};
 use reqwest::Method;
 use serde_json::json;
@@ -282,11 +283,16 @@ impl MailboxContentReader for OutlookApiClientRepository {
         &self,
         token: &AccessToken,
         link_id: Uuid,
+        folder: RecentMailFolder,
         limit: u16,
         since: Option<chrono::DateTime<Utc>>,
         folders: &[MailFolder],
     ) -> Result<Vec<MailboxMessage>, EmailApiError> {
-        let mut url = self.endpoint(&["me", "mailFolders", "inbox", "messages"])?;
+        let folder_name = match folder {
+            RecentMailFolder::Inbox => "inbox",
+            RecentMailFolder::Sent => "sentitems",
+        };
+        let mut url = self.endpoint(&["me", "mailFolders", folder_name, "messages"])?;
         url.query_pairs_mut()
             .append_pair("$select", RECENT_MESSAGE_FIELDS)
             .append_pair("$orderby", "receivedDateTime desc")

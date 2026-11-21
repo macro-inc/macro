@@ -1,3 +1,4 @@
+use models_email::email::service::message::RecentMailFolder;
 use reqwest::Method;
 use serde_json::json;
 use uuid::Uuid;
@@ -780,6 +781,7 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
                 sync_generation: 1,
                 grant_generation: 1,
             },
+            RecentMailFolder::Inbox,
             2,
             None,
             &[inbox],
@@ -1019,37 +1021,47 @@ async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
 }
 
 #[tokio::test]
-async fn recent_inbox_messages_since_a_time_filter_on_when_they_arrived() {
+async fn inbox_and_sent_windows_filter_and_sort_on_received_date_time() {
     let (server, api, token) = setup().await;
-    Mock::given(method("GET"))
-        .and(path("/v1.0/me/mailFolders/inbox/messages"))
-        .and(query_param("$orderby", "receivedDateTime desc"))
-        .and(query_param("$top", "500"))
-        .and(query_param(
-            "$filter",
-            "receivedDateTime ge 2026-10-21T09:30:00Z",
-        ))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[{
-            "id":"m1", "conversationId":"c1", "parentFolderId":"inbox",
-            "subject":"Invoice 42", "isRead":false, "isDraft":false, "flag":{},
-            "receivedDateTime":"2026-10-27T09:00:00Z"
-        }]})))
-        .expect(1)
-        .mount(&server)
-        .await;
+    for (folder, folder_name) in [
+        (RecentMailFolder::Inbox, "inbox"),
+        (RecentMailFolder::Sent, "sentitems"),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/me/mailFolders/{folder_name}/messages")))
+            .and(query_param("$orderby", "receivedDateTime desc"))
+            .and(query_param("$top", "500"))
+            .and(query_param(
+                "$filter",
+                "receivedDateTime ge 2026-10-21T09:30:00Z",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[{
+                "id":folder_name, "conversationId":"c1", "parentFolderId":folder_name,
+                "subject":"Invoice 42", "isRead":false, "isDraft":false, "flag":{},
+                "receivedDateTime":"2026-10-27T09:00:00Z"
+            }]})))
+            .expect(1)
+            .mount(&server)
+            .await;
 
-    let messages = api
-        .recent_inbox_messages(
-            &token,
-            Uuid::now_v7(),
-            500,
-            Some("2026-10-21T09:30:00Z".parse().unwrap()),
-            &[],
-        )
-        .await
-        .unwrap();
+        let messages = api
+            .recent_inbox_messages(
+                &token,
+                Uuid::now_v7(),
+                folder,
+                500,
+                Some("2026-10-21T09:30:00Z".parse().unwrap()),
+                &[],
+            )
+            .await
+            .unwrap();
 
-    assert_eq!(messages.len(), 1);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].content.message.provider_id.as_deref(),
+            Some(folder_name)
+        );
+    }
 }
 
 #[tokio::test]
@@ -1092,6 +1104,7 @@ async fn recent_inbox_messages_follow_short_pages_and_leave_out_unreadable_messa
         .recent_inbox_messages(
             &token,
             Uuid::now_v7(),
+            RecentMailFolder::Inbox,
             3,
             Some("2026-10-21T09:30:00Z".parse().unwrap()),
             &[],
@@ -1153,12 +1166,19 @@ async fn recent_inbox_messages_stop_at_a_link_already_followed_and_keep_pages_be
         .mount(&server)
         .await;
     let read = || async {
-        api.recent_inbox_messages(&token, Uuid::now_v7(), 10, None, &[])
-            .await
-            .unwrap()
-            .iter()
-            .map(|message| message.content.message.provider_id.clone())
-            .collect::<Vec<_>>()
+        api.recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            10,
+            None,
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect::<Vec<_>>()
     };
 
     assert_eq!(
@@ -1226,12 +1246,19 @@ async fn recent_inbox_messages_read_past_an_empty_page_and_stop_at_page_one_or_a
         .mount(&server)
         .await;
     let read = || async {
-        api.recent_inbox_messages(&token, Uuid::now_v7(), 10, None, &[])
-            .await
-            .unwrap()
-            .iter()
-            .map(|message| message.content.message.provider_id.clone())
-            .collect::<Vec<_>>()
+        api.recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            10,
+            None,
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect::<Vec<_>>()
     };
 
     assert_eq!(read().await, vec![Some("m1".to_owned())]);
@@ -1293,7 +1320,14 @@ async fn recent_inbox_messages_read_at_most_ten_pages_and_fill_the_limit_past_a_
     }
 
     let messages = api
-        .recent_inbox_messages(&token, Uuid::now_v7(), 50, None, &[])
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            50,
+            None,
+            &[],
+        )
         .await
         .unwrap();
 
@@ -1314,7 +1348,14 @@ async fn recent_inbox_messages_read_at_most_ten_pages_and_fill_the_limit_past_a_
         .await;
 
     let ids: Vec<_> = api
-        .recent_inbox_messages(&token, Uuid::now_v7(), 2, None, &[])
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            2,
+            None,
+            &[],
+        )
         .await
         .unwrap()
         .iter()

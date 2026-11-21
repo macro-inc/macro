@@ -1,5 +1,5 @@
 use crate::EmailServiceClient;
-use crate::get_recent_inbox_messages::InboxWindow;
+use crate::get_recent_inbox_messages::{InboxWindow, RecentMailFolder};
 use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
@@ -89,7 +89,7 @@ async fn asks_for_longer_snippets_and_reads_labels() {
 }
 
 #[tokio::test]
-async fn a_window_read_asks_for_its_days_and_texts() {
+async fn an_inbox_window_preserves_the_exact_query_string() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/internal/recent_messages/macro|owner@example.com"))
@@ -118,6 +118,7 @@ async fn a_window_read_asks_for_its_days_and_texts() {
         .get_inbox_window(
             "macro|owner@example.com",
             InboxWindow {
+                folder: RecentMailFolder::Inbox,
                 days: 30,
                 limit: 500,
                 texts: 100,
@@ -129,4 +130,41 @@ async fn a_window_read_asks_for_its_days_and_texts() {
 
     assert_eq!(response.messages[0].subject.as_deref(), Some("Invoice 42"));
     assert_eq!(response.messages[0].snippet, None);
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(
+        requests[0].url.query(),
+        Some("days=30&limit=500&texts=100&snippet_chars=300")
+    );
+}
+
+#[tokio::test]
+async fn a_sent_window_adds_its_folder_to_the_query() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/internal/recent_messages/macro|owner@example.com"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"messages": []})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = EmailServiceClient::new("internal-key".to_owned(), server.uri());
+
+    client
+        .get_inbox_window(
+            "macro|owner@example.com",
+            InboxWindow {
+                folder: RecentMailFolder::Sent,
+                days: 30,
+                limit: 500,
+                texts: 100,
+                snippet_chars: 500,
+            },
+        )
+        .await
+        .unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(
+        requests[0].url.query(),
+        Some("days=30&limit=500&texts=100&snippet_chars=500&folder=sent")
+    );
 }

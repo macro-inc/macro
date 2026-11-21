@@ -48,6 +48,8 @@ preview endpoint.
 - New endpoint calls inject the caller's trace context
   (`macro_tower_layers::inject_trace_headers`, as
   `get_recent_inbox_messages` does); most older modules predate that.
+- `get_inbox_window` takes an `InboxWindow` with `RecentMailFolder::Inbox`
+  or `RecentMailFolder::Sent`. It adds `folder=sent` only for sent windows.
 
 ## Related
 

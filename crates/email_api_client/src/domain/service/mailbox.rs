@@ -2,6 +2,7 @@
 //! explicit credential refresh after a definitive authentication rejection.
 
 use crate::domain::{models::*, ports::*};
+use models_email::email::service::message::RecentMailFolder;
 
 mod contacts;
 mod drafts;
@@ -152,12 +153,13 @@ impl<
         }
     }
 
-    /// Up to `limit` of the newest inbox messages, newest first, received no
+    /// Up to `limit` messages from `folder`, newest first, dated no
     /// earlier than `since` when it is given, read straight from the
     /// provider, so a mailbox can be looked at before it synchronizes.
     pub async fn recent_inbox_messages(
         &self,
         mailbox: MailboxAccess,
+        folder: RecentMailFolder,
         limit: u16,
         since: Option<chrono::DateTime<chrono::Utc>>,
         folders: &[MailFolder],
@@ -171,7 +173,7 @@ impl<
             .await?;
         let repository = self.repository.for_mailbox(mailbox);
         match repository
-            .recent_inbox_messages(&token, mailbox.link_id, limit, since, folders)
+            .recent_inbox_messages(&token, mailbox.link_id, folder, limit, since, folders)
             .await
         {
             Err(EmailApiError::AuthRequired) => {
@@ -183,7 +185,7 @@ impl<
                     )
                     .await?;
                 repository
-                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, since, folders)
+                    .recent_inbox_messages(&fresh, mailbox.link_id, folder, limit, since, folders)
                     .await
             }
             result => result,

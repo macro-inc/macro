@@ -1,12 +1,16 @@
 use crate::EmailServiceClient;
 use models_email::email::service::message::RecentInboxMessagesResponse;
 
+pub use models_email::email::service::message::RecentMailFolder;
+
 #[cfg(test)]
 mod test;
 
 /// A read of the last days of a user's mail.
 #[derive(Debug, Clone, Copy)]
 pub struct InboxWindow {
+    /// Folder to read across the user's mailboxes.
+    pub folder: RecentMailFolder,
     /// 1 to 30.
     pub days: u16,
     /// 1 to 500.
@@ -50,13 +54,14 @@ impl EmailServiceClient {
         self.read_recent_messages(url).await
     }
 
-    /// The messages across `user_id`'s own inboxes received in the last
+    /// Messages in `window.folder` across `user_id`'s own mailboxes in the last
     /// `window.days` days (at most 30), newest first, at most `window.limit`
     /// (500) of them, read straight from Gmail and Outlook. Only the newest
     /// `window.texts` carry a snippet, of up to `window.snippet_chars`.
     #[tracing::instrument(
         skip_all,
         fields(
+            folder = window.folder.as_ref(),
             days = window.days,
             limit = window.limit,
             texts = window.texts,
@@ -70,11 +75,20 @@ impl EmailServiceClient {
         window: InboxWindow,
     ) -> anyhow::Result<RecentInboxMessagesResponse> {
         let mut url = self.recent_messages_url(user_id)?;
-        url.query_pairs_mut()
-            .append_pair("days", &window.days.to_string())
-            .append_pair("limit", &window.limit.to_string())
-            .append_pair("texts", &window.texts.to_string())
-            .append_pair("snippet_chars", &window.snippet_chars.to_string());
+        {
+            let mut query = url.query_pairs_mut();
+            query
+                .append_pair("days", &window.days.to_string())
+                .append_pair("limit", &window.limit.to_string())
+                .append_pair("texts", &window.texts.to_string())
+                .append_pair("snippet_chars", &window.snippet_chars.to_string());
+            match window.folder {
+                RecentMailFolder::Inbox => {}
+                RecentMailFolder::Sent => {
+                    query.append_pair("folder", window.folder.as_ref());
+                }
+            }
+        }
         self.read_recent_messages(url).await
     }
 
