@@ -6,6 +6,7 @@ import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { make, pipe, toPromise } from 'wonka';
 import type {
   ChannelListItemFieldsFragment,
   ChannelListNotificationFieldsFragment,
@@ -378,6 +379,7 @@ const mocks = vi.hoisted(() => {
     realtimeClient,
     replaceSubscriptions,
     initializeCrmCacheOwner: vi.fn(async () => {}),
+    cachedQuery: vi.fn(),
     platformFetch,
     toastFailure,
     telemetryError: vi.fn(),
@@ -481,6 +483,7 @@ vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
 }));
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
+  HYDRATE_ONLY_CONTEXT_KEY: 'normalizedCacheHydrateOnly',
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
 vi.mock('@macro-inc/observability', async (importOriginal) => {
@@ -577,6 +580,7 @@ vi.mock('@urql/core', () => ({
     const host = cacheExchange.host;
     return {
       kind: 'cached',
+      query: (...args: unknown[]) => mocks.cachedQuery(...args),
       mutation: () => ({
         toPromise: async () => {
           await host.enqueueOptimisticMutation();
@@ -1444,6 +1448,31 @@ describe('GraphQL Soup browser cache session gate', () => {
       readers.dispose();
     }
   );
+
+  it('leaves a hydration request once its signal aborts', async () => {
+    let left = false;
+    // Like urql's, the request ends only when its subscriber leaves: urql
+    // replaces a fetch signal with its own.
+    const held = make<never>(() => () => {
+      left = true;
+    });
+    mocks.cachedQuery.mockReturnValue(
+      Object.assign(held, { toPromise: () => pipe(held, toPromise) })
+    );
+    const soup = await import('./graphql-soup');
+    const controller = new AbortController();
+
+    const hydrated = soup.hydrateGraphqlSoup(
+      parse('query Page { user { id } }'),
+      {},
+      { signal: controller.signal }
+    );
+    const settled = expect(hydrated).rejects.toThrow('deadline');
+    controller.abort(new Error('deadline'));
+
+    await vi.waitFor(() => expect(left).toBe(true));
+    await settled;
+  });
 
   it('latches an activated client through a flag change until navigation', async () => {
     const apiStarted = mocks.apiStarted();

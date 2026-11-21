@@ -10,7 +10,11 @@
  */
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
-import { abortedBy, anyAbortSignal } from '@core/util/abort-signal';
+import {
+  anyAbortSignal,
+  firstOrAborted,
+  untilAborted,
+} from '@core/util/abort-signal';
 import { deepEqual } from '@core/util/compareUtils';
 import { debounce, throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -20,7 +24,6 @@ import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   ChannelDirectoryEntityDocument,
   ChannelDirectoryPageDocument,
-  type ChannelDirectoryPageQuery,
   SoupChannelDirectoryBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -40,7 +43,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/solid-query';
-import type { Client, OperationResult } from '@urql/core';
+import type { Client } from '@urql/core';
 import {
   type Accessor,
   batch,
@@ -51,16 +54,7 @@ import {
   untrack,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import {
-  concat,
-  filter,
-  fromValue,
-  map,
-  merge,
-  pipe,
-  take,
-  toPromise,
-} from 'wonka';
+import { filter, pipe } from 'wonka';
 import { currentQueryAccount, type QueryAccount } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
@@ -207,9 +201,11 @@ export type ChannelDirectory = {
    * each channel they and the cache disagree on with a read of the primary.
    * `signal` ends the read, for a caller that no longer needs it. */
   readComplete: (signal?: AbortSignal) => Promise<readonly DirectoryChannel[]>;
-  /** Whether filling the directory failed and stays failed until `retry`.
-   * The cached directory fails only when its backfill lane gave up and the
-   * network's pages failed too. */
+  /** Whether filling the directory failed, until `retry` or the directory's
+   * own next try. The cached directory fails when its backfill lane gave up
+   * and the network's pages failed too, which holds until `retry`, and when a
+   * by-id read that `complete` waits on failed, which it tries again by
+   * itself `BY_ID_RETRY_AFTER_MS` later. */
   failed: Accessor<boolean>;
   retry: () => void;
   /** Shows a view the viewer just recorded on the channel from now on, in
@@ -539,14 +535,6 @@ type FallbackWalk = Omit<JoinedChannelsWalk, 'channels'> & {
   channels: readonly DirectoryChannel[];
 };
 
-type DirectoryPageSettled =
-  | {
-      kind: 'answered';
-      result: OperationResult<ChannelDirectoryPageQuery>;
-    }
-  | { kind: 'ended' }
-  | { kind: 'aborted' };
-
 /** One network page of the directory's query, without the cache. An abort
  * leaves the query's result source, which is what ends urql's request: urql
  * replaces a `fetchOptions.signal` with its own. */
@@ -555,28 +543,17 @@ async function fetchDirectoryPage(
   input: GraphqlSoupInput,
   signal: AbortSignal | undefined
 ): Promise<DirectoryPage> {
-  const settled = await pipe(
-    merge<DirectoryPageSettled>([
-      concat<DirectoryPageSettled>([
-        pipe(
-          client.query(
-            ChannelDirectoryPageDocument,
-            { input },
-            { requestPolicy: 'network-only' }
-          ),
-          // The answer, as urql's own toPromise takes it.
-          filter((result) => !result.stale && !result.hasNext),
-          map((result) => ({ kind: 'answered' as const, result }))
-        ),
-        fromValue({ kind: 'ended' as const }),
-      ]),
-      pipe(
-        abortedBy(signal),
-        map(() => ({ kind: 'aborted' as const }))
+  const settled = await firstOrAborted(
+    pipe(
+      client.query(
+        ChannelDirectoryPageDocument,
+        { input },
+        { requestPolicy: 'network-only' }
       ),
-    ]),
-    take(1),
-    toPromise
+      // The answer, as urql's own toPromise takes it.
+      filter((result) => !result.stale && !result.hasNext)
+    ),
+    signal
   );
   if (settled.kind === 'aborted') {
     signal?.throwIfAborted();
@@ -584,7 +561,7 @@ async function fetchDirectoryPage(
   }
   if (settled.kind === 'ended')
     throw new Error('Channel directory page read ended without an answer');
-  const { result } = settled;
+  const result = settled.value;
   if (result.error) throw result.error;
   const soup = result.data?.user.soup;
   if (!soup) throw new Error('Channel directory page returned no data');
@@ -1085,7 +1062,8 @@ export function createByIdReader(
             ids.filter((id) => attempts.has(id)).length
           );
           try {
-            const result = await read(ids, signal);
+            // The slot frees at the deadline even if the read ignores it.
+            const result = await untilAborted(read(ids, signal), signal);
             span.setAttr(
               'channel_directory.returned',
               result.returned?.size ?? -1
@@ -1215,6 +1193,12 @@ export function createByIdReader(
      * again: each answered for a record the cache has changed since. Reads
      * that failed or are under way are left alone. */
     renew,
+    /** Forgets the reads that failed now, not `BY_ID_RETRY_AFTER_MS` after
+     * them, for a viewer who asked to try again. */
+    retryFailed() {
+      forgetFailures.clear();
+      forgetFailed();
+    },
     /** Forgets each absence whose record `version` now shows changed since
      * its read was sent, so asking reads it again. */
     renewChanged() {
@@ -2132,6 +2116,20 @@ export function createCachedChannelDirectory(
     }
     return true;
   });
+  // A read that `proven` waits on failed: the directory tries it again by
+  // itself `BY_ID_RETRY_AFTER_MS` later, and at once on `retry`.
+  const readsFailed = createMemo(() => {
+    const { state: current, fallback: status, unconfirmed } = shown();
+    if (!current.complete) return false;
+    if (status === 'loaded') {
+      const confirmed = confirm.outcomes();
+      return Object.keys(unconfirmed).some((id) => confirmed[id] === 'failed');
+    }
+    const outcomes = reader.outcomes();
+    return Object.keys(current.incomplete).some(
+      (id) => outcomes[id] === 'failed'
+    );
+  });
 
   return {
     channels: () => view().joined,
@@ -2167,9 +2165,11 @@ export function createCachedChannelDirectory(
     },
     failed: () => {
       const { state: current, fallback: status } = shown();
-      return !current.complete && status === 'failed';
+      return (!current.complete && status === 'failed') || readsFailed();
     },
     retry() {
+      reader.retryFailed();
+      confirm.retryFailed();
       if (fallback.status !== 'failed') return;
       fallback = { status: 'idle' };
       startFallback('retry');

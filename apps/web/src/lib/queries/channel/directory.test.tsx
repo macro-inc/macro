@@ -498,8 +498,9 @@ describe('by-id reader', () => {
   });
 
   /** Hands each read a deadline the test aborts, as `BY_ID_DEADLINE_MS`
-   * passing would, and a read that hangs until its signal aborts. */
-  function hungReads() {
+   * passing would, and a read that hangs: until its signal aborts, or for
+   * good when it ignores the signal, as a read waiting on shared work can. */
+  function hungReads(heedsAbort = true) {
     const deadlines: AbortController[] = [];
     const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
       const deadline = new AbortController();
@@ -509,6 +510,7 @@ describe('by-id reader', () => {
     const read = vi.fn<Read>(
       (_ids, signal) =>
         new Promise((_resolve, reject) => {
+          if (!heedsAbort) return;
           signal.addEventListener('abort', () => reject(signal.reason), {
             once: true,
           });
@@ -517,47 +519,58 @@ describe('by-id reader', () => {
     return { deadlines, timeout, read };
   }
 
-  it('fails a read whose deadline passes, after trying it once more', async () => {
-    const { deadlines, timeout, read } = hungReads();
-    try {
-      const reader = mountReader(read);
-      reader.request('a');
-      await vi.advanceTimersByTimeAsync(100);
-      expect(timeout).toHaveBeenCalledWith(20_000);
-      expect(read).toHaveBeenCalledTimes(1);
+  const HUNG_READS = [
+    ['heeds its signal', true],
+    ['ignores its signal', false],
+  ] as const;
 
-      deadlines[0]?.abort();
-      await vi.advanceTimersByTimeAsync(100);
-      expect(read).toHaveBeenCalledTimes(2);
-      expect(reader.outcomes()).toEqual({});
+  it.each(HUNG_READS)(
+    'fails a read whose deadline passes, after trying it once more, when it %s',
+    async (_kind, heedsAbort) => {
+      const { deadlines, timeout, read } = hungReads(heedsAbort);
+      try {
+        const reader = mountReader(read);
+        reader.request('a');
+        await vi.advanceTimersByTimeAsync(100);
+        expect(timeout).toHaveBeenCalledWith(20_000);
+        expect(read).toHaveBeenCalledTimes(1);
 
-      deadlines[1]?.abort();
-      await vi.advanceTimersByTimeAsync(100);
-      expect(read).toHaveBeenCalledTimes(2);
-      expect(reader.outcomes()).toEqual({ a: 'failed' });
-    } finally {
-      timeout.mockRestore();
+        deadlines[0]?.abort();
+        await vi.advanceTimersByTimeAsync(100);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(reader.outcomes()).toEqual({});
+
+        deadlines[1]?.abort();
+        await vi.advanceTimersByTimeAsync(100);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(reader.outcomes()).toEqual({ a: 'failed' });
+      } finally {
+        timeout.mockRestore();
+      }
     }
-  });
+  );
 
-  it('frees the slot of a read whose deadline passes', async () => {
-    const { deadlines, timeout, read } = hungReads();
-    try {
-      const reader = mountReader(read);
-      for (let i = 0; i < 200; i += 1) reader.request(`c${i}`);
-      await vi.advanceTimersByTimeAsync(100);
-      reader.request('late');
-      await vi.advanceTimersByTimeAsync(100);
-      // Both slots hang, so the late batch waits.
-      expect(read.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100]);
+  it.each(HUNG_READS)(
+    'frees the slot of a read whose deadline passes when it %s',
+    async (_kind, heedsAbort) => {
+      const { deadlines, timeout, read } = hungReads(heedsAbort);
+      try {
+        const reader = mountReader(read);
+        for (let i = 0; i < 200; i += 1) reader.request(`c${i}`);
+        await vi.advanceTimersByTimeAsync(100);
+        reader.request('late');
+        await vi.advanceTimersByTimeAsync(100);
+        // Both slots hang, so the late batch waits.
+        expect(read.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100]);
 
-      deadlines[0]?.abort();
-      await vi.advanceTimersByTimeAsync(100);
-      expect(read.mock.calls[2]?.[0]).toEqual(['late']);
-    } finally {
-      timeout.mockRestore();
+        deadlines[0]?.abort();
+        await vi.advanceTimersByTimeAsync(100);
+        expect(read.mock.calls[2]?.[0]).toEqual(['late']);
+      } finally {
+        timeout.mockRestore();
+      }
     }
-  });
+  );
 
   it('settles nothing for a read a reset aborts', async () => {
     const { timeout, read } = hungReads();
@@ -1442,6 +1455,39 @@ describe('cached channel directory', () => {
     }
   });
 
+  it('fails while a read it waits on to complete failed, and reads it again at once on retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const { cache, directory, hydrate } = mountCachedDirectory([
+        channelRecord('thin'),
+      ]);
+      const read = hydrate.getMockImplementation();
+      hydrate.mockImplementation(async () => {
+        throw new Error('offline');
+      });
+      cache.put(channelRecord('a'));
+      cache.put(channelRecord('thin'), { incomplete: true });
+      completeLane('g1');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(hydrate).toHaveBeenCalledTimes(2);
+      // Not loading for good: the reader can offer to try again.
+      expect(directory.complete()).toBe(false);
+      expect(directory.failed()).toBe(true);
+
+      if (read) hydrate.mockImplementation(read);
+      directory.retry();
+      expect(directory.failed()).toBe(false);
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(hydrate).toHaveBeenCalledTimes(3);
+      expect(directory.complete()).toBe(true);
+      expect(directory.failed()).toBe(false);
+      expect(ids(directory.channels()).sort()).toEqual(['a', 'thin']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('reads a channel by id again when its record loses a field after a read returned it', async () => {
     const { cache, directory, hydrate, reopen } = mountCachedDirectory([
       channelRecord('thin'),
@@ -1956,6 +2002,40 @@ describe('cached channel directory', () => {
     expect(hydrate).toHaveBeenCalledOnce();
   });
 
+  it('fails while the fallback cannot confirm a channel, and confirms it again at once on retry', async () => {
+    let answer!: (channels: DirectoryChannel[]) => void;
+    const { cache, directory, hydrate } = mountCachedDirectory(
+      [channelRecord('kept')],
+      {
+        pageAll: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      }
+    );
+    const read = hydrate.getMockImplementation();
+    hydrate.mockImplementation(async () => {
+      throw new Error('offline');
+    });
+    cache.put(channelRecord('kept'));
+    cache.put(channelRecord('lost'), { incomplete: true });
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    answer([directoryChannel('kept')]);
+
+    await vi.waitFor(() => expect(directory.failed()).toBe(true));
+    expect(hydrate).toHaveBeenCalledTimes(2);
+    expect(directory.complete()).toBe(false);
+
+    if (read) hydrate.mockImplementation(read);
+    directory.retry();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.failed()).toBe(false);
+    expect(hydrate).toHaveBeenCalledTimes(3);
+    expect(directory.lookup(channelUuid('lost')).status).toBe('missing');
+  });
+
   it('reads a channel again that a by-id read found gone once the viewer rejoins it', async () => {
     let answer!: (channels: DirectoryChannel[]) => void;
     const server = [channelRecord('kept')];
@@ -2431,16 +2511,18 @@ describe('cached channel directory', () => {
       markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
       await vi.advanceTimersByTimeAsync(1_000);
       expect(ids(directory.channels()).sort()).toEqual(['a', 'gone']);
-      // Read once more, then given up on for now.
+      // Read once more, then given up on for now: failed, so a reader can
+      // offer to try again.
       expect(hydrate).toHaveBeenCalledTimes(2);
       expect(directory.complete()).toBe(false);
-      expect(directory.failed()).toBe(false);
+      expect(directory.failed()).toBe(true);
 
       // The network is back, and nothing in the cache changes.
       if (read) hydrate.mockImplementation(read);
       await vi.advanceTimersByTimeAsync(30_000);
 
       expect(hydrate).toHaveBeenCalledTimes(3);
+      expect(directory.failed()).toBe(false);
       expect(directory.complete()).toBe(true);
       expect(ids(directory.channels())).toEqual(['a']);
     });
