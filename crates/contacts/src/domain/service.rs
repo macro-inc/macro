@@ -167,27 +167,13 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
             return Ok(Vec::new());
         }
 
-        let named: HashSet<_> = added
-            .iter()
-            .flat_map(|(owner, contact)| [owner.clone(), contact.clone()])
-            .collect();
-        let named: Vec<_> = named.into_iter().collect();
-        let deleted: HashSet<_> = self
-            .repository
-            .missing_profiles(&named)
-            .await?
-            .into_iter()
-            .collect();
+        let (deleted, lost_one) = remove_deleted_accounts(&self.repository, &added).await?;
         if deleted.is_empty() {
             return Ok(invalidations_by_owner(added));
         }
 
         // Owners who lost a deleted account re-read everything, like any
         // removal; everyone else is told only what they gained.
-        let mut lost_one = HashSet::new();
-        for user in &deleted {
-            lost_one.extend(self.repository.delete_user_lists(user).await?);
-        }
         let kept = added
             .into_iter()
             .filter(|(owner, contact)| {
@@ -532,4 +518,40 @@ where
         }
         Ok(())
     }
+}
+
+/// Finds the accounts among the ids `added` names that no longer have a
+/// profile, and removes every list row for them. Returns those accounts and
+/// the other owners who lost them. Used after each interaction write, by the
+/// worker and the backfill, because a write can commit after the deletion
+/// that should have removed its rows.
+pub(crate) async fn remove_deleted_accounts<R: ContactListRepository>(
+    repository: &R,
+    added: &[(MacroUserIdStr<'static>, MacroUserIdStr<'static>)],
+) -> Result<
+    (
+        HashSet<MacroUserIdStr<'static>>,
+        HashSet<MacroUserIdStr<'static>>,
+    ),
+    Report,
+> {
+    let mut lost_one = HashSet::new();
+    if added.is_empty() {
+        return Ok((HashSet::new(), lost_one));
+    }
+
+    let named: HashSet<_> = added
+        .iter()
+        .flat_map(|(owner, contact)| [owner.clone(), contact.clone()])
+        .collect();
+    let named: Vec<_> = named.into_iter().collect();
+    let deleted: HashSet<_> = repository
+        .missing_profiles(&named)
+        .await?
+        .into_iter()
+        .collect();
+    for user in &deleted {
+        lost_one.extend(repository.delete_user_lists(user).await?);
+    }
+    Ok((deleted, lost_one))
 }

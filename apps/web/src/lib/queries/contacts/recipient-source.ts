@@ -7,6 +7,7 @@ import type {
 } from '@core/user/recipient-source';
 import { toChannelListItem } from '@queries/channel/directory-core';
 import { createMemo } from 'solid-js';
+import { useTeammateIds } from '../team/roster';
 import { createContactRecipientSource } from './recipient-window';
 import { useContactDirectoryScope } from './use-directory';
 
@@ -16,7 +17,9 @@ export function useContactRecipientSource(
   return createContactRecipientSource(
     useContactDirectoryScope(),
     input,
-    useIsConnectedSecondaryInbox()
+    useIsConnectedSecondaryInbox(),
+    undefined,
+    useTeammateIds(input.enabled)
   );
 }
 
