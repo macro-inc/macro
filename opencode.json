@@ -45,6 +45,10 @@
       "type": "remote",
       "url": "https://mcp.posthog.com/mcp",
       "oauth": {}
+    },
+    "macro": {
+      "type": "remote",
+      "url": "https://mcp-server.macro.com/mcp"
     }
   }
 }

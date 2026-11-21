@@ -34,6 +34,10 @@
     "posthog": {
       "type": "http",
       "url": "https://mcp.posthog.com/mcp"
+    },
+    "datadog": {
+      "type": "http",
+      "url": "https://mcp.us5.datadoghq.com/api/unstable/mcp-server/mcp?referrer_ide=opencode-plugin&plugin_version=0.7.13"
     }
   }
 }
