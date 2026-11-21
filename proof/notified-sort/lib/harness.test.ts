@@ -88,6 +88,15 @@ describe('comparison', () => {
     expect(openPaged([rows[1], rows[0], rows[2], rows[3]])).toContain('order');
     const altered = rows.slice(0, 4).map((d, i) => (i === 3 ? { ...d, notifiedAt: '2026-11-20T08:59:00.000Z' } : d));
     expect(openPaged(altered)).toEqual(['field:document.notifiedAt']);
+    // Main read past its kept pages to the end of the list (no next page)
+    // while the branch stopped at the limit: still only the kept tail.
+    const ended = { ...paged(rows, 2), hasNextPage: false };
+    expect(compareSnapshots(ended, paged(rows.slice(0, 4), 2), { pageSize: 2 }).map((d) => d.signature)).toEqual(['paging:retained-pages']);
+    expect(compareSnapshots(ended, paged([rows[0], rows[1], rows[2], rows[4]], 2), { pageSize: 2 }).map((d) => d.signature)).toContain('paging:hasNextPage');
+    // The branch at the end of the list with fewer rows is not this case.
+    expect(compareSnapshots(ended, { ...paged(rows.slice(0, 4), 2), hasNextPage: false }, { pageSize: 2 }).map((d) => d.signature)).toContain(
+      'membership:missing-in-new:document'
+    );
   });
 
   it('catches a dropped row, a swapped pair and an altered notification time', () => {

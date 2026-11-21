@@ -1,7 +1,9 @@
 // Repro for closure P1: one tab reads the same notified list twice, three
 // pages each time, on main's REST reader, the branch's reader, and main's
 // GraphQL reader (update-time sort). Prints the rows each read returned and
-// whether the second read's first rows are the first read's.
+// whether the second read's first rows are the first read's. DBG_SIZE,
+// DBG_LIMIT and DBG_MAX_PAGES pick the viewer, the page size and the page
+// limit (seed 2601: DBG_SIZE=101 DBG_LIMIT=1 DBG_MAX_PAGES=60).
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { launchBrowser, openLane, probeRead, startApp, stopApp, type ReadSpec } from './lib/browser.ts';
@@ -14,6 +16,7 @@ const seed = Number(process.env.PROOF_SEED ?? 1701);
 const out = join(here, 'out/dbg-retained');
 mkdirSync(out, { recursive: true });
 const stack = stackFromEnv();
+const portBase = Number(process.env.PROOF_PORT_BASE ?? 30110);
 const env = { backendProxy: stack.proxyUrl, routes: process.env.PROOF_ROUTES ?? '', caPem: process.env.PROOF_CA_PEM ?? '', hostname: process.env.PROOF_HOSTNAME ?? 'localhost' };
 const seeded = await seedWorld(stack, {
   seed,
@@ -30,14 +33,14 @@ if (!viewer) throw new Error('no such viewer');
 const user = seeded.users.get(viewer.key)!;
 const spec: ReadSpec = {
   source: { kind: 'preset', tab: 'signal' },
-  params: { limit: 5, sort_method: 'notified_at', sort_direction: 'desc' },
+  params: { limit: Number(process.env.DBG_LIMIT ?? 5), sort_method: 'notified_at', sort_direction: 'desc' },
   showForeign: true,
   fresh: false,
-  maxPages: 3,
+  maxPages: Number(process.env.DBG_MAX_PAGES ?? 3),
 };
 const [oldApp, newApp] = await Promise.all([
-  startApp('old', process.env.PROOF_OLD_WORKTREE ?? '', 30110, env, join(here, 'probe.ts'), out),
-  startApp('new', process.env.PROOF_NEW_WORKTREE ?? '', 30111, env, join(here, 'probe.ts'), out),
+  startApp('old', process.env.PROOF_OLD_WORKTREE ?? '', portBase, env, join(here, 'probe.ts'), out),
+  startApp('new', process.env.PROOF_NEW_WORKTREE ?? '', portBase + 1, env, join(here, 'probe.ts'), out),
 ]);
 const browser = await launchBrowser();
 try {
@@ -57,7 +60,7 @@ try {
         reader: name,
         transport: second.transport,
         first: { rows: a.length, pages: first.pages },
-        second: { rows: b.length, pages: second.pages },
+        second: { rows: b.length, pages: second.pages, hasNextPage: second.hasNextPage },
         secondStartsWithFirst: a.every((key, i) => b[i] === key),
       })
     );

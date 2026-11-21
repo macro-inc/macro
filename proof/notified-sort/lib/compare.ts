@@ -94,24 +94,17 @@ export function compareSnapshots(
       detail: `old=${oldSnap.error} new=${newSnap.error}`,
     });
   }
-  if (oldSnap.hasNextPage !== newSnap.hasNextPage) {
-    diffs.push({
-      signature: `${label}paging:hasNextPage`,
-      kind: 'paging',
-      detail: `old=${oldSnap.hasNextPage} new=${newSnap.hasNextPage}`,
-    });
-  }
-
   // Main's REST reader keeps every page a reader with the same key loaded
   // (TanStack infinite query), so a second read of a list starts with those
-  // pages and then reads up to the page limit on top of them. When both
-  // reads stopped at the limit, the branch read full pages and its rows are
-  // exactly the first rows of main's, that tail is the only difference;
-  // compare the shared prefix. A dropped, moved or altered row still breaks
-  // the prefix or the full-page count.
+  // pages and then reads up to the page limit on top of them; on top of
+  // them it may even reach the end of the list. When the branch stopped at
+  // the limit, read full pages, and its rows are exactly the first rows of
+  // main's, that tail is the only difference (and main's list has no next
+  // page only because it read further); compare the shared prefix. A
+  // dropped, moved or altered row still breaks the prefix or the full-page
+  // count.
   const retained =
     options.pageSize !== undefined &&
-    oldSnap.hasNextPage &&
     newSnap.hasNextPage &&
     oldSnap.entities.length > newSnap.entities.length &&
     newSnap.entities.length === options.pageSize * newSnap.pages &&
@@ -123,6 +116,12 @@ export function compareSnapshots(
       detail: `old ${oldSnap.entities.length} rows, new ${newSnap.entities.length}; new is old's prefix`,
     });
     oldSnap = { ...oldSnap, entities: oldSnap.entities.slice(0, newSnap.entities.length) };
+  } else if (oldSnap.hasNextPage !== newSnap.hasNextPage) {
+    diffs.push({
+      signature: `${label}paging:hasNextPage`,
+      kind: 'paging',
+      detail: `old=${oldSnap.hasNextPage} new=${newSnap.hasNextPage}`,
+    });
   }
   const oldKeys = oldSnap.entities.map(entityKey);
   const newKeys = newSnap.entities.map(entityKey);
