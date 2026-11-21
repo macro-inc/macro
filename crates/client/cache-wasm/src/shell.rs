@@ -197,6 +197,8 @@ struct HydrateRequest {
     variables: serde_json::Map<String, serde_json::Value>,
     data: serde_json::Value,
     identity: Option<String>,
+    /// Parsed after the projections are read, so a request that is wrong in
+    /// both ways fails on its projections first, as `hydrateQuery` always did.
     scope: Option<HydrationScope>,
 }
 
@@ -207,7 +209,6 @@ impl HydrateRequest {
         variables: JsValue,
         data: JsValue,
         identity: Option<String>,
-        hydration_scope: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
             query,
@@ -215,7 +216,7 @@ impl HydrateRequest {
             variables: parse_variables(variables)?,
             data: serde_wasm_bindgen::from_value(data).map_err(err_js)?,
             identity,
-            scope: serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?,
+            scope: None,
         })
     }
 }
@@ -650,10 +651,12 @@ impl CacheState {
 
     async fn prepare_hydrate(
         &mut self,
-        request: HydrateRequest,
+        mut request: HydrateRequest,
+        hydration_scope: JsValue,
     ) -> Result<PreparedHydrate, JsValue> {
         let wal_position = self.wal_position();
         let projections = self.hydrate_projections(&request).await?;
+        request.scope = serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?;
         Ok(PreparedHydrate {
             request,
             projections,
@@ -1980,15 +1983,8 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let request = HydrateRequest::parse(
-                query,
-                operation_name,
-                variables,
-                data,
-                identity,
-                hydration_scope,
-            )?;
-            let prepared = state.prepare_hydrate(request).await?;
+            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             to_js(&state.commit_hydrate(prepared, &ops).await?)
         })
     }
@@ -2015,15 +2011,8 @@ impl CacheEngine {
             let mut state = state.lock().await;
             state.prepared_hydrate = None;
             state.ensure_callable()?;
-            let request = HydrateRequest::parse(
-                query,
-                operation_name,
-                variables,
-                data,
-                identity,
-                hydration_scope,
-            )?;
-            let prepared = state.prepare_hydrate(request).await?;
+            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             state.prepared_hydrate = Some(prepared);
             Ok(JsValue::UNDEFINED)
         })
