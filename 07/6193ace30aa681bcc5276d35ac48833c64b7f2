@@ -1,0 +1,643 @@
+.agents/rules/config-and-service-urls.md
+  s_86a3b382b10917::t_25b7d57d1de17b 60-62
+.sqlx/query-0f6c9ac05ceabd7985b1fff67574cd19b63bf853992d21f61ae2bbd26924e165.json
+  s_86a3b382b10917::t_d3000901a6679a 1-15
+.sqlx/query-35ad8c76578312391c49b1d5afa74f8d9ad20780de12e5eea561204bf9803e22.json
+  s_86a3b382b10917::t_a85ca08786d09b 1-16
+.sqlx/query-551739bf4326e610a344884239ad020ccf46aeccfbf8fd8ad9bfdcb9f9321f51.json
+  s_86a3b382b10917::t_c3fa25e15f4f49 1-16
+.sqlx/query-c0ff0c0d098336ec33db39b6e784bb8924a7d239e4de8751b8758021c6b73ee1.json
+  s_86a3b382b10917::t_9cfe2f9ff864b2 1-52
+.sqlx/query-c402d631b082e61d35b711f24fa75cd66f286062812f5912c095570cb8172bd6.json
+  s_86a3b382b10917::t_e05b488d7ece12 1-20
+.sqlx/query-c50fc0191728afca30adc7095234550c9f28c29134fca1db62c354f0c2758435.json
+  s_86a3b382b10917::t_462580eef93f79 1-18
+.sqlx/query-df320c36009f6bacacd23615ef14356e3c300acadad7de730f3638a2eec0d144.json
+  s_86a3b382b10917::t_23028281a7329b 1-20
+.sqlx/query-e62baf832a861e8737a777680cc386bbbb1547b94a25602d51ca21cecb2b3138.json
+  s_86a3b382b10917::t_7216c907513904 1-17
+.sqlx/query-eb56091c8ac73f7675e3525e2f75edbfb1c063d0d79572fbd8c570fc38008530.json
+  s_86a3b382b10917::t_d61f1fc7281b6a 1-53
+.sqlx/query-ee67841194dbd676956e9a873597c35008c1b58d81255698171025cad844270c.json
+  s_86a3b382b10917::t_65fb143ec949f5 1-14
+.sqlx/query-ff090fde68a39849c07cfaad092aee8d4a7258a3f26e1a3a9d7003d74f36dec0.json
+  s_86a3b382b10917::t_5caac2c2b8ed1d 1-40
+Cargo.lock
+  s_86a3b382b10917::t_c58bcbbb6577da 341-342,666-667,919-962
+Cargo.toml
+  s_86a3b382b10917::t_3bbc6ed98fb915 33-34
+apps/web/package.json
+  s_86a3b382b10917::t_d454ad3c0ebda1 160
+apps/web/src/features/agent-activity/queries/code-activity.ts
+  s_86a3b382b10917::t_e95bb72a428c33 66-69
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_86a3b382b10917::t_fc95ffbde4f4c6 1-66
+apps/web/src/features/agent-permissions/CLAUDE.md
+  s_86a3b382b10917::t_6c0b2949979a4d 1
+apps/web/src/features/agent-permissions/components/blocked-by-permissions-card.test.tsx
+  s_86a3b382b10917::t_1ef61ba0abe556 1-69
+apps/web/src/features/agent-permissions/components/blocked-by-permissions-card.tsx
+  s_86a3b382b10917::t_54deff40c49eb6 1-82
+apps/web/src/features/agent-permissions/components/gated-operation-list.tsx
+  s_86a3b382b10917::t_199856e0124c4f 1-102
+apps/web/src/features/agent-permissions/components/gated-phrases.test.ts
+  s_86a3b382b10917::t_93ac81800739c4 1-64
+apps/web/src/features/agent-permissions/components/gated-phrases.ts
+  s_86a3b382b10917::t_6a3924e0e491ad 1-90
+apps/web/src/features/agent-permissions/components/group-icon.ts
+  s_86a3b382b10917::t_aeb0f6c1b1a9e3 1-49
+apps/web/src/features/agent-permissions/components/labels.ts
+  s_86a3b382b10917::t_2e72f982b447f3 1-54
+apps/web/src/features/agent-permissions/components/match-text.tsx
+  s_86a3b382b10917::t_5d92b8bbf295f6 1-21
+apps/web/src/features/agent-permissions/components/permission-action-row.tsx
+  s_86a3b382b10917::t_acdedb0d3f75aa 1-79
+apps/web/src/features/agent-permissions/components/permission-group-row.tsx
+  s_86a3b382b10917::t_fc7e1e079fc1d0 1-58
+apps/web/src/features/agent-permissions/components/permission-group-summary.tsx
+  s_86a3b382b10917::t_8be377d0de0581 1-74
+apps/web/src/features/agent-permissions/components/permission-row.tsx
+  s_86a3b382b10917::t_2b2201c401c203 1-34
+apps/web/src/features/agent-permissions/components/permission-state-control.tsx
+  s_86a3b382b10917::t_204fc83486922b 1-53
+apps/web/src/features/agent-permissions/components/permission-state-glyph.tsx
+  s_86a3b382b10917::t_fd9ff8a2de68ce 1-37
+apps/web/src/features/agent-permissions/components/permission-tool-list.tsx
+  s_86a3b382b10917::t_634094eafff2c4 1-90
+apps/web/src/features/agent-permissions/components/permission-tool-row.tsx
+  s_86a3b382b10917::t_656905f57d515d 1-115
+apps/web/src/features/agent-permissions/components/permissions-notes.tsx
+  s_86a3b382b10917::t_cf4d1e79af7cd9 1-102
+apps/web/src/features/agent-permissions/components/permissions-skeleton.tsx
+  s_86a3b382b10917::t_6ea7963350f545 1-24
+apps/web/src/features/agent-permissions/components/reset-permissions-dialog.tsx
+  s_86a3b382b10917::t_2d8d06db731cff 1-45
+apps/web/src/features/agent-permissions/components/rich-text.tsx
+  s_86a3b382b10917::t_403aafabc42e4a 1-19
+apps/web/src/features/agent-permissions/core/gated-operations.test.ts
+  s_86a3b382b10917::t_4b27ddfd9b7e87 1-74
+apps/web/src/features/agent-permissions/core/gated-operations.ts
+  s_86a3b382b10917::t_3efd1639ebb011 1-105
+apps/web/src/features/agent-permissions/core/model.test.ts
+  s_86a3b382b10917::t_3c0b95bf000e46 1-145
+apps/web/src/features/agent-permissions/core/model.ts
+  s_86a3b382b10917::t_41112403bb4c7a 1-302
+apps/web/src/features/agent-permissions/core/registry.ts
+  s_86a3b382b10917::t_48abef0563ec04 1-79
+apps/web/src/features/agent-permissions/core/selection.test.ts
+  s_86a3b382b10917::t_f054dc1ed4fc0f 1-51
+apps/web/src/features/agent-permissions/core/selection.ts
+  s_86a3b382b10917::t_e4dd10160c2eb1 1-69
+apps/web/src/features/agent-permissions/index.ts
+  s_86a3b382b10917::t_544e33ade87e6c 1-16
+apps/web/src/features/agent-permissions/primitives/pending-changes.ts
+  s_86a3b382b10917::t_b5aee2b13a9bd1 1-69
+apps/web/src/features/agent-permissions/queries/keys.ts
+  s_86a3b382b10917::t_16e536e9b4f56e 1-10
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_86a3b382b10917::t_b0d46f3ea105fc 1-171
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_86a3b382b10917::t_b8b853f1fb14ac 1-147
+apps/web/src/features/agent-permissions/tests/gated-fixtures.ts
+  s_86a3b382b10917::t_3a4a7aeea9dd73 1-41
+apps/web/src/features/agent-permissions/use-agent-permissions-available.test.tsx
+  s_86a3b382b10917::t_b0c53c6eaa6574 1-71
+apps/web/src/features/agent-permissions/use-agent-permissions-available.ts
+  s_86a3b382b10917::t_14287a8408351d 1-18
+apps/web/src/features/agent-permissions/use-agent-permissions-flag.test.ts
+  s_86a3b382b10917::t_f323a811eb606e 1-36
+apps/web/src/features/agent-permissions/use-agent-permissions-flag.ts
+  s_86a3b382b10917::t_c9936c3ba86601 1-13
+apps/web/src/features/agent-permissions/views/agent-permissions-list.tsx
+  s_86a3b382b10917::t_4c3bc2ad008313 1-439
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_86a3b382b10917::t_a1e367b8af711a 1-297
+apps/web/src/features/agent-permissions/views/agent-permissions-page.tsx
+  s_86a3b382b10917::t_6f5a7aaa6f462a 1-279
+apps/web/src/features/agent-permissions/views/agent-permissions-section.tsx
+  s_86a3b382b10917::t_ee7eb34c601799 1-184
+apps/web/src/features/agent-permissions/views/blocked-permissions-notice.test.tsx
+  s_86a3b382b10917::t_fa525d9da1c0f5 1-81
+apps/web/src/features/agent-permissions/views/blocked-permissions-notice.tsx
+  s_86a3b382b10917::t_837eaeb459bcf0 1-46
+apps/web/src/features/agent-permissions/views/open-agent-permissions.ts
+  s_86a3b382b10917::t_8b1a409b0e80e4 1-16
+apps/web/src/features/agent-permissions/views/permission-changes.ts
+  s_86a3b382b10917::t_618e94e4190a3e 1-126
+apps/web/src/features/agent-permissions/views/show-permissions-card.test.tsx
+  s_86a3b382b10917::t_51a851a75fd5f9 1-163
+apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
+  s_86a3b382b10917::t_632e9cee9313ec 1-402
+apps/web/src/features/agent-updates/core/agent-update.test.ts
+  s_86a3b382b10917::t_df8e18a24b9473 66
+apps/web/src/features/block-agent/browser-test/permissions-session.ts
+  s_86a3b382b10917::t_1dbc480cd6b103 1-89
+apps/web/src/features/block-agent/browser-test/permissions-settings.ts
+  s_86a3b382b10917::t_71e399a2996d94 1-8
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_86a3b382b10917::t_53f5430a80ba20 1-178
+apps/web/src/features/block-agent/browser-test/permissions.html
+  s_86a3b382b10917::t_a23ae035820bfe 1-2
+apps/web/src/features/block-agent/browser-test/permissions.playwright.config.ts
+  s_86a3b382b10917::t_5d33344a9b4acf 1-18
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_86a3b382b10917::t_afb104cb6b15ab 1-482
+apps/web/src/features/block-agent/browser-test/permissions.vite.config.ts
+  s_86a3b382b10917::t_98aea9dc5ba3ce 1-42
+apps/web/src/features/block-agent/browser-test/playwright.config.ts
+  s_86a3b382b10917::t_93969cf9085e7a 10
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_86a3b382b10917::t_d887c12926a32c 1-192
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_86a3b382b10917::t_01c9052b57d1cf 1-176
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_86a3b382b10917::t_052e4bcad7136f 3,6,13,17-27,38,61
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.test.tsx
+  s_86a3b382b10917::t_ed4c6dfd5f56e0 128-161
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.tsx
+  s_86a3b382b10917::t_2b7a468f60702c 1,104-109,114-115
+apps/web/src/features/block-agent/component/parts/ToolApprovalPart.tsx
+  s_86a3b382b10917::t_59ab04aa6f034f 6-7,12-15,48-85,100-117
+apps/web/src/features/block-agent/component/parts/ToolCallPart.test.tsx
+  s_86a3b382b10917::t_43257d62afb66e 81-95,1631-1701
+apps/web/src/features/block-agent/component/parts/ToolCallPart.tsx
+  s_86a3b382b10917::t_15fda5a27201c9 15,24,79-85
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_86a3b382b10917::t_9205bae7098396 19,121-157
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.ts
+  s_86a3b382b10917::t_398cf0348a4085 40-44,72-75,84-89
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_86a3b382b10917::t_e476a55fa8b57b 1-183
+apps/web/src/features/block-agent/state/permission-approval.ts
+  s_86a3b382b10917::t_c58bf7fcaa8d63 1-164
+apps/web/src/features/block-agent/state/section-steps.ts
+  s_86a3b382b10917::t_85a944623f60e6 61,63-67
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_86a3b382b10917::t_1ae7f56805a3bc 10-12,29-33,89-91,158-169
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_86a3b382b10917::t_a60c23b54462a9 3,29-48,63-64,71,73-76,79-82,84-96,114,126,137,147
+apps/web/src/features/block-agent/views/CodeExecutionPart.tsx
+  s_86a3b382b10917::t_65b8eba6090255 1-7,14-16,67-83,103-152
+apps/web/src/features/block-agent/views/ShowPermissionsPart.test.tsx
+  s_86a3b382b10917::t_3d0c2a8e448124 1-102
+apps/web/src/features/block-agent/views/ShowPermissionsPart.tsx
+  s_86a3b382b10917::t_4056cf672ee793 1-62
+apps/web/src/features/block-agent/views/code-execution-record.ts
+  s_86a3b382b10917::t_1ff72db1f3a6b0 11,64-69
+apps/web/src/features/settings/Agents.test.tsx
+  s_86a3b382b10917::t_44a1e85ff91e42 23,30,85-116,368-369,1043-1186
+apps/web/src/features/settings/Agents.tsx
+  s_86a3b382b10917::t_ad64f62cbbcdec 2-8,39,211-232,363,380,387-422,478-479,524-528,593-604,672,710-727,1008-1011,1374-1383,1680-1688
+apps/web/src/features/settings/agentSettingsState.ts
+  s_86a3b382b10917::t_f23ca36cff3e00 1,5-6,10-15,28-43
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_86a3b382b10917::t_4188444a06b05e 155-168
+apps/web/src/lib/i18n/locales/en.ts
+  s_86a3b382b10917::t_d48072cf12df6e 5-6,62-63
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_86a3b382b10917::t_2feaef113a30a0 1-81
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_86a3b382b10917::t_f11111fe1ec706 1-115
+apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts
+  s_86a3b382b10917::t_bf1b15722d4171 1412,1463,1495,1536,1574,1626-1631,1662,1696,1743,1813,1845,1896,1928,1969,2007,2059-2064,2095,2129,2176,2246,2389-2394
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_86a3b382b10917::t_a034430ae1a7d0 20,85-88,4074-4139,4390-4446,4504-4790
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissions.ts
+  s_86a3b382b10917::t_f203964cdf6ca3 1-40
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissionsSessionRules.ts
+  s_86a3b382b10917::t_9137435500ecca 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/declinedStatus.ts
+  s_86a3b382b10917::t_c86dc2638b0833 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermission.ts
+  s_86a3b382b10917::t_87d5a8ab2dc7ca 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOf.ts
+  s_86a3b382b10917::t_2ed110f89112b1 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfOutcome.ts
+  s_86a3b382b10917::t_fd6885ac67e863 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfThree.ts
+  s_86a3b382b10917::t_7e2d7cc29e119c 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionPermissionOneOfThreeOutcome.ts
+  s_86a3b382b10917::t_0b07002738cb29 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceipt.ts
+  s_86a3b382b10917::t_69ab294fead770 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceiptError.ts
+  s_86a3b382b10917::t_a85cc0a8ac1472 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceiptPermission.ts
+  s_86a3b382b10917::t_b1d2aa38431a05 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordPermission.ts
+  s_86a3b382b10917::t_db2924d46a721b 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordSdkFingerprint.ts
+  s_86a3b382b10917::t_82acdecb03195b 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/gatedOperation.ts
+  s_86a3b382b10917::t_f7f97f84810244 1-33
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/gatedOperationAction.ts
+  s_86a3b382b10917::t_df26a9f3f3224b 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/groupSelection.ts
+  s_86a3b382b10917::t_f1954d8f3c4b3e 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/loosenedOperation.ts
+  s_86a3b382b10917::t_b000e14fa584be 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/permissionAction.ts
+  s_86a3b382b10917::t_6dc82d34809b7b 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_86a3b382b10917::t_aafe86e7a35f35 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/recordedCallStatus.ts
+  s_86a3b382b10917::t_85aa75699cae9a 20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResult.ts
+  s_86a3b382b10917::t_468bbd69e8e0f7 1-28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResultReason.ts
+  s_86a3b382b10917::t_1a0b7c83992606 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsSelection.ts
+  s_86a3b382b10917::t_898e0c63fb9c9d 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/shownPermission.ts
+  s_86a3b382b10917::t_96a785b2b8cf43 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/tightenToolPermissionsResponse.ts
+  s_86a3b382b10917::t_2ce8f45ffcda50 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAction.ts
+  s_86a3b382b10917::t_9abea5ff54016b 1-29
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionAppliedTo.ts
+  s_86a3b382b10917::t_f04aa4d2f1d2c8 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalog.ts
+  s_86a3b382b10917::t_a51bccae309965 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogAction.ts
+  s_86a3b382b10917::t_423f5d1901c709 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogGroup.ts
+  s_86a3b382b10917::t_dbd80192f74b06 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionCatalogTool.ts
+  s_86a3b382b10917::t_d9ed5c73ae1799 1-21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChange.ts
+  s_86a3b382b10917::t_9621debfca7cdc 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChangeState.ts
+  s_86a3b382b10917::t_db746a7dbe1057 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionChanges.ts
+  s_86a3b382b10917::t_ae51f3647e53e1 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionError.ts
+  s_86a3b382b10917::t_ff4f0c2a7c2924 1-23
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorOperations.ts
+  s_86a3b382b10917::t_c084c07a762e64 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorTargets.ts
+  s_86a3b382b10917::t_3e11616e12a18b 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionGroup.ts
+  s_86a3b382b10917::t_82951c8b5e0821 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_86a3b382b10917::t_01bfbe44f4dd62 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOverride.ts
+  s_86a3b382b10917::t_c7fea5780b2f6b 1-24
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionPolicyKind.ts
+  s_86a3b382b10917::t_02118c4b438cae 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionRule.ts
+  s_86a3b382b10917::t_1e2f1464ae3222 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionState.ts
+  s_86a3b382b10917::t_7627d9e3b41cf6 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTarget.ts
+  s_86a3b382b10917::t_6cc89a224563a4 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOf.ts
+  s_86a3b382b10917::t_ea9f1f339a9c90 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfKind.ts
+  s_86a3b382b10917::t_57e7e3f4c71e2c 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThree.ts
+  s_86a3b382b10917::t_d78afa30068e30 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionTargetOneOfThreeKind.ts
+  s_86a3b382b10917::t_3372e2b2d723c2 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolSelection.ts
+  s_86a3b382b10917::t_2ee4e536fc020b 1-16
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_86a3b382b10917::t_3fa3c1c797b9fd 1-109
+apps/web/tsconfig.json
+  s_86a3b382b10917::t_d994ce3768a220 5-6,51-53
+bun.lock
+  s_88951331898820::t_432f441ce566a3 148,243-245,1608-1609,2296,2518-2519,4732-4733,4744-4745,4820-4821,5002-5003,5130-5131
+crates/agent_code_mode/AGENTS.md
+  s_86a3b382b10917::t_77d610055962a5 10-12,110-130,133-139,173-178
+crates/agent_code_mode/Cargo.toml
+  s_86a3b382b10917::t_dc36387f2cef6d 8,54,56-57
+crates/agent_code_mode/SKILL.md
+  s_86a3b382b10917::t_925d291e0e532f 49-56
+crates/agent_code_mode/src/domain/activity.rs
+  s_86a3b382b10917::t_89b3778b08f1f7 37,44-47
+crates/agent_code_mode/src/domain/connected_apps/test.rs
+  s_86a3b382b10917::t_8b07efc2622ebe 155-156,163,221-222,229,270-271,278,308-309,316
+crates/agent_code_mode/src/domain/models.rs
+  s_86a3b382b10917::t_00cb82d49c1f68 1,59-99,148-150,166,168-176,191-195,216-219,282-293,338-341
+crates/agent_code_mode/src/domain/ports.rs
+  s_86a3b382b10917::t_fde55a506f4a33 2-3,26,31,79-87
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_86a3b382b10917::t_2f20b5efa40dca 110-111,118
+crates/agent_code_mode/src/domain/service.rs
+  s_86a3b382b10917::t_221e52fe4c3b94 5-7,35-58,68,92,130-156,161,170-171,178,186,220-225,237,240-266,589-595,616-617,621,629-631,681-694,816-819,832
+crates/agent_code_mode/src/domain/service/test.rs
+  s_86a3b382b10917::t_3521f97bb1edcf 77,176,195,371-372,379,606-607,614,878-1148
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_86a3b382b10917::t_10d575c058a674 153-154,161
+crates/agent_code_mode/src/domain/user/test.rs
+  s_86a3b382b10917::t_62afe7ac5d69b4 78,145,150
+crates/agent_code_mode/src/inbound/toolset/session/js_tools.md
+  s_86a3b382b10917::t_a3a759abcea00a 1-9
+crates/agent_code_mode/src/inbound/toolset/session/js_tools_permissions.md
+  s_86a3b382b10917::t_c9d51a0560cccf 1
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_86a3b382b10917::t_fa672f03fe05c6 3-4,280-325,394,419-620
+crates/agent_code_mode/src/inbound/toolset/test/js_tools.rs
+  s_86a3b382b10917::t_942a073e335067 1-480
+crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
+  s_86a3b382b10917::t_8ed3939e38d48c 1-424
+crates/agent_code_mode/src/outbound/postgres/test.rs
+  s_86a3b382b10917::t_57213ac3a657d9 18-19,26,79-80,87
+crates/agent_code_mode/src/outbound/reviews/test.rs
+  s_86a3b382b10917::t_abc0e5dcf25495 25-26,33
+crates/agent_correlation/src/scope.rs
+  s_86a3b382b10917::t_918e5fe57b21ba 34-35,102-103
+crates/agent_correlation/src/scope/test.rs
+  s_86a3b382b10917::t_f0316785521553 185-189,224-225
+crates/agent_egress/AGENTS.md
+  s_86a3b382b10917::t_6f8489ec9ae5fc 44-50
+crates/agent_egress/src/domain/approval.rs
+  s_86a3b382b10917::t_fbbe4ed158b750 64-75,193-223,259-269,409-412,419,437,439,463,475-480,594-596,611-674,946-1038
+crates/agent_egress/src/domain/approval/model.rs
+  s_86a3b382b10917::t_9cee45b7ced801 10,97-98,101-119,155-175,235-238
+crates/agent_egress/src/domain/approval/test.rs
+  s_86a3b382b10917::t_a0f821b36e88b8 177,208-214,236,243-249,257,265,460,577-583,618-624,684,725,754-760,779-785,798-1136
+crates/agent_egress/src/domain/model.rs
+  s_86a3b382b10917::t_734c2541d3d04b 593-595,598
+crates/agent_egress/src/domain/model/test.rs
+  s_86a3b382b10917::t_eadb9ea7e62496 27-31
+crates/agent_harness/src/inbound/tool_approvals.rs
+  s_86a3b382b10917::t_ad479c8c297c68 198-200,243,275-278,286
+crates/agent_harness/src/inbound/tool_approvals/test.rs
+  s_86a3b382b10917::t_5b6f4a9bf7e587 13-16
+crates/agent_harness/src/outbound/tool_approvals/test.rs
+  s_86a3b382b10917::t_dd1b6d962c880a 32
+crates/agent_inmem/src/outbound/approval_gate/test.rs
+  s_86a3b382b10917::t_022c7b279f7a32 127-133,151,295-301
+crates/agent_permission_registry/AGENTS.md
+  s_86a3b382b10917::t_b57c32bd1beace 1-64
+crates/agent_permission_registry/CLAUDE.md
+  s_86a3b382b10917::t_5e9a3000f7b619 1
+crates/agent_permission_registry/Cargo.toml
+  s_86a3b382b10917::t_8c7fc63bae714c 1-19
+crates/agent_permission_registry/registry.json
+  s_86a3b382b10917::t_f3a324b464b3ce 1-1015
+crates/agent_permission_registry/src/lib.rs
+  s_86a3b382b10917::t_96b98756610b0b 1-160
+crates/agent_permission_registry/src/test.rs
+  s_86a3b382b10917::t_acc4b8689afa5e 1-94
+crates/agent_permissions/AGENTS.md
+  s_86a3b382b10917::t_938b1d811b8797 1-114
+crates/agent_permissions/CLAUDE.md
+  s_86a3b382b10917::t_0d5b579ba9b9db 1
+crates/agent_permissions/Cargo.toml
+  s_86a3b382b10917::t_391dbd6383c6d4 1-38
+crates/agent_permissions/fixtures/permissions.sql
+  s_86a3b382b10917::t_ebfc91ccdb897e 1-10
+crates/agent_permissions/src/domain.rs
+  s_86a3b382b10917::t_9f1bb34294cacd 1-8
+crates/agent_permissions/src/domain/admission.rs
+  s_86a3b382b10917::t_14d02d4902abda 1-103
+crates/agent_permissions/src/domain/admission/test.rs
+  s_86a3b382b10917::t_9d22d2966204f9 1-85
+crates/agent_permissions/src/domain/model.rs
+  s_86a3b382b10917::t_59744fe6685ab9 1-612
+crates/agent_permissions/src/domain/ports.rs
+  s_86a3b382b10917::t_f24e46f40188da 1-101
+crates/agent_permissions/src/domain/resolve.rs
+  s_86a3b382b10917::t_67641308a6bc6f 1-417
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_86a3b382b10917::t_42ff9aacfd8bc4 1-456
+crates/agent_permissions/src/domain/service.rs
+  s_86a3b382b10917::t_2f73aa03958ccd 1-655
+crates/agent_permissions/src/domain/service/test.rs
+  s_86a3b382b10917::t_fe65847f57f94d 1-871
+crates/agent_permissions/src/inbound.rs
+  s_86a3b382b10917::t_b009e2168bf0b0 1-4
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_86a3b382b10917::t_820ab7fdf88448 1-438
+crates/agent_permissions/src/inbound/axum_router/test.rs
+  s_86a3b382b10917::t_7115cc65710da8 1-346
+crates/agent_permissions/src/inbound/toolset.rs
+  s_86a3b382b10917::t_4de3287b6e25a2 1-343
+crates/agent_permissions/src/inbound/toolset/test.rs
+  s_86a3b382b10917::t_a1a296be86bba4 1-225
+crates/agent_permissions/src/lib.rs
+  s_86a3b382b10917::t_99573d4c73eb5d 1-14
+crates/agent_permissions/src/outbound.rs
+  s_86a3b382b10917::t_f928b2cc6f102b 1-4
+crates/agent_permissions/src/outbound/pg.rs
+  s_86a3b382b10917::t_c4b1de99a16559 1-409
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_86a3b382b10917::t_e1173f8e2233e5 1-351
+crates/agent_permissions/src/outbound/registry.rs
+  s_86a3b382b10917::t_a91bb2161086d8 1-35
+crates/agent_runtime_protocol/src/domain/tool_approval.rs
+  s_86a3b382b10917::t_64ad000c575cfc 102-106
+crates/agent_runtime_protocol/src/domain/tool_approval/test.rs
+  s_86a3b382b10917::t_b609baf4155a65 16
+crates/agent_session/src/domain/service/test.rs
+  s_86a3b382b10917::t_b0dd8d7d16884b 1671
+crates/agent_session/src/domain/updates/test.rs
+  s_86a3b382b10917::t_60b6b30f39265b 149
+crates/code_execution/AGENTS.md
+  s_86a3b382b10917::t_6c54cbbfb10c2f 5-7,32-37,40-46,127-148,153-158
+crates/code_execution/README.md
+  s_86a3b382b10917::t_f44f1d13c1002e 7-8,85-237,284-285,361-365
+crates/code_execution/src/domain/models.rs
+  s_86a3b382b10917::t_fc3d5eeaa5da0d 11-12,16-17,19,21-49,76-83,245-246,398-467
+crates/code_execution/src/domain/ports.rs
+  s_86a3b382b10917::t_c9f76cfd439b0b 99-110
+crates/code_execution/src/domain/service.rs
+  s_86a3b382b10917::t_621a6dfed4b6e6 109-110
+crates/code_execution/src/domain/service/test.rs
+  s_86a3b382b10917::t_ee9b6a925886f2 46,75-76,268,563
+crates/code_execution/src/outbound/analysis.rs
+  s_86a3b382b10917::t_85728b4f07d235 1-89
+crates/code_execution/src/outbound/analysis/test.rs
+  s_86a3b382b10917::t_1ee549a23f7e57 1-61
+crates/code_execution/src/outbound/deno/analyze.rs
+  s_86a3b382b10917::t_3ebde6985c1548 1-187
+crates/code_execution/src/outbound/deno/analyze/test.rs
+  s_86a3b382b10917::t_74c9272c5edf52 1-343
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_86a3b382b10917::t_1f8d04c15d98cd 80-82,91-152,154-200,261,287,290,300-334,352,359-385,416,436-443
+crates/code_execution/src/outbound/deno/exit/test.rs
+  s_86a3b382b10917::t_c38a3ade6beeb7 213,273
+crates/code_execution/src/outbound/deno/js_tools_analyze.mjs
+  s_86a3b382b10917::t_e43b634edf4849 1-30
+crates/code_execution/src/outbound/deno/test.rs
+  s_86a3b382b10917::t_d4456f7d9cf1c6 68,110-126,180,200,298,340,354,421,628,824,852,979,1025,1087,1369,1625,1679,1738,1771,1797,1845,1902,1943,2024-2025
+crates/code_execution/src/outbound/deno/test/js_tools.rs
+  s_86a3b382b10917::t_dbeb1746faa3ab 1-884
+crates/code_mode_assets/AGENTS.md
+  s_86a3b382b10917::t_81cd25149b821a 8-11,45-47
+crates/code_mode_assets/build.rs
+  s_86a3b382b10917::t_5b209fd4a80cf6 17-19,21,23,36
+crates/code_mode_assets/src/lib.rs
+  s_86a3b382b10917::t_a933b212fba67a 26-41
+crates/folds/agent_fold/src/domain/fold/tool_approval.rs
+  s_86a3b382b10917::t_824d9ae4e6627e 44,62
+crates/folds/agent_fold/src/domain/model/interaction.rs
+  s_86a3b382b10917::t_e93b0889ef439a 63-66
+crates/folds/agent_fold/src/domain/model/part.rs
+  s_86a3b382b10917::t_a5a0edcecf099c 105-108
+crates/folds/agent_fold/src/domain/test/interactions.rs
+  s_86a3b382b10917::t_f5c3b2a3c98461 234-267
+crates/macro_db_client/migrations/20261120234700_agent_tool_permissions.sql
+  s_86a3b382b10917::t_cdd1c155ac2eb4 1-71
+crates/macro_db_client/migrations/20261120234701_agent_tool_permission_restriction_only.sql
+  s_86a3b382b10917::t_5c7ef13e954f3e 1-21
+docs/agent-guide/ai-chat.md
+  s_86a3b382b10917::t_dc5f57e9627e76 1399-1421,1837-1888
+docs/agent-guide/settings.md
+  s_86a3b382b10917::t_4d985a736874c2 1229-1262
+nix/cloud-storage.nix
+  s_86a3b382b10917::t_ca75896f3cd2c9 251-253
+packages/code-mode-sdk/AGENTS.md
+  s_86a3b382b10917::t_b183b8ce2ad961 5-8,38-42,67-82
+packages/code-mode-sdk/README.md
+  s_86a3b382b10917::t_b46473f5064fb7 58-97,102-103
+packages/code-mode-sdk/licenses/opencode-codemode.LICENSE
+  s_86a3b382b10917::t_1b2b1679c2bb7a 1-21
+packages/code-mode-sdk/package.json
+  s_86a3b382b10917::t_70e4bdb194207e 15-17
+packages/code-mode-sdk/scripts/generate.ts
+  s_86a3b382b10917::t_884b6b380d3b09 3-5,11-12,16-20,143-146,155,158-159,161,228-334
+packages/code-mode-sdk/src/documentation.test.ts
+  s_86a3b382b10917::t_f2317ae8ef7680 331-345
+packages/code-mode-sdk/src/js-tools/analyze.test.ts
+  s_86a3b382b10917::t_5288557f9e4a45 1-614
+packages/code-mode-sdk/src/js-tools/analyze.ts
+  s_86a3b382b10917::t_b019caf85d5466 1-358
+packages/code-mode-sdk/src/js-tools/catalog.test.ts
+  s_86a3b382b10917::t_3d735dc5bf8adf 1-339
+packages/code-mode-sdk/src/js-tools/catalog.ts
+  s_86a3b382b10917::t_2c79fa022b44cc 1-394
+packages/code-mode-sdk/src/js-tools/index.ts
+  s_86a3b382b10917::t_a1ada3dfc80fdd 1-21
+packages/code-mode-sdk/src/js-tools/pins.test.ts
+  s_86a3b382b10917::t_78f65716d295e7 1-134
+packages/code-mode-sdk/src/js-tools/runtime.test.ts
+  s_86a3b382b10917::t_a075e826141725 1-179
+packages/code-mode-sdk/src/js-tools/runtime.ts
+  s_86a3b382b10917::t_8981f3b7e7eb5f 1-121
+packages/sdk-docs/AGENTS.md
+  s_86a3b382b10917::t_83fff4bfeed881 30-33
+packages/sdk-docs/src/render.test.ts
+  s_86a3b382b10917::t_e3aa02917be8df 122-139
+packages/sdk-docs/src/render.ts
+  s_86a3b382b10917::t_6d0950b611ed62 40-47,57,85-90,118-121,134-161
+packages/sdk-mcp/AGENTS.md
+  s_86a3b382b10917::t_e1e1a0c5feaeb6 35-38
+packages/sdk-mcp/scripts/generate.ts
+  s_86a3b382b10917::t_432aaf653a8f16 13-14,117-134,138-156,714-715,726-728,737,986-996
+packages/sdk-mcp/src/tools.test.ts
+  s_86a3b382b10917::t_c2019b3939b144 3,52-67
+packages/sdk/AGENTS.md
+  s_86a3b382b10917::t_cb48aa4660e02e 247-250,287-289
+packages/sdk/generated/agent-fold/index.ts
+  s_86a3b382b10917::t_9c4a4f5d9bf2aa 1262,1282,1286,1296,1306,1332-1338,1344,1348,1364,1405,1412,1432,1436,1446,1456,1482-1488,1494,1498,1514,1555,1669-1674
+packages/sdk/generated/agent-harness/index.ts
+  s_86a3b382b10917::t_378849822029db 4
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_86a3b382b10917::t_61a8756a60f5c0 5,727-735,783-789,797-845
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_86a3b382b10917::t_11a7143da0b42a 749-791,1742-1746,1999-2046,2073-2079,2085-2092,2174-2211,2226-2239,2449-2474,2585-2590,2645-2652,2813,3222-3284,3349-3362,3378-3653,5450-5475,5571-5593,5614-5729
+packages/sdk/specs/agent-harness.json
+  s_86a3b382b10917::t_bfaf85d43e235f 3544-3604,3803-3841,3884-4173,5787-5849,6987-6991,7393-7477,7520-7534,7538-7541,7544,7661-7714,7729-7747,8051-8077,8256-8260,8344-8348,8535,9350-9423,9514-9528,9544-9885,10303-10306
+packages/sdk/src/coverage/skipped.ts
+  s_86a3b382b10917::t_ceb9461ec25957 45-46
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_86a3b382b10917::t_303e7404798398 21-25,240-256
+packages/sdk/src/entities/agent-sessions/namespace.ts
+  s_86a3b382b10917::t_fae3e344680c33 94-95
+packages/sdk/src/entities/agents/agent.ts
+  s_86a3b382b10917::t_1bc212a8cfe684 14-19,198-239
+packages/sdk/src/entities/agents/namespace.ts
+  s_86a3b382b10917::t_ddf7e33ba1ef35 4,58-71
+packages/sdk/src/entities/agents/tool-permissions.ts
+  s_86a3b382b10917::t_6ad83cf37d07df 1-59
+packages/sdk/src/macro.ts
+  s_86a3b382b10917::t_0aa7fb584a5bbc 424-435
+packages/sdk/src/utils/verbs.ts
+  s_86a3b382b10917::t_d0cbf8c5b93bab 57,64,71
+packages/sdk/tests/agent-sessions.test.ts
+  s_86a3b382b10917::t_84adac924a8fc1 675,688
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_86a3b382b10917::t_a6804d47d53acd 19
+rules/ast-grep/ts-feature-core-pure.yml
+  s_86a3b382b10917::t_006a4887a45b77 21
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_86a3b382b10917::t_96a9c44d64247c 20-21
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_86a3b382b10917::t_9c597b70a0724e 33-37
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_86a3b382b10917::t_be51bf66198d04 19
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_86a3b382b10917::t_1463ac4df9c1da 21
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_86a3b382b10917::t_e4b77eed195a04 20-21
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_86a3b382b10917::t_f4f41a08a04dd0 33-37
+services/agent_harness_service/AGENTS.md
+  s_86a3b382b10917::t_889f7220fcfdcc 73-100
+services/agent_harness_service/Cargo.toml
+  s_86a3b382b10917::t_aca9a7f1c55624 43,223
+services/agent_harness_service/src/api.rs
+  s_86a3b382b10917::t_d6b8b83f4f7897 94,153,307-312,480
+services/agent_harness_service/src/api/swagger.rs
+  s_86a3b382b10917::t_4be2bd789fa23c 23-26,142-147,155-165,244-248,263-264
+services/agent_harness_service/src/api/test.rs
+  s_86a3b382b10917::t_bed6eecb2dbf19 439-510
+services/agent_harness_service/src/code_mode.rs
+  s_86a3b382b10917::t_204474c1cad2b5 3-4,109-112,236,239-260,303-304,378,398-462,534,542,545-550
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_86a3b382b10917::t_68d8d3cd1a7ba5 1-389
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_86a3b382b10917::t_c98f85e7462e9c 1-824
+services/agent_harness_service/src/code_mode/test.rs
+  s_86a3b382b10917::t_89be84cba324c1 51-58,64-71,80-142,164-172,456-457,782,784-789,1036,1058-1307
+services/agent_harness_service/src/internal_mcp.rs
+  s_86a3b382b10917::t_fad0f13fcd43e2 100-125,151,172-228,251-252,255,303-328,380-389
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_88951331898820::t_b268441c91f674 196,434-762
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_86a3b382b10917::t_6d26c42d9daf12 48,130
+services/agent_harness_service/src/internal_mcp/test/trace.rs
+  s_86a3b382b10917::t_0c94e5a98dcae5 96
+services/agent_harness_service/src/lib.rs
+  s_86a3b382b10917::t_d00fdbe7b8e645 47,248-270,731-733,744-746,997-1028,1041,1052-1066,1129,2268-2276,2366
+services/agent_harness_service/src/routine_code.rs
+  s_86a3b382b10917::t_d5fde3aa9e1d6c 18-20,338,347
+services/agent_harness_service/src/test.rs
+  s_86a3b382b10917::t_8b5eebb1f3d803 1,42-52
+services/agent_harness_service/src/tool_permissions.rs
+  s_86a3b382b10917::t_01279284a77545 1-58
+tooling/xtask/crates/xtask_nextest_filter/determinator.toml
+  s_86a3b382b10917::t_cc7a2c51c81643 28-33
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_86a3b382b10917::t_633eec313ba6a0 3-5,13,43-65,177-307,363
+crates/code_execution/src/outbound.rs
+  s_86a3b382b10917::t_147b04348dd77c 1-2,4
+crates/code_execution/src/outbound/deno.rs
+  s_86a3b382b10917::t_f41faebb1820ee 2-3,163-169,248-276,295-307,400,569-585,626-628,632-641,651,663-666,672,674-684,733-739,787
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "076193ace30aa681bcc5276d35ac48833c64b7f2",
+  "prompts": {},
+  "sessions": {
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_88951331898820": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "18a358bb-9b89-4bb6-871f-cd867cd4f342",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
