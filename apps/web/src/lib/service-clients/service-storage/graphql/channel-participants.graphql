@@ -1,0 +1,21 @@
+# Who is in one channel, for the participants query. Read past the normalized
+# cache: the participants query's TanStack cache owns refresh and optimism.
+query ChannelParticipantsSoup($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				... on GraphqlSoupChannel {
+					id
+					participants {
+						channelId
+						userId
+						role
+						joinedAt
+						leftAt
+					}
+				}
+			}
+		}
+	}
+}
