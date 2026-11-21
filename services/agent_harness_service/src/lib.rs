@@ -767,6 +767,7 @@ pub async fn run() -> anyhow::Result<()> {
                     max_queued: BACKGROUND_JOB_SLOTS,
                     max_duration: agent_code_mode::domain::JOB_LIMIT,
                     background: true,
+                    long_running: true,
                     ..Default::default()
                 },
             )?;
