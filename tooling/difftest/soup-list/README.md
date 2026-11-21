@@ -27,6 +27,12 @@ spans from that step, per side (`phases`). World building retries a document
 create that failed on a backend hop (DSS answering 500 "error sending
 request" to the lexical or sync service, on a loaded machine) and reports how
 many it retried as `meta.setupRetries`; sequence steps are never retried.
+A sequence step (its write, comparisons and any reload) has 15 minutes
+(`DIFFTEST_STEP_DEADLINE_MS`): a dev-server page that never finishes loading a
+module otherwise leaves an in-page await, and its lane, waiting forever. A step
+past it is recorded in `sequences.hangs` with what each page showed, the pages
+are loaded again, and the sequence runs again once with its earlier failures
+dropped (`sequences.aborted`).
 
 `bun run against-aa.ts results/aa.json results/quiet.json ...` puts each
 sequence failure bucket next to the A/A's rate for the same bucket, per 100
