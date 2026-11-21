@@ -985,10 +985,11 @@ export function fallbackChannels(
 
 /** The channels `fallbackChannels` decides by a by-id read: listed ones the
  * cache never held, changed ones the network did not list, and ones the
- * network did not list that the cache holds without every field
- * (`incomplete`): a channel joined after the walk read its page can be
- * cached first by a read without the directory's fields, and only a by-id
- * read lands it with them. */
+ * cache holds without every field (`incomplete`) that the rows leave out
+ * (the network did not list them, or the cache removed their record since):
+ * a channel joined after the walk read its page, or rejoined after its
+ * record was removed, can be cached first by a read without the directory's
+ * fields, and only a by-id read lands it with them. */
 export function fallbackConfirmations(
   network: readonly DirectoryChannel[],
   evidence: FallbackEvidence,
@@ -1006,7 +1007,8 @@ export function fallbackConfirmations(
     if (change && !listed.has(id)) unlisted.add(id);
   // No channel has an id no read can parse.
   for (const id of incomplete)
-    if (!listed.has(id) && isChannelId(id)) unlisted.add(id);
+    if ((!listed.has(id) || changes.get(id) === null) && isChannelId(id))
+      unlisted.add(id);
   ids.push(...unlisted);
   return ids;
 }
@@ -1271,13 +1273,15 @@ export function createCachedChannelDirectory(
   const renderConfirmed = throttle(() => render(true), CONFIRM_RENDER_MS);
 
   /** Notes each record this read found changed or removed since the last,
-   * while the fallback runs. A record that now lacks a field is not a
-   * change: what was seen of it stands, so its removal later still is one. */
+   * while the fallback runs, and returns the ids of those removed. A record
+   * that now lacks a field is not a change: what was seen of it stands, so
+   * its removal later still is one. */
   const observe = (
     read: ChannelDirectoryRead,
     records: () => Map<string, DirectoryChannel>
-  ) => {
-    if (!observed || !changes) return;
+  ): string[] => {
+    if (!observed || !changes) return [];
+    const removed: string[] = [];
     const next = records();
     for (const [id, channel] of next) {
       const before = observed.get(id);
@@ -1292,10 +1296,14 @@ export function createCachedChannelDirectory(
       if (incomplete.has(id)) {
         kept ??= new Map(next);
         kept.set(id, before);
-      } else changes.set(id, null);
+      } else {
+        changes.set(id, null);
+        removed.push(id);
+      }
     }
     for (const id of next.keys()) seen?.add(id);
     observed = kept ?? next;
+    return removed;
   };
 
   /** Stops showing the network's channels from the caller's next render. */
@@ -1339,13 +1347,20 @@ export function createCachedChannelDirectory(
    * channel whose record the cache changed since that read was sent (the
    * viewer may have joined it), proves nothing of the record now cached:
    * forget it, so the channel is read again. A channel a confirming read
-   * returned is shown as the cache holds it, so a later write needs no read. */
-  const renewStaleReads = (read: ChannelDirectoryRead) => {
+   * returned is shown as the cache holds it, so a later write needs no read;
+   * once the cache removes its record (`removed`), that read proves nothing
+   * of the channel's next record, which a rejoin may first write without a
+   * field. */
+  const renewStaleReads = (
+    read: ChannelDirectoryRead,
+    removed: readonly string[]
+  ) => {
     const outcomes = untrack(reader.outcomes);
     reader.renew(
       read.incompleteIds.filter((id) => outcomes[id] === 'returned')
     );
     reader.renewChanged();
+    confirm.renew(removed);
     confirm.renewChanged();
   };
 
@@ -1370,13 +1385,13 @@ export function createCachedChannelDirectory(
       byId ??= recordsById(read);
       return byId;
     };
-    observe(read, records);
+    const removed = observe(read, records);
     restampOlderRecords(records);
     // A finished pass reconciled the cache: it answers alone again.
     if (lane.complete) stopFallback();
     // `complete` reads both, so it never pairs one with the other's old value.
     batch(() => {
-      renewStaleReads(read);
+      renewStaleReads(read, removed);
       render();
     });
     queueIncomplete();

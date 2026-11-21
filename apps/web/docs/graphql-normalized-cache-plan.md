@@ -1424,9 +1424,12 @@ network's row, so a stale joined row the network left out stays out. A change
 proves no membership by itself: a changed record the network did not list
 shows only once a by-id read returns it, and a listed channel the cache never
 held is dropped once a by-id read finds it absent. So does a record the
-network did not list that the cache holds without every field: a channel
-joined after the walk read its page, cached first by a query without the
-directory's fields, is listed only once a by-id read lands it with them.
+cache holds without every field that the rows leave out (the network did not
+list it, or the cache removed its record since): a channel joined after the
+walk read its page, or rejoined after its record was removed, cached first by
+a query without the directory's fields, is listed only once a by-id read lands
+it with them. A read that returned a channel is forgotten once the cache
+removes that channel's record, so a rejoin is read again.
 Those reads decide only with complete evidence (a cached record cannot vouch for a channel the viewer
 may have lost), and the directory is complete only once each has returned
 its channel or found it absent; until then a lookup of an unlisted channel

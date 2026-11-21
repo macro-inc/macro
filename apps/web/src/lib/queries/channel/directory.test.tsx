@@ -1535,6 +1535,73 @@ describe('cached channel directory', () => {
     expect(ids(await directory.readComplete()).sort()).toEqual(['a', 'joined']);
   });
 
+  it.each([
+    { shape: 'the walk left out', listed: false },
+    { shape: 'the walk listed', listed: true },
+  ])(
+    'reads a channel $shape again when it is rejoined without a field after its record was removed',
+    async ({ listed }) => {
+      const options: CachedDirectoryOptions = {
+        pageAll: async () =>
+          listed
+            ? [directoryChannel('a'), directoryChannel('x')]
+            : [directoryChannel('a')],
+      };
+      const { cache, directory, reopen, hydrate } = mountCachedDirectory(
+        [channelRecord('a'), channelRecord('x')],
+        options
+      );
+      const names = () =>
+        ids(directory.channels())
+          .map((id) => channelName(id))
+          .sort();
+      cache.put(channelRecord('a'));
+      if (listed) cache.put(channelRecord('x'));
+      await vi.waitFor(() => expect(directory.channels()).not.toHaveLength(0));
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      if (!listed) {
+        // Joined after the walk read its page: shown once a by-id read
+        // returns it.
+        cache.put(channelRecord('x'));
+        reopen();
+      }
+      await vi.waitFor(() => expect(names()).toEqual(['a', 'x']));
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      const readsBefore = hydrate.mock.calls.length;
+
+      // The viewer loses it: its record is removed.
+      cache.records.delete(`GraphqlSoupChannel:${channelUuid('x')}`);
+      cache.put(channelRecord('a', { name: 'renamed' }), { sourceHash: 'a-2' });
+      reopen();
+      await vi.waitFor(() => expect(names()).toEqual(['a']));
+      expect(directory.complete()).toBe(true);
+
+      // Then rejoins it, cached first by a read without a directory field.
+      let release!: () => void;
+      options.byIdGate = new Promise<void>((done) => {
+        release = done;
+      });
+      cache.put(channelRecord('x'), { incomplete: true, sourceHash: 'x-2' });
+      reopen();
+      await vi.waitFor(() =>
+        expect(hydrate.mock.calls.length).toBeGreaterThan(readsBefore)
+      );
+      expect(directory.complete()).toBe(false);
+      expect(directory.lookup(channelUuid('x')).status).toBe('pending');
+
+      release();
+      await vi.waitFor(() => expect(names()).toEqual(['a', 'x']));
+      await vi.waitFor(() => expect(directory.complete()).toBe(true));
+      expect(directory.lookup(channelUuid('x')).status).toBe('loaded');
+      expect(
+        ids(await directory.readComplete())
+          .map((id) => channelName(id))
+          .sort()
+      ).toEqual(['a', 'x']);
+    }
+  );
+
   it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
     let release!: () => void;
     const byIdGate = new Promise<void>((done) => {
