@@ -229,7 +229,7 @@ function PartRow(props: {
           class="group flex items-center rounded-full focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px]"
           onClick={() => props.draft.unpin(props.row.part)}
         >
-          <span class="rounded-full border border-edge-muted px-2 py-0.5 text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent group-aria-pressed:outline-ink">
+          <span class="rounded-full border border-edge-muted px-2 py-0.5 dark-mode:border-edge text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent group-aria-pressed:outline-ink">
             {t('agentFaces.any')}
           </span>
         </button>
