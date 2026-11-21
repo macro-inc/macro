@@ -19,6 +19,7 @@
       href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600;700&family=Funnel+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
     />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="sections.css" />
     <script>
       document.documentElement.classList.add('js');
     </script>
@@ -68,12 +69,6 @@
         <circle cx="4.5" cy="12" r="1.5" />
         <circle cx="11.5" cy="12" r="1.5" />
         <path d="M4.5 5.5v5M11.5 10.5V7a2 2 0 0 0-2-2H8m1.5-1.5L8 5l1.5 1.5" />
-      </symbol>
-      <symbol id="i-out" viewBox="0 0 16 16">
-        <path d="M5 11 11 5M6 5h5v5" />
-      </symbol>
-      <symbol id="i-next" viewBox="0 0 16 16">
-        <path d="M3 8h10M9 4l4 4-4 4" />
       </symbol>
       <symbol id="i-copy" viewBox="0 0 16 16">
         <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
@@ -174,7 +169,7 @@
                     <span>Signal</span>
                     <span>9:12 AM</span>
                   </header>
-                  <h3>CSV export drops the timezone column</h3>
+                  <p class="pane-title">CSV export drops the timezone column</p>
                   <p class="soft">Tim Reyes · Acme</p>
                   <p>
                     Hi team, since Tuesday our exported CSVs are missing the
@@ -215,7 +210,7 @@
                     <span>Task</span>
                     <span>Support</span>
                   </header>
-                  <h3>Keep timezone column in CSV export</h3>
+                  <p class="pane-title">Keep timezone column in CSV export</p>
                   <dl class="props">
                     <dt>Status</dt>
                     <dd>
@@ -310,7 +305,7 @@
           <ol class="steps" data-steps>
             <li>
               <button class="step" type="button" data-step-button="1">
-                <span class="step-title"><b>1</b>An email comes in</span>
+                <span class="step-title"><b>1</b> An email comes in</span>
                 <span class="step-text"
                   >A customer reports a bug. It lands in your Signal
                   inbox.</span
@@ -319,7 +314,7 @@
             </li>
             <li>
               <button class="step" type="button" data-step-button="2">
-                <span class="step-title"><b>2</b>It becomes a task</span>
+                <span class="step-title"><b>2</b> It becomes a task</span>
                 <span class="step-text"
                   >Press c then t. The task keeps a link to the thread.</span
                 >
@@ -327,7 +322,7 @@
             </li>
             <li>
               <button class="step" type="button" data-step-button="3">
-                <span class="step-title"><b>3</b>An agent takes it</span>
+                <span class="step-title"><b>3</b> An agent takes it</span>
                 <span class="step-text"
                   >Assign it. The agent reads the task and everything linked to
                   it.</span
@@ -341,7 +336,7 @@
                 data-step-button="4"
                 aria-current="step"
               >
-                <span class="step-title"><b>4</b>The work links back</span>
+                <span class="step-title"><b>4</b> The work links back</span>
                 <span class="step-text"
                   >The pull request and a draft reply attach to the task and
                   the email.</span
@@ -420,8 +415,9 @@
                       Share a thread to any channel or DM. No screenshots.
                     </li>
                     <li>
-                      Open a contact or a company to see every email and file
-                      your team has exchanged with them.
+                      Open a contact to see your emails with that person, or a
+                      company to see the emails and files your team has
+                      exchanged with it.
                     </li>
                   </ul>
                 </div>
@@ -548,7 +544,7 @@
                     </p>
                     <h3>Markdown docs that feel like one shared computer.</h3>
                     <p class="block-keys">
-                      <a href="https://docs.macro.com/product/docs">Read more</a>
+                      <a href="https://docs.macro.com/product/docs">Docs guide</a>
                     </p>
                   </div>
                   <ul class="ticks">
@@ -820,18 +816,21 @@
           </div>
 
           <div class="linked">
-            <div class="app-panel" aria-label="Example: a company record in Macro and everything that mentions it">
+            <div
+              class="app-panel"
+              role="group"
+              aria-label="Example: a company record in Macro and everything that mentions it"
+            >
               <div class="app-panel-inner">
-                <h3 class="record-title">
+                <p class="record-title">
                   <svg class="icon" aria-hidden="true">
                     <use href="#i-crm" />
                   </svg>
                   Acme
-                </h3>
+                </p>
                 <p class="record-props">
                   <span>Stage <b>Trialing</b></span>
                   <span>Owner <b>Dana</b></span>
-                  <span>Domain <b>acme.com</b></span>
                 </p>
                 <span class="pane-label">Mentioned in · 5</span>
                 <ul class="backlinks">
@@ -886,8 +885,9 @@
               <div>
                 <h3>Permissions follow channels</h3>
                 <p>
-                  Anything you mention in a channel is shared with its members.
-                  Join a channel and you gain access. Leave and you lose it.
+                  A doc or file you mention in a channel is shared with its
+                  members. Join a channel and you gain access. Leave and you
+                  lose it.
                 </p>
               </div>
               <div>
@@ -961,7 +961,7 @@
                   <svg class="icon" aria-hidden="true">
                     <use href="#i-copy" />
                   </svg>
-                  <span data-copy-label>Copy</span>
+                  <span data-copy-label aria-live="polite">Copy</span>
                 </button>
               </div>
               <pre><code><span class="prompt">$ </span><span id="mcp-command">claude mcp add --transport http macro https://mcp-server.macro.com/mcp</span></code></pre>
@@ -1034,9 +1034,9 @@
               <h2>Bring your work with you.</h2>
             </div>
             <p>
-              Connect the tool, tell the Macro agent what to import, and review
-              its plan before it creates anything. You can move one project
-              first.
+              For Notion and Linear, connect the tool, tell the Macro agent
+              what to import, and review its plan before it creates anything.
+              You can move one project first.
             </p>
           </div>
 
@@ -1097,8 +1097,8 @@
               <h2>One price for the whole workspace.</h2>
             </div>
             <p>
-              Pro is a flat price per seat with every Block included. Plans
-              differ in models, AI usage, connected email accounts and storage.
+              Every plan includes every Block. Plans differ in models, AI
+              usage, connected email accounts and storage.
             </p>
           </div>
 
@@ -1107,7 +1107,7 @@
               <h3>Free</h3>
               <p class="plan-price">$0</p>
               <ul class="ticks">
-                <li>Access to Haiku</li>
+                <li>Limited AI usage</li>
                 <li>MCP access</li>
                 <li>2 connected email accounts</li>
                 <li>5 GB storage</li>
@@ -1141,9 +1141,6 @@
               <a class="btn btn-quiet" href="https://macro.com/app">Get Max</a>
             </div>
           </div>
-          <p class="plans-note">
-            Prices in US dollars.
-          </p>
         </div>
       </section>
 
@@ -1220,9 +1217,8 @@
           </div>
         </div>
       </section>
-    </main>
 
-    <section class="closing">
+      <section class="closing">
       <div class="wrap">
         <h2>Put your team on one page.</h2>
         <div class="closing-row">
@@ -1234,15 +1230,11 @@
             href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo"
             >Book a demo</a
           >
-          <p>
-            Connect Gmail or Outlook to start.
-            <a href="https://docs.macro.com/getting-started"
-              >Setup takes about 15 minutes</a
-            >
-          </p>
+          <p>Connect Gmail or Outlook to start.</p>
         </div>
       </div>
-    </section>
+      </section>
+    </main>
 
     <footer class="site-footer">
       <div class="wrap">
@@ -1292,6 +1284,9 @@
       </div>
     </footer>
 
-    <script src="site.js"></script>
+    <script
+      src="site.js"
+      onerror="document.documentElement.classList.remove('js')"
+    ></script>
   </body>
 </html>

@@ -114,34 +114,35 @@ function setUpBlocks() {
   });
 
   // A link to a Block (the hero headline has four) opens that Block's tab.
-  function selectFromHash() {
-    const index = blocks.findIndex(
-      (block) => `#${block.id}` === location.hash
-    );
+  // The Block is shown before the browser follows the link, so the browser's
+  // own scrolling, history and focus handling all still apply.
+  function selectFromHash(hash) {
+    const index = blocks.findIndex((block) => `#${block.id}` === hash);
     if (index === -1) return false;
 
     select(index);
-    document.getElementById('blocks').scrollIntoView();
     return true;
   }
 
   document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+
     const link = event.target.closest('a[href^="#"]');
-    if (!link) return;
-
-    const index = blocks.findIndex(
-      (block) => `#${block.id}` === link.getAttribute('href')
-    );
-    if (index === -1) return;
-
-    event.preventDefault();
-    select(index);
-    document.getElementById('blocks').scrollIntoView();
+    if (link) selectFromHash(link.getAttribute('href'));
   });
 
-  window.addEventListener('hashchange', selectFromHash);
-  if (!selectFromHash()) select(0);
+  window.addEventListener('hashchange', () => selectFromHash(location.hash));
+
+  if (selectFromHash(location.hash)) {
+    // On a direct load the browser scrolled before the other Blocks were
+    // hidden, so the target has moved since.
+    document.getElementById(location.hash.slice(1)).scrollIntoView();
+  } else {
+    select(0);
+  }
 }
+
+const COPY_RESET_MS = 1600;
 
 function setUpCopy() {
   for (const button of document.querySelectorAll('[data-copy]')) {
@@ -149,7 +150,11 @@ function setUpCopy() {
     const label = button.querySelector('[data-copy-label]');
     if (!source || !label) continue;
 
+    let resetTimer;
+
     button.addEventListener('click', async () => {
+      clearTimeout(resetTimer);
+
       try {
         await navigator.clipboard.writeText(source.textContent);
         label.textContent = 'Copied';
@@ -159,9 +164,9 @@ function setUpCopy() {
         label.textContent = 'Selected';
       }
 
-      setTimeout(() => {
+      resetTimer = setTimeout(() => {
         label.textContent = 'Copy';
-      }, 1600);
+      }, COPY_RESET_MS);
     });
   }
 }
@@ -173,7 +178,8 @@ function setUpKeys() {
   if (keys.length === 0) return;
 
   document.addEventListener('keydown', (event) => {
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (!(event.target instanceof Element)) return;
     if (event.target.closest('input, textarea, [contenteditable]')) return;
 
     const pressed = event.key.toLowerCase();
