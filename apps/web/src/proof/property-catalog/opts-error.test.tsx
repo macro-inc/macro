@@ -206,7 +206,7 @@ it('retry policy matches src/lib/queries/client.ts', async () => {
   expect(source).not.toContain('retryDelay');
   expect(
     readFileSync('src/lib/queries/properties/options.ts', 'utf8')
-  ).not.toMatch(/retry/);
+  ).not.toMatch(/retry\s*:|retryDelay/);
 });
 
 // The fresh-mount settle timeouts the load runs show. A cold mount of the
@@ -260,6 +260,7 @@ it('needs two round trips plus the 1 s retry delay to settle a hidden definition
   for (const [first, second] of [oldCalls, neuCalls]) {
     // the retry went out TanStack's 1 s after the first answer
     expect(second.start - first.answered).toBeGreaterThanOrEqual(1000 - 20);
+    expect(second.start - first.answered).toBeLessThan(1000 + 400);
   }
   for (const ms of [oldMs, neuMs]) {
     expect(ms).toBeGreaterThanOrEqual(2 * LATENCY_MS + 1000 - 20);

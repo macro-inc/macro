@@ -221,17 +221,19 @@ The counts measure work attempted, not successes, and are not interchangeable:
   `net`).
   `inflight`, `recent` and `net` are taken when that side's call returns, which
   for a fresh mount is after the mount was torn down. Paths are masked: ids,
-  numbers and any segment of 24 or more token characters.
+  numbers and any segment of 24 or more token characters (the write census
+  masks only ids and numbers, so distinct routes stay apart).
 - The SQL steps (`sqlRename`, `sqlNullColor`) run `psql` through
   `docker exec` synchronously (`sql()` in `run.mjs`), which blocks the driver
   and so every page's API answers until it returns. Under machine load that
-  took up to 3.1 s. No route handler runs while it does, so every request in
-  flight across it is answered that much later; a cold mount that also needs a
+  took up to 3.1 s. No route handler runs while it does, so no request in
+  flight across it is answered before it ends; a cold mount that also needs a
   retried read (two round trips plus TanStack's 1 s delay;
   `opts-error.test.tsx` shows it) or a token refresh then overruns
   `SETTLE_MS`. In the final load run every `settle` timeout's `waitedOn` has
-  a `psql` in `driverWork` covering 2.8 s or more of the call, matching a
-  stall in `driverStalls`. That is a coincidence in time plus the mechanism,
+  a `psql` in `driverWork` covering at least 2.6 s of the last 5 s before the
+  call returned, matching a stall in `driverStalls`
+  (`results/settle-timeouts.json`). That is a coincidence in time plus the mechanism,
   not a trace of each request: `driverWork` is process-wide, and `fetches`
   shows which of the page's requests were open across it.
 - `out/` can hold Playwright error dumps with the local session cookie; it is

@@ -1,0 +1,203 @@
+{
+  "source": "out/seed-2-load/results.json, harness adcbc850bd6: every settle timeout, its psql driverWork and its driver stalls of 1 s or more. overlapOf5sMs is how much of the psql fell in the last 5,000 ms before the call returned, a lower bound on its overlap with the call.",
+  "timeouts": [
+    {
+      "seq": 39,
+      "step": 2,
+      "op": "addOption",
+      "side": "old",
+      "psql": [
+        {
+          "ms": 2877,
+          "endedAgoMs": 2260,
+          "overlapOf5sMs": 2740
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2925,
+          "endedAgoMs": 2219
+        }
+      ]
+    },
+    {
+      "seq": 39,
+      "step": 2,
+      "op": "addOption",
+      "side": "new",
+      "psql": [
+        {
+          "ms": 2877,
+          "endedAgoMs": 2328,
+          "overlapOf5sMs": 2672
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2925,
+          "endedAgoMs": 2287
+        }
+      ]
+    },
+    {
+      "seq": 39,
+      "step": 2,
+      "op": "addOption",
+      "side": "old",
+      "psql": [
+        {
+          "ms": 2877,
+          "endedAgoMs": 2202,
+          "overlapOf5sMs": 2798
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2925,
+          "endedAgoMs": 2161
+        }
+      ]
+    },
+    {
+      "seq": 39,
+      "step": 2,
+      "op": "addOption",
+      "side": "new",
+      "psql": [
+        {
+          "ms": 2877,
+          "endedAgoMs": 2275,
+          "overlapOf5sMs": 2725
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2925,
+          "endedAgoMs": 2234
+        }
+      ]
+    },
+    {
+      "seq": 48,
+      "step": 15,
+      "op": "createDef",
+      "side": "old",
+      "psql": [
+        {
+          "ms": 3092,
+          "endedAgoMs": 2134,
+          "overlapOf5sMs": 2866
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 3063,
+          "endedAgoMs": 2118
+        },
+        {
+          "ms": 1037,
+          "endedAgoMs": 556
+        }
+      ]
+    },
+    {
+      "seq": 48,
+      "step": 15,
+      "op": "createDef",
+      "side": "new",
+      "psql": [
+        {
+          "ms": 3092,
+          "endedAgoMs": 2026,
+          "overlapOf5sMs": 2974
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 3063,
+          "endedAgoMs": 2010
+        },
+        {
+          "ms": 1037,
+          "endedAgoMs": 448
+        }
+      ]
+    },
+    {
+      "seq": 49,
+      "step": 16,
+      "op": "addOption",
+      "side": "old",
+      "psql": [
+        {
+          "ms": 2842,
+          "endedAgoMs": 313,
+          "overlapOf5sMs": 2842
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2827,
+          "endedAgoMs": 312
+        }
+      ]
+    },
+    {
+      "seq": 49,
+      "step": 16,
+      "op": "addOption",
+      "side": "new",
+      "psql": [
+        {
+          "ms": 2842,
+          "endedAgoMs": 231,
+          "overlapOf5sMs": 2842
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2827,
+          "endedAgoMs": 230
+        }
+      ]
+    },
+    {
+      "seq": 49,
+      "step": 16,
+      "op": "addOption",
+      "side": "old",
+      "psql": [
+        {
+          "ms": 2842,
+          "endedAgoMs": 71,
+          "overlapOf5sMs": 2842
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2827,
+          "endedAgoMs": 70
+        }
+      ]
+    },
+    {
+      "seq": 49,
+      "step": 16,
+      "op": "addOption",
+      "side": "new",
+      "psql": [
+        {
+          "ms": 2842,
+          "endedAgoMs": 138,
+          "overlapOf5sMs": 2842
+        }
+      ],
+      "stalls": [
+        {
+          "ms": 2827,
+          "endedAgoMs": 137
+        }
+      ]
+    }
+  ]
+}

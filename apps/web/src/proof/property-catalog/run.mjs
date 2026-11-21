@@ -766,7 +766,9 @@ const isGraphqlMutation = (req) => {
 };
 // Writes the page sends outside the properties service and GraphQL, by side,
 // tap mode and route (ids masked): a census, and in a write window a stray.
-const maskPath = (p) => p.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/[A-Za-z0-9_.~-]{24,}/g, '<token>').replace(/\/\d+(?=\/|$)/g, '/<n>');
+const maskIds = (p) => p.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>').replace(/\/\d+(?=\/|$)/g, '/<n>');
+// timeout records only: also hide long tokens; the write census keeps literal routes apart
+const maskPath = (p) => maskIds(p.replace(/[A-Za-z0-9_.~-]{24,}/g, '<token>'));
 // Writes either page sends that never touch the catalog, seen in a smoke run:
 // the session token refresh, which the auth client sends on its own clock.
 // Still counted in `otherWrites`; never a stray.
@@ -882,7 +884,7 @@ async function openSide(storageState, side, label) {
       }
     } else if (isWrite(req) && !PROPS_PATH.test(p)) {
       const u = new URL(req.url());
-      const route = `${req.method()} ${u.host}${maskPath(p)}`;
+      const route = `${req.method()} ${u.host}${maskIds(p)}`;
       bump(R.otherWrites, `${side}:${tap.mode}`, route);
       if (!IGNORED_WRITE.test(route) && (tap.mode === 'record' || tap.mode === 'replay' || side === 'old')) tap.stray.push({ method: req.method(), path: route, body: null, mode: tap.mode });
     }
