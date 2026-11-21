@@ -15,11 +15,10 @@ use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
     HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, QueryRegistration,
-    ReadResult, RollbackOptimisticWriteResult, StagedHydrate, WriteResult,
+    ReadResult, RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
-use cache_core::predicate::ProjectionMutation;
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
@@ -28,13 +27,13 @@ use cache_core::record_selection::{SelectedRecord, cache::RecordSelectionCache};
 use cache_core::revision::CacheRevision;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
-use cache_turso::{TursoStorage, TursoStorageCloseOutcome, WalPosition};
+use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 mod access;
-use access::EngineAccess;
+use access::{AccessGuard, EngineAccess};
 mod authority;
 mod idle;
 pub use authority::AuthorityTransitionWire;
@@ -427,36 +426,13 @@ mod test_hooks {
     }
 }
 
-/// Computes a hydrate's write without writing, with the projections it
-/// writes and the WAL position it was computed at. `None` when it runs whole:
-/// it binds the account, composes with optimistic layers, fails admission,
-/// or a read failed, which the whole hydrate then meets and reports.
-async fn stage_hydration(
-    engine: &mut Engine<TursoStorage>,
-    write: NetworkWrite<'_>,
-    scope: Option<&HydrationScope>,
-) -> Option<(StagedHydrate, Vec<ProjectionMutation>, WalPosition)> {
+/// Whether hydrates compute their write before taking the engine back to
+/// write it. Tests switch it off to compare with whole hydrates.
+fn staging() -> bool {
     #[cfg(test)]
-    if !test_hooks::STAGING.with(std::cell::Cell::get) {
-        return None;
-    }
-    let wal = engine.storage().wal_position().ok()?;
-    let projections = soup::write_projections(
-        engine,
-        write.query,
-        write.operation_name,
-        write.variables,
-        write.data,
-        write.identity,
-    )
-    .await
-    .ok()?;
-    let staged = engine
-        .stage_hydrate(write, scope, &projections)
-        .await
-        .ok()??;
-    // Staging only reads; check anyway.
-    (engine.storage().wal_position().ok()? == wal).then_some((staged, projections, wal))
+    return test_hooks::STAGING.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    true
 }
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
@@ -829,20 +805,37 @@ impl EngineHandle {
             identity: identity.as_deref(),
         };
         let mut state = self.snapshot_hydration().await?;
-        // Compute the write while holding the engine, then let reads that
-        // queued meanwhile run before writing it. Only reads can: this
-        // hydrate keeps its turn. Anything that still changed storage or the
-        // engine makes it run whole, after rechecking the session.
-        if let Some((staged, projections, wal)) =
-            stage_hydration(&mut state.engine, write, hydration_scope.as_ref()).await
+        // Compute the write in two read-only steps, letting reads that queued
+        // meanwhile run after each. Only reads can: this hydrate keeps its
+        // turn. If storage moved anyway, the hydrate runs whole after
+        // rechecking the session.
+        let mut reuse = None;
+        if staging()
+            && let Ok(wal) = state.engine.storage().wal_position()
         {
-            state = match state.yield_to_reads(&self.inner) {
-                Ok(turn) => {
-                    let mut state = turn.resume().await;
+            let computed = soup::write_projections(
+                &mut state.engine,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                identity.as_deref(),
+            )
+            .await;
+            if let Ok(projections) = computed {
+                state = self.let_reads_run(state).await;
+                let unmoved = |engine: &Engine<TursoStorage>| {
+                    engine.storage().wal_position().ok() == Some(wal)
+                };
+                if unmoved(&state.engine)
+                    && let Ok(Some(staged)) = state
+                        .engine
+                        .stage_hydrate(write, hydration_scope.as_ref(), &projections)
+                        .await
+                {
+                    state = self.let_reads_run(state).await;
                     let EngineState { engine, ops, .. } = &mut *state;
-                    if engine.storage().wal_position().ok() == Some(wal)
-                        && engine.staged_hydrate_current(&staged)
-                    {
+                    if unmoved(engine) && engine.staged_hydrate_current(&staged) {
                         let result = engine
                             .commit_staged_hydrate(staged, projections)
                             .await
@@ -851,22 +844,29 @@ impl EngineHandle {
                         test_hooks::STAGED_COMMITS.with(|commits| commits.set(commits.get() + 1));
                         return Ok(self.hydration_wire(engine, ops, result).await);
                     }
-                    self.recheck_hydration(&mut state).await?;
-                    state
+                } else if unmoved(&state.engine) {
+                    // Not staged (it binds the account, meets optimistic
+                    // layers, or fails admission): the projections still hold.
+                    reuse = Some(projections);
                 }
-                Err(state) => state,
-            };
+                self.recheck_hydration(&mut state).await?;
+            }
         }
         let EngineState { engine, ops, .. } = &mut *state;
-        let projections = soup::write_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-            identity.as_deref(),
-        )
-        .await?;
+        let projections = match reuse {
+            Some(projections) => projections,
+            None => {
+                soup::write_projections(
+                    engine,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    identity.as_deref(),
+                )
+                .await?
+            }
+        };
         let result = match hydration_scope {
             Some(scope) => {
                 engine
@@ -888,6 +888,18 @@ impl EngineHandle {
         }
         .map_err(|error| error.to_string())?;
         Ok(self.hydration_wire(engine, ops, result).await)
+    }
+
+    /// Gives the engine to reads that queued for it, keeping this hydrate's
+    /// turn, and takes it back after them.
+    async fn let_reads_run<'a>(
+        &'a self,
+        state: AccessGuard<'a, EngineState>,
+    ) -> AccessGuard<'a, EngineState> {
+        match state.yield_to_reads(&self.inner) {
+            Ok(turn) => turn.resume().await,
+            Err(state) => state,
+        }
     }
 
     async fn hydration_wire(
