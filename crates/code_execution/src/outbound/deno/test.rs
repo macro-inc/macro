@@ -869,7 +869,7 @@ async fn malformed_keys_keep_json_wrapper_and_proto_handling() {
     let (_root, service) = setup(Limits::default()).await;
     let (_, outcome) = run(
         &service,
-        r#"export function main() { const n = new Number(7); n["\ud800"] = 1; return {data: {n, s: new String("a\ud800"), b: new Boolean(false), o: {["__proto__"]: {keep: 1}, ["\ud800"]: 2}}}; }"#,
+        r#"export function main() { const n = new Number(7); n["\ud800"] = 1; return {data: {n, s: new String("a\ud800"), b: new Boolean(false), p: Object.setPrototypeOf({a: 1}, Number.prototype), o: {["__proto__"]: {keep: 1}, ["\ud800"]: 2}}}; }"#,
         5000,
     )
     .await;
@@ -878,7 +878,7 @@ async fn malformed_keys_keep_json_wrapper_and_proto_handling() {
     };
     assert_eq!(
         value,
-        serde_json::json!({"data": {"n": 7, "s": "a\u{FFFD}", "b": false, "o": {"__proto__": {"keep": 1}, "\u{FFFD}": 2}}})
+        serde_json::json!({"data": {"n": 7, "s": "a\u{FFFD}", "b": false, "p": {"a": 1}, "o": {"__proto__": {"keep": 1}, "\u{FFFD}": 2}}})
     );
     service.shutdown().await;
 }

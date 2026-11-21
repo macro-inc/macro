@@ -34,9 +34,11 @@ const LOOP_HINT_CALLS = 50;
 // JSON unboxes Number, String and Boolean objects only after the replacer runs,
 // so unbox them here first, as JSON would.
 function wellFormed(_key, value) {
-  if (value instanceof NumberObject) return call(numberValue, value);
-  if (value instanceof BooleanObject) return call(booleanValue, value);
-  if (value instanceof StringObject) value = call(stringValue, value);
+  // valueOf throws on an object that only inherits a wrapper's prototype; JSON
+  // serializes that as a plain object, and so does the fallthrough.
+  if (value instanceof NumberObject) { try { return call(numberValue, value); } catch {} }
+  else if (value instanceof BooleanObject) { try { return call(booleanValue, value); } catch {} }
+  else if (value instanceof StringObject) { try { value = call(stringValue, value); } catch {} }
   if (typeof value === "string") return call(toWellFormed, value);
   if (value === null || typeof value !== "object" || isArray(value)) return value;
   const keys = keysOf(value);
