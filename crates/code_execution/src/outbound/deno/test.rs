@@ -1983,3 +1983,128 @@ export async function main({ macro, knobs }: any) {
     );
     service.shutdown().await;
 }
+
+/// Serves `/email/ok` and a redirect from `/email/redirect` to unfurl, and
+/// records every request that reached unfurl.
+async fn unfurl_fixture() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let reached = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = Arc::clone(&reached);
+    tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            let path = request.split(' ').nth(1).unwrap_or_default().to_owned();
+            if path.starts_with("/email/redirect") {
+                stream
+                    .write_all(b"HTTP/1.1 302 Found\r\nLocation: /UnFurl/proxy?url=x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    .await
+                    .unwrap();
+            } else if path.starts_with("/email/ok") {
+                respond(&mut stream, "{}").await;
+            } else {
+                seen.lock().unwrap().push(path);
+                respond(&mut stream, "{}").await;
+            }
+        }
+    });
+    (host, reached)
+}
+
+fn unfurl_run(host: &str, token: &str) -> RunEnvironment {
+    RunEnvironment {
+        token: token.into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([
+                ("email".into(), host.to_owned()),
+                ("unfurl".into(), format!("{host}/unfurl")),
+            ]),
+            ..SdkEndpoints::default()
+        },
+        ..RunEnvironment::default()
+    }
+}
+
+/// Unfurl fetches what its caller names from Macro's servers and takes no
+/// credential, so the run bootstrap is the only gate: a scoped run (here a
+/// background job's token) can't reach it however the URL spells its path,
+/// nor through a redirect; its other requests still go through.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_scoped_run_never_reaches_unfurl() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, reached) = unfurl_fixture().await;
+    let source = format!(
+        r#"
+export async function main() {{
+  const base = "{host}";
+  const results: string[] = [];
+  for (const url of [
+    `${{base}}/unfurl/proxy?url=x`,
+    `${{base}}/UNFURL/proxy?url=x`,
+    `${{base}}/unfurl/`,
+    `${{base}}/unfurl`,
+    `${{base}}//unfurl//proxy`,
+    `${{base}}/%75nfurl/proxy`,
+    `${{base}}/email/../unfurl/proxy`,
+    `${{base}}/email/redirect`,
+    `${{base}}/email/ok`,
+  ]) {{
+    try {{
+      results.push(String((await fetch(url)).status));
+    }} catch (error) {{
+      results.push(String(error).includes("can't fetch links") ? "refused" : String(error));
+    }}
+  }}
+  return {{ results }};
+}}
+"#
+    );
+    let job = "eyJhbGciOiJub25lIn0.eyJhZ2VudF9zY29wZSI6ImpvYiJ9.signature";
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.clone(),
+                    timeout_ms: 10_000,
+                },
+                unfurl_run(&host, job),
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value["results"],
+        serde_json::json!([
+            "refused", "refused", "refused", "refused", "refused", "refused", "refused", "refused",
+            "200"
+        ])
+    );
+    assert!(
+        reached.lock().unwrap().is_empty(),
+        "{:?}",
+        reached.lock().unwrap()
+    );
+
+    // An unscoped run's token signs no scope: its link previews still work.
+    let unscoped = "eyJhbGciOiJub25lIn0.e30.signature";
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 10_000,
+                },
+                unfurl_run(&host, unscoped),
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert!(!reached.lock().unwrap().is_empty());
+    service.shutdown().await;
+}

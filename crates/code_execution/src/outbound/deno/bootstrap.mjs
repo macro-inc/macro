@@ -147,8 +147,71 @@ try {
   const forwarded = Object.entries(context.forwarder ?? {})
     .map(([service, local]) => [context.hosts[service].replace(/\/$/, ""), local])
     .sort(([left], [right]) => right.length - left.length);
+  // A scoped run (a background job, a hidden session, a routine's dry run)
+  // must not reach a service that fetches what its caller names from
+  // Macro's servers (unfurl): that service takes no credential, so this is
+  // the only gate. The scope is the one its token signs; a token that can't
+  // be read counts as scoped.
+  const claims = (() => {
+    if (!context.token) return {};
+    try {
+      const part = context.token.split(".")[1];
+      return JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=")));
+    } catch {
+      return null;
+    }
+  })();
+  const scoped = dryRun || claims === null || typeof claims?.agent_scope === "string";
+  // A URL's origin and its path as a service would route it: decoded, in
+  // lower case, dot segments resolved, empty segments dropped.
+  const routed = (url) => {
+    const parsed = new URL(url);
+    let path = parsed.pathname;
+    try { path = decodeURIComponent(path); } catch { /* keep it encoded */ }
+    const segments = [];
+    for (const segment of path.toLowerCase().split(/[\\/]+/)) {
+      if (segment === "" || segment === ".") continue;
+      if (segment === "..") segments.pop();
+      else segments.push(segment);
+    }
+    return {origin: originOf(parsed.href).toLowerCase(), segments};
+  };
+  const fetchers = [context.hosts.unfurl].filter(Boolean).map(routed);
+  const reachesFetcher = (url) => {
+    const {origin, segments} = routed(url);
+    // The gateway serves unfurl under /unfurl on every SDK origin.
+    if (origins.has(origin) && segments[0] === "unfurl") return true;
+    return fetchers.some(base => base.origin === origin && base.segments.every((segment, index) => segments[index] === segment));
+  };
+  const refusal = () => new TypeError("A background job or other scoped run can't fetch links through Macro's servers.");
+  const redirects = new Set([301, 302, 303, 307, 308]);
+  // A scoped run follows redirects itself, so none lands on a fetcher.
+  const guarded = async (first) => {
+    let request = first;
+    for (let hop = 0; hop <= 20; hop++) {
+      if (reachesFetcher(request.url)) throw refusal();
+      const retry = request.body === null ? undefined : request.clone();
+      const response = await route(new Request(request, {redirect: "manual"}));
+      const location = redirects.has(response.status) ? response.headers.get("location") : null;
+      if (location === null) return response;
+      const next = new URL(location, request.url).href;
+      const asGet = response.status === 303 || ((response.status === 301 || response.status === 302) && request.method === "POST");
+      const headers = new Headers(request.headers);
+      if (originOf(next) !== originOf(request.url)) {
+        headers.delete("authorization");
+        headers.delete("cookie");
+      }
+      request = asGet
+        ? new Request(next, {method: request.method === "HEAD" ? "HEAD" : "GET", headers})
+        : new Request(next, retry ? {method: request.method, headers, body: retry.body, duplex: "half"} : {method: request.method, headers});
+    }
+    throw new TypeError("Too many redirects.");
+  };
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
+    return scoped ? guarded(request) : route(request);
+  };
+  const route = (request) => {
     // Every request to an SDK origin, whatever credential it carries.
     if (origins.has(originOf(request.url))) {
       for (const [name, value] of Object.entries(context.traceHeaders ?? {})) {
