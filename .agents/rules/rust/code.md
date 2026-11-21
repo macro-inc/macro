@@ -80,8 +80,9 @@ Type design, idioms, errors and observability, performance, and tests.
   and never record prompts, tool arguments or tool results as span fields or
   logs — they are content, recorded on the spans under the
   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` policy and a size budget.
-  Read the policy with `ContentPolicy::current()`, never `from_env()`, so work
-  run inside `genai_telemetry::withhold_content` records none; a task spawned
+  Read the policy with `ContentPolicy::current()` when you record, never
+  `from_env()` and never only once into a value built before the work runs, so
+  work run inside `genai_telemetry::withhold_content` records none; a task spawned
   from it carries the scope with `withhold_content_if(content_withheld(), fut)`.
   An error made inside the scope that is logged, recorded or returned to a
   library that logs it says only its kind and what was wanted: a model or
