@@ -180,12 +180,15 @@ pub(crate) fn install(exporter: Option<Exporter>) -> Telemetry {
     );
     let layer = provider.as_ref().map(|provider| {
         // Only audited metadata spans are exported; ACP and tool payloads stay private.
-        // The teammate container spans carry opaque install ids only.
+        // The trigger and workspace spans carry ids, timings and outcomes only;
+        // the teammate container spans carry opaque install ids only.
         tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("macrod"))
             .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
                 let name = metadata.name();
                 name.starts_with("macrod.enroll")
+                    || name.starts_with("macrod.trigger.")
+                    || name == "macrod.workspace.worktree"
                     || name == "run_enroll"
                     || name == "macrod.agent.apply"
                     || (metadata.is_span() && name.starts_with("teammate."))

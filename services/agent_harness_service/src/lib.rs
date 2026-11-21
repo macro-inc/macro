@@ -1341,10 +1341,16 @@ pub async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
+    let contacts_ingress = Arc::new(contacts::domain::list_writes::ListWritesGate {
+        inner: contacts::domain::service::SqsContactsIngress {
+            queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: contacts::domain::list_writes::ContactListWrites::new(
+            config.environment,
+            feature_flags.clone(),
         ),
     });
     // The same message service the storage API composes, so an announcement
