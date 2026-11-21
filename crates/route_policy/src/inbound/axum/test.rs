@@ -213,6 +213,7 @@ async fn a_request_with_no_resolved_caller_is_refused_and_the_handler_does_not_r
         Some(vec![
             ("route_policy.category", "credential_mint"),
             ("route_policy.outcome", "unresolved"),
+            ("route_policy.code", "no_caller"),
         ])
     );
     let body = response.into_body().collect().await.unwrap().to_bytes();
@@ -378,4 +379,83 @@ async fn an_any_route_is_decided_for_every_method() {
         let response = router.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method}");
     }
+}
+
+#[tokio::test]
+async fn a_cors_preflight_with_no_credentials_is_not_refused_for_having_no_caller() {
+    let router = Router::new().route(
+        "/keys",
+        on(MethodFilter::OPTIONS, Category::CredentialMint, handled),
+    );
+    let request = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/keys")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .extensions()
+            .get::<RouteDecision>()
+            .map(|d| d.verdict),
+        Some(Verdict::Public)
+    );
+}
+
+#[tokio::test]
+async fn a_request_with_no_caller_records_its_code_on_the_span() {
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/keys")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router().oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response
+            .extensions()
+            .get::<ResponseSpanFields>()
+            .map(|fields| fields.0.clone()),
+        Some(vec![
+            ("route_policy.category", "credential_mint"),
+            ("route_policy.outcome", "unresolved"),
+            ("route_policy.code", "no_caller"),
+        ])
+    );
+}
+
+#[tokio::test]
+async fn an_unknown_scope_may_post_to_a_public_route() {
+    let router = Router::new().route("/webhook", post(Category::Public, handled));
+    let mut request = Request::builder()
+        .method(Method::POST)
+        .uri("/webhook")
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(resolved(Caller::ScopedUnknown));
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_route_walker_does_not_run_the_handler_of_a_route_that_declares_a_category() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static RAN: AtomicUsize = AtomicUsize::new(0);
+    async fn counted() {
+        RAN.fetch_add(1, Ordering::SeqCst);
+    }
+    let router = Router::new().route("/declared", post(Category::Write, counted));
+
+    let undeclared = undeclared_routes(router, &[(Method::POST, "/declared")]).await;
+
+    assert!(undeclared.is_empty());
+    assert_eq!(RAN.load(Ordering::SeqCst), 0);
 }

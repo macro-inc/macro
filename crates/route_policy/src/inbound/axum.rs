@@ -165,7 +165,8 @@ where
             *request.method(),
             Method::GET | Method::HEAD | Method::OPTIONS
         );
-        let decision = RouteDecision::new(resolved, self.category, safe_method);
+        let preflight = *request.method() == Method::OPTIONS;
+        let decision = RouteDecision::new(resolved, self.category, safe_method, preflight);
         if decision.verdict == Verdict::Unresolved {
             tracing::warn!(
                 route_policy.category = %self.category,
@@ -191,6 +192,12 @@ where
                 decision,
             ))));
         }
+        if request.extensions().get::<walk::Probe>().is_some() {
+            return Box::pin(std::future::ready(Ok(with_decision(
+                Response::new(axum::body::Body::empty()),
+                decision,
+            ))));
+        }
         request.extensions_mut().insert(decision);
         let handling = self.inner.call(request);
         Box::pin(async move { Ok(with_decision(handling.await?, decision)) })
@@ -207,8 +214,12 @@ fn with_decision(mut response: Response, decision: RouteDecision) -> Response {
     if let Some(caller) = decision.verdict.caller() {
         fields.push(("route_policy.caller", caller.into()));
     }
-    if let Verdict::Refused(refusal) | Verdict::Observed(refusal) = decision.verdict {
-        fields.push(("route_policy.code", refusal.code.into()));
+    match decision.verdict {
+        Verdict::Refused(refusal) | Verdict::Observed(refusal) => {
+            fields.push(("route_policy.code", refusal.code.into()));
+        }
+        Verdict::Unresolved => fields.push(("route_policy.code", RefusalCode::NoCaller.into())),
+        Verdict::Allowed(_) | Verdict::Public => {}
     }
     response.extensions_mut().insert(decision);
     response.extensions_mut().insert(ResponseSpanFields(fields));

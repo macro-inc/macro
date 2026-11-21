@@ -218,7 +218,7 @@ pub enum Verdict {
     /// The service resolved no caller on a route that needs one: refused, the
     /// handler doesn't run.
     Unresolved,
-    /// A public route, which takes no caller.
+    /// A route that takes no caller: a public route, or a CORS preflight.
     Public,
     /// The caller may make the request.
     Allowed(Caller),
@@ -232,13 +232,25 @@ impl RouteDecision {
     /// The decision for a request to a route of `category` from `resolved`,
     /// with the rollout's enforced categories applied. `safe_method` says
     /// whether the request's method only reads (`GET`, `HEAD`, `OPTIONS`).
-    pub fn new(resolved: Option<ResolvedCaller>, category: Category, safe_method: bool) -> Self {
+    pub fn new(
+        resolved: Option<ResolvedCaller>,
+        category: Category,
+        safe_method: bool,
+        method_is_preflight: bool,
+    ) -> Self {
         let verdict = match resolved {
             None if category == Category::Public => Verdict::Public,
+            // A CORS preflight carries no credentials by design, so it is
+            // never refused for having no caller; it reads nothing.
+            None if method_is_preflight => Verdict::Public,
             None => Verdict::Unresolved,
             // An unknown scope reads by method only, as its scope is held in
             // `agent_correlation`: a POST is refused even on a read route.
-            Some(resolved) if resolved.caller == Caller::ScopedUnknown && !safe_method => {
+            Some(resolved)
+                if resolved.caller == Caller::ScopedUnknown
+                    && !safe_method
+                    && category != Category::Public =>
+            {
                 Verdict::Refused(Refusal {
                     code: RefusalCode::OutOfScope,
                     category,
