@@ -20,14 +20,16 @@ export const setupRetries: Record<string, number> = {};
 /**
  * Retries a world-building write that failed because a backend hop timed out
  * or ran out of sockets on a loaded machine (DSS answers 500 "error sending
- * request"). Only world building uses it: a sequence step that fails is a
+ * request"), or the local sync worker restarted under a burst of creates and DSS
+ * gave up on the document snapshot (500 "Failed to create Loro snapshot"). Only
+ * world building uses it: a sequence step that fails is a
  * result, not something to retry.
  */
 async function setupWrite<T>(what: string, write: () => Promise<T>, attempt = 0): Promise<T> {
   try {
     return await write();
   } catch (error) {
-    if (attempt >= 5 || !(error instanceof ApiError) || error.status !== 500 || !/error sending request/.test(error.message)) throw error;
+    if (attempt >= 5 || !(error instanceof ApiError) || error.status !== 500 || !/error sending request|Failed to create Loro snapshot/.test(error.message)) throw error;
     setupRetries[what] = (setupRetries[what] ?? 0) + 1;
     await Bun.sleep(1000 * 2 ** attempt);
     return setupWrite(what, write, attempt + 1);
