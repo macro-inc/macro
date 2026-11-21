@@ -276,7 +276,9 @@ UDP and ICMP alike:
 - **Dropped:** the host's own addresses, its on-link prefixes (IPv4 and
   IPv6, so a LAN on public or global addresses is covered) and its gateway,
   read from the host's interfaces and routes at every teammate start (an
-  interface that comes up later is covered from the next start); IPv4 0/8, 10/8, 100.64/10 (CGNAT and tailnets), 127/8 off
+  interface that comes up later is covered from the next start). Every
+  route's destination is dropped except the default and a VPN's split
+  defaults (IPv4 `/0` and `/1`, IPv6 up to `/3`), which are the internet; IPv4 0/8, 10/8, 100.64/10 (CGNAT and tailnets), 127/8 off
   loopback, 169.254/16 (link-local and metadata), 172.16/12, 192.0.0/24,
   192.168/16, 198.18/15, multicast and reserved; IPv6 `::1` off loopback,
   `::ffff:0:0/96` (v4-mapped), the NAT64 prefixes, `fc00::/7` (ULA,

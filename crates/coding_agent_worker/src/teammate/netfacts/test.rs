@@ -117,3 +117,21 @@ fn the_destinations_of_every_route_but_the_default_are_dropped() {
     );
     assert!(route_destinations("{}").is_err());
 }
+
+#[test]
+fn a_vpn_that_splits_the_default_route_is_still_the_internet() {
+    // OpenVPN's def1 (and the v6 equivalent, 2000::/3) replace the default
+    // with routes that cover the whole internet; dropping them would cut
+    // the agent off everything.
+    let v4 = r#"[{"dst":"0.0.0.0/1","dev":"tun0"},{"dst":"128.0.0.0/1","dev":"tun0"},{"dst":"10.8.0.0/24","dev":"tun0"}]"#;
+    let v6 = r#"[{"dst":"::/1","dev":"tun0"},{"dst":"2000::/3","dev":"tun0"},{"dst":"fd00:8::/64","dev":"tun0"}]"#;
+    let mut routes = route_destinations(v4).unwrap();
+    routes.extend(route_destinations(v6).unwrap());
+    assert_eq!(
+        routes,
+        [
+            "10.8.0.0/24".parse::<IpNet>().unwrap(),
+            "fd00:8::/64".parse().unwrap(),
+        ]
+    );
+}

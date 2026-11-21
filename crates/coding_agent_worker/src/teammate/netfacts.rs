@@ -154,7 +154,8 @@ pub fn host_prefixes(json: &str) -> Result<Vec<IpNet>, String> {
     Ok(prefixes)
 }
 
-/// The destinations of every route but the defaults, from `ip -j route
+/// The destinations of every route but the defaults (and a VPN's split
+/// defaults), from `ip -j route
 /// show table all` (v4) or `ip -j -6 route show table all`: a VPN's or a
 /// static route's network can be an internal one on public addresses, and
 /// the host's own and broadcast routes are its addresses. A destination
@@ -178,9 +179,23 @@ pub fn route_destinations(json: &str) -> Result<Vec<IpNet>, String> {
                     .map_err(|_| format!("{destination} is not a destination"))?,
             ),
         };
+        if covers_the_internet(&net) {
+            continue;
+        }
         destinations.push(net.trunc());
     }
     Ok(destinations)
+}
+
+/// A route a VPN uses in place of the default: OpenVPN's `def1` splits the
+/// IPv4 default into two `/1`s, and IPv6 VPNs route `::/1` or `2000::/3`
+/// (all global unicast). Like the default, it is the internet, not one
+/// internal network.
+fn covers_the_internet(net: &IpNet) -> bool {
+    match net {
+        IpNet::V4(net) => net.prefix_len() <= 1,
+        IpNet::V6(net) => net.prefix_len() <= 3,
+    }
 }
 
 /// The service address and port pairs an agent environment names: the
