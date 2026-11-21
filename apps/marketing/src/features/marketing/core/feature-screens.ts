@@ -3,46 +3,61 @@
 // The captures come from the tutorial video sets in macro-inc/meta-ads (tutorials/macro-*/set).
 
 import agentsAgpCursor from '../assets/screens/agents-agp-cursor.webp';
+import agentsAgpCursorNarrow from '../assets/screens/agents-agp-cursor-narrow.webp';
 import agentsAgpRoster from '../assets/screens/agents-agp-roster.webp';
+import agentsAgpRosterNarrow from '../assets/screens/agents-agp-roster-narrow.webp';
 import agentsChannel from '../assets/screens/agents-channel.webp';
+import agentsChannelNarrow from '../assets/screens/agents-channel-narrow.webp';
 import calendarPgAccounts from '../assets/screens/calendar-pg-accounts.webp';
 import calendarPgFindTimeOpen from '../assets/screens/calendar-pg-find-time-open.webp';
+import calendarPgFindTimeOpenNarrow from '../assets/screens/calendar-pg-find-time-open-narrow.webp';
 import calendarPgInvite from '../assets/screens/calendar-pg-invite.webp';
 import callsChannelLive from '../assets/screens/calls-channel-live.webp';
+import callsChannelLiveNarrow from '../assets/screens/calls-channel-live-narrow.webp';
 import callsPageLinks from '../assets/screens/calls-page-links.webp';
 import callsPageSharing from '../assets/screens/calls-page-sharing.webp';
 import callsPhoneSummary from '../assets/screens/calls-phone-summary.webp';
 import callsPhoneTranscript from '../assets/screens/calls-phone-transcript.webp';
 import callsSummary from '../assets/screens/calls-summary.webp';
+import callsSummaryNarrow from '../assets/screens/calls-summary-narrow.webp';
 import canvasPCopyLink from '../assets/screens/canvas-p-copy-link.webp';
 import canvasPMentions from '../assets/screens/canvas-p-mentions.webp';
 import canvasPPlan from '../assets/screens/canvas-p-plan.webp';
 import chatPInbox from '../assets/screens/chat-p-inbox.webp';
 import chatPMentionMenu from '../assets/screens/chat-p-mention-menu.webp';
 import chatPMentions from '../assets/screens/chat-p-mentions.webp';
+import chatPMentionsNarrow from '../assets/screens/chat-p-mentions-narrow.webp';
 import chatPThread from '../assets/screens/chat-p-thread.webp';
+import chatPThreadNarrow from '../assets/screens/chat-p-thread-narrow.webp';
 import chatPhoneChannel from '../assets/screens/chat-phone-channel.webp';
 import chatPhoneHome from '../assets/screens/chat-phone-home.webp';
 import chatPhoneMention from '../assets/screens/chat-phone-mention.webp';
 import crmBoard from '../assets/screens/crm-board.webp';
 import crmPageAgent from '../assets/screens/crm-page-agent.webp';
 import crmPageChat from '../assets/screens/crm-page-chat.webp';
+import crmPageChatNarrow from '../assets/screens/crm-page-chat-narrow.webp';
 import crmPageEmails from '../assets/screens/crm-page-emails.webp';
+import crmPageEmailsNarrow from '../assets/screens/crm-page-emails-narrow.webp';
 import crmPageTableMenu from '../assets/screens/crm-page-table-menu.webp';
 import crmPdFiles from '../assets/screens/crm-pd-files.webp';
+import crmPdFilesNarrow from '../assets/screens/crm-pd-files-narrow.webp';
 import crmPhoneList from '../assets/screens/crm-phone-list.webp';
 import crmPhoneProperties from '../assets/screens/crm-phone-properties.webp';
 import crmPhoneRecord from '../assets/screens/crm-phone-record.webp';
 import crmRecord from '../assets/screens/crm-record.webp';
+import crmRecordNarrow from '../assets/screens/crm-record-narrow.webp';
 import databasesAgent from '../assets/screens/databases-agent.webp';
 import databasesBoard from '../assets/screens/databases-board.webp';
 import databasesFormsAgent from '../assets/screens/databases-forms-agent.webp';
 import databasesFormsBooking from '../assets/screens/databases-forms-booking.webp';
+import databasesFormsBookingNarrow from '../assets/screens/databases-forms-booking-narrow.webp';
 import databasesFormsPBuild from '../assets/screens/databases-forms-p-build.webp';
 import databasesFormsPRespond from '../assets/screens/databases-forms-p-respond.webp';
 import databasesFormsPResponses from '../assets/screens/databases-forms-p-responses.webp';
 import databasesFormsResponses from '../assets/screens/databases-forms-responses.webp';
+import databasesFormsResponsesNarrow from '../assets/screens/databases-forms-responses-narrow.webp';
 import databasesFormsShare from '../assets/screens/databases-forms-share.webp';
+import databasesFormsShareNarrow from '../assets/screens/databases-forms-share-narrow.webp';
 import databasesImportPlan from '../assets/screens/databases-import-plan.webp';
 import databasesMentionPicker from '../assets/screens/databases-mention-picker.webp';
 import docsAgent from '../assets/screens/docs-agent.webp';
@@ -53,25 +68,34 @@ import docsPhoneAgent from '../assets/screens/docs-phone-agent.webp';
 import docsPhoneDetails from '../assets/screens/docs-phone-details.webp';
 import docsPhoneDoc from '../assets/screens/docs-phone-doc.webp';
 import docsSnippetDrive from '../assets/screens/docs-snippet-drive.webp';
+import docsSnippetDriveNarrow from '../assets/screens/docs-snippet-drive-narrow.webp';
 import docsSnippetMenuSearch from '../assets/screens/docs-snippet-menu-search.webp';
 import docsSnippetOpen from '../assets/screens/docs-snippet-open.webp';
+import docsSnippetOpenNarrow from '../assets/screens/docs-snippet-open-narrow.webp';
 import docsSnippetPhoneDoc from '../assets/screens/docs-snippet-phone-doc.webp';
 import docsSnippetPhoneMenu from '../assets/screens/docs-snippet-phone-menu.webp';
 import drivePdAgent from '../assets/screens/drive-pd-agent.webp';
+import drivePdAgentNarrow from '../assets/screens/drive-pd-agent-narrow.webp';
 import drivePdFoldersDb from '../assets/screens/drive-pd-folders-db.webp';
 import drivePdMention from '../assets/screens/drive-pd-mention.webp';
 import drivePdPdf from '../assets/screens/drive-pd-pdf.webp';
+import drivePdPdfNarrow from '../assets/screens/drive-pd-pdf-narrow.webp';
 import drivePdPhoneFiles from '../assets/screens/drive-pd-phone-files.webp';
 import drivePdPhoneFolder from '../assets/screens/drive-pd-phone-folder.webp';
 import drivePdPhonePdf from '../assets/screens/drive-pd-phone-pdf.webp';
 import drivePdSkills from '../assets/screens/drive-pd-skills.webp';
+import drivePdSkillsNarrow from '../assets/screens/drive-pd-skills-narrow.webp';
 import drivePdTags from '../assets/screens/drive-pd-tags.webp';
+import drivePdTagsNarrow from '../assets/screens/drive-pd-tags-narrow.webp';
 import drivePdWorkspaceMenu from '../assets/screens/drive-pd-workspace-menu.webp';
 import driveSkDoc from '../assets/screens/drive-sk-doc.webp';
+import driveSkDocNarrow from '../assets/screens/drive-sk-doc-narrow.webp';
 import driveSkFilter from '../assets/screens/drive-sk-filter.webp';
+import driveSkFilterNarrow from '../assets/screens/drive-sk-filter-narrow.webp';
 import driveSkMenu2 from '../assets/screens/drive-sk-menu2.webp';
 import driveSkPList from '../assets/screens/drive-sk-p-list.webp';
 import githubPgCursorMerge from '../assets/screens/github-pg-cursor-merge.webp';
+import githubPgCursorMergeNarrow from '../assets/screens/github-pg-cursor-merge-narrow.webp';
 import githubPgInboxWide from '../assets/screens/github-pg-inbox-wide.webp';
 import githubPgLinkHover from '../assets/screens/github-pg-link-hover.webp';
 import githubPgPPr from '../assets/screens/github-pg-p-pr.webp';
@@ -81,10 +105,15 @@ import mailAgPConversation from '../assets/screens/mail-ag-p-conversation.webp';
 import mailAgPRoutine from '../assets/screens/mail-ag-p-routine.webp';
 import mailAgPRoutines from '../assets/screens/mail-ag-p-routines.webp';
 import mailAgRoutine from '../assets/screens/mail-ag-routine.webp';
+import mailAgRoutineNarrow from '../assets/screens/mail-ag-routine-narrow.webp';
 import mailAgentDraft from '../assets/screens/mail-agent-draft.webp';
+import mailAgentDraftNarrow from '../assets/screens/mail-agent-draft-narrow.webp';
 import mailAgpMemory from '../assets/screens/mail-agp-memory.webp';
+import mailAgpMemoryNarrow from '../assets/screens/mail-agp-memory-narrow.webp';
 import mailAgpSearch from '../assets/screens/mail-agp-search.webp';
+import mailAgpSearchNarrow from '../assets/screens/mail-agp-search-narrow.webp';
 import mailEmailTask from '../assets/screens/mail-email-task.webp';
+import mailEmailTaskNarrow from '../assets/screens/mail-email-task-narrow.webp';
 import mailInbox from '../assets/screens/mail-inbox.webp';
 import mailNoise from '../assets/screens/mail-noise.webp';
 import mailPhoneInbox from '../assets/screens/mail-phone-inbox.webp';
@@ -93,16 +122,22 @@ import mailPhoneThread from '../assets/screens/mail-phone-thread.webp';
 import mailRtPRuns from '../assets/screens/mail-rt-p-runs.webp';
 import mailRtRuns from '../assets/screens/mail-rt-runs.webp';
 import mailRtSchedule from '../assets/screens/mail-rt-schedule.webp';
+import mailRtScheduleNarrow from '../assets/screens/mail-rt-schedule-narrow.webp';
 import mailRtShare from '../assets/screens/mail-rt-share.webp';
+import mailRtShareNarrow from '../assets/screens/mail-rt-share-narrow.webp';
 import mailRtTriggerMenu from '../assets/screens/mail-rt-trigger-menu.webp';
 import mailShareChannel from '../assets/screens/mail-share-channel.webp';
+import mailShareChannelNarrow from '../assets/screens/mail-share-channel-narrow.webp';
 import mailTags from '../assets/screens/mail-tags.webp';
 import schedulingBlAgent from '../assets/screens/scheduling-bl-agent.webp';
 import schedulingBlGuest from '../assets/screens/scheduling-bl-guest.webp';
+import schedulingBlGuestNarrow from '../assets/screens/scheduling-bl-guest-narrow.webp';
 import schedulingBlPDetails from '../assets/screens/scheduling-bl-p-details.webp';
 import schedulingBlPGuest from '../assets/screens/scheduling-bl-p-guest.webp';
 import schedulingBlTeamEdit from '../assets/screens/scheduling-bl-team-edit.webp';
+import schedulingBlTeamEditNarrow from '../assets/screens/scheduling-bl-team-edit-narrow.webp';
 import schedulingPgBooking from '../assets/screens/scheduling-pg-booking.webp';
+import schedulingPgBookingNarrow from '../assets/screens/scheduling-pg-booking-narrow.webp';
 import schedulingPgPhoneBooking from '../assets/screens/scheduling-pg-phone-booking.webp';
 import schedulingPgPhoneDetails from '../assets/screens/scheduling-pg-phone-details.webp';
 import spreadsheetsAgents from '../assets/screens/spreadsheets-agents.webp';
@@ -114,10 +149,12 @@ import spreadsheetsUpload from '../assets/screens/spreadsheets-upload.webp';
 import tasksGanttWide from '../assets/screens/tasks-gantt-wide.webp';
 import tasksGhDetails from '../assets/screens/tasks-gh-details.webp';
 import tasksMessageTask from '../assets/screens/tasks-message-task.webp';
+import tasksMessageTaskNarrow from '../assets/screens/tasks-message-task-narrow.webp';
 import tasksPDetail from '../assets/screens/tasks-p-detail.webp';
 import tasksPDetailsSheet from '../assets/screens/tasks-p-details-sheet.webp';
 import tasksPList from '../assets/screens/tasks-p-list.webp';
 import tasksProjectTasks from '../assets/screens/tasks-project-tasks.webp';
+import tasksProjectTasksNarrow from '../assets/screens/tasks-project-tasks-narrow.webp';
 import tasksPrtaskPanel3 from '../assets/screens/tasks-prtask-panel3.webp';
 import tasksTaskAssignees from '../assets/screens/tasks-task-assignees.webp';
 
@@ -170,6 +207,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: 'A channel where an email was shared as a live attachment, with a teammate’s reply.',
     focus: { x: 40, y: 341, width: 920, height: 106 },
+    narrow: {
+      src: mailShareChannelNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 441, width: 368, height: 106 },
+    },
   },
   'agentic-editing': {
     src: mailAgentDraft,
@@ -177,6 +220,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'An agent conversation with a drafted reply waiting for review in an email composer.',
     focus: { x: 281, y: 225, width: 695, height: 346 },
+    narrow: {
+      src: mailAgentDraftNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 41, width: 352, height: 577 },
+    },
   },
   'email-to-task': {
     src: mailEmailTask,
@@ -184,6 +233,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: 'The task composer opened from an email, with the email linked in the description.',
     focus: { x: 100, y: 60, width: 800, height: 342 },
+    narrow: {
+      src: mailEmailTaskNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 70, width: 384, height: 456 },
+    },
   },
   'email-crm': {
     src: crmRecord,
@@ -191,6 +246,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'A company record with its summary, pipeline entry and discussion.',
     focus: { x: 281, y: 188, width: 695, height: 78 },
+    narrow: {
+      src: crmRecordNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 188, width: 352, height: 78 },
+    },
   },
   'auto-tags': {
     src: mailTags,
@@ -205,6 +266,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: 'A routine triggered by a new email, with an “only if” condition.',
     focus: { x: 297, y: 320, width: 623, height: 156 },
+    narrow: {
+      src: mailAgRoutineNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 382, width: 368, height: 156 },
+    },
   },
   'from-a-message': {
     src: tasksMessageTask,
@@ -212,6 +279,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 480,
     alt: 'The task composer opened from the Task action on a #launch-team message, with the message as the task title and a link back to it.',
     focus: { x: 80, y: 48, width: 800, height: 342 },
+    narrow: {
+      src: tasksMessageTaskNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 70, width: 384, height: 456 },
+    },
   },
   'from-docs-and-email': {
     src: mailEmailTask,
@@ -219,6 +292,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "The task composer opened from the Create task button on Dana's email.",
     focus: { x: 100, y: 60, width: 800, height: 342 },
+    narrow: {
+      src: mailEmailTaskNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 70, width: 384, height: 456 },
+    },
   },
   'task-agents': {
     src: tasksTaskAssignees,
@@ -240,6 +319,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 540,
     alt: 'The Q4 launch project page beside the Tasks sidebar with its Projects section.',
     focus: { x: 273, y: 142, width: 711, height: 342 },
+    narrow: {
+      src: tasksProjectTasksNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 140, width: 384, height: 344 },
+    },
   },
   'task-views': {
     src: tasksGanttWide,
@@ -254,6 +339,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: 'The Chat view on #launch-team: Jacob\'s posted message "Dana confirmed the dates in [email: Q4 launch plan] so I updated [document: Launch week plan] / Next up is [task: Record the launch video voiceover]" carries an email.',
     focus: { x: 273, y: 407, width: 711, height: 106 },
+    narrow: {
+      src: chatPMentionsNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 459, width: 368, height: 154 },
+    },
   },
   'channel-access': {
     src: chatPMentionMenu,
@@ -268,6 +359,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "#launch-team: a teammate asks @Macro what's still open before launch, and Macro replies in the channel as an agent session card listing the open items.",
     focus: { x: 68, y: 413, width: 864, height: 88 },
+    narrow: {
+      src: agentsChannelNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 64, y: 513, width: 312, height: 88 },
+    },
   },
   'channel-threads': {
     src: chatPThread,
@@ -275,6 +372,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: '#launch-team in the Chat view, with a message saying the landing page copy is final and the conversation around it.',
     focus: { x: 273, y: 119, width: 711, height: 262 },
+    narrow: {
+      src: chatPThreadNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 147, width: 368, height: 286 },
+    },
   },
   'chat-inbox': {
     src: chatPInbox,
@@ -324,6 +427,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: "The 'Northpeak weekly sync' call page: participants, the Summary and the start of the Transcript with each line under its speaker's name and time; Ask Macro in the header.",
     focus: { x: 281, y: 306, width: 655, height: 160 },
+    narrow: {
+      src: callsSummaryNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 348, width: 352, height: 184 },
+    },
   },
   'call-start': {
     src: callsChannelLive,
@@ -331,6 +440,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "#launch-team while a call is running there: the timeline row 'Teo started a call' with a live timer, the three people on it and a green Join button.",
     focus: { x: 273, y: 413, width: 671, height: 36 },
+    narrow: {
+      src: callsChannelLiveNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 513, width: 368, height: 36 },
+    },
   },
   'call-external': {
     src: callsPageLinks,
@@ -345,6 +460,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'The Northpeak company record in Customers.',
     focus: { x: 281, y: 188, width: 695, height: 78 },
+    narrow: {
+      src: crmRecordNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 188, width: 352, height: 78 },
+    },
   },
   'crm-pipeline': {
     src: crmBoard,
@@ -366,6 +487,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 480,
     alt: "The Northpeak record's Emails tab: six threads with Dana Whitfield and the team, with the Signal/All and Team/Me switches.",
     focus: { x: 16, y: 95, width: 968, height: 264 },
+    narrow: {
+      src: crmPageEmailsNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 136, width: 384, height: 288 },
+    },
   },
   'crm-context': {
     src: crmPageChat,
@@ -373,6 +500,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 560,
     alt: "The Discussion on the Northpeak record: Julia's comment, Jacob's comment with an @Teo mention chip, Teo's reply threaded under it, and the Leave a comment box.",
     focus: { x: 281, y: 121, width: 695, height: 343 },
+    narrow: {
+      src: crmPageChatNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 141, width: 352, height: 511 },
+    },
   },
   'crm-agents': {
     src: crmPageAgent,
@@ -386,13 +519,25 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 520,
     alt: 'An agent conversation in the real Agents view: Jacob asks "What\'s Teo working on for the launch?".',
     focus: { x: 281, y: 142, width: 735, height: 188 },
+    narrow: {
+      src: mailAgpMemoryNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 166, width: 352, height: 192 },
+    },
   },
   'agent-collaboration': {
     src: agentsAgpCursor,
     width: 1000,
     height: 600,
-    alt: "#launch-team: the Release notes agent's post among Teo's and Valentina's messages, Jacob's \"@Cursor update the signup page to the 21st, like Teo said\".",
+    alt: "#launch-team: the Release notes agent's post among Teo's and Peter's messages, Jacob's \"@Cursor update the signup page to the 21st, like Teo said\".",
     focus: { x: 88, y: 413, width: 864, height: 88 },
+    narrow: {
+      src: agentsAgpCursorNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 64, y: 513, width: 312, height: 88 },
+    },
   },
   'agent-actions': {
     src: mailAgpSearch,
@@ -400,6 +545,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 500,
     alt: 'An agent conversation in the real Agents view: "When is the customer webinar now?".',
     focus: { x: 281, y: 142, width: 695, height: 192 },
+    narrow: {
+      src: mailAgpSearchNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 142, width: 352, height: 192 },
+    },
   },
   'existing-agents': {
     src: agentsAgpRoster,
@@ -407,6 +558,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'The Agents page in the Agents workspace: Cursor, Bring your own agent, and Your agents: Macro, Claude and Grok, each with Message.',
     focus: { x: 305, y: 239, width: 647, height: 62 },
+    narrow: {
+      src: agentsAgpRosterNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 278, width: 368, height: 62 },
+    },
   },
   'databases-workspace': {
     src: databasesMentionPicker,
@@ -449,6 +606,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "#launch-team in Chat: Jacob asks @Macro to find a time for the team to meet this week, and the Macro agent's thread reply shows its Get team availability step.",
     focus: { x: 313, y: 257, width: 671, height: 200 },
+    narrow: {
+      src: calendarPgFindTimeOpenNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 48, y: 261, width: 336, height: 296 },
+    },
   },
   'calendar-agent-invites': {
     src: calendarPgInvite,
@@ -463,6 +626,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'The public booking page for Jacob\'s "30 minute meeting" link as a guest sees it: time zone set to Europe/London, Wednesday Nov 4 chosen in the month, and that day\'s open times listed.',
     focus: { x: 321, y: 200, width: 618, height: 404 },
+    narrow: {
+      src: schedulingPgBookingNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 37, y: 56, width: 326, height: 589 },
+    },
   },
   'pr-links': {
     src: githubPgLinkHover,
@@ -477,6 +646,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 584,
     alt: "#eng: Jacob's '@Cursor fix the unread badge that sticks after you read a thread'.",
     focus: { x: 88, y: 397, width: 864, height: 87 },
+    narrow: {
+      src: githubPgCursorMergeNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 64, y: 513, width: 312, height: 88 },
+    },
   },
   'pr-tasks': {
     src: tasksPrtaskPanel3,
@@ -512,6 +687,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: 'A PDF open inside Drive: Drive / Brand assets > Brand guidelines in the PDF viewer, with the Drive sidebar and the Brand assets folder selected beside it.',
     focus: { x: 278, y: 109, width: 703, height: 491 },
+    narrow: {
+      src: drivePdPdfNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 0, y: 92, width: 400, height: 608 },
+    },
   },
   'drive-detail-3': {
     src: drivePdAgent,
@@ -519,6 +700,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 640,
     alt: 'An Agents conversation, Embargo timing: a question that @mentions the Launch brief file is answered from it.',
     focus: { x: 281, y: 324, width: 695, height: 224 },
+    narrow: {
+      src: drivePdAgentNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 24, y: 379, width: 352, height: 248 },
+    },
   },
   'drive-detail-4': {
     src: drivePdFoldersDb,
@@ -533,6 +720,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "Drive filtered by the Northpeak tag: ten files from email, channels, teammates and folders, each row with its tag chips, SHARED badges on teammates' files, and the filter button showing its active dot.",
     focus: { x: 257, y: 48, width: 743, height: 440 },
+    narrow: {
+      src: drivePdTagsNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 0, y: 48, width: 400, height: 540 },
+    },
   },
   'drive-detail-6': {
     src: crmPdFiles,
@@ -540,6 +733,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 460,
     alt: 'The Northpeak company record in Customers on its Files tab: a file search box and four files, Northpeak proposal, Launch timeline Q4 and Northpeak security questionnaire and Discovery call notes.',
     focus: { x: 8, y: 96, width: 984, height: 176 },
+    narrow: {
+      src: crmPdFilesNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 96, width: 384, height: 192 },
+    },
   },
   'drive-detail-7': {
     src: drivePdSkills,
@@ -547,6 +746,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 460,
     alt: 'Drive / Contracts: a skill and a snippet, each with its own icon, listed in the same folder as the contracts, all tagged Contracts.',
     focus: { x: 257, y: 48, width: 743, height: 88 },
+    narrow: {
+      src: drivePdSkillsNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 0, y: 48, width: 400, height: 48 },
+    },
   },
   'spreadsheets-workspace': {
     src: spreadsheetsMention,
@@ -582,6 +787,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 620,
     alt: "The form's Responses tab: the count tiles over the linked table's own database grid, one column per question and one row per response.",
     focus: { x: 1, y: 182, width: 998, height: 437 },
+    narrow: {
+      src: databasesFormsResponsesNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 1, y: 295, width: 398, height: 404 },
+    },
   },
   'forms-booking': {
     src: databasesFormsBooking,
@@ -589,6 +800,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'The form builder scrolled to its last two steps.',
     focus: { x: 116, y: 394, width: 768, height: 230 },
+    narrow: {
+      src: databasesFormsBookingNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 25, y: 242, width: 350, height: 265 },
+    },
   },
   'forms-agents': {
     src: databasesFormsAgent,
@@ -603,6 +820,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 576,
     alt: 'The form\'s Settings tab scrolled to the Branding card with the "People and channels · Manage access" row below it and the end of the Responses settings above.',
     focus: { x: 176, y: 238, width: 648, height: 240 },
+    narrow: {
+      src: databasesFormsShareNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 17, y: 238, width: 366, height: 292 },
+    },
   },
   'canvas-workspace': {
     src: canvasPMentions,
@@ -631,6 +854,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: "The snippet 'Pilot kickoff reply' open in Drive.",
     focus: { x: 282, y: 159, width: 693, height: 496 },
+    narrow: {
+      src: docsSnippetOpenNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 25, y: 66, width: 350, height: 616 },
+    },
   },
   'snippets-detail-1': {
     src: docsSnippetMenuSearch,
@@ -645,6 +874,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 460,
     alt: "Drive filtered to Type: Snippets with Files: All files: seven snippets in one list, the four owned by teammates carrying the owner's avatar and a SHARED badge.",
     focus: { x: 262, y: 51, width: 733, height: 304 },
+    narrow: {
+      src: docsSnippetDriveNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 1, y: 49, width: 398, height: 396 },
+    },
   },
   'booking-links-guests': {
     src: schedulingBlGuest,
@@ -652,6 +887,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: "The public booking page a guest opens for Jacob's \"30 minute meeting\" link: the guest's time zone, November 2026 with Thursday the 5th chosen, and that day's nine open times.",
     focus: { x: 32, y: 44, width: 936, height: 587 },
+    narrow: {
+      src: schedulingBlGuestNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 0, width: 368, height: 700 },
+    },
   },
   'booking-links-team': {
     src: schedulingBlTeamEdit,
@@ -659,6 +900,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 626,
     alt: 'The Macro team\'s "Product demo" link in the booking link editor, step 2: the Working hours schedule and Team scheduling set to Round robin with 3 hosts.',
     focus: { x: 188, y: 377, width: 624, height: 116 },
+    narrow: {
+      src: schedulingBlTeamEditNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 28, y: 447, width: 344, height: 116 },
+    },
   },
   'booking-links-forms': {
     src: databasesFormsBooking,
@@ -666,6 +913,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 660,
     alt: 'The form builder of a "Vendor application" form.',
     focus: { x: 116, y: 394, width: 768, height: 230 },
+    narrow: {
+      src: databasesFormsBookingNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 25, y: 242, width: 350, height: 265 },
+    },
   },
   'booking-links-agent': {
     src: schedulingBlAgent,
@@ -680,6 +933,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 620,
     alt: 'The saved "Morning brief" routine\'s page in the Agents workspace, scrolled to its Trigger card, "Weekdays at 9:00 AM", with its next run time.',
     focus: { x: 297, y: 108, width: 663, height: 512 },
+    narrow: {
+      src: mailRtScheduleNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 0, y: 86, width: 400, height: 614 },
+    },
   },
   'routines-detail-1': {
     src: mailRtTriggerMenu,
@@ -701,6 +960,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 620,
     alt: 'The Share dialog of the "Morning brief" routine, sharing it with #launch-team along with a short message.',
     focus: { x: 100, y: 160, width: 800, height: 349 },
+    narrow: {
+      src: mailRtShareNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 8, y: 80, width: 384, height: 371 },
+    },
   },
   'skills-workspace': {
     src: driveSkDoc,
@@ -708,6 +973,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "The skill 'Release notes' open in Drive: its title, its one-line 'Use when writing release notes for a shipped version; not for internal changelogs or commit messages', and the instructions.",
     focus: { x: 281, y: 102, width: 695, height: 496 },
+    narrow: {
+      src: driveSkDocNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 0, y: 92, width: 400, height: 608 },
+    },
   },
   'skills-detail-1': {
     src: driveSkMenu2,
@@ -722,6 +993,12 @@ export const featureScreens: Record<string, FeatureScreen> = {
     height: 600,
     alt: "Drive's My Files filtered to skills: the five skill documents listed with their times.",
     focus: { x: 257, y: 48, width: 743, height: 220 },
+    narrow: {
+      src: driveSkFilterNarrow,
+      width: 400,
+      height: 700,
+      focus: { x: 16, y: 129, width: 368, height: 222 },
+    },
   },
 };
 
@@ -792,7 +1069,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       src: chatPhoneChannel,
       width: 390,
       height: 770,
-      alt: '#launch-team on a phone: Julia\'s message with the Press kit document pill, Valentina\'s message with three inline replies and "2 more replies", Teo and Julia after it.',
+      alt: '#launch-team on a phone: Julia\'s message with the Press kit document pill, Peter\'s message with three inline replies and "2 more replies", Teo and Julia after it.',
       title: 'Replies stay inline',
       text: 'The first replies show under the message and the rest open in place.',
     },
@@ -800,7 +1077,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       src: chatPhoneMention,
       width: 390,
       height: 770,
-      alt: '#launch-team on a phone with the composer holding "Here\'s the plan @l" and the mention menu open: Julia, Valentina, documents Launch FAQ and Launch week plan, task Record the launch video voiceover.',
+      alt: '#launch-team on a phone with the composer holding "Here\'s the plan @l" and the mention menu open: Julia, Peter, documents Launch FAQ and Launch week plan, task Record the launch video voiceover.',
       title: '@mention anything',
       text: 'Type @ to bring a person, a document or a task into the channel.',
     },
@@ -844,7 +1121,7 @@ export const phoneScreens: Record<string, readonly PhoneScreen[]> = {
       src: callsPhoneTranscript,
       width: 390,
       height: 770,
-      alt: "The same call scrolled to its Transcript: lines from Julia, Jacob and Valentina with photos and times, the recording's player bar above, 'Call chat' below.",
+      alt: "The same call scrolled to its Transcript: lines from Julia, Jacob and Peter with photos and times, the recording's player bar above, 'Call chat' below.",
       title: 'Who said what',
       text: "The transcript puts each line under its speaker's name and photo.",
     },
