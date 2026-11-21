@@ -65,6 +65,7 @@ async fn run(
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms,
+                    language: Language::Javascript,
                 },
                 RunEnvironment::default(),
             )
@@ -104,6 +105,23 @@ async fn respond(stream: &mut TcpStream, body: &str) {
         body.len()
     );
     stream.write_all(response.as_bytes()).await.unwrap();
+}
+
+fn failure(outcome: &Outcome) -> &ExecutionFailure {
+    match outcome {
+        Outcome::Failed { error } => error,
+        other => panic!("expected a failure, got {other:?}"),
+    }
+}
+
+fn progress(events: &[ExecutionEvent]) -> Vec<&serde_json::Value> {
+    events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            EventKind::Progress { value } => Some(value),
+            _ => None,
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -159,6 +177,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
         },
         unattended: None,
         egress: Egress::Direct,
+        allowed_operations: None,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -178,6 +197,7 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -275,6 +295,7 @@ export async function main({{macro}}) {{
                 ExecuteRequest {
                     source,
                     timeout_ms: 8000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -316,6 +337,7 @@ async fn a_program_presents_a_view_through_its_session() {
         },
         unattended: None,
         egress: Egress::Direct,
+        allowed_operations: None,
     };
     let source = r#"
 export async function main({execution}) {
@@ -329,6 +351,7 @@ export async function main({execution}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -395,6 +418,7 @@ export async function main({token, hosts, webAppUrl, macro: supplied}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -601,6 +625,7 @@ async fn a_program_has_no_way_to_the_network_but_fetch() {
                 ExecuteRequest {
                     source: RAW_REQUESTS.replace("HOST", &host),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -796,7 +821,7 @@ async fn denies_unlisted_destinations_including_redirects() {
         read_request(&mut stream).await;
         stream.write_all(format!("HTTP/1.1 302 Found\r\nLocation: http://{forbidden_address}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
     });
-    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000 }, RunEnvironment { endpoints: SdkEndpoints { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..SdkEndpoints::default() }, ..RunEnvironment::default() }).unwrap()).await;
+    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000, language: Language::Javascript }, RunEnvironment { endpoints: SdkEndpoints { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..SdkEndpoints::default() }, ..RunEnvironment::default() }).unwrap()).await;
     assert!(
         matches!(outcome, Outcome::Failed { .. }),
         "redirect escaped allowlist: {outcome:?}"
@@ -824,6 +849,7 @@ async fn times_out_cancels_and_reaps_busy_processes() {
             ExecuteRequest {
                 source: "export function main() { console.log('ready'); while(true) {} }".into(),
                 timeout_ms: 5000,
+                language: Language::Javascript,
             },
             RunEnvironment::default(),
         )
@@ -950,6 +976,7 @@ async fn dropping_receiver_and_shutdown_reap_processes() {
             ExecuteRequest {
                 source: "export function main() { console.log('ready'); while(true) {} }".into(),
                 timeout_ms: 5000,
+                language: Language::Javascript,
             },
             RunEnvironment::default(),
         )
@@ -995,6 +1022,7 @@ async fn redacts_run_token_from_results_keys_console_stderr_and_errors() {
                     ExecuteRequest {
                         source: source.into(),
                         timeout_ms: 5000,
+                        language: Language::Javascript,
                     },
                     RunEnvironment {
                         token: token.into(),
@@ -1056,6 +1084,7 @@ async fn run_unattended(
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -1337,6 +1366,7 @@ async fn run_in_session(
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms,
+                    language: Language::Javascript,
                 },
                 session_run(host, hanging),
             )
@@ -1592,6 +1622,7 @@ export async function main({token, hosts}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -1645,6 +1676,7 @@ export async function main({hosts}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 proxied(&host),
             )
@@ -1703,6 +1735,7 @@ export async function main() {{
                 ExecuteRequest {
                     source,
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 proxied(&host),
             )
@@ -1735,6 +1768,7 @@ async fn a_proxied_runs_forwarder_stops_with_the_run() {
                 ExecuteRequest {
                     source: finished.into(),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 proxied(host),
             )
@@ -1760,6 +1794,7 @@ async fn a_proxied_runs_forwarder_stops_with_the_run() {
             ExecuteRequest {
                 source: waiting.into(),
                 timeout_ms: 10_000,
+                language: Language::Javascript,
             },
             proxied(host),
         )
@@ -1807,6 +1842,7 @@ async fn a_proxied_runs_requests_end_with_the_run() {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 1000,
+                    language: Language::Javascript,
                 },
                 proxied(&host),
             )
@@ -1863,6 +1899,7 @@ export async function main() {{
                 ExecuteRequest {
                     source,
                     timeout_ms: 5000,
+                    language: Language::Javascript,
                 },
                 environment,
             )
@@ -1903,6 +1940,7 @@ export async function main({hosts}) {
                 ExecuteRequest {
                     source: source.into(),
                     timeout_ms: 10_000,
+                    language: Language::Javascript,
                 },
                 proxied(&host),
             )
@@ -1983,3 +2021,5 @@ export async function main({ macro, knobs }: any) {
     );
     service.shutdown().await;
 }
+
+mod js_tools;

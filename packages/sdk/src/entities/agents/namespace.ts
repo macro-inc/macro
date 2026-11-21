@@ -1,6 +1,7 @@
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Agent, type AgentOptions, agentBody } from './agent';
+import type { ToolPermissionCatalog } from './tool-permissions';
 
 /**
  * A coding agent the caller can start a session as right now: a built-in
@@ -51,6 +52,20 @@ export class AgentNamespace {
   async list(): Promise<Agent[]> {
     return unwrap(await this.client.storage.listAgents()).map((a) =>
       Agent.from(this.client, a),
+    );
+  }
+
+  /**
+   * Every group, action and SDK operation an agent's tool permissions can
+   * name, with display names: the targets {@link Agent.tightenToolPermissions}
+   * accepts.
+   *
+   * @readonly
+   * @flag enable-agent-permissions
+   */
+  async toolPermissionCatalog(): Promise<ToolPermissionCatalog> {
+    return unwrap(
+      await this.client.agentHarness.getAgentToolPermissionCatalog(),
     );
   }
 

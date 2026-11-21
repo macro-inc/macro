@@ -1,0 +1,38 @@
+[package]
+name = "agent_permissions"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Per-agent tool permissions: which SDK operations an agent's code may call always, only after asking, or never."
+
+[dependencies]
+agent_correlation = { path = "../agent_correlation" }
+agent_fold = { path = "../folds/agent_fold", default-features = false }
+agent_permission_registry = { path = "../agent_permission_registry", features = ["openapi"] }
+ai_toolset = { path = "../ai_toolset" }
+async-trait = { workspace = true }
+axum = { workspace = true }
+bot_id = { path = "../bot_id", features = ["schema"] }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+rootcause = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_fold = { path = "../folds/agent_fold", default-features = false, features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["schema", "test-utils"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

@@ -106,6 +106,8 @@ impl ExecutionService {
             "code_execution.run",
             run_id = %run_id.0,
             check = tracing::field::Empty,
+            language = job.request.language.as_str(),
+            allowed_operations = job.environment.allowed_operations.as_ref().map(Vec::len),
             outcome = tracing::field::Empty,
         );
         self.tasks.spawn(
@@ -144,7 +146,9 @@ impl ExecutionService {
         token: CancellationToken,
     ) -> Outcome {
         let span = tracing::Span::current();
-        if job.environment.unattended.is_some() {
+        // A JS tools program isn't TypeScript: its run parses and analyzes
+        // it, and refuses one that doesn't.
+        if job.environment.unattended.is_some() || job.request.language == Language::JsTools {
             span.record("check", "skipped");
         } else if self.take_prechecked(job.environment.shape(), &job.request.source) {
             span.record("check", "prechecked");
@@ -252,6 +256,10 @@ impl ExecutionService {
         cancellation: CancellationToken,
     ) -> Result<(), Outcome> {
         let span = tracing::info_span!("code_execution.precheck", check = tracing::field::Empty);
+        if request.language == Language::JsTools {
+            span.record("check", "skipped");
+            return Ok(());
+        }
         if request.source.trim().is_empty() || request.source.len() > self.limits.max_source_bytes {
             span.record("check", "invalid");
             return Err(ExecutionFailure::new(

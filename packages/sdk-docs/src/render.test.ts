@@ -119,3 +119,21 @@ test('object aliases expose concrete fields while retaining linked types and des
   expect(request).toMatch(/^> .*\[`DynamicSchema`\]\(DynamicSchema\.md\)/m);
   expect(request).toContain('## Properties');
 });
+
+test('flagged declarations reach no output: tool permissions while their flag is off', async () => {
+  const files = await readdir(pages, { recursive: true });
+  expect(files.filter((file) => file.includes('tool-permissions'))).toEqual([]);
+  for (const [file, kept] of [
+    ['src/entities/agents/agent/classes/Agent.md', 'update()'],
+    ['src/entities/agents/namespace/classes/AgentNamespace.md', 'list()'],
+    [
+      'src/entities/agent-sessions/agent-session/classes/AgentSession.md',
+      'pendingApprovals()',
+    ],
+  ] as const) {
+    const markdown = await readFile(new URL(file, pages), 'utf8');
+    expect(markdown, file).toContain(kept);
+    expect(markdown, file).not.toMatch(/toolPermission|ToolPermission/);
+    expect(markdown, file).not.toContain('@flag');
+  }
+});

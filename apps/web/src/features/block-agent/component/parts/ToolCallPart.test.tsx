@@ -78,6 +78,21 @@ vi.mock('@app/features/dynamic-ui/DashboardToolView.lazy', () => ({
   ),
 }));
 
+// The blocked card reads the session's permissions through the query client;
+// a marker carrying the refused operations is enough here.
+vi.mock('@app/features/agent-permissions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/features/agent-permissions')>()),
+  BlockedPermissionsNotice: (props: {
+    operations: readonly { service: string; operation: string }[];
+  }) => (
+    <div data-testid="blocked-by-permissions">
+      {props.operations
+        .map((operation) => `${operation.service}.${operation.operation}`)
+        .join(',')}
+    </div>
+  ),
+}));
+
 // The entity link a finished email's outcome carries needs the query client
 // and the split layout; a marker carrying the id is enough here.
 vi.mock('@core/component/ItemPreview', () => ({
@@ -1611,6 +1626,77 @@ describe('code execution results', () => {
     ));
     expect(codeQuery.read).toHaveBeenCalledWith('session', id);
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+  });
+
+  // JS tools programs (opencode's JavaScript dialect) are gated; their
+  // records say so with `language: "js_tools"`.
+  const jsToolsSource =
+    'await tools.email.delete_label({ path: { id: "old" } })\nreturn null';
+  const jsToolsPart = (): ToolUsePart => {
+    const part = codePart('macro_internal');
+    if (part.detail.kind === 'other') {
+      part.detail.input = {
+        execution_id: executionId,
+        source: jsToolsSource,
+        language: 'js_tools',
+      };
+      part.detail.result = { executionId, status: 'failed', error: null };
+    }
+    return part;
+  };
+  const deleteLabel = {
+    service: 'email',
+    operation: 'delete_label',
+    label: 'Delete label',
+    group: 'email',
+    groupName: 'Email',
+    action: 'destroy',
+    state: 'never',
+    origin: 'group_action',
+  } as const;
+
+  it('shows the blocked card for a refused JS tools record', () => {
+    codeQuery.record = {
+      executionId,
+      source: jsToolsSource,
+      language: 'js_tools',
+      sdkFingerprint: '@opencode/codemode@2.3.2+0123456789ab',
+      status: 'failed',
+      calls: [],
+      activity: [],
+      permission: { outcome: 'blocked', operations: [deleteLabel] },
+    };
+    const rendered = render(() => (
+      <ToolCallPart part={jsToolsPart()} context={context(false)} />
+    ));
+    expect(rendered.getByTestId('blocked-by-permissions').textContent).toBe(
+      'email.delete_label'
+    );
+    expect(rendered.container.textContent).not.toContain(jsToolsSource);
+  });
+
+  it('shows a declined JS tools program as a quiet row', () => {
+    codeQuery.record = {
+      executionId,
+      source: jsToolsSource,
+      language: 'js_tools',
+      status: 'failed',
+      calls: [],
+      activity: [],
+      permission: {
+        outcome: 'declined',
+        status: 'denied',
+        operations: [{ ...deleteLabel, state: 'ask' }],
+      },
+    };
+    const rendered = render(() => (
+      <ToolCallPart part={jsToolsPart()} context={context(false)} />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe(
+      'Didn’t run a program that may delete email'
+    );
+    expect(rendered.getByTestId('trailing').textContent).toBe('Declined');
+    expect(rendered.queryByTestId('blocked-by-permissions')).toBeNull();
   });
 
   it('does not let an external MCP server select the code-mode record view', () => {

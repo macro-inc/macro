@@ -9,8 +9,11 @@ import type { ExecutionActivity } from './executionActivity';
 import type { ExecutionId } from './executionId';
 import type { ExecutionRecordActingAs } from './executionRecordActingAs';
 import type { ExecutionRecordError } from './executionRecordError';
+import type { ExecutionRecordPermission } from './executionRecordPermission';
+import type { ExecutionRecordSdkFingerprint } from './executionRecordSdkFingerprint';
 import type { ExecutionRecordTurnId } from './executionRecordTurnId';
 import type { ExecutionStatus } from './executionStatus';
+import type { ProgramLanguage } from './programLanguage';
 import type { RecordedToolCall } from './recordedToolCall';
 
 /**
@@ -29,9 +32,17 @@ export interface ExecutionRecord {
   error?: ExecutionRecordError;
   /** Execution identity. */
   executionId: ExecutionId;
+  /** The language `source` is written in; historical records are JavaScript.
+JavaScript, the default, is left out, so records of JavaScript
+programs serialize as they did before languages. */
+  language?: ProgramLanguage;
+  permission?: ExecutionRecordPermission;
   /** JSON returned by the program, if successful. */
   result?: unknown;
-  /** The submitted TypeScript module. */
+  /** For a JavaScript tools program, the fingerprint of the interpreter and
+catalog it ran with. */
+  sdkFingerprint?: ExecutionRecordSdkFingerprint;
+  /** The submitted program: a JavaScript module or a JS tools script. */
   source: string;
   /** Overall execution state. */
   status: ExecutionStatus;

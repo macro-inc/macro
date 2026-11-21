@@ -124,7 +124,13 @@ async fn somebody_elses_turn_runs_only_once_the_owner_approves() {
             serde_json::json!({ "limit": 3, "acting_as":"owner" })
         );
         rig.approvals
-            .answer(rig.session, held.id, ApprovalAnswer::Approve, &owner())
+            .answer(
+                rig.session,
+                held.id,
+                ApprovalAnswer::Approve,
+                &owner(),
+                true,
+            )
             .await
             .unwrap();
     };
@@ -142,7 +148,7 @@ async fn a_declined_call_is_refused_in_words_the_model_can_relay() {
         rig.heard.requested.notified().await;
         let held = rig.store.all().remove(0);
         rig.approvals
-            .answer(rig.session, held.id, ApprovalAnswer::Deny, &owner())
+            .answer(rig.session, held.id, ApprovalAnswer::Deny, &owner(), true)
             .await
             .unwrap();
     };
@@ -286,7 +292,13 @@ async fn abandoning_a_held_call_cancels_its_approval_and_a_later_approval_is_ref
     assert_eq!(held.status, ToolApprovalStatus::Cancelled);
     assert!(matches!(
         rig.approvals
-            .answer(rig.session, held.id, ApprovalAnswer::Approve, &owner())
+            .answer(
+                rig.session,
+                held.id,
+                ApprovalAnswer::Approve,
+                &owner(),
+                true
+            )
             .await,
         Err(agent_egress::domain::approval::ToolApprovalError::NotPending)
     ));

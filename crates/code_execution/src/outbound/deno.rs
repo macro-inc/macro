@@ -1,4 +1,6 @@
 //! Fresh Deno processes with run-only credentials and allowlisted API egress.
+//! JS tools programs run in the same bootstrap, in the interpreter
+//! `code_mode_assets::JS_TOOLS` bundles.
 
 use crate::domain::*;
 use async_trait::async_trait;
@@ -158,6 +160,13 @@ fn import_map(unattended: bool) -> String {
 }
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
+/// Where a JS tools program's source is written; its diagnostics name it.
+const JS_TOOLS_PROGRAM: &str = "main.js";
+/// The most tool calls one JS tools run makes.
+const JS_TOOLS_MAX_TOOL_CALLS: u16 = 256;
+/// What a JS tools run leaves of its deadline for the bootstrap to report how
+/// it ended: the interpreter stops this much before the process is stopped.
+const JS_TOOLS_REPORT_MARGIN: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// The supervisor owns process lifecycle; Deno owns the permission boundary.
 pub struct DenoRunner {
@@ -236,8 +245,35 @@ impl DenoRunner {
                 .await
                 .map_err(internal)?;
         }
-        // Programs are TypeScript; Deno strips their types on load.
-        tokio::fs::write(root.join("main.ts"), &job.request.source)
+        let language = job.request.language;
+        let program = match language {
+            // Only JS tools requests name their operation, so only those runs
+            // can be held to a set of them.
+            Language::Javascript if job.environment.allowed_operations.is_some() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "only JS tools programs can be limited to operations",
+                ));
+            }
+            Language::JsTools if job.environment.unattended.is_some() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Runtime,
+                    "JS tools programs can't run unattended",
+                ));
+            }
+            // A JS tools run is always held to the operations its check
+            // allowed, so a caller that skipped the check fails closed here.
+            Language::JsTools if job.environment.allowed_operations.is_none() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "JS tools programs run only with the operations they were checked to call",
+                ));
+            }
+            Language::JsTools => JS_TOOLS_PROGRAM,
+            // Programs are TypeScript; Deno strips their types on load.
+            Language::Javascript => "main.ts",
+        };
+        tokio::fs::write(root.join(program), &job.request.source)
             .await
             .map_err(internal)?;
         let bootstrap = root.join("bootstrap.mjs");
@@ -256,6 +292,19 @@ impl DenoRunner {
         tokio::fs::write(root.join("unavailable.mjs"), UNAVAILABLE)
             .await
             .map_err(internal)?;
+        // The interpreter and catalog sit in scratch like the SDK, so a JS
+        // tools run has exactly a JavaScript run's read permission.
+        if language == Language::JsTools {
+            tokio::fs::write(root.join("js-tools.mjs"), code_mode_assets::JS_TOOLS)
+                .await
+                .map_err(internal)?;
+            tokio::fs::write(
+                root.join("js-tools.json"),
+                code_mode_assets::JS_TOOLS_CATALOG,
+            )
+            .await
+            .map_err(internal)?;
+        }
         tokio::fs::write(
             root.join("imports.json"),
             import_map(job.environment.unattended.is_some()),
@@ -348,6 +397,7 @@ impl DenoRunner {
         let execution = async {
             let bridged = bridge(
                 &job.environment,
+                language,
                 forwarder,
                 ChildPipes {
                     stdin,
@@ -516,6 +566,23 @@ struct ChildContext<'a> {
     /// writes with, both for SDK operations and the requests they send.
     #[serde(skip_serializing_if = "Option::is_none")]
     operations: Option<&'static [CatalogEntry]>,
+    /// `js_tools` for a JS tools program (main.js); absent for JavaScript.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<&'static str>,
+    /// For a JS tools program, the interpreter's limits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    js_tools: Option<JsToolsLimits>,
+}
+
+/// What `@opencode/codemode` enforces on a JS tools run.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsToolsLimits {
+    /// The run's remaining deadline, less the margin to report how it ended.
+    timeout_ms: u32,
+    max_tool_calls: u16,
+    /// Bytes of result and logs the interpreter keeps: the frame limit.
+    max_output_bytes: usize,
 }
 
 #[derive(Serialize)]
@@ -556,7 +623,20 @@ enum ChildFrame {
     },
     Error {
         message: String,
+        /// Set when the program was refused before it ran.
+        #[serde(default)]
+        failure: Option<FrameFailure>,
     },
+}
+
+/// Why an error frame's program failed, when it's not a runtime error.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum FrameFailure {
+    /// A JS tools program that doesn't parse or can't be analyzed.
+    Compile,
+    /// A JS tools program its interpreter stopped at the deadline.
+    TimedOut,
 }
 
 /// The child's standard streams, which the bridge owns for the run.
@@ -568,6 +648,7 @@ struct ChildPipes {
 
 async fn bridge(
     environment: &RunEnvironment,
+    language: Language,
     forwarder: Option<&std::collections::BTreeMap<String, String>>,
     pipes: ChildPipes,
     events: &mut EventSink,
@@ -579,15 +660,26 @@ async fn bridge(
         stdout,
         stderr,
     } = pipes;
+    // Only the JS tools path sends a failure kind; any other program could
+    // write its own error frame.
+    let js_tools = language == Language::JsTools;
+    let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         forwarder,
         max_result_bytes: limits.max_result_bytes,
         max_calls_per_operation: limits.max_calls_per_operation,
-        remaining_ms: deadline
-            .saturating_duration_since(tokio::time::Instant::now())
-            .as_millis(),
+        remaining_ms: remaining.as_millis(),
         operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
+        language: js_tools.then(|| language.as_str()),
+        js_tools: js_tools.then(|| JsToolsLimits {
+            // Milliseconds as a u32 stay a safe JavaScript integer.
+            timeout_ms: u32::try_from(remaining.saturating_sub(JS_TOOLS_REPORT_MARGIN).as_millis())
+                .unwrap_or(u32::MAX)
+                .max(1),
+            max_tool_calls: JS_TOOLS_MAX_TOOL_CALLS,
+            max_output_bytes: limits.max_frame_bytes,
+        }),
     })
     .map_err(internal)?;
     initial.push(b'\n');
@@ -636,7 +728,13 @@ async fn bridge(
                         }
                         outcome = Some(Outcome::Succeeded { value });
                     }
-                    ChildFrame::Error { message } => outcome = Some(ExecutionFailure::new(FailureCode::Runtime, message).into()),
+                    ChildFrame::Error { message, failure } => {
+                        outcome = Some(match failure.filter(|_| js_tools) {
+                            Some(FrameFailure::Compile) => ExecutionFailure::new(FailureCode::Compile, message).into(),
+                            Some(FrameFailure::TimedOut) => Outcome::TimedOut,
+                            None => ExecutionFailure::new(FailureCode::Runtime, message).into(),
+                        });
+                    }
                 }
             }
             line = stderr.next(), if stderr_open => {
@@ -684,6 +782,7 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
     Ok(line)
 }
 
+pub mod analyze;
 pub mod check;
 mod egress;
 mod exit;

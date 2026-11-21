@@ -96,3 +96,15 @@ pub trait ProgramChecker: Send + Sync + 'static {
         imports: super::ProgramImports,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
 }
+
+/// Which SDK operations a program may call, found without running it.
+#[async_trait]
+pub trait ProgramAnalyzer: Send + Sync + 'static {
+    /// The fingerprint of the SDK programs are analyzed against.
+    fn sdk_fingerprint(&self) -> &str;
+
+    /// Compile `source` far enough to read its typed tree, then list the SDK
+    /// operations it names. Branches are not considered: an operation named
+    /// anywhere counts.
+    async fn may_call(&self, source: &str) -> Result<super::Analysis, super::CheckError>;
+}
