@@ -7,7 +7,8 @@
  * the list's own `isLoading()` covers. Per round, both sides mount the full
  * list (every bucket) and are sampled every 250 ms for 30 s: the time the
  * probe called them settled, the person rows then, the person rows at the end,
- * and whether the two sides' id lists are equal at the end. Person ids are
+ * whether the two sides' id lists are equal at the end, and the rows only one
+ * side lists (bucket, opened or not, name; never a person's). Person ids are
  * counted, never printed. Fresh synthetic user; needs run.sh's two Vites.
  */
 import { ApiUser } from '../lib/api';
@@ -20,7 +21,7 @@ const user = await new ApiUser('https://localhost:23209', email).login();
 const probe = { new: '/src/difftest-probe/new.tsx', old: '/src/difftest-probe/old.tsx' };
 const sides: Side[] = ['old', 'new'];
 const label = (side: Side) => (side === 'old' ? 'main' : 'branch');
-type Item = { id?: string; bucket?: string };
+type Item = { id?: string; bucket?: string; name?: string; viewedAt?: unknown; timestamps?: { viewedAt?: unknown } };
 const b = await launch();
 try {
   const s = await openUser(b, { new: 'http://localhost:23250', old: 'http://localhost:23251' }, email, probe, user.browserCookies());
@@ -33,6 +34,7 @@ try {
     const settledAt: Partial<Record<Side, number>> = {};
     const atSettle: Partial<Record<Side, number>> = {};
     const lastIds: Partial<Record<Side, string[]>> = {};
+    const lastItems: Partial<Record<Side, Item[]>> = {};
     const peopleAt: Record<string, [number, number][]> = { main: [], branch: [] };
     while (Date.now() - t0 < 30_000) {
       for (const side of sides) {
@@ -46,6 +48,7 @@ try {
         const series = peopleAt[label(side)];
         if (series.at(-1)?.[1] !== people) series.push([Date.now() - t0, people]);
         lastIds[side] = items.map((i) => i.id ?? '');
+        lastItems[side] = items;
       }
       await Bun.sleep(250);
     }
@@ -57,6 +60,14 @@ try {
         rowsAt30s: lastIds[side]?.length ?? 0,
         peopleOverTime: peopleAt[label(side)],
       };
+    // The rows one side lists and the other doesn't: bucket, whether the user
+    // ever opened it, and its name (never for people).
+    for (const side of sides) {
+      const other = new Set(lastIds[side === 'old' ? 'new' : 'old'] ?? []);
+      (row[label(side)] as Record<string, unknown>).onlyHere = (lastItems[side] ?? [])
+        .filter((i) => !other.has(i.id ?? ''))
+        .map((i) => ({ bucket: i.bucket, opened: (i.viewedAt ?? i.timestamps?.viewedAt) != null, name: i.bucket === 'person' ? undefined : i.name }));
+    }
     row.equalAt30s = JSON.stringify(lastIds.old) === JSON.stringify(lastIds.new);
     await Promise.all(sides.map((side) => unmount(s.pages[side], key)));
     out.push(row);
