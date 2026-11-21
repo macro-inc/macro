@@ -309,7 +309,9 @@ impl Schema {
                 .is_some_and(|t| t.possible_types.iter().any(|name| name == concrete))
     }
 }
-/// SDL embedded for legacy callers and tests; production hosts supply bundle SDL.
+/// SDL embedded in this build. The browser engine's build script turns it into
+/// lookup tables (`cache-wasm/build.rs`); native hosts supply their bundle's SDL;
+/// tests and legacy callers parse it here.
 pub const BUNDLED_SCHEMA_SDL: &str = include_str!("../../../../static_assets/schema.graphql");
 /// Fingerprint of the SDL embedded in this build, for diagnostics.
 pub const SCHEMA_HASH: &str = env!("CACHE_BUNDLED_SCHEMA_HASH");
