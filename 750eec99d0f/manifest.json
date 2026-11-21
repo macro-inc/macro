@@ -1,0 +1,33 @@
+{
+  "head": "750eec99d0fc1c9900cfb0e91461e3a63f11b39e",
+  "recorded": "2026-11-21",
+  "result": "partial proof; forced refusal pending",
+  "environment": "local isolated real Macro stack; synthetic Dovecot and Mailpit stand-ins; local passwordless authentication",
+  "verified": [
+    "wrong password422 and successful retry200",
+    "initial import appears without reload",
+    "new arrival appears without reload",
+    "one SMTP acceptance and matching IMAP Sent copy",
+    "Connect another account opens and cancels",
+    "two replies share original thread",
+    "restart stable message IDs and UIDs, one outgoing SMTP submission"
+  ],
+  "notVerified": [
+    "forced SMTP550 refusal: prior attempt stuck before RCPT on idle-closed pooled connection; fix pending",
+    "real-provider delivery or Fastmail sync/send/reply",
+    "phone, notch, dark mode at this head",
+    "unpublished routing/UI/backend audit fixes"
+  ],
+  "deliveryStandIn": "Captured Mailpit MIME was appended unchanged into controlled recipient INBOX; Mailpit accepts SMTP but does not prove recipient delivery.",
+  "review": "Full MP4 decode plus every6s contactsheets, final frame and all screenshots inspected. Private addressbar masked; test content only.",
+  "files": {
+    "imap-smtp-lab-partial-750.mp4": "026e47b463be8ddcab995073b44346d6035c6411c29c07c34ab89bc160226994",
+    "00-before-empty-inbox.png": "2637dad9e3bb490802c1efd2ae42e360579d92c888f0832148ad78c285d3c632",
+    "00-first-sync-pending.png": "83dc04d3fa0c3a34891088411f0c5782bdc7993d1b2337b066d6e6319c014721",
+    "01-initial.png": "c97379054321ee5ba8150432ca7e0ef07df326bb4578b3d88c14588422be7eaa",
+    "02-live-arrival.png": "d3bc567fe5ec627dfeb5aca4b27672e9a144dd3b2eeccec5362932b4e6f546fb",
+    "03-outbound.png": "a7c35c8648cb67607042d3e405970dd840f09b0a7a320ba551b737c2d23610a0",
+    "04-thread.png": "ea8983179979f73ebb135726096408ea36edcc3036f216efa4a36f4675ab98b0",
+    "05-recovered.png": "3ecc0f7814dc683278ecbfa67c65114a9e9deb7f70ce8af3b03668e1c66778e0"
+  }
+}
