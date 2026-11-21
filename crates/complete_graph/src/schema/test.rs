@@ -49,6 +49,8 @@ use super::*;
 mod active_notification_ids;
 mod calendar;
 mod channel;
+mod channel_messages;
+mod channel_perf;
 mod contacts;
 mod crm_member_access;
 mod crm_record;
@@ -1163,10 +1165,11 @@ fn full_message(thread_id: Uuid) -> Message {
 }
 
 /// Entity access service whose team lookups are counted and return a team,
-/// and which grants View on the configured email threads only.
+/// and which grants View on the configured channels and email threads only.
 #[derive(Clone, Default)]
 struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
+    viewable_channels: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
     viewable_crm_records: Arc<Mutex<std::collections::HashSet<(EntityType, String)>>>,
@@ -1200,6 +1203,12 @@ impl EntityAccessService for CountingEntityAccessService {
                     },
                 );
             }
+            (EntityType::Channel, _) => self
+                .viewable_channels
+                .lock()
+                .unwrap()
+                .contains(&Uuid::parse_str(entity_id).unwrap())
+                .then_some(AccessLevel::View),
             (EntityType::EmailThread, _) => {
                 let thread_id = Uuid::parse_str(entity_id).unwrap();
                 self.email_thread_checks.lock().unwrap().push(thread_id);
@@ -1232,6 +1241,7 @@ impl EntityAccessService for CountingEntityAccessService {
             EntityType::Database
                 | EntityType::Form
                 | EntityType::EmailThread
+                | EntityType::Channel
                 | EntityType::CrmCompany
                 | EntityType::CrmContact
                 | EntityType::CrmPipeline

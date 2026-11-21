@@ -13,6 +13,8 @@ export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
     kind === 'contact-snapshot' ||
     kind === 'entity-filter' ||
     kind === 'calendar-range' ||
+    kind === 'channel-timeline' ||
+    kind === 'channel-timeline-stats' ||
     kind === 'people-context' ||
     kind === 'people-search' ||
     kind === 'inspect-mutations' ||
@@ -47,7 +49,8 @@ export function cacheRequestStamp(
   if (
     isReadOnlyCacheRequest(kind) ||
     kind === 'invalidate' ||
-    kind === 'delete-records'
+    kind === 'delete-records' ||
+    kind === 'channel-timeline-evict'
   )
     return 'observed';
   if (isControlCacheRequest(kind)) return 'none';

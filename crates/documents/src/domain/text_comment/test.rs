@@ -52,6 +52,7 @@ fn posted(input: &PostMessage) -> Message {
         sender_id: ChannelSender::try_from(USER.to_owned()).unwrap(),
         guest_name: None,
         imported_author: None,
+        import_order: None,
         bot_profile: None,
         mentions: vec![],
         triggered_via: None,

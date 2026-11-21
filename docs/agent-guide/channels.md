@@ -1695,6 +1695,8 @@ a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
 older cached notifications. Failed server lookups and successful server lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.
+A lookup that got no response, as without a connection, opens the channel from
+what the cache holds of it, however many newer channels the person has.
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
 

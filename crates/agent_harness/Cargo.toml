@@ -70,6 +70,7 @@ model_owner = { path = "../model_owner" }
 notification = { path = "../notification" }
 shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
 messages = { path = "../messages", features = ["broker", "ports"] }
+message_write_gate = { path = "../message_write_gate" }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }

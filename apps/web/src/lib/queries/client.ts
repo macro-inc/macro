@@ -4,7 +4,6 @@ import {
 } from '@core/mobile/native-network-status';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
-import { thrownResultErrorHasCode } from '@core/util/result';
 import { startupAuthorityHint } from '@graphql-cache/generation-mirror';
 import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import {
@@ -18,6 +17,7 @@ import { authKeys } from './auth/keys';
 import { traceQueriesToFlows } from './flow-trace';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
+import { defaultQueryRetry } from './retry';
 import { initSoupNormalizer } from './soup/normalized-cache/normalizer';
 
 export const queryClient = new QueryClient({
@@ -26,18 +26,7 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // 5 minutes
       gcTime: 1000 * 60 * 10, // 10 minutes
       refetchOnWindowFocus: false,
-      // Auth failures are terminal within a session — fetchWithToken already
-      // refreshes and retries the token internally, so a query-level retry just
-      // repeats the doomed request.
-      retry: (failureCount, error) => {
-        if (
-          thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
-          thrownResultErrorHasCode(error, 'FORBIDDEN')
-        ) {
-          return false;
-        }
-        return failureCount < 1;
-      },
+      retry: defaultQueryRetry,
     },
   },
 });

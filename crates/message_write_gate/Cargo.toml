@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "message_write_gate"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+tokio = { workspace = true, features = ["sync", "time"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

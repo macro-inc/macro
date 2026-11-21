@@ -84,7 +84,9 @@ cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 feature_flags = { path = "../../crates/feature_flags" }
 channel_bots = { path = "../../crates/channel_bots" }
+channel_change_db_utils = { path = "../../crates/channel_change_db_utils" }
 messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
+message_write_gate = { path = "../../crates/message_write_gate" }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
@@ -174,6 +176,7 @@ graphql_initiative = { path = "../../crates/graphql_initiative" }
 graphql_databases = { path = "../../crates/graphql_databases" }
 
 graphql_calendar = { path = "../../crates/graphql_calendar" }
+graphql_channel = { path = "../../crates/graphql_channel" }
 graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
@@ -333,6 +336,7 @@ tokio-tungstenite = { workspace = true }
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }

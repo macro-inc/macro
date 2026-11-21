@@ -7,6 +7,7 @@ mod timeline;
 
 mod agent_activity;
 mod entity_history;
+mod ids;
 
 use std::collections::HashMap;
 use std::num::{NonZeroU32, NonZeroU64};
@@ -23,8 +24,8 @@ use crate::domain::{
     },
     overview::{ActivityOverview, ActivityWindow, DayCount, EntityRank, TOP_ENTITY_LIMIT},
     ports::{
-        ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap,
-        SubjectActivityPresence,
+        ActivityFeedPage, ActivityRange, ActivityReads, ActivityReceipt, ActivityRepo,
+        EntityActivityMap, SubjectActivityPresence,
     },
 };
 
@@ -175,8 +176,12 @@ where
 impl ActivityRepo for PgActivityRepo {
     type Err = sqlx::Error;
 
-    async fn insert_activities(&self, activities: &[Activity]) -> Result<(), Self::Err> {
-        insert_activities(&self.pool, activities).await
+    async fn insert_activities(
+        &self,
+        activities: &[Activity],
+    ) -> Result<Vec<ActivityReceipt>, Self::Err> {
+        insert_activities(&self.pool, activities).await?;
+        Ok(Vec::new())
     }
 
     async fn purge_entities(&self, entities: &[(EntityType, String)]) -> Result<(), Self::Err> {

@@ -9,7 +9,10 @@ import {
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
+import { defaultQueryRetry } from '../retry';
 import { messageKeys } from './keys';
+import { channelReadNetworkMode, retryOnceOnline } from './local/flag';
+import { loadLocalChannelThread } from './local/source';
 import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
 import { findTopLevelMessageInMessageTimeline } from './timeline';
@@ -28,6 +31,11 @@ export async function fetchMessageThread(
   parent: MessageParent,
   rootId: string
 ): Promise<MessageThread> {
+  if (parent.type === 'channel') {
+    // The device cache answers a thread it holds; undefined reads over REST.
+    const local = await loadLocalChannelThread(parent.id, rootId);
+    if (local) return local;
+  }
   return normalizeMessageThreadSenders(
     await entityMessagesClient.thread(parent, rootId)
   );
@@ -37,9 +45,16 @@ export function threadRepliesQueryOptions(
   parent: MessageParent,
   messageId: string
 ) {
+  const networkMode = channelReadNetworkMode(parent);
   return {
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
     queryFn: () => fetchMessageThread(parent, messageId),
+    networkMode,
+    // Only a read that runs offline can fail offline; other reads keep the
+    // retry their caller gives them.
+    ...(networkMode === 'offlineFirst' && {
+      retry: retryOnceOnline(defaultQueryRetry),
+    }),
     staleTime: Infinity,
   };
 }

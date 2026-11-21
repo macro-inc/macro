@@ -1,6 +1,7 @@
 use super::*;
 use chrono::DateTime;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use messages::domain::ports::MessageError;
 use opentelemetry::trace::{SpanId, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use rootcause::Report;
@@ -36,6 +37,18 @@ impl CalendarChangeLogPruner for Pruner {
         _batch: usize,
     ) -> Result<usize, Report> {
         Ok(7)
+    }
+}
+
+struct ChannelPruner;
+
+impl ChannelChangeLogPruner for ChannelPruner {
+    async fn prune_channel_change_log(
+        &self,
+        _cutoff: DateTime<Utc>,
+        _batch: usize,
+    ) -> Result<usize, MessageError> {
+        Ok(0)
     }
 }
 
@@ -87,6 +100,7 @@ async fn each_scheduler_round_is_its_own_finished_root_span(db: PgPool) {
         queue.clone(),
         GoogleCalendarSyncScheduler::new(Syncs(token.clone())),
         CalendarChangeLogRetention::new(Pruner),
+        ChannelChangeLogRetention::new(ChannelPruner),
         true,
         token,
     )

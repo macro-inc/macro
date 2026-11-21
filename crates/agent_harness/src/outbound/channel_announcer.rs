@@ -359,6 +359,21 @@ impl<Access> MessageAnnouncer<Access> {
 }
 
 impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> {
+    async fn with_write_admission<F>(
+        &self,
+        parent: &MessageParent,
+        operation: F,
+    ) -> Result<F::Output>
+    where
+        F: std::future::Future + Send,
+        F::Output: Send,
+    {
+        let permit = message_write_gate::acquire(parent.entity_type(), &parent.entity_id())
+            .await
+            .map_err(|error| HarnessError::ReplyBusy(rootcause::report!(error).into()))?;
+        Ok(permit.scope(operation).await)
+    }
+
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         let access = self
             .bot_write(
@@ -397,7 +412,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     },
                 )
                 .await
-                .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+                .map_err(message_error)?;
             return Ok(AnnouncedMessage {
                 message_id: announcement.origin_message_id,
             });
@@ -424,7 +439,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             Some(id) => self.messages.post_from_event(access, id, input).await,
             None => self.messages.post(access, input).await,
         }
-        .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        .map_err(message_error)?;
         Ok(AnnouncedMessage {
             message_id: posted.id,
         })
@@ -495,7 +510,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 tracing::info!(%message_id, "pending reply was deleted; dropping the answer");
                 Ok(())
             }
-            Err(error) => Err(HarnessError::Announce(rootcause::report!(error).into())),
+            Err(error) => Err(message_error(error)),
         }
     }
 
@@ -524,7 +539,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     },
                 )
                 .await
-                .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+                .map_err(message_error)?;
             return Ok(());
         }
         self.messages
@@ -549,7 +564,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 },
             )
             .await
-            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+            .map_err(message_error)?;
         Ok(())
     }
 
@@ -608,7 +623,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 },
             )
             .await
-            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+            .map_err(message_error)?;
         // A participant deleted it while the agent ran: they did not want it.
         if shown.deleted_at.is_some() || shown.content == content {
             return Ok(());
@@ -631,7 +646,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .await
         {
             Ok(_) | Err(MessageError::NotFound) => Ok(()),
-            Err(error) => Err(HarnessError::Announce(rootcause::report!(error).into())),
+            Err(error) => Err(message_error(error)),
         }
     }
 
@@ -650,6 +665,13 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 },
             )
             .await
-            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
+            .map_err(message_error)
+    }
+}
+
+fn message_error(error: MessageError) -> HarnessError {
+    match error {
+        MessageError::Contended(_) => HarnessError::ReplyBusy(rootcause::report!(error).into()),
+        _ => HarnessError::Announce(rootcause::report!(error).into()),
     }
 }

@@ -6,6 +6,7 @@
  */
 import type { MessageChange } from './messageChange';
 import type { MessageEventNonce } from './messageEventNonce';
+import type { MessageEventSeq } from './messageEventSeq';
 import type { MessageParent } from './messageParent';
 
 /**
@@ -20,4 +21,6 @@ export interface MessageEvent {
   nonce?: MessageEventNonce;
   /** Changed parent, used for subscriptions and cache invalidation. */
   parent: MessageParent;
+  /** Committed channel change position; absent for other parents and typing. */
+  seq?: MessageEventSeq;
 }

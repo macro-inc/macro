@@ -441,7 +441,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
                 },
             })
             .await;
-        let message = match result {
+        let (message, seq) = match result {
             Err(MessageError::Conflict) => {
                 return self
                     .messages
@@ -454,6 +454,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
         };
         self.messages
             .publish(MessageEvent {
+                seq,
                 parent,
                 actor: actor.as_ref().to_owned(),
                 nonce: None,
@@ -691,7 +692,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 "Enter a message of at most 16000 characters",
             ));
         }
-        let message = self
+        let (message, seq) = self
             .messages
             .repo
             .edit(
@@ -708,6 +709,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
             .await?;
         self.messages
             .publish(MessageEvent {
+                seq,
                 parent,
                 actor: actor.as_ref().to_owned(),
                 nonce: None,
@@ -736,12 +738,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if current.sender_id != actor {
             return Err(MessageError::Forbidden);
         }
-        let message = self.messages.repo.delete(&parent, id).await?;
+        let (message, seq) = self.messages.repo.delete(&parent, id).await?;
         self.messages
             .publish_message(
                 actor,
                 None,
                 &message,
+                seq,
                 MessageChange::MessageDeleted {
                     message: message.clone(),
                 },
@@ -767,7 +770,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let ReactionResult { message, changed } = self
+        let ReactionResult {
+            message,
+            changed,
+            seq,
+        } = self
             .messages
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
@@ -778,6 +785,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                     actor,
                     nonce,
                     &message,
+                    seq,
                     MessageChange::ReactionChanged {
                         message: message.clone(),
                         emoji,

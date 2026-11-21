@@ -42,6 +42,7 @@ use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 mod authority;
 mod calendar;
+mod channel_timeline;
 mod people;
 #[cfg(test)]
 mod test;

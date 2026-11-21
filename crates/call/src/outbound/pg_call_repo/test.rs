@@ -23,6 +23,8 @@ use models_permissions::share_permission::{LinkShare, UpdateSharePermissionReque
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+mod channel_changes;
+
 fn attended_filter(b: bool) -> LiteralTree<CallLiteral> {
     Some(Arc::new(Expr::Literal(CallLiteral::Attended(b))))
 }

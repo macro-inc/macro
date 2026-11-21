@@ -24,6 +24,11 @@ import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
+import { channelReadNetworkMode, retryOnceOnline } from './local/flag';
+import {
+  loadLocalChannelTimelinePage,
+  resolveLocalChannelMessage,
+} from './local/source';
 import {
   normalizeChannelMessageSender,
   normalizeMessageTimelinePageSenders,
@@ -91,6 +96,10 @@ export function fetchResolvedChannelMessage(
   return queryClient.fetchQuery({
     queryKey: messageKeys.resolveMessage(parent, messageId).queryKey,
     queryFn: async () => {
+      if (parent.type === 'channel') {
+        const local = await resolveLocalChannelMessage(parent.id, messageId);
+        if (local) return { ...local, parent };
+      }
       const message = await entityMessagesClient.get(parent, messageId);
       return {
         id: message.id,
@@ -194,8 +203,23 @@ function trackMessageTimelineLoad(
 async function fetchMessageTimelinePage(
   parent: MessageParent,
   pageParam: MessageTimelinePageParam | null,
-  loadAroundMessageId: string | null
+  loadAroundMessageId: string | null,
+  options: { signal?: AbortSignal; revalidate?: boolean } = {}
 ): Promise<MessageTimelinePage> {
+  if (parent.type === 'channel') {
+    // Channels read from the device cache when it can serve them; it answers
+    // undefined for anyone still on REST and for a read it could not serve.
+    const local = await loadLocalChannelTimelinePage({
+      channelId: parent.id,
+      limit: pageParam ? 100 : 50,
+      older: pageParam?.next_cursor,
+      newer: pageParam?.next_cursor ? null : pageParam?.previous_cursor,
+      aroundMessageId: pageParam ? null : loadAroundMessageId,
+      revalidate: options.revalidate,
+      signal: options.signal,
+    });
+    if (local) return local;
+  }
   const page = await entityMessagesClient.timeline(parent, {
     limit: pageParam ? 100 : 50,
     cursor: pageParam?.next_cursor ?? pageParam?.previous_cursor,
@@ -212,6 +236,19 @@ export function messageTimelineQueryOptions(
   parent: MessageParent,
   loadAroundMessageId: string | null
 ) {
+  const networkMode = channelReadNetworkMode(parent);
+  const retryPolicy = (failureCount: number, error: Error) => {
+    if (loadAroundMessageId && isMissingMessageError(error)) {
+      return false;
+    }
+    if (
+      thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+      thrownResultErrorHasCode(error, 'FORBIDDEN')
+    ) {
+      return false;
+    }
+    return failureCount < 1;
+  };
   return {
     queryKey: messageKeys.messages(parent, loadAroundMessageId).queryKey,
     queryFn: async ({
@@ -224,13 +261,14 @@ export function messageTimelineQueryOptions(
       // Observe cancellation so a restarted refetch stops paging its old result.
       signal?.throwIfAborted();
       if (pageParam) {
-        return fetchMessageTimelinePage(parent, pageParam, null);
+        return fetchMessageTimelinePage(parent, pageParam, null, { signal });
       }
       if (loadAroundMessageId) {
         const page = await fetchMessageTimelinePage(
           parent,
           null,
-          loadAroundMessageId
+          loadAroundMessageId,
+          { signal }
         );
         trackMessageTimelineLoad(parent, {
           path: 'full',
@@ -245,7 +283,9 @@ export function messageTimelineQueryOptions(
       }
       const watermark = readMessageTimelineWatermark(parent);
       if (watermark.kind !== 'ready') {
-        const page = await fetchMessageTimelinePage(parent, null, null);
+        const page = await fetchMessageTimelinePage(parent, null, null, {
+          signal,
+        });
         trackMessageTimelineLoad(parent, {
           path: 'full',
           reason: watermark.kind,
@@ -255,7 +295,12 @@ export function messageTimelineQueryOptions(
       if (parent.type === 'channel') {
         // Replies, reactions, edits and deletions do not advance a root's
         // created-at cursor. Revalidate its preview even when no root is new.
-        const page = await fetchMessageTimelinePage(parent, null, null);
+        // With the device cache this replays the channel's changes since its
+        // sequence and reads the page locally instead of fetching it again.
+        const page = await fetchMessageTimelinePage(parent, null, null, {
+          signal,
+          revalidate: true,
+        });
         trackMessageTimelineLoad(parent, {
           path: 'full',
           reason: 'revalidate',
@@ -309,19 +354,13 @@ export function messageTimelineQueryOptions(
             previous_cursor: firstPage.previous_cursor,
           }
         : null,
+    networkMode,
     staleTime: Infinity,
-    retry: (failureCount: number, error: Error) => {
-      if (loadAroundMessageId && isMissingMessageError(error)) {
-        return false;
-      }
-      if (
-        thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
-        thrownResultErrorHasCode(error, 'FORBIDDEN')
-      ) {
-        return false;
-      }
-      return failureCount < 1;
-    },
+    // Only a read that runs offline can fail offline.
+    retry:
+      networkMode === 'offlineFirst'
+        ? retryOnceOnline(retryPolicy)
+        : retryPolicy,
   };
 }
 

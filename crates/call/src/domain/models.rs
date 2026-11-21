@@ -927,6 +927,9 @@ pub enum CallError {
     /// stale team-share revision); the caller should reload and retry.
     #[error("conflict: {0}")]
     Conflict(String),
+    /// Message admission is busy; no call status change was committed.
+    #[error("channel is busy; retry the request")]
+    Contended(rootcause::Report),
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),

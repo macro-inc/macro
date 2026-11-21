@@ -206,6 +206,62 @@ it.each([
   }
 );
 
+it('opens a channel the cache holds when the request gets no response', async () => {
+  const { detail } = setup({ cached: channelPage('one') });
+  (await transport.requests.next()).respond(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  await transport.results.next();
+  await transport.results.next();
+  expect(detail.view().status).toBe('ready');
+});
+
+it('keeps a removed channel hidden when its confirmation gets no response', async () => {
+  const { detail } = setup();
+  (await transport.requests.next()).respond(channelPage());
+  await transport.results.next();
+  expect(detail.view().status).toBe('unavailable');
+  await transport.cache(channelPage('one'));
+  (await transport.requests.next()).respond(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  await transport.results.next();
+  await transport.cache(channelPage('one'));
+  expect(detail.view().status).toBe('unavailable');
+});
+
+it('keeps a denied channel hidden when its confirmation gets no response', async () => {
+  const { detail } = setup();
+  (await transport.requests.next()).respond(
+    undefined,
+    new CombinedError({ graphQLErrors: [{ message: 'Forbidden' }] })
+  );
+  await transport.results.next();
+  const before = detail.view().status;
+  await transport.cache(channelPage('one'));
+  (await transport.requests.next()).respond(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  await transport.results.next();
+  await transport.cache(channelPage('one'));
+  expect(detail.view().status).toBe(before);
+  expect(before).not.toBe('ready');
+});
+
+it('stays unavailable when the request gets no response and the cache holds nothing', async () => {
+  const { detail } = setup({ cached: channelPage() });
+  (await transport.requests.next()).respond(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  await transport.results.next();
+  await transport.results.next();
+  expect(detail.view().status).toBe('unavailable');
+});
+
 it('confirms a cold cache-only absence before declaring the channel unavailable', async () => {
   const { detail } = setup({
     requestPolicy: 'cache-first',

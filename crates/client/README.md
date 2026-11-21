@@ -285,6 +285,12 @@ the predicate/collation; older local schema-12 shapes without it are incompatibl
 not silently upgraded. No additional format/version cutover or contacts store was
 introduced.
 
+Storage schema 13 adds the channel timeline tables (`channel_timeline`,
+`channel_coverage`, `channel_sync`) the same way: an incompatible cutover, not a
+migration. Native `open_or_reset` replaces a schema-12 cache with its queued
+mutations; browsers open a fresh `s4.v4.t13` database. Native binaries must be
+rebuilt to gain the tables and the commands that read them.
+
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
 measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.

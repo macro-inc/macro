@@ -574,6 +574,18 @@ export const enableSoupFilterPersistence = defineFlag({
   env: 'ENABLE_SOUP_FILTER_PERSISTENCE',
 });
 
+/**
+ * Channel messages read from the device cache and are written through its
+ * queue (`queries/messages/local`); off, channels use REST. Needs the GraphQL
+ * cache. No default, dev included: off until PostHog answers on, because the
+ * rollout moves where messages are stored and sent. A local or CI bundle has
+ * no PostHog and sets `VITE_ENABLE_CHANNEL_LOCAL_SYNC` at build time.
+ */
+export const enableChannelLocalSync = defineFlag({
+  key: 'enable-channel-local-sync',
+  env: 'ENABLE_CHANNEL_LOCAL_SYNC',
+});
+
 export const enableSupportedSoupForeignEntities = defineFlag({
   key: 'enable-supported-soup-foreign-entities',
   default: onInDev,

@@ -31,6 +31,13 @@ import {
   type CalendarCommitCacheResult,
   type CalendarRangeCacheArgs,
   type CalendarRangeCacheResult,
+  type ChannelTimelineCacheArgs,
+  type ChannelTimelineCacheResult,
+  type ChannelTimelineCommitArgs,
+  type ChannelTimelineCommitCacheResult,
+  type ChannelTimelineEvictArgs,
+  type ChannelTimelineEvictCacheResult,
+  type ChannelTimelineStatsCacheResult,
   type ClaimedMutation,
   type CommitOptimisticWriteResult,
   type DeferOptimisticWriteResult,
@@ -1630,6 +1637,41 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         commit: args,
         generation,
       })) as CalendarCommitCacheResult;
+    },
+
+    async channelTimeline(
+      args: ChannelTimelineCacheArgs
+    ): Promise<ChannelTimelineCacheResult> {
+      return (await initializedRequest({
+        kind: 'channel-timeline',
+        request: args,
+      })) as ChannelTimelineCacheResult;
+    },
+
+    async channelTimelineCommit(
+      args: ChannelTimelineCommitArgs,
+      generation: string
+    ): Promise<ChannelTimelineCommitCacheResult> {
+      return (await initializedRequest({
+        kind: 'channel-timeline-commit',
+        commit: args,
+        generation,
+      })) as ChannelTimelineCommitCacheResult;
+    },
+
+    async channelTimelineEvict(
+      args: ChannelTimelineEvictArgs
+    ): Promise<ChannelTimelineEvictCacheResult> {
+      return (await initializedRequest({
+        kind: 'channel-timeline-evict',
+        eviction: args,
+      })) as ChannelTimelineEvictCacheResult;
+    },
+
+    async channelTimelineStats(): Promise<ChannelTimelineStatsCacheResult> {
+      return (await initializedRequest({
+        kind: 'channel-timeline-stats',
+      })) as ChannelTimelineStatsCacheResult;
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

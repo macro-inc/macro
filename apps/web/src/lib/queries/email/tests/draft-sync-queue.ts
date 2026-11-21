@@ -381,6 +381,10 @@ export function createQueue(activity: () => void) {
       entityFilter: answer(() => ({ kind: 'unsupported' as const })),
       calendarRange: answer(() => ({ kind: 'unsupported' as const })),
       calendarCommit: answer(() => ({ kind: 'unsupported' as const })),
+      channelTimeline: answer(() => ({ kind: 'unsupported' as const })),
+      channelTimelineCommit: answer(() => ({ kind: 'unsupported' as const })),
+      channelTimelineEvict: answer(() => ({ kind: 'unsupported' as const })),
+      channelTimelineStats: answer(() => ({ kind: 'unsupported' as const })),
       writeQuery: answer(() => WRITTEN),
       hydrateQuery: answer((args: { data: unknown }) => ({
         kind: 'data' as const,

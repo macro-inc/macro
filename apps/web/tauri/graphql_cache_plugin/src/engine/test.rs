@@ -3,6 +3,7 @@ use pollster::block_on;
 
 mod authority;
 mod calendar;
+mod channel_timeline;
 mod people;
 mod soup;
 mod watch;

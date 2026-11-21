@@ -85,6 +85,11 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     calendarRange: (args) => current.calendarRange(args),
     calendarCommit: (args, generation) =>
       current.calendarCommit(args, generation),
+    channelTimeline: (args) => current.channelTimeline(args),
+    channelTimelineCommit: (args, generation) =>
+      current.channelTimelineCommit(args, generation),
+    channelTimelineEvict: (args) => current.channelTimelineEvict(args),
+    channelTimelineStats: () => current.channelTimelineStats(),
     writeQuery: (args) => current.writeQuery(args),
     hydrateQuery: (args) => current.hydrateQuery(args),
     enqueueOptimisticMutation: (args, claim) =>
