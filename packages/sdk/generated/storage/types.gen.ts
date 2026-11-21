@@ -4016,7 +4016,8 @@ export type ChannelTopicEvent = {
     event_type: 'channel.updated';
     /**
      * A channel's settings were patched (a rename, a team conversion, or an
-     * auto-join change); the names are equal when it was not a rename.
+     * auto-join change), or the bots in it changed; the names are equal when
+     * it was not a rename.
      */
     metadata: ChannelUpdatedMetadata;
 } | {
