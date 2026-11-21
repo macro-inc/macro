@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO time_entry (id, task_id, user_id, entry_date, minutes, note, started_at, ended_at, source)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n        ON CONFLICT (id) DO NOTHING\n        RETURNING id, task_id, user_id, entry_date, minutes, note, started_at, ended_at,\n                  source AS \"source: TimeEntrySource\", created_at, updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entry_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "source: TimeEntrySource",
+        "type_info": {
+          "Custom": {
+            "name": "time_entry_source",
+            "kind": {
+              "Enum": [
+                "manual",
+                "timer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Date",
+        "Int4",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        {
+          "Custom": {
+            "name": "time_entry_source",
+            "kind": {
+              "Enum": [
+                "manual",
+                "timer"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6abe7f5fa4d5e92e215e8b6fd17c127aed40c7cb4faf9a3c70572f54ce4d9ade"
+}

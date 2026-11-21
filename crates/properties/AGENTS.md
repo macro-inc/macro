@@ -67,6 +67,12 @@ events to the `macro.properties` Kafka topic.
   backstop and raises a bare exception, which would surface as a 500. Database
   columns live in their database's own namespace and are not checked.
 
+- Time logged (`SystemPropertyKey::TimeLogged`, `0x16`) is the sum of a task's
+  time entries, written only by `crates/time_tracking`. Every value mutator
+  calls `reject_derived_property` first and answers a validation error, for
+  internal callers too; a new value mutator calls it as well. Deleting all of
+  an entity's properties (`delete_entity_properties`) still removes it.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md` · Docs: `README.md`

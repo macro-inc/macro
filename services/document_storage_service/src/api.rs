@@ -365,6 +365,12 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/time",
+            time_tracking::inbound::axum_router::time_tracking_router(
+                state.time_tracking_state.clone(),
+            ),
+        )
+        .nest(
             "/channel-sections",
             channel_labels::inbound::axum_router::channel_sections_router(
                 state.channel_sections_state.clone(),

@@ -106,6 +106,9 @@ define_system_properties! {
 
     // Projects: the one project (initiative) a task belongs to
     Project,           PROJECT_UUID,            0x14, "Project";
+
+    // Time tracking: whole minutes logged on a task, the sum of its time entries
+    TimeLogged,        TIME_LOGGED_UUID,        0x16, "Time logged";
 }
 
 impl SystemPropertyKey {
@@ -183,7 +186,7 @@ mod tests {
     #[test]
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
-        assert_eq!(all_keys.len(), 20);
+        assert_eq!(all_keys.len(), 21);
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -204,6 +207,7 @@ mod tests {
         assert!(all_keys.contains(&SystemPropertyKey::REVENUE_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::CONTACTS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PROJECT_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::TIME_LOGGED_UUID));
     }
 
     #[test]
@@ -212,6 +216,15 @@ mod tests {
         assert_eq!(
             SystemPropertyKey::PROJECT_UUID.to_string(),
             "00000001-0000-0000-0000-000000000014"
+        );
+    }
+
+    #[test]
+    fn time_logged_uuid_matches_its_seed_migration() {
+        // 20261120204950_time_logged_property.up.sql spells this literal.
+        assert_eq!(
+            SystemPropertyKey::TIME_LOGGED_UUID.to_string(),
+            "00000001-0000-0000-0000-000000000016"
         );
     }
 
@@ -311,6 +324,7 @@ mod tests {
             SystemPropertyKey::Revenue,
             SystemPropertyKey::Contacts,
             SystemPropertyKey::Project,
+            SystemPropertyKey::TimeLogged,
         ];
 
         for variant in variants {
