@@ -123,6 +123,19 @@ fn window_bound(query: &IndexQuery) -> Option<i64> {
     bound
 }
 
+/// `terms` joined by `OR` as a balanced tree, so the SQL nests by the
+/// logarithm of the partition count instead of the count.
+fn balanced_or(terms: &[String]) -> String {
+    match terms {
+        [] => "0".to_owned(),
+        [term] => term.clone(),
+        _ => {
+            let (left, right) = terms.split_at(terms.len() / 2);
+            format!("({} OR {})", balanced_or(left), balanced_or(right))
+        }
+    }
+}
+
 /// A window's last candidate in index order: its sort value and document id.
 #[derive(Clone, Copy)]
 struct Position {
@@ -199,8 +212,8 @@ fn candidate_sql(
             let predicate = conjunction::condition(&partition.predicate, source, &mut parameters);
             format!("(d.partition = ? AND ({predicate}))")
         })
-        .collect::<Vec<_>>()
-        .join(" OR ");
+        .collect::<Vec<_>>();
+    let partitions = balanced_or(&partitions);
     // Bound BEFORE scope/predicate probes. A sparse query cannot turn this
     // speculation into a full-index walk. Ordering document_id with value lets
     // Turso walk the existing index without sorting the corpus. Record-key
@@ -233,7 +246,10 @@ impl Window {
         }
     }
 
-    /// Reads the next `count` candidates after the last one read.
+    /// Reads the next `count` candidates after the last one read. Returns
+    /// false, reading nothing, when Turso refuses the SQL: it joins every
+    /// partition's predicate into one expression, which can nest deeper than
+    /// Turso parses.
     fn extend(
         &mut self,
         connection: &Db,
@@ -241,7 +257,7 @@ impl Window {
         excluded_optimistic: &[i64],
         count: usize,
         pending: bool,
-    ) -> Result<(), TursoStorageError> {
+    ) -> Result<bool, TursoStorageError> {
         let (sql, parameters) = candidate_sql(
             query,
             self.source,
@@ -250,7 +266,10 @@ impl Window {
             count,
             pending,
         );
-        let rows = driver::query(connection, &sql, parameters)?;
+        let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? else {
+            return Ok(false);
+        };
+        let rows = driver::query_prepared(&mut statement, parameters)?;
         self.read += rows.len();
         self.exhausted = rows.len() < count;
         for row in rows {
@@ -279,7 +298,7 @@ impl Window {
                 });
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Every candidate up to `cutoff` is read: the window ran out, or its last
@@ -330,8 +349,12 @@ fn try_select(
     if pending {
         windows.push(Window::new(conjunction::FactSource::Optimistic));
     }
+    // SQL Turso refuses takes the set-based plan, which compiles each
+    // partition on its own.
     for window in &mut windows {
-        window.extend(connection, query, excluded_optimistic, budget, pending)?;
+        if !window.extend(connection, query, excluded_optimistic, budget, pending)? {
+            return Ok(None);
+        }
     }
     loop {
         let mut hits = windows
@@ -371,7 +394,9 @@ fn try_select(
         for window in &mut windows {
             if !window.proves(cutoff, &query.sort_direction) {
                 let count = budget.saturating_sub(window.read);
-                window.extend(connection, query, excluded_optimistic, count, pending)?;
+                if !window.extend(connection, query, excluded_optimistic, count, pending)? {
+                    return Ok(None);
+                }
             }
         }
     }
