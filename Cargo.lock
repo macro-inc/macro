@@ -5227,6 +5227,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent_correlation",
  "anyhow",
  "async-trait",
@@ -5270,6 +5271,7 @@ dependencies = [
  "stream",
  "strum 0.27.2",
  "tokio",
+ "tokio-util",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -7722,6 +7724,7 @@ dependencies = [
 name = "email_e2e"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_toolset",
  "aws-sdk-sqs",
  "axum",
@@ -7768,6 +7771,7 @@ dependencies = [
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_usage",
  "aws-sdk-cloudwatch",
  "calendar_events",
@@ -11377,6 +11381,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
