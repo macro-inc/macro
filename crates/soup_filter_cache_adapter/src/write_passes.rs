@@ -120,7 +120,9 @@ impl WritePasses {
             self.position = position;
             return Ok(WritePassStep::Pending);
         }
-        engine.keep_pass_reads(std::mem::take(&mut self.reads));
+        // The position from before this step read anything: a commit since
+        // then leaves the kept reads unused.
+        engine.keep_pass_reads(std::mem::take(&mut self.reads), position);
         Ok(WritePassStep::Done(std::mem::take(&mut self.projections)))
     }
 

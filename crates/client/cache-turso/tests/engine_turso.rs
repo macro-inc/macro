@@ -490,11 +490,12 @@ fn reads_kept_for_a_write_are_dropped_once_another_connection_commits() {
         // and is kept for the next write.
         let mut engine = Engine::new(database.open("engine-kept-reads").unwrap());
         let property = EntityKey("GraphqlProperty:property-1".into());
+        let position = engine.storage().write_position();
         let reads = engine.pass_reads();
         let read = reads.read_records(&[property]).await.unwrap();
         assert!(read[0].is_some());
         let reads = reads.finish();
-        engine.keep_pass_reads(reads);
+        engine.keep_pass_reads(reads, position);
 
         // Another connection to the file clears it, so the kept property is
         // stale: it is no longer stored. Kept open, so closing it cannot
@@ -538,5 +539,40 @@ fn write_position_moves_when_another_connection_commits() {
             .unwrap();
         // The reader has not read since; its position must still move.
         assert_ne!(reader.write_position(), before);
+    });
+}
+
+#[test]
+fn reads_kept_for_a_write_are_dropped_when_another_connection_commits_while_they_are_read() {
+    use cache_core::store::DurableRead;
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        let mut engine = Engine::new(database.open("engine-kept-reads-race").unwrap());
+        let mut other = Engine::new(database.open("engine-kept-reads-race").unwrap());
+
+        // The passes find the property absent, and before they finish another
+        // connection stores it.
+        let property = EntityKey("GraphqlProperty:property-1".into());
+        let position = engine.storage().write_position();
+        let reads = engine.pass_reads();
+        let read = reads.read_records(&[property.clone()]).await.unwrap();
+        assert!(read[0].is_none());
+        let original = page("Status", "todo", "user-1");
+        other
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        let reads = reads.finish();
+        engine.keep_pass_reads(reads, position);
+
+        // The same response again merges onto the stored property and changes
+        // nothing; merged onto the kept absence it would count as new.
+        let result = engine
+            .write_query(Some(1), QUERY, Some("Soup"), &query_vars(), &original, None)
+            .await
+            .unwrap();
+        assert!(!result.changed.contains(&property), "{:?}", result.changed);
+        drop(other);
     });
 }

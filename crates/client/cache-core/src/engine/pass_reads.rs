@@ -121,7 +121,8 @@ pub(super) struct KeptReads {
 }
 
 impl<S: Storage> Engine<S> {
-    /// Durable reads for the projection passes of the next write. Hand
+    /// Durable reads for the projection passes of the next write. Take
+    /// [`Storage::write_position`] first, and hand it with
     /// [`PassReads::finish`] to [`Self::keep_pass_reads`] after them.
     pub fn pass_reads(&self) -> PassReads<'_, S> {
         self.resume_pass_reads(PassReadSet::default())
@@ -138,13 +139,12 @@ impl<S: Storage> Engine<S> {
         }
     }
 
-    /// Keeps what the projection passes read for the next write. Without a
-    /// [`Storage::write_position`] the write reads storage itself.
-    pub fn keep_pass_reads(&mut self, set: PassReadSet) {
-        self.kept_reads = self
-            .storage
-            .write_position()
-            .map(|position| KeptReads { position, set });
+    /// Keeps what the projection passes read for the next write. `position`
+    /// is [`Storage::write_position`] taken before the passes read anything,
+    /// so a commit while they read leaves the next write a moved position.
+    /// Without a position the write reads storage itself.
+    pub fn keep_pass_reads(&mut self, set: PassReadSet, position: Option<WritePosition>) {
+        self.kept_reads = position.map(|position| KeptReads { position, set });
     }
 
     /// The kept reads, while storage has committed nothing since they were
