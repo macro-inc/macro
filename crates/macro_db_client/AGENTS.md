@@ -48,6 +48,14 @@ initial flag and clear soft-deleted items; never reseed on metadata updates.
 The legacy JSON favorite bit stays for rollback but is no longer a read source;
 remove it in a later migration after rollback compatibility is retired.
 
+`contact_list_members` and `contact_inbox_members` (migration `20261120222032`)
+are the directed, list-aware contact directory owned by `crates/contacts`; they
+replace `contacts_connections`, which stays until its readers are gone. Both store
+only canonical lowercase `macro|` ids in `COLLATE "C"` keys. Inbox rows cascade
+with their `email_links` row; `user_id` and `list_key` on them repeat the link's
+owner and provider on purpose, so reads never join `email_links`. List rows have no
+foreign key: the contacts worker removes them on account deletion.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
