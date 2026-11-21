@@ -824,7 +824,7 @@ impl Stack {
 
     /// Runs the hourly link maintenance once, as the cron does in
     /// production: the real `email_refresh_handler` enqueues a `HealthCheck`
-    /// on `link-manager` for every Gmail inbox that is due and a `Refresh`
+    /// on `link-maintenance` for every Gmail inbox that is due and a `Refresh`
     /// for those whose hour it is. The handler runs with a health interval
     /// of one hour, so every syncing Gmail inbox is due a health check on
     /// each run; which inboxes are refreshed depends on the hour and the

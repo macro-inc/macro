@@ -809,12 +809,12 @@ async fn discovery_skips_a_live_dm_a_bot_was_removed_from(pool: PgPool) {
     .await
     .unwrap();
     tx.commit().await.unwrap();
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at) \
          VALUES ($1, $2, 'member', now())",
+        live.id,
+        format!("bot|{}", Uuid::now_v7()),
     )
-    .bind(live.id)
-    .bind(format!("bot|{}", Uuid::now_v7()))
     .execute(&pool)
     .await
     .unwrap();
