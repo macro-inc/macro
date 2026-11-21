@@ -244,8 +244,8 @@ impl MacroEntrypoint {
         let dependency_filter = DependencyLogFilter {
             suppressed: self.suppressed_targets,
             quiet: self.quiet_targets,
-            dropped: self.dropped_events,
         };
+        let dropped_events = DroppedEvents(self.dropped_events);
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
@@ -265,21 +265,22 @@ impl MacroEntrypoint {
                     let otel_filter = otel_env_filter();
                     let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
                     let otel_layer = otel_layer_with_error_mapping(provider.tracer(service_name()))
-                        .with_filter(otel_filter);
+                        .with_filter(otel_filter.and(dropped_events));
                     let log_bridge = logger_provider.as_ref().map(|p| {
-                        OpenTelemetryTracingBridge::new(p).with_filter(otel_logs_filter())
+                        OpenTelemetryTracingBridge::new(p)
+                            .with_filter(otel_logs_filter().and(dropped_events))
                     });
 
                     Registry::default()
                         .with(dependency_filter)
-                        .with(RootcauseLayer.with_filter(rootcause_filter))
+                        .with(RootcauseLayer.with_filter(rootcause_filter.and(dropped_events)))
                         .with(
                             tracing_subscriber::fmt::layer()
                                 .with_ansi(true)
                                 .with_file(true)
                                 .with_line_number(true)
                                 .pretty()
-                                .with_filter(rust_log_filter),
+                                .with_filter(rust_log_filter.and(dropped_events)),
                         )
                         .with(otel_layer)
                         .with(log_bridge)
@@ -287,14 +288,16 @@ impl MacroEntrypoint {
                 } else {
                     Registry::default()
                         .with(dependency_filter)
-                        .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
+                        .with(
+                            RootcauseLayer.with_filter(rust_log_filter.clone().and(dropped_events)),
+                        )
                         .with(
                             tracing_subscriber::fmt::layer()
                                 .with_ansi(true)
                                 .with_file(true)
                                 .with_line_number(true)
                                 .pretty()
-                                .with_filter(rust_log_filter),
+                                .with_filter(rust_log_filter.and(dropped_events)),
                         )
                         .init();
                 }
@@ -314,8 +317,11 @@ impl MacroEntrypoint {
                 let rust_log_filter = rust_log_env_filter();
                 let subscriber = Registry::default()
                     .with(dependency_filter)
-                    .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
-                    .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
+                    .with(RootcauseLayer.with_filter(rust_log_filter.clone().and(dropped_events)))
+                    .with(
+                        HierarchicalLayer::new(level)
+                            .with_filter(rust_log_filter.and(dropped_events)),
+                    );
                 tracing::subscriber::set_global_default(subscriber).unwrap();
                 InitializedEntrypoint {
                     tracer_provider: None,
@@ -339,7 +345,8 @@ impl MacroEntrypoint {
                 let otel_filter = otel_env_filter();
                 // Capture anything already enabled for logs or OTEL without enabling new callsites.
                 let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
-                let otel_layer = otel_layer_with_error_mapping(tracer).with_filter(otel_filter);
+                let otel_layer = otel_layer_with_error_mapping(tracer)
+                    .with_filter(otel_filter.and(dropped_events));
 
                 // Build the JSON event format, then wrap it with DatadogFormat
                 // to inject dd.trace_id / dd.span_id for trace-log correlation.
@@ -355,11 +362,11 @@ impl MacroEntrypoint {
                     .with_ansi(false)
                     .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
                     .event_format(datadog_fmt::DatadogFormat { inner: json_format })
-                    .with_filter(rust_log_filter);
+                    .with_filter(rust_log_filter.and(dropped_events));
 
                 Registry::default()
                     .with(dependency_filter)
-                    .with(RootcauseLayer.with_filter(rootcause_filter))
+                    .with(RootcauseLayer.with_filter(rootcause_filter.and(dropped_events)))
                     .with(fmt_layer)
                     .with(otel_layer)
                     .init();
@@ -581,13 +588,12 @@ struct LocalOptions {
     tree_tracing: Option<usize>,
 }
 
-/// The global filter for dependency diagnostics: drops suppressed targets,
-/// quiet targets below info, and the single events in `dropped`.
+/// The global filter for dependency diagnostics: drops suppressed targets and
+/// quiet targets below info, by callsite.
 #[derive(Debug, Clone, Copy)]
 struct DependencyLogFilter {
     suppressed: &'static [&'static str],
     quiet: &'static [&'static str],
-    dropped: &'static [DroppedDependencyEvent],
 }
 
 impl<S: tracing::Subscriber> Layer<S> for DependencyLogFilter {
@@ -598,13 +604,43 @@ impl<S: tracing::Subscriber> Layer<S> for DependencyLogFilter {
     ) -> bool {
         dependency_logs_allowed(self.suppressed, self.quiet, metadata)
     }
+}
+
+/// Drops the single events in [DroppedDependencyEvent] rules. It is a
+/// per-sink filter, joined to each sink's own, because a veto in a global
+/// layer's `event_enabled` would skip dispatch after the per-sink filters
+/// recorded their verdicts for the event, and a verdict left behind would hide
+/// the thread's next event at a cached callsite from that sink.
+#[derive(Debug, Clone, Copy)]
+struct DroppedEvents(&'static [DroppedDependencyEvent]);
+
+impl<S> tracing_subscriber::layer::Filter<S> for DroppedEvents {
+    fn enabled(
+        &self,
+        _: &tracing::Metadata<'_>,
+        _: &tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        true
+    }
+
+    fn callsite_enabled(
+        &self,
+        _: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::always()
+    }
 
     fn event_enabled(
         &self,
         event: &tracing::Event<'_>,
-        _: tracing_subscriber::layer::Context<'_, S>,
+        _: &tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
-        !is_dropped_event(self.dropped, event)
+        !is_dropped_event(self.0, event)
+    }
+
+    // Joined with `and`, a `None` hint would lift the sink's own level hint.
+    fn max_level_hint(&self) -> Option<LevelFilter> {
+        Some(LevelFilter::TRACE)
     }
 }
 

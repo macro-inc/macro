@@ -509,13 +509,12 @@ fn dropped_dependency_events_match_target_message_and_error() {
         .with(DependencyLogFilter {
             suppressed: &[],
             quiet: &[],
-            dropped: DROPPED,
         })
         .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
                 .with_writer(output.clone())
-                .with_filter(EnvFilter::new("info")),
+                .with_filter(EnvFilter::new("info").and(DroppedEvents(DROPPED))),
         );
     tracing::subscriber::with_default(subscriber, || {
         let closed = "channel closed";
@@ -536,4 +535,52 @@ fn dropped_dependency_events_match_target_message_and_error() {
         .local()
         .build();
     assert_eq!(entrypoint.dropped_events.len(), 1);
+}
+
+#[test]
+fn a_dropped_event_does_not_hide_the_next_event_from_a_stricter_sink() {
+    const DROPPED: &[DroppedDependencyEvent] = &[DroppedDependencyEvent {
+        target: "rmcp::service",
+        message: "response error",
+        error_contains: "com.macro/filter",
+    }];
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(DependencyLogFilter {
+            suppressed: &[],
+            quiet: &[],
+        })
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(errors.clone())
+                .with_filter(EnvFilter::new("error").and(DroppedEvents(DROPPED))),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(infos.clone())
+                .with_filter(EnvFilter::new("info").and(DroppedEvents(DROPPED))),
+        );
+    fn dropped() {
+        tracing::warn!(target: "rmcp::service", error = %"data com.macro/filter", "response error");
+    }
+    fn unrelated(round: u8) {
+        tracing::error!(round, "unrelated failure");
+    }
+    tracing::subscriber::with_default(subscriber, || {
+        for round in 0..3 {
+            dropped();
+            unrelated(round);
+        }
+    });
+    for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
+        assert!(!text.contains("com.macro/filter"), "{sink}: {text}");
+        assert_eq!(
+            text.matches("unrelated failure").count(),
+            3,
+            "{sink}: {text}"
+        );
+    }
 }
