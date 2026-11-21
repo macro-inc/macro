@@ -18,24 +18,31 @@ disk after a reopen must come out the same.
   rollback, defer), deletes, invalidation, people search, idle, reopen, crash and
   probes. Responses come from `src/faker.rs` over the app schema.
 - `src/exec.rs` runs a case. `src/normalize.rs` replaces the ids the engine mints
-  (`#1`, `#2`, …), and `src/dump.rs` writes the tables after a final reopen.
+  (`#1`, `#2`, …) and keeps every id that appears in the case. `src/dump.rs`
+  writes the tables after a final reopen, each value tagged with its type.
+- A reset on open (`open_or_reset` deleting a file it can't read) and a failed
+  idle checkpoint are recorded, not hidden: the first goes into the trace, the
+  second fails the seed.
 
 ## Recipes
 
 - Build a side: `build-side.sh NAME BASE [BRANCH...]` (a detached worktree in
   `~/.cache/cache-diff-fuzz/sides/NAME`, binary in `bin/NAME`). Set
   `IDLE_CHECKPOINT=1` when the side has `TursoStorage::checkpoint_if_due`.
-- Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. Differences go to
-  `runs/RUN/diffs.txt`.
+- Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. RUN must be a new name.
+  Differences go to `runs/RUN/diffs.txt`, seeds a side could not finish to
+  `runs/RUN/failures.txt`; it exits 0 only when neither has a line.
 - Shrink a difference: `minimize.sh SEED SIDE_A SIDE_B`.
 - Rerun one seed: `bin/SIDE --seed N --schema static_assets/schema.graphql --assets
   crates/client/cache-diff-fuzz/assets --out D --work D/w --full`. Use
-  `--emit-case` and `--case FILE` to save a case and rerun it.
+  `--emit-case` and `--case FILE` to save a case and rerun it. A seed's case
+  depends on the fuzzer source (hashed in `bin/SIDE.side`) and the schema (hashed
+  in `runs/RUN/run.txt`); rerun it with both unchanged.
 
 ## Checks
 
 - `cargo clippy -p cache-diff-fuzz --all-targets`
-- After a generator change: a side compared with itself (`fuzz.sh self 1 50 X X`)
+- After a generator change: a side compared with itself (`fuzz.sh self-X 1 50 X X`)
   reports 0 differences.
 
 ## Gotchas
