@@ -7,7 +7,7 @@ mod test;
 
 use super::filter::McpEventFilter;
 use super::models::{
-    MAX_ARGUMENTS_BYTES, MAX_FILTER_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
+    MAX_ARGUMENTS_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
     McpEventOccurrence, McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult,
     McpSubscriptionKey,
 };
@@ -37,23 +37,12 @@ pub const SWEEP_BATCH: u32 = 500;
 /// Most sweep statements in one round; the next round continues.
 pub const SWEEP_MAX_BATCHES: u32 = 20;
 
-/// Refuse arguments and filters large enough to weigh on matching, which
-/// reads every candidate's filter.
-fn check_sizes(
-    arguments: &serde_json::Value,
-    filter: &McpEventFilter,
-) -> Result<(), McpSubscriptionError> {
-    let too_large = |value: Result<Vec<u8>, serde_json::Error>, max: usize| {
-        value.map_or(true, |bytes| bytes.len() > max)
-    };
-    if too_large(serde_json::to_vec(arguments), MAX_ARGUMENTS_BYTES) {
+/// Refuse arguments too large to store; the filter's own size is part of
+/// [`McpEventFilter::validate`].
+fn check_arguments_size(arguments: &serde_json::Value) -> Result<(), McpSubscriptionError> {
+    if serde_json::to_vec(arguments).map_or(true, |bytes| bytes.len() > MAX_ARGUMENTS_BYTES) {
         return Err(McpSubscriptionError::InvalidParams(format!(
             "arguments must be at most {MAX_ARGUMENTS_BYTES} bytes of JSON"
-        )));
-    }
-    if too_large(serde_json::to_vec(filter), MAX_FILTER_BYTES) {
-        return Err(McpSubscriptionError::InvalidParams(format!(
-            "the filter must be at most {MAX_FILTER_BYTES} bytes of JSON"
         )));
     }
     Ok(())
@@ -123,7 +112,7 @@ where
         filter
             .validate()
             .map_err(|error| McpSubscriptionError::InvalidParams(error.to_string()))?;
-        check_sizes(&key.arguments, &filter)?;
+        check_arguments_size(&key.arguments)?;
 
         // A live subscription of this user to this URL means the endpoint
         // already proved it wants their deliveries.

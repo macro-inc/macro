@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::mcp::filter::{
-    McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
+    McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterError, McpFilterField,
+    McpFilterValue,
 };
 use crate::domain::mcp::models::{
     McpEndpointFailure, McpEventSubscription, McpMatchCandidate, McpSecretCiphertext,
@@ -589,7 +590,7 @@ async fn oversized_arguments_and_filters_are_refused() {
     let large = McpEventFilter {
         any_of: (0..8).map(clause).collect(),
     };
-    assert_eq!(large.validate(), Ok(()));
+    assert_eq!(large.validate(), Err(McpFilterError::TooLarge));
     let refused = service
         .subscribe(user(ME), request("ids", Some(large)))
         .await;
