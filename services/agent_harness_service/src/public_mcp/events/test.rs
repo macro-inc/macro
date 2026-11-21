@@ -1109,7 +1109,8 @@ fn source_frames_become_events_or_heartbeats() {
 // --- events/stream --------------------------------------------------------
 
 /// Run `events/stream` beside `script`, which reads its notifications and
-/// cancels it.
+/// cancels it. The handler owns the sending side, so the notifications end
+/// when it returns.
 async fn stream_with<F>(
     events: &McpEvents,
     params: Value,
@@ -1122,7 +1123,8 @@ where
     let sink = Sink(sender);
     let cancel = CancellationToken::new();
     let extensions = no_extensions();
-    let (result, ()) = tokio::join!(
+    let handler_cancel = cancel.clone();
+    let handler = async move {
         handle(
             events,
             "events/stream",
@@ -1132,12 +1134,13 @@ where
                 request_id: json!(7),
                 extensions: &extensions,
                 sink: &sink,
-                cancel: cancel.clone(),
+                cancel: handler_cancel,
                 span: tracing::Span::none(),
             },
-        ),
-        script(receiver, cancel.clone()),
-    );
+        )
+        .await
+    };
+    let (result, ()) = tokio::join!(handler, script(receiver, cancel));
     result
 }
 
@@ -1462,7 +1465,7 @@ async fn a_stream_that_cannot_open_its_source_fails_before_any_notification() {
         &fixture.events,
         json!({"name": "message.posted"}),
         |mut receiver, _| async move {
-            assert!(receiver.try_recv().is_err(), "nothing was sent");
+            assert!(receiver.next().await.is_none(), "nothing was sent");
         },
     )
     .await;
@@ -1476,7 +1479,7 @@ async fn a_stream_of_words_alone_shows_its_filter_and_opens_nothing() {
         &fixture.events,
         json!({"name": QUERY_EVENT, "arguments": {"query": MENTIONS}}),
         |mut receiver, _| async move {
-            assert!(receiver.try_recv().is_err(), "nothing was sent");
+            assert!(receiver.next().await.is_none(), "nothing was sent");
         },
     )
     .await;
