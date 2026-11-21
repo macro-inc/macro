@@ -1490,6 +1490,53 @@ describe('useChannelParticipantsQuery', () => {
     expect(ids()).toEqual(['owner', 'other', 'a']);
   });
 
+  it('lets a newer check still out decide when a later recheck fails', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const owner = restRow('owner', '2026-01-01T00:00:00Z', 'owner');
+    const a = restRow('a', '2026-01-03T00:00:00Z');
+    // Answers queued by earlier tests would shift these checks.
+    storage.getChannelParticipants.mockReset();
+    const checks = [0, 1, 2].map(() => Promise.withResolvers<unknown>());
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(ok([owner, a]))
+      .mockReturnValueOnce(checks[0]!.promise)
+      .mockReturnValueOnce(checks[1]!.promise)
+      .mockReturnValueOnce(checks[2]!.promise);
+    const { add, ids } = mount();
+
+    add.mutate({ channelId: 'channel-1', participants: ['a'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'a']);
+
+    for (const record of [
+      [participant('owner', '2026-01-01T00:00:00Z', 'admin')],
+      [
+        participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+        participant('other', '2026-01-04T00:00:00Z'),
+      ],
+      [
+        participant('owner', '2026-01-01T00:00:00Z', 'admin'),
+        participant('other', '2026-01-04T00:00:00Z', 'admin'),
+      ],
+    ]) {
+      setDetail(record);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(4);
+    // a left, then rejoined: the second check saw them gone, the third back.
+    checks[0]!.resolve(ok([owner]));
+    await vi.advanceTimersByTimeAsync(0);
+    checks[2]!.resolve(err([{ code: 'HTTP_ERROR', message: 'offline' }]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ids()).toEqual(['owner', 'other']);
+    checks[1]!.resolve(ok([owner, a]));
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(ids()).toEqual(['owner', 'other', 'a']);
+  });
+
   it('keeps two readers of a channel agreeing when an older recheck answers before one joins a newer check', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
