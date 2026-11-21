@@ -1,6 +1,11 @@
 //! The single per-node import policy and Macro search-text interface.
 use lexical_model::*;
 use std::borrow::Cow;
+
+/// Read-only service JSON entrypoints use Source's importJSON nullish defaults.
+#[derive(Clone)]
+pub(crate) struct ServiceJsonImport;
+
 /// Source exportJSON own-undefined fields; the mirror stores each absent value as null.
 pub fn own_undefined_fields(node_type: &str) -> &'static [String] {
     #[derive(serde::Deserialize)]

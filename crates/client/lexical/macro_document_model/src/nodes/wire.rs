@@ -7,6 +7,23 @@ pub(super) fn import_node<T: ImportPolicy>(
     json: &SerializedNode,
 ) -> crate::ModelResult<NodeKey> {
     let mut json = json.clone();
+    if tx
+        .try_extension::<crate::policy::ServiceJsonImport>()
+        .is_some()
+    {
+        // Source importJSON coalesces these nulls to undefined. Raw Loro slot
+        // loading uses the unmarked builder and must retain the stored nulls.
+        let fields: &[&str] = match T::TYPE {
+            "pr-mention" | "agent-session-mention" | "date-mention" => &["mentionUuid"],
+            "image" | "video" => &["constrainedWidth", "constrainedHeight"],
+            _ => &[],
+        };
+        for field in fields {
+            if json.get(*field).is_some_and(Value::is_null) {
+                json.shift_remove(*field);
+            }
+        }
+    }
     match T::TYPE {
         "document-mention" if json.get("createdAt").is_none_or(Value::is_null) => {
             json.insert("createdAt".into(), crate::now_ms(tx)?.into());

@@ -176,6 +176,10 @@ pub fn register_supported_nodes(builder: EditorBuilder) -> EditorBuilder {
 pub fn export_builder() -> EditorBuilder {
     register_supported_nodes(Editor::builder(EditorMode::Headless))
 }
+/// Admit serialized service JSON without changing the stored-slot import contract.
+pub(crate) fn service_json_builder() -> EditorBuilder {
+    export_builder().extension_state(crate::policy::ServiceJsonImport)
+}
 /// Build the lexical-service document export registry, without code/list replacements.
 pub fn export_registry() -> Editor {
     export_builder()

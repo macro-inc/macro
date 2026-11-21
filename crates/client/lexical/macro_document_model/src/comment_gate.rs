@@ -22,7 +22,7 @@ fn without_identity(node: &mut Value) {
 /// Normalize identity and comment wrappers using the service's exact class registry.
 /// Other mark classes and non-identity state remain content.
 pub fn content_without_comments(state: &SerializedEditorState) -> Result<Value> {
-    normalize(state, crate::export_builder())
+    normalize(state, crate::editor::service_json_builder())
 }
 /// Normalize with explicit constructor entropy and time while retaining the service registry.
 pub fn content_without_comments_with_context(
@@ -31,7 +31,7 @@ pub fn content_without_comments_with_context(
 ) -> Result<Value> {
     normalize(
         state,
-        crate::export_builder()
+        crate::editor::service_json_builder()
             .extension_state(context.clock.clone())
             .extension_state(context.random.clone())
             .extension_state(context.host.clone()),

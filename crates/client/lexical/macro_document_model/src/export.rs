@@ -281,7 +281,7 @@ pub fn parse_export_state(
     raw: &SerializedEditorState,
     context: &crate::DocumentContext,
 ) -> Result<EditorState> {
-    let mut editor = crate::export_builder()
+    let mut editor = crate::editor::service_json_builder()
         .extension_state(context.clock.clone())
         .extension_state(context.random.clone())
         .extension_state(context.host.clone())
