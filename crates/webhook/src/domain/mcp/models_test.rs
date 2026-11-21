@@ -163,3 +163,20 @@ fn ciphertext_travels_as_base64() {
         ciphertext
     );
 }
+
+#[test]
+fn trace_context_travels_with_the_message_only_when_there_is_one() {
+    let mut mcp = McpEventQueueMessage::new(Uuid::now_v7(), event());
+    let body = serde_json::to_string(&mcp).expect("serializable");
+    assert!(!body.contains("trace_context"), "no trace, no field");
+
+    mcp.trace_context.insert(
+        "traceparent".to_owned(),
+        serde_json::json!("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"),
+    );
+    let body = serde_json::to_string(&mcp).expect("serializable");
+    assert_eq!(
+        serde_json::from_str::<McpEventQueueMessage>(&body).expect("parses"),
+        mcp
+    );
+}

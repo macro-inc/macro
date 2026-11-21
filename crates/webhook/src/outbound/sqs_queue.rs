@@ -171,7 +171,12 @@ impl McpEventEnqueuer for SqsWebhookQueue {
             event_id = %message.event.event_id,
         )
     )]
-    async fn enqueue_mcp(&self, message: McpEventQueueMessage) -> Result<(), Self::Err> {
+    async fn enqueue_mcp(&self, mut message: McpEventQueueMessage) -> Result<(), Self::Err> {
+        // The delivery worker parents its attempts on this send.
+        genai_telemetry::propagation::inject_mcp(
+            &tracing::Span::current(),
+            &mut message.trace_context,
+        );
         let prepared = prepare_mcp_message(&message)?;
         self.sqs
             .send_fifo_message(
