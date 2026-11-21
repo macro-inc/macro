@@ -53,6 +53,10 @@ contract and the multi-target verification commands.
   same files to a different lock.
 - Local tests prove physical lock contention but not real cross-worker
   termination — don't read passing tests here as proof of that.
+- `adopt_previous` is the only way files move between identities: it moves
+  main and WAL together, only under the older identity's free lock, and never
+  onto an existing file. Don't checkpoint or copy instead; a copy leaves the
+  older build a second queue to replay.
 
 ## Related
 

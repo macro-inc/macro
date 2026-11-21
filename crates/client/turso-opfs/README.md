@@ -18,6 +18,21 @@ directly; `ConnectedOpfsSession::try_close()` exclusively owns and proves that
 transition. Turso open/connect failures poison and require worker replacement
 followed by a fresh lock acquisition and `recovery_wipe()`.
 
+`OpfsOwner::adopt_previous(previous_identity)` moves an older build's complete
+main/WAL pair to this owner's paths, so a new storage version opens the old
+database and upgrades it instead of starting empty. It first checks this owner's
+own paths, which only this owner can create while it holds their lock, and moves
+nothing if either exists. Otherwise it takes the older identity's lock only if
+that lock is free (`ifAvailable`) and holds it through both moves; a held lock
+means a context of the older build may have the files open, and nothing moves.
+Main and WAL move under their new names together, so committed WAL frames move
+with them and no checkpoint is needed. A failed WAL move moves the main file
+back. A process stopped between the two moves leaves one path at each identity,
+which either identity's next open treats as an interrupted creation and resets.
+Browsers without `FileSystemHandle.move` report `Unsupported` and move nothing.
+`src/browser/test/adopt.rs` covers each outcome, the held lock, and the stop
+between moves in a real DedicatedWorker.
+
 The crate tests physical lock contention in its real DedicatedWorker. Actual
 cross-worker termination/restart orchestration remains a WP-08 coordinator
 harness responsibility: terminating a worker causes the browser to release its

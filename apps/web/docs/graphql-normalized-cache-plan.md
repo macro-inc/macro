@@ -526,7 +526,10 @@ compatibility epochs, record formats, or storage schemas use separate files and
 owner locks instead of resetting each other's data. Builds at the versions in
 use when names began to embed them (epoch 3, format 3, storage 11) keep the
 unversioned `graphql-cache:{scope}`, so that change moved no database and the
-next build still replays its queued mutations. Once an owner is active and no
+next build still replays its queued mutations. A build whose own name has no file
+yet first moves the newest older storage version of the same epoch and format
+that it can upgrade to its own name, when no tab of that build holds it
+(`crates/client/README.md`, storage upgrades). Once an owner is active and no
 other build has live tabs, the coordinator lets that page delete stale
 databases of its scope: names for versions no newer than its own that it does
 not open, which includes the unversioned name once the versions move past it.
@@ -1359,10 +1362,10 @@ matching compact projections into a Rust heap of at most `limit + 1` documents.
 It no longer retains per-bucket text catalogs. Matching and ranking semantics,
 optimistic overlays, and indexed empty-query browsing are preserved; leading
 wildcards still scan selected buckets. Storage schema 12 makes the browse index
-covering by appending search text and source hashes. This is an incompatible
-cutover, not a migration: native caches reset, including queued mutations;
-browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
-Existing cleanup safeguards for those older files remain. That streaming-search
+covering by appending search text and source hashes. It shipped as a reset; the
+registered 11 to 12 step now upgrades a schema-11 cache in place, and browsers
+move the `t11` file to the `t12` name first (`crates/client/README.md`, storage
+upgrades). That streaming-search
 cutover did not change the record format or schema epoch. See
 [streaming text search](../../../crates/client/README.md#streaming-text-search)
 for the memory boundary and native/OPFS verification.

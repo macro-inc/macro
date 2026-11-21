@@ -87,6 +87,41 @@ free pages in the old file. The browser's physical database name embeds the form
 version, so a browser upgrade starts a new file instead of migrating; the previous
 file is left for any tab still running the older bundle.
 
+## Storage upgrades
+
+A database written at an older `STORAGE_SCHEMA_VERSION` is upgraded in place
+when `cache-turso/src/storage/migration.rs` registers a chain of steps from its
+version to the current one. Each step runs in one write transaction that also
+advances `meta.storage_schema_version`, so a stopped upgrade resumes from the
+last committed step. After the last step the open runs the same frozen-schema
+and queue checks as every reopen: an upgraded file must have exactly the tables
+and indexes a fresh file has. Records, queued mutations, optimistic layers and
+the storage generation stay, so nothing is refetched and no queued write is
+lost. A version with no chain, a newer version, or a failing step resets as
+before. Bumping the version without registering a step fails to compile;
+clearing `STEPS` declares that every older file resets.
+
+Native hosts upgrade the fixed file at open. Browser database names embed the
+storage version, so the browser first carries the old database forward: when
+this build's database does not exist yet, the open moves the newest upgradable
+older database of the scope to this build's name (`OpfsOwner::adopt_previous`,
+main and WAL together, under the older build's free owner lock) and then opens
+it, which runs the steps. A tab of the older build still holding its lock, a
+browser without OPFS moves, or a failed move leaves the old file where it is and
+starts empty, as every version change did before. The open result reports
+`upgraded-existing` with `fromStorageVersion`, and `carryForward` says whether
+an older database was moved or left behind; `graphql_cache.schema_init` records
+both. The coordinator protocol carries an upgrade as `opened-existing`, since
+storage survived.
+
+Returning to the older build after a move finds its own name empty and starts
+fresh; its queued writes went forward with the file and are sent by the newer
+build. The next newer open finds its own file and moves nothing again. A
+recovery open never carries anything forward.
+
+Only storage versions migrate this way. A record format change keeps its own
+path above, and a GraphQL schema epoch change still starts a new file.
+
 ## Network refreshes
 
 Normalized refreshes persist only records whose merged contents changed. The hot
@@ -267,23 +302,23 @@ including deleted and nonmatching replacements. Empty-query browsing retains its
 indexed recent path and cursors. Leading-wildcard matching still scans the selected
 buckets: this bounds application search memory, not search work or database page
 cache memory. The existing SQL telemetry includes streamed processing and cleanup.
-Storage schema 12 introduces this covering index through an intentionally
-incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
-cache, including its records, queued mutations, and optimistic layers. Browsers
-open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
-pending mutations, but the new engine does not replay those queues. Backfill
-restarts against the new storage generation. That index cutover kept the GraphQL
-schema epoch and record format unchanged. Native binaries
-must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
+Storage schema 12 introduced this covering index. It shipped as a reset: native
+`open_or_reset` replaced a schema-11 cache, including its queued mutations, and
+browsers opened a fresh `s4.v4.t12` database. The registered 11 to 12 step now
+builds it in place instead (see [storage upgrades](#storage-upgrades)), so a
+schema-11 cache still on disk upgrades keeping its records and queue. That
+version kept the GraphQL schema epoch and record format unchanged. Native
+binaries must be rebuilt to gain the new index; an OTA frontend update alone
+cannot add it.
 
-The same unpublished schema-12 cutover now includes `records_contacts_cover_idx`,
-a partial covering index on `records(__typename, id, value)` for `GraphqlContact`.
-Ranked reads explicitly seek this index after the text prefilter instead of also
-fetching the record table. They still decode one row at a time and apply membership,
-exclusions, ranking and DM dedup before limiting. Exact schema validation protects
-the predicate/collation; older local schema-12 shapes without it are incompatible,
-not silently upgraded. No additional format/version cutover or contacts store was
-introduced.
+Schema 12 also includes `records_contacts_cover_idx`, a partial covering index
+on `records(__typename, id, value)` for `GraphqlContact`, which the same step
+builds. Ranked reads explicitly seek this index after the text prefilter instead
+of also fetching the record table. They still decode one row at a time and apply
+membership, exclusions, ranking and DM dedup before limiting. Exact schema
+validation protects the predicate/collation; a pre-release local schema-12 shape
+without it is incompatible, since it already records version 12 and no step runs.
+No contacts store was introduced.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
@@ -297,7 +332,7 @@ statement reuse, covering-index scans, and borrowed-row decoding against the sam
 fixture adds a legacy non-covering index for comparison with the production
 covering index. Statement reuse has not shown a material benefit and is not
 enabled in production. See [search performance](search-performance.md) for
-measured costs, memory boundaries, and the schema-12 reset behavior.
+measured costs and memory boundaries.
 
 ### Contact projection and page retention
 

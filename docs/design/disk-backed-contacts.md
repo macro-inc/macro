@@ -223,9 +223,9 @@ Migrating Quick Access alone leaves other callers retaining the entire corpus.
 - SQL results stream into a top-K ranker; there is no retained text-search catalog.
 - Row fields are borrowed and a canonical-key buffer is reused; only winners are
   copied into owned documents.
-- Storage schema 12 adds covering search and contact-payload indexes. The deliberately incompatible
-  cache cutover is already implemented; do not add another rollout mechanism for
-  contacts unnecessarily.
+- Storage schema 12 adds covering search and contact-payload indexes. Schema-11
+  caches upgrade to it in place through the registered 11 to 12 step; do not add
+  another rollout mechanism for contacts.
 
 See [client cache architecture](../../crates/client/README.md#streaming-text-search)
 and [search measurements](../../crates/client/search-performance.md). These are

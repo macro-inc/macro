@@ -48,24 +48,35 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `cargo test -p cache-turso --test search -- --ignored --nocapture`: explicit 100k-row search measurement.
 - The `web` wasm test target checks streamed search over real OPFS; use the [browser runner](../turso-opfs/README.md#repeatable-verification).
 - `cargo test --release -p cache-turso --lib compare_search_scan_options -- --ignored --nocapture`: isolate prepared-statement, covering-index, and borrowed-row costs on a temporary database, without changing production schema.
+- `cargo test --release -p cache-turso --lib generated_chains_long_run -- --ignored`: 1,000 generated storage upgrade chains with interruptions, each checked against a fresh file at the target version.
+- `CACHE_MIGRATION_DB=<bench database> cargo test --release -p cache-turso --lib --features migration-test-hooks upgrade_cost_on_a_retained_cache -- --ignored --nocapture`: time the 11 to 12 upgrade against an ordinary reopen of the same database.
 
 ## Gotchas
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 - Permission retirement pages raw and projection-only keys through covering keys, retaining the distinction between an initial cursor and an empty ID. Whole-projection deletion skips old fact reconstruction but still rebases ordered pending contributions; preserve queue rows, retry metadata, and identity bindings.
 
-- The contact payload index is part of this branch's unpublished schema-12 cutover (tracked `origin/main` baseline: schema 11), not a second migration/version. Older local schema-12 shapes missing the index reject as incompatible; do not silently upgrade or reuse those test files. Fresh/current shape reopen preserves records, queued writes and generation. Benchmark only with fresh synthetic profiles, not user caches.
+- Storage 12 added the covering browse index and the partial contact payload index; the registered 11 to 12 step builds both in place. A pre-release local 12 shape missing the contact index still rejects as incompatible: it already says 12, so no step runs. Fresh/current shape reopen preserves records, queued writes and generation. Benchmark only with fresh synthetic profiles, not user caches.
 - Projection 6 includes the visible local-part fallback in contact matching; storage schema remains 12. It is independent of the context-aware person-policy API.
 - Contact verification keyset-scans `records` through the existing typename/id key, visits at most 500 rows plus one undecoded lookahead, and returns only scoped IDs and scalar progress. Deletion maintains the existing search/predicate projections transactionally; do not add a contacts table or whole-directory ID set. `tests/people_sql.rs` covers bounded verification/deletion at 1k and optionally 100k; `tests/web.rs` exercises the same contract over OPFS.
 - Projection 5 adds viewer-scoped contacts and removes public-profile membership; retention version 2 shares the bounded viewer-page budget with contact search/lookup snapshots. Neither changes storage schema 12 or clears durable data.
-- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
+- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage versions are separate: see the upgrade steps below and `../README.md#storage-upgrades`.
 
 - `#![forbid(unsafe_code)]` and `#![deny(missing_docs)]` — this crate is held to
   a stricter bar than most because it's the single physical-disk commit point.
 - The compound-key schema and payload encoding are frozen; an incompatible or
   uncertain on-disk state is classified for physical reset, never silently
   migrated, copied, or redirected to a fallback backend.
-- The one exception is a cache format version listed in
+- One exception is a storage version with a registered chain of steps in
+  `storage/migration.rs`, which is upgraded in place, never silently: one write
+  transaction per step, which also advances `meta.storage_schema_version`, so an
+  interrupted upgrade resumes, then the frozen-schema checks every open runs. Bumping
+  `STORAGE_SCHEMA_VERSION` without a step fails to compile; clearing `STEPS`
+  declares that older files reset. Freeze a step's SQL when registering it:
+  never use the current schema constants, which a later version changes. Each
+  step gets a test beside the 11 to 12 one in `test/migration.rs`. A missing
+  chain, a newer version, or a failing step still resets.
+- The other exception is a cache format version listed in
   `MIGRATABLE_CACHE_FORMAT_VERSIONS`: `migrate_previous_format` drops the
   refetchable records, search projections, index facts, and calendar ranges in
   one transaction, keeps queued mutations, optimistic layers, and their
