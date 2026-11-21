@@ -1,5 +1,5 @@
 /**
- * Repro (bun run repro/qa-rename-row.ts [rounds] [kind]): the one row an
+ * Repro (bun run repro/qa-rename-row.ts [rounds] [kind] [viewed] [no-menu]): the one row an
  * in-app rename changes, in each side's Quick Access skills (or snippets)
  * feed (`qa.skills`) and in Quick Access itself (`quickAccess`, that bucket).
  * A fresh user makes four, opens the last two, then per round renames an
@@ -13,6 +13,10 @@ import { closeBrowser, launch, openUser, reloadApp, type Side } from '../lib/bro
 import { mount, settle, unmount, write } from '../lib/probe';
 const rounds = Number(process.argv[2] ?? 2);
 const kind = process.argv[3] === 'snippet' ? 'snippet' : 'skill';
+// [viewed]: rename the two opened rows instead of the two unopened ones.
+// [no-menu]: never mount the `/` menu, so no list reads the cache.
+const renameViewed = process.argv.includes('viewed');
+const withMenu = !process.argv.includes('no-menu');
 const feedReader = kind === 'snippet' ? 'qa.snippets' : 'qa.skills';
 const tag = Date.now().toString(36);
 const email = `owner@wrow-${tag}.difftest.dev`;
@@ -72,7 +76,7 @@ try {
   for (const side of sides) for (const key of ['feed', 'qa']) await rowOf(s.pages[side], key, mine[0].id, true);
   const out: unknown[] = [];
   for (let r = 0; r < rounds; r++) {
-    const target = mine[r % 2];
+    const target = mine[(renameViewed ? 2 : 0) + (r % 2)];
     const newName = `Renamed row ${r} ${tag}`;
     const t0 = Date.now();
     const renameAt: Record<string, number> = {};
@@ -82,17 +86,17 @@ try {
     target.name = newName;
     // The user opens the `/` menu two seconds after the rename.
     await Bun.sleep(2_000);
-    for (const side of sides) await mount(s.pages[side], 'menu', 'quickAccess', { buckets: [kind], menu: true });
+    if (withMenu) for (const side of sides) await mount(s.pages[side], 'menu', 'quickAccess', { buckets: [kind], menu: true });
     const samples: Record<string, [number, string][]> = {};
     while (Date.now() - t0 < 90_000) {
-      for (const side of sides) for (const key of ['feed', 'qa', 'menu']) {
+      for (const side of sides) for (const key of withMenu ? ['feed', 'qa', 'menu'] : ['feed', 'qa']) {
         const v = JSON.stringify(await rowOf(s.pages[side], key, target.id));
         const xs = (samples[`${label(side)} ${key}`] ??= []);
         if (xs.at(-1)?.[1] !== v) xs.push([Date.now() - t0, v]);
       }
       await Bun.sleep(250);
     }
-    for (const side of sides) await unmount(s.pages[side], 'menu');
+    if (withMenu) for (const side of sides) await unmount(s.pages[side], 'menu');
     const timeline: Record<string, unknown> = {};
     for (const side of sides)
       timeline[label(side)] = await s.pages[side].evaluate(
