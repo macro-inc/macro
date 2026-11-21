@@ -300,6 +300,71 @@ export function channelDirectoryState(
   return { records, joined: inDirectoryOrder(joined), incomplete, complete };
 }
 
+/** Above this many new or changed joined channels, a read sorts them all
+ * again instead of moving each into place. */
+const MOVE_IN_PLACE_LIMIT = 64;
+
+function idsOf(
+  ids: readonly string[],
+  previous: Readonly<Record<string, true>>
+) {
+  const keys = Object.keys(previous);
+  if (keys.length === ids.length && ids.every((id) => previous[id]))
+    return previous;
+  const next: Record<string, true> = {};
+  for (const id of ids) next[id] = true;
+  return next;
+}
+
+/** Whether `records` holds these channels, each as the same object, and
+ * nothing else. */
+function holdsExactly(
+  records: Readonly<Record<string, DirectoryChannel>>,
+  channels: readonly DirectoryChannel[]
+) {
+  for (const channel of channels)
+    if (records[channel.id] !== channel) return false;
+  let held = 0;
+  for (const _id in records) held += 1;
+  return held === channels.length;
+}
+
+/**
+ * `channelDirectoryState(channels, incompleteIds, complete)`, built from
+ * `previous`. A channel `previous` holds as the same object keeps its place
+ * in the order, so a read that changed nothing returns `previous` itself and
+ * one that changed a few channels moves only those: the cache keeps a record
+ * as the same object until it changes, and an account's directory can hold
+ * thousands of channels.
+ */
+export function nextChannelDirectoryState(
+  previous: ChannelDirectoryState,
+  channels: readonly DirectoryChannel[],
+  incompleteIds: readonly string[],
+  complete: boolean
+): ChannelDirectoryState {
+  const incomplete = idsOf(incompleteIds, previous.incomplete);
+  if (holdsExactly(previous.records, channels)) {
+    if (incomplete === previous.incomplete && complete === previous.complete)
+      return previous;
+    return { ...previous, incomplete, complete };
+  }
+  const records: Record<string, DirectoryChannel> = {};
+  const moved: DirectoryChannel[] = [];
+  for (const channel of channels) {
+    records[channel.id] = channel;
+    if (previous.records[channel.id] !== channel && channel.isParticipant)
+      moved.push(channel);
+  }
+  if (moved.length > MOVE_IN_PLACE_LIMIT)
+    return channelDirectoryState(channels, incompleteIds, complete);
+  const joined = previous.joined.filter(
+    (channel) => records[channel.id] === channel
+  );
+  for (const channel of moved) insertInDirectoryOrder(joined, channel);
+  return { records, joined, incomplete, complete };
+}
+
 /** `state` with the writes it is behind laid over it. Its joined channels
  * stay in order without sorting them again: the account's directory can
  * hold thousands, and this runs on every publish while a write is held. */
@@ -1449,6 +1514,11 @@ export function createCachedChannelDirectory(
     return listed.ids;
   };
 
+  // The states `render` last built from the cache's read and from the
+  // fallback's pages, which the next ones build on.
+  let fromRead = EMPTY_CHANNEL_DIRECTORY_STATE;
+  let fromFallback = EMPTY_CHANNEL_DIRECTORY_STATE;
+
   /** Publishes what `render` built with the fallback's status, keeping each
    * part that did not change. */
   const show = (
@@ -1481,16 +1551,15 @@ export function createCachedChannelDirectory(
     setViewsCurrent(lastRead !== undefined && publishedLane.viewsCurrent);
     const network = fallback;
     if (network.status !== 'loaded') {
-      show(
-        lastRead
-          ? channelDirectoryState(
-              lastRead.channels,
-              lastRead.incompleteIds,
-              lane.complete
-            )
-          : EMPTY_CHANNEL_DIRECTORY_STATE,
-        NO_IDS
-      );
+      fromRead = lastRead
+        ? nextChannelDirectoryState(
+            fromRead,
+            lastRead.channels,
+            lastRead.incompleteIds,
+            lane.complete
+          )
+        : EMPTY_CHANNEL_DIRECTORY_STATE;
+      show(fromRead, NO_IDS);
       return;
     }
     const confirmed = untrack(confirm.outcomes);
@@ -1512,11 +1581,13 @@ export function createCachedChannelDirectory(
       seen: seen ?? new Set(),
       confirmed,
     };
-    const next = channelDirectoryState(
+    fromFallback = nextChannelDirectoryState(
+      fromFallback,
       fallbackChannels(network.channels, evidence),
       lastRead?.incompleteIds ?? [],
       true
     );
+    const next = fromFallback;
     // Only this viewer's cache can show what the reads returned; without it
     // the network's pages are all there is to know.
     if (!settle || !confirmations)
@@ -1997,13 +2068,18 @@ export function createMemoryChannelDirectory(
     userId: deps.userId,
     session: deps.session,
   });
-  const read = createMemo((): ChannelDirectoryState => {
+  const read = createMemo((previous: ChannelDirectoryState) => {
     // Raw rows: walking them through the store creates a signal per field.
     if (queryReadyGate(pages))
-      return channelDirectoryState(unwrap(pages.data), [], true);
+      return nextChannelDirectoryState(previous, unwrap(pages.data), [], true);
     // The channels read by id stand in until every page has loaded.
-    return channelDirectoryState(Object.values(overlay()), [], false);
-  });
+    return nextChannelDirectoryState(
+      previous,
+      Object.values(overlay()),
+      [],
+      false
+    );
+  }, EMPTY_CHANNEL_DIRECTORY_STATE);
   const state = createMemo(() => views.apply(own.apply(read())));
 
   // The pages read a replica: the read right after a write can miss it, and
