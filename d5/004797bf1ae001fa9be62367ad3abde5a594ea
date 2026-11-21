@@ -1,0 +1,45 @@
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceipt.ts
+  s_86a3b382b10917::t_a8b35c3779ba4e 12,24-25
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_86a3b382b10917::t_c7c0db6013e4b4 12-13,16,35-39,42-45
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordSdkFingerprint.ts
+  s_86a3b382b10917::t_7729a281f33fb2 9-10
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_86a3b382b10917::t_2e94ef67f08ef2 109-110,226,268-275,279-280,291-292,297,335,353-355,361,372,485-488,497,501-524
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/modelImage.ts
+  s_86a3b382b10917::t_c94f0a2d1e3a5c 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/modelImageMediaType.ts
+  s_86a3b382b10917::t_f9c1bdeaa93b37 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/modelMediaType.ts
+  s_86a3b382b10917::t_0d9605d067b611 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_86a3b382b10917::t_9108fc63fd2fd0 9-11
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_86a3b382b10917::t_89b65877028a32 3492,3544-3604,3741-4063,4065,4070,4073,4075,4081-4087,4090,4092,4100-4109,4111-4119,4121,4124,4126,4131,4140-4141,4146,4151,4154,4156,4161-4162,4164,4166,5787-5849,6987-6991,7393-7484,7527-7541,7545-7548,7551,7668-7721,7736-7754,8058-8084,8211-8239,8292-8296,8380-8384,8571,9386-9459,9550-9564,9580-9921,10339-10342
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_86a3b382b10917::t_f87b75247c53c4 20953,20985-21209
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_86a3b382b10917::t_3f1f3af7509688 4927-4932,4941-4977,16778-16782,16809-16842
+packages/sdk/generated/agent-harness/index.ts
+  s_86a3b382b10917::t_f51ef17e16ca52 4
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_86a3b382b10917::t_8053ada2a626e0 2036-2039,2079-2080,2089-2090,2094,2539-2566,2676-2678,2680,5456
+packages/sdk/specs/agent-harness.json
+  s_86a3b382b10917::t_5ea73c2d76b62f 3492,7458-7464,7529,7547,7551,8211-8239,8382-8383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d5004797bf1ae001fa9be62367ad3abde5a594ea",
+  "prompts": {},
+  "sessions": {
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
