@@ -288,3 +288,57 @@ async fn the_sdk_declarations_type_check() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_program_that_reads_files_is_refused_at_its_line() {
+    let (root, checker) = checker().await;
+    let source = r#"export async function main({ macro }: StepContext) {
+  const bundle = await Deno.readTextFile('/tmp/run/sdk.mjs');
+  return { size: bundle.length, users: macro.users !== undefined };
+}
+"#;
+    let diagnostics = checker
+        .check(source, CONTEXT, ProgramImports::Sdk)
+        .await
+        .unwrap();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].file.as_deref(), Some("main.ts"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("A program can't read files: Deno.readTextFile"),
+        "{diagnostics:?}"
+    );
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("DescribeCodeTools and ReadCodeDocs")
+    );
+    assert!(
+        diagnostics[0].message.ends_with("at main.ts:2:24"),
+        "{diagnostics:?}"
+    );
+    let host = root.path().to_string_lossy();
+    assert!(!diagnostics[0].message.contains(host.as_ref()));
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn probing_the_sdk_only_warns_for_now() {
+    let (_root, checker) = checker().await;
+    let source = r#"export async function main({ macro }: StepContext) {
+  // @ts-ignore
+  const source = macro.users.toString();
+  const members = Object.getOwnPropertyNames(Object.getPrototypeOf(macro.users));
+  return { source, members, loose: (1 as any) };
+}
+"#;
+    assert_eq!(
+        checker
+            .check(source, CONTEXT, ProgramImports::Sdk)
+            .await
+            .unwrap(),
+        Vec::new()
+    );
+}

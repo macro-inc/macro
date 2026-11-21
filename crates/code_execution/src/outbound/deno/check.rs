@@ -25,6 +25,18 @@ const CONFIG: &str = r#"{"compilerOptions":{"skipLibCheck":true}}"#;
 /// The host's declarations, written as a module rather than a `.d.ts` so
 /// they are still checked. Not a name a program's file can take.
 const DECLARATIONS: &str = "context.global.ts";
+/// Lint rules for probing the SDK instead of reading its documentation
+/// (`check/probes.ts`), run beside the type check.
+const PROBES: &str = include_str!("check/probes.ts");
+/// The lint's configuration: the probe rules and the built-in rules for
+/// switching the type checker off.
+const LINT_CONFIG: &str = r#"{"lint":{"plugins":["./probes.ts"],"rules":{"tags":[],"include":["ban-ts-comment","no-explicit-any","macro/no-sandbox-read","macro/no-sdk-source","macro/no-reflection"]}}}"#;
+/// The lint rule whose finding refuses a program. The others are warnings for
+/// now, counted on the check's span so their rate can be read before they
+/// refuse programs too. The lint is a nudge toward the documentation, not a
+/// sandbox boundary: the runtime can read its scratch directory (it loads the
+/// SDK bundle from there), and a determined program can get past a lint.
+const REFUSED_RULE: &str = "macro/no-sandbox-read";
 /// Nothing a check reads comes from outside the files it is given.
 const OFFLINE: [&str; 4] = [
     "--no-lock",
@@ -39,6 +51,7 @@ pub struct DenoChecker {
     root: PathBuf,
     types: PathBuf,
     config: PathBuf,
+    lint_config: PathBuf,
     fingerprint: String,
     /// Checks running or waiting for a slot; one more is refused as busy.
     admitted: Arc<Semaphore>,
@@ -106,11 +119,15 @@ impl DenoChecker {
         tokio::fs::create_dir_all(root.join("cache")).await?;
         let config = root.join("check.json");
         tokio::fs::write(&config, CONFIG).await?;
+        tokio::fs::write(root.join("probes.ts"), PROBES).await?;
+        let lint_config = root.join("lint.json");
+        tokio::fs::write(&lint_config, LINT_CONFIG).await?;
         Ok(Self {
             binary,
             root,
             types,
             config,
+            lint_config,
             fingerprint: sdk.fingerprint,
             admitted: Arc::new(Semaphore::new(concurrency.max(1) + max_queued)),
             slots: Arc::new(Semaphore::new(concurrency.max(1))),
@@ -167,7 +184,7 @@ impl DenoChecker {
             .map_err(internal)?;
         let mut config = std::ffi::OsString::from("--config=");
         config.push(&self.config);
-        let output = Command::new(&self.binary)
+        let checked = Command::new(&self.binary)
             .env_clear()
             .env("DENO_DIR", self.root.join("cache"))
             .env("HOME", check)
@@ -183,11 +200,16 @@ impl DenoChecker {
             .arg(DECLARATIONS)
             .stdin(Stdio::null())
             .kill_on_drop(true)
-            .output()
-            .await
-            .map_err(internal)?;
+            .output();
+        let (output, findings) = tokio::join!(checked, self.lint(check, files));
+        let output = output.map_err(internal)?;
+        let (refused, warned): (Vec<_>, Vec<_>) = findings
+            .into_iter()
+            .partition(|finding| finding.code == REFUSED_RULE);
+        record_probes(&refused, &warned);
+        let refused = refused.iter().map(|finding| finding.diagnostic(&check_url));
         if output.status.success() {
-            return Ok(Vec::new());
+            return Ok(refused.collect());
         }
         let text = String::from_utf8_lossy(&output.stderr);
         let diagnostics = diagnostics(&text, &check_url, &types_url);
@@ -195,8 +217,115 @@ impl DenoChecker {
             tracing::warn!("type checker failed without diagnostics");
             return Err(CheckError::Internal);
         }
-        Ok(diagnostics)
+        Ok(diagnostics.into_iter().chain(refused).collect())
     }
+
+    /// The probe lint's findings in `files`. A lint that can't run or answer
+    /// finds nothing, recorded on the span as `probe_lint = "failed"`: the type
+    /// check still decides, as it did before the lint.
+    async fn lint(&self, check: &std::path::Path, files: &[SourceFile]) -> Vec<LintFinding> {
+        let mut config = std::ffi::OsString::from("--config=");
+        config.push(&self.lint_config);
+        let output = Command::new(&self.binary)
+            .env_clear()
+            .env("DENO_DIR", self.root.join("cache"))
+            .env("HOME", check)
+            .env("TMPDIR", check)
+            .env("DENO_NO_UPDATE_CHECK", "1")
+            .env("NO_COLOR", "1")
+            .current_dir(check)
+            .args(["lint", "--json"])
+            .arg(config)
+            .args(files.iter().map(|file| file.name.as_str()))
+            .stdin(Stdio::null())
+            .kill_on_drop(true)
+            .output()
+            .await;
+        let report = match output {
+            Ok(output) => serde_json::from_slice::<LintReport>(&output.stdout).map_err(|_| {
+                (
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr).into_owned(),
+                )
+            }),
+            Err(error) => Err((None, error.to_string())),
+        };
+        let span = tracing::Span::current();
+        match report {
+            Ok(report) => {
+                span.record("probe_lint", "ran");
+                report.diagnostics
+            }
+            Err((status, cause)) => {
+                span.record("probe_lint", "failed");
+                tracing::warn!(?status, cause = %cause.chars().take(500).collect::<String>(), "probe lint failed to report");
+                Vec::new()
+            }
+        }
+    }
+}
+
+/// `deno lint --json`'s report.
+#[derive(Deserialize)]
+struct LintReport {
+    diagnostics: Vec<LintFinding>,
+}
+
+/// One lint finding: the rule, what it found and where.
+#[derive(Deserialize)]
+struct LintFinding {
+    filename: String,
+    range: LintRange,
+    code: String,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct LintRange {
+    start: LintPosition,
+}
+
+/// A 1-based line and 0-based column, as `deno lint` reports them.
+#[derive(Deserialize)]
+struct LintPosition {
+    line: u32,
+    col: u32,
+}
+
+impl LintFinding {
+    /// A refused finding as a check diagnostic, located like the type
+    /// checker's.
+    fn diagnostic(&self, check_url: &str) -> Diagnostic {
+        let file = self.filename.strip_prefix(check_url);
+        Diagnostic {
+            file: file.map(str::to_owned),
+            message: format!(
+                "A program can't read files: {} would only find the sandbox. Learn the SDK from DescribeCodeTools and ReadCodeDocs instead.\n    at {}:{}:{}",
+                self.message,
+                file.unwrap_or("<program>"),
+                self.range.start.line,
+                self.range.start.col + 1,
+            ),
+        }
+    }
+}
+
+/// Count the probe warnings on the check's span, with every rule the lint
+/// found broken, refused ones included.
+fn record_probes(refused: &[LintFinding], warned: &[LintFinding]) {
+    if refused.is_empty() && warned.is_empty() {
+        return;
+    }
+    let mut rules: Vec<&str> = refused
+        .iter()
+        .chain(warned)
+        .map(|finding| finding.code.as_str())
+        .collect();
+    rules.sort_unstable();
+    rules.dedup();
+    let span = tracing::Span::current();
+    span.record("probe_warnings", warned.len() as i64);
+    span.record("probe_rules", rules.join(",").as_str());
 }
 
 #[async_trait]
@@ -214,6 +343,9 @@ impl ProgramChecker for DenoChecker {
             imports = ?imports,
             waited_ms = tracing::field::Empty,
             diagnostics = tracing::field::Empty,
+            probe_lint = tracing::field::Empty,
+            probe_warnings = tracing::field::Empty,
+            probe_rules = tracing::field::Empty,
             outcome = tracing::field::Empty,
         ),
         err
