@@ -269,7 +269,7 @@ struct RankScan<'a> {
 }
 
 fn ordered_scan(
-    connection: &Arc<Connection>,
+    connection: &Db,
     read: &mut NameSearchRead<'_>,
     stage: NameStage,
     scan: &RankScan<'_>,
