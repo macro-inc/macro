@@ -47,6 +47,7 @@ members = [
   "crates/channel_bots",
   "crates/channel_labels",
   "crates/client/cache-core",
+  "crates/client/cache-diff-fuzz",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",

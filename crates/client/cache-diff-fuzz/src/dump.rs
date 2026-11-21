@@ -1,0 +1,61 @@
+//! Reads every row of every table of a closed cache file, so two builds can be
+//! compared on what they left on disk, not only on what they answer.
+
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::sync::Arc;
+use turso_core::{Database, IO, OpenOptions, PlatformIO, SqliteDialect, StepResult, Statement};
+
+/// Table name to its rows, each row as text, sorted.
+pub fn tables(path: &Path) -> Result<BTreeMap<String, Vec<String>>, String> {
+    let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(|error| error.to_string())?);
+    let path = path.to_str().ok_or("path is not UTF-8")?;
+    let database = Database::open(io, path, OpenOptions::new(Arc::new(SqliteDialect)))
+        .map_err(|error| error.to_string())?;
+    let connection = database.connect().map_err(|error| error.to_string())?;
+    let mut names = Vec::new();
+    let mut statement = connection
+        .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' ORDER BY name")
+        .map_err(|error| error.to_string())?;
+    rows(&mut statement, |values| {
+        if let Some(name) = values.first() {
+            names.push(name.clone());
+        }
+    })?;
+    let mut out = BTreeMap::new();
+    for name in names {
+        let name = name.trim_matches('"').to_owned();
+        let mut statement = connection
+            .prepare(format!("SELECT * FROM \"{}\"", name.replace('"', "\"\"")))
+            .map_err(|error| format!("{name}: {error}"))?;
+        let mut table = Vec::new();
+        rows(&mut statement, |values| table.push(values.join("\u{1f}")))?;
+        table.sort();
+        out.insert(name, table);
+    }
+    connection.close().map_err(|error| error.to_string())?;
+    Ok(out)
+}
+
+fn rows(statement: &mut Statement, mut visit: impl FnMut(Vec<String>)) -> Result<(), String> {
+    loop {
+        match statement.step().map_err(|error| error.to_string())? {
+            StepResult::Done => return Ok(()),
+            StepResult::Row => {
+                let row = statement.row().ok_or("row without values")?;
+                let values = row
+                    .get_values()
+                    .map(|value| match value {
+                        turso_core::Value::Text(text) => text.as_str().to_owned(),
+                        other => format!("{other:?}"),
+                    })
+                    .collect();
+                visit(values);
+            }
+            StepResult::IO | StepResult::Yield => {
+                statement._io().step().map_err(|error| error.to_string())?;
+            }
+            StepResult::Busy | StepResult::Interrupt => return Err("busy".into()),
+        }
+    }
+}
