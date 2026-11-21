@@ -524,8 +524,15 @@ function swappedAt(a, b, p, q) {
   const oa = pairOrders(a, p, q);
   return [...pairOrders(b, p, q)].some(([path, pFirst]) => pFirst && oa.get(path) === false);
 }
-// A GraphQL field and the reader's spelling of it (displayOrder, display_order).
-const sameField = (a, b) => a.replace(/_/g, '').toLowerCase() === b.replace(/_/g, '').toLowerCase();
+// A GraphQL field and the reader's or caller's spelling of it (displayOrder,
+// display_order; the property panel's domain row calls data_type valueType,
+// toPropertyDefinitionDomain in features/property/utils/transforms.ts).
+const FIELD_ALIASES = { datatype: 'valuetype' };
+const fieldKey = (f) => {
+  const k = f.replace(/_/g, '').toLowerCase();
+  return FIELD_ALIASES[k] ?? k;
+};
+const sameField = (a, b) => fieldKey(a) === fieldKey(b);
 const fieldOf = (row, field) => Object.entries(row).filter(([k]) => sameField(k, field)).map(([, v]) => J(v));
 function shows(m, level, kind, a, b, norm, rawB) {
   if (m.kind === 'drop-row') return rowsWith(a, m.id).length > 0 && rowsWith(b, m.id).length === 0;
