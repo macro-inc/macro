@@ -165,7 +165,7 @@ impl DssEvents {
             .timeout(UNARY_TIMEOUT)
             .send()
             .await
-            .map_err(|error| StoreError::Internal(rootcause::Report::new(error).into_dynamic()))?;
+            .map_err(|error| StoreError::Internal(transport(error)))?;
         if response.status().is_success() {
             return Ok(response);
         }
@@ -173,7 +173,7 @@ impl DssEvents {
         match response.json::<McpSubscriptionErrorBody>().await {
             Ok(body) => Err(StoreError::Refused(body)),
             Err(error) => Err(StoreError::Internal(
-                rootcause::Report::new(error)
+                rootcause::Report::new(error.without_url())
                     .context(format!("unexpected status {status}"))
                     .into_dynamic(),
             )),
@@ -197,7 +197,7 @@ impl SubscriptionStore for DssEvents {
             .await?
             .json()
             .await
-            .map_err(|error| StoreError::Internal(rootcause::Report::new(error).into_dynamic()))
+            .map_err(|error| StoreError::Internal(transport(error)))
     }
 
     #[tracing::instrument(name = "mcp_events.store.unsubscribe", skip_all, err)]
@@ -243,7 +243,7 @@ impl EventSource for DssEvents {
         let response = builder
             .send()
             .await
-            .map_err(|error| SourceError(rootcause::Report::new(error).into_dynamic()))?;
+            .map_err(|error| SourceError(transport(error)))?;
         let status = response.status();
         if !status.is_success() {
             return Err(SourceError(rootcause::report!(
@@ -251,7 +251,11 @@ impl EventSource for DssEvents {
             )));
         }
         let mut events = SseStream::with_decoder(SseDecoder::with_limit(MAX_EVENT_BYTES));
-        events.attach(response.bytes_stream());
+        events.attach(
+            response
+                .bytes_stream()
+                .map(|chunk| chunk.map_err(reqwest::Error::without_url)),
+        );
         Ok(events
             .filter_map(|item| async move {
                 match item {
@@ -268,6 +272,12 @@ impl EventSource for DssEvents {
             })
             .boxed())
     }
+}
+
+/// A transport error without its URL: the stream's URL carries the filter's
+/// event names and ids, which logs and spans must not hold.
+fn transport(error: reqwest::Error) -> rootcause::Report {
+    rootcause::Report::new(error.without_url()).into_dynamic()
 }
 
 /// One SSE message of the event stream.

@@ -17,7 +17,7 @@ pub(crate) fn describe(filter: &McpEventFilter) -> String {
 fn clause(clause: &McpFilterClause) -> String {
     let mut text = format!("{} events", list(&clause.events, "or", |event| code(event)));
     if let Some(ids) = &clause.ids {
-        text.push_str(&format!(" for {}", list(ids, "or", |id| code(id))));
+        text.push_str(&format!(" for {}", list(ids, "or", |id| quoted(id))));
     }
     let conditions: Vec<String> = clause
         .all_of
@@ -58,9 +58,15 @@ fn condition(condition: &McpFieldCondition, events: &[String]) -> String {
 
 fn value(value: &McpFilterValue) -> String {
     match value {
-        McpFilterValue::Literal { value } => code(value),
+        McpFilterValue::Literal { value } => quoted(value),
         McpFilterValue::Me => "you".to_owned(),
     }
+}
+
+/// A value as a JSON string in a code span, so edge spaces, line breaks and
+/// other characters a Markdown renderer would fold stay visible and exact.
+fn quoted(text: &str) -> String {
+    code(&serde_json::Value::from(text).to_string())
 }
 
 /// `text` as a code span whose fence is longer than any run of backticks

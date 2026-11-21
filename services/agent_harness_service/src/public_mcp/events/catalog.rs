@@ -84,9 +84,10 @@ pub(crate) fn selection(name: &str, arguments: &Value) -> Result<Selection, Even
         let QueryArguments { query, filter } = serde_json::from_value(arguments.clone())
             .map_err(|error| EventsError::InvalidParams(format!("arguments: {error}")))?;
         let query = query.trim();
-        if query.is_empty() || query.chars().count() > MAX_QUERY_CHARS {
+        // PostgreSQL cannot store a NUL character in the stored arguments.
+        if query.is_empty() || query.chars().count() > MAX_QUERY_CHARS || query.contains('\0') {
             return Err(EventsError::InvalidParams(format!(
-                "arguments.query must be 1 to {MAX_QUERY_CHARS} characters"
+                "arguments.query must be 1 to {MAX_QUERY_CHARS} characters, with no NUL character"
             )));
         }
         return Ok(Selection::Query {
@@ -108,10 +109,10 @@ pub(crate) fn selection(name: &str, arguments: &Value) -> Result<Selection, Even
             || ids.len() > MAX_VALUES
             || ids
                 .iter()
-                .any(|id| id.is_empty() || id.len() > MAX_VALUE_LEN))
+                .any(|id| id.is_empty() || id.len() > MAX_VALUE_LEN || id.contains('\0')))
     {
         return Err(EventsError::InvalidParams(format!(
-            "arguments.ids holds 1 to {MAX_VALUES} ids of 1 to {MAX_VALUE_LEN} bytes"
+            "arguments.ids holds 1 to {MAX_VALUES} ids of 1 to {MAX_VALUE_LEN} bytes, with no NUL character"
         )));
     }
     Ok(Selection::Event { name, ids })

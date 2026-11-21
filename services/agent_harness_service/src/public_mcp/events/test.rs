@@ -365,6 +365,8 @@ fn a_query_is_trimmed_and_bounded() {
     // `null` is not a filter, so it is refused rather than taken for words alone.
     assert!(selection(QUERY_EVENT, &json!({"query": "x", "filter": null})).is_err());
     assert!(selection(QUERY_EVENT, &json!({"query": "   "})).is_err());
+    // PostgreSQL cannot store a NUL character.
+    assert!(selection(QUERY_EVENT, &json!({"query": "new\u{0}messages"})).is_err());
     let long = "a".repeat(MAX_QUERY_CHARS + 1);
     assert!(selection(QUERY_EVENT, &json!({"query": long})).is_err());
     assert!(selection(QUERY_EVENT, &json!({})).is_err());
@@ -389,6 +391,7 @@ fn a_named_type_takes_optional_ids() {
     );
     assert!(selection("message.posted", &json!({"ids": []})).is_err());
     assert!(selection("message.posted", &json!({"ids": [""]})).is_err());
+    assert!(selection("message.posted", &json!({"ids": ["chan\u{0}nel"]})).is_err());
     let many: Vec<String> = (0..17).map(|index| index.to_string()).collect();
     assert!(selection("message.posted", &json!({"ids": many})).is_err());
     assert!(selection("message.posted", &json!({"query": "x"})).is_err());
@@ -466,7 +469,7 @@ async fn words_alone_are_compiled_and_shown_back_without_subscribing() {
     .await
     .unwrap_err();
 
-    let reading = "`message.mentioned` events where the message is in a `channel` and the mentioned item is you.";
+    let reading = "`message.mentioned` events where the message is in a `\"channel\"` and the mentioned item is you.";
     assert_eq!(error.code.0, -32602);
     assert!(error.message.starts_with("Nothing is subscribed yet."));
     assert!(error.message.contains(reading));
@@ -506,7 +509,7 @@ async fn a_confirmed_filter_subscribes_without_a_model_call() {
     );
     assert_eq!(
         result["_meta"][INTERPRETATION_META],
-        "`message.mentioned` events where the message is in a `channel` and the mentioned item is you."
+        "`message.mentioned` events where the message is in a `\"channel\"` and the mentioned item is you."
     );
     assert_eq!(*fixture.sealer.sealed.lock().unwrap(), 1);
     {
@@ -574,7 +577,7 @@ async fn a_named_type_sends_its_filter_without_a_model_call() {
     assert!(fixture.compiler.queries.lock().unwrap().is_empty());
     assert_eq!(
         result["_meta"][INTERPRETATION_META],
-        format!("`message.posted` events for `{CHANNEL}`.")
+        format!("`message.posted` events for `\"{CHANNEL}\"`.")
     );
 }
 
@@ -1022,10 +1025,10 @@ fn the_reading_names_every_alternative() {
     assert_eq!(
         super::describe::describe(&filter),
         format!(
-            "Any of: `message.posted` or `message.patched` events for `{CHANNEL}` or \
-             `{OTHER_CHANNEL}` where whoever acted (sent it, or for an edit, deletion or \
+            "Any of: `message.posted` or `message.patched` events for `\"{CHANNEL}\"` or \
+             `\"{OTHER_CHANNEL}\"` where whoever acted (sent it, or for an edit, deletion or \
              attachment change, whoever made that change, not necessarily its author) is \
-             `{OTHER}` or you; or `document.created` events."
+             `\"{OTHER}\"` or you; or `document.created` events."
         )
     );
 }
@@ -1051,7 +1054,7 @@ fn the_reading_names_the_sender_only_where_the_actor_is_the_sender() {
 }
 
 #[test]
-fn a_value_holding_backticks_reads_as_one_value() {
+fn a_value_reads_exactly_as_one_value() {
     let in_parent = |values: &[&str]| McpEventFilter {
         any_of: vec![McpFilterClause {
             events: vec!["message.posted".to_owned()],
@@ -1065,8 +1068,14 @@ fn a_value_holding_backticks_reads_as_one_value() {
     let two = super::describe::describe(&in_parent(&["channel", "document"]));
     let one = super::describe::describe(&in_parent(&["channel` or `document"]));
     assert_ne!(two, one);
-    assert!(two.contains("a `channel` or `document`."));
-    assert!(one.contains("a `` channel` or `document ``."));
+    assert!(two.contains(r#"a `"channel"` or `"document"`."#));
+    assert!(one.contains(r#"a `` "channel` or `document" ``."#));
+    // Edge spaces and line breaks, which a Markdown code span folds, stay
+    // visible.
+    let spaced = super::describe::describe(&in_parent(&[" channel "]));
+    assert!(spaced.contains(r#"a `" channel "`."#));
+    let broken = super::describe::describe(&in_parent(&["chan\nnel"]));
+    assert!(broken.contains(r#"a `"chan\nnel"`."#));
 }
 
 // --- the live source ------------------------------------------------------
