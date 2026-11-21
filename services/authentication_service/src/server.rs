@@ -786,8 +786,23 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            // The notice goes to the admin's email correspondents, read from
+            // the legacy graph or the list-aware tables by the admin's
+            // `contacts-list-reads` flag; without a PostHog key, the legacy
+            // graph.
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
-                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+                contacts::domain::list_reads::FlaggedContactReads::new(
+                    Arc::new(contacts::domain::service::ContactsDomainService {
+                        repository: contacts::outbound::repository::DbContactsRepository::new(
+                            db.clone(),
+                        ),
+                        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+                    }),
+                    Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+                        db.clone(),
+                    )),
+                    contacts::domain::list_reads::ContactListReads::optional(feature_flags.clone()),
+                ),
             ),
             teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
                 teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
