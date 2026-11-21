@@ -502,7 +502,32 @@ async function settle(client: QueryClient, reg: Registry, boundMs: number) {
     } else quietSince = -1;
     await sleep(15);
   }
-  return { ms: Math.round(performance.now() - start), timedOut: true };
+  return {
+    ms: Math.round(performance.now() - start),
+    timedOut: true,
+    busy: busyNow(client, reg),
+  };
+}
+
+// The queries, mutations and readers still busy when a settle timed out.
+function busyNow(client: QueryClient, reg: Registry) {
+  const out: Record<string, unknown>[] = [];
+  for (const q of client.getQueryCache().getAll())
+    if (q.state.fetchStatus !== 'idle')
+      out.push({
+        query: JSON.stringify(q.queryKey).slice(0, 200),
+        fetchStatus: q.state.fetchStatus,
+        status: q.state.status,
+        failures: q.state.fetchFailureCount,
+      });
+  if (client.isMutating() > 0) out.push({ mutating: client.isMutating() });
+  for (const [id, read] of reg) {
+    if (id === 'callers') continue;
+    const s = read() as { fetchStatus: string; status: string };
+    if (s.fetchStatus !== 'idle')
+      out.push({ reader: id, fetchStatus: s.fetchStatus, status: s.status });
+  }
+  return out;
 }
 
 function snapshot(reg: Registry) {

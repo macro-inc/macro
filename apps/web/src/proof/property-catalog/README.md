@@ -188,9 +188,15 @@ The counts measure work attempted, not successes, and are not interchangeable:
   reused for `ROTATE` (25) sequences, and a refused signup clears the sign-up
   counter in the instance's own Redis (`$REDIS_CONTAINER`, as the email e2e
   tier does) and retries; with `REDIS_CONTAINER=` it waits five minutes instead.
-- The dev server now and then serves a reloaded page without its modules
-  (`ERR_NETWORK_CHANGED` on a machine with many network interfaces). The
-  harness retries the load and records it in `harnessErrors`; a write the dev
-  server never answers fails on both sides alike.
+- Chromium aborts every request in flight when the machine's network
+  interfaces change (`ERR_NETWORK_CHANGED`; on a machine where other stacks'
+  containers add and remove virtual interfaces all the time), and one lost
+  module fails the page's whole module graph. A load that loses a module is
+  retried at once, up to 8 times, and recorded in `harnessErrors`; a write
+  whose request is lost fails on both sides alike.
+- A settle timeout (level `settle`) records what that side was still waiting
+  on: its busy queries and readers (`busy`), its API requests in flight with
+  their age (`inflight`) and its last failed requests (`net`), in `diffs` and
+  `examples`.
 - `out/` can hold Playwright error dumps with the local session cookie; it is
   gitignored, and nothing from it is published unscanned.

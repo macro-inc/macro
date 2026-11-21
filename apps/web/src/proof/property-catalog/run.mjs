@@ -848,29 +848,53 @@ async function openSide(storageState, side, label) {
     if (s.netlog.length > 40) s.netlog.shift();
   };
   page.on('requestfailed', (r) => note(`failed ${new URL(r.url()).pathname.slice(0, 90)} ${r.failure()?.errorText}`));
+  // API requests in flight, so a settle timeout can say what it waited on.
+  const inflight = new Map();
+  const isModule = (r) => /^\/(src|node_modules|@)/.test(new URL(r.url()).pathname);
+  page.on('request', (r) => !isModule(r) && inflight.set(r, { method: r.method(), path: maskPath(new URL(r.url()).pathname), at: Date.now() }));
+  page.on('requestfinished', (r) => inflight.delete(r));
+  page.on('requestfailed', (r) => inflight.delete(r));
   page.on('response', (r) => r.status() >= 400 && /\/(src|node_modules|@)/.test(r.url()) && note(`${r.status()} ${new URL(r.url()).pathname.slice(0, 90)}`));
   page.on('console', (m) => m.type() === 'error' && !/Vite server|Failed to load resource/.test(m.text()) && note(`console ${m.text().slice(0, 120)}`));
-  const s = { ctx: bctx, page, tap, side, label, old, sameUserLoad };
+  const s = { ctx: bctx, page, tap, side, label, old, sameUserLoad, inflight };
   await loadHarness(s);
   return s;
 }
-// Load (or reload) the harness page. The dev server now and then leaves a
-// reload without its modules; that is retried and recorded, never compared.
+// Load (or reload) the harness page. Chromium aborts the module requests in
+// flight whenever the machine's network interfaces change (another stack's
+// containers coming and going), and one failed module fails the page's whole
+// module graph; that load is retried and recorded, never compared.
+const LOAD_ATTEMPTS = 8;
+// Ready, or a module request already failed: a page that lost a module never
+// becomes ready, so it is reloaded at once instead of after the timeout.
+async function waitReady(s) {
+  const bound = Number(E.READY_MS ?? 120000);
+  const deadline = Date.now() + bound;
+  for (;;) {
+    const ready = await s.page.evaluate(() => !!(window.__harnessReady && window.__h.authenticated() === true)).catch(() => false);
+    if (ready) return;
+    const dead = s.netlog.find((x) => /^failed \/(src|node_modules|@)/.test(x));
+    if (dead) throw new Error(`module request failed: ${dead}`);
+    if (Date.now() > deadline) throw new Error(`page.waitForFunction: Timeout ${bound}ms exceeded.`);
+    await sleep(250);
+  }
+}
 // Every load then checks which query modules the page runs.
 async function loadHarness(s) {
   for (let attempt = 1; ; attempt++) {
     s.netlog = [];
     try {
       await s.page.goto(HARNESS, { waitUntil: 'load', timeout: 300000 });
-      await s.page.waitForFunction(() => window.__harnessReady && window.__h.authenticated() === true, null, { timeout: Number(E.READY_MS ?? 120000) });
+      await waitReady(s);
       break;
     } catch (e) {
       const st = await s.page.evaluate(() => ({ ready: !!window.__harnessReady, auth: window.__h?.authenticated?.(), url: location.href, body: document.body.innerText.slice(0, 200) })).catch((x) => String(x));
       const msg = `${s.label}: harness not ready (attempt ${attempt}) ${JSON.stringify(st)}: ${e.message.slice(0, 100)}; last requests: ${JSON.stringify(s.netlog.slice(-8))}`;
       R.harnessReloadRetries = (R.harnessReloadRetries ?? 0) + 1;
       harnessError(msg);
-      if (attempt >= 4) throw new Error(msg);
+      if (attempt >= LOAD_ATTEMPTS) throw new Error(msg);
       log(msg.slice(0, 300));
+      await sleep(2000 * attempt);
     }
   }
   const sides = await ev(s, 'moduleSides');
@@ -1161,12 +1185,18 @@ async function setKeys(pair, keys) {
   await Promise.all(sides(pair).map((s) => ev(s, 'setKeys', keys)));
   for (const k of keys) cover('open reader', k.k === 'defs' ? `defs:${k.scope}` : k.k);
 }
+// What a side that timed out was still waiting on: its busy queries, its API
+// requests in flight (with their age) and its last failed requests.
+function waitedOn(s, t) {
+  const now = Date.now();
+  return { busy: t.busy ?? null, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), net: (s.netlog ?? []).slice(-8) };
+}
 async function settleAll(pair) {
   const res = await Promise.all(sides(pair).map((s) => ev(s, 'settle', CONFIG.settleMs)));
   // A side that did not settle within the bound broke the live-update bound:
   // a difference, and its snapshot is not compared as data.
   res.forEach((t, i) => {
-    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms });
+    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms, ...waitedOn(sides(pair)[i], t) });
   });
   for (const t of res) {
     R.settle.samples++;
@@ -1212,7 +1242,7 @@ async function compareStep(pair, level, op) {
     if (f.timing.timedOut) R.settle.fresh.timeouts++;
   }
   fresh.forEach((f, i) => {
-    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms });
+    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms, ...waitedOn(sides(pair)[i], f.timing) });
   });
   const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);
