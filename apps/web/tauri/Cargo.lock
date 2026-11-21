@@ -1075,7 +1075,6 @@ dependencies = [
  "lru",
  "macro_user_id",
  "maybe_send",
- "miniz_oxide",
  "postcard",
  "predicate-index",
  "serde",
