@@ -36,7 +36,7 @@ import {
   cursorFromSortKey,
 } from './sort-key';
 import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
-import { withUnsettledReplies } from './unsettled-replies';
+import { listQueuedReplies, withUnsettledReplies } from './unsettled-replies';
 
 export type ChannelPageHost = Pick<
   CacheHost,
@@ -217,6 +217,8 @@ export async function readDeviceChannelPage(
   const result = await host.channelTimeline(cacheArgs(request));
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
   if (!result.covered) return { kind: 'miss', storedSeq: result.seq };
+  // Listed beside the records, so the page waits on the slower of the two.
+  const queued = listQueuedReplies(host, request.channelId);
   const records = await readTimelineRecords(host, result.keys);
   if (!records) return { kind: 'miss', storedSeq: result.seq };
   return {
@@ -225,7 +227,8 @@ export async function readDeviceChannelPage(
     page: await withUnsettledReplies(
       host,
       request.channelId,
-      timelinePage(records, result.olderCursor, result.newerCursor)
+      timelinePage(records, result.olderCursor, result.newerCursor),
+      queued
     ),
     storedSeq: result.seq,
   };

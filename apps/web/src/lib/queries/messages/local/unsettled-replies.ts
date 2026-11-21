@@ -109,12 +109,16 @@ async function queuedReplies(
   return rootOf;
 }
 
-/** Whether a reply to the channel waits in the device queue. */
-export async function channelHasQueuedReplies(
+/** Whether a reply to one of the page's roots waits in the device queue. */
+export async function pageHasQueuedReplies(
   host: UnsettledRepliesHost,
-  channelId: string
+  channelId: string,
+  page: MessageTimelinePage
 ): Promise<boolean> {
-  return (await queuedReplies(host, channelId)).size > 0;
+  const roots = rootIdsOf(page.entries);
+  if (roots.size === 0) return false;
+  const rootOf = await queuedReplies(host, channelId);
+  return [...rootOf.values()].some((rootId) => roots.has(rootId));
 }
 
 function isBefore(earlier: string | null | undefined, later: string): boolean {
@@ -125,12 +129,31 @@ function isBefore(earlier: string | null | undefined, later: string): boolean {
   return left < right;
 }
 
+function byTimeWritten(left: Message, right: Message): number {
+  const [first, second] = [
+    timestampMicros(left.created_at),
+    timestampMicros(right.created_at),
+  ];
+  if (first === undefined || second === undefined || first === second) {
+    return 0;
+  }
+  return first < second ? -1 : 1;
+}
+
 function rootIdsOf(entries: readonly MessageTimelineEntry[]): Set<string> {
   return new Set(
     entries.flatMap((entry) =>
       entry.type === 'activity' ? [] : [entry.message.id]
     )
   );
+}
+
+/** Lists the channel's waiting replies, for a page read to take in. */
+export function listQueuedReplies(
+  host: UnsettledRepliesHost,
+  channelId: string
+): Promise<Map<string, string>> {
+  return queuedReplies(host, channelId);
 }
 
 /**
@@ -141,10 +164,12 @@ function rootIdsOf(entries: readonly MessageTimelineEntry[]): Set<string> {
 export async function withUnsettledReplies(
   host: UnsettledRepliesHost,
   channelId: string,
-  page: MessageTimelinePage
+  page: MessageTimelinePage,
+  /** The queue as it was listed while the page was being read. */
+  queued: Promise<Map<string, string>> = queuedReplies(host, channelId)
 ): Promise<MessageTimelinePage> {
   const roots = rootIdsOf(page.entries);
-  const rootOf = await queuedReplies(host, channelId);
+  const rootOf = new Map(await queued);
   const queuedIds = new Set(rootOf.keys());
   for (const [id, note] of ownReplies) {
     if (note.channelId === channelId) rootOf.set(id, note.rootId);
@@ -172,7 +197,10 @@ export async function withUnsettledReplies(
       ownReplies.delete(id);
       continue;
     }
-    if (reply.deleted_at) continue;
+    if (reply.deleted_at) {
+      if (note?.delivered) ownReplies.delete(id);
+      continue;
+    }
     const placed = !queuedIds.has(id) && note?.delivered === true;
     byRoot.set(rootId, [...(byRoot.get(rootId) ?? []), { reply, placed }]);
   }
@@ -185,8 +213,12 @@ export async function withUnsettledReplies(
       const replies = byRoot.get(entry.message.id);
       if (!replies) return entry;
       let thread = entry.message.thread;
+      // The server previews a thread's first replies only. A root that counts
+      // more than it previews may count a waiting reply already, when the
+      // answer to its send was lost; nothing here can tell.
+      const cutShort = thread.preview.length < thread.reply_count;
       const ordered = [...replies].sort((left, right) =>
-        isBefore(left.reply.created_at, right.reply.created_at) ? -1 : 1
+        byTimeWritten(left.reply, right.reply)
       );
       for (const { reply, placed } of ordered) {
         if (thread.preview.some((shown) => shown.id === reply.id)) {
@@ -199,6 +231,7 @@ export async function withUnsettledReplies(
           ownReplies.delete(reply.id);
           continue;
         }
+        if (!placed && cutShort) continue;
         thread = { ...thread, ...insertReplyIntoThreadPreview(thread, reply) };
       }
       return thread === entry.message.thread
@@ -208,7 +241,7 @@ export async function withUnsettledReplies(
   };
 }
 
-/** For tests. */
+/** Forgets every note: they belong to the account and cache they were made for. */
 export function resetUnsettledReplies(): void {
   ownReplies.clear();
 }

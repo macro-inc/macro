@@ -537,9 +537,12 @@ describe('queued channel writes', () => {
 });
 
 describe('a reply and the page of its root', () => {
-  const replyOn = async (answer: Answer) => {
+  const replyOn = async (
+    answer: Answer,
+    thread: ChannelMessageFieldsFragment['thread'] = graphqlMessage(1).thread
+  ) => {
     resetUnsettledReplies();
-    const root = graphqlMessage(1);
+    const root = graphqlMessage(1, { thread });
     const reply = graphqlMessage(8, { threadId: root.id });
     const { client } = fakeClient(() => answer);
     const outcome = await sendChannelMessage(
@@ -574,6 +577,27 @@ describe('a reply and the page of its root', () => {
 
     expect(thread.reply_count).toBe(1);
     expect(thread.preview.map((shown) => shown.id)).toEqual([reply.id]);
+  });
+
+  it('counts a delivered reply on a root that previews only its first replies', async () => {
+    const base = graphqlMessage(1);
+    const first = graphqlMessage(2, { threadId: base.id });
+    const reply = graphqlMessage(8, { threadId: base.id });
+    const { thread } = await replyOn(
+      {
+        data: { sendChannelMessage: reply },
+        disposition: { kind: 'committed' },
+      },
+      base.thread && {
+        ...base.thread,
+        replyCount: 5,
+        latestReplyAt: first.createdAt,
+        preview: [first],
+      }
+    );
+
+    // Only a reply the server is known to have placed is counted there.
+    expect(thread.reply_count).toBe(6);
   });
 
   it('takes a refused reply off its root', async () => {

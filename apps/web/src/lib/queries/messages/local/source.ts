@@ -31,7 +31,7 @@ import {
   type UnheldRead,
   unheldReadsLeft,
 } from './unheld-reads';
-import { channelHasQueuedReplies } from './unsettled-replies';
+import { pageHasQueuedReplies } from './unsettled-replies';
 import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
@@ -98,7 +98,7 @@ async function settleServerPage(
   if (storedSeq === null) return;
   if (
     (await pageHasPendingWrites(host, request)) ||
-    (await channelHasQueuedReplies(host, request.channelId))
+    (await pageHasQueuedReplies(host, request.channelId, loaded.page))
   ) {
     refreshChannelViews(request.channelId);
   }

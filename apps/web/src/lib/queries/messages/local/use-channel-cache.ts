@@ -27,6 +27,7 @@ import { evictIdleChannels, runChannelPrewarm } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
 import { holdUnheldReads } from './source';
 import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
+import { resetUnsettledReplies } from './unsettled-replies';
 import { sendChannelMessage } from './writes';
 
 /** Leaves startup and the first screen alone. */
@@ -134,6 +135,7 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
       // Sequence bookkeeping belongs to the account and cache it was read for.
       resetChannelSync();
       resetPendingChannelPages();
+      resetUnsettledReplies();
     });
   });
 

@@ -1,13 +1,13 @@
 import type { MutationInspection } from '@graphql-cache/protocol';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mapChannelMessage } from '../map';
+import { mapChannelMessage, mapChannelRoot } from '../map';
 import { readDeviceChannelPage } from '../pages';
 import {
-  channelHasQueuedReplies,
   forgetOwnReply,
   noteOwnReply,
   ownReplyDelivered,
+  pageHasQueuedReplies,
   resetUnsettledReplies,
 } from '../unsettled-replies';
 import {
@@ -176,6 +176,38 @@ describe('a device page and the replies its roots do not show yet', () => {
     expect(thread.preview).toHaveLength(1);
   });
 
+  it('leaves a waiting reply off a root that counts more than it previews', async () => {
+    // The answer to the send may have been lost: the root may count it.
+    const base = graphqlMessage(1);
+    const first = graphqlMessage(2, { threadId: base.id });
+    const root = graphqlMessage(1, {
+      thread: base.thread && {
+        ...base.thread,
+        replyCount: 5,
+        latestReplyAt: first.createdAt,
+        preview: [first],
+      },
+    });
+    const reply = graphqlMessage(9, { threadId: root.id });
+
+    const thread = await readRoot(root, [reply], [queuedSend(reply)]);
+
+    expect(thread.reply_count).toBe(5);
+    expect(thread.preview.map((shown) => shown.id)).toEqual([first.id]);
+  });
+
+  it('forgets a delivered reply that was deleted', async () => {
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(2, { threadId: root.id });
+    noteOwnReply(CHANNEL_ID, root.id, mapChannelMessage(reply));
+    ownReplyDelivered(mapChannelMessage(reply));
+    const deleted = { ...reply, deletedAt: '2026-11-01T10:00:09.000000Z' };
+
+    expect((await readRoot(root, [deleted])).reply_count).toBe(0);
+    // The note is gone: the same reply held live again is not put back.
+    expect((await readRoot(root, [reply])).reply_count).toBe(0);
+  });
+
   it('drops a reply the queue refused', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(2, { threadId: root.id });
@@ -235,22 +267,31 @@ describe('a device page and the replies its roots do not show yet', () => {
   });
 });
 
-describe('channelHasQueuedReplies', () => {
-  it('is true only while a reply to the channel waits', async () => {
+describe('pageHasQueuedReplies', () => {
+  it('is true only while a reply to one of the page roots waits', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(2, { threadId: root.id });
+    const elsewhere = graphqlMessage(4, { threadId: graphqlMessage(3).id });
     const host = (queued: MutationInspection[]) => ({
       ...fakeHost([]),
       inspectMutations: async () => queued,
     });
+    const page = {
+      entries: [
+        { type: 'message' as const, message: mapChannelRoot(root) as never },
+      ],
+      next_cursor: null,
+      previous_cursor: null,
+    };
+    const waits = (queued: MutationInspection[]) =>
+      pageHasQueuedReplies(host(queued), CHANNEL_ID, page);
 
-    expect(await channelHasQueuedReplies(host([]), CHANNEL_ID)).toBe(false);
-    expect(
-      await channelHasQueuedReplies(host([queuedSend(root)]), CHANNEL_ID)
-    ).toBe(false);
-    expect(
-      await channelHasQueuedReplies(host([queuedSend(reply)]), CHANNEL_ID)
-    ).toBe(true);
-    expect(await channelHasQueuedReplies(fakeHost([]), CHANNEL_ID)).toBe(false);
+    expect(await waits([])).toBe(false);
+    expect(await waits([queuedSend(root)])).toBe(false);
+    expect(await waits([queuedSend(elsewhere)])).toBe(false);
+    expect(await waits([queuedSend(reply)])).toBe(true);
+    expect(await pageHasQueuedReplies(fakeHost([]), CHANNEL_ID, page)).toBe(
+      false
+    );
   });
 });
