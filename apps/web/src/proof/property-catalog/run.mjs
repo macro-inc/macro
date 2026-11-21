@@ -4,8 +4,9 @@
 //
 // Usage: node run.mjs   (configured by environment variables, see CONFIG)
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { execFileSync } from 'node:child_process';
+import { execFileSync as runChild } from 'node:child_process';
 import fs from 'node:fs';
+import { PerformanceObserver } from 'node:perf_hooks';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +29,39 @@ const driverStalls = [];
     last = now;
   }, 50).unref();
 }
+// What the driver did that blocks its loop, kept when it lasts 100 ms or more,
+// so a stall can be matched to its cause: child processes, which run
+// synchronously, its own comparisons and results flushes, and garbage
+// collection. A stall with none of these in it was spent elsewhere in the
+// driver process (Playwright's protocol handling).
+const driverWork = [];
+function noteWork(what, ms) {
+  if (ms < 100) return;
+  driverWork.push({ end: Date.now(), ms: Math.round(ms), what });
+  if (driverWork.length > 500) driverWork.shift();
+}
+function execFileSync(file, args, opts) {
+  const t = performance.now();
+  try {
+    return runChild(file, args, opts);
+  } finally {
+    // the command and its first operands only, never its values
+    noteWork([file, ...args.filter((a) => !String(a).startsWith('-')).slice(0, 3)].join(' '), performance.now() - t);
+  }
+}
+function timed(what, f) {
+  return (...args) => {
+    const t = performance.now();
+    try {
+      return f(...args);
+    } finally {
+      noteWork(what, performance.now() - t);
+    }
+  };
+}
+new PerformanceObserver((list) => {
+  for (const e of list.getEntries()) noteWork('gc', e.duration);
+}).observe({ entryTypes: ['gc'] });
 const ROOT = path.resolve(HERE, '../../../../..');
 const E = process.env;
 
@@ -1060,7 +1094,7 @@ function compareCallers(level, sa, sb, groupsFor, at) {
   }
 }
 // `expected`: the reader ids that must be in both snapshots.
-function compareSnapshots(level, a, b, expected, at) {
+const compareSnapshots = timed('compare snapshots', (level, a, b, expected, at) => {
   const groupsFor = callerGroups(a, b);
   for (const k of new Set([...Object.keys(a), ...Object.keys(b), ...expected, 'callers'])) {
     if (k === 'callers') {
@@ -1068,9 +1102,9 @@ function compareSnapshots(level, a, b, expected, at) {
       else compareCallers(level, a, b, groupsFor, at);
     } else compareReader(level, k, a[k], b[k], at);
   }
-}
+});
 // Raw read case: the old queryFn and the new reader, back to back.
-function compareRaw(kind, k, oldR, newR, account) {
+const compareRaw = timed('compare raw', (kind, k, oldR, newR, account) => {
   R.counts.rawCases++;
   const level = `raw:${here().phase ?? 'read'}`;
   if (oldR.ok !== newR.ok) return record(level, kind, 'diff', { ok: oldR.ok, error: oldR.error ?? null, message: oldR.message ?? null }, { ok: newR.ok, error: newR.error ?? null, message: newR.message ?? null });
@@ -1081,7 +1115,7 @@ function compareRaw(kind, k, oldR, newR, account) {
   bump(R.coverage, 'raw outcome', 'both ok');
   const canon = canonFor(k);
   return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true, account, asOf: clockNow() }, canon);
-}
+});
 // In CONTROL both halves of a raw case run the base commit's functions.
 const newRaw = (fn) => (CONFIG.control ? `raw.old.${fn}` : `raw.neu.${fn}`);
 async function rawCase(s, key) {
@@ -1224,7 +1258,8 @@ function withWaitedOn(s, t) {
     .filter((x) => now - x.end <= t.ms + 1000)
     .map((x) => ({ method: x.method, path: x.path, status: x.status, startedAgoMs: now - x.at, ms: x.ms }));
   const stalls = driverStalls.filter((x) => now - x.end <= t.ms + 1000).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms }));
-  return { ...t, waitedOn: { busy: t.busy ?? null, fetches: t.fetches ?? null, driverStalls: stalls, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), recent, net: (s.netlog ?? []).slice(-8) } };
+  const work = driverWork.filter((x) => now - x.end <= t.ms + 1000).map((x) => ({ endedAgoMs: now - x.end, ms: x.ms, what: x.what }));
+  return { ...t, waitedOn: { busy: t.busy ?? null, fetches: t.fetches ?? null, driverStalls: stalls, driverWork: work, inflight: [...s.inflight.values()].map((x) => ({ method: x.method, path: x.path, ms: now - x.at })), recent, net: (s.netlog ?? []).slice(-8) } };
 }
 async function settleAll(pair) {
   // what a side that timed out waited on is sampled as its settle returns
@@ -1826,13 +1861,13 @@ async function stopLoad() {
   }
 }
 
-function flush() {
+const flush = timed('flush', () => {
   R.updatedAt = new Date().toISOString();
   // written whole and renamed into place, so a reader or a kill never sees half a file
   const tmp = path.join(OUT, 'results.json.tmp');
   fs.writeFileSync(tmp, JSON.stringify(R, null, 2));
   fs.renameSync(tmp, path.join(OUT, 'results.json'));
-}
+});
 
 // ------------------------------------------------------------------- main ----
 log(`seed ${CONFIG.seed}, ${CONFIG.seqs} sequences x ${CONFIG.steps} steps over ${CONFIG.lanes} lanes${CONFIG.mutant ? `, mutant ${CONFIG.mutant}` : ''}${CONFIG.control ? ', CONTROL (old vs old)' : ''}${CONFIG.load ? `, load ${CONFIG.load}` : ''} -> ${OUT}`);

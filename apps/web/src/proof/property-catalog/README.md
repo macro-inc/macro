@@ -211,7 +211,10 @@ The counts measure work attempted, not successes, and are not interchangeable:
   from the settle's start (`fetches`, from a pass-through `fetch` wrapper in
   `harness.tsx`), the driver's event-loop stalls of 100 ms or more during the
   wait (`driverStalls`; the driver answers every API request through its route
-  handlers, so a stall delays every page's answers), and the page's last eight
+  handlers, so a stall delays every page's answers), the driver's own blocking work of
+  100 ms or more in that time (`driverWork`: its synchronous child processes,
+  such as the SQL steps' `psql`, its comparisons, its results flushes, and
+  garbage collection), and the page's last eight
   network notes (failed requests, failed module responses, console errors:
   `net`).
   `inflight`, `recent` and `net` are taken when that side's call returns, which
