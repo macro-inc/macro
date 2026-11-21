@@ -92,6 +92,8 @@ describe('createCodeLinkOpener', () => {
       expect(open('example.com')).toBe(false);
       expect(open('example.org')).toBe(false);
       expect(open('example.com/spec.html')).toBe(false);
+      expect(open('docs.rs/serde')).toBe(false);
+      expect(open('crates.io/crates/serde')).toBe(false);
       expect(context.opened).toEqual([]);
       expect(context.notified).toEqual([]);
       // Repository paths of the same look still open on GitHub.
@@ -101,12 +103,17 @@ describe('createCodeLinkOpener', () => {
       // A bare docs or source file, and a version folder, are paths too.
       expect(open('README.md')).toBe(true);
       expect(open('v1.2/notes.md')).toBe(true);
+      expect(open('my.md')).toBe(true);
+      // The one trade-off: a bare docs.rs reads as a Rust file.
+      expect(open('docs.rs')).toBe(true);
       expect(context.opened).toEqual([
         'https://github.com/macro-inc/macro/blob/abc123/package.json#L5',
         'https://github.com/macro-inc/macro/blob/abc123/.github/ci.yml',
         'https://github.com/macro-inc/macro/blob/abc123/src/b.ts#L2',
         'https://github.com/macro-inc/macro/blob/abc123/README.md',
         'https://github.com/macro-inc/macro/blob/abc123/v1.2/notes.md',
+        'https://github.com/macro-inc/macro/blob/abc123/my.md',
+        'https://github.com/macro-inc/macro/blob/abc123/docs.rs',
       ]);
       dispose();
     });
