@@ -69,8 +69,14 @@ async fn the_first_reserve_wins_and_a_later_one_gets_its_request_id(pool: PgPool
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
 
-    let reserved = inboxes.reserve(&user(AGENT), TEAM, first).await.unwrap();
-    let again = inboxes.reserve(&user(AGENT), TEAM, second).await.unwrap();
+    let reserved = inboxes
+        .reserve(&user(AGENT), TEAM, first, AgentInboxState::Provisioning)
+        .await
+        .unwrap();
+    let again = inboxes
+        .reserve(&user(AGENT), TEAM, second, AgentInboxState::Paused)
+        .await
+        .unwrap();
 
     assert_eq!(reserved.request_id, first);
     assert_eq!(reserved.state, AgentInboxState::Provisioning);
@@ -84,7 +90,12 @@ async fn an_update_keeps_a_known_mailbox_and_address_and_lists_by_team(pool: PgP
     let inboxes = PgAgentInboxes::new(pool.clone());
     let mailbox = Uuid::from_u128(9);
     inboxes
-        .reserve(&user(AGENT), TEAM, Uuid::from_u128(1))
+        .reserve(
+            &user(AGENT),
+            TEAM,
+            Uuid::from_u128(1),
+            AgentInboxState::Provisioning,
+        )
         .await
         .unwrap();
 
@@ -131,7 +142,12 @@ async fn removing_the_agents_seat_drops_its_inbox_record(pool: PgPool) {
     team_with_agent(&pool).await;
     let inboxes = PgAgentInboxes::new(pool.clone());
     inboxes
-        .reserve(&user(AGENT), TEAM, Uuid::from_u128(1))
+        .reserve(
+            &user(AGENT),
+            TEAM,
+            Uuid::from_u128(1),
+            AgentInboxState::Provisioning,
+        )
         .await
         .unwrap();
 
@@ -156,4 +172,34 @@ async fn removing_the_agents_seat_drops_its_inbox_record(pool: PgPool) {
             .await,
         Err(PgAgentInboxesError::Missing)
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_live_update_never_overwrites_an_inbox_being_wound_down(pool: PgPool) {
+    team_with_agent(&pool).await;
+    let inboxes = PgAgentInboxes::new(pool.clone());
+    inboxes
+        .reserve(
+            &user(AGENT),
+            TEAM,
+            Uuid::from_u128(1),
+            AgentInboxState::Paused,
+        )
+        .await
+        .unwrap();
+    let active = InboxUpdate {
+        mailbox_id: Some(Uuid::from_u128(9)),
+        address: Some("sam-rivera@agents.example.com".to_owned()),
+        state: AgentInboxState::Active,
+        last_error: None,
+        fake_provider: false,
+    };
+
+    let refused = inboxes.update_live(&user(AGENT), &active).await.unwrap();
+
+    assert_eq!(refused, None);
+    assert_eq!(
+        inboxes.get(&user(AGENT)).await.unwrap().unwrap().state,
+        AgentInboxState::Paused
+    );
 }

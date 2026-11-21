@@ -53,6 +53,7 @@ impl AgentInboxes for FakeInboxes {
     }
 
     async fn refresh(&self, agent: &MacroUserIdStr<'_>) -> Result<AgentInbox, InboxError> {
+        self.journal.record("inbox.refresh");
         self.made
             .lock()
             .unwrap()
@@ -65,7 +66,7 @@ impl AgentInboxes for FakeInboxes {
         Ok(self.made.lock().unwrap().clone())
     }
 
-    async fn pause(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
+    async fn pause(&self, _team_id: Uuid, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
         self.journal.record("inbox.pause");
         match self.failing {
             Some(error) => Err(error()),
@@ -73,7 +74,7 @@ impl AgentInboxes for FakeInboxes {
         }
     }
 
-    async fn release(&self, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
+    async fn release(&self, _team_id: Uuid, _agent: &MacroUserIdStr<'_>) -> Result<(), InboxError> {
         self.journal.record("inbox.release");
         match self.failing {
             Some(error) => Err(error()),
@@ -175,10 +176,12 @@ async fn an_admin_adds_an_inbox_later_and_again_changes_nothing_new() {
 
     assert_eq!(added, read);
     assert_eq!(added.state, AgentInboxState::Active);
-    assert_eq!(
-        journal.entries().last().map(String::as_str),
-        Some("inbox.provision Sam Rivera sam-rivera")
-    );
+    let provisions = journal
+        .entries()
+        .into_iter()
+        .filter(|entry| entry.starts_with("inbox.provision"))
+        .collect::<Vec<_>>();
+    assert_eq!(provisions, vec!["inbox.provision Sam Rivera sam-rivera"]);
 }
 
 #[tokio::test]
@@ -293,4 +296,26 @@ async fn a_failed_inbox_shows_on_the_list_with_its_reason() {
             .and_then(|inbox| inbox.failure),
         Some(AgentInboxFailure::AddressTaken)
     );
+}
+
+#[tokio::test]
+async fn with_only_the_inbox_rollout_off_the_list_shows_no_inboxes_and_asks_nothing() {
+    let (service, journal, flags) = with_inboxes(true, None);
+    let agent = service.create(receipt(), with_inbox()).await.unwrap();
+    service.inboxes.made.lock().unwrap().insert(
+        agent.user_id.as_ref().to_owned(),
+        AgentInbox {
+            address: None,
+            state: AgentInboxState::Provisioning,
+            failure: None,
+            fake_provider: false,
+        },
+    );
+    flags.set_inboxes(false);
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents.len(), 1);
+    assert_eq!(listed.agents[0].inbox, None);
+    assert!(!journal.entries().contains(&"inbox.refresh".to_owned()));
 }

@@ -35,6 +35,7 @@ impl AgentInboxRepository for FakeRecords {
         agent: &MacroUserIdStr<'_>,
         team_id: Uuid,
         request_id: Uuid,
+        state: AgentInboxState,
     ) -> Result<InboxRecord, FakeError> {
         let mut records = self.0.lock().unwrap();
         if let Some(record) = records.iter().find(|r| r.agent.as_ref() == agent.as_ref()) {
@@ -46,7 +47,7 @@ impl AgentInboxRepository for FakeRecords {
             request_id,
             mailbox_id: None,
             address: None,
-            state: AgentInboxState::Provisioning,
+            state,
             last_error: None,
             fake_provider: false,
             updated_at: DateTime::UNIX_EPOCH,
@@ -93,6 +94,31 @@ impl AgentInboxRepository for FakeRecords {
         record.fake_provider = update.fake_provider;
         Ok(record.clone())
     }
+
+    async fn update_live(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        update: &InboxUpdate,
+    ) -> Result<Option<InboxRecord>, FakeError> {
+        let wound_down = self
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|r| r.agent.as_ref() == agent.as_ref())
+            .is_none_or(|r| {
+                matches!(
+                    r.state,
+                    AgentInboxState::Paused
+                        | AgentInboxState::Releasing
+                        | AgentInboxState::Released
+                )
+            });
+        if wound_down {
+            return Ok(None);
+        }
+        self.update(agent, update).await.map(Some)
+    }
 }
 
 /// What the fake email_service answers next.
@@ -105,6 +131,9 @@ enum Answer {
     Down,
 }
 
+/// What a test runs while a provision is in flight.
+type DuringProvision = Box<dyn Fn() + Send>;
+
 /// email_service's agent mailboxes, journaling each call.
 #[derive(Clone)]
 struct FakeMailboxes {
@@ -112,6 +141,8 @@ struct FakeMailboxes {
     calls: Arc<Mutex<Vec<String>>>,
     /// The mailbox email_service holds, once made.
     made: Arc<Mutex<Option<MailboxView>>>,
+    /// Runs while a provision is in flight, as a concurrent request would.
+    during_provision: Arc<Mutex<Option<DuringProvision>>>,
 }
 
 impl FakeMailboxes {
@@ -120,6 +151,7 @@ impl FakeMailboxes {
             answer: Arc::new(Mutex::new(answer)),
             calls: Arc::default(),
             made: Arc::default(),
+            during_provision: Arc::default(),
         }
     }
 
@@ -152,6 +184,9 @@ impl AgentMailboxes for FakeMailboxes {
             "provision {} {} {}",
             request.request_id, request.display_name, request.local_part
         ));
+        if let Some(during) = self.during_provision.lock().unwrap().as_ref() {
+            during();
+        }
         let view = match *self.answer.lock().unwrap() {
             Answer::Active => Self::view(AgentInboxState::Active),
             Answer::Slow => MailboxView {
@@ -348,22 +383,23 @@ async fn an_agent_without_an_inbox_has_none_to_refresh_pause_or_release() {
         service.refresh(&agent()).await,
         Err(InboxError::NoInbox)
     ));
-    service.pause(&agent()).await.unwrap();
-    service.release(&agent()).await.unwrap();
+    service.pause(TEAM, &agent()).await.unwrap();
+    service.release(TEAM, &agent()).await.unwrap();
 
-    assert!(mailboxes.calls().is_empty());
+    // Only asked whether email_service has one.
+    assert!(mailboxes.calls().iter().all(|call| call == "status"));
 }
 
 #[tokio::test]
-async fn pausing_stops_the_mailbox_once_and_keeps_it() {
+async fn pausing_stops_the_mailbox_and_keeps_it_and_again_is_harmless() {
     let (service, records, mailboxes) = service(Answer::Active);
     service
         .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
         .await
         .unwrap();
 
-    service.pause(&agent()).await.unwrap();
-    service.pause(&agent()).await.unwrap();
+    service.pause(TEAM, &agent()).await.unwrap();
+    service.pause(TEAM, &agent()).await.unwrap();
 
     assert_eq!(records.only().state, AgentInboxState::Paused);
     let pauses = mailboxes
@@ -371,7 +407,8 @@ async fn pausing_stops_the_mailbox_once_and_keeps_it() {
         .into_iter()
         .filter(|call| call.starts_with("pause"))
         .collect::<Vec<_>>();
-    assert_eq!(pauses, vec!["pause".to_owned()]);
+    // email_service's pause is idempotent; a repeat just tells it again.
+    assert_eq!(pauses, vec!["pause".to_owned(), "pause".to_owned()]);
 }
 
 #[tokio::test]
@@ -383,10 +420,20 @@ async fn a_pause_email_service_misses_fails_so_the_removal_is_retried() {
         .unwrap();
     mailboxes.answer(Answer::Down);
 
-    let missed = service.pause(&agent()).await;
-
+    let missed = service.pause(TEAM, &agent()).await;
+    // Marked paused already, so no provision revives it; the retry tells
+    // email_service again.
     assert!(matches!(missed, Err(InboxError::Unavailable(_))));
-    assert_eq!(records.only().state, AgentInboxState::Active);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+    mailboxes.answer(Answer::Active);
+    service.pause(TEAM, &agent()).await.unwrap();
+
+    let pauses = mailboxes
+        .calls()
+        .into_iter()
+        .filter(|call| call == "pause")
+        .count();
+    assert_eq!(pauses, 2);
 }
 
 #[tokio::test]
@@ -399,7 +446,7 @@ async fn releasing_a_mailbox_still_being_made_finds_it_through_email_service() {
     // The answer carried the id; forget it, as if the answer had been lost.
     records.0.lock().unwrap()[0].mailbox_id = None;
 
-    service.release(&agent()).await.unwrap();
+    service.release(TEAM, &agent()).await.unwrap();
 
     assert_eq!(records.only().state, AgentInboxState::Released);
     assert!(mailboxes.calls().contains(&"release".to_owned()));
@@ -414,7 +461,7 @@ async fn releasing_an_inbox_email_service_never_made_releases_nothing() {
         .unwrap();
     mailboxes.answer(Answer::Active);
 
-    service.release(&agent()).await.unwrap();
+    service.release(TEAM, &agent()).await.unwrap();
 
     assert_eq!(records.only().state, AgentInboxState::Released);
     assert!(
@@ -444,7 +491,7 @@ async fn a_lost_answer_heals_once_email_service_has_made_the_mailbox() {
 }
 
 #[tokio::test]
-async fn pausing_an_inbox_email_service_never_made_changes_nothing() {
+async fn pausing_an_inbox_email_service_never_made_only_marks_it() {
     let (service, records, mailboxes) = service(Answer::Down);
     service
         .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
@@ -452,8 +499,48 @@ async fn pausing_an_inbox_email_service_never_made_changes_nothing() {
         .unwrap();
     mailboxes.answer(Answer::Active);
 
-    service.pause(&agent()).await.unwrap();
+    service.pause(TEAM, &agent()).await.unwrap();
 
-    assert_eq!(records.only().state, AgentInboxState::Failed);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
     assert!(!mailboxes.calls().iter().any(|call| call == "pause"));
+}
+
+#[tokio::test]
+async fn an_agent_removed_before_any_inbox_gets_none_later() {
+    let (service, records, mailboxes) = service(Answer::Active);
+
+    service.pause(TEAM, &agent()).await.unwrap();
+    let late = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+
+    assert_eq!(late.state, AgentInboxState::Paused);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+    assert!(
+        !mailboxes
+            .calls()
+            .iter()
+            .any(|call| call.starts_with("provision"))
+    );
+}
+
+#[tokio::test]
+async fn an_agent_removed_while_its_inbox_is_being_made_ends_up_paused() {
+    let (service, records, mailboxes) = service(Answer::Active);
+    // The removal marks the record while email_service is creating the
+    // mailbox, so its own pause finds nothing to pause yet.
+    let marked = records.clone();
+    *mailboxes.during_provision.lock().unwrap() = Some(Box::new(move || {
+        marked.0.lock().unwrap()[0].state = AgentInboxState::Paused;
+    }));
+
+    let inbox = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+
+    assert_eq!(inbox.state, AgentInboxState::Paused);
+    assert_eq!(records.only().state, AgentInboxState::Paused);
+    assert!(mailboxes.calls().contains(&"pause".to_owned()));
 }
