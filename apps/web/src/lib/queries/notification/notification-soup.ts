@@ -108,14 +108,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Whether a mounted Soup list is ordered by notification. Grouped lists are
- * not: they sort each group by update time.
+ * Whether a mounted Soup list is a notified list. Grouped ones count too:
+ * they sort each group by update time, but which rows they hold and the
+ * notification times on them still change with each new notification, and
+ * on REST they refetch for it.
  */
 function isNotifiedList(body: unknown): boolean {
   if (!isRecord(body) || !isRecord(body.params)) return false;
-  return (
-    body.params.sort_method === 'notified_at' && body.groupBy === undefined
-  );
+  return body.params.sort_method === 'notified_at';
 }
 
 /** Soup lists read a replica, which can answer the first re-read without the
@@ -141,8 +141,9 @@ const rereadAfterReplicaLag = debounce(
 /**
  * GraphQL lists ordered by notification have no local projection: the cache
  * can neither place a newly notified entity in them nor move a row up, and
- * the notified-at floor only applies when a row is mapped again. They read
- * their loaded pages again instead, which carries the new stamps. Each read
+ * the notified-at floor only applies when a row is mapped again. Grouped
+ * notified lists project by update time, which a notification leaves alone.
+ * They read their loaded pages again instead, which carries the new stamps. Each read
  * runs the notified page query, whose cost grows with the viewer's
  * notifications, for every loaded page: a burst reads at most once per
  * interval, and a hidden tab reads once when it is shown.
