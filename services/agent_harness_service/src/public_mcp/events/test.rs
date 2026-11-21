@@ -447,8 +447,7 @@ async fn words_alone_are_compiled_and_shown_back_without_subscribing() {
     .await
     .unwrap_err();
 
-    let reading =
-        "`message.mentioned` events where the message is in a `channel` and the mentioned item is you.";
+    let reading = "`message.mentioned` events where the message is in a `channel` and the mentioned item is you.";
     assert_eq!(error.code.0, -32602);
     assert!(error.message.starts_with("Nothing is subscribed yet."));
     assert!(error.message.contains(reading));
@@ -970,9 +969,7 @@ fn the_reading_names_the_sender_only_where_the_actor_is_the_sender() {
         "`message.posted` or `message.mentioned` events where the sender is you."
     );
     // A deletion's actor is whoever deleted the message, not its author.
-    assert!(
-        !super::describe::describe(&by_me(&["message.deleted"])).contains("the sender is")
-    );
+    assert!(!super::describe::describe(&by_me(&["message.deleted"])).contains("the sender is"));
 }
 
 // --- the live source ------------------------------------------------------
