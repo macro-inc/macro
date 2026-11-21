@@ -67,9 +67,15 @@ export function ComputerSizeSkeleton() {
           {() => (
             <div class="flex items-start gap-3 rounded-lg border border-edge-muted p-3 dark-mode:border-edge">
               <ListSkeleton.Bar class="mt-0.5 size-4 shrink-0" />
-              <div class="flex min-w-0 flex-1 flex-col gap-2 py-0.5">
-                <ListSkeleton.Bar class="h-3 w-20" />
-                <ListSkeleton.Bar class="h-2.5 w-40 max-w-full" />
+              {/* Two text lines as tall as ChoiceRow's, so the dialog keeps
+                  its height when the sizes arrive. */}
+              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div class="flex h-5 items-center">
+                  <ListSkeleton.Bar class="h-3 w-20" />
+                </div>
+                <div class="flex h-5 items-center">
+                  <ListSkeleton.Bar class="h-2.5 w-40 max-w-full" />
+                </div>
               </div>
               <ListSkeleton.Bar class="h-3 w-16 self-center" />
             </div>

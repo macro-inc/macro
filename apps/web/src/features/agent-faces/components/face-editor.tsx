@@ -98,7 +98,7 @@ export function FaceEditor(props: {
               </div>
               {/* Auto columns spread edge to edge, so the first and last
                   faces line up with the labels on every width. */}
-              <div class="grid grid-cols-[repeat(8,auto)] justify-between gap-y-2 max-sm:grid-cols-[repeat(4,auto)]">
+              <div class="grid grid-cols-[repeat(8,auto)] justify-between gap-y-2 max-sm:grid-cols-[repeat(4,auto)] max-sm:gap-y-4">
                 <Index each={suggestions.faces()}>
                   {(face, index) => (
                     <button
@@ -251,7 +251,7 @@ function PartRow(props: {
                 class="block rounded-full outline-2 outline-offset-1"
                 classList={{
                   'outline-ink': pinned() === index(),
-                  'outline-edge-muted':
+                  'outline-edge-muted dark-mode:outline-ink-muted':
                     pinned() === undefined && current() === index(),
                   'outline-transparent': current() !== index(),
                 }}

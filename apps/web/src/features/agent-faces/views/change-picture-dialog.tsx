@@ -5,7 +5,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg';
 import type { AgentFace } from '@macro-inc/agent-faces';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js';
 import { FaceEditor } from '../components/face-editor';
 import { FaceImage } from '../components/face-image';
 import { createFaceDraft } from '../primitives/create-face-draft';
@@ -65,14 +65,9 @@ export function ChangePictureDialog(props: {
         <Show when={props.open}>
           <Switch fallback={<ChangePictureBody {...props} />}>
             <Match when={props.pictureState === 'loading'}>
-              <Panel.Body>
-                <ListSkeleton.Root
-                  label={t('agentFaces.loading')}
-                  class="flex justify-center px-5 py-5"
-                >
-                  <ListSkeleton.Bar class="size-24" />
-                </ListSkeleton.Root>
-              </Panel.Body>
+              <ChangePictureSkeleton
+                onCancel={() => props.onOpenChange(false)}
+              />
             </Match>
             <Match when={props.pictureState === 'error'}>
               <Panel.Body>
@@ -94,6 +89,56 @@ export function ChangePictureDialog(props: {
         </Show>
       </Panel>
     </Dialog>
+  );
+}
+
+/**
+ * The editor's outline while the saved picture loads, as tall as the editor
+ * and with its footer, so the dialog doesn't grow when the picture arrives.
+ */
+function ChangePictureSkeleton(props: { onCancel: () => void }) {
+  return (
+    <>
+      <Panel.Body>
+        <ListSkeleton.Root label={t('agentFaces.loading')} class="px-5 py-5">
+          <div class="flex flex-col gap-4">
+            <ListSkeleton.Bar class="size-24 self-center" />
+            <div class="flex flex-col gap-3">
+              <div class="flex h-8 items-center">
+                <ListSkeleton.Bar class="w-12" />
+              </div>
+              <div class="grid grid-cols-[repeat(8,auto)] justify-between gap-y-2 max-sm:grid-cols-[repeat(4,auto)] max-sm:gap-y-4">
+                <For each={Array.from({ length: 8 })}>
+                  {() => <ListSkeleton.Bar class="size-9 touch:size-12" />}
+                </For>
+              </div>
+              <ListSkeleton.Bar class="h-8 w-full" />
+              <For each={[0, 1]}>
+                {() => (
+                  <div class="flex flex-col gap-1.5">
+                    <ListSkeleton.Bar class="w-10" />
+                    <div class="flex gap-1.5 touch:gap-3">
+                      <For each={Array.from({ length: 6 })}>
+                        {() => <ListSkeleton.Bar class="size-8" />}
+                      </For>
+                    </div>
+                  </div>
+                )}
+              </For>
+              <div class="h-8" />
+            </div>
+          </div>
+        </ListSkeleton.Root>
+      </Panel.Body>
+      <Panel.Footer class="justify-end gap-2 px-5 py-3">
+        <Button type="button" variant="ghost" onClick={props.onCancel}>
+          {t('agentFaces.cancel')}
+        </Button>
+        <Button type="button" variant="primary" disabled>
+          {t('agentFaces.save')}
+        </Button>
+      </Panel.Footer>
+    </>
   );
 }
 
