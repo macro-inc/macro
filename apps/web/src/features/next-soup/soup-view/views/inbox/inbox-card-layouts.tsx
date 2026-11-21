@@ -48,7 +48,12 @@ import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
 import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
-import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
+import { pingedBy, pingPlace } from '@notifications/notification-metadata';
+import {
+  getNotificationAgentSender,
+  getNotificationSenderFallbackName,
+  getNotificationUserSenderId,
+} from '@notifications/notification-sender';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -1613,6 +1618,47 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
   );
 }
 
+/**
+ * A ping, whatever it is about: who pinged, then what about, then what they
+ * wrote, under the icon of what it is about.
+ */
+export function PingCardLayout(props: InboxCardLayoutProps) {
+  const userName = createSenderDisplayName(() =>
+    props.item.notification
+      ? getNotificationUserSenderId(props.item.notification)
+      : undefined
+  );
+  const sender = () => {
+    const notification = props.item.notification;
+    if (!notification) return undefined;
+    return getNotificationAgentSender(notification)?.name ?? userName();
+  };
+
+  return (
+    <BaseCard
+      {...props}
+      icon={
+        <EntityIcon
+          class={AVATAR_GLYPH_CLASS}
+          targetType={getEntityIconType(props.item.entity)}
+          appearance={props.item.entity.appearance}
+          size="fill"
+        />
+      }
+      title={pingedBy(sender())}
+    >
+      <Show when={props.item.entity.name && pingPlace(props.item.entity)}>
+        {(place) => (
+          <InboxCard.Content class="truncate">{place()}</InboxCard.Content>
+        )}
+      </Show>
+      <CardMarkdownLine
+        text={itemContent(props.item.entity, props.item.notification)}
+      />
+    </BaseCard>
+  );
+}
+
 export function GenericCardLayout(props: InboxCardLayoutProps) {
   const text = createMemo(() => ({
     title: props.item.entity.name
@@ -1664,6 +1710,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <Switch>
+      <Match when={notificationTag() === 'ping'}>
+        <PingCardLayout {...props} />
+      </Match>
       <Match when={props.item.entity.type === 'email'}>
         <EmailCardLayout {...props} />
       </Match>

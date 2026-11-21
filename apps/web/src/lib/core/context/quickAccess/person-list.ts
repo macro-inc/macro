@@ -26,6 +26,7 @@ export function createPersonList(options: {
   enabled: Accessor<boolean>;
   policy: Accessor<ContactPeoplePolicy>;
   resetKey?: Accessor<string>;
+  localBudgetMs?: number;
   activity: Accessor<ReadonlyMap<string, DateValue>>;
   conversation: (id: string) => EntityItem<ChannelEntity> | undefined;
   excluded: (id: string) => boolean;
@@ -43,6 +44,7 @@ export function createPersonList(options: {
       // Menus debounce their own query. Waiting again lands people after
       // every other source and moves the rows under the highlight.
       debounceMs: untrack(options.policy).mode === 'property' ? 200 : 0,
+      localBudgetMs: options.localBudgetMs,
     })
   );
   const [loadingMore, setLoadingMore] = createSignal(false);
@@ -86,9 +88,12 @@ export function createPersonList(options: {
             dm && options.policy().mode === 'command' && options.search().trim()
               ? options.conversation(dm.id)
               : undefined;
+          // The server's page is in no meaningful order, so its rows carry
+          // none and callers rank them as they rank other people.
+          const order = page.localLate ? {} : { personOrder };
           return target
-            ? { ...item, commandTarget: target, personOrder }
-            : { ...item, personOrder };
+            ? { ...item, commandTarget: target, ...order }
+            : { ...item, ...order };
         })
     );
   }, []);

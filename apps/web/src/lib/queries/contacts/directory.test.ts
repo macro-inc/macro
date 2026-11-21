@@ -323,6 +323,112 @@ it('reads server pages when this tab has no usable local cache', async () => {
     readContactDirectory(VIEWER, undefined, request, signal())
   ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
 });
+it('reads the server once when a budgeted first page gets no answer from the cache in time', async () => {
+  vi.useFakeTimers();
+  const serverPage = {
+    user: {
+      id: VIEWER,
+      contacts: {
+        nodes: [
+          {
+            __typename: 'GraphqlContact' as const,
+            id: 'contact-1',
+            userId: 'macro|person@example.com',
+            email: 'person@example.com',
+            name: 'John Smith',
+          },
+        ],
+        nextCursor: 'server-position',
+      },
+    },
+  };
+  remote.mockResolvedValue(serverPage);
+  const request = { query: 'jo', localBudgetMs: 2_000 };
+
+  // A cache that never answers: nothing is read from the server before the
+  // budget runs out, and one page after it.
+  const stalled = host();
+  stalled.readQuery.mockReturnValue(new Promise(() => {}));
+  const late = readContactDirectory(VIEWER, stalled, request, signal(), true);
+  await vi.advanceTimersByTimeAsync(1_999);
+  expect(remote).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  const latePage = await late;
+  expect(latePage.source).toBe('server');
+  expect(latePage.localLate).toBe(true);
+  expect(latePage.users.map((user) => user.name)).toEqual(['John Smith']);
+  expect(remote).toHaveBeenCalledOnce();
+
+  // Its further pages come from the server too and are marked the same way,
+  // so the whole list keeps its place.
+  const nextPage = await readContactDirectory(
+    VIEWER,
+    stalled,
+    { ...request, cursor: latePage.nextCursor ?? undefined },
+    signal(),
+    true
+  );
+  expect(nextPage.localLate).toBe(true);
+  expect(nextPage.nextCursor).toMatchObject({ localLate: true });
+  expect(remote).toHaveBeenCalledTimes(2);
+  remote.mockClear();
+  remote.mockResolvedValue(serverPage);
+
+  // A cache that refuses the read (its owner is changing) is not waited for.
+  const refused = host();
+  refused.people.search.mockRejectedValue(
+    new Error('cache reads unavailable after owner handoff timeout')
+  );
+  const failedPage = await readContactDirectory(
+    VIEWER,
+    refused,
+    request,
+    signal(),
+    true
+  );
+  expect(failedPage.localLate).toBe(true);
+  expect(remote).toHaveBeenCalledOnce();
+
+  // A cache that answers in time is the answer; the server is not asked.
+  const healthy = await readContactDirectory(
+    VIEWER,
+    host(),
+    request,
+    signal(),
+    true
+  );
+  expect(healthy.source).toBe('cache');
+  expect(healthy.localLate).toBeUndefined();
+  expect(remote).toHaveBeenCalledOnce();
+
+  // A read superseded while it waited asks the server for nothing, and an
+  // offline one waits for the cache: it has no server to ask.
+  const controller = new AbortController();
+  const superseded = readContactDirectory(
+    VIEWER,
+    stalled,
+    request,
+    controller.signal,
+    true
+  );
+  const outcome = expect(superseded).rejects.toThrow();
+  controller.abort();
+  await vi.advanceTimersByTimeAsync(2_000);
+  await outcome;
+  const slow = host();
+  const identity = Promise.withResolvers<{
+    kind: 'hit';
+    data: { user: { id: string } };
+  }>();
+  slow.readQuery.mockReturnValueOnce(identity.promise);
+  const offline = readContactDirectory(VIEWER, slow, request, signal(), false);
+  await vi.advanceTimersByTimeAsync(5_000);
+  identity.resolve({ kind: 'hit', data: { user: { id: VIEWER } } });
+  expect((await offline).source).toBe('cache');
+  expect(remote).toHaveBeenCalledOnce();
+  vi.useRealTimers();
+});
+
 it('binds continuations to query, policy, account and storage; rejects changed core versions', async () => {
   const cache = host();
   const request = { query: 'john' };
