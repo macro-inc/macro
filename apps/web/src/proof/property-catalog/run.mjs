@@ -379,7 +379,7 @@ const R = {
   diffs: [], // first 400 real differences with context
   diffSignatures: {}, // signature -> count
   examples: {}, // class -> first few examples
-  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, candidatesBy: {}, tainted: {}, running: {}, discardedCatches: 0, taintedSequences: 0 } : null,
+  mutant: CONFIG.mutant ? { name: CONFIG.mutant, applied: 0, caughtBy: {}, firstCatch: null, ignoredAsInBaseline: 0, beforeApplied: 0, candidate: {}, candidatesBy: {}, tainted: {}, running: {}, touched: {}, discardedCatches: 0, taintedSequences: 0 } : null,
   load: CONFIG.load ? { pages: CONFIG.load, ops: 0, errors: 0, sameUserReads: 0, sameUserErrors: 0 } : null,
   crashes: [],
 };
@@ -441,7 +441,7 @@ const MUTANT_REACH = {
 // Whether a difference is about data rather than a failure on one side: a
 // reader that succeeded on both; a caller that rendered on both, over a
 // source list that read without error on both; a snapshot with all of that.
-const readerOk = (r) => r?.isSuccess === true && !r.isError;
+const readerOk = (r) => r?.isSuccess === true && !r.isError && !r.isPlaceholderData;
 const threw = (x) => !!x && typeof x === 'object' && 'thrown' in x;
 function callerOk(snap, caller) {
   const source = CALLER_SOURCES[caller];
@@ -450,7 +450,7 @@ function callerOk(snap, caller) {
   if (source === 'opts') return Object.entries(snap).every(([k, r]) => readerKind(k) !== 'opts' || readerOk(r));
   return src[source] !== null && src[source] !== undefined && src.failing?.[source] === false;
 }
-const snapshotClean = (s) => !!s && Object.entries(s).every(([k, v]) => (k === 'callers' ? !!v && Object.keys(v).every((c) => c === '__sources' || callerOk(s, c)) : readerOk(v)));
+const snapshotClean = (s, expected = []) => !!s && expected.every((k) => k in s) && Object.entries(s).every(([k, v]) => (k === 'callers' ? !!v && Object.keys(v).every((c) => c === '__sources' || callerOk(s, c)) : readerOk(v)));
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   bump(R.classes, level, cls);
   if (cls === 'equal') return;
@@ -465,7 +465,7 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
     bump(R.diffSignatures, s);
     R.totals.differences++;
     if (R.diffs.length < 400) R.diffs.push({ level, kind, class: cls, ...at, ...extra, diff: d });
-    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level)) {
+    if (R.mutant && cls === 'diff' && extra.clean && MUTANT_REACH[R.mutant.name](level) && R.mutant.running[laneOf(at)] && R.mutant.touched[extra.account]) {
       // A catch is a difference in data both sides read successfully, at a
       // level the planted fault can reach, that the clean run does not have,
       // after the fault was applied at least once.
@@ -480,6 +480,13 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   }
 }
 const laneOf = (at) => String(at.lane ?? 'none');
+// The account a page belongs to (`L0A-neu` -> `L0A`). A mutant marks the
+// account whose NEW page it changed; a catch must be an observation of that
+// account, in the same sequence, after the change.
+const acctKey = (label) => String(label).replace(/-(old|neu)$/, '');
+function touch(label) {
+  if (R.mutant) R.mutant.touched[acctKey(label)] = true;
+}
 // A sequence's first catch stands only if the sequence had no harness-level
 // difference: a replay failure, a timeout or a page error can leave the two
 // sides' caches apart and so make differences of its own. Each sequence ends
@@ -691,7 +698,10 @@ async function openSide(storageState, side, label) {
       const resp = await r.fetch().catch((e) => (harnessError(`${label}: mutant fetch: ${firstLine(e)}`), null));
       if (!resp) return r.abort('failed');
       const json = await resp.json();
-      if (mutateResponse(json, CONFIG.mutant, g)) R.mutant.applied++;
+      if (mutateResponse(json, CONFIG.mutant, g)) {
+        R.mutant.applied++;
+        touch(label);
+      }
       const headers = { ...resp.headers() };
       delete headers['content-encoding'];
       delete headers['content-length'];
@@ -871,7 +881,7 @@ function compareErrors(level, kind, ea, eb, extra = {}) {
   const cls = (A === null) !== (B === null) || A?.retry !== B?.retry ? 'diff' : 'error-shape';
   record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: pairLabel(A, B) });
 }
-function compareReader(level, id, a, b) {
+function compareReader(level, id, a, b, account) {
   R.counts.readerComparisons++;
   const kind = `reader${id}`;
   if (!a || !b) {
@@ -882,10 +892,10 @@ function compareReader(level, id, a, b) {
   const sb = Object.fromEntries(STATE_FIELDS.map((k) => [k, b[k]]));
   if (J(sa) !== J(sb)) record(level, kind, 'state', sa, sb);
   const canon = canonFor(readerKind(id));
-  record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, { clean: readerOk(a) && readerOk(b) }, canon);
+  record(level, `${kind}.data`, classify(a.data, b.data, canon), a.data, b.data, { clean: readerOk(a) && readerOk(b), account }, canon);
   compareErrors(level, kind, a.error, b.error);
 }
-function compareCallers(level, sa, sb, groupsFor) {
+function compareCallers(level, sa, sb, groupsFor, account) {
   const a = sa.callers;
   const b = sb.callers;
   for (const k of new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])) {
@@ -893,21 +903,21 @@ function compareCallers(level, sa, sb, groupsFor) {
     const clean = callerOk(sa, k) && callerOk(sb, k);
     const canon = (x) => canonCallers(x, groupsFor(k));
     R.counts.callerComparisons++;
-    record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], { clean }, canon);
+    record(`${level}:caller`, `caller.${k}`, classify(a?.[k], b?.[k], canon), a?.[k], b?.[k], { clean, account }, canon);
   }
 }
 // `expected`: the reader ids that must be in both snapshots.
-function compareSnapshots(level, a, b, expected) {
+function compareSnapshots(level, a, b, expected, account) {
   const groupsFor = callerGroups(a, b);
   for (const k of new Set([...Object.keys(a), ...Object.keys(b), ...expected, 'callers'])) {
     if (k === 'callers') {
       if (!a.callers || !b.callers) record(`${level}:caller`, 'callers', 'state', a.callers ?? null, b.callers ?? null, { note: 'callers missing' });
-      else compareCallers(level, a, b, groupsFor);
-    } else compareReader(level, k, a[k], b[k]);
+      else compareCallers(level, a, b, groupsFor, account);
+    } else compareReader(level, k, a[k], b[k], account);
   }
 }
 // Raw read case: the old queryFn and the new reader, back to back.
-function compareRaw(kind, k, oldR, newR) {
+function compareRaw(kind, k, oldR, newR, account) {
   R.counts.rawCases++;
   const level = `raw:${here().phase ?? 'read'}`;
   if (oldR.ok !== newR.ok) return record(level, kind, 'diff', { ok: oldR.ok, error: oldR.error ?? null, message: oldR.message ?? null }, { ok: newR.ok, error: newR.error ?? null, message: newR.message ?? null });
@@ -917,7 +927,7 @@ function compareRaw(kind, k, oldR, newR) {
   }
   bump(R.coverage, 'raw outcome', 'both ok');
   const canon = canonFor(k);
-  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true }, canon);
+  return record(level, kind, classify(oldR.value, newR.value, canon), oldR.value, newR.value, { clean: true, account }, canon);
 }
 // In CONTROL both halves of a raw case run the base commit's functions.
 const newRaw = (fn) => (CONFIG.control ? `raw.old.${fn}` : `raw.neu.${fn}`);
@@ -932,7 +942,7 @@ async function rawCase(s, key) {
       cover('listing size', sizeBucket(o.value.length));
       coverTies('definitions', o.value, defKey);
     }
-    compareRaw(`defs:${key.scope}:${key.includeOptions ? 'opts' : 'plain'}:${key.forEntityType ?? '-'}`, 'defs', o, n);
+    compareRaw(`defs:${key.scope}:${key.includeOptions ? 'opts' : 'plain'}:${key.forEntityType ?? '-'}`, 'defs', o, n, acctKey(s.label));
   } else if (key.k === 'opts') {
     cover('option target', key.why ?? 'visible');
     const [o, n] = await Promise.all([ev(s, 'raw.old.options', key.id), ev(s, newRaw('options'), key.id)]);
@@ -940,14 +950,14 @@ async function rawCase(s, key) {
       cover('options size', sizeBucket(o.value.length));
       coverTies('options', o.value, optKey);
     }
-    compareRaw(`opts:${key.why ?? 'visible'}`, 'opts', o, n);
+    compareRaw(`opts:${key.why ?? 'visible'}`, 'opts', o, n, acctKey(s.label));
   } else {
     const [o, n] = await Promise.all([ev(s, 'raw.old.tags'), ev(s, newRaw('tags'))]);
     if (o.ok) {
       cover('tag count', sizeBucket(o.value.reduce((t, set) => t + set.options.length, 0)));
       for (const set of o.value) coverTies('tag options', set.options, optKey);
     }
-    compareRaw('tags', 'tags', o, n);
+    compareRaw('tags', 'tags', o, n, acctKey(s.label));
   }
 }
 // Rows whose server sort key is shared with a neighbour (the tie-order class
@@ -1081,8 +1091,10 @@ async function compareStep(pair, level, op) {
   checkStray(pair);
   const timedOut = await settleAll(pair);
   if (CONFIG.mutant === 'stale-cache') {
-    const restored = await Promise.all([pair.A.neu, pair.B.neu].map((s) => ev(s, 'mutant.restoreCache')));
+    const pages = [pair.A.neu, pair.B.neu];
+    const restored = await Promise.all(pages.map((s) => ev(s, 'mutant.restoreCache')));
     if (restored.some((n) => n > 0)) R.mutant.applied++;
+    restored.forEach((n, i) => n > 0 && touch(pages[i].label));
   }
   if (CONFIG.mutant === 'skip-live-update') await takeSkipped(pair.A.neu, pair.B.neu);
   const keys = pair.keys;
@@ -1106,8 +1118,9 @@ async function compareStep(pair, level, op) {
     const at = who === 'A' ? 0 : 2;
     const liveOut = timedOut[at] || timedOut[at + 1];
     const freshOutHere = freshOut[at] || freshOut[at + 1];
-    if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected);
-    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected);
+    const account = `L${pair.lane}${who}`;
+    if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, account);
+    if (!freshOutHere) compareSnapshots(`${level}:fresh`, fo, fn, expected, account);
     if (liveOut || freshOutHere) continue;
     // staleness: which readers differ live vs fresh, per side. Each side is
     // compared with itself, so only tie order is removed.
@@ -1127,7 +1140,7 @@ async function compareStep(pair, level, op) {
     if (sn.length) bump(R.staleness.byOp, `${op}:${who}`, 'new');
     if (J(so) !== J(sn)) {
       R.staleness.mismatches++;
-      record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn, { clean: [lo, ln, fo, fn].every(snapshotClean) });
+      record(`${level}:staleness`, `stale keys ${who}`, 'diff', so, sn, { clean: [lo, ln, fo, fn].every((x) => snapshotClean(x, expected)), account });
     } else record(`${level}:staleness`, `stale keys ${who}`, 'equal');
   }
   delete c.account;
@@ -1142,6 +1155,7 @@ async function compareStep(pair, level, op) {
 async function takeSkipped(...pages) {
   const n = await Promise.all(pages.map((s) => ev(s, 'mutant.takeSkipped')));
   R.mutant.applied += n.reduce((a, b) => a + b, 0);
+  n.forEach((x, i) => x > 0 && touch(pages[i].label));
 }
 
 // One write, through the real mutation hooks: NEW performs it against the
@@ -1194,7 +1208,7 @@ async function compareImperative(acct, id) {
   const [o, n] = await Promise.all([ev(acct.old, 'imperative.fetchDefinitionWithOptions', id), ev(acct.neu, 'imperative.fetchDefinitionWithOptions', id)]);
   if (o.ok !== n.ok) return record('imperative', 'fetchPropertyDefinitionWithOptions', 'diff', o, n);
   if (!o.ok) return compareErrors('imperative', 'fetchPropertyDefinitionWithOptions', o.error, n.error, { oldMessage: o.message, newMessage: n.message });
-  record('imperative', 'fetchPropertyDefinitionWithOptions', classify(o.value, n.value, canonDefWithOptions), o.value, n.value, {}, canonDefWithOptions);
+  record('imperative', 'fetchPropertyDefinitionWithOptions', classify(o.value, n.value, canonDefWithOptions), o.value, n.value, { clean: true, account: acctKey(acct.neu.label) }, canonDefWithOptions);
 }
 // Read-after-write: the old and new readers right after a write (or an
 // out-of-band change), then whether the write is visible to each.
@@ -1426,7 +1440,10 @@ async function runLane(lane, seqCount) {
   const gen = makeGen(g);
   let pair = null;
   for (let seq = 0; seq < seqCount; seq++) {
-    if (R.mutant) R.mutant.running[String(lane)] = true;
+    if (R.mutant) {
+      R.mutant.running[String(lane)] = true;
+      for (const k of Object.keys(R.mutant.touched)) if (k.startsWith(`L${lane}`)) delete R.mutant.touched[k];
+    }
     if (!pair || seq % CONFIG.rotate === 0) {
       if (pair) {
         if (CONFIG.sweep) await sweep(pair, 'end');

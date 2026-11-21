@@ -610,10 +610,19 @@ window.__h = {
         queryKey: propertiesKeys._def,
       });
     },
+    // Returns how many entries it changed: putting back data the cache
+    // already holds changes nothing and is not a fault applied.
     restoreCache() {
-      const restored = staleCache.length;
-      for (const [key, data] of staleCache)
-        if (data !== undefined) queryClient.setQueryData(key, data);
+      let restored = 0;
+      for (const [key, data] of staleCache) {
+        if (data === undefined) continue;
+        if (
+          JSON.stringify(queryClient.getQueryData(key)) === JSON.stringify(data)
+        )
+          continue;
+        queryClient.setQueryData(key, data);
+        restored++;
+      }
       staleCache = [];
       return restored;
     },
