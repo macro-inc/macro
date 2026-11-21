@@ -751,7 +751,9 @@ Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
 until then.
 **Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
+scheduled plans show no retry notice). CRM (for owners and admins while
+`enable-crm-member-access-changes` is on, **Who can use CRM** first: each person's
+CRM access switch, the same setting as their ⋯ in Members; individual email contribution, gated selective sharing rules with JSON,
 count preview and history subpages, and team/personal domain exclusions;
 a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow

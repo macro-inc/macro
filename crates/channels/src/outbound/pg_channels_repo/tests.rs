@@ -932,18 +932,22 @@ async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool
 
     assert_eq!(repo.get_user_team_id(&user_id).await.unwrap(), Some(TEAM_A));
 
-    repo.patch_channel(
-        CH1,
-        TEAM_OWNER_A.to_string(),
-        Some(TEAM_A),
-        PatchChannelRequest {
-            channel_name: None,
-            convert_to_team_channel: Some(true),
-            auto_join_team: Some(true),
-        },
-    )
-    .await
-    .unwrap();
+    let auto_joined = repo
+        .patch_channel(
+            CH1,
+            TEAM_OWNER_A.to_string(),
+            Some(TEAM_A),
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: Some(true),
+                auto_join_team: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+    // The reactivated member counts as added; the admin was already active.
+    assert!(auto_joined.contains(&LEFT_USER.to_string()));
+    assert!(!auto_joined.contains(&TEAM_OWNER_A.to_string()));
 
     let channel = sqlx::query!(
         r#"
@@ -986,18 +990,20 @@ async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool
     .await
     .unwrap();
 
-    repo.patch_channel(
-        CH1,
-        TEAM_OWNER_A.to_string(),
-        Some(TEAM_A),
-        PatchChannelRequest {
-            channel_name: None,
-            convert_to_team_channel: None,
-            auto_join_team: Some(false),
-        },
-    )
-    .await
-    .unwrap();
+    let turned_off = repo
+        .patch_channel(
+            CH1,
+            TEAM_OWNER_A.to_string(),
+            Some(TEAM_A),
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: None,
+                auto_join_team: Some(false),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(turned_off.is_empty());
 
     let auto_join_team = sqlx::query_scalar!(
         "SELECT auto_join_team FROM comms_channels WHERE id = $1",
@@ -1080,8 +1086,12 @@ async fn auto_join_is_enabled_team_scoped_and_idempotent(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_id = macro_user_id(NON_MEMBER);
 
-    repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
-    repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+    let mut joined = repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+    joined.sort();
+    let joined_again = repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+
+    assert_eq!(joined, vec![TEAM_A_AUTO_ACTIVE, TEAM_A_AUTO_LEFT]);
+    assert!(joined_again.is_empty());
 
     let channel_ids = sqlx::query_scalar!(
         r#"
@@ -1135,7 +1145,8 @@ async fn auto_join_reactivates_left_members_without_changing_active_memberships(
     .await
     .unwrap();
 
-    repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+    let changed = repo.auto_join_by_team_id(&TEAM_A, &user_id).await.unwrap();
+    assert_eq!(changed, vec![TEAM_A_AUTO_LEFT]);
 
     let active_after = sqlx::query!(
         r#"

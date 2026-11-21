@@ -133,7 +133,15 @@ a covered range with such occurrences refetches once instead of rendering
 without them (span `calendar.refetch_unreadable_occurrences`). A
 `refresh_calendar` poke, reconnecting, coming online, or returning to the tab
 runs one `CalendarChanges` delta that
-applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
+applies edits made elsewhere. The delta tracks the user's own inboxes and the
+ones delegated to them, not teammates' shared calendars. When an inbox becomes
+visible after weeks were cached, the cache drops what it holds and refetches
+the visible weeks: it never adopts the new inbox from a page, so the delta
+leaves it out and the server resets. That includes the first inbox of a user
+whose weeks were cached with none; with no inbox the delta asks for the
+server's watermark only. Span `calendar.delta_sync` records
+`calendar.delta.reset` (`first_link`, `new_link`, `retention`) and
+`calendar.delta.pages`. RSVPs, edits, deletions, and creates show at once
 through the durable mutation queue: a rejected write rolls back with the usual
 error, and a write made offline stays visible and replays on reconnect. Native
 apps whose engine lacks the calendar cache commands keep the REST path. Until the
@@ -141,7 +149,36 @@ cache answers its first calendar read, viewports wait at most a second and then
 read from REST, and writes use REST, so a cache that is slow to start or fails
 ("Local cache unavailable") never leaves the calendar on skeletons. Writes in
 that window behave as on the REST path: offline, they roll back with an error
-instead of replaying.
+instead of replaying. After the cache has answered, a viewport still reads from
+REST whenever the cache cannot answer it: a refused or timed-out cache request
+(another tab handing over the database) reads REST at once, and a cache path
+still running after three seconds (a read, coverage commit or write
+acknowledgement waiting on an owner change) races a REST read that keeps
+whichever answers first. The cache path keeps running, so the week is cached
+once it finishes; while it is overdue, other viewports give the cache only the
+one-second head start before racing REST. If REST fails, the cache gets one
+more deadline to answer before the viewport errors. Retry takes the same path.
+Span `calendar.occurrences.read` records which path answered
+(`calendar.read.source`) and why it fell back (`calendar.read.fallback_reason`,
+`calendar.read.cache_error`); deadline and cache-error fallbacks also log
+`calendar.occurrences.cache_fallback`. A failed GraphQL fetch of an uncovered
+week also reads REST, as `fetch-error`, without that log.
+A week the cache covered is only as current as its last delta, while a REST
+answer shows the server as it is, so once REST has answered a viewport the
+cache answers only after a delta that read the server since: the read waits
+for one (`calendar.read.catch_up` `held`, or `retried` when it retries a failed
+one whose backoff has passed; `waiting` when REST answered at the deadline
+first). A failed delta also retries on its own, after 2, 4 and 8 seconds, then
+waits for the next poke; one can fail while another tab hands over the
+database. A cache that cannot be brought forward (`behind`) reads REST
+(fallback `behind`, also logged) without fetching the week's gaps, and answers
+from its older copy of a covered week only if REST fails too
+(`calendar.read.older_cache`). While a failed delta backs off or has used its
+retries, a change in the cache does not refetch the viewports, since they
+would only read REST again. A cache that no REST read has overtaken reads
+no REST and runs no extra delta, even after a failed one. Without this, an
+event REST had shown, such as one just created, would drop off the grid until
+a later delta.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without

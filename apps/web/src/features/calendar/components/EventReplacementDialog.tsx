@@ -3,19 +3,8 @@ import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { EventReplacementController } from '../context/event-replacement-source';
 import type { EventReplacementPreview } from '../core/event-replacement';
-
-function replacementTime(preview: EventReplacementPreview) {
-  if (!preview.allDay)
-    return `${new Date(preview.startsAt).toLocaleString()} – ${new Date(preview.endsAt).toLocaleString()}`;
-  const lastDay = new Date(
-    new Date(`${preview.endsAt}T00:00:00Z`).getTime() - 86_400_000
-  )
-    .toISOString()
-    .slice(0, 10);
-  return preview.startsAt === lastDay
-    ? `${preview.startsAt} · All day`
-    : `${preview.startsAt} – ${lastDay} · All day`;
-}
+import type { CalendarTimeFormat } from '../types';
+import { formatEventSchedule } from '../utils/event-schedule';
 
 function ReplacementConfirmation(props: {
   preview: EventReplacementPreview;
@@ -57,6 +46,7 @@ function ReplacementConfirmation(props: {
 /** Pure presentation: all provider I/O and retry decisions are supplied by the owner. */
 export function EventReplacementDialog(props: {
   controller: EventReplacementController;
+  timeFormat: CalendarTimeFormat;
   onOpenUrl: (url: string) => void;
   onDone: () => void;
 }) {
@@ -67,11 +57,9 @@ export function EventReplacementDialog(props: {
       onOpenChange={(open) => {
         if (!open) state.close();
       }}
+      class="w-128"
     >
-      <Panel
-        depth={2}
-        class="w-full max-w-[min(32rem,calc(100vw-2rem))] rounded-xl text-ink"
-      >
+      <Panel depth={2} class="rounded-xl text-ink">
         <Panel.Header class="p-3">
           <Dialog.Title>Replace Outlook event</Dialog.Title>
         </Panel.Header>
@@ -97,7 +85,16 @@ export function EventReplacementDialog(props: {
                   <p class="font-medium">
                     {preview().title || '(Untitled event)'}
                   </p>
-                  <p>{replacementTime(preview())}</p>
+                  <p>
+                    {formatEventSchedule(
+                      {
+                        start: preview().startsAt,
+                        end: preview().endsAt,
+                        allDay: preview().allDay,
+                      },
+                      props.timeFormat
+                    )}
+                  </p>
                   <p>
                     {preview().isSeries
                       ? 'Entire recurring series'

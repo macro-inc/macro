@@ -10,6 +10,7 @@ import {
   useCalendarProviderUrl,
   useEventReplacementSource,
 } from '../queries/event-replacement-source';
+import { useCalendarPreferences } from '../utils/preferences';
 
 /** App-facing composition: production adapters stay outside the injected controller. */
 export function useEventReplacement(eventId: Accessor<string | undefined>) {
@@ -21,9 +22,11 @@ export function EventReplacement(props: {
   controller: EventReplacementController;
   onDone: () => void;
 }) {
+  const [preferences] = useCalendarPreferences();
   return (
     <EventReplacementDialog
       controller={props.controller}
+      timeFormat={preferences.timeFormat}
       onOpenUrl={openExternalUrl}
       onDone={props.onDone}
     />

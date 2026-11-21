@@ -2,7 +2,7 @@
 
 use super::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::{catalog::InboxCredentialOwnerLookup, lifecycle::InboxDeletionQueue};
-use models_email::service::pubsub::{DeletionReason, LinkManagerMessage};
+use models_email::service::pubsub::{DeletionReason, LinkManagerMessage, LinkManagerSender};
 use uuid::Uuid;
 
 pub struct PgDeletedUserInboxes(pub sqlx::PgPool);
@@ -32,10 +32,13 @@ impl InboxDeletionQueue for DeletedUserNotifications {
         reason: DeletionReason,
     ) -> Result<(), Self::Err> {
         self.0
-            .enqueue_link_manager_notification(LinkManagerMessage::DeleteLink {
-                link_id,
-                deletion_reason: reason,
-            })
+            .enqueue_link_manager_notification(
+                LinkManagerMessage::DeleteLink {
+                    link_id,
+                    deletion_reason: reason,
+                },
+                LinkManagerSender::Event,
+            )
             .await
             .map_err(Into::into)
     }
