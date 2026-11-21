@@ -1506,6 +1506,57 @@ async fn a_macrod_restart_in_a_backoff_keeps_the_last_exit() {
 }
 
 #[tokio::test]
+async fn a_restarted_macrod_adopts_a_running_container_while_the_host_has_no_route() {
+    // Wi-Fi down when macrod comes back: the running agent's policy reads
+    // back intact, so it is adopted, not stopped as egress-blocked.
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-1"));
+    store.save(&stored(install(4)), &environment().0).unwrap();
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine.state().to_the_internet = false;
+    engine.state().containers.insert(
+        "macro-teammate-install-1".to_owned(),
+        ContainerState {
+            id: None,
+            running: true,
+            delivery: Some(Delivery::of(&install(4))),
+            image_id: Some(IMAGE_ID.to_owned()),
+        },
+    );
+    engine.state().containers.insert(
+        "macro-teammate-install-1-net".to_owned(),
+        ContainerState {
+            id: Some("holder-0".to_owned()),
+            running: true,
+            delivery: None,
+            image_id: Some(IMAGE_ID.to_owned()),
+        },
+    );
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
+    let mut statuses = teammates.subscribe();
+
+    teammates.detect().await;
+
+    assert_eq!(
+        next_states(&mut statuses, 1).await,
+        [TeammateRunState::Running]
+    );
+    assert_eq!(
+        engine.calls(),
+        [Call::Guard {
+            holder_id: "holder-0".to_owned(),
+            loaded: false
+        }]
+    );
+}
+
+#[tokio::test]
 async fn an_adopted_containers_exit_is_passed_on_once() {
     let directory = tempfile::tempdir().unwrap();
     let store = Store::new(directory.path().join("teammates/harness-1"));

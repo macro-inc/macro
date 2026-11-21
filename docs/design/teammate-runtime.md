@@ -258,8 +258,9 @@ networkIsolationUnavailable`; it never falls back to an open network. A
 host with no default (or split default) route, v4 or v6, has only routes
 to networks the rules drop, so the agent would run and reach nothing,
 Macro included: its start is refused with `failed: egressBlocked`
-instead, and the same check runs before an adoption. Either refusal is
-tried again with the restart backoff five times (about 30 seconds), then
+instead. An adoption isn't checked for routes: a running agent whose
+rules read back intact keeps running while the host is offline. Either
+refusal is tried again with the restart backoff five times (about 30 seconds), then
 the agent is parked: the service shows `failed` with the reason while
 macrod keeps trying, waits doubling from 1 to 10 minutes, and starts it
 on the first try that passes (an engine back up, a VPN reconnected). A

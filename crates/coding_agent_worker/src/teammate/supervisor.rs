@@ -414,14 +414,10 @@ async fn adopted_holder<EngineImpl: Engine>(
     engine: &EngineImpl,
     supervision: &Supervision,
 ) -> Result<String, String> {
+    // Not gated on the host's routes: a running agent whose policy reads
+    // back intact keeps running while the host is offline (a resume with
+    // Wi-Fi down); only a new start needs a route out.
     let install_id = &supervision.install.install_id;
-    if !isolation::host_network(engine)
-        .await
-        .map_err(|error| error.to_string())?
-        .to_the_internet
-    {
-        return Err(NO_WAY_OUT.to_owned());
-    }
     let state = engine
         .container(&holder_name(install_id))
         .await
