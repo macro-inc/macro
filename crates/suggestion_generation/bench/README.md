@@ -249,7 +249,8 @@ answers, forwards, files, leaves to someone, nothing, or sends), to whom
 (`to`), and how many they sent. The writer refuses a person
 whose month keeps fewer than 250 messages or whose key has fewer than eight
 needs (by id, with a drafted routine that isn't blank) a drafted routine can
-meet (five for earlier sets). Both writers refuse a workspace where two people share a first name in
+meet (five for earlier sets), after writing its needs from the same mail three
+times. Both writers refuse a workspace where two people share a first name in
 any case (each is mailed as first name at the domain) or a colleague is named
 Owner (the person's own place), when sketching and when finishing a set.
 `run`, `find` and `heldout make` take counts from 1 to 1000.

@@ -113,6 +113,8 @@ export function draftableNeeds(needs: { id: string; drafted?: string }[]): numbe
 
 /** The fewest needs only a drafted routine can meet, so five good drafts are a fair target (5 for sets written before sent mail). */
 const MIN_DRAFTED_NEEDS = 8;
+/** How many times a person's needs are written from the same mail before the person is given up. */
+const KEY_TRIES = 3;
 /** The soonest and latest a reply or forward follows the message it answers. */
 const SENT_DELAY_MS = [20 * 60_000, 9 * 60 * 60_000] as const;
 
@@ -422,13 +424,32 @@ Their mail, newest first (text for the newest ${WINDOW_TEXTS}; sender, subject a
 <mail>${digest}</mail>
 What they sent in those days, newest first (text for the newest ${SENT_TEXTS}):
 <mail>${sentDigest}</mail>`;
-  const { needs } = await write<{ needs: (WrittenRoutinesTruth['needs'][number] & { id: string; what: string; streams: string[] })[] }>(
-    at,
+  type Need = WrittenRoutinesTruth['needs'][number] & { id: string; what: string; streams: string[] };
+  const ids = new Set(streams.map((s) => s.id));
+  // A need rests on streams that were kept, or no mail shows it. It is left out before
+  // placing, so the catalog keys it named aren't counted as met.
+  const onKeptStreams = (needs: Need[]) =>
+    needs
+      .map((need) => ({ ...need, streams: (need.streams ?? []).filter((id) => ids.has(id)), drafted: need.drafted?.trim() || undefined }))
+      .filter((need) => need.streams.length);
+  // Five good drafted routines must be within reach. The needs are written again from
+  // the same mail when too few are left to drafts, before any decoy or build sees them.
+  let needs: Need[] = [];
+  let shown: ReturnType<typeof onKeptStreams> = [];
+  for (let attempt = 1; ; attempt++) {
+    ({ needs } = await write<{ needs: Need[] }>(
+      at,
     `Write the needs of the answer key for judging automations ("routines") suggested to ${owner.name} a minute after signup, from their mail alone. Who they are: ${sketch.persona}
 A need is a routine they would still have on a month later because a stream of their mail shows the work: one for each work stream, or several that make one job, where a routine would do real work for them, the way they handle that mail. Leave out streams someone or something else already handles for them and streams too thin to automate. Ids r1, r2, …; for each: what, streams (the stream ids it rests on), evidence (3 to 5 subjects from the mail), the catalog keys that meet it on their own (empty when only a drafted routine can), drafted (what a drafted routine that meets it does; empty when the catalog covers it), and surfaces (sidebars it belongs in, best first: email, calendar, tasks, files, crm, chat, calls, reviews, agents). Make one need "mail sorting" met by inbox or email_tags when they file mail under labels.
 ${context}`,
-    NEEDS,
-  );
+      NEEDS,
+    ));
+    shown = onKeptStreams(needs);
+    const draftable = draftableNeeds(shown);
+    if (draftable >= MIN_DRAFTED_NEEDS) break;
+    if (attempt === KEY_TRIES) throw new Error(`${sketch.slug}: ${draftable} of ${shown.length} needs can be met by a drafted routine in each of ${KEY_TRIES} keys, fewer than ${MIN_DRAFTED_NEEDS}`);
+    console.error(`a key left ${draftable} of ${shown.length} needs to drafts, fewer than ${MIN_DRAFTED_NEEDS}; writing its needs again`);
+  }
   const { decoys, misfit } = await write<{ decoys: WrittenRoutinesTruth['decoys']; misfit: string[] }>(
     at,
     `Write the decoys and misfits of the answer key for judging automations ("routines") suggested to ${owner.name} a minute after signup, from their mail alone. Who they are: ${sketch.persona}
@@ -437,16 +458,7 @@ Decoys (ids x1, …, 3 to 6): routines that look plausible from their mail but t
 ${context}`,
     DECOYS,
   );
-  const ids = new Set(streams.map((s) => s.id));
-  // A need rests on streams that were kept, or no mail shows it. It is left out before
-  // placing, so the catalog keys it named aren't counted as met.
-  const shown = needs
-    .map((need) => ({ ...need, streams: (need.streams ?? []).filter((id) => ids.has(id)), drafted: need.drafted?.trim() || undefined }))
-    .filter((need) => need.streams.length);
   const placed = placeAll({ needs: shown, decoys, misfit });
-  // Five good drafted routines must be within reach.
-  const draftable = draftableNeeds(shown);
-  if (draftable < MIN_DRAFTED_NEEDS) throw new Error(`${sketch.slug}: ${draftable} of ${placed.needs.length} needs can be met by a drafted routine, fewer than ${MIN_DRAFTED_NEEDS}`);
   writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(placed, null, 1)}\n`);
 
   const users = Object.fromEntries([
