@@ -21,7 +21,7 @@
  */
 import type { ApiUser } from './api';
 import { AstGen } from './ast-gen';
-import { cacheEventsBetween, ensurePage, loadProbe, registerPage, watchCacheErrors, type CacheEvent, type UserSession } from './browser';
+import { cacheEventsBetween, ensurePage, loadProbe, registerPage, watchCacheErrors, type CacheEvent, type ExportedSpan, type UserSession } from './browser';
 import { CALLERS } from './callers';
 import { compareCaller, compareData, DATA_RULES, type Diff, PREVIEW_DROPS_NOTIFICATIONS } from './compare';
 import { login } from './login';
@@ -772,6 +772,11 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
         detail: `${stepKind}: main showed the change after ${o} ms, the branch not within ${bound} ms; ${late === undefined ? `not within ${bound + LATE_MS} ms either` : `it did at ${late} ms`}`,
         lateMs: late ?? null,
         cache,
+        // The apps' own list-refresh spans in the window, start offset and duration.
+        phases: {
+          old: phaseSpans(session.spans.old, t0),
+          new: phaseSpans(session.spans.new, t0),
+        },
         // What the branch still showed against the cold read when the watch ended.
         ...(late === undefined && lastNew[i] && { diffs: compareCaller(JSON.parse(tv[i] as string), view(r, lastNew[i])).diffs.slice(0, 8) }),
       });
@@ -780,6 +785,13 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
       ctx.result.newOnly.push({ seq, step, stepKind, reader: r.caller, latencyMs: n as number });
     }
   });
+}
+
+function phaseSpans(spans: ExportedSpan[], t0: number): string[] {
+  return spans
+    .filter((s) => s.start !== undefined && s.start >= t0 - 100 && /^(agent_session|soup|graphql_cache|entity)\./.test(s.name))
+    .slice(0, 16)
+    .map((s) => `${s.name} +${(s.start as number) - t0}ms ${s.ms}ms`);
 }
 
 const truthViews = (readers: Reader[], truth: Snap[]) =>
@@ -867,6 +879,8 @@ export async function runSequence(ctx: SeqContext, seq: number) {
       prevTruth = truthViews(readers, truth);
       prevTruthSnaps = truth;
     }
+    // One line per step, so a slow or stuck lane shows where it is.
+    ctx.log(`seq ${seq} step ${i} ${step.kind}: ${Date.now() - t0} ms`);
   }
   for (const f of result.failures) if (f.seq === seq && !f.trace) f.trace = trace;
   await Promise.all(readers.flatMap((r) => [unmount(session.pages.old, r.key), unmount(session.pages.new, r.key)]));

@@ -57,6 +57,9 @@ export type ExportedSpan = {
   attributes: Record<string, unknown>;
   status?: number;
   at: number;
+  /** Wall-clock start and duration, from the span itself. */
+  start?: number;
+  ms?: number;
 };
 
 export type SoupRequest = {
@@ -135,6 +138,10 @@ export async function openUser(
                   ),
                   status: span.status?.code,
                   at: Date.now(),
+                  ...(span.startTimeUnixNano && span.endTimeUnixNano && {
+                    start: Number(BigInt(span.startTimeUnixNano) / 1_000_000n),
+                    ms: Number((BigInt(span.endTimeUnixNano) - BigInt(span.startTimeUnixNano)) / 1_000_000n),
+                  }),
                 });
         } catch {}
       }

@@ -4,7 +4,8 @@
  * name, renaming on main only, on the branch only, and on both at once. Also
  * prints, per side, the durations of the app's own `agent_session.*` spans
  * (the list refresh pass, its REST refetch phase and the primary row read),
- * so a late list can be put on a phase. Fresh synthetic user; needs run.sh's
+ * so a late list can be put on a phase. WITH_REST=1 also mounts a REST list
+ * of the same sessions. Fresh synthetic user; needs run.sh's
  * two Vites.
  */
 import { ApiUser } from '../lib/api';
@@ -44,6 +45,14 @@ try {
       } catch {}
     });
   for (const side of sides) await mount(s.pages[side], 'qa', 'qa.agentSessions', {});
+  // WITH_REST=1: also mount a list the branch still reads over REST (a sort the
+  // translator refuses) holding the same sessions, as a Drive Recent view does.
+  if (process.env.WITH_REST) {
+    const body = await s.pages.new.evaluate(() => (window as any).__probe.bases()['qa.agentSessions'].body);
+    const args = { params: { limit: 500, sort_method: 'touched_by_me' }, body };
+    for (const side of sides) await mount(s.pages[side], 'rest', 'ast', { args, options: {}, pages: 1 });
+    for (const side of sides) await settle(s.pages[side], 'rest', { timeoutMs: 60_000 });
+  }
   for (const side of sides) await settle(s.pages[side], 'qa', { timeoutMs: 60_000 });
   const shows = async (side: Side, id: string, name: string) => {
     const snap = await settle(s.pages[side], 'qa', { timeoutMs: 500, stableMs: 0 });

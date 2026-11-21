@@ -12,9 +12,10 @@
 #   load      seed B, the same under concurrent REST/GraphQL load;
 #   cache-off seed C with the browser cache off (Vites restarted): smaller;
 #   mutants   seed M: each planted mutant in its own lane, and a control lane;
-#   aa        seed D, A/A control: main's app on both sides (one Vite, two
-#             origins), sequences only: the base rate of every difference
-#             kind when nothing changed.
+#   aa        seed D, A/A control: main's app on both sides, from two
+#             checkouts of OLD_REF (AA_CHECKOUT is the second) on two Vites,
+#             sequences only: the base rate of every difference kind when
+#             nothing changed.
 # and writes results/<label>.json plus results/summary.json. Synthetic data
 # only; every user and team it makes lives under *.difftest.dev.
 set -euo pipefail
@@ -26,6 +27,7 @@ INSTANCE=${INSTANCE:-gqlsoup}
 STACK=${STACK:-https://localhost:23209}
 NEW_CHECKOUT=${NEW_CHECKOUT:-$repo}
 OLD_CHECKOUT=${OLD_CHECKOUT:-$repo-main}
+AA_CHECKOUT=${AA_CHECKOUT:-$repo-main2}
 NEW_REF=${NEW_REF:-21bd07dc3f6}
 # The PR head merges main in; its second parent is the main it was tested on.
 OLD_REF=${OLD_REF:-$(git -C "$NEW_CHECKOUT" rev-parse "$NEW_REF^2")}
@@ -41,7 +43,9 @@ OUT=${OUT:-$here/results}
 mkdir -p "$OUT"
 
 # The apps must be exactly the commits the results name.
-for pair in "$NEW_CHECKOUT:$NEW_REF" "$OLD_CHECKOUT:$OLD_REF"; do
+pairs=("$NEW_CHECKOUT:$NEW_REF" "$OLD_CHECKOUT:$OLD_REF")
+[[ " $PASSES " == *" aa "* ]] && pairs+=("$AA_CHECKOUT:$OLD_REF")
+for pair in "${pairs[@]}"; do
   dir=${pair%%:*} ref=${pair##*:}
   git -C "$dir" diff --quiet "$ref" -- apps packages ||
     { echo "$dir: apps/ or packages/ differ from $ref" >&2; exit 1; }
@@ -57,13 +61,10 @@ stop_vites() {
 }
 trap stop_vites EXIT INT TERM
 
-start_vites() { # <cache:on|off> [old-only]
-  ports=("$OLD_PORT")
-  if [ "${2:-}" != old-only ]; then
-    "$here/vite.sh" "$NEW_CHECKOUT" "$NEW_PORT" "$here/probe" "$1" "$STACK" >"$OUT/vite-new-$1.log" 2>&1 &
-    pids+=($!)
-    ports+=("$NEW_PORT")
-  fi
+start_vites() { # <cache:on|off>
+  ports=("$OLD_PORT" "$NEW_PORT")
+  "$here/vite.sh" "$NEW_CHECKOUT" "$NEW_PORT" "$here/probe" "$1" "$STACK" >"$OUT/vite-new-$1.log" 2>&1 &
+  pids+=($!)
   "$here/vite.sh" "$OLD_CHECKOUT" "$OLD_PORT" "$here/probe" "$1" "$STACK" >"$OUT/vite-old-$1.log" 2>&1 &
   pids+=($!)
   for port in "${ports[@]}"; do
@@ -85,7 +86,7 @@ run() { # <label> <seed> <cache> [args...]
   shift 3
   reset_user_limit
   (cd "$here" && bun run run.ts --seed "$seed" --label "$label" --cache "$cache" \
-    --out "$OUT/$label.json" --new "${NEW_ORIGIN:-http://localhost:$NEW_PORT}" --old "http://localhost:$OLD_PORT" \
+    --out "$OUT/$label.json" --new "http://localhost:$NEW_PORT" --old "http://localhost:$OLD_PORT" \
     --stack "$STACK" --instance "$INSTANCE" --new-ref "$(git -C "$NEW_CHECKOUT" rev-parse "$NEW_REF")" \
     --old-ref "$(git -C "$OLD_CHECKOUT" rev-parse "$OLD_REF")" --lanes "${LANES:-8}" "$@") 2>&1 | tee "$OUT/$label.log"
 }
@@ -103,10 +104,10 @@ if has cache-off; then
   stop_vites
 fi
 if has aa; then
-  # Main on both sides: one Vite, reached as two origins so each side keeps
-  # its own browser storage and GraphQL cache.
-  start_vites on old-only
-  NEW_CHECKOUT=$OLD_CHECKOUT NEW_REF=$OLD_REF NEW_ORIGIN="http://127.0.0.1:$OLD_PORT" run aa "${SEEDS[4]}" on --aa --scale small --fuzz 0 --no-callers \
+  # Main on both sides, each from its own checkout and Vite, as in the real
+  # passes, so its timings compare with theirs.
+  NEW_CHECKOUT=$AA_CHECKOUT NEW_REF=$OLD_REF start_vites on
+  NEW_CHECKOUT=$AA_CHECKOUT NEW_REF=$OLD_REF run aa "${SEEDS[4]}" on --aa --scale small --fuzz 0 --no-callers \
     --seq-lanes "${AA_LANES:-8}" --seqs "${AA_SEQS:-48}" --steps "$STEPS"
   stop_vites
 fi
