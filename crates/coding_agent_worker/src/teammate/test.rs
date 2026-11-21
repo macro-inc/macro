@@ -2139,6 +2139,8 @@ fn the_holder_runs_with_exactly_the_specified_flags() {
             "16",
             "--memory",
             "64m",
+            "--sysctl",
+            "net.ipv4.ping_group_range=0 2147483647",
             "--network",
             "macro-teammate-install-1",
             "--network",
@@ -2711,7 +2713,7 @@ fn the_list_header_names_every_engine_and_the_one_that_runs_teammates() {
 /// as uid 1000, the public internet answers and every private, metadata and
 /// host destination is dropped, and the agent can't change the rules.
 #[tokio::test]
-#[ignore = "needs a container engine, the teammate image (teammate-runtime:latest) and the internet"]
+#[ignore = "needs a container engine, the teammate image (teammate-runtime:latest), nginx:alpine and the internet"]
 async fn the_real_engine_enforces_the_egress_policy() {
     let engine = real_engine();
     let info = engine.info().await.expect("a container engine answers");
@@ -2720,6 +2722,34 @@ async fn the_real_engine_enforces_the_egress_policy() {
     } else {
         "podman"
     };
+    // A peer on a public-looking address on another of the engine's
+    // networks (rootless Podman routes between its networks inside its own
+    // namespace, where the host's routes don't show them).
+    let lan = format!("macro-teammate-test-lan-{}", std::process::id());
+    let peer = format!("macro-teammate-test-peer-{}", std::process::id());
+    let run = |arguments: &[&str]| {
+        let output = std::process::Command::new(program)
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{arguments:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    run(&["network", "create", "--subnet", "44.31.250.0/24", &lan]);
+    run(&[
+        "run",
+        "--detach",
+        "--name",
+        &peer,
+        "--network",
+        &lan,
+        "--ip",
+        "44.31.250.10",
+        "nginx:alpine",
+    ]);
     let up_id = test_image(program, "egress-up", RUNS_UNTIL_STOPPED);
 
     let directory = tempfile::tempdir().unwrap();
@@ -2817,6 +2847,7 @@ async fn the_real_engine_enforces_the_egress_policy() {
         ("10.0.0.1", 80),
         ("192.168.0.1", 80),
         ("100.100.100.100", 80),
+        ("44.31.250.10", 80),
     ] {
         assert!(!connects(address, port), "{address}:{port} was reachable");
     }

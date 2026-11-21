@@ -257,8 +257,9 @@ pub trait Engine: Send + Sync + 'static {
         spec: &HolderSpec,
     ) -> impl Future<Output = Result<String, EngineError>> + Send;
 
-    /// What the holder's namespace and networks say: resolvers, gateways
-    /// and the networks' prefixes (not the host's: see `host_prefixes`).
+    /// What the holder's namespace and networks say: resolvers, the
+    /// gateways of `networks`, and the prefixes of `networks` and of every
+    /// other network the engine has (not the host's: see `host_prefixes`).
     fn network_facts(
         &self,
         holder_id: &str,
@@ -436,6 +437,10 @@ pub fn holder_arguments(spec: &HolderSpec) -> Vec<OsString> {
         "16",
         "--memory",
         "64m",
+        // Unprivileged ping for the agent, as Docker allows by default and
+        // rootless Podman doesn't (the policy still decides where to).
+        "--sysctl",
+        "net.ipv4.ping_group_range=0 2147483647",
     ]
     .into_iter()
     .map(OsString::from)

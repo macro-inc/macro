@@ -460,6 +460,34 @@ impl Engine for CliEngine {
             facts.network_prefixes.extend(prefixes);
             facts.gateways.extend(gateways);
         }
+        // Every other network the engine has: rootless Podman routes between
+        // its networks inside its rootless namespace, where neither the
+        // host's routes nor the holder's own networks show them. Networks
+        // without subnets (host, none) have nothing to add.
+        let others = self
+            .succeed(["network", "ls", "--format", "{{.Name}}"], QUICK_COMMAND)
+            .await?;
+        for network in others
+            .lines()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+        {
+            if networks.iter().any(|own| own == network) {
+                continue;
+            }
+            let Ok(inspected) = self
+                .succeed(
+                    ["network", "inspect", "--format", "{{json .}}", network],
+                    QUICK_COMMAND,
+                )
+                .await
+            else {
+                continue;
+            };
+            if let Ok((prefixes, _)) = netfacts::network_subnets(&inspected) {
+                facts.network_prefixes.extend(prefixes);
+            }
+        }
         Ok(facts)
     }
 
