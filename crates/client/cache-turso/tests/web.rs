@@ -477,9 +477,9 @@ async fn incompatible_opfs_initialization_exposes_reset_only_and_cannot_preserve
         .unwrap();
 }
 
-/// About 3 KB that payload compression cannot shrink, distinct per write.
+/// About 3 KB that payload compression cannot shrink, distinct per record.
 fn incompressible(write: usize, index: usize) -> String {
-    let mut state = (write as u64) << 32 | index as u64 | 1;
+    let mut state = (write as u64) << 32 | index as u64;
     (0..375)
         .map(|_| {
             state = state
