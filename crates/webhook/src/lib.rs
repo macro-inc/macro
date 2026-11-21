@@ -6,7 +6,7 @@ pub mod domain;
 #[cfg(any(feature = "inbound", feature = "consumer", feature = "worker"))]
 /// HTTP, Kafka consumer, and queue worker adapters.
 pub mod inbound;
-#[cfg(any(feature = "outbound", feature = "stream"))]
+#[cfg(any(feature = "outbound", feature = "stream", feature = "kms"))]
 /// Postgres, HTTP, and Kafka stream adapters.
 pub mod outbound;
 #[cfg(any(feature = "consumer", feature = "stream"))]

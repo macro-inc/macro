@@ -3,6 +3,8 @@
 //! and the webhook pipeline delivers to it. Same audience as webhooks,
 //! personal only. See the README's "MCP event subscriptions".
 
+/// What each event means, for `events/list`.
+pub mod catalog;
 /// The filter language subscriptions compile into.
 pub mod filter;
 /// Subscriptions, ids, lifetimes and delivery payloads.
