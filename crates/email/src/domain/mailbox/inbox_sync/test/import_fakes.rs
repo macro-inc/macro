@@ -274,8 +274,12 @@ impl InboxSyncHistory for Fake {
         batch: ChangeBatch,
     ) -> BoxFuture<'a, Result<(), crate::domain::mailbox::MailboxError>> {
         Box::pin(async move {
-            self.io("accept", (expected, batch))
-                .map_err(|_| crate::domain::mailbox::MailboxError::Persistence)
+            // A failed journal commit fails as a lock timeout does.
+            self.io("accept", (expected, batch)).map_err(|_| {
+                crate::domain::mailbox::MailboxError::database(
+                    crate::domain::mailbox::DatabaseFailure::Sqlstate("55P03".into()),
+                )
+            })
         })
     }
 }
@@ -364,7 +368,7 @@ impl InboxSyncUploads for Fake {
 impl InboxSyncContacts for Fake {
     fn connect<'a>(
         &'a self,
-        _: &'a MacroUserIdStr<'static>,
+        _: &'a service::link::Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {

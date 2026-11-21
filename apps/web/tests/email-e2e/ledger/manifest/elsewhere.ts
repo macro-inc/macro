@@ -482,7 +482,8 @@ export const elsewhere = {
       id: 'AX-063',
       surface: 'SX-29',
       fn: ['F-162'],
-      action: 'Toggle "New email" notifications (also hides the Mail badge)',
+      action:
+        'Toggle "New email" notifications (mail the notification service receives while it is off adds nothing to the Mail badge)',
       trigger: 'switch on the row "New email" ("When a new email arrives")',
       source: [
         'src/features/settings/Notifications.tsx',
@@ -526,9 +527,14 @@ export const elsewhere = {
       surface: 'SX-17',
       fn: ['F-042'],
       state:
-        'Unread mark on the Mail navigation entry; hidden when "New email" notifications are off',
-      trigger: 'an unread, not-done Signal thread in the loaded page',
-      source: ['src/components/app/use-navigation-unread.ts'],
+        'Unread mark on the Mail navigation entry: lit while the Notifications inbox has an unread mail row, which mail received while "New email" notifications are off does not make',
+      trigger:
+        'an unread mail row in the Notifications inbox (new mail or an email reminder; the server counts them), until it is read',
+      source: [
+        'src/components/app/use-navigation-unread.ts',
+        'src/features/notifications-inbox/queries/inbox-unread.ts',
+      ],
+      needs: 'the notification service',
     },
     {
       id: 'STX-300',
@@ -575,14 +581,11 @@ export const elsewhere = {
       id: 'STX-303',
       surface: 'SX-20',
       fn: ['F-166'],
-      state:
-        'Result "Email draft saved" / "Email sent"; buttons "Saving…" / "Working…" while pending',
-      trigger: 'save or send finished / pending',
-      source: [
-        'src/features/universal-input/actions.ts',
-        'src/features/universal-input/views/universal-composer.tsx',
-      ],
+      state: 'Buttons "Saving…" / "Working…" while the save or send is pending',
+      trigger: 'save or send pending',
+      source: ['src/features/universal-input/views/universal-composer.tsx'],
       flag: 'enable-universal-input',
+      note: 'the result line ("Email draft saved" / "Email sent" and its Open) is never on screen: every host ends the universal input in the step that sets it (the menu closes; on a phone its text clears), and opens what was made (STX-977)',
     },
     {
       id: 'STX-034',
@@ -803,6 +806,15 @@ export const elsewhere = {
       source: ['src/features/email-view/tour.ts'],
     },
     {
+      id: 'STX-943',
+      surface: 'SX-29',
+      fn: ['F-162'],
+      state:
+        'result: the "New email" switch shows the chosen setting, also after a reload',
+      trigger: 'after the action succeeds',
+      source: ['src/features/settings/Notifications.tsx'],
+    },
+    {
       id: 'STX-944',
       surface: 'SX-24',
       fn: ['F-163'],
@@ -905,6 +917,19 @@ export const elsewhere = {
         'Review card of a drafted email after it is sent: status "Sent", its fields and "Send email" disabled',
       trigger: 'the user sent the draft from the card',
       source: ['src/features/agent-reviews/views/review-stack.tsx'],
+    },
+    {
+      id: 'STX-977',
+      surface: 'SX-20',
+      fn: ['F-166'],
+      state:
+        'result: the universal input ends, and the saved draft opens in the composer or the sent thread opens',
+      trigger: 'the save or send finished',
+      source: [
+        'src/features/universal-input/universal-input.tsx',
+        'src/features/universal-input/actions.ts',
+      ],
+      flag: 'enable-universal-input',
     },
   ],
 } as const satisfies Group;

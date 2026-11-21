@@ -96,7 +96,9 @@ export class PipelineNamespace {
   }
 
   /**
-   * Entries (deals) whose company or contact name, domain or email contains
+   * Search entries across the caller's pipelines.
+   *
+   * Returns entries (deals) whose company or contact name, domain or email contains
    * `search`, across the caller's pipelines; pipelines without a match are
    * left out.
    *

@@ -1,4 +1,7 @@
-import { createListController } from '@app/components/list';
+import {
+  createListController,
+  useListInteractions,
+} from '@app/components/list';
 import {
   CollapsibleSection,
   SearchBar,
@@ -7,16 +10,9 @@ import {
 } from '@app/components/view-shell';
 import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
-import {
-  type EntityActionListState,
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
-import {
-  MaybeSoupEntityActionDrawerManager,
-  SoupEntityContextMenu,
-} from '@app/features/soup';
+import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -33,7 +29,7 @@ import { Key } from '@solid-primitives/keyed';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createEffect, createSignal, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, createUniqueId, Show } from 'solid-js';
 import type { AgentKind } from '../core/agent-kind';
 import {
   activeFilterCount,
@@ -53,6 +49,7 @@ import {
 } from '../core/recent-conversations';
 import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
+import { ConversationContextMenu } from '../views/shared/conversation-context-menu/conversation-context-menu';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 import {
   ConversationListControls,
@@ -62,12 +59,8 @@ import {
 /** Rows the filtered list should fill before paging stops waiting for a scroll. */
 const FILTERED_PAGE_FILL = 20;
 
-const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  supportsOpenInNewSplit: true,
-  senderBucket: undefined,
-};
-
+/** Rows from the end of the list at which moving down loads the next page. */
+const LOAD_MORE_DISTANCE = 3;
 export type AgentsSidebarProps = Omit<
   ConversationListControlsProps,
   'filters' | 'grouping'
@@ -91,41 +84,25 @@ export type AgentsSidebarProps = Omit<
   onSearchChange: (search: string) => void;
   onOpenConversation: (
     conversation: AgentConversationEntity,
-    event?: MouseEvent
+    newSplit: boolean
   ) => void;
   onRetry: () => void;
   onLoadMore: () => void;
 };
 
-function ConversationContextMenu(props: {
+/** Legacy Home sections keep independent row keys for keyboard focus. */
+type ConversationRow = {
+  key: string;
   conversation: AgentConversationEntity;
-  list: EntityActionListState;
-  children: JSX.Element;
-}) {
-  return (
-    <SoupEntityContextMenu
-      entity={props.conversation}
-      list={props.list}
-      selectedEntities={() => []}
-      viewContext={AGENTS_ACTION_VIEW_CONTEXT}
-      as="div"
-      // The nav is a fixed-height flex column, so the trigger's default
-      // `h-full` would split that height between the rows; keep rows content-sized.
-      class="block h-auto w-full shrink-0"
-      onOpenChange={(open) => {
-        if (!open) return;
-        props.list.focus.set(props.conversation.id);
-      }}
-    >
-      {props.children}
-    </SoupEntityContextMenu>
-  );
-}
+};
 
+type ConversationSection = 'pull-request' | 'conversation' | 'archived';
 function Row(props: {
+  id: string;
   conversation: AgentConversationEntity;
   mode: AgentsMode;
   active: boolean;
+  focused: boolean;
   onOpen: (event: MouseEvent) => void;
 }) {
   const title = () => props.conversation.name || 'Untitled chat';
@@ -134,11 +111,15 @@ function Row(props: {
       when={props.conversation.type === 'agent_session' && props.conversation}
       fallback={
         <ViewSidebar.Item
+          id={props.id}
           active={props.active}
           title={title()}
           data-kind="chat"
           onClick={props.onOpen}
-          class="pl-3"
+          class={cn(
+            'pl-3',
+            props.focused && !props.active && 'not-touch:bg-hover text-ink'
+          )}
         >
           <span class="min-w-0 flex-1 truncate">{title()}</span>
           <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
@@ -149,11 +130,13 @@ function Row(props: {
     >
       {(session) => (
         <AgentSessionListItem
+          domId={props.id}
           entity={session()}
           surface="agents"
           unread={unreadFilterFn(session())}
           mode={props.mode}
           active={props.active}
+          focused={props.focused}
           onOpen={props.onOpen}
         />
       )}
@@ -182,33 +165,108 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     conversations.filter((conversation) =>
       conversationMatchesFilters(factsOf(conversation), props.filters)
     );
-  const conversations = () => matching(props.conversations);
+  // Pages can overlap as conversations move up the list, so one can arrive
+  // twice, even in two states; it lists once, as the last copy received.
+  const unique = (conversations: AgentConversationEntity[]) => [
+    ...new Map(
+      conversations.map((conversation) => [conversation.id, conversation])
+    ).values(),
+  ];
+  const conversations = () => matching(unique(props.conversations));
   const openPullRequests = () =>
     selectOpenPullRequests(
-      props.conversations,
+      unique(props.conversations),
       userId(),
       props.modeForConversation
     );
-  const archived = () => matching(props.archived);
+  const archived = () => matching(unique(props.archived));
   const groups = () =>
     groupConversations(conversations(), factsOf, props.grouping);
   const filtering = () => activeFilterCount(props.filters) > 0;
-  const actionController = createListController({
-    items: () => [
-      ...new Map(
-        [
-          ...(agentUpdates().enabled ? openPullRequests() : []),
-          ...conversations(),
-          ...archived(),
-        ].map((conversation) => [conversation.id, conversation])
-      ).values(),
-    ],
-    getKey: (conversation) => conversation.id,
+  const rowsOf = (
+    section: ConversationSection,
+    conversations: AgentConversationEntity[]
+  ): ConversationRow[] =>
+    conversations.map((conversation) => ({
+      key: `${section}:${conversation.id}`,
+      conversation,
+    }));
+  // The rows on screen, in screen order: a collapsed section has none.
+  const visibleRows = () => [
+    ...(agentUpdates().enabled && openPullRequestsOpen()
+      ? rowsOf('pull-request', openPullRequests())
+      : []),
+    ...(conversationsOpen()
+      ? groups().flatMap((group) => rowsOf('conversation', group.items))
+      : []),
+    ...(archivedOpen() ? rowsOf('archived', archived()) : []),
+  ];
+  const list = createListController<ConversationRow, { newSplit: boolean }>({
+    items: visibleRows,
+    getKey: (row) => row.key,
     isSelectable: () => false,
+    onActivate: ({ item, metadata }) =>
+      props.onOpenConversation(item.conversation, metadata?.newSplit === true),
   });
   const actionList = toEntityActionListState({
-    controller: actionController,
-    getEntity: (conversation) => conversation,
+    controller: list,
+    getEntity: (row) => row.conversation,
+  });
+  const listId = createUniqueId();
+  const rowDomId = (key: string) => `${listId}-${key}`;
+  // The row whose button holds DOM focus, as Tab leaves it.
+  const rowKeyWithFocus = () => {
+    const id = document.activeElement?.id;
+    const prefix = `${listId}-`;
+    return id?.startsWith(prefix) ? id.slice(prefix.length) : undefined;
+  };
+  let sidebar: HTMLElement | undefined;
+  let listRoot: HTMLDivElement | undefined;
+
+  // The conversation beside the sidebar shares its split's keys, so the list
+  // answers only while the keyboard is in this sidebar.
+  useListInteractions({
+    controller: list,
+    scopeId: panel.splitHotkeyScope,
+    scrollHandle: () => ({
+      scrollToIndex: (index) => {
+        const row = list.items.at(index);
+        if (!row) return;
+        document
+          .getElementById(rowDomId(row.key))
+          ?.scrollIntoView({ block: 'nearest' });
+      },
+    }),
+    enabled: () =>
+      panel.isPanelActive() &&
+      Boolean(sidebar?.contains(document.activeElement)),
+    navigation: {
+      // A row tabbed to is where the keyboard is, so j and k move from it.
+      onBeforeMove: () => {
+        const key = rowKeyWithFocus();
+        if (key !== undefined) list.focus.set(key, { reason: 'keyboard' });
+        return true;
+      },
+      onNavigate: (event) => {
+        listRoot?.focus({ preventScroll: true });
+        if (event.kind !== 'move' || event.direction !== 1 || !event.result)
+          return;
+        if (!props.hasNextPage || props.loadingNextPage) return;
+        if (list.items.count() - event.result.index - 1 > LOAD_MORE_DISTANCE)
+          return;
+        props.onLoadMore();
+      },
+    },
+    activation: {
+      // A focused button or link, such as a row's pull request, answers Enter itself.
+      shouldHandleKeyEvent: (event) =>
+        !(
+          event?.target instanceof Element &&
+          event.target.closest('button, a[href]')
+        ),
+      createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
+      alternateDescription: 'Open in new split',
+    },
   });
   const total = () => conversations().length + archived().length;
   // Filters apply to one mixed query, so a short filtered list never scrolls
@@ -231,23 +289,38 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
       props.onLoadMore();
     }
   };
-  const rows = (conversations: () => AgentConversationEntity[]) => (
-    <Key each={conversations()} by="id">
-      {(conversation) => (
+  const rows = (
+    section: ConversationSection,
+    conversations: () => AgentConversationEntity[]
+  ) => (
+    <Key each={rowsOf(section, conversations())} by="key">
+      {(row) => (
         <ConversationContextMenu
-          conversation={conversation()}
+          conversation={row().conversation}
+          focusKey={row().key}
           list={actionList}
         >
           <Row
-            conversation={conversation()}
-            mode={props.modeForConversation(conversation())}
-            active={props.activeConversationId === conversation().id}
-            onOpen={(event) => props.onOpenConversation(conversation(), event)}
+            id={rowDomId(row().key)}
+            conversation={row().conversation}
+            mode={props.modeForConversation(row().conversation)}
+            active={props.activeConversationId === row().conversation.id}
+            focused={list.focus.isFocused(row().key)}
+            onOpen={(event) =>
+              list.activate.key(row().key, {
+                reason: 'pointer',
+                metadata: { newSplit: event.shiftKey },
+              })
+            }
           />
         </ConversationContextMenu>
       )}
     </Key>
   );
+  const focusedRowId = () => {
+    const key = list.focus.key();
+    return key === undefined ? undefined : rowDomId(String(key));
+  };
 
   const openSearch = () => {
     setConversationsOpen(true);
@@ -274,21 +347,23 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <ViewSidebar.Root aria-label="Agents navigation">
+      <ViewSidebar.Root
+        reorderId="agents"
+        ref={sidebar}
+        aria-label="Agents navigation"
+      >
         <ViewSidebar.Header
           searchLabel="Search conversations"
-          searchOpen={searchOpen()}
+          searchOpen={searchOpen() || props.search.trim().length > 0}
           onSearchOpenChange={(open) => (open ? openSearch() : closeSearch())}
           search={() => (
-            <SearchBar
-              ref={searchInput}
-              placeholder="Search conversations"
+            <ViewSidebar.Search
+              ref={(element) => (searchInput = element)}
               label="Search conversations"
               value={props.search}
               onValueChange={props.onSearchChange}
-              onEscape={() => {
-                if (!props.search) closeSearch();
-              }}
+              focusResults={() => listRoot?.focus({ preventScroll: true })}
+              hasResults={() => list.items.count() > 0}
             />
           )}
         >
@@ -308,42 +383,57 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </ViewSidebar.Primary>
         </Show>
 
-        <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
+        <ViewSidebar.Content
+          ref={listRoot}
+          role="group"
+          aria-label="Conversations"
+          tabIndex={isTouchDevice() ? undefined : -1}
+          aria-activedescendant={focusedRowId()}
+          class="gap-2 overflow-hidden pt-2 outline-none"
+        >
           <SidebarRoutineSuggestions surface="agents" />
           <Show when={!isTouchDevice()}>
-            <ViewSidebar.Nav aria-label="Agent tools">
-              <ViewSidebar.Item
-                active={props.activePage === 'agents'}
-                onClick={() => props.onOpenPage('agents')}
-                ref={tourTarget(AGENTS_TOUR.rosterNav)}
-              >
-                <ViewSidebar.Icon>
-                  <AgentIcon />
-                </ViewSidebar.Icon>
-                <span>Agents</span>
-              </ViewSidebar.Item>
-              <ViewSidebar.Item
-                active={props.activePage === 'routines'}
-                onClick={() => props.onOpenPage('routines')}
-              >
-                <ViewSidebar.Icon>
-                  <RoutineIcon />
-                </ViewSidebar.Icon>
-                <span>Routines</span>
-              </ViewSidebar.Item>
-              <ViewSidebar.Item
-                active={props.activePage === 'connections'}
-                onClick={() => props.onOpenPage('connections')}
-              >
-                <ViewSidebar.Icon>
-                  <PlugIcon />
-                </ViewSidebar.Icon>
-                <span>Connections</span>
-              </ViewSidebar.Item>
-            </ViewSidebar.Nav>
+            <ViewSidebar.Section
+              id="tools"
+              label={t('viewMenus.agentViews')}
+              headerless
+            >
+              <ViewSidebar.Nav aria-label="Agent tools">
+                <ViewSidebar.Item
+                  active={props.activePage === 'agents'}
+                  onClick={() => props.onOpenPage('agents')}
+                  ref={tourTarget(AGENTS_TOUR.rosterNav)}
+                >
+                  <ViewSidebar.Icon>
+                    <AgentIcon />
+                  </ViewSidebar.Icon>
+                  <span>Agents</span>
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={props.activePage === 'routines'}
+                  onClick={() => props.onOpenPage('routines')}
+                >
+                  <ViewSidebar.Icon>
+                    <RoutineIcon />
+                  </ViewSidebar.Icon>
+                  <span>Routines</span>
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={props.activePage === 'connections'}
+                  onClick={() => props.onOpenPage('connections')}
+                >
+                  <ViewSidebar.Icon>
+                    <PlugIcon />
+                  </ViewSidebar.Icon>
+                  <span>Connections</span>
+                </ViewSidebar.Item>
+              </ViewSidebar.Nav>
+            </ViewSidebar.Section>
           </Show>
           <Show when={agentUpdates().enabled && openPullRequests().length > 0}>
             <CollapsibleSection.Root
+              sectionId="open-pull-requests"
+              sectionLabel="Open PRs"
               open={openPullRequestsOpen()}
               onOpenChange={setOpenPullRequestsOpen}
               class={cn(
@@ -365,12 +455,14 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   class="min-h-0 shrink overflow-auto"
                   aria-label="Open pull requests"
                 >
-                  {rows(openPullRequests)}
+                  {rows('pull-request', openPullRequests)}
                 </ViewSidebar.Nav>
               </CollapsibleSection.Content>
             </CollapsibleSection.Root>
           </Show>
           <CollapsibleSection.Root
+            sectionId="conversations"
+            sectionLabel="Conversations"
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
             class={cn(
@@ -436,7 +528,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                           </h3>
                         )}
                       </Show>
-                      {rows(() => group().items)}
+                      {rows('conversation', () => group().items)}
                     </>
                   )}
                 </Key>
@@ -472,6 +564,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </CollapsibleSection.Root>
           <Show when={archived().length}>
             <CollapsibleSection.Root
+              sectionId="archived"
+              sectionLabel="Archived"
               open={archivedOpen()}
               onOpenChange={setArchivedOpen}
               as="section"
@@ -495,7 +589,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   class="min-h-0 flex-1 shrink overflow-auto"
                   onScroll={loadMoreNearEnd}
                 >
-                  {rows(archived)}
+                  {rows('archived', archived)}
                 </ViewSidebar.Nav>
               </CollapsibleSection.Content>
             </CollapsibleSection.Root>

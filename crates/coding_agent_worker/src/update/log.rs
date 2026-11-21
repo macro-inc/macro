@@ -3,8 +3,7 @@
 //! did after the panel that showed it has restarted. Versions, sizes and
 //! outcomes only: never tokens, prompts, or agent output.
 
-use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[cfg(test)]
 mod test;
@@ -119,35 +118,13 @@ impl UpdateLog {
     }
 
     fn append(&self, event: &UpdateEvent) -> std::io::Result<()> {
-        let directory = self.path.parent().unwrap_or(Path::new("."));
-        let mut builder = std::fs::DirBuilder::new();
-        builder.recursive(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt as _;
-            builder.mode(0o700);
-        }
-        builder.create(directory)?;
-        if std::fs::metadata(&self.path).is_ok_and(|metadata| metadata.len() >= self.max_bytes) {
-            let mut rotated = self.path.clone().into_os_string();
-            rotated.push(".1");
-            std::fs::rename(&self.path, rotated)?;
-        }
         let mut line = serde_json::to_vec(&Line {
             time: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             event,
         })
         .map_err(std::io::Error::other)?;
         line.push(b'\n');
-        let mut options = std::fs::OpenOptions::new();
-        options.create(true).append(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt as _;
-            options.mode(0o600);
-        }
-        // One write per line, so concurrent writers interleave whole lines.
-        options.open(&self.path)?.write_all(&line)
+        crate::log_file::append(&self.path, self.max_bytes, &line)
     }
 }
 

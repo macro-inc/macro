@@ -1,25 +1,24 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/composite/check_macro_db_migrations.rs
 name: Check Macro Database Migrations
 description: Fail unless every migration in the checked-out commit is applied to the environment's database. Applies nothing.
-
 inputs:
   environment:
-    description: 'Environment whose database is checked (dev, prod)'
+    description: Environment whose database is checked (dev, prod)
     required: true
-
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] the calling deploy job may use the persisted token
       with:
         sparse-checkout: |
           .github/
           crates/macro_db_client
-
-    - name: Get database URL from Secrets Manager
-      id: get-db-url
-      shell: bash
       env:
-        ENVIRONMENT: ${{ inputs.environment }}
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
+    - id: get-db-url
+      name: Get database URL from Secrets Manager
       run: |
         set -euo pipefail
         if [ "$ENVIRONMENT" = "prod" ]; then
@@ -44,12 +43,14 @@ runs:
 
         echo "::add-mask::$DATABASE_URL"
         echo "database_url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
-
-    - name: Check that every migration is applied
       shell: bash
-      working-directory: crates/macro_db_client
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+    - name: Check that every migration is applied
+      run: |
+        "$GITHUB_ACTION_PATH/check-migrations-applied.sh"
+      shell: bash
       env:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
         ENVIRONMENT: ${{ inputs.environment }}
-      run: |
-        "$GITHUB_ACTION_PATH/check-migrations-applied.sh"
+      working-directory: crates/macro_db_client

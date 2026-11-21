@@ -103,7 +103,6 @@ export default {
     close: '閉じる',
     delete: '削除',
     rename: '名前を変更',
-    more: 'その他',
     search: '検索',
     settings: '設定',
   },
@@ -509,6 +508,9 @@ export default {
       other: '{{count}}件の項目を削除しました',
     },
     toastDeleteFailed: '削除できませんでした',
+    toastPropertySet: {
+      other: '{{count}}件の項目に{{property}}を設定しました',
+    },
     toastAddedToFavorites: 'お気に入りに追加しました',
     toastAddedCountToFavorites: {
       other: '{{count}}件の項目をお気に入りに追加しました',

@@ -485,3 +485,45 @@ async fn an_in_process_owner_call_the_owner_declines_never_runs() {
     assert_eq!(service.approvals.held_in_process.lock().unwrap().len(), 1);
     assert!(transport.0.lock().unwrap().is_empty());
 }
+
+/// Refuses every call the way an upstream under a burst does.
+struct RateLimitedTransport;
+
+#[async_trait::async_trait]
+impl ActorMcpTransport for RateLimitedTransport {
+    async fn exchange(
+        &self,
+        _: AgentSessionId,
+        _: MacroUserIdStr<'static>,
+        _: UpstreamCall,
+        _: Value,
+    ) -> Result<Value, EgressError> {
+        Err(EgressError::RateLimited {
+            retry_after: Some(std::time::Duration::from_secs(1)),
+        })
+    }
+}
+
+#[tokio::test]
+async fn an_in_process_call_the_upstream_rate_limited_is_an_error_not_a_tool_result() {
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let service = gated(prompted_by(Some(asker.clone())), SpyCredentials::knowing())
+        .with_actor_mcp(Arc::new(RateLimitedTransport));
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+
+    let result = service
+        .exchange_as(
+            &grant,
+            &asker,
+            &McpDestination::Connected(McpServerSlug::parse("github").unwrap()),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{}}}),
+        )
+        .await;
+
+    match result {
+        Err(EgressError::RateLimited { retry_after }) => {
+            assert_eq!(retry_after, Some(std::time::Duration::from_secs(1)));
+        }
+        other => panic!("expected a rate limit, got {other:?}"),
+    }
+}

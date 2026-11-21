@@ -57,6 +57,16 @@ events to the `macro.properties` Kafka topic.
 
 - `ExternalChat` currently has no property-storage mapping.
 
+## Gotchas
+
+- A user or team definition cannot take a built-in property's name.
+  `create_property_definition` answers `PropertiesErr::ReservedName` (HTTP 409,
+  the body names the property) from the `SystemPropertyKey` names, comparing
+  the whole name without regard to case, as the database's
+  `check_property_name_not_system` trigger does. The trigger stays as the
+  backstop and raises a bare exception, which would surface as a 500. Database
+  columns live in their database's own namespace and are not checked.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md` · Docs: `README.md`

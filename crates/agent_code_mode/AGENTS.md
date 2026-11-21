@@ -17,9 +17,17 @@ stacks. Process isolation belongs to
 
 ## Start here
 
-- `SKILL.md`: the agent-facing JavaScript contract and examples.
+- `SKILL.md`: the agent-facing TypeScript contract and examples. Every
+  whole-program example here, in `src/inbound/toolset/guides/` and in SDK
+  `@agent` guides and the compose-routines skill is fenced `typescript` and
+  must type-check (`every_documented_example_type_checks`, which CI runs with
+  the Deno tests). The suggestions brief's programs are checked by the
+  harness's `suggestions_brief_programs_type_check`.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+  Session and user runs type-check the program (`check_program`) before
+  credentials are issued, so a program with type errors never asks the owner
+  for approval or gets a token.
   A session program may return up to two SDK images (`images: [await
   canvas.render()]`); records keep only their static file ids, and every
   receipt (a saved retry too) loads their PNGs through the `ModelImages` port
@@ -62,6 +70,9 @@ stacks. Process isolation belongs to
   (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
   and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
   the native tool gate, so both tools are in `covered_by_code_sdk`.
+  `CodeModeError::ConnectedAppRateLimited` (HTTP 429 with `Retry-After`) is
+  a call egress's budget (`agent_egress::outbound::budgeted_mcp`) could not
+  get through; it did not run.
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
   `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
   do, then sends only for a turn a person prompted from an app tab

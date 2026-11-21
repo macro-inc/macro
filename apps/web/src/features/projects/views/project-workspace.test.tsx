@@ -30,7 +30,7 @@ vi.mock('@property/component/PropertyValuePill', () => ({
 vi.mock('@property/side-panel/properties/EntityPropertiesSection', () => ({
   EntityPropertiesSection: () => null,
 }));
-vi.mock('./add-project-tasks', () => ({ AddProjectTasks: () => null }));
+vi.mock('../add-project-tasks', () => ({ AddProjectTasks: () => null }));
 const tasksList = vi.hoisted(() => vi.fn());
 vi.mock('./project-tasks-list', () => ({
   ProjectTasksList: (props: unknown) => {

@@ -68,7 +68,7 @@ function sectionOf<T extends CrmRecordSection>(
  * breadcrumb after the originating view; reopening one already in the trail
  * returns to it.
  */
-export function CrmRecordDetail(props: {
+type CrmRecordDetailProps = {
   /** Opened records, oldest first; the last one is shown. */
   records: readonly CrmRecordRef[];
   section: CrmRecordSection | undefined;
@@ -79,7 +79,9 @@ export function CrmRecordDetail(props: {
   onClose: () => void;
   navigation: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function CrmRecordDetail(props: CrmRecordDetailProps) {
   const trail = () => props.records;
   // Each navigation brings new record objects; only another record remounts.
   const current = createMemo(() => trail()[trail().length - 1]!, undefined, {

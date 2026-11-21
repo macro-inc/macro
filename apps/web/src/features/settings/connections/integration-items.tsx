@@ -12,7 +12,10 @@ import DesktopIcon from '@icon/system/regular/desktop.svg';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
-import type { Link as EmailLink } from '@service-email/generated/schemas';
+import {
+  type Link as EmailLink,
+  SyncStatus,
+} from '@service-email/generated/schemas';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -84,7 +87,14 @@ function emailItem(
     },
     categories: ['Email', 'Calendar'],
     get status() {
-      if (links().some((link) => link.needs_reauth)) return 'attention';
+      if (
+        links().some(
+          (link) =>
+            link.needs_reauth ||
+            link.sync_status === SyncStatus.MAILBOX_UNAVAILABLE
+        )
+      )
+        return 'attention';
       return links().length > 0 ? 'connected' : 'available';
     },
     get statusLabel() {

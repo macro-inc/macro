@@ -8323,7 +8323,7 @@
     "/crm/blocked-domains/{domain}": {
       "put": {
         "tags": ["crm::inbound::axum_router::blocked_domains"],
-        "summary": "Block a domain: email sync stops creating or updating CRM records for\nit, and the company and contacts the CRM holds for it are hidden.\nIdempotent. Requires an admin/owner team role (403).",
+        "summary": "Block a domain and its subdomains from email contributions, preserving records.\nRefuses a domain covering any member's connected primary mailbox (400).\nIdempotent for permitted domains. Requires an admin/owner team role (403).",
         "operationId": "block_crm_domain",
         "parameters": [
           {
@@ -8384,7 +8384,7 @@
       },
       "delete": {
         "tags": ["crm::inbound::axum_router::blocked_domains"],
-        "summary": "Unblock a domain: email sync resumes for it, and what blocking hid is\nshown again. Idempotent. Requires an admin/owner team role (403).",
+        "summary": "Remove a team domain exclusion and schedule eligible email backfill,\npreserving record visibility. Idempotent. Requires an admin/owner role (403).",
         "operationId": "unblock_crm_domain",
         "parameters": [
           {
@@ -8501,6 +8501,76 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/companies/by-domain": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_company_by_domain"],
+        "summary": "Look up the CRM company that owns a domain in the caller's team, as\n`GET /crm/companies/{company_id}` reads it, without its contacts. Returns\na null `company` when the team tracks no company at the domain. A team\nmember with CRM access gets a visible company; admins and owners also get\na hidden one.",
+        "operationId": "get_company_by_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "description": "The company domain to resolve within the caller's team, such as\n`acme.com`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The company for the domain, or a null company when none is visible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCompanyByDomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The domain is not a bare domain like acme.com.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -9179,7 +9249,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_team_contact"],
-        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact for the caller's team without naming a company.\nAn email at a company's own domain files the contact under the team's\ncompany for that domain, creating the company when the team has none; a\npersonal or generic provider address, a domain the team blocks, or a\nhidden company leaves the contact without a company. Any team member with\nCRM access may create one. A contact filed under a company is refused when\nthat company, or a contact without a company, already has the email as its\nprimary address, and one left without a company when another such contact\nhas it (409). The team's CRM killswitch must be on (403).",
         "operationId": "create_crm_team_contact",
         "requestBody": {
           "content": {
@@ -10055,6 +10125,228 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmailPrivacySettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/policy": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Read sharing state without initializing consent or scheduling work.",
+        "operationId": "get_crm_email_policy",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPolicyView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Direct member/agent activation with CAS, idempotency and verified audit.",
+        "operationId": "update_crm_email_policy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailPolicyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPolicyOutcome"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Consent changed; inspect before deciding again"
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/policy/history": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Read only the acting member's audit history.",
+        "operationId": "list_crm_email_policy_history",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Exclusive audit event cursor; pages contain at most fifty events.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPolicyHistory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/policy/preview": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Inspect the owner's current count preview; no email content is returned.",
+        "operationId": "get_crm_email_rule_preview",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EmailPreviewView"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Start optional count-only work; this never initializes or activates consent.",
+        "operationId": "preview_crm_email_rules",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPreviewView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/policy/preview/{preview_id}": {
+      "delete": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Cancel the owner's current named preview, including while rollout is off.",
+        "operationId": "cancel_crm_email_rule_preview",
+        "parameters": [
+          {
+            "name": "preview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/policy/revisions/{revision}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Fetch one saved definition, independently of live CRM viewing permission.",
+        "operationId": "get_crm_email_rule_revision",
+        "parameters": [
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EmailPolicyRevision"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy/policy/validate": {
+      "post": {
+        "tags": ["crm::inbound::axum_router::email_policy"],
+        "summary": "Canonicalize and authorize a definition without sharing mail.",
+        "operationId": "validate_crm_email_rules",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRuleSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailRuleValidation"
                 }
               }
             }
@@ -23063,6 +23355,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -23114,6 +23416,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -23184,6 +23496,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -24079,7 +24401,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24206,7 +24528,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24568,7 +24890,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24688,7 +25010,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24815,7 +25137,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25017,7 +25339,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25084,7 +25406,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25162,7 +25484,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25221,7 +25543,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25319,7 +25641,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25492,7 +25814,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25559,7 +25881,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25710,7 +26032,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25786,7 +26108,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25845,7 +26167,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25921,7 +26243,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25983,7 +26305,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26294,6 +26616,126 @@
             }
           },
           "409": {
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/favorite": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_set_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_remove_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -26356,7 +26798,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26434,7 +26876,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26496,7 +26938,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26565,7 +27007,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26636,7 +27078,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26695,7 +27137,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26763,7 +27205,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26822,7 +27264,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26890,7 +27332,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -28917,6 +29359,86 @@
         }
       }
     },
+    "/saved_views/definitions/{saved_view_id}/appearance": {
+      "put": {
+        "tags": ["saved_views"],
+        "operationId": "set_saved_view_appearance",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to edit",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views/exclude_default": {
       "post": {
         "tags": ["saved_views"],
@@ -29350,6 +29872,249 @@
         }
       }
     },
+    "/task_templates": {
+      "get": {
+        "tags": ["task_templates"],
+        "operationId": "list_task_templates",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskTemplate"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["task_templates"],
+        "operationId": "create_task_template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/task_templates/{id}": {
+      "get": {
+        "tags": ["task_templates"],
+        "operationId": "get_task_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["task_templates"],
+        "operationId": "update_task_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["task_templates"],
+        "operationId": "delete_task_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/threads/{thread_id}": {
       "patch": {
         "tags": ["threads"],
@@ -29406,6 +30171,51 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/threads/{thread_id}/channel-shares": {
+      "get": {
+        "tags": ["threads"],
+        "summary": "List a thread owner's grants to channels they participate in.",
+        "operationId": "get_thread_channel_shares",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ThreadChannelShare"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid thread ID"
+          },
+          "401": {
+            "description": "Owner access required"
+          },
+          "403": {
+            "description": "User session required"
+          },
+          "500": {
+            "description": "Unable to read thread shares"
           }
         }
       }
@@ -32359,7 +33169,7 @@
               },
               {
                 "$ref": "#/components/schemas/CrmAssociation",
-                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
+                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A task also matches when one of\nits custom entity properties names the record. A company also matches\nthrough its contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
               }
             ]
           },
@@ -35810,6 +36620,13 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the deleted channel."
+          },
+          "participant_user_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Active participants just before the delete. The channel and its\nmemberships are gone by the time this is consumed, so consumers that\ntell members about the delete cannot look them up."
           }
         }
       },
@@ -36475,6 +37292,10 @@
           "content": {
             "type": "string",
             "description": "Message body."
+          },
+          "notification_policy": {
+            "$ref": "#/components/schemas/PostMessageNotificationPolicy",
+            "description": "Who hears about the message; `Silent` notifies no one."
           }
         }
       },
@@ -38409,7 +39230,7 @@
         "properties": {
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+            "description": "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company, unless the team\nblocks the domain or the company is hidden. Optional: omit it to add\nthe contact by name only."
           },
           "name": {
             "type": "string",
@@ -38883,6 +39704,17 @@
         "type": "object",
         "required": ["name", "config"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Optional initial icon and color metadata; retries retain the original value."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Consumer configuration with its `kind` and `version`, at most 32 KiB."
@@ -39005,6 +39837,13 @@
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty task document."
           },
+          "pinnedPropertyDefinitionIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults."
+          },
           "projectId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -39069,6 +39908,32 @@
             "description": "A pre-generated permission token that you can use for SS"
           }
         }
+      },
+      "CreateTaskTemplateRequest": {
+        "type": "object",
+        "description": "Create a personal template or one owned by a current team.",
+        "required": ["name", "configuration"],
+        "properties": {
+          "configuration": {
+            "$ref": "#/components/schemas/TaskTemplateConfiguration",
+            "description": "Reusable task fields and description."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-generated creation identity; reuse the same ID and input when retrying."
+          },
+          "name": {
+            "type": "string",
+            "description": "Template name."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team; omission creates a personal template."
+          }
+        },
+        "additionalProperties": false
       },
       "CreateToken": {
         "type": "string",
@@ -44796,6 +45661,11 @@
         },
         "additionalProperties": false
       },
+      "EmailContributionMode": {
+        "type": "string",
+        "description": "The scope of an explicitly granted mailbox contribution.",
+        "enum": ["all", "selected"]
+      },
       "EmailFilters": {
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
@@ -45046,6 +45916,542 @@
           }
         }
       },
+      "EmailInclusionRule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A mailbox-local thread owned by the contributor.",
+            "required": ["thread_id", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["thread"]
+              },
+              "thread_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Internal thread ID, never a provider thread ID."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "An exact sender or recipient address, without alias inference.",
+            "required": ["address", "kind"],
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Address to normalize and validate before activation."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["address"]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "All current addresses of an authorized contact in the same team.",
+            "required": ["contact_id", "kind"],
+            "properties": {
+              "contact_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Stable contact ID, resolved live rather than expanded on activation."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["contact"]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "A domain and its dot-boundary subdomains.",
+            "required": ["domain", "kind"],
+            "properties": {
+              "domain": {
+                "type": "string",
+                "description": "Bare domain to normalize and validate before activation."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["domain"]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "All current domains of an authorized company in the same team.",
+            "required": ["company_id", "kind"],
+            "properties": {
+              "company_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Stable company ID, resolved live rather than expanded on activation."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["company"]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One positive whole-thread selector; denials always take precedence."
+      },
+      "EmailPolicyActorKind": {
+        "type": "string",
+        "description": "Provenance established by authenticated credentials, never a request field.",
+        "enum": ["member", "agent", "api", "system"]
+      },
+      "EmailPolicyAudit": {
+        "type": "object",
+        "description": "An audit record may predate incarnation-aware writers.",
+        "required": ["entry", "link_id", "policy_version", "created_at"],
+        "properties": {
+          "consent_incarnation": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Absent only for a legacy audit row."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database commit transaction's creation time."
+          },
+          "entry": {
+            "$ref": "#/components/schemas/NewEmailPolicyAudit",
+            "description": "Stored event and provenance."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact mailbox at the time of the event."
+          },
+          "policy_version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Committed policy version within the recorded lifetime."
+          }
+        }
+      },
+      "EmailPolicyAuditAction": {
+        "type": "string",
+        "description": "Events in the member-only policy history; records never contain mail content.",
+        "enum": [
+          "rules_activated",
+          "all_mail_enabled",
+          "withdrawn",
+          "mailbox_revoked",
+          "live_targets_changed"
+        ]
+      },
+      "EmailPolicyChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Directly activate a full replacement, including an empty rule list.",
+            "required": ["rules", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["replace_rules"]
+              },
+              "rules": {
+                "$ref": "#/components/schemas/EmailRuleSet",
+                "description": "Positive selectors for eligible past and future whole threads."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Explicitly share all eligible past and future mail.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["enable_all"]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Withdraw contribution, retaining CRM records and interaction dates.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["withdraw"]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "One explicit sharing command; member and team never come from the body."
+      },
+      "EmailPolicyCommand": {
+        "type": "object",
+        "description": "Retry-safe command with the exact state observed by the caller.",
+        "required": ["if_policy", "request_id", "change"],
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/EmailPolicyChange",
+            "description": "The explicit sharing operation."
+          },
+          "if_policy": {
+            "$ref": "#/components/schemas/EmailPolicyToken",
+            "description": "State returned by inspection; stale tokens produce a conflict."
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One UUID per intended operation, reused only for its retries."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailPolicyHistory": {
+        "type": "object",
+        "description": "Owner history has a fixed fifty-event page.",
+        "required": ["events"],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailPolicyAudit"
+            },
+            "description": "Audit entries without mailbox contents or expanded source identities."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exclusive UUID cursor for the next page."
+          }
+        }
+      },
+      "EmailPolicyOutcome": {
+        "type": "object",
+        "description": "Recorded outcome. A replay describes the original commit, not current state.",
+        "required": [
+          "token",
+          "mode",
+          "enabled",
+          "audit_event_id",
+          "replayed",
+          "effect"
+        ],
+        "properties": {
+          "audit_event_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owner history entry identifying this operation."
+          },
+          "effect": {
+            "type": "string",
+            "description": "Sharing and retention effects of the committed operation."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this commit granted contribution."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/EmailContributionMode",
+            "description": "Committed scope."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True means the stored result was returned without repeating any effects."
+          },
+          "revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Committed definition revision, if selected."
+          },
+          "token": {
+            "$ref": "#/components/schemas/EmailPolicyToken",
+            "description": "State token produced by this commit."
+          }
+        }
+      },
+      "EmailPolicyPreviewCounts": {
+        "type": "object",
+        "description": "Count-only preview output; no mailbox contents or target identities.",
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Threads newly included by the proposal.",
+            "default": 0,
+            "minimum": 0
+          },
+          "current": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Currently included threads encountered so far.",
+            "default": 0,
+            "minimum": 0
+          },
+          "denied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Matching threads vetoed by other privacy settings.",
+            "default": 0,
+            "minimum": 0
+          },
+          "proposed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Proposed included threads encountered so far.",
+            "default": 0,
+            "minimum": 0
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Threads held back by the proposal.",
+            "default": 0,
+            "minimum": 0
+          },
+          "retained": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Threads included by both policies.",
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailPolicyPreviewStatus": {
+        "type": "string",
+        "description": "Preview state is independent of the contribution grant.",
+        "enum": [
+          "pending",
+          "running",
+          "complete",
+          "partial",
+          "cancelled",
+          "stale"
+        ]
+      },
+      "EmailPolicyRevision": {
+        "type": "object",
+        "description": "One immutable owner-only definition, fetched separately from history pages.",
+        "required": ["revision", "link_id", "rules", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time this definition was committed."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mailbox the saved definition refers to."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision in this member's rule history."
+          },
+          "rules": {
+            "$ref": "#/components/schemas/EmailRuleSet",
+            "description": "Stored selectors; no expanded contact details or mail content."
+          }
+        }
+      },
+      "EmailPolicyToken": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A read-only fingerprint of legacy consent, mailbox and membership.",
+            "required": ["fingerprint", "kind"],
+            "properties": {
+              "fingerprint": {
+                "type": "string",
+                "description": "Opaque observation; the first write compares it before initialization."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["legacy"]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "Identity and version of an initialized consent lifetime.",
+            "required": [
+              "consent_incarnation",
+              "policy_version",
+              "authority_fingerprint",
+              "kind"
+            ],
+            "properties": {
+              "authority_fingerprint": {
+                "type": "string",
+                "description": "Explicit mailbox and membership authority, excluding sync state."
+              },
+              "consent_incarnation": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Never reused after deletion and recreation of consent."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["policy"]
+              },
+              "policy_version": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Database-owned version observed by the caller."
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "An observed consent state, not an authorization credential. Never refresh\nthis token automatically after a conflict and replay a sharing command."
+      },
+      "EmailPolicyView": {
+        "type": "object",
+        "description": "Owner-only view. GET never initializes identity or transfers historical work.",
+        "required": ["authoring_available", "mode", "enabled", "effect"],
+        "properties": {
+          "authoring_available": {
+            "type": "boolean",
+            "description": "Whether new rule authoring is available for this caller."
+          },
+          "effect": {
+            "type": "string",
+            "description": "Explain whole-thread sharing, live targets and overriding exclusions."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Current effective grant."
+          },
+          "link_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact mailbox represented by the consent or prospective first grant."
+          },
+          "mailbox_email": {
+            "type": ["string", "null"],
+            "description": "The caller's mailbox address."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/EmailContributionMode",
+            "description": "Current scope of contribution."
+          },
+          "revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Active immutable definition revision."
+          },
+          "rules": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailRuleSet",
+                "description": "The member's own definition; references continue to resolve live."
+              }
+            ]
+          },
+          "token": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailPolicyToken",
+                "description": "Legacy state has no editable token while rollout is off."
+              }
+            ]
+          }
+        }
+      },
+      "EmailPreviewRequest": {
+        "type": "object",
+        "description": "A bounded preview request. The slot token fences delayed starts after replacement.",
+        "required": ["if_policy", "rules"],
+        "properties": {
+          "if_policy": {
+            "$ref": "#/components/schemas/EmailPolicyToken",
+            "description": "Observed sharing state; never refreshed automatically after a conflict."
+          },
+          "if_preview_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Current preview ID from inspection, or null before the first preview."
+          },
+          "rules": {
+            "$ref": "#/components/schemas/EmailRuleSet",
+            "description": "Hypothetical selected contribution; validation never activates it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailPreviewView": {
+        "type": "object",
+        "description": "Count-only result. Complete counts describe one stable snapshot; every other\nstatus is incomplete and must not be presented as the total mailbox count.",
+        "required": [
+          "preview_id",
+          "context_id",
+          "status",
+          "counts",
+          "created_at",
+          "expires_at",
+          "scanned_threads"
+        ],
+        "properties": {
+          "as_of": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Time of the stable read snapshot, once a worker starts."
+          },
+          "context_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A new worker attempt gets a new context; old completions cannot overwrite it."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/EmailPolicyPreviewCounts",
+            "description": "Distinct counts of this member's mailbox-local threads, never team conversations."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Enqueue time, used to explain queue delay."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Five-minute work deadline; results remain inspectable after the deadline."
+          },
+          "preview_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The member's current preview slot occupant."
+          },
+          "scanned_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Progress counts contain no identities, subjects, participants or bodies."
+          },
+          "status": {
+            "$ref": "#/components/schemas/EmailPolicyPreviewStatus",
+            "description": "Pending, running, complete, partial, cancelled or stale."
+          }
+        }
+      },
       "EmailPrivacyChange": {
         "oneOf": [
           {
@@ -45149,6 +46555,8 @@
           "enabled",
           "team_domains",
           "personal_domains",
+          "team_domain_warnings",
+          "personal_domain_warnings",
           "can_remove_team_domains"
         ],
         "properties": {
@@ -45169,12 +46577,32 @@
             "format": "uuid",
             "description": "Exact current primary connection; clients bind opt-in to this identifier."
           },
+          "personal_domain_warnings": {
+            "type": "object",
+            "description": "Existing personal exclusions that cover the caller's whole mailbox.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MailboxDomainConflict"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "personal_domains": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "description": "Domains excluded only for the caller's contributions."
+          },
+          "team_domain_warnings": {
+            "type": "object",
+            "description": "Existing team exclusions that cover a connected member's whole mailbox.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MailboxDomainConflict"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "team_domains": {
             "type": "array",
@@ -45221,6 +46649,63 @@
             "type": "string",
             "format": "uuid",
             "description": "Original email identity, never a mirror reminder identity."
+          }
+        }
+      },
+      "EmailRuleSet": {
+        "type": "object",
+        "description": "A complete replacement definition; an empty list selects no mail.\nContact/company edits affect matching without rewriting this definition.",
+        "required": ["schema_version", "include"],
+        "properties": {
+          "include": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailInclusionRule"
+            },
+            "description": "OR-combined positive selectors over all non-draft thread participants."
+          },
+          "schema_version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Wire-format version, not a contribution grant or revision number.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmailRuleValidation": {
+        "type": "object",
+        "description": "Canonical rules and bounded warnings; validation does not grant contribution.",
+        "required": [
+          "rules",
+          "inactive_rule_indices",
+          "broad_rule_indices",
+          "effect"
+        ],
+        "properties": {
+          "broad_rule_indices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Indices that may select most mail because they match the owner or domain."
+          },
+          "effect": {
+            "type": "string",
+            "description": "Human-readable effect to show before an agent changes sharing."
+          },
+          "inactive_rule_indices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Indices into the canonical list that currently have no live targets."
+          },
+          "rules": {
+            "$ref": "#/components/schemas/EmailRuleSet",
+            "description": "Normalized, sorted and deduplicated, without expanding live references."
           }
         }
       },
@@ -49432,6 +50917,23 @@
           }
         }
       },
+      "GetCompanyByDomainResponse": {
+        "type": "object",
+        "description": "Response from looking up a CRM company by domain.",
+        "properties": {
+          "company": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmCompanyResponse",
+                "description": "The company that owns the domain, without its contacts, or `null`\nwhen the team tracks none the caller may see."
+              }
+            ]
+          }
+        }
+      },
       "GetContactByEmailResponse": {
         "type": "object",
         "description": "Response from looking up a CRM contact by email.",
@@ -51412,7 +52914,7 @@
         "properties": {
           "markdown": {
             "type": "string",
-            "description": "GitHub-flavored markdown; empty while no one has opened or written it."
+            "description": "Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it."
           }
         }
       },
@@ -52451,6 +53953,11 @@
       },
       "MacroUserIdStr": {
         "type": "string"
+      },
+      "MailboxDomainConflict": {
+        "type": "string",
+        "description": "Why a domain exclusion would hide an affected mailbox's entire history.",
+        "enum": ["company", "personal_provider"]
       },
       "MarkRead": {
         "type": "object",
@@ -53896,6 +55403,49 @@
         ],
         "description": "What a new column holds."
       },
+      "NewEmailPolicyAudit": {
+        "type": "object",
+        "description": "Audit data supplied by the authorized use case, without mail content.",
+        "required": ["event_id", "action", "actor_kind", "details"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/EmailPolicyAuditAction",
+            "description": "The operation that committed."
+          },
+          "actor_kind": {
+            "$ref": "#/components/schemas/EmailPolicyActorKind",
+            "description": "Provenance derived from authenticated credentials."
+          },
+          "agent_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Verified agent identity, if available."
+          },
+          "agent_session_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Verified session identity, if available; never inferred from a request."
+          },
+          "details": {
+            "description": "Bounded metadata, never email IDs, addresses, subjects or bodies."
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Server-generated UUIDv7, stable for a retried system event."
+          },
+          "next_revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "New immutable definition."
+          },
+          "previous_revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Previous immutable definition."
+          }
+        }
+      },
       "NewEntry": {
         "type": "object",
         "description": "One entry to add: at most one of `recordId` or `email`. A tracked\npipeline's entry names its record; a generic pipeline's names none.",
@@ -55122,7 +56672,8 @@
           "version_conflict",
           "vault_busy",
           "rate_limited",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordAgentFailure": {
@@ -55577,7 +57128,8 @@
           "version_conflict",
           "vault_busy",
           "folder_missing",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordFailure": {
@@ -55722,7 +57274,8 @@
           "version_conflict",
           "folder_missing",
           "busy",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordImportFolder": {
@@ -55957,7 +57510,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "The current viewer's private favorite in responses; legacy initial flag in storage."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -56109,7 +57662,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Legacy accepted field, ignored; change private preferences through the favorite endpoint."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -56328,7 +57881,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Initial creator preference on create; ignored on update. Use the favorite endpoint afterward."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57642,6 +59195,10 @@
             "type": ["string", "null"],
             "description": "Client nonce for optimistic reconciliation."
           },
+          "notification_policy": {
+            "$ref": "#/components/schemas/PostMessageNotificationPolicy",
+            "description": "Who hears about this post. `Silent` still delivers and shows the\nmessage, but sends no notification of any kind, mentions included.\nChannel messages only; other parents accept only `Default`."
+          },
           "thread_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -57651,7 +59208,7 @@
       },
       "PostMessageNotificationPolicy": {
         "type": "string",
-        "description": "Internal notification behavior for a posted channel message.",
+        "description": "Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.",
         "enum": ["Default", "MentionsOnly", "Silent"]
       },
       "PostSoupAstRequest": {
@@ -58097,6 +59654,22 @@
               "$ref": "#/components/schemas/PropertyDateRange"
             },
             "description": "Ordered, contiguous ranges covering every present date."
+          }
+        }
+      },
+      "PropertyDefault": {
+        "type": "object",
+        "description": "A reusable default using the task creation property's existing value contract.",
+        "required": ["propertyId", "value"],
+        "properties": {
+          "propertyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Definition that receives the default."
+          },
+          "value": {
+            "$ref": "#/components/schemas/SetPropertyValue",
+            "description": "Default value; absence from the configuration leaves the field blank."
           }
         }
       },
@@ -59753,6 +61326,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Icon and color metadata, separate from configuration."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`."
@@ -60149,7 +61733,7 @@
       },
       "SetContactCompanyRequest": {
         "type": "object",
-        "description": "Link or switch a contact with a known personal-provider email.",
+        "description": "Link a contact without a company, or switch the company of a contact\nwhose primary email is at a known personal provider. A contact with an\naddress on its current company's domain cannot switch.",
         "required": ["companyId"],
         "properties": {
           "companyId": {
@@ -65638,6 +67222,101 @@
           }
         }
       },
+      "TaskTemplate": {
+        "type": "object",
+        "description": "A personal or team-owned template with viewer-specific management capability.",
+        "required": [
+          "id",
+          "name",
+          "configuration",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "canManage"
+        ],
+        "properties": {
+          "canManage": {
+            "type": "boolean",
+            "description": "Whether the current viewer can update or delete the template."
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/TaskTemplateConfiguration",
+            "description": "Reusable task fields and description."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "creatorId": {
+            "type": ["string", "null"],
+            "description": "Original creator; cleared when that account is deleted."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable template ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-supplied template name."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Positive revision used for conditional updates and deletes."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team; absent for personal templates."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last content update time."
+          },
+          "userId": {
+            "type": ["string", "null"],
+            "description": "Personal owner; absent for team-owned templates."
+          }
+        }
+      },
+      "TaskTemplateConfiguration": {
+        "type": "object",
+        "description": "Selected fields, optional task title and sharing defaults, and description Markdown.",
+        "required": ["propertyIds", "descriptionMarkdown"],
+        "properties": {
+          "defaults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyDefault"
+            },
+            "description": "Defaults for selected fields only."
+          },
+          "descriptionMarkdown": {
+            "type": "string",
+            "description": "Markdown inserted only when the current description is blank."
+          },
+          "propertyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Visible definition IDs, including fields without a default value."
+          },
+          "shareWithTeam": {
+            "type": ["boolean", "null"],
+            "description": "Default task sharing, independent of template ownership; absence preserves the current choice."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Default task title, separate from the template name; absence leaves the task untitled."
+          }
+        },
+        "additionalProperties": false
+      },
       "TeamAvailability": {
         "type": "object",
         "description": "Availability for exactly the members selected by the domain service.",
@@ -66122,6 +67801,30 @@
           }
         ],
         "description": "A thread's location within its document. PDF geometry remains annotation-owned."
+      },
+      "ThreadChannelShare": {
+        "type": "object",
+        "description": "A channel grant the thread owner can see in the sharing roster.",
+        "required": ["channel_id", "access_level", "channel_type"],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The access level granted to the channel."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel with access to the thread."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "The channel's configured name, if it has one."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Whether the share is with a conversation or a group."
+          }
+        }
       },
       "ThreadOrigin": {
         "type": "object",
@@ -67080,6 +68783,27 @@
           }
         }
       },
+      "UpdateTaskTemplateRequest": {
+        "type": "object",
+        "description": "Replace content without changing ownership.",
+        "required": ["revision", "name", "configuration"],
+        "properties": {
+          "configuration": {
+            "$ref": "#/components/schemas/TaskTemplateConfiguration",
+            "description": "Replacement task fields and description."
+          },
+          "name": {
+            "type": "string",
+            "description": "Replacement name."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision observed when editing began."
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdatedPipelineEntry": {
         "type": "object",
         "description": "An updated entry.",
@@ -67552,6 +69276,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Validated icon and color metadata, independent of configuration revisions."
+              }
+            ]
+          },
           "config": {
             "description": "It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux."
           },

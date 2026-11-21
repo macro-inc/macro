@@ -555,6 +555,8 @@ where
         let teammate_ids = self.teammate_ids_except(&team_id, user_id).await;
         self.enqueue_joining_user_contacts(user_id, &teammate_ids)
             .await;
+        self.send_teammates_changed(&team_id, user_id, &teammate_ids)
+            .await;
 
         // NOTE: no TeamJoined analytics event here - that event is tied to
         // the team invite that was accepted, and a direct join has none.
@@ -898,7 +900,7 @@ where
         actor_user_id: MacroUserIdStr<'static>,
     ) -> Result<(), DeleteTeamError> {
         let members = self.team_repository.get_all_team_members(&team_id).await?;
-        let member_user_ids = members
+        let member_user_ids: Vec<_> = members
             .iter()
             .map(|member| member.user_id.clone().into_owned())
             .collect();
@@ -933,6 +935,11 @@ where
             .delete_team(&cleared)
             .await
             .map_err(DeleteTeamError::TeamError)?;
+        // Every member lost every other member as a teammate.
+        if member_user_ids.len() > 1 {
+            self.send_directory_changed(&team_id, member_user_ids.clone(), member_user_ids.clone())
+                .await;
+        }
         self.publish_team_event(&TeamMacroEvent::deleted(TeamDeletedMetadata {
             team_id,
             actor_user_id,
@@ -1178,6 +1185,10 @@ where
             );
         }
 
+        let remaining_members = self.teammate_ids_except(&team_id, user_id).await;
+        self.send_teammates_changed(&team_id, user_id, &remaining_members)
+            .await;
+
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
             member_id: removed_member.member.user_id.clone().into_owned(),
@@ -1232,7 +1243,7 @@ where
                     error = ?error,
                     team_id = %team_id,
                     user_id = %user_id,
-                    "failed to load team roster for joining-member side effects"
+                    "failed to load team roster for membership side effects"
                 );
             })
             .ok()
@@ -1280,6 +1291,48 @@ where
                     error = ?error,
                     user_id = %user_id,
                     "failed to enqueue team contact connections"
+                );
+            })
+            .ok();
+    }
+
+    /// Tells `member` and `roster` that they gained or lost each other as
+    /// teammates: everyone on the roster re-reads `member`, and `member`
+    /// re-reads the roster. Same shape for a join and a removal.
+    async fn send_teammates_changed(
+        &self,
+        team_id: &uuid::Uuid,
+        member: &MacroUserIdStr<'_>,
+        roster: &[MacroUserIdStr<'static>],
+    ) {
+        if roster.is_empty() {
+            return;
+        }
+
+        let member = member.clone().into_owned();
+        self.send_directory_changed(team_id, roster.to_vec(), vec![member.clone()])
+            .await;
+        self.send_directory_changed(team_id, vec![member], roster.to_vec())
+            .await;
+    }
+
+    /// Best-effort, like the other contacts side effects: the membership is
+    /// already committed, and the clients' periodic scan covers a missed
+    /// message.
+    async fn send_directory_changed(
+        &self,
+        team_id: &uuid::Uuid,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) {
+        self.contacts_enqueuer
+            .directory_changed(users, changed)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    team_id = %team_id,
+                    "failed to enqueue team directory change"
                 );
             })
             .ok();
@@ -1815,6 +1868,16 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn take_back_team_agent(
+        &self,
+        team_id: uuid::Uuid,
+        agent_user_id: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        self.remove_member(team_id, agent_user_id, removed_by).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn reject_invitation(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -2187,6 +2250,8 @@ where
             .teammate_ids_except(&team_member.team_id, user_id)
             .await;
         self.enqueue_joining_user_contacts(user_id, &teammate_ids)
+            .await;
+        self.send_teammates_changed(&team_member.team_id, user_id, &teammate_ids)
             .await;
 
         self.reward_inviter(

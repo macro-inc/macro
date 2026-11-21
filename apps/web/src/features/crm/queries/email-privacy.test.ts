@@ -35,6 +35,8 @@ const settings: CrmEmailPrivacyResponse = {
   mailbox_email: 'person@example.com',
   team_domains: [],
   personal_domains: [],
+  team_domain_warnings: {},
+  personal_domain_warnings: {},
   can_remove_team_domains: false,
 };
 const cleanups: (() => void)[] = [];

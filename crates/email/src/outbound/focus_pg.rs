@@ -10,9 +10,10 @@ use uuid::Uuid;
 
 use crate::{
     domain::focus::{
-        CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusMail,
-        FocusMessage, FocusRecord, FocusStore, ImportanceTrend, RECENT_CONTACT_DAYS, SentNote,
-        StaleThread, StoredClassification, ThreadFocus, change_subject_pattern, importance_at,
+        CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusInboxOwner,
+        FocusMail, FocusMessage, FocusRecord, FocusStore, ImportanceTrend, RECENT_CONTACT_DAYS,
+        SentNote, StaleThread, StoredClassification, ThreadFocus, change_subject_pattern,
+        importance_at,
     },
     outbound::invitation_pg,
 };
@@ -201,6 +202,17 @@ impl FocusStore for FocusPgRepository {
         let Some(row) = sqlx::query!(
             r#"
             SELECT t.id, t.link_id, t.is_signal, t.inbox_visible, el.macro_id, el.email_address,
+                   -- The other users whose Focus tab lists the inbox, as
+                   -- focus_thread_ids reads it for them: an index probe on
+                   -- macro_user_links_link_idx, sorted and deduplicated in
+                   -- `delegates` rather than once per inbox here.
+                   -- inboxes_with_focus and syncing_inboxes restate it;
+                   -- change all three.
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = t.link_id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!",
                    f.classified_message_id AS "classified_message_id?",
                    f.rule_version AS "rule_version?",
                    f.scores AS "scores?",
@@ -245,6 +257,7 @@ impl FocusStore for FocusPgRepository {
             thread_id: row.id,
             link_id: row.link_id,
             owner: MacroUserIdStr::try_from(row.macro_id)?,
+            delegates: delegates(row.link_id, row.delegates),
             owner_email: row.email_address.to_lowercase(),
             is_signal: row.is_signal,
             inbox_visible: row.inbox_visible,
@@ -327,86 +340,109 @@ impl FocusStore for FocusPgRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(threads = tracing::field::Empty), err)]
     async fn stale_threads(
         &self,
+        link_id: Uuid,
         since: DateTime<Utc>,
-        domains: &[String],
         after: Option<StaleThread>,
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
+        // Its cost grows with the inbox's mail in the window, so bound it.
+        let mut tx = self.0.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '30s'")
+            .execute(&mut *tx)
+            .await?;
+        // The inner query reads only the inbox's threads with mail in the
+        // window, through its indexes on latest inbound and latest outbound
+        // time, and drops those already classified at their latest mail. The
+        // `OFFSET 0` keeps the calendar and recent contact checks, a subquery
+        // each per thread, off everything else. A thread below the cursor has
+        // both times at or below it, so a later page starts each index range
+        // at the cursor instead of reading the window from the top again.
         let rows = sqlx::query!(
             r#"
-            SELECT t.id,
-                   GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
-                       AS "latest_at!"
-            FROM email_links el
-            JOIN email_threads t ON t.link_id = el.id
-            LEFT JOIN email_thread_focus f ON f.thread_id = t.id
-            WHERE LOWER(SPLIT_PART(el.email_address, '@', 2)) = ANY($2)
-              AND t.inbox_visible
-              AND t.latest_inbound_message_ts IS NOT NULL
-              AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $1
-              AND (
-                  t.is_signal
-                  OR t.latest_outbound_message_ts > t.latest_inbound_message_ts
-                  OR f.rule_version < $4
-                  -- A calendar change. The service judges whether it is the
-                  -- latest message and its event isn't over; a new invite or an
-                  -- RSVP never gets this far.
-                  OR EXISTS (
-                      SELECT 1
-                      FROM email_messages notice
-                      WHERE notice.thread_id = t.id
-                        AND NOT notice.is_sent
-                        AND NOT notice.is_draft
-                        AND (
-                            LOWER(notice.subject) ~ $6
-                            OR EXISTS (
-                                SELECT 1 FROM email_message_calendar_invites i
-                                WHERE i.message_id = notice.id
-                                  AND (
-                                      i.snapshot->>'method' IN ('cancel', 'counter')
-                                      OR (
-                                          i.snapshot->>'method' = 'request'
-                                          AND i.snapshot->'sequence' > '0'::jsonb
-                                      )
-                                  )
-                            )
-                        )
+            SELECT s.id AS "id!", s.latest_at AS "latest_at!"
+            FROM (
+                SELECT t.id, t.is_signal, t.latest_inbound_message_ts,
+                       t.latest_outbound_message_ts,
+                       GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
+                           AS latest_at,
+                       f.rule_version
+                FROM email_threads t
+                LEFT JOIN email_thread_focus f ON f.thread_id = t.id
+                WHERE t.id IN (
+                        SELECT w.id FROM email_threads w
+                        WHERE w.link_id = $1
+                          AND w.inbox_visible
+                          AND w.latest_inbound_message_ts >= $2
+                          AND w.latest_inbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
+                        UNION
+                        SELECT w.id FROM email_threads w
+                        WHERE w.link_id = $1
+                          AND w.latest_outbound_message_ts >= $2
+                          AND w.latest_outbound_message_ts <= COALESCE($7, 'infinity'::timestamptz)
+                    )
+                  AND t.inbox_visible
+                  AND t.latest_inbound_message_ts IS NOT NULL
+                  AND (
+                      f.thread_id IS NULL
+                      OR f.rule_version < $4
+                      OR f.classified_message_ts
+                         < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
                   )
-                  -- A sender the owner has written to lately. The service judges
-                  -- whether it really is a recent contact; mail no event covers,
-                  -- such as an initial sync, only arrives this way.
-                  OR EXISTS (
-                      SELECT 1
-                      FROM email_messages inbound
-                      JOIN email_message_recipients r ON r.contact_id = inbound.from_contact_id
-                      JOIN email_messages sent ON sent.id = r.message_id
-                      WHERE inbound.thread_id = t.id
-                        AND NOT inbound.is_sent
-                        AND NOT inbound.is_draft
-                        AND sent.is_sent
-                        AND NOT sent.is_draft
-                        AND sent.internal_date_ts >= $5
-                  )
-              )
-              AND (
-                  f.thread_id IS NULL
-                  OR f.rule_version < $4
-                  OR f.classified_message_ts
-                     < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)
-              )
-              AND (
-                  $7::timestamptz IS NULL
-                  OR (GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts), t.id)
-                     < ($7, $8::uuid)
-              )
-            ORDER BY GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) DESC, t.id DESC
+                  AND (GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts), t.id)
+                      < (COALESCE($7, 'infinity'::timestamptz),
+                         COALESCE($8, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
+                OFFSET 0
+            ) s
+            WHERE s.is_signal
+               OR s.latest_outbound_message_ts > s.latest_inbound_message_ts
+               OR s.rule_version < $4
+               -- A calendar change. The service judges whether it is the
+               -- latest message and its event isn't over; a new invite or an
+               -- RSVP never gets this far.
+               OR EXISTS (
+                   SELECT 1
+                   FROM email_messages notice
+                   WHERE notice.thread_id = s.id
+                     AND NOT notice.is_sent
+                     AND NOT notice.is_draft
+                     AND (
+                         LOWER(notice.subject) ~ $6
+                         OR EXISTS (
+                             SELECT 1 FROM email_message_calendar_invites i
+                             WHERE i.message_id = notice.id
+                               AND (
+                                   i.snapshot->>'method' IN ('cancel', 'counter')
+                                   OR (
+                                       i.snapshot->>'method' = 'request'
+                                       AND i.snapshot->'sequence' > '0'::jsonb
+                                   )
+                               )
+                         )
+                     )
+               )
+               -- A sender the owner has written to lately. The service judges
+               -- whether it really is a recent contact; mail no event covers,
+               -- such as an initial sync, only arrives this way.
+               OR EXISTS (
+                   SELECT 1
+                   FROM email_messages inbound
+                   JOIN email_message_recipients r ON r.contact_id = inbound.from_contact_id
+                   JOIN email_messages sent ON sent.id = r.message_id
+                   WHERE inbound.thread_id = s.id
+                     AND NOT inbound.is_sent
+                     AND NOT inbound.is_draft
+                     AND sent.is_sent
+                     AND NOT sent.is_draft
+                     AND sent.internal_date_ts >= $5
+               )
+            ORDER BY s.latest_at DESC, s.id DESC
             LIMIT $3
             "#,
+            link_id,
             since,
-            domains,
             limit,
             FOCUS_RULE_VERSION,
             since - Duration::days(RECENT_CONTACT_DAYS),
@@ -414,8 +450,10 @@ impl FocusStore for FocusPgRepository {
             after.map(|after| after.latest_at),
             after.map(|after| after.thread_id),
         )
-        .fetch_all(&self.0)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
+        tracing::Span::current().record("threads", rows.len());
         Ok(rows
             .into_iter()
             .map(|row| StaleThread {
@@ -425,7 +463,86 @@ impl FocusStore for FocusPgRepository {
             .collect())
     }
 
-    #[tracing::instrument(skip(self), fields(threads = tracing::field::Empty), err)]
+    #[tracing::instrument(skip(self), fields(inboxes = tracing::field::Empty), err)]
+    async fn inboxes_with_focus(&self) -> Result<Vec<FocusInboxOwner>, Report> {
+        // One index probe per inbox holding Focus, not a read of every row:
+        // each step finds the next inbox id after the last.
+        let rows = sqlx::query!(
+            r#"
+            WITH RECURSIVE focus_links AS (
+                (
+                    SELECT f.link_id
+                    FROM email_thread_focus f
+                    WHERE f.is_focus
+                    ORDER BY f.link_id
+                    LIMIT 1
+                )
+                UNION ALL
+                SELECT (
+                    SELECT f.link_id
+                    FROM email_thread_focus f
+                    WHERE f.is_focus AND f.link_id > l.link_id
+                    ORDER BY f.link_id
+                    LIMIT 1
+                )
+                FROM focus_links l
+                WHERE l.link_id IS NOT NULL
+            )
+            SELECT el.id, el.macro_id,
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!"
+            FROM focus_links l
+            JOIN email_links el ON el.id = l.link_id
+            "#,
+        )
+        .fetch_all(&self.0)
+        .await?;
+        tracing::Span::current().record("inboxes", rows.len());
+        rows.into_iter()
+            .map(|row| {
+                Ok(FocusInboxOwner {
+                    link_id: row.id,
+                    owner: MacroUserIdStr::try_from(row.macro_id)?,
+                    delegates: delegates(row.id, row.delegates),
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(skip(self), fields(inboxes = tracing::field::Empty), err)]
+    async fn syncing_inboxes(&self) -> Result<Vec<FocusInboxOwner>, Report> {
+        // One row per connected mailbox: a small table, read whole, with an
+        // index probe each for the users it is linked to.
+        let rows = sqlx::query!(
+            r#"
+            SELECT el.id, el.macro_id,
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!"
+            FROM email_links el
+            WHERE el.is_sync_active
+            "#,
+        )
+        .fetch_all(&self.0)
+        .await?;
+        tracing::Span::current().record("inboxes", rows.len());
+        rows.into_iter()
+            .map(|row| {
+                Ok(FocusInboxOwner {
+                    link_id: row.id,
+                    owner: MacroUserIdStr::try_from(row.macro_id)?,
+                    delegates: delegates(row.id, row.delegates),
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(skip(self, owner), fields(threads = tracing::field::Empty), err)]
     async fn focus_thread_ids(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -499,7 +616,7 @@ impl FocusStore for FocusPgRepository {
     }
 
     #[tracing::instrument(
-        skip(self, thread_ids),
+        skip(self, owner, thread_ids),
         fields(
             threads = thread_ids.len(),
             waiting = tracing::field::Empty,
@@ -634,6 +751,24 @@ impl FocusStore for FocusPgRepository {
             })
             .collect())
     }
+}
+
+/// The users other than its owner inbox `link_id` is linked to, sorted, each
+/// once: a user can reach an inbox through more than one account. A malformed id
+/// is left out, so one bad row never fails a read of many inboxes, and is never
+/// quoted: a Macro user id holds an address.
+fn delegates(link_id: Uuid, mut ids: Vec<String>) -> Vec<MacroUserIdStr<'static>> {
+    ids.sort_unstable();
+    ids.dedup();
+    ids.into_iter()
+        .filter_map(|id| {
+            MacroUserIdStr::try_from(id)
+                .inspect_err(
+                    |_| tracing::warn!(%link_id, "focus left out a malformed linked user id"),
+                )
+                .ok()
+        })
+        .collect()
 }
 
 #[cfg(test)]

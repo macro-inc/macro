@@ -20,3 +20,7 @@ vendor/chrono-tz/src/prebuilt/** linguist-generated=true
 
 # MCP tool-list snapshots generated from the SDK by packages/sdk-mcp.
 packages/sdk-mcp/src/__snapshots__/** linguist-generated=true
+
+# Firecracker's CI kernel config merged with macro-box's fragment; regenerated
+# by nix/macro-box/kernel/update.sh.
+nix/macro-box/kernel/firecracker-x86_64.config linguist-generated=true

@@ -17,7 +17,7 @@ impl IntoResponse for SeenThreadError {
         let status = match &self.0 {
             EmailErr::ThreadNotFound | EmailErr::ThreadEmpty => StatusCode::NOT_FOUND,
             EmailErr::Unauthorized => StatusCode::FORBIDDEN,
-            EmailErr::ThreadHasNoInboundMessages => StatusCode::CONFLICT,
+            EmailErr::ThreadHasNoInboundMessages | EmailErr::Contended => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status.is_server_error() {

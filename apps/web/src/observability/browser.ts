@@ -15,6 +15,7 @@ import {
   type DesktopSnapshot,
   desktopResourceAttributes,
   readDesktopDiagnostics,
+  readNativeBuildAttribute,
 } from './desktop';
 import { startDocumentLifecycle } from './document-lifecycle';
 import { frontendInstanceId } from './frontend-instance';
@@ -149,7 +150,10 @@ export async function initializeBrowserObservability(
       'app.runtime': isTauri() ? 'tauri' : 'browser',
       'app.platform': getPlatform(),
       'os.type': osType(),
-      ...(native && desktopResourceAttributes(desktopReady)),
+      ...(native && {
+        ...desktopResourceAttributes(desktopReady),
+        'macro.native.build': readNativeBuildAttribute(),
+      }),
     },
     spanAttributes: () => ({
       ...recording?.attributes(),

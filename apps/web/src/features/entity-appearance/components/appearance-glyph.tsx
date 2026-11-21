@@ -1,6 +1,7 @@
+import { lazy } from '@core/util/lazy';
 import { ENTITY_ICON_ALIASES } from '@macro-inc/entity-icons';
 import type { Component, JSX } from 'solid-js';
-import { children, lazy, Match, Suspense, Switch } from 'solid-js';
+import { children, Match, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { EntityAppearance } from '../core/appearance';
 

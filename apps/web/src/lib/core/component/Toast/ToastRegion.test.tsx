@@ -26,6 +26,7 @@ afterEach(() => {
   toaster.clear();
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 it('keeps toasts and upload progress when the import tray fails to load', async () => {

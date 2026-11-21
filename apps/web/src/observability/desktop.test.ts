@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createMemoryRecording,
@@ -5,6 +6,7 @@ import {
   desktopResourceAttributes,
   type MemorySample,
   memoryAttributes,
+  nativeBuildAttribute,
 } from './desktop';
 
 vi.mock('@core/util/platform', () => ({
@@ -156,5 +158,65 @@ describe('desktop recording', () => {
     expect(sink.warn).not.toHaveBeenCalled();
     expect(sink.recordSample).toHaveBeenCalledTimes(1);
     recording.dispose();
+  });
+});
+
+describe('native build', () => {
+  it.each([
+    [27, 27],
+    [202610060012, 202610060012],
+    [0, undefined],
+    [undefined, undefined],
+    [null, undefined],
+    [-1, undefined],
+    [2.5, undefined],
+    ['27', undefined],
+    [Number.NaN, undefined],
+    [2 ** 53, undefined],
+  ])('maps a reported build of %s to %s', (reported, attribute) => {
+    expect(nativeBuildAttribute(reported)).toBe(attribute);
+  });
+
+  it('shares one native lookup with the mail cache and reads it from the debug info', async () => {
+    vi.resetModules();
+    vi.mocked(invoke).mockReset().mockResolvedValue({
+      bundleBuild: 1,
+      source: 'embedded',
+      nativeBuild: 24,
+    });
+    const { readNativeBuildAttribute } = await import('./desktop');
+    const { installedNativeBuild } = await import(
+      '@app/lib/tauri/native-build'
+    );
+    expect(await readNativeBuildAttribute()).toBe(24);
+    expect(await installedNativeBuild()).toBe(24);
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith('get_bundle_debug_info');
+  });
+
+  it('leaves the build absent when the binary fails or never answers', async () => {
+    vi.resetModules();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    vi.mocked(invoke).mockReset().mockRejectedValue(new Error('not found'));
+    let { readNativeBuildAttribute } = await import('./desktop');
+    expect(await readNativeBuildAttribute()).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+    // A failed call is not kept: the next reader asks the binary again.
+    vi.mocked(invoke).mockResolvedValue({ nativeBuild: 24 });
+    expect(await readNativeBuildAttribute()).toBe(24);
+    expect(invoke).toHaveBeenCalledTimes(2);
+
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.mocked(invoke)
+      .mockReset()
+      .mockReturnValue(new Promise(() => {}));
+    ({ readNativeBuildAttribute } = await import('./desktop'));
+    const build = readNativeBuildAttribute();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await build).toBeUndefined();
   });
 });

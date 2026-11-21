@@ -1,0 +1,30 @@
+# One channel's not-done message, reply and mention notifications, newest
+# first, for the channel gutter's stacks. A seen row stays until it is done, so
+# the edge is bounded: a channel read without marking anything done keeps one
+# seen row per message.
+query ChannelActiveNotifications($input: SoupInput!, $limit: Int!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				... on GraphqlSoupChannel {
+					activeMessageNotifications: notifications(
+						filter: {
+							states: [UNSEEN, SEEN]
+							eventTypes: [
+								"channel_message_send"
+								"channel_message_reply"
+								"channel_mention"
+							]
+						}
+						limit: $limit
+					) {
+						...SoupNotificationFields
+					}
+				}
+			}
+		}
+	}
+}

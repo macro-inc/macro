@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   prefetchTarget: vi.fn(async () => {}),
   favoriteIds: (): string[] => [],
+  asideList: (): { open: boolean; onBack: () => void } | undefined => undefined,
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -114,7 +115,12 @@ vi.mock('@app/components/view-shell', () => ({
     aside: { isCollapsed: () => mocks.mobileLayout() },
   }),
   ViewShell: {
-    Root: mocks.pass,
+    Root: (
+      props: ParentProps<{ asideList?: { open: boolean; onBack: () => void } }>
+    ) => {
+      mocks.asideList = () => props.asideList;
+      return props.children;
+    },
     Aside: mocks.pass,
     Main: mocks.pass,
     TopBar: mocks.pass,
@@ -452,6 +458,39 @@ describe('Chat rollout source activation', () => {
     expect(mocks.sourceEnabled('channels')).toBe(false);
   });
 });
+describe('desktop list aside', () => {
+  it('shows the rail until a conversation opens, and returns to it', () => {
+    setSelectedId(undefined);
+    render(() => <ChannelsView />);
+    expect(mocks.asideList()?.open).toBe(false);
+    setSelectedId('one');
+    expect(mocks.asideList()?.open).toBe(true);
+    mocks.asideList()?.onBack();
+    expect(mocks.selectChannel).toHaveBeenCalledWith(undefined);
+  });
+
+  it('keeps the threads list open in Main', () => {
+    mocks.sectionsEnabled = () => false;
+    mocks.tab = () => 'threads';
+    setSelectedId(undefined);
+    render(() => <ChannelsView />);
+    expect(mocks.asideList()?.open).toBe(true);
+  });
+
+  it('leaves touch layouts and the loading state alone', () => {
+    const [loading, setLoading] = createSignal(true);
+    mocks.sectionsLoading = loading;
+    render(() => <ChannelsView />);
+    expect(mocks.asideList()).toBeUndefined();
+    setLoading(false);
+    expect(mocks.asideList()?.open).toBe(true);
+    cleanup();
+    mocks.touch = () => true;
+    render(() => <ChannelsView />);
+    expect(mocks.asideList()).toBeUndefined();
+  });
+});
+
 it('opens the touch Recent feed inline at wide widths without desktop rollout sources', () => {
   mocks.touch = () => true;
   mocks.sectionsLoading = () => false;
@@ -726,6 +765,9 @@ describe('channel selection loading and recovery', () => {
     new CombinedError({
       networkError: new Error('HTTP 503'),
       response: { status: 503 },
+    }),
+    new CombinedError({
+      graphQLErrors: [{ message: 'A comms error has occured' }],
     }),
   ])(
     'renders an empty unread projection after a transient failure without marking read: %s',

@@ -16,10 +16,16 @@ import type {
   NotificationState,
 } from './generated/schemas';
 import type { ApiUserNotification } from './generated/schemas/apiUserNotification';
+import type { ChannelNotificationSettingsResponse } from './generated/schemas/channelNotificationSettingsResponse';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
 import { EntityType } from './generated/schemas/entityType';
 import type { GetNotificationTypePreferencesResponse } from './generated/schemas/getNotificationTypePreferencesResponse';
+import type { ListChannelNotificationSettingsResponse } from './generated/schemas/listChannelNotificationSettingsResponse';
+import type { ListSectionNotificationSettingsResponse } from './generated/schemas/listSectionNotificationSettingsResponse';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
+import type { SectionNotificationSettingsResponse } from './generated/schemas/sectionNotificationSettingsResponse';
+import type { UpdateChannelNotificationSettingsRequest } from './generated/schemas/updateChannelNotificationSettingsRequest';
+import type { UpdateSectionNotificationSettingsRequest } from './generated/schemas/updateSectionNotificationSettingsRequest';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 
 const notificationHost: string = SERVER_HOSTS['notification-service'];
@@ -188,33 +194,6 @@ export const notificationServiceClient = {
       })
     ).map((result) => result);
   },
-  async bulkMarkNotificationAsSeen(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/seen`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
-  async bulkMarkNotificationAsDone(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/done`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
-  async bulkMarkNotificationAsUndone(args: NotificationBulkRequest) {
-    const { notificationIds } = args;
-    return (
-      await notificationFetch<any>(`/user_notifications/bulk/undone`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notificationIds }),
-      })
-    ).map((result) => result);
-  },
   async markNotificationEntityAsSeen(args: WithEventItemId) {
     const { event_item_id } = args;
     return (
@@ -265,6 +244,41 @@ export const notificationServiceClient = {
     return notificationFetch<{}>(
       `/user_notifications/preferences/${encodeURIComponent(notificationEventType)}/enable`,
       { method: 'PUT' }
+    );
+  },
+  async listChannelNotificationSettings() {
+    return notificationFetch<ListChannelNotificationSettingsResponse>(
+      '/notification_settings/channels',
+      { method: 'GET' }
+    );
+  },
+  async updateChannelNotificationSettings(
+    channelId: string,
+    change: UpdateChannelNotificationSettingsRequest
+  ) {
+    return notificationFetch<ChannelNotificationSettingsResponse>(
+      `/notification_settings/channels/${encodeURIComponent(channelId)}`,
+      { method: 'PATCH', body: JSON.stringify(change) }
+    );
+  },
+  async resetChannelNotificationSettings(channelId: string) {
+    return notificationFetch<{}>(
+      `/notification_settings/channels/${encodeURIComponent(channelId)}`,
+      { method: 'DELETE' }
+    );
+  },
+  async listSectionNotificationSettings() {
+    return notificationFetch<ListSectionNotificationSettingsResponse>(
+      '/notification_settings/sections',
+      { method: 'GET' }
+    );
+  },
+  async updateSectionNotificationSettings(
+    change: UpdateSectionNotificationSettingsRequest
+  ) {
+    return notificationFetch<SectionNotificationSettingsResponse>(
+      '/notification_settings/sections',
+      { method: 'PATCH', body: JSON.stringify(change) }
     );
   },
   async getUnsubscribes() {

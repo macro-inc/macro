@@ -8,6 +8,7 @@ import {
   CanvasHistoryControls,
   CanvasViewControls,
 } from './canvas-toolbars';
+import { CanvasInsertMenu } from './insert-menu';
 import { CanvasInspectorSections } from './shared/canvas-inspector-parts';
 import {
   CanvasViewParts,
@@ -86,6 +87,26 @@ function CanvasSurfaceWithContextMenu() {
   );
 }
 
+/** The Attach menu and its pickers, open wherever the insert state points. */
+function CanvasInsert() {
+  const { insert, focus } = useCanvasView();
+  return (
+    <Show when={insert.location()} keyed>
+      {(location) => (
+        <CanvasInsertMenu
+          location={location}
+          onSelect={insert.select}
+          onFiles={(files) => insert.files(files, location)}
+          onUpload={insert.upload}
+          onArtifact={insert.artifact}
+          onClose={insert.close}
+          onRestoreFocus={focus}
+        />
+      )}
+    </Show>
+  );
+}
+
 function CanvasToolbar() {
   const view = useCanvasView();
   const { props, state } = view;
@@ -104,7 +125,7 @@ export function CanvasView(props: CanvasViewProps) {
   return (
     <CanvasViewParts.Root {...props}>
       <CanvasViewParts.Presentation />
-      <CanvasViewParts.InsertMenu />
+      <CanvasInsert />
       <CanvasInspectorPanel />
       <CanvasSurfaceWithContextMenu />
       <CanvasViewParts.EmptyState />

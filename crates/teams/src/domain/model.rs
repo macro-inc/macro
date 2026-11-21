@@ -306,6 +306,16 @@ pub struct SubscriptionItemView {
     pub computer_id: Option<String>,
 }
 
+/// The credit note that undid a computer's purchase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerPurchaseCredit {
+    /// The credit note on the purchase's invoice.
+    pub credit_note: stripe::CreditNoteId,
+    /// The card refund it made; `None` when the invoice was paid from the
+    /// team's credit balance, which the note restores instead.
+    pub refund: Option<stripe::RefundId>,
+}
+
 /// What removing one subscription item did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemRemoval {
@@ -371,6 +381,62 @@ pub struct SubscriptionTerms {
     pub currency: String,
     /// The subscription is in a trial.
     pub trialing: bool,
+}
+
+/// A subscription's terms and the card it charges, from one read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaymentTerms {
+    /// Period end, interval, currency and trial.
+    pub terms: SubscriptionTerms,
+    /// The subscription's default card, else the customer's invoice default;
+    /// `None` when there is none or the method is not a card.
+    pub card: Option<PaymentCard>,
+    /// The customer's credit balance, in the currency's smallest unit (0 or
+    /// more): Stripe applies it to an invoice before charging the card.
+    pub credit: i64,
+}
+
+/// A card as a buyer recognizes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaymentCard {
+    /// Card network.
+    pub brand: CardBrand,
+    /// Last four digits.
+    pub last4: String,
+}
+
+/// A card network, as Stripe names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum CardBrand {
+    /// American Express.
+    Amex,
+    /// Diners Club.
+    Diners,
+    /// Discover.
+    Discover,
+    /// eftpos Australia.
+    EftposAu,
+    /// JCB.
+    Jcb,
+    /// Mastercard.
+    Mastercard,
+    /// UnionPay.
+    Unionpay,
+    /// Visa.
+    Visa,
+    /// A network Stripe itself doesn't know.
+    Unknown,
+}
+
+/// What adding one item of `price_id` would invoice now: the prorated rest
+/// of the current period, less discounts, plus tax not included in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProratedCharge {
+    /// The added price.
+    pub price_id: stripe::PriceId,
+    /// In the currency's smallest unit.
+    pub amount: i64,
 }
 
 /// What a Stripe price charges.

@@ -1,5 +1,12 @@
 import type { ElementTransformer } from '@lexical/markdown';
-import type { ElementNode, LexicalNode } from 'lexical';
+import {
+  $isLineBreakNode,
+  $isParagraphNode,
+  $isTextNode,
+  type ElementNode,
+  type LexicalNode,
+  type ParagraphNode,
+} from 'lexical';
 import { $createVideoNode, $isVideoNode, VideoNode } from '../nodes/VideoNode';
 import {
   replaceElementWithUnknownMention,
@@ -79,13 +86,29 @@ const VIDEO_LINK_REGEXP = new RegExp(
   'i'
 );
 
+/** The paragraph's video when nothing else in it but blank text and breaks. */
+function $onlyVideo(paragraph: ParagraphNode): LexicalNode | null {
+  const content = paragraph
+    .getChildren()
+    .filter(
+      (child) =>
+        !$isLineBreakNode(child) &&
+        !($isTextNode(child) && child.getTextContent().trim() === '')
+    );
+  const [only] = content;
+  return content.length === 1 && only && $isVideoNode(only) ? only : null;
+}
+
 // Internal transformer — always uses <m-video> for unambiguous round-tripping.
 export const I_VIDEO: ElementTransformer = {
   dependencies: [VideoNode, UnknownMentionNode],
   type: 'element',
   regExp: /^<m-video>(.*?)<\/m-video>\s*$/,
-  export: (node: LexicalNode) => {
-    if (!$isVideoNode(node)) return null;
+  export: (block: LexicalNode) => {
+    // Import appends the video to its line's paragraph, and element
+    // transformers see only that paragraph.
+    const node = $isParagraphNode(block) ? $onlyVideo(block) : block;
+    if (!node || !$isVideoNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
     if (!node.getUrl()) return null;
 

@@ -20,10 +20,20 @@ use crate::domain::lifecycle::{
     SetupOutcome, SubscriptionItemId, TimerKind,
 };
 use crate::domain::models::{
-    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
-    HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation, HostName,
+    HostRecord, HostRegistration, NewReservation, PurchaseBilling, PurchaseTerms, Quote,
+    Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
+
+mod overcommit;
+pub use overcommit::{
+    ComputersInUse, ComputersInUseFuture, EveryComputerInUse, GuestUsage, HostLimitsState,
+    HostMemory, OvercommitRepo,
+};
+
+mod usage;
+pub use usage::UsageHistory;
 
 /// Supplies advisory fleet operator presence at the caller's time.
 pub trait FleetAttachmentSource: Send + Sync + 'static {
@@ -81,6 +91,8 @@ pub struct PendingEffect {
     pub effect: Effect,
     /// Number of failed execution attempts.
     pub attempts: u32,
+    /// When the transition queued it.
+    pub queued_at: DateTime<Utc>,
 }
 
 /// A timer that came due.
@@ -103,6 +115,34 @@ pub enum ReserveError<Err> {
     /// Reservation storage failed.
     #[error(transparent)]
     Storage(Err),
+}
+
+/// Whose computers a worker serves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostScope {
+    /// Every host's: billing runs where Stripe lives, for every computer.
+    Every,
+    /// Only these hosts': a control plane drives only the hosts it registered,
+    /// never another control plane's.
+    Only(Vec<HostId>),
+}
+
+impl HostScope {
+    /// Whether a computer on `host` is in scope.
+    pub fn includes(&self, host: HostId) -> bool {
+        match self {
+            Self::Every => true,
+            Self::Only(hosts) => hosts.contains(&host),
+        }
+    }
+
+    /// The hosts, `None` for every host: for storage queries.
+    pub fn hosts(&self) -> Option<&[HostId]> {
+        match self {
+            Self::Every => None,
+            Self::Only(hosts) => Some(hosts),
+        }
+    }
 }
 
 /// What applying an event to a stored computer did.
@@ -220,7 +260,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
-    /// Every awake computer that has a harness, as `(harness, computer)`.
+    /// Every awake, unhibernated computer that has a harness, as `(harness, computer)`.
     fn awake_computers(
         &self,
     ) -> impl Future<Output = Result<Vec<(HarnessId, ComputerId)>, Self::Err>> + Send;
@@ -274,11 +314,13 @@ pub trait ComputerRepo: Send + Sync + 'static {
         host: HostId,
     ) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
 
-    /// Lease up to `limit` due effects for `worker`; a leased effect is
-    /// hidden from other workers until `lease_until`. Exclude quarantined owners before the limit.
+    /// Lease up to `limit` due effects for `worker` of computers in `scope`;
+    /// a leased effect is hidden from other workers until `lease_until`.
+    /// Exclude quarantined owners before the limit.
     fn lease_effects(
         &self,
         worker: EffectWorker,
+        scope: HostScope,
         limit: u32,
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
@@ -305,6 +347,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Run the effect again at `run_after` without counting an attempt: it
+    /// was turned away, not failed.
+    fn defer_effect(
+        &self,
+        id: i64,
+        run_after: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Record a failed attempt and run the effect again at `retry_at`.
     fn retry_effect(
         &self,
@@ -313,9 +363,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
         retry_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Timers due at `now`, oldest first; exclude quarantined owners before the limit.
+    /// Timers of computers in `scope` due at `now`, oldest first; exclude
+    /// quarantined owners before the limit.
     fn due_timers(
         &self,
+        scope: HostScope,
         now: DateTime<Utc>,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<DueTimer>, Self::Err>> + Send;
@@ -349,8 +401,28 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Every host with what its computers and reservations hold, by host id.
+    /// Every host purchases may be placed on (admitting hosts), with
+    /// what its computers and reservations hold, by host id.
     fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
+
+    /// Every host row, with its backend and connection, oldest first.
+    fn hosts(&self) -> impl Future<Output = Result<Vec<HostRecord>, Self::Err>> + Send;
+}
+
+/// Takes back an agent teammate whose computer was released after failing
+/// its first start: the agent teammates domain, which depends on this crate,
+/// implements it.
+pub trait AgentInvites: Send + Sync + 'static {
+    /// Undo failure; the effect is retried.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Remove `agent` from `team_id` as removing an agent does, keeping its
+    /// account. Idempotent: an agent already taken back is done.
+    fn undo_invite(
+        &self,
+        team_id: Uuid,
+        agent: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Errors from billing a team.
@@ -372,6 +444,10 @@ pub enum BillingError {
     /// teams only, so nothing is charged or provisioned.
     #[error("Computers are available on paid plans. Your team is on a trial.")]
     TeamOnTrial,
+    /// Another change to the team's subscription is still in flight (a
+    /// release's item removal, say): nothing was sent; try again shortly.
+    #[error("another change to the team's subscription is still in flight")]
+    ChangeInFlight,
     /// The billing provider failed; the change's outcome is unknown.
     #[error("billing provider error: {0:?}")]
     Provider(rootcause::Report),
@@ -386,7 +462,7 @@ impl BillingError {
             | Self::IntervalNotSold(_)
             | Self::PaymentFailed
             | Self::TeamOnTrial => true,
-            Self::Provider(_) => false,
+            Self::ChangeInFlight | Self::Provider(_) => false,
         }
     }
 }
@@ -423,6 +499,30 @@ pub trait Billing: Send + Sync + 'static {
         team_id: Uuid,
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
+
+    /// What buying one computer of each of `sizes` would cost the team, for
+    /// the buy dialog: each recurring price and what it would invoice now,
+    /// the renewal date and the card, from ONE subscription read and ONE
+    /// invoice preview (none when `billing` is comped: nothing is invoiced,
+    /// so `due_today` is 0 and no card is named). `due_today` is net of the
+    /// team's credit balance, which Stripe applies to the invoice first. A Stripe-billed trialing team is refused with
+    /// [`BillingError::TeamOnTrial`]. Never on the purchase path.
+    fn purchase_terms(
+        &self,
+        team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> impl Future<Output = Result<PurchaseTerms, BillingError>> + Send;
+
+    /// The price to buy one computer of `size` at, from ONE read of the
+    /// team's subscription: refuses a trialing team with
+    /// [`BillingError::TeamOnTrial`] (computers are for paying teams) and
+    /// fetches no price details, which a purchase does not need.
+    fn purchase_price(
+        &self,
+        team_id: Uuid,
+        size: ComputerSize,
+    ) -> impl Future<Output = Result<stripe::PriceId, BillingError>> + Send;
 
     /// Add the computer's own item at its saved `price_id`, plus
     /// `extra_items`, in ONE update that fails rather than leaving an unpaid
@@ -469,6 +569,19 @@ pub trait Billing: Send + Sync + 'static {
         subscription_item: &SubscriptionItemId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
+
+    /// Undo the purchase of `computer_id`: credit note the computer's lines
+    /// on the invoice its purchase paid, refunding the part paid by card and
+    /// restoring any part paid from the team's credit balance. Idempotent on
+    /// `idempotency_key`; a replay answers with the same credit note. `None`
+    /// when no paid invoice carries the computer, so nothing was charged.
+    fn refund_computer_purchase(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<crate::domain::lifecycle::PurchaseRefund>, BillingError>>
+    + Send;
 
     /// Refuse a team whose subscription is trialing with
     /// [`BillingError::TeamOnTrial`]: every computer item (purchase, undo,
@@ -547,6 +660,24 @@ pub trait Fleet: Send + Sync + 'static {
     /// The host this fleet drives, for registration.
     fn host(&self) -> impl Future<Output = Result<HostRegistration, Self::Err>> + Send;
 
+    /// The host's memory now: its resident memory, the limit on its guests
+    /// and what each of this control plane's guests holds.
+    fn memory(&self) -> impl Future<Output = Result<HostMemory, Self::Err>> + Send;
+
+    /// Have the host enforce `limits` itself. Called only on a fleet whose
+    /// [`HostMemory::limits`] is [`HostLimitsState::Enforced`].
+    fn set_host_limits(
+        &self,
+        limits: crate::domain::overcommit::HostAgentLimits,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Save the guest's memory to its disk and end its process; `start`
+    /// restores it. The computer stays on to the lifecycle.
+    fn hibernate(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Run `argv` in the guest as its [`GUEST_USER`], without a TTY. Resolves
     /// once the program started; a missing guest is [`FleetError::is_missing`].
     fn exec(
@@ -554,6 +685,76 @@ pub trait Fleet: Send + Sync + 'static {
         computer_id: ComputerId,
         argv: &[&str],
     ) -> impl Future<Output = Result<GuestProcess<Self::Err>, Self::Err>> + Send;
+}
+
+/// The fleets one control plane drives: every Firecracker host row, or a
+/// home host its environment configures (the local Docker host), which
+/// registers itself. A single [`Fleet`] is a control plane with only a home
+/// host.
+pub trait Fleets: Send + Sync + 'static {
+    /// The fleet every host is driven through.
+    type Fleet: Fleet;
+    /// Why a host row cannot be driven: no credentials or no connection.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The home host's fleet; `None` when every host is a row.
+    fn home(&self) -> Option<&Self::Fleet>;
+
+    /// Whether this control plane drives the row `host`, other than the
+    /// home host. A row it drives but cannot reach is reported, never skipped;
+    /// a row it does not drive belongs to another control plane.
+    fn drives(&self, host: &HostRecord) -> bool;
+
+    /// The fleet driving the row `host`, other than the home host. Building
+    /// one makes no request; an unchanged row gets the same fleet back.
+    fn fleet(&self, host: &HostRecord) -> Result<FleetHandle<'_, Self::Fleet>, Self::Err>;
+}
+
+/// A fleet a [`Fleets`] hands out: its home fleet, or a shared one built
+/// from a host row.
+pub enum FleetHandle<'a, Machines> {
+    /// The home host's fleet.
+    Home(&'a Machines),
+    /// Another host's fleet.
+    Host(std::sync::Arc<Machines>),
+}
+
+impl<Machines> std::ops::Deref for FleetHandle<'_, Machines> {
+    type Target = Machines;
+
+    fn deref(&self) -> &Machines {
+        match self {
+            Self::Home(fleet) => fleet,
+            Self::Host(fleet) => fleet,
+        }
+    }
+}
+
+/// A single fleet drives only its home host.
+#[derive(Debug, thiserror::Error)]
+#[error("this control plane drives only its home host, not {host}")]
+pub struct HomeHostOnly {
+    /// The host row that was asked for.
+    pub host: HostName,
+}
+
+impl<Machines: Fleet> Fleets for Machines {
+    type Fleet = Machines;
+    type Err = HomeHostOnly;
+
+    fn home(&self) -> Option<&Machines> {
+        Some(self)
+    }
+
+    fn drives(&self, _host: &HostRecord) -> bool {
+        false
+    }
+
+    fn fleet(&self, host: &HostRecord) -> Result<FleetHandle<'_, Machines>, HomeHostOnly> {
+        Err(HomeHostOnly {
+            host: host.name.clone(),
+        })
+    }
 }
 
 /// The guest account [`Fleet::exec`] runs programs as.
@@ -693,6 +894,18 @@ pub trait Harnesses: Send + Sync + 'static {
     /// to it, so no agent is left on a machine that is gone; absent is fine.
     /// Safe to repeat: a retry still finds agents bound to a deleted harness.
     fn revoke(&self, computer: &Computer) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Ask for the agent teammate of `computer_id` (enrollment `generation`)
+    /// to be handed to macrod on `harness_id`, so the guest starts it.
+    /// Carries no credential: the replica holding macrod's socket issues the
+    /// agent's environment and sends it down that socket. Not confirmed here:
+    /// the agent's own online report is.
+    fn deliver_agent(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+        generation: crate::domain::enrollment::EnrollmentGeneration,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the
     /// buyer. Skips when an agent is already bound to the harness.

@@ -90,9 +90,8 @@ impl From<EmailErr> for UpdateThreadLabelError {
             | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::DraftGenerationConflict(_)
             | EmailErr::MessageAlreadySent(_)
-            | EmailErr::ThreadHasNoInboundMessages => {
-                UpdateThreadLabelError::Conflict(err.to_string())
-            }
+            | EmailErr::ThreadHasNoInboundMessages
+            | EmailErr::Contended => UpdateThreadLabelError::Conflict(err.to_string()),
             _ => UpdateThreadLabelError::Internal(err),
         }
     }

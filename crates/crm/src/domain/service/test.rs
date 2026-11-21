@@ -76,6 +76,8 @@ impl EmailPrivacyRepository for StubRepo {
             mailbox_email: None,
             team_domains: vec![],
             personal_domains: vec![],
+            team_domain_warnings: Default::default(),
+            personal_domain_warnings: Default::default(),
             can_remove_team_domains: false,
         })
     }
@@ -236,6 +238,16 @@ impl CompaniesRepository for StubRepo {
         &self,
         _team_id: &uuid::Uuid,
         _email: Option<&str>,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
+    async fn create_contact_for_email_domain(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
         _name: &str,
         _now: DateTime<Utc>,
     ) -> Result<CrmContact, CrmError> {
@@ -460,6 +472,15 @@ impl CompaniesRepository for StubRepo {
         _email: &str,
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn get_company_by_domain_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
 

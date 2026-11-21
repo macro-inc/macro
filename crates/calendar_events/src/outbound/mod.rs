@@ -6,6 +6,9 @@ pub mod calendar_service_mutations;
 /// Meeting-link adapter over the call domain service.
 #[cfg(feature = "call-meetings")]
 pub mod call_meeting_links;
+/// Connection-gateway adapter for the calendar refresh ports.
+#[cfg(feature = "gateway-refresh")]
+pub mod gateway_refresh;
 /// Google Calendar API adapter.
 #[cfg(feature = "google")]
 pub mod google;

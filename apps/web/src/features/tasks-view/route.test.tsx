@@ -1,7 +1,10 @@
 import {
   claimOf,
+  createMemoryHistory,
+  createMemoryPaneStore,
   createRoutesManifest,
   createSearchParamsCodec,
+  createSplitRouter,
   decodePane,
   formatPanePath,
   routeParams,
@@ -13,6 +16,7 @@ import {
   tasksProjectsRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
+import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { projectDetailSearch } from './project-detail-search';
 
@@ -64,6 +68,62 @@ describe('project routes in Tasks', () => {
       ).toEqual({ type: 'initiative', id: projectId });
     }
   );
+
+  it('pushes project sections and restores Overview with pane or browser back', async () => {
+    const overviewPath = `/tasks/projects/${projectId}/overview`;
+    const tasksPath = `/tasks/projects/${projectId}/tasks`;
+    const history = createMemoryHistory(overviewPath);
+    const { router, dispose } = createRoot((dispose) => ({
+      router: createSplitRouter({
+        routes: {
+          definitions: [{ ...tasksSplitRoute, children: [projectDetailRoute] }],
+          defaultRoute: () => ({
+            matches: [{ id: tasksSplitRoute.id, params: {} }],
+          }),
+        },
+        history,
+        paneStore: createMemoryPaneStore(),
+        policy: {
+          placeNewPane: () => ({ insertAt: 0 }),
+          closeAction: () => ({ type: 'keep' }),
+          activate: () => {},
+        },
+      }),
+      dispose,
+    }));
+    try {
+      await router.ready;
+      const pane = router.panes()[0]!;
+      const openTasks = () =>
+        router.navigatePane(pane, {
+          route: projectDetailRoute,
+          params: { projectId, section: 'tasks' },
+        });
+      await openTasks();
+      expect(history.entries().map((entry) => entry.path)).toEqual([
+        overviewPath,
+        tasksPath,
+      ]);
+      expect(router.history(pane)?.index).toBe(1);
+
+      await router.navigatePane(pane, -1);
+      expect(history.read().path).toBe(overviewPath);
+      expect(router.history(pane)?.index).toBe(0);
+
+      await openTasks();
+      history.back();
+      await router.settled();
+      expect(history.read().path).toBe(overviewPath);
+      expect(router.history(pane)?.index).toBe(0);
+      history.forward();
+      await router.settled();
+      expect(history.read().path).toBe(tasksPath);
+      expect(router.history(pane)?.index).toBe(1);
+    } finally {
+      router.dispose();
+      dispose();
+    }
+  });
 
   it('retains project ancestry when opening a task and claims the task document', () => {
     const segments = [

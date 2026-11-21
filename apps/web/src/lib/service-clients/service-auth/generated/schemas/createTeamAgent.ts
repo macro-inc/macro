@@ -13,12 +13,13 @@ import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
 export interface CreateTeamAgent {
   /** Profile picture URL (a static file the caller uploaded). */
   avatarUrl?: CreateTeamAgentAvatarUrl;
-  /** What the agent is responsible for. Seeds its workspace. */
-  jobDescription: string;
+  /** What the agent is responsible for. Seeds its workspace; when this and
+`personality` are empty the agent asks its owner what to take on. */
+  jobDescription?: string;
   /** Display name. */
   name: string;
   /** How the agent behaves and talks. Seeds its workspace. */
-  personality: string;
+  personality?: string;
   /** One key per Invite dialog, reused when the invite is retried, so a
 retry never buys a second computer. */
   purchaseKey: string;

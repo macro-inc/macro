@@ -5,14 +5,15 @@ use crate::domain::{
 };
 use calendar_events::domain::{
     labels::{CalendarLabels, attends_meeting},
-    meeting_links::{create_event_with_macro_call, first_macro_call_url},
+    meeting_links::{MacroCallEventError, create_event_with_macro_call, first_macro_call_url},
     models::{
         CalendarAttendeeInput, CalendarEvent, CalendarEventDraft, ConferenceChange, EventTime,
         EventTransparency, OccurrenceRange, VisibleCalendar,
     },
     ports::{
-        CalendarCreationRecoveryService, CalendarDeletionScope, CalendarOccurrenceService,
-        CalendarSyncHealthReader, MeetingLinkProvider, UnavailableMeetingLinks,
+        CalendarCreationRecoveryService, CalendarDeletionScope, CalendarMutationError,
+        CalendarOccurrenceService, CalendarSyncHealthReader, MeetingLinkProvider,
+        UnavailableMeetingLinks,
     },
 };
 use chrono::{DateTime, Duration, Utc};
@@ -104,7 +105,10 @@ where
         .await
         .map_err(|error| {
             tracing::error!(error = ?error, "scheduling macro call creation failed");
-            Error::CalendarUnavailable
+            match &error {
+                MacroCallEventError::Calendar(error) => calendar_failure(error),
+                MacroCallEventError::MeetingLink(_) => Error::CalendarUnavailable,
+            }
         })?;
         let minted = created.meeting_link.url;
         if carries_url(
@@ -281,13 +285,13 @@ where
             .booking
             .hosts
             .first()
-            .ok_or(Error::CalendarUnavailable)?;
+            .ok_or(Error::CalendarRejected)?;
         let mut emails = vec![record.booking.email.clone()];
         for host in record.booking.hosts.iter().skip(1) {
             let user: macro_user_id::user_id::MacroUserIdStr<'_> = host
                 .as_str()
                 .try_into()
-                .map_err(|_| Error::CalendarUnavailable)?;
+                .map_err(|_| Error::CalendarRejected)?;
             emails.push(user.email_part().as_ref().to_owned());
         }
         let answers = event
@@ -347,7 +351,7 @@ where
         if event.macro_call {
             if event.google_meet {
                 tracing::error!("booking link requested both a Macro call and Google Meet");
-                return Err(Error::CalendarUnavailable);
+                return Err(Error::CalendarRejected);
             }
             return self
                 .create_macro_call(organizer, record.calendar_id, draft)
@@ -359,7 +363,7 @@ where
             .await
             .map_err(|error| {
                 tracing::error!(error=?error,"scheduling calendar creation failed");
-                Error::CalendarUnavailable
+                calendar_failure(&error)
             })?;
         if event.google_meet
             && result
@@ -391,7 +395,7 @@ where
                     record.booking.id,
                 )
                 .await
-                .map_err(|_| Error::CalendarUnavailable);
+                .map_err(|error| calendar_failure(&error));
         }
         if let Some(id) = record.calendar_event_id {
             self.mutations
@@ -406,7 +410,7 @@ where
                     CalendarDeletionScope::All,
                 )
                 .await
-                .map_err(|_| Error::CalendarUnavailable)?;
+                .map_err(|error| calendar_failure(&error))?;
         }
         Ok(())
     }
@@ -432,9 +436,36 @@ where
                     calendar_events::domain::ports::CalendarUpdateScope::All,
                 )
                 .await
-                .map_err(|_| Error::CalendarUnavailable)?;
+                .map_err(|error| calendar_failure(&error))?;
         }
         Ok(())
+    }
+}
+/// Whether a booking's calendar write can still succeed on a later attempt.
+/// A refusal decided before anything reaches the provider, which the same
+/// request will meet again, ends recovery. `ProviderRejected` is retried:
+/// it also reports a write that landed but whose read-back failed, which the
+/// keyed retry finds.
+fn calendar_failure(error: &CalendarMutationError) -> Error {
+    match error {
+        CalendarMutationError::Retryable(_)
+        | CalendarMutationError::PersistFailed(_)
+        | CalendarMutationError::ReauthRequired(_)
+        | CalendarMutationError::ProviderRejected(_) => Error::CalendarUnavailable,
+        CalendarMutationError::NotFound
+        | CalendarMutationError::OccurrenceNotFound
+        | CalendarMutationError::ReadOnly
+        | CalendarMutationError::NoWritableCalendar
+        | CalendarMutationError::NotAttendee
+        | CalendarMutationError::NotOrganizer
+        | CalendarMutationError::GuestsCannotInvite
+        | CalendarMutationError::GuestListHidden
+        | CalendarMutationError::GuestsCannotModify
+        | CalendarMutationError::AlreadyOnCalendar
+        | CalendarMutationError::JoinRequestOpen
+        | CalendarMutationError::CopyRefused(_)
+        | CalendarMutationError::Snapshot
+        | CalendarMutationError::InvalidInput(_) => Error::CalendarRejected,
     }
 }
 /// Membership adapter over the owning teams repository port.

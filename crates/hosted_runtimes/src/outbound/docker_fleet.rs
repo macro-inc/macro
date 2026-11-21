@@ -1,9 +1,9 @@
-//! [`Fleet`] on the local Docker daemon, for dev stacks without an Incus host.
+//! [`Fleet`] on the local Docker daemon, for dev stacks without KVM.
 //!
 //! Each computer is a `macro-box` container running systemd.
 //! The disk size is not enforced (overlayfs has no per-container quota).
 //!
-//! Like an Incus computer's data disk, two named volumes hold `/home` and
+//! Like a Firecracker computer's `/home` volume, two named volumes hold `/home` and
 //! `/var/lib/macrod` (the enrollment marker and Claude credential).
 //! Destroy deletes them; a guest recreated after a loss reuses them. They
 //! carry the computer and control-plane labels, so a stack reset finds them.
@@ -27,8 +27,10 @@ use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssu
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::{GuestImage, GuestImages, InvalidGuestImage};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
+use crate::domain::overcommit::MemoryReport;
 use crate::domain::ports::{
-    Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, InstanceStatus,
+    Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, HostLimitsState,
+    HostMemory, InstanceStatus,
 };
 use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure, read_tail};
 
@@ -69,13 +71,9 @@ pub struct DockerFleetConfig {
     /// Host directory holding one enrollment directory per computer.
     pub enrollment_dir: PathBuf,
     /// Name used to register host capacity.
-    pub host_name: String,
+    pub host_name: crate::domain::models::HostName,
     /// Memory in GiB.
     pub memory_gb: u32,
-    /// Memory in GiB reserved for the host.
-    pub reserve_gb: u32,
-    /// Sold units per awake unit.
-    pub oversell_factor: u32,
 }
 
 /// Failure while operating the local Docker fleet.
@@ -133,6 +131,10 @@ pub enum DockerFleetError {
         /// Computer the program ran in.
         computer_id: ComputerId,
     },
+    /// This fleet neither measures nor limits its guests' memory, nor
+    /// hibernates them; overcommit never asks it to.
+    #[error("this fleet does not hibernate or limit guest memory")]
+    MemoryControlUnsupported,
 }
 
 /// Computers as containers on the local Docker daemon.
@@ -229,7 +231,10 @@ impl FleetError for DockerFleetError {
     }
 
     fn is_permanent(&self) -> bool {
-        matches!(self, Self::NotLocal(_) | Self::Encode(_))
+        matches!(
+            self,
+            Self::NotLocal(_) | Self::Encode(_) | Self::MemoryControlUnsupported
+        )
     }
 }
 
@@ -422,10 +427,76 @@ impl Fleet for DockerFleet {
     async fn host(&self) -> Result<HostRegistration, DockerFleetError> {
         Ok(HostRegistration {
             name: self.config.host_name.clone(),
+            vcpus: std::thread::available_parallelism()
+                .map_or(1, |count| u32::try_from(count.get()).unwrap_or(u32::MAX)),
             memory_gb: self.config.memory_gb,
-            reserve_gb: self.config.reserve_gb,
-            oversell_factor: self.config.oversell_factor,
         })
+    }
+
+    /// The fleet's containers' memory together (`docker stats`), against the
+    /// configured memory. Containers share no parent cgroup and do not
+    /// hibernate, so the limit is unsupported and no guest reports usage.
+    #[tracing::instrument(
+        name = "docker_fleet.memory",
+        skip(self),
+        fields(containers, resident_memory_mib),
+        err
+    )]
+    async fn memory(&self) -> Result<HostMemory, DockerFleetError> {
+        let mut ids_args = list_args(&self.config.network, &self.config.control_plane_id);
+        // Only running containers, by id.
+        ids_args.retain(|arg| arg != "--all");
+        let format = ids_args.len() - 1;
+        ids_args[format] = "{{.ID}}".to_owned();
+        let ids: Vec<String> = self
+            .docker("ps", &ids_args)
+            .await?
+            .lines()
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect();
+        let mut resident_bytes = 0u64;
+        if !ids.is_empty() {
+            let mut stats_args = vec![
+                "stats".to_owned(),
+                "--no-stream".to_owned(),
+                "--format".to_owned(),
+                "{{.MemUsage}}".to_owned(),
+            ];
+            stats_args.extend(ids.iter().cloned());
+            for line in self.docker("stats", &stats_args).await?.lines() {
+                if line.is_empty() {
+                    continue;
+                }
+                resident_bytes =
+                    resident_bytes.saturating_add(memory_usage_bytes(line).ok_or_else(|| {
+                        DockerFleetError::Malformed(format!("stats line {line:?}"))
+                    })?);
+            }
+        }
+        let resident_memory_mib = resident_bytes / (1024 * 1024);
+        let span = tracing::Span::current();
+        span.record("containers", ids.len());
+        span.record("resident_memory_mib", resident_memory_mib);
+        Ok(HostMemory {
+            report: MemoryReport {
+                resident_memory_mib,
+                reported_at: Utc::now(),
+            },
+            limits: HostLimitsState::Unsupported,
+            guests: Vec::new(),
+        })
+    }
+
+    async fn set_host_limits(
+        &self,
+        _limits: crate::domain::overcommit::HostAgentLimits,
+    ) -> Result<(), DockerFleetError> {
+        Err(DockerFleetError::MemoryControlUnsupported)
+    }
+
+    async fn hibernate(&self, _computer_id: ComputerId) -> Result<(), DockerFleetError> {
+        Err(DockerFleetError::MemoryControlUnsupported)
     }
 
     #[tracing::instrument(name = "docker_fleet.exec", skip(self, argv), err)]
@@ -527,7 +598,7 @@ impl ContainerLabels {
             .try_into()
             .map_err(|_| malformed())?;
         Ok(Self {
-            control_plane_id: ControlPlaneId::parse(owner.to_owned()).map_err(|_| malformed())?,
+            control_plane_id: ControlPlaneId::try_new(owner).map_err(|_| malformed())?,
             generation: EnrollmentGeneration::new(generation.parse().map_err(|_| malformed())?),
             pairing_id: pairing.parse().map_err(|_| malformed())?,
             created_at: DateTime::parse_from_rfc3339(created_at)
@@ -772,4 +843,29 @@ async fn docker(command: &str, args: &[String]) -> Result<String, DockerFleetErr
         });
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The used half of a `docker stats` `MemUsage` cell, `"512.3MiB / 15.5GiB"`,
+/// in bytes.
+fn memory_usage_bytes(cell: &str) -> Option<u64> {
+    use nom::Parser;
+    use nom::branch::alt;
+    use nom::bytes::complete::tag;
+    use nom::number::complete::double;
+
+    let unit = alt((
+        tag("KiB").map(|_| 1024.0),
+        tag("MiB").map(|_| 1024.0 * 1024.0),
+        tag("GiB").map(|_| 1024.0 * 1024.0 * 1024.0),
+        tag("TiB").map(|_| 1024.0 * 1024.0 * 1024.0 * 1024.0),
+        tag("kB").map(|_| 1e3),
+        tag("MB").map(|_| 1e6),
+        tag("GB").map(|_| 1e9),
+        tag("B").map(|_| 1.0),
+    ));
+    let (_, (amount, scale)) = (double::<&str, nom::error::Error<&str>>, unit)
+        .parse(cell.trim_start())
+        .ok()?;
+    let bytes = amount * scale;
+    (bytes.is_finite() && bytes >= 0.0).then_some(bytes as u64)
 }

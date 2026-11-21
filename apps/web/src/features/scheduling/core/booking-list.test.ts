@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bookingAbandoned,
   bookingTab,
   bookingTimeRange,
   bookingTimeRangeDisplay,
+  canManageBooking,
   filterBookings,
 } from './booking-list';
 import type { Booking } from './types';
@@ -151,5 +153,32 @@ describe('booking management', () => {
     expect(display.sharedTimeZone).toBe(false);
     expect(display.start.time).toBe(display.end.time);
     expect(display.start.timeZone).not.toBe(display.end.timeZone);
+  });
+});
+
+describe('abandoned bookings', () => {
+  const abandoned = booking({
+    status: 'failed',
+    abandonedAt: '2026-09-18T15:00:00Z',
+  });
+
+  it('tells a booking Macro stopped retrying from one it still retries', () => {
+    expect(bookingAbandoned(abandoned)).toBe(true);
+    expect(bookingAbandoned(booking({ status: 'failed' }))).toBe(false);
+    expect(
+      bookingAbandoned(
+        booking({ status: 'cancelled', abandonedAt: '2026-09-18T15:00:00Z' })
+      )
+    ).toBe(false);
+  });
+
+  it('lets a host or manager cancel an abandoned booking, even after it ended', () => {
+    const ended = { ...abandoned, startsAt: '2026-09-18T10:00:00Z' };
+    expect(canManageBooking(abandoned, false, 'host', now)).toBe(true);
+    expect(canManageBooking(ended, true, 'someone', now)).toBe(true);
+    expect(canManageBooking(abandoned, false, 'someone', now)).toBe(false);
+    expect(
+      canManageBooking(booking({ status: 'failed' }), true, 'host', now)
+    ).toBe(false);
   });
 });

@@ -266,15 +266,14 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         if end < now || start > now + Duration::days(i64::from(event.horizon_days) + 1) {
             return Ok(vec![]);
         }
-        let records = self.repository.bookings(profile_id, start, end).await?;
-        let count = records
-            .iter()
-            .filter(|r| {
-                r.booking.event_type_id == event_id && r.booking.status != BookingStatus::Cancelled
-            })
-            .count();
-        if event.daily_limit.is_some_and(|n| count >= usize::from(n)) {
-            return Ok(vec![]);
+        if let Some(limit) = event.daily_limit {
+            let count = self
+                .repository
+                .daily_bookings(profile_id, event_id, start, end, None)
+                .await?;
+            if count >= i64::from(limit) {
+                return Ok(vec![]);
+            }
         }
         let busy_start = start - Duration::minutes(i64::from(event.before_minutes));
         let busy_end = end + Duration::minutes(i64::from(event.after_minutes));
@@ -526,6 +525,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 attendance: BookingAttendance::Unknown,
                 reschedule_count: 0,
                 rescheduled_at: None,
+                abandoned_at: None,
                 location: event.location.clone(),
                 answers: request.answers,
                 question_labels: event
@@ -776,15 +776,41 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         let mut slots = vec![];
         let now = Utc::now();
         while host_date <= last {
-            slots.extend(
-                slots_for_date(&event, &record.schedule, host_date, now, &busy)?
-                    .into_iter()
-                    .filter(|s| s.starts_at >= start && s.starts_at < end),
-            );
+            if !self.day_full_for_move(&record, host_date).await? {
+                slots.extend(
+                    slots_for_date(&event, &record.schedule, host_date, now, &busy)?
+                        .into_iter()
+                        .filter(|s| s.starts_at >= start && s.starts_at < end),
+                );
+            }
             host_date = host_date.succ_opt().ok_or(Error::Conflict)?;
         }
         slots.sort_by_key(|s| s.starts_at);
         self.respect_host_hours(&owner, &event, slots).await
+    }
+    /// Whether the booking link's daily limit leaves no place for `record` on
+    /// this schedule date, counted as the move itself counts it: the booking
+    /// being moved never takes a place from itself.
+    async fn day_full_for_move(
+        &self,
+        record: &BookingRecord,
+        date: NaiveDate,
+    ) -> Result<bool, Error> {
+        let Some(limit) = record.event.daily_limit else {
+            return Ok(false);
+        };
+        let (start, end) = day_bounds(&record.schedule, date)?;
+        let count = self
+            .repository
+            .daily_bookings(
+                record.profile_id,
+                record.booking.event_type_id,
+                start,
+                end,
+                Some(record.booking.id),
+            )
+            .await?;
+        Ok(count >= i64::from(limit))
     }
     /// Move a booking while retaining both reservations until the calendar accepts the change.
     pub async fn reschedule(
@@ -843,10 +869,33 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             return Ok(record.booking);
         }
         let expected = record.booking.status;
-        if expected == BookingStatus::Processing || expected == BookingStatus::Failed {
+        // Recovery owns a failed booking until it abandons the operation; after
+        // that, cancelling is the only way to release its reservations.
+        let abandoned = record
+            .operation
+            .as_ref()
+            .is_some_and(|operation| operation.abandoned_at.is_some());
+        if expected == BookingStatus::Processing
+            || (expected == BookingStatus::Failed && !abandoned)
+        {
             return Err(Error::Conflict);
         }
+        // A create refused on its first attempt never reached the calendar,
+        // so there is no event to remove and the cancellation needs no
+        // calendar change.
+        if expected == BookingStatus::Failed
+            && record.operation.as_ref().is_some_and(|operation| {
+                operation.unsent && matches!(operation.kind, CalendarOperationKind::Create)
+            })
+        {
+            record.booking.status = BookingStatus::Cancelled;
+            record.booking.abandoned_at = None;
+            let cancelled = self.repository.update_booking(record, expected).await?;
+            tracing::info!(booking_id = %cancelled.booking.id, "scheduling booking cancelled; its calendar never received it");
+            return Ok(cancelled.booking);
+        }
         record.booking.status = BookingStatus::Processing;
+        record.booking.abandoned_at = None;
         record.operation = Some(CalendarOperation::new(CalendarOperationKind::Cancel));
         record = self.repository.update_booking(record, expected).await?;
         Ok(self.finish_operation(record).await?.booking)

@@ -7,8 +7,8 @@
  * connect page, which reports lifecycle events back via `postMessage`.
  */
 
-// The desktop shell must allow this page to load in a frame: keep in sync with
-// `EMBEDDED_DOCUMENTS` in `apps/web/tauri/src-tauri/src/lib.rs`.
+// Web only: the native apps open Connect in the system browser
+// (`connect-native.tsx`), and their webviews load no third-party pages.
 const CONNECT_UI_URL = 'https://pipedream.com/_static/connect.html';
 
 export type PipedreamConnectEvent =

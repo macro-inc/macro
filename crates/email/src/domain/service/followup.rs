@@ -107,8 +107,7 @@ where
                 },
                 user,
             )
-            .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+            .await?;
         let ids: Vec<_> = previews.into_iter().map(|thread| thread.id).collect();
         if filters.attachments.is_empty() {
             return Ok(ids);

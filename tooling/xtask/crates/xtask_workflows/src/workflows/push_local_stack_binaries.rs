@@ -13,8 +13,9 @@
 //! push cancelled the one before it and most main commits showed a cancelled
 //! check. Hourly, the cache trails main by up to an hour plus the build.
 
+use gh_workflow::expr::typed::github;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Schedule, Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Schedule, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps};
@@ -41,7 +42,7 @@ pub fn push_local_stack_binaries() -> Workflow {
         // for it (a newer one replaces a waiting one) and builds only what
         // changed.
         .concurrency(
-            Concurrency::new(Expression::new("${{ github.workflow }}-${{ github.ref }}"))
+            Concurrency::new(format!("{}-{}", github().workflow(), github().git_ref()))
                 .cancel_in_progress(false),
         )
         .add_job("push", push_job())

@@ -22,14 +22,15 @@
 //! in App Store Connect before the next submission; already releasing, it
 //! needs a follow-up release. The comment says which.
 
+use gh_workflow::expr::typed::{
+    Bool, Expr, Flag, Json, StepHandle, StepOutput, Str, always, github,
+};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
-    Workflow,
+    Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use, Workflow,
 };
 
+use crate::workflows::actions::OvenShSetupBun;
 use crate::workflows::{runners, steps, vars};
-
-const CHANGED: &str = "steps.detect.outputs.changed == 'true'";
 
 /// Build the workflow.
 pub fn ios_release_drift() -> Workflow {
@@ -42,10 +43,16 @@ pub fn ios_release_drift() -> Workflow {
 fn drift_job() -> Job {
     Job::default()
         .name("iOS Release Drift")
-        .cond(Expression::new(
-            "contains(github.event.pull_request.labels.*.name, 'ios-update') && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Json>("pull_request.labels.*.name")
+                .contains("ios-update")
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(15u32)
         .permissions(
@@ -54,9 +61,9 @@ fn drift_job() -> Job {
                 .contents(Level::Read)
                 .pull_requests(Level::Write),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
         .add_step(steps::checkout(false, false))
         .add_step(detect())
         .add_step(cancel_release_runs())
@@ -67,8 +74,37 @@ fn drift_job() -> Job {
         .add_step(comment())
 }
 
-fn changed() -> Expression {
-    Expression::new(CHANGED)
+struct DetectOutputs {
+    /// Whether this push changed the iOS native code.
+    changed: StepOutput<Flag>,
+}
+
+/// The [`detect`] step.
+const DETECT: StepHandle<DetectOutputs> = StepHandle::new(
+    "detect",
+    DetectOutputs {
+        changed: StepOutput::new("detect", "changed"),
+    },
+);
+
+struct WithdrawOutputs {
+    /// The approved version held for release, if any.
+    held: StepOutput<Str>,
+    /// The approved version already live, if any.
+    live: StepOutput<Str>,
+}
+
+/// The [`withdraw`] step.
+const WITHDRAW: StepHandle<WithdrawOutputs> = StepHandle::new(
+    "withdraw",
+    WithdrawOutputs {
+        held: StepOutput::new("withdraw", "held"),
+        live: StepOutput::new("withdraw", "live"),
+    },
+);
+
+fn changed() -> Expr<Bool> {
+    DETECT.outputs.changed.read().is_set()
 }
 
 fn detect() -> Step<Run> {
@@ -77,10 +113,10 @@ fn detect() -> Step<Run> {
             include_str!("scripts/ios_native_tree.sh"),
             include_str!("scripts/ios_release_drift.sh")
         ))
-        .id("detect")
+        .id(DETECT.id())
         .shell("bash")
-        .add_env(("BEFORE_SHA", "${{ github.event.before }}"))
-        .add_env(("AFTER_SHA", "${{ github.event.after }}"))
+        .add_env(("BEFORE_SHA", github().event::<Str>("before")))
+        .add_env(("AFTER_SHA", github().event::<Str>("after")))
 }
 
 fn cancel_release_runs() -> Step<Run> {
@@ -113,18 +149,14 @@ fn cancel_release_runs() -> Step<Run> {
         "#})
         .if_condition(changed())
         .shell("bash")
-        .add_env(("HEAD_REF", "${{ github.event.pull_request.head.ref }}"))
+        .add_env(("HEAD_REF", github().event::<Str>("pull_request.head.ref")))
 }
 
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
+    OvenShSetupBun::new("Setup Bun")
+        .bun_version("1.3.13")
+        .step()
         .if_condition(changed())
-        .add_with(("bun-version", "1.3.13"))
 }
 
 fn fetch_credentials() -> Step<Run> {
@@ -138,7 +170,7 @@ fn fetch_credentials() -> Step<Run> {
 fn withdraw() -> Step<Run> {
     Step::new("Withdraw the PR's App Store submission")
         .run("bun scripts/ios-app-store.mjs withdraw --pr \"$PR_NUMBER\"")
-        .id("withdraw")
+        .id(WITHDRAW.id())
         .if_condition(changed())
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
@@ -146,8 +178,8 @@ fn withdraw() -> Step<Run> {
 /// `always()`: even if the withdrawal call failed (App Store Connect or
 /// Doppler hiccup), the label must come off and someone must be told —
 /// otherwise the stale build stays in review unnoticed.
-fn after_withdraw() -> Expression {
-    Expression::new(format!("always() && {CHANGED}"))
+fn after_withdraw() -> Expr<Bool> {
+    always().and(changed())
 }
 
 fn remove_label() -> Step<Run> {
@@ -175,11 +207,16 @@ fn comment() -> Step<Run> {
         "#})
         .if_condition(after_withdraw())
         .shell("bash")
-        .add_env(("HELD", "${{ steps.withdraw.outputs.held }}"))
-        .add_env(("LIVE", "${{ steps.withdraw.outputs.live }}"))
-        .add_env(("WITHDRAW_OUTCOME", "${{ steps.withdraw.outcome }}"))
+        .add_env(("HELD", WITHDRAW.outputs.held.read()))
+        .add_env(("LIVE", WITHDRAW.outputs.live.read()))
+        .add_env(("WITHDRAW_OUTCOME", WITHDRAW.outcome()))
         .add_env((
             "RUN_URL",
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            format!(
+                "{}/{}/actions/runs/{}",
+                github().server_url(),
+                github().repository(),
+                github().run_id()
+            ),
         ))
 }

@@ -2,13 +2,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
+import { useCalendarFirstSync } from '@queries/calendar/first-sync';
 import {
   getCachedCalendarInvitations,
   useCalendarInvitationsQuery,
   useCopyCalendarInvitationMutation,
 } from '@queries/calendar/invitations';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import { CalendarFirstSyncNotice } from '../calendar/components/CalendarFirstSyncNotice';
 import { EventRsvpScopeDialog } from '../calendar/components/EventRsvpScopeDialog';
 import { createCalendarRsvpController } from '../calendar/hooks/create-calendar-rsvp-controller';
 import { useCalendarAddSharedEventFlag } from '../calendar/hooks/use-calendar-ui-flag';
@@ -118,12 +120,14 @@ function ConnectedInvitation(
     onSuccess: () => toast.success('Added to your calendar'),
     onError: toastAddToCalendarFailure,
   });
-  // Like the response actions, adding waits for a calendar check that worked.
-  const canAdd = () =>
+  const mayAdd = () =>
     addSharedEvent() &&
     !query.isError &&
-    state().kind === 'no_match' &&
     invitationCanBeAdded(props.invitation);
+  const calendarFirstSync = useCalendarFirstSync(() => {
+    const kind = state().kind;
+    return mayAdd() && (kind === 'no_match' || kind === 'still_syncing');
+  });
   return (
     <>
       <CalendarInviteCard
@@ -131,20 +135,25 @@ function ConnectedInvitation(
         hour12={props.hour12}
         inCalendarFile={props.inCalendarFile}
         addToCalendar={
-          <Show when={canAdd()}>
-            <AddToCalendarButton
-              size="md"
-              pending={copy.isPending}
-              onAdd={(calendarId) =>
-                copy.mutate({
-                  threadId: props.threadId,
-                  messageId: props.messageId,
-                  invitationId: props.invitation.id,
-                  calendarId,
-                })
-              }
-            />
-          </Show>
+          <Switch>
+            <Match when={calendarFirstSync()}>
+              <CalendarFirstSyncNotice />
+            </Match>
+            <Match when={mayAdd() && state().kind === 'no_match'}>
+              <AddToCalendarButton
+                size="md"
+                pending={copy.isPending}
+                onAdd={(calendarId) =>
+                  copy.mutate({
+                    threadId: props.threadId,
+                    messageId: props.messageId,
+                    invitationId: props.invitation.id,
+                    calendarId,
+                  })
+                }
+              />
+            </Match>
+          </Switch>
         }
         actions={{
           get resolution() {
