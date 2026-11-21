@@ -83,8 +83,11 @@ tasks itself.
   side effects publish from separate tasks, so a re-add can be published
   before the removal it follows; the removal's roster read still sees the
   rejoin. Every channel settings patch raises `channel.updated`, so conversions and
-  auto-join changes reach members too, and so does every change of the bots in
-  a channel (`crates/bots` raises it with the name unchanged).
+  auto-join changes reach members too, and so does a change of the bots in a
+  channel that `crates/bots` makes (it raises one with the name unchanged).
+  An agent DM's membership repair (`crates/channels` `ensure_agent_dm`)
+  raises nothing: no writer marks a direct agent DM row left except deleting
+  its bot, after which the DM cannot be reopened.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.
