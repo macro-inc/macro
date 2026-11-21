@@ -773,6 +773,41 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ botId: CURSOR_BOT_ID })
     );
   });
+  it('lets a pick made while the roster loads win over an earlier @mention', async () => {
+    const computerAgent: PersistedAgentLike = {
+      bot: { id: 'computer-agent', name: "Maya's Agent", handle: 'maya' },
+      harness: 'macrod',
+      harness_id: 'computer',
+      default_model: 'default',
+    };
+    const [agents, setAgents] = createSignal<PersistedAgentLike[]>([]);
+    const [loading, setLoading] = createSignal(true);
+    const send = vi.fn();
+    render(() => (
+      <NewChatPage
+        mode="code"
+        roster={buildAgentRoster({
+          agents: agents(),
+          runtimes: [{ id: 'computer', name: 'Agent Box', connected: true }],
+          cursorConnected: true,
+          cursorNeedsConnection: false,
+        })}
+        rosterLoading={loading()}
+        onStart={send}
+        onOpenRoster={vi.fn()}
+      />
+    ));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
+      target: { value: 'bot|computer-agent' },
+    });
+    await selectAgent(/Cursor/);
+    setAgents([computerAgent]);
+    setLoading(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID })
+    );
+  });
   it('selects an @mentioned agent from Auto, showing its selector', () => {
     startInChat = false;
     const send = page();

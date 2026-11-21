@@ -16,8 +16,9 @@ import type {
 import { UserContextProvider } from '@core/context/user';
 import { EntityProvider } from '@entity';
 import { botProfileKeys } from '@queries/bots/keys';
+import { queryClient as client } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { buildAgentRoster } from '../core/roster';
@@ -103,9 +104,9 @@ function Fixture() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
-const client = new QueryClient({
-  defaultOptions: { queries: { retry: false } },
-});
+// EntityProvider installs the app's own client, so the profiles are seeded
+// there for the mention chips to read; the outer provider shares it.
+client.setDefaultOptions({ queries: { retry: false } });
 // Mention chips show an agent's current name from its profile.
 for (const person of PEOPLE) {
   if (!person.id.startsWith('bot|')) continue;
