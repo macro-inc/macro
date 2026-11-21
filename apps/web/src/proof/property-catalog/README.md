@@ -219,5 +219,12 @@ The counts measure work attempted, not successes, and are not interchangeable:
   `net`).
   `inflight`, `recent` and `net` are taken when that side's call returns, which
   for a fresh mount is after the mount was torn down.
+- The SQL steps (`sqlRename`, `sqlNullColor`) run `psql` through
+  `docker exec` synchronously (`sql()` in `run.mjs`), which blocks the driver
+  and so every page's API answers until it returns. Under machine load that
+  took up to 3.1 s, and a cold mount then waiting on a retried read (two
+  round trips plus TanStack's 1 s delay; `opts-error.test.tsx` shows it) or a
+  token refresh overran `SETTLE_MS`. Those are the `settle` timeouts of the
+  load runs; `driverWork` names the `psql` beside each one.
 - `out/` can hold Playwright error dumps with the local session cookie; it is
   gitignored, and nothing from it is published unscanned.

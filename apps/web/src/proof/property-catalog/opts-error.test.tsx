@@ -202,3 +202,47 @@ it('retry policy matches src/lib/queries/client.ts', async () => {
     "retry: (failureCount, error) => { if ( thrownResultErrorHasCode(error, 'UNAUTHORIZED') || thrownResultErrorHasCode(error, 'FORBIDDEN') ) { return false; } return failureCount < 1; },"
   );
 });
+
+// The fresh-mount settle timeouts the load runs show. A cold mount of the
+// options query for a hidden definition fails, waits TanStack's first retry
+// delay (1,000 ms, the app sets none of its own), and fails again, so it
+// settles only after two round trips plus 1 s. The harness gives a cold mount
+// 5,000 ms (harness.tsx, `settle`), so round trips of 2 s or more time it
+// out, on either side: this runs both with every request answered after
+// LATENCY_MS.
+const LATENCY_MS = 2100;
+it('needs two round trips plus the 1 s retry delay to settle a hidden definition, on both sides', async () => {
+  appClient = new QueryClient({ defaultOptions: { queries: { retry } } });
+  const late = <T,>(value: T) =>
+    new Promise<T>((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
+  rest.getPropertyOptions.mockImplementation(() =>
+    late(err([{ code: 'NOT_FOUND', message: 'Resource not found' }]))
+  );
+  network.executeQuery.mockImplementation(() => ({
+    toPromise: () =>
+      late({
+        data: undefined,
+        error: new CombinedError({
+          graphQLErrors: [{ message: 'property definition is not visible' }],
+          response: { status: 200 },
+        }),
+      }),
+  }));
+  const time = async (q: OptionsQuery) => {
+    const start = performance.now();
+    await settled(q);
+    return performance.now() - start;
+  };
+  const oldMs = await time(
+    mount(() => useQuery(() => oldPropertyOptionsQueryOptions(HIDDEN)))
+  );
+  dispose?.();
+  appClient.clear();
+  const neuMs = await time(mount(() => usePropertyOptionsQuery(() => HIDDEN)));
+  for (const ms of [oldMs, neuMs]) {
+    expect(ms).toBeGreaterThanOrEqual(2 * LATENCY_MS + 1000 - 20);
+    expect(ms).toBeGreaterThan(5000);
+  }
+  expect(rest.getPropertyOptions).toHaveBeenCalledTimes(2);
+  expect(network.executeQuery).toHaveBeenCalledTimes(2);
+}, 20000);
