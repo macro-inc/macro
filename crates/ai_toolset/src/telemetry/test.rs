@@ -362,47 +362,93 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
     }
 }
 
-/// The warning for arguments that don't fit quotes them, so inside
-/// `withhold_content` it says only what kind of failure it was.
+/// A tool whose input is a count, and whose call fails quoting what it read.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "tally_tool", description = "Fails quoting its input.")]
+struct TallyTool {
+    count: u64,
+}
+
+impl ToolAnnotated for TallyTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Tally");
+}
+
+#[async_trait]
+impl AsyncTool<()> for TallyTool {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        _service_context: ServiceContext<()>,
+        _request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Err(ToolCallError {
+            description: format!("the private supplier list has no row {}", self.count),
+            internal_error: anyhow::anyhow!("the private supplier list is locked"),
+        })
+    }
+}
+
+/// The events of a call whose arguments don't fit and of a call that fails
+/// quote what the call held, so inside `withhold_content` they say only
+/// what kind of failure it was.
 #[tokio::test]
-async fn a_withheld_calls_misfit_arguments_are_not_logged() {
+async fn a_withheld_calls_failures_are_logged_without_their_text() {
     let events = Events::default();
     let _guard =
         tracing::subscriber::set_default(tracing_subscriber::registry().with(events.clone()));
-    let refuse = || {
-        let misfit: Result<ToolResult<serde_json::Value>, ToolSetError> =
-            Err(ToolSetError::Deserialization(
-                serde_json::from_value::<u64>(json!("the private supplier list")).unwrap_err(),
-            ));
-        ToolCallSpan::begin("echo_tool", &json!({})).finish(&misfit);
+    let tools = AsyncToolCollection::<()>::new().add_tool::<TallyTool, ()>();
+    let calls = || async {
+        for arguments in [
+            json!({ "count": "the private supplier list" }),
+            json!({ "count": 1 }),
+        ] {
+            let _ = tools
+                .try_tool_call((), request_context(), "tally_tool", &arguments)
+                .await;
+        }
     };
     // Register the callsites, then recompute their interest on this thread:
     // another test's thread can cache them as never wanted.
-    refuse();
+    calls().await;
+    genai_telemetry::withhold_content(calls()).await;
     tracing::callsite::rebuild_interest_cache();
-    events.0.lock().expect("events lock").clear();
+    let take = || std::mem::take(&mut *events.0.lock().expect("events lock"));
+    take();
 
-    refuse();
-    genai_telemetry::withhold_content(async { refuse() }).await;
-    let logged: Vec<String> = events
-        .0
-        .lock()
-        .expect("events lock")
-        .iter()
-        .filter(|event| event.contains("could not be dispatched"))
-        .cloned()
-        .collect();
-    let [shown, withheld] = logged.as_slice() else {
-        panic!("one warning a call: {logged:?}");
-    };
-    assert!(shown.contains("private supplier"), "{shown}");
-    assert!(!withheld.contains("private"), "{withheld}");
+    calls().await;
+    let shown = take();
+    genai_telemetry::withhold_content(calls()).await;
+    let withheld = take();
+    // Outside the scope each failure is logged with its text, as before:
+    // serde's refusal, the dispatch warning, and the tool's error.
     assert!(
-        withheld.contains("did not match the tool's schema"),
-        "{withheld}"
+        shown
+            .iter()
+            .filter(|event| event.contains("private supplier"))
+            .count()
+            >= 3,
+        "{shown:#?}"
     );
+    assert!(
+        withheld.iter().all(|event| !event.contains("private")),
+        "{withheld:#?}"
+    );
+    assert_eq!(
+        withheld.len(),
+        shown.len(),
+        "the same events: {withheld:#?}"
+    );
+    for kind in [
+        "the arguments did not match the tool's schema",
+        "the tool reported an error",
+    ] {
+        assert!(
+            withheld.iter().any(|event| event.contains(kind)),
+            "{withheld:#?}"
+        );
+    }
 }
-
 #[tokio::test]
 async fn oversized_content_is_bounded_and_flagged() {
     let (exporter, provider, _guard) = otel_test_pipeline();

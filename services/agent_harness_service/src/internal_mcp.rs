@@ -385,8 +385,11 @@ fn invalid_arguments(error: serde_json::Error) -> rmcp::ErrorData {
 /// messages say what came (`string "…"` quotes it), then what the input
 /// wanted, which comes from the tool's input type, as does the name of a
 /// missing or repeated field. Arguments are read from a parsed value, so
-/// there is no line or column to give. A message of any other shape, such as
-/// a custom one, says only its kind.
+/// there is no line or column to give. What was wanted is kept only in
+/// serde's own shapes (`names_list`, `plain_description`); a message of any
+/// other shape, such as a custom one, says only its kind. A custom message
+/// in serde's shape that put the value, unquoted, after "expected" would
+/// pass; the tool inputs here never build one.
 fn misfit_without_value(error: &serde_json::Error) -> String {
     let text = error.to_string();
     let field = |prefix: &str| {
@@ -400,22 +403,52 @@ fn misfit_without_value(error: &serde_json::Error) -> String {
     if let Some(field) = field("missing field `").or_else(|| field("duplicate field `")) {
         return field;
     }
-    for kind in [
-        "invalid type",
-        "invalid value",
-        "invalid length",
-        "unknown variant",
-        "unknown field",
+    for (kind, fits) in [
+        ("invalid type", plain_description as fn(&str) -> bool),
+        ("invalid value", plain_description),
+        ("invalid length", plain_description),
+        ("unknown variant", names_list),
+        ("unknown field", names_list),
     ] {
-        // The last separator: a quoted value can hold the words too.
-        if let Some((_, wanted)) = text
-            .strip_prefix(kind)
-            .and_then(|rest| rest.rsplit_once(", expected "))
-        {
-            return format!("{kind}, expected {wanted}");
-        }
+        let Some(rest) = text.strip_prefix(kind) else {
+            continue;
+        };
+        // The last separator: the value can hold the words too. A name
+        // serde quotes raw can end the message as well, when nothing fits
+        // ("there are no fields"), so what follows must be serde's shape.
+        return match rest.rsplit_once(", expected ") {
+            Some((_, wanted)) if fits(wanted) => format!("{kind}, expected {wanted}"),
+            _ => kind.to_owned(),
+        };
     }
     format!("a {:?} error", error.classify())
+}
+
+/// A type's own description of what it reads (`u64`, `a sequence`,
+/// `struct ExecuteCode`): no quotes, so no quoted value.
+fn plain_description(text: &str) -> bool {
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || " _,.:<>()-".contains(c))
+}
+
+/// serde's list of the names that fit, each from the input type:
+/// `` `a` ``, `` `a` or `b` ``, or `` one of `a`, `b`, `c` ``.
+fn names_list(text: &str) -> bool {
+    let list = text.strip_prefix("one of ").unwrap_or(text);
+    list.split(", ")
+        .flat_map(|part| part.split(" or "))
+        .all(|name| {
+            name.strip_prefix('`')
+                .and_then(|name| name.strip_suffix('`'))
+                .is_some_and(|name| {
+                    !name.is_empty()
+                        && name
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+                })
+        })
 }
 
 /// The receipt as structured content, which Macro's own agent reads with its

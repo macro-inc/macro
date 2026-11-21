@@ -10,7 +10,6 @@ struct MisfitInput {
     cadence: MisfitCadence,
 }
 
-#[expect(dead_code, reason = "Only refused arguments are read")]
 #[derive(Debug, serde::Deserialize)]
 enum MisfitCadence {
     Weekly,
@@ -36,6 +35,11 @@ async fn misfit_arguments_of_a_withheld_call_are_not_quoted() {
             "unknown field, expected `count` or `cadence`",
         ),
         (serde_json::json!({ "count": 1 }), "missing field `cadence`"),
+        // A key that imitates serde's separator still gets serde's list.
+        (
+            serde_json::json!({ "count": 1, "cadence": "Weekly", "x, expected the private supplier list": 1 }),
+            "unknown field, expected `count` or `cadence`",
+        ),
     ];
     for (arguments, wanted) in cases {
         let misfit = || serde_json::from_value::<MisfitInput>(arguments.clone()).unwrap_err();
@@ -57,6 +61,35 @@ async fn misfit_arguments_of_a_withheld_call_are_not_quoted() {
     assert!(!withheld.contains("private"), "{withheld}");
     assert!(withheld.contains("a Data error"), "{withheld}");
     assert!(invalid_arguments(custom()).message.contains(secret));
+    // Messages in serde's shape whose list or description isn't serde's say
+    // only their kind: the value could be in it.
+    for (imitation, kind) in [
+        (
+            <serde_json::Error as serde::de::Error>::custom(
+                "invalid type: string, expected \"the private supplier list\"",
+            ),
+            "invalid type",
+        ),
+        (
+            <serde_json::Error as serde::de::Error>::unknown_field(
+                "note, expected the private supplier list",
+                &[],
+            ),
+            "unknown field",
+        ),
+        (
+            <serde_json::Error as serde::de::Error>::unknown_variant(
+                "note, expected the private supplier list",
+                &[],
+            ),
+            "unknown variant",
+        ),
+    ] {
+        let withheld =
+            genai_telemetry::withhold_content(async { invalid_arguments(imitation).message }).await;
+        assert!(!withheld.contains("private"), "{withheld}");
+        assert!(withheld.contains(kind), "{withheld}");
+    }
 }
 
 #[test]

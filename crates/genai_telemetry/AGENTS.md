@@ -21,6 +21,11 @@ agent loop.
   switch says (a task-local; `ContentPolicy::current` is what every recorder
   reads). A task spawned from withheld work carries it with
   `withhold_content_if(content_withheld(), fut)`.
+  Error events inside the scope say only what kind of failure it was, since
+  a tool's error or serde's refusal can quote the call: `ai_toolset`'s
+  `log_failure`, `agent`'s `log_tool_error`, `mcp_toolset`'s `call_tool`, and
+  the harness's `invalid_arguments` for the refusal rmcp logs, check
+  `content_withheld()` first.
 - `src/span.rs`: `GenAiSpanExt`, the attribute setters that write to an
   already-open span.
 - `src/messages.rs`: builders for the semconv JSON message/tool-definition shapes.
@@ -38,7 +43,7 @@ agent loop.
 ## Boundaries
 
 - Depends on: `strum`, `macro_env_var` (reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`), `tokio` (the task-local behind `withhold_content`).
-- Used by: `agent`, `agent_inmem`, `agent_session`, `ai_toolset`; for
+- Used by: `agent`, `agent_inmem`, `agent_session`, `ai_toolset`, `mcp_toolset`; for
   `provider_account`, also every crate with its own provider client
   (`anthropic`, `dictation`, `embedding`, `image_generation`, `task_dedup`,
   `agent_harness_service`).
