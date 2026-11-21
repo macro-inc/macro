@@ -330,7 +330,9 @@ pub trait ChannelRepo: Send + Sync + 'static {
         creation: super::historical::DmCreation,
     ) -> impl Future<Output = Result<super::historical::EnsuredChannel, Self::Err>> + Send;
 
-    /// Fetch an existing exact two-member DM, deterministically choosing the oldest.
+    /// The exact two-member DM `user_id` is still in that their get-or-create
+    /// would reuse: of several, one both are in, then one only `recipient_id`
+    /// left, then the oldest. `None` when `user_id` is in none.
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -628,8 +630,9 @@ pub trait ChannelService: Send + Sync + 'static {
     }
 
     /// The direct message between `user_id` and `recipient_id` that
-    /// [`Self::get_or_create_dm`] would reuse, without creating one: `None`
-    /// when they have none, or when they are the same person.
+    /// [`Self::get_or_create_dm`] by `user_id` would reuse, while `user_id` is
+    /// still in it, without creating one: `None` when they have none `user_id`
+    /// is in, or when they are the same person.
     fn find_direct_message(
         &self,
         _user_id: MacroUserIdStr<'static>,

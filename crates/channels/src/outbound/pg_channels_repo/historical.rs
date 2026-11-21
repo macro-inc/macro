@@ -202,7 +202,7 @@ pub async fn ensure_dm_in(
     // This must be a separate statement after acquiring the lock: READ COMMITTED
     // then observes a concurrent creator that committed while we were waiting.
     let roster = match &creation {
-        DmCreation::Live(_) => DmRoster::Listed,
+        DmCreation::Live(owner) => DmRoster::Listed(owner),
         DmCreation::Historical { .. } => DmRoster::Stored,
     };
     if let Some(id) = find_dm(tx, &pair, roster).await? {
@@ -232,33 +232,50 @@ pub async fn ensure_dm_in(
     Ok(EnsuredChannel { id, created: true })
 }
 
-/// Which rows make a direct-message channel a pair's DM in [`find_dm`].
+/// Which rows make a direct-message channel a pair's DM in [`find_dm`], and
+/// which of several such DMs it answers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DmRoster {
-    /// Every row counts, a removed bot's too. An import maps a conversation
-    /// onto the channel it reserved for it, so it keeps the rule that channel
-    /// was chosen by.
+pub enum DmRoster<'a> {
+    /// Every row counts, a removed member's too, and the oldest DM wins. An
+    /// import maps a conversation onto the channel it reserved for it, so it
+    /// keeps the rule that channel was chosen by.
     Stored,
-    /// A removed bot's row does not count: the DM is the pair's again, as
-    /// every channel list shows it. Live get-or-create and the read-only
-    /// lookup use this, so messaging the other person reopens that DM instead
-    /// of starting a second one.
-    Listed,
+    /// The row of anyone else who left does not count, a removed bot's or a
+    /// departed third person's in a legacy DM: the DM is the pair's again, as
+    /// every channel list shows it, so messaging the other person reopens
+    /// that DM instead of starting a second one. Of several, one both people
+    /// are still in wins, then one only the other person left, then one this
+    /// member left, then the oldest: a legacy duplicate never takes over the
+    /// DM they use, and this member lands where they can still write if they
+    /// can anywhere. Live get-or-create, by its actor.
+    Listed(&'a MacroUserIdStr<'a>),
+    /// As `Listed`, among the DMs this member is still in, the only ones
+    /// open to them: the read-only lookup answers its viewer the DM their
+    /// first message would reuse whenever they can open it, as the joined
+    /// channel list it replaced did, and nothing otherwise.
+    Joined(&'a MacroUserIdStr<'a>),
 }
 
 /// Discover an exact pair without modifying it.
 ///
 /// A DM is any channel both people have a row in, active or left, with no
-/// third row; `roster` says whether a removed bot's row is one. A bot still in
-/// the channel always is. The two people's rows are intersected first, through
-/// the partial `(user_id, channel_id)` indexes on active and on left rows,
-/// behind an `OFFSET 0` fence; only the channels they share are then checked.
-/// The read is bounded by the two people's memberships, never by the table.
+/// third row; `roster` says whether the row of a third member who left is
+/// one, and which DM wins. A third member still in the channel always is.
+/// The two people's rows are intersected first, through the partial
+/// `(user_id, channel_id)` indexes on active and on left rows, behind an
+/// `OFFSET 0` fence; only the channels they share are then checked, each
+/// through its own rows. The read is bounded by the two people's
+/// memberships, never by the table.
 pub async fn find_dm(
     connection: &mut PgConnection,
     pair: &DmPair,
-    roster: DmRoster,
+    roster: DmRoster<'_>,
 ) -> anyhow::Result<Option<Uuid>> {
+    let (stored, member, joined_only): (bool, &MacroUserIdStr<'_>, bool) = match roster {
+        DmRoster::Stored => (true, pair.lo(), false),
+        DmRoster::Listed(member) => (false, member, false),
+        DmRoster::Joined(member) => (false, member, true),
+    };
     Ok(sqlx::query_scalar!(
         r#"
         SELECT c.id
@@ -280,13 +297,28 @@ pub async fn find_dm(
         WHERE c.channel_type = 'direct_message'
           AND (SELECT COUNT(*) FROM comms_channel_participants p
                WHERE p.channel_id = c.id
-                 AND ($3 OR p.left_at IS NULL OR p.user_id NOT LIKE 'bot|%')) = 2
-        ORDER BY c.created_at, c.id
+                 AND ($3 OR p.left_at IS NULL OR p.user_id IN ($1, $2))) = 2
+          AND (NOT $5 OR EXISTS (
+               SELECT 1 FROM comms_channel_participants p
+               WHERE p.channel_id = c.id AND p.user_id = $4 AND p.left_at IS NULL))
+        ORDER BY
+          -- 0 while both are in, 1 when only the other left, 2 when the
+          -- member left, 3 when both did.
+          CASE WHEN $3 THEN 0 ELSE (
+              SELECT COALESCE(SUM(CASE WHEN p.user_id = $4 THEN 2 ELSE 1 END), 0)
+              FROM comms_channel_participants p
+              WHERE p.channel_id = c.id
+                AND p.user_id IN ($1, $2)
+                AND p.left_at IS NOT NULL)
+          END,
+          c.created_at, c.id
         LIMIT 1
         "#,
         pair.lo().as_ref(),
         pair.hi().as_ref(),
-        roster == DmRoster::Stored,
+        stored,
+        member.as_ref(),
+        joined_only,
     )
     .fetch_optional(connection)
     .await?)

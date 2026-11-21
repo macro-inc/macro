@@ -85,15 +85,22 @@ DMs, and the shared message store other domains discuss things on.
   `(user_id, channel_id)` indexes on active rows and on left rows
   (`idx_comms_cp_left_by_user_channel`), then checks the shared channels. Left
   rows count: an imported DM both people left is still the one to reuse. A
-  bot still in it makes it a group. A bot that was removed counts only for
-  the Slack importer (`DmRoster::Stored`), which maps a conversation onto the
-  channel it reserved by that rule; live get-or-create and the lookup
-  (`DmRoster::Listed`) skip its row, so the DM is the pair's again, as
-  channel lists show it. So when a pair's only DM had a bot removed, a Slack
-  import of that pair creates a DM of its own while live messages keep
-  reusing the first, as they did when the web opener picked the DM from the
-  channel list. Keep that shape; checking every direct-message channel for
-  both people reads the whole table.
+  third member still in it (a bot) makes it a group. A third member who left
+  (a removed bot, or a departed person in a legacy DM) counts only for the
+  Slack importer (`DmRoster::Stored`), which maps a conversation onto the
+  channel it reserved by that rule and takes the oldest; live get-or-create
+  (`DmRoster::Listed`) and the lookup (`DmRoster::Joined`) skip that row, so
+  the DM is the pair's again, as channel lists show it. Of several DMs, live
+  get-or-create takes one both people are still in, then one only the other
+  left, then one its actor left, then the oldest, so a legacy duplicate never
+  takes over the DM in use. The lookup ranks the same among the DMs its viewer
+  is still in: it answers the DM their first message would reuse whenever
+  they can open it, and nothing otherwise, as the joined list it replaced.
+  So when a pair's only DM had a bot removed, a Slack import of that pair
+  creates a DM of its own while live messages keep reusing the first, as they
+  did when the web opener picked the DM from the channel list. Keep that
+  shape; checking every direct-message channel for both people reads the
+  whole table.
 
 - The channel list picks its candidates from the filter
   (`ChannelCandidates::for_filter`): joined channels by default, plus the
