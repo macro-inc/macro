@@ -1347,6 +1347,27 @@ async fn code_context_can_be_imported_from_the_sdk() {
         matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Compile && error.message.contains("TS2322")),
         "{outcome:?}"
     );
+    // In a session's run the import carries the session handles too.
+    let source = "import type { CodeContext } from '@macro-inc/sdk';\nexport async function main({ sessionId, session }: CodeContext) {\n  return { data: sessionId === session.id };\n}\n";
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                RunEnvironment {
+                    session_id: Some(uuid::Uuid::from_u128(1)),
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(&outcome, Outcome::Succeeded { value } if value["data"] == true),
+        "{outcome:?}"
+    );
     service.shutdown().await;
 }
 
