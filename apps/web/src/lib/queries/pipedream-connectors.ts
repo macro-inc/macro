@@ -497,7 +497,9 @@ export async function connectMcpServer(server: {
  * Authorize the MCP server at `server.url` in `popup` (or the system
  * browser), then wait for the server list to show it authorized. The
  * callback page cannot message this tab, so the list is re-read until the
- * grant lands, the tab is closed, or the pending authorization expires.
+ * grant lands, the tab is closed, or the pending authorization expires. A
+ * read that fails is retried at the next poll: the sign-in has started by
+ * then, so only a failure to start it rejects.
  */
 async function authorizeMcpServer(
   server: { url: string; name: string },
@@ -523,15 +525,22 @@ async function authorizeMcpServer(
   const consent = span.span('mcp.consent');
   try {
     const deadline = Date.now() + MCP_AUTH_TIMEOUT_MS;
+    let failedReads = 0;
     while (Date.now() < deadline && currentUserId() === userId) {
       const closed = popup?.closed ?? false;
-      const servers = await consent.run(() =>
-        queryClient.fetchQuery({
-          ...mcpServersQueryOptions(),
-          staleTime: 0,
-        })
+      const servers = await ResultAsync.fromPromise(
+        consent.run(() =>
+          queryClient.fetchQuery({
+            ...mcpServersQueryOptions(),
+            staleTime: 0,
+          })
+        ),
+        () => 'unread' as const
       );
-      if (mcpServerConnected(servers, server.url)) {
+      if (servers.isErr()) {
+        failedReads += 1;
+        consent.setAttr('mcp.failed_reads', failedReads);
+      } else if (mcpServerConnected(servers.value, server.url)) {
         return 'connected';
       }
       if (closed) return 'closed';

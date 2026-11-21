@@ -259,6 +259,26 @@ describe('overlaid apps connect through their own MCP server', () => {
     expect(await connectPipedreamApp({ appSlug: 'sentry' })).toBe('closed');
   });
 
+  it('keeps waiting for the grant when one read of the server list fails', async () => {
+    vi.useFakeTimers();
+    try {
+      const popup = { closed: false, close: vi.fn() };
+      mocks.reservePopup.mockReturnValue(popup);
+      mocks.fetchServers
+        .mockRejectedValueOnce(new Error('503'))
+        .mockResolvedValue([authorized]);
+
+      const pending = connectPipedreamApp({ appSlug: 'sentry' });
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(await pending).toBe('connected');
+      expect(mocks.fetchServers).toHaveBeenCalledTimes(2);
+      expect(popup.close).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('looks the overlay up when it is not cached yet', async () => {
     mocks.cachedOverlays = undefined;
     mocks.overlays = [sentry];

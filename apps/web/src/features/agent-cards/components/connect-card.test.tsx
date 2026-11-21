@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   connectedSlugs: new Set<string>(),
   connectedServers: new Set<string>(),
   listedServers: new Set<string>(),
+  serversReady: true,
   connectPipedreamApp: vi.fn(),
   connectMcpServer: vi.fn(),
   toastSuccess: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock('@queries/pipedream-connectors', () => ({
     slugs: () => mocks.connectedSlugs,
   }),
   useMcpServerConnected: (url: () => string) => ({
-    ready: () => true,
+    ready: () => mocks.serversReady,
     connected: () => mocks.connectedServers.has(url()),
     listed: () => mocks.listedServers.has(url()),
   }),
@@ -52,6 +53,7 @@ beforeEach(() => {
   mocks.connectedSlugs.clear();
   mocks.connectedServers.clear();
   mocks.listedServers.clear();
+  mocks.serversReady = true;
 });
 
 describe('connect card', () => {
@@ -171,7 +173,27 @@ describe('connect card', () => {
 
     await waitFor(() =>
       expect(mocks.toastAlert).toHaveBeenCalledWith(
-        'Could not start the sign-in for Acme.'
+        'Could not start a sign-in for Acme. If it needs none, reply to continue.'
+      )
+    );
+    expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');
+  });
+
+  it('asks to try again, without the add-server dialog, before the server list has loaded', async () => {
+    mocks.serversReady = false;
+    mocks.connectMcpServer.mockRejectedValue(new Error('network'));
+    render(() => (
+      <ConnectCard
+        name="Acme"
+        target={{ kind: 'server', url: 'https://mcp.acme.example/mcp' }}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Acme' }));
+
+    await waitFor(() =>
+      expect(mocks.toastAlert).toHaveBeenCalledWith(
+        'Could not start a sign-in for Acme. If it needs none, reply to continue.'
       )
     );
     expect(screen.getByTestId('add-mcp-dialog').dataset.open).toBe('false');

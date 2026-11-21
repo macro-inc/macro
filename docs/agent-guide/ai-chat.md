@@ -2045,8 +2045,9 @@ the session that presented it, connecting an app continues the session through
 `app.connected`, as the `Connect <app>` chip does. Elsewhere (a DM reply, a
 custom MCP server) a toast asks the reader to reply when ready. A server whose
 sign-in cannot start opens the Add MCP Server dialog filled in with its name
-and URL, unless the user already added it; then a toast says the sign-in
-could not start. While the session cannot connect (a viewer, an archived session, a
+and URL, unless the user already added it; then a toast says a sign-in
+could not start and, if the server needs none (no OAuth), to reply to
+continue: such a server works without one and never reads **Connected**. While the session cannot connect (a viewer, an archived session, a
 running turn) the button is disabled. A code-mode agent is told to present
 connect cards by its session prompt and the `macro.connectedApps` docs, and
 by the not-connected answers of connected-app tool calls; the `m-connect-app`
