@@ -16,7 +16,9 @@ import {
 } from '@urql/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapChannelMessage } from '../map';
+import { readDeviceChannelPage } from '../pages';
 import { unplacedSortKey } from '../sort-key';
+import { resetUnsettledReplies } from '../unsettled-replies';
 import {
   type ChannelWriteHost,
   deleteChannelMessage,
@@ -25,7 +27,13 @@ import {
   sendChannelMessage,
   WAITING_ANNOUNCE_MS,
 } from '../writes';
-import { CHANNEL_ID, fakeHost, graphqlMessage } from './fixtures';
+import {
+  CHANNEL_ID,
+  devicePage,
+  fakeHost,
+  graphqlMessage,
+  keyOf,
+} from './fixtures';
 
 const { pageIsLeaving } = vi.hoisted(() => ({
   pageIsLeaving: vi.fn(() => false),
@@ -525,5 +533,55 @@ describe('queued channel writes', () => {
       nonce: 'e',
     });
     expect(new Set(calls.map((call) => call.context.uuid)).size).toBe(3);
+  });
+});
+
+describe('a reply and the page of its root', () => {
+  const replyOn = async (answer: Answer) => {
+    resetUnsettledReplies();
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(8, { threadId: root.id });
+    const { client } = fakeClient(() => answer);
+    const outcome = await sendChannelMessage(
+      writeHost().host,
+      {
+        channelId: CHANNEL_ID,
+        id: reply.id,
+        senderId: SENDER,
+        message: { content: 'reply', thread_id: root.id },
+      },
+      { client, now: () => NOW }
+    ).catch((error: unknown) => error);
+    // The device holds the delivered reply; its root is as it was before.
+    const read = await readDeviceChannelPage(
+      fakeHost([devicePage([keyOf(root)])], {
+        records: outcome instanceof Error ? [root] : [root, reply],
+      }),
+      { channelId: CHANNEL_ID, limit: 50 }
+    );
+    if (read.kind !== 'page') throw new Error(`device answered ${read.kind}`);
+    const entry = read.page.entries[0];
+    if (entry?.type !== 'message') throw new Error('no root on the page');
+    return { reply, thread: entry.message.thread };
+  };
+
+  it('keeps a sent reply under a root the device has not brought up to date', async () => {
+    const reply = graphqlMessage(8, { threadId: graphqlMessage(1).id });
+    const { thread } = await replyOn({
+      data: { sendChannelMessage: reply },
+      disposition: { kind: 'committed' },
+    });
+
+    expect(thread.reply_count).toBe(1);
+    expect(thread.preview.map((shown) => shown.id)).toEqual([reply.id]);
+  });
+
+  it('takes a refused reply off its root', async () => {
+    const { thread } = await replyOn({
+      error: refused('FORBIDDEN'),
+      disposition: { kind: 'permanently-failed' },
+    });
+
+    expect(thread.reply_count).toBe(0);
   });
 });
