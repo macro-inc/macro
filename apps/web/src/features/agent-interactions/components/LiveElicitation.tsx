@@ -26,7 +26,7 @@ import type {
   CreateCalendarEvent,
   SendEmail,
 } from '@service-cognition/generated/tools/types';
-import { Button, Card } from '@ui';
+import { Button, Card, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -185,8 +185,12 @@ export function QuestionFields(props: {
 }
 
 /**
- * The decisions, as buttons: the question's own (Submit, Open) then Decline
- * and, unless the row is short of room, Cancel. On a card they follow the
+ * The decisions, as buttons: the question's own (Submit, Open) then Skip.
+ * Skip declines, the one refusal whose effect is the same for every agent:
+ * the agent goes on without an answer. Cancel is not offered beside it,
+ * because no agent stops for it (Claude aborts the tool call and goes on,
+ * Codex can't tell it from a decline), and the session's own Stop is already
+ * on screen wherever a question is. On a card they follow the
  * session's other cards (`ToolApprovalCard`): the refusals quiet on the left,
  * the question's own action on the right, and nothing primary.
  *
@@ -199,8 +203,6 @@ export function QuestionActions(props: {
   question: LiveQuestion;
   locked: boolean;
   onRespond: RespondToElicitation;
-  /** Whether Cancel joins Decline; default yes. */
-  cancel?: boolean;
   /** Lay the buttons out for a card's footer rather than a plain row. */
   card?: boolean;
 }) {
@@ -251,26 +253,16 @@ export function QuestionActions(props: {
     </Switch>
   );
   const refusals = (
-    <>
+    <Tooltip label="The agent continues without your answer">
       <Button
         variant={props.card ? 'ghost' : 'secondary'}
         size={size()}
         disabled={props.locked}
         onClick={() => respond({ action: 'decline' })}
       >
-        Decline
+        Skip
       </Button>
-      <Show when={props.cancel ?? true}>
-        <Button
-          variant="ghost"
-          size={size()}
-          disabled={props.locked}
-          onClick={() => respond({ action: 'cancel' })}
-        >
-          Cancel
-        </Button>
-      </Show>
-    </>
+    </Tooltip>
   );
 
   return (

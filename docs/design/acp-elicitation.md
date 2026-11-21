@@ -496,7 +496,7 @@ would leave the agent blocked on a request nothing could answer.
    `session/cancel`. Disconnect / `acp_ready` drops it — the JSON-RPC id
    is dead across connections and cannot be answered.
 9. **Form answers are conversation content.** Logged as ACP frames, folded
-   into the transcript. No password widget; the user's tool is Decline.
+   into the transcript. No password widget; the user's tool is Skip (a decline).
 10. **URL opens in a new tab** after consent. No iframe, no prefetch.
 11. **No new table, no new gateway message type.** The log is the record;
     the fold derives the pending slot into `SessionMetadata`; the existing
@@ -818,7 +818,7 @@ pub enum ElicitationPropertySchema {
         options: Vec<ElicitationOption>, default: Vec<String>,
     },
     /// A property type this fold does not know. The browser renders a
-    /// "cannot display" row; Decline / Cancel still work.
+    /// "cannot display" row; Skip still works.
     Unrecognized { #[serde(rename = "type")] type_name: String, #[specta(type = Unknown)] raw: serde_json::Value },
 }
 
@@ -1034,7 +1034,8 @@ count, `format` for email/uri/date/date-time, `pattern` via `new RegExp`
 wrapped in a try and a 50 ms budget check (fail closed to "invalid").
 
 URL card: `message`, full URL monospace, host highlighted, warning when
-host starts with `xn--`, buttons Open / Decline / Cancel. Open →
+host starts with `xn--`, buttons Open / Skip (Skip declines; the web offers no
+Cancel, which no agent stops for). Open →
 `respondElicitation({ action: 'accept' })` **then**
 `window.open(url, '_blank', 'noopener,noreferrer')`. Never fetch the URL.
 

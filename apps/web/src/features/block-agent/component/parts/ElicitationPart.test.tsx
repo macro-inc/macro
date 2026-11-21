@@ -236,9 +236,12 @@ describe('ElicitationPart', () => {
     inCard.getByText('Waiting for you');
     inCard.getByText('What is the best colour?');
     inCard.getByTestId('form');
-    for (const name of ['Submit', 'Decline', 'Cancel']) {
+    for (const name of ['Submit', 'Skip']) {
       inCard.getByRole('button', { name });
     }
+    // Skip is the one refusal: no agent stops for Cancel, so it is not offered.
+    expect(inCard.queryByRole('button', { name: 'Decline' })).toBeNull();
+    expect(inCard.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
   it('a viewer without edit access sees the question locked', () => {
@@ -249,7 +252,7 @@ describe('ElicitationPart', () => {
     ));
     getByText('Waiting for an editor');
     getByText('Only people who can edit this session can answer.');
-    for (const label of ['Submit', 'Decline', 'Cancel']) {
+    for (const label of ['Submit', 'Skip']) {
       const button = getByText(label).closest('button');
       expect(button?.disabled).toBe(true);
       fireEvent.click(getByText(label));
@@ -318,15 +321,13 @@ describe('ElicitationPart', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('decline and cancel send their actions', () => {
+  it('skip declines the question', () => {
     pending = live();
     const { getByText } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
-    fireEvent.click(getByText('Decline'));
+    fireEvent.click(getByText('Skip'));
     expect(respond).toHaveBeenCalledWith({ action: 'decline' });
-    fireEvent.click(getByText('Cancel'));
-    expect(respond).toHaveBeenCalledWith({ action: 'cancel' });
   });
 
   it('shows the harness-reported answer over what was sent', () => {

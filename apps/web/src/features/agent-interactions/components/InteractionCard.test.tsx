@@ -112,7 +112,7 @@ describe('InteractionCard', () => {
       'This agent is no longer available. You can still read the conversation.'
     );
     expect(card.queryByText('Waiting for you')).toBeNull();
-    for (const name of ['Submit', 'Decline', 'Cancel']) {
+    for (const name of ['Submit', 'Skip']) {
       const button = card.getByRole('button', { name });
       expect((button as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(button);
@@ -137,9 +137,10 @@ describe('InteractionCard', () => {
     const region = view.getByRole('region', { name: 'Agent question' });
     const card = within(region);
     card.getByRole('radio', { name: /Blue/ });
-    for (const name of ['Submit', 'Decline', 'Cancel']) {
+    for (const name of ['Submit', 'Skip']) {
       expect(card.getAllByRole('button', { name })).toHaveLength(1);
     }
+    expect(card.queryByRole('button', { name: 'Cancel' })).toBeNull();
     // A card carries no primary button (design-system rule).
     expect(region.querySelector('[data-variant="primary"]')).toBeNull();
   });
