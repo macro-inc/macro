@@ -56,9 +56,13 @@ pub(crate) enum HerdrError {
     /// The agent's terminal is still there, but the agent is not.
     #[error("the agent's herdr terminal no longer runs it")]
     Ended,
-    /// The agent started but never reported that it is ready for input.
+    /// The agent started but never reported any status, as one stopped on
+    /// a dialog (folder trust, sign-in) before it can.
     #[error("the agent did not become ready; finish any dialog in its Herdr tab")]
     NotReady,
+    /// The agent reported it was still working when the wait for it ended.
+    #[error("the agent is busy: it was still working after 60 s; send again once it finishes")]
+    Busy,
 }
 
 impl HerdrError {

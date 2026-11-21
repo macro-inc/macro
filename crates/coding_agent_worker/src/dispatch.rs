@@ -8,7 +8,22 @@ use macro_user_id::user_id::MacroUserIdStr;
 use crate::config::Workspace;
 use crate::outbound::agent_session::{ApiError, HarnessApi};
 use crate::runtime::Runtime;
-use crate::trigger::{TriggerWork, WorkExecutor};
+use crate::trigger::{TriggerWork, WorkExecutor, millis};
+use tracing::Instrument as _;
+
+/// Run one phase of an event's work in `span`, and record its milliseconds
+/// on the event's span as `field`, so the event's closing log line has them.
+async fn phase<Output>(
+    field: &'static str,
+    span: tracing::Span,
+    work: impl Future<Output = Output>,
+) -> Output {
+    let event = tracing::Span::current();
+    let started = std::time::Instant::now();
+    let output = work.instrument(span).await;
+    event.record(field, millis(started.elapsed()));
+    output
+}
 
 /// A failure doing an event's work.
 #[derive(Debug, thiserror::Error)]
@@ -114,6 +129,35 @@ impl Dispatcher {
         let _ = (session, sender);
     }
 
+    async fn ensure_connected(&self) -> Result<(), DispatchError> {
+        phase(
+            "ensure_connected_ms",
+            tracing::info_span!("macrod.trigger.ensure_connected"),
+            self.runtime.ensure_connected(),
+        )
+        .await
+        .map_err(DispatchError::Dial)
+    }
+
+    /// Be dialed in, then deliver the prompt.
+    async fn connect_and_prompt(
+        &self,
+        session: AgentSessionId,
+        sender: &MacroUserIdStr<'static>,
+        content: &str,
+        message_id: macro_uuid::Uuid,
+        context: Option<trigger_context::TriggerContext>,
+    ) -> Result<(), DispatchError> {
+        self.ensure_connected().await?;
+        phase(
+            "prompt_ms",
+            tracing::info_span!("macrod.trigger.prompt"),
+            self.api.prompt(session, sender, content, message_id, context),
+        )
+        .await?;
+        Ok(())
+    }
+
     fn prompted(&self, session: AgentSessionId, sender: &MacroUserIdStr<'static>) {
         #[cfg(unix)]
         if let Some(hub) = &self.herdr {
@@ -142,7 +186,13 @@ impl WorkExecutor for Dispatcher {
                     &bot.as_uuid(),
                     thread_id.as_bytes(),
                 ));
-                let workspace = self.workspace_for(session, None).await?;
+                tracing::Span::current().record("session_id", tracing::field::display(session));
+                let workspace = phase(
+                    "workspace_prepare_ms",
+                    tracing::info_span!("macrod.trigger.workspace_prepare"),
+                    self.workspace_for(session, None),
+                )
+                .await?;
                 let request = CreateAgentSessionRequest {
                     // The service mints the id: nothing here opens a surface
                     // on it before the create answers.
@@ -192,8 +242,17 @@ impl WorkExecutor for Dispatcher {
                     model: None,
                     origin: *origin,
                 };
-                let created = match self.api.create_session(&request, &sender).await {
-                    Ok(created) => created,
+                let created = match phase(
+                    "create_ms",
+                    tracing::info_span!("macrod.trigger.create"),
+                    self.api.create_session(&request, &sender),
+                )
+                .await
+                {
+                    Ok(created) => {
+                        tracing::Span::current().record("resumed", false);
+                        created
+                    }
                     // A redelivered mention: the thread's session exists.
                     // Resume serving it - the first attempt may have died
                     // between create and prompt, and re-prompting a session
@@ -201,14 +260,10 @@ impl WorkExecutor for Dispatcher {
                     Err(ApiError::ThreadSessionExists {
                         session: Some(session),
                     }) => {
+                        tracing::Span::current().record("resumed", true);
                         tracing::info!(%thread_id, %session, "thread already has a session; resuming it");
                         self.prompted(session, &sender);
-                        self.runtime
-                            .ensure_connected()
-                            .await
-                            .map_err(DispatchError::Dial)?;
-                        self.api
-                            .prompt(session, &sender, &content, message_id, context)
+                        self.connect_and_prompt(session, &sender, &content, message_id, context)
                             .await?;
                         return Ok(());
                     }
@@ -220,10 +275,6 @@ impl WorkExecutor for Dispatcher {
                 };
                 let session = AgentSessionId::new_from_uuid(created.session.id);
                 self.created(session, &sender);
-                self.runtime
-                    .ensure_connected()
-                    .await
-                    .map_err(DispatchError::Dial)?;
                 // No retry around the prompt: the session actor buffers
                 // actions from the moment the runtime attaches, so the only
                 // uncovered window is the sub-millisecond gap between the
@@ -233,10 +284,8 @@ impl WorkExecutor for Dispatcher {
                 // so this one is not redelivered; a later
                 // `agent_trigger.existing` or a 409 on a repeat create (session
                 // already exists) is how a follow-up lands on the same session.
-                self.api
-                    .prompt(session, &sender, &content, message_id, context)
-                    .await?;
-                Ok(())
+                self.connect_and_prompt(session, &sender, &content, message_id, context)
+                    .await
             }
             TriggerWork::OpenRequested {
                 repo_url,
@@ -245,7 +294,13 @@ impl WorkExecutor for Dispatcher {
                 sender,
                 origin,
             } => {
-                let workspace = self.workspace_for(session, repo_url.as_deref()).await?;
+                tracing::Span::current().record("session_id", tracing::field::display(session));
+                let workspace = phase(
+                    "workspace_prepare_ms",
+                    tracing::info_span!("macrod.trigger.workspace_prepare"),
+                    self.workspace_for(session, repo_url.as_deref()),
+                )
+                .await?;
                 // Same create as a mention, minus the thread: the requester is
                 // waiting on this id, so the session is created under it. No
                 // prompt here - whoever asked sends their own through the
@@ -266,15 +321,16 @@ impl WorkExecutor for Dispatcher {
                     model: None,
                     origin,
                 };
-                self.api.create_session(&request, &sender).await?;
+                phase(
+                    "create_ms",
+                    tracing::info_span!("macrod.trigger.create"),
+                    self.api.create_session(&request, &sender),
+                )
+                .await?;
                 self.created(session, &sender);
                 // Be dialed in before the prompt the requester is about to
                 // send arrives, so it lands on a runtime that is serving.
-                self.runtime
-                    .ensure_connected()
-                    .await
-                    .map_err(DispatchError::Dial)?;
-                Ok(())
+                self.ensure_connected().await
             }
             TriggerWork::PromptExisting {
                 message_id,
@@ -283,15 +339,10 @@ impl WorkExecutor for Dispatcher {
                 content,
                 context,
             } => {
+                tracing::Span::current().record("session_id", tracing::field::display(session));
                 self.prompted(session, &sender);
-                self.runtime
-                    .ensure_connected()
+                self.connect_and_prompt(session, &sender, &content, message_id, context)
                     .await
-                    .map_err(DispatchError::Dial)?;
-                self.api
-                    .prompt(session, &sender, &content, message_id, context)
-                    .await?;
-                Ok(())
             }
         }
     }

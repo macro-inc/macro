@@ -257,6 +257,7 @@ impl Core {
         let deadline = tokio::time::Instant::now() + AGENT_READY_TIMEOUT;
         let mut screen = String::new();
         let mut settled = 0u32;
+        let mut working = false;
         while tokio::time::Instant::now() < deadline {
             tokio::time::sleep(AGENT_READY_POLL).await;
             let terminal = self.get(launch.name).await?;
@@ -267,6 +268,7 @@ impl Core {
                 if status.state != "working" {
                     return Ok(());
                 }
+                working = true;
                 continue;
             }
             if launch.reports_status
@@ -285,7 +287,7 @@ impl Core {
             }
         }
         if launch.reports_status {
-            return Err(HerdrError::NotReady);
+            return Err(not_ready(working));
         }
         Ok(())
     }
@@ -352,4 +354,14 @@ pub(super) fn parse_terminal(command: &str, output: &str) -> Result<Terminal, He
         command: command.to_owned(),
         source,
     })
+}
+
+/// Why an agent that reports status was not ready in time: still `working`
+/// is a busy agent, never reporting at all is one stopped on a dialog.
+pub(super) fn not_ready(working: bool) -> HerdrError {
+    if working {
+        HerdrError::Busy
+    } else {
+        HerdrError::NotReady
+    }
 }

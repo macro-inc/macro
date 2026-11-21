@@ -4,28 +4,45 @@
 //! in its own workspace instead.
 
 use crate::outbound::git::{GitRepositories, git};
-use crate::repository::{Repository, prepare};
+use crate::repository::{Repository, RepositoryStore, prepare};
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
+mod test;
+
 /// Serializes repository preparation within one macrod instance.
-pub(crate) struct Workspaces {
-    git: GitRepositories,
+pub(crate) struct Workspaces<Store = GitRepositories> {
+    store: Store,
     root: PathBuf,
     preparing: tokio::sync::Mutex<()>,
 }
 
 impl Workspaces {
     pub(crate) fn new(search: PathBuf, root: PathBuf) -> Self {
-        Self {
-            git: GitRepositories {
+        Self::with_store(
+            GitRepositories {
                 search,
                 cache: root.join("repos"),
             },
+            root,
+        )
+    }
+}
+
+impl<Store: RepositoryStore> Workspaces<Store> {
+    fn with_store(store: Store, root: PathBuf) -> Self {
+        Self {
+            store,
             root,
             preparing: tokio::sync::Mutex::new(()),
         }
     }
 
+    /// The session's worktree under `root/worktrees/<session>`. One that
+    /// exists is returned as it is, on whatever branch its agent left it,
+    /// without a fetch: only a new worktree fetches `origin/main` and starts
+    /// from it.
+    #[tracing::instrument(name = "macrod.workspace.worktree", skip_all, fields(session_id = session, fetched = tracing::field::Empty), err)]
     pub(crate) async fn prepare(&self, session: &str, url: &str) -> rootcause::Result<PathBuf> {
         let repository = Repository::parse(url)?;
         let _guard = self.preparing.lock().await;
@@ -36,9 +53,11 @@ impl Workspaces {
                 rootcause::bail!("the existing session worktree belongs to another repository");
             }
             // Redelivery and reconnect preserve the session's edits and base.
+            tracing::Span::current().record("fetched", false);
             return Ok(path);
         }
-        let clone = prepare(&self.git, &repository).await?;
+        tracing::Span::current().record("fetched", true);
+        let clone = prepare(&self.store, &repository).await?;
         std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?;
         git(
             &clone,
