@@ -83,15 +83,36 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
   const [writes, setWrites] = createSignal<
     Readonly<Record<string, OwnChannelWrite>>
   >({});
-  // One hold per read that took writes, however many channels it named.
-  const holds = new Set<ReturnType<typeof setTimeout>>();
-  // The latest read taken for each channel, kept after its write goes, so a
-  // read sent before it can never land later. A clear forgets it: every
-  // read sent before the clear is dropped anyway (`clearedAt`).
+  // One hold per read that took writes, however many channels it named,
+  // with the writes it holds. A hold ends early once none of them is held.
+  const holds = new Map<
+    ReturnType<typeof setTimeout>,
+    readonly (readonly [string, OwnChannelWrite])[]
+  >();
+  // The latest read taken for each channel, kept after its write goes while
+  // a read sent before it is still in flight, so that read can never land
+  // later. A clear forgets it: every read sent before the clear is dropped
+  // anyway (`clearedAt`).
   const latest = new Map<string, number>();
   const inFlight = new Map<number, OwnWriteRead>();
   let sequence = 0;
   let clearedAt = 0;
+  // Ends the holds whose writes all went or were replaced, and forgets the
+  // order of channels no read in flight was sent before.
+  const sweep = () => {
+    const held = untrack(writes);
+    for (const [hold, taken] of holds) {
+      if (taken.some(([channelId, write]) => held[channelId] === write))
+        continue;
+      clearTimeout(hold);
+      holds.delete(hold);
+    }
+    let oldest = Number.POSITIVE_INFINITY;
+    for (const read of inFlight.values())
+      oldest = Math.min(oldest, read.sequence);
+    for (const [channelId, taken] of latest)
+      if (taken < oldest) latest.delete(channelId);
+  };
   const release = (
     released: readonly (readonly [string, OwnChannelWrite])[]
   ) => {
@@ -105,6 +126,7 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
       for (const [channelId] of gone) delete rest[channelId];
       return rest;
     });
+    sweep();
   };
   const record = (read: OwnWriteRead, found: SettledChannels) => {
     if (read.sequence <= clearedAt) return;
@@ -124,7 +146,7 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
       holds.delete(hold);
       release(taken);
     }, OWN_WRITE_HOLD_MS);
-    holds.add(hold);
+    holds.set(hold, taken);
     setWrites((previous) => {
       const next = { ...previous };
       for (const [channelId, write] of taken) next[channelId] = write;
@@ -143,6 +165,7 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
         settle(found) {
           if (!inFlight.delete(read.sequence)) return;
           record(read, found);
+          sweep();
         },
       };
     },
@@ -150,7 +173,7 @@ export function ownChannelWrites(client: QueryClient): OwnChannelWrites {
     clear() {
       clearedAt = sequence;
       inFlight.clear();
-      for (const hold of holds) clearTimeout(hold);
+      for (const hold of holds.keys()) clearTimeout(hold);
       holds.clear();
       latest.clear();
       if (Object.keys(untrack(writes)).length > 0) setWrites({});

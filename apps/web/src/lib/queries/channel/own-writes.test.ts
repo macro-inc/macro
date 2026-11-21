@@ -351,6 +351,36 @@ describe('ownChannelWrites', () => {
     expect(own.writes()).toEqual({});
   });
 
+  it('ends a hold early once every write it held went or was replaced', () => {
+    vi.useFakeTimers();
+    const own = ownChannelWrites(new QueryClient());
+    settle(own, { [A]: written, [B]: null });
+    settle(own, { [A]: { ...written, name: 'again' } });
+    expect(vi.getTimerCount()).toBe(2);
+    const b = own.writes()[B];
+    if (b) own.release([[B, b]]);
+    // The first hold's A was replaced and its B went: nothing keeps it.
+    expect(vi.getTimerCount()).toBe(1);
+    const a = own.writes()[A];
+    if (a) own.release([[A, a]]);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(own.writes()).toEqual({});
+  });
+
+  it('keeps the order of reads sent earlier than one still in flight, and forgets it once none is', () => {
+    const own = ownChannelWrites(new QueryClient());
+    const first = own.send(ACCOUNT, [A]);
+    const second = own.send(ACCOUNT, [A]);
+    second.settle({ [A]: written });
+    const held = own.writes()[A];
+    if (held) own.release([[A, held]]);
+    first.settle({ [A]: { ...written, name: 'older' } });
+    expect(own.writes()).toEqual({});
+    // No read of A is in flight now: a new one is taken as sent.
+    settle(own, { [A]: null });
+    expect(own.writes()[A]?.channel).toBeNull();
+  });
+
   it('never lets a read sent earlier replace one sent later, even after it went', () => {
     const own = ownChannelWrites(new QueryClient());
     const first = own.send(ACCOUNT, [A]);
