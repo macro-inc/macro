@@ -26,6 +26,8 @@ const dockPrefsSchema = z.object({
   size: z.enum(DOCK_SIZES),
   // Added after position and size; earlier saves have none.
   align: z.enum(DOCK_ALIGNMENTS).default('start'),
+  // Whether the Create button shows the team's logo, when it has one, or +.
+  showTeamLogo: z.boolean().default(true),
 });
 
 type DockPrefs = z.infer<typeof dockPrefsSchema>;
@@ -34,6 +36,7 @@ const DEFAULT_DOCK_PREFS: DockPrefs = {
   position: 'left',
   size: 'large',
   align: 'start',
+  showTeamLogo: true,
 };
 
 // makePersistedState absorbs storage failures: an unreadable save keeps the
@@ -59,6 +62,7 @@ const [dockPrefs, setDockPrefs] = makePersistedState(
 export const dockPosition = () => dockPrefs().position;
 export const dockSize = () => dockPrefs().size;
 export const dockAlignment = () => dockPrefs().align;
+export const dockShowsTeamLogo = () => dockPrefs().showTeamLogo;
 
 export const setDockPosition = (position: DockPosition) =>
   setDockPrefs((current) => ({ ...current, position }));
@@ -68,6 +72,9 @@ export const setDockSize = (size: DockSize) =>
 
 export const setDockAlignment = (align: DockAlignment) =>
   setDockPrefs((current) => ({ ...current, align }));
+
+export const setDockShowsTeamLogo = (showTeamLogo: boolean) =>
+  setDockPrefs((current) => ({ ...current, showTeamLogo }));
 
 /** Whether the dock runs along the top or bottom edge. */
 export const isDockHorizontal = () =>

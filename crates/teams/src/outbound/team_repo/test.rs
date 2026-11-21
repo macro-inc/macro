@@ -1512,6 +1512,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        logo_file_id: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1543,6 +1544,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        logo_file_id: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1573,6 +1575,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        logo_file_id: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1602,6 +1605,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
         language: None,
+        logo_file_id: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1615,6 +1619,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        logo_file_id: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1628,10 +1633,69 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         user_role_updates: None,
         default_link_share: Some(None),
         language: None,
+        logo_file_id: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
     assert_eq!(team.team.default_link_share(), None);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_logo_round_trip(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let logo = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
+    let logo_request = |logo_file_id, name| PatchTeamRequest {
+        member_crm_access: None,
+        name,
+        slug: None,
+        user_role_updates: None,
+        default_link_share: None,
+        language: None,
+        logo_file_id,
+    };
+
+    // Teams start without a logo.
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.logo_file_id(), None);
+
+    // Setting it shows it to every member.
+    team_repo
+        .patch_team(&team_id, &logo_request(Some(Some(logo)), None))
+        .await?;
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.logo_file_id(), Some(logo));
+    let member = team
+        .members
+        .iter()
+        .find(|member| member.role == TeamRole::Member)
+        .expect("the fixture team should have a plain member");
+    let member_teams = team_repo.get_user_teams(&member.user_id).await?;
+    let member_team = member_teams
+        .iter()
+        .find(|team| team.id() == &team_id)
+        .expect("the member's team should be returned");
+    assert_eq!(member_team.logo_file_id(), Some(logo));
+
+    // Omitting the field leaves it unchanged.
+    team_repo
+        .patch_team(&team_id, &logo_request(None, Some("Renamed".to_string())))
+        .await?;
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.logo_file_id(), Some(logo));
+    assert_eq!(team.team.name(), "Renamed");
+
+    // An explicit null removes it.
+    team_repo
+        .patch_team(&team_id, &logo_request(Some(None), None))
+        .await?;
+    let team = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(team.team.logo_file_id(), None);
 
     Ok(())
 }

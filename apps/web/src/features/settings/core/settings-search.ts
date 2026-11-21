@@ -196,6 +196,12 @@ const SETTINGS: Setting[] = [
     keywords: 'customize sidebar hide show reorder apps more menu',
   },
   {
+    tab: 'Dock',
+    title: 'Team logo',
+    target: 'Team logo',
+    keywords: 'brand branding company image upload plus create button dock',
+  },
+  {
     tab: 'Notifications',
     title: 'Notification delivery',
     target: 'Delivery',

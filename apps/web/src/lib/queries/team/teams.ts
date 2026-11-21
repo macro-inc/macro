@@ -68,6 +68,18 @@ export function useCurrentTeamQuery(enabled?: Accessor<boolean>) {
 }
 
 /**
+ * The current team's logo as a static-file id, or undefined when the user is on
+ * no team, the team has no logo, or the team is still loading. Never suspends.
+ */
+export function useCurrentTeamLogoFileId(): Accessor<string | undefined> {
+  const teamQuery = useCurrentTeamQuery();
+  return () => {
+    if (!queryReadyGate(teamQuery)) return undefined;
+    return teamQuery.data?.team.logo_file_id ?? undefined;
+  };
+}
+
+/**
  * Reactive boolean: true iff the current user has admin or owner team
  * role. When a team id is supplied, it must match that team. Drives
  * admin-gated UI (e.g. the companies → hidden tab and detail-page Hide button).

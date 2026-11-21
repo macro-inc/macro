@@ -6,6 +6,7 @@
  */
 import type { PatchTeamRequestDefaultLinkShare } from './patchTeamRequestDefaultLinkShare';
 import type { PatchTeamRequestLanguage } from './patchTeamRequestLanguage';
+import type { PatchTeamRequestLogoFileId } from './patchTeamRequestLogoFileId';
 import type { PatchTeamRequestMemberCrmAccess } from './patchTeamRequestMemberCrmAccess';
 import type { PatchTeamRequestName } from './patchTeamRequestName';
 import type { PatchTeamRequestSlug } from './patchTeamRequestSlug';
@@ -17,6 +18,11 @@ import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRole
 export interface PatchTeamRequest {
   default_link_share?: PatchTeamRequestDefaultLinkShare;
   language?: PatchTeamRequestLanguage;
+  /** The static file id of the team's logo, shown to every member in place
+of the app rail's create button. Omit to leave unchanged or pass `null`
+to remove it. The file must be a PNG, JPEG, WebP or GIF image the
+caller uploaded. */
+  logo_file_id?: PatchTeamRequestLogoFileId;
   member_crm_access?: PatchTeamRequestMemberCrmAccess;
   /** The new name for the team */
   name?: PatchTeamRequestName;

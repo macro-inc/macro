@@ -628,7 +628,11 @@ left (default), top, right, or bottom edge of the window, and sets it **Large**
 alignment** **Center** puts the apps and More in the middle of the bar, with
 Create and Search at its start and the footer at its end. The page's **Apps**
 section is the same show, hide and reorder list as **More → Customize sidebar**.
-Edge, size and alignment are saved per device (`macro:dock` in localStorage,
+Its **Team logo** section lets a team admin upload a PNG, JPEG, WebP or GIF
+(stored as the team's `logo_file_id` through `PATCH /team`) that replaces + on
+every member's Create button; members see it read-only, and without a team the
+section is disabled with a note. **Show team logo on my dock** puts + back for
+one user. Edge, size, alignment and that switch are saved per device (`macro:dock` in localStorage,
 read by the boot shell in `index.html`) and apply at once. Tooltips and rail menus open away from the
 dock's edge; on the top or bottom edge the apps run left to right, with the
 footer actions at the far end. The rail sets `--dock-inset-left|right|bottom` on the root to its thickness on

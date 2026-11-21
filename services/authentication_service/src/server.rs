@@ -733,7 +733,12 @@ async fn run_server() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
     .with_crm_access_rollout(crm_access_rollout)
-    .with_invite_rewarder(Arc::new(invite_rewards));
+    .with_invite_rewarder(Arc::new(invite_rewards))
+    .with_logo_files(Arc::new(
+        teams::outbound::team_logo_files::StaticFileTeamLogos::new(
+            static_file_service_client.clone(),
+        ),
+    ));
     let computer_rollout = feature_flags
         .clone()
         .map(hosted_runtimes::domain::rollout::ComputerRollout::new)

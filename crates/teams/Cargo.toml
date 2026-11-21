@@ -43,6 +43,7 @@ outbound = [
   "dep:models_email",
   "dep:sqlx",
   "dep:sqs_client",
+  "dep:static_file_service_client",
   "dep:url",
   "ports",
 ]
@@ -118,6 +119,7 @@ sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
 ], optional = true }
+static_file_service_client = { path = "../static_file_service_client", optional = true }
 url = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

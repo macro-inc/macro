@@ -13,5 +13,6 @@ pub mod owned_entity_cleanup;
 pub mod subscription_items;
 pub mod team_analytics;
 pub mod team_crm_settings_repo;
+pub mod team_logo;
 pub mod team_repo;
 pub mod team_service;

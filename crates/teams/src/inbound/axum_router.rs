@@ -292,6 +292,14 @@ impl IntoResponse for TeamError {
                     message: self.to_string().into(),
                 }),
             ),
+            // Static file storage did not answer while checking a new logo;
+            // the request can be retried as is.
+            TeamError::LogoLookupUnavailable(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            ),
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

@@ -200,6 +200,8 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'size',
           'small',
           'large',
+          'logo',
+          'branding',
         ],
       }),
       tabItem('tabNotifications', {

@@ -1636,6 +1636,13 @@ export type PatchTeamMemberPlanRequest = {
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
     language?: null | Language;
+    /**
+     * The static file id of the team's logo, shown to every member in place
+     * of the app rail's create button. Omit to leave unchanged or pass `null`
+     * to remove it. The file must be a PNG, JPEG, WebP or GIF image the
+     * caller uploaded.
+     */
+    logo_file_id?: string | null;
     member_crm_access?: null | PatchTeamMemberCrmAccess;
     /**
      * The new name for the team
@@ -2432,6 +2439,11 @@ export type Team = {
     enterprise: boolean;
     id: string;
     language?: null | Language;
+    /**
+     * The static file id of the team's logo, an image every member sees in
+     * place of the app rail's create button. `None` when the team has none.
+     */
+    logo_file_id?: string | null;
     name: string;
     owner_id: string;
     slug: string;

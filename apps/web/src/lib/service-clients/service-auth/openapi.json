@@ -9724,6 +9724,11 @@
               }
             ]
           },
+          "logo_file_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file id of the team's logo, shown to every member in place\nof the app rail's create button. Omit to leave unchanged or pass `null`\nto remove it. The file must be a PNG, JPEG, WebP or GIF image the\ncaller uploaded."
+          },
           "member_crm_access": {
             "oneOf": [
               {
@@ -10846,6 +10851,11 @@
                 "description": "The interface language for the team's members, unless a member picks\ntheir own. `None` lets each member's browser decide."
               }
             ]
+          },
+          "logo_file_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file id of the team's logo, an image every member sees in\nplace of the app rail's create button. `None` when the team has none."
           },
           "name": {
             "type": "string"

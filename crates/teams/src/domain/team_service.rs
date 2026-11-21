@@ -62,6 +62,7 @@ use crate::domain::{
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
+    team_logo::{TeamLogoFiles, UnavailableTeamLogoFiles, check_logo_file},
     team_repo::{TeamMembersService, TeamRepository, TeamService},
 };
 
@@ -167,6 +168,9 @@ pub struct TeamServiceImpl<
     invite_rewarder: Arc<dyn InviteRewarder>,
     /// Gates preference changes until every membership writer is upgraded.
     crm_access_rollout: Arc<dyn CrmAccessRollout>,
+    /// Looks up the static files proposed as the team logo. The default
+    /// refuses, so an unwired service cannot set a logo it never checked.
+    logo_files: Arc<dyn TeamLogoFiles>,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
@@ -205,6 +209,7 @@ where
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
             crm_access_rollout: self.crm_access_rollout.clone(),
+            logo_files: self.logo_files.clone(),
         }
     }
 }
@@ -311,6 +316,7 @@ where
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
             invite_rewarder: Arc::new(NoOpInviteRewarder),
             crm_access_rollout: Arc::new(DisabledCrmAccessRollout),
+            logo_files: Arc::new(UnavailableTeamLogoFiles),
         }
     }
 }
@@ -701,6 +707,7 @@ where
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
             crm_access_rollout: self.crm_access_rollout,
+            logo_files: self.logo_files,
         }
     }
 
@@ -727,6 +734,7 @@ where
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
             crm_access_rollout: self.crm_access_rollout,
+            logo_files: self.logo_files,
         }
     }
 
@@ -753,12 +761,19 @@ where
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
             crm_access_rollout: self.crm_access_rollout,
+            logo_files: self.logo_files,
         }
     }
 
     /// Supply the rollout gate for CRM preference writes. Read enforcement is unconditional.
     pub fn with_crm_access_rollout(mut self, rollout: Arc<dyn CrmAccessRollout>) -> Self {
         self.crm_access_rollout = rollout;
+        self
+    }
+
+    /// Supplies the static file lookup that checks a proposed team logo.
+    pub fn with_logo_files(mut self, logo_files: Arc<dyn TeamLogoFiles>) -> Self {
+        self.logo_files = logo_files;
         self
     }
 
@@ -816,6 +831,7 @@ where
             owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
             crm_access_rollout: self.crm_access_rollout,
+            logo_files: self.logo_files,
         }
     }
 
@@ -2716,6 +2732,17 @@ where
             .into_owned();
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+
+        // Check a new logo before applying anything, so a refused file leaves
+        // the rest of the request unapplied too.
+        if let Some(Some(logo_file_id)) = req.logo_file_id {
+            let file = self
+                .logo_files
+                .get_logo_file(logo_file_id)
+                .await
+                .map_err(TeamError::from)?;
+            check_logo_file(file, actor_user_id.as_ref())?;
+        }
 
         if let Some(change) = &req.member_crm_access {
             self.crm_access_rollout.require_enabled().await?;

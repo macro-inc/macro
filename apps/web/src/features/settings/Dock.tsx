@@ -20,12 +20,14 @@ import {
   SettingsRow,
   SettingsSection,
 } from './primitives';
+import { TeamLogoSettings } from './TeamLogoSettings';
 
 /**
  * Settings → Dock: which window edge the app rail sits against, its size, where
  * its apps sit along it, and which apps it shows (the More menu's Customize
- * sidebar list). Edge, size and alignment are saved on this device; the app
- * list is the rail's own preference.
+ * sidebar list), plus the team logo that replaces + on the dock. Edge, size,
+ * alignment and showing the logo are saved on this device; the app list is
+ * the rail's own preference; the logo belongs to the team.
  */
 export function Dock() {
   const gates = useNavItemGates();
@@ -103,6 +105,8 @@ export function Dock() {
         >
           <CustomizeNavItems gates={gates()} />
         </SettingsSection>
+
+        <TeamLogoSettings />
       </SettingsPage>
     </div>
   );
