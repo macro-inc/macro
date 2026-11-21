@@ -51,3 +51,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 tower = { workspace = true, features = ["util"] }
+tracing-subscriber = { workspace = true }
