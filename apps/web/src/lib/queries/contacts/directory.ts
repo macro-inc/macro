@@ -362,10 +362,11 @@ async function searchWithListOrder(
     span.setAttr('contacts.policy_version', result.policyVersion);
   }
   if (lists) {
-    span.setAttr(
-      'contacts.list_order',
-      sendsLists || resend ? 'sent' : 'unsupported'
-    );
+    // A host that has not answered with a page has told no policy yet.
+    let outcome = 'unknown';
+    if (sendsLists || resend) outcome = 'sent';
+    else if (result.kind === 'page') outcome = 'unsupported';
+    span.setAttr('contacts.list_order', outcome);
     span.setAttr('contacts.list_order_resent', resend);
   }
   return result;
