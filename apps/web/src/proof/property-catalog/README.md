@@ -29,7 +29,8 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   markers back and stops the run if a side runs the wrong modules.
 - Each write runs through the real mutation hooks on NEW; its requests and
   responses are recorded and replayed to OLD, so the server sees it once and
-  both sides get the same answer. Every write either page sends is watched:
+  both sides get the same answer; a replayed write must match the recording's
+  method, origin, path, query and body. Every write either page sends is watched:
   a replay that differs from the recording, a recorded write OLD never sent,
   a hook that succeeded without sending any request, a GraphQL mutation
   (comments stripped, batches and persisted queries included), a write to
@@ -57,14 +58,18 @@ not run the base commit's modules, or a mutant was not applied or not caught.
   rows whose server sort key is equal swap: definitions by lowercased name,
   options by display order then value, and caller rows only when both sides'
   catalogs give them the same key; an option without a key never ties). Tie
-  keys lowercase like JavaScript; at the end the run asks PostgreSQL to
-  lowercase every string a key was built from and fails if any differs from
-  JavaScript's, since plain definitions and option values sort by SQL
-  `LOWER`. Timestamps normalize to a NUL-prefixed instant, so no literal can
+  keys lowercase the way the server sorted that list: definitions with options
+  like Rust's `to_lowercase` (JavaScript's `toLowerCase`), plain definitions,
+  options and tag options like PostgreSQL's `LOWER` under its libc collation
+  (one code point at a time, so `İ` lowers to `i`). At the end the run asks
+  PostgreSQL to lower every string a SQL-sorted key was built from and fails if
+  any differs from the harness's mapping. Timestamps normalize to a NUL-prefixed instant, so no literal can
   pass for one. `error-shape` (the same retry decision, a different error
   object; the retry decision is the app's own, computed in the page with
   `thrownResultErrorHasCode`, and each old→new pair, message included, is its
-  own signature); `state`
+  own signature; equality compares the whole message, and two errors that
+  differ only in the ids they name, or past the signature's 160 characters,
+  are a `diff`); `state`
   (query state fields, or a reader missing on one side); and `diff`. Reader
   errors are compared whatever the data did.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
@@ -77,6 +82,17 @@ not run the base commit's modules, or a mutant was not applied or not caught.
 - An uncaught page error seen on one side only is a `diff` at level
   `page-errors`.
 - `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`.
+
+## What it does not check
+
+- The tag filter's cleanup of a selection whose tag is gone depends on when the
+  missing-tag listing was fetched (`listedAt`, `tag-filter-state.tsx`); the
+  harness compares the filter's state, not that timing, and does not run the
+  cleanup.
+- Two definitions or options the server ties (same sort key) may be shown in
+  either order on either side, by readers and callers alike: the server gives
+  no order between them, and the control run shows the old side doing the same
+  against itself. A change that reordered only tied rows would pass.
 
 ## Limits of the local stack
 
