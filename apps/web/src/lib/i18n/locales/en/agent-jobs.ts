@@ -7,6 +7,7 @@ export default {
   timedOut: 'Timed out',
   interrupted: 'Stopped: outcome unknown',
   outcomeUnknown: 'Stopped: outcome unknown',
+  didNotRun: "Didn't run",
   cancel: 'Cancel',
   cancelJob: 'Cancel job',
   actions: 'Background job actions',

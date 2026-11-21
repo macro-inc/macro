@@ -1423,7 +1423,7 @@ per account. In a turn someone else prompted, a system turn, with the flag
 off, for a program that sends (email, messages, routine saves, connected
 apps, the web: a job can't yet), or when the server already holds 8 jobs,
 the program runs in the foreground as before. A job that never got a slot
-settles saying nothing ran. To try it: ask the agent to read your recent
+settles saying nothing ran, and its card reads **Didn't run** (muted). To try it: ask the agent to read your recent
 documents in the background, then send another message while the card runs.
 
 CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the

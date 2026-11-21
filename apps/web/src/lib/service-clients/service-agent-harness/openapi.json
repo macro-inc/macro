@@ -7381,6 +7381,10 @@
             "format": "date-time",
             "description": "When it stops at the latest."
           },
+          "neverRan": {
+            "type": "boolean",
+            "description": "It settled before its program ever started: nothing ran."
+          },
           "startedAt": {
             "type": "string",
             "format": "date-time",

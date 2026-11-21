@@ -2188,6 +2188,10 @@ export type JobInfo = {
      */
     deadline: string;
     /**
+     * It settled before its program ever started: nothing ran.
+     */
+    neverRan?: boolean;
+    /**
      * When it was launched.
      */
     startedAt: string;

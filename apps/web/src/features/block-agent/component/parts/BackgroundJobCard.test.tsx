@@ -20,6 +20,28 @@ it('says how a settled job ended and nothing while it runs', () => {
   expect(jobOutcome('running')).toBeUndefined();
   expect(jobOutcome('succeeded')).toBe('Done');
   expect(jobOutcome('interrupted')).toBe('Stopped: outcome unknown');
+  // A job that settled before its program started says it didn't run.
+  expect(jobOutcome('interrupted', true)).toBe("Didn't run");
+  expect(jobOutcome('timed_out', true)).toBe("Didn't run");
+});
+
+it('shows a job that never ran muted, not as a failure', () => {
+  const view = render(() => (
+    <BackgroundJobCard
+      jobId="job-1"
+      job={{
+        title: 'Scanning inbox',
+        startedAt: new Date().toISOString(),
+        status: 'timed_out',
+        neverRan: true,
+        activity: [],
+      }}
+    />
+  ));
+  expect(view.getAllByText("Didn't run")).not.toHaveLength(0);
+  expect(
+    view.container.querySelector('[data-tool-status="failed"]')
+  ).toBeNull();
 });
 
 it('names running jobs as jobs in the composer chip', () => {

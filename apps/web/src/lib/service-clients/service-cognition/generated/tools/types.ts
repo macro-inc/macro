@@ -16819,6 +16819,10 @@ export interface JobInfo {
    * When it stops at the latest.
    */
   deadline: string;
+  /**
+   * It settled before its program ever started: nothing ran.
+   */
+  neverRan?: boolean;
 }
 /**
  * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way.

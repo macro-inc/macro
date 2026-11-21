@@ -113,6 +113,7 @@ export function CodeExecutionPart(props: {
           title={job().title}
           startedAt={job().startedAt}
           status={record()?.status ?? receipt()?.status ?? 'running'}
+          neverRan={record()?.job?.neverRan ?? false}
           activity={record()?.activity ?? []}
         />
       )}
@@ -131,6 +132,7 @@ function BackgroundJob(props: {
   title: string;
   startedAt: string;
   status: ExecutionStatus;
+  neverRan: boolean;
   activity: readonly ExecutionActivity[];
 }) {
   const session = useOptionalAgentSession();
@@ -168,6 +170,7 @@ function BackgroundJob(props: {
         title: props.title,
         startedAt: props.startedAt,
         status: props.status,
+        neverRan: props.neverRan,
         activity: props.activity,
       }}
       cancelling={cancel.isPending}

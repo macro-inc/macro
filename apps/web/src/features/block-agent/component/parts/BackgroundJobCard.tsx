@@ -16,6 +16,8 @@ export type BackgroundJobView = {
   startedAt: string;
   /** The saved record's status, or the receipt's before the record loads. */
   status: ExecutionStatus;
+  /** It settled before its program started, so nothing it would do ran. */
+  neverRan?: boolean;
   activity: readonly ExecutionActivity[];
 };
 
@@ -30,7 +32,11 @@ export function elapsedLabel(from: string, now: number): string {
 }
 
 /** The trailing word a settled job's card ends with. */
-export function jobOutcome(status: ExecutionStatus): string | undefined {
+export function jobOutcome(
+  status: ExecutionStatus,
+  neverRan = false
+): string | undefined {
+  if (neverRan && status !== 'running') return t('agentJobs.didNotRun');
   return match(status)
     .with('running', () => undefined)
     .with('succeeded', () => t('agentJobs.done'))
@@ -41,8 +47,12 @@ export function jobOutcome(status: ExecutionStatus): string | undefined {
     .exhaustive();
 }
 
-/** A cancel someone asked for is not a failure: it reads muted, not red. */
-function toolStatus(status: ExecutionStatus): ToolStatus {
+/**
+ * A cancel someone asked for is not a failure, and neither is a job that never
+ * ran: both read muted, not red.
+ */
+function toolStatus(status: ExecutionStatus, neverRan = false): ToolStatus {
+  if (neverRan && status !== 'running') return 'completed';
   return match(status)
     .with('running', () => 'running' as const)
     .with('succeeded', 'cancelled', () => 'completed' as const)
@@ -77,7 +87,7 @@ export function BackgroundJobCard(props: {
       <span>
         {running()
           ? elapsedLabel(props.job.startedAt, now())
-          : jobOutcome(props.job.status)}
+          : jobOutcome(props.job.status, props.job.neverRan)}
       </span>
       <Show when={running() && props.onCancel}>
         {(cancel) => (
@@ -100,7 +110,7 @@ export function BackgroundJobCard(props: {
       <ToolCard
         title={props.job.title}
         subtitle={running() ? t('agentJobs.inBackground') : undefined}
-        status={toolStatus(props.job.status)}
+        status={toolStatus(props.job.status, props.job.neverRan)}
         muted={!running() && props.job.status !== 'succeeded'}
         trailing={trailing()}
       />

@@ -11,6 +11,8 @@
 export interface JobInfo {
   /** When it stops at the latest. */
   deadline: string;
+  /** It settled before its program ever started: nothing ran. */
+  neverRan?: boolean;
   /** When it was launched. */
   startedAt: string;
   /** What the agent called it, shown on its card. */
