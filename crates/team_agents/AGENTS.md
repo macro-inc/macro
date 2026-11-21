@@ -130,14 +130,24 @@ local Macro computer gets, since the teammate joins the stack's network). A move
 first marks the row's `checkpoint`; the old machine stops the agent (its last
 push), then `finish_checkpoint` (internal `.../{install}/checkpointed`, or at
 once when the machine is offline, or after `CHECKPOINT_TIMEOUT`) makes a new
-install id and generation on the target (revoking the old machine's keys
-and repository token at once), or revokes and removes the agent with its
-install last. Only the agent's inviter or the current machine's owner may
-move it. A machine whose owner is no longer an owner or admin of the agent's
-team, or that was unpaired, gets nothing more (`issue_install` checks
-`host_entitled`), and authentication_service's 60 s sweep
-(`offboard_unentitled_hosts`) revokes its agents' credentials and starts
-their removal. No billing (`SELF_HOSTED_TEAMMATE_PRICING` is `None`).
+install id and generation on the target, or revokes and removes the agent
+with its install last. A finished move sets `revoke_pending`: nothing is
+delivered until the old machine's keys and repository token are revoked, so a
+late revoke never voids the new machine's key. Only the agent's inviter or
+the current machine's owner may move it. A machine whose owner is no longer
+an owner or admin of the agent's team, or that was unpaired, gets nothing more
+(`issue_install` checks `host_entitled`), and authentication_service's 60 s
+sweep (`offboard_unentitled_hosts`) parks its agents: `park` waits for a
+delivery in flight and sets `parked_at` and `revoke_pending`, then the
+credentials are revoked; `installs_on` leaves a parked install out, so its
+machine stops it. A parked agent keeps its account, seat, DMs and repository,
+lists as `paused` with `installProblem: hostRemoved`, and any admin of the team
+may move it to a machine of theirs (or back to the same one). The same sweep
+retries every revoke still pending. Deleting a team first runs
+`TeamInstallRelease::release_team` (team deletion's
+`release_teammate_installs`): park, revoke, delete each install, nudge its
+machine; `team_agent_installs.team_id` and `harness_id` are `ON DELETE
+RESTRICT`, so nothing drops an install with live credentials. No billing (`SELF_HOSTED_TEAMMATE_PRICING` is `None`).
 Spec: `docs/design/teammate-runtime.md`.
 
 ## Start here

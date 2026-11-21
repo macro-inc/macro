@@ -715,11 +715,18 @@ warning tone, with the network line from *Network*.
 
 Only the machine's owner can host a teammate there, and only the admin who
 invited it or the owner of the machine it runs on can move it. When the
-hosting owner is removed from the team, stops being an admin, or unpairs the
-machine, the service stops the install and revokes its key and repo token:
-at its next delivery at once, and otherwise within a minute, from a sweep
-the auth service runs every 60 seconds over installs on such machines.
-Hosted team agents keep their own computers.
+hosting owner is removed from the team, stops being an admin, is deleted, or
+unpairs the machine, the service parks the install: it revokes its key and
+repo token and the machine stops it, at its next delivery at once, and
+otherwise within a minute, from a sweep the auth service runs every 60 seconds
+over installs on such machines. A parked agent keeps its account, seat, DMs
+and repository. Members shows it stopped, saying its machine can no longer
+host it, and any admin of the team may move it to a machine of theirs (the
+same machine again after a brief demotion or a re-pair). Nothing restarts it
+by itself. Deleting the team takes every agent off its machine first
+(revoked, stopped, install deleted); the database refuses to delete a team
+or machine that still has an install. Hosted team agents keep their own
+computers.
 
 ### Observability
 
