@@ -252,17 +252,46 @@ behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
 narrow page the two invite buttons wrap, together, onto their own line. The
 desktop settings sidebar lists **Invite agents** under **Invite your team** for
 the same viewers. Members, and everyone while a flag is off or still loading,
-see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
-agent's computer size; picture, voice and role come later, and the agent asks
-what to take on once it is online. While the name is empty, **Try** offers
-**Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
-letter. Sizes come from the same catalog and prices as Buy a computer
-(sold-out sizes are disabled and marked **Sold out**). The agent's seat is
-included, so the button reads **Add <name> · $X/month** (or **Add <name>**
-when included); while it is disabled, the line under it says why ("Give your
-agent a name to continue.", a name too long, no size for sale). Adding calls
+see only the people invite. Each entry opens its own form: **Invite Human** and
+**Invite your team** the people invite, **Invite Agent** and **Invite agents**
+the agent form, and neither has a People/Agent switch. **Invite an agent**
+asks only for a name and the agent's computer size, with no explanatory text
+around them: a 64px picture at the top left, beside the field headed
+**Name it**, then **Give it a computer** (layout A,
+`components/agent-invite-layout-a.tsx`; the form hands it named parts so
+another layout can replace it). Voice and role come later, and the agent asks
+what to take on once it is online. With `ENABLE_AGENT_FACES`, each opening
+starts with a random face in that picture. **Shuffle face** changes its seed
+and keeps pinned parts. **Edit picture** opens eight suggested faces at the
+top: tapping one chooses it, and **New faces** replaces the eight while the
+chosen face stays chosen. Below them, tabs for Head, Hair, Face, Extras and
+Outfit; choosing a part pins it, **Any** unpins just that part,
+and **Reset** clears all pins. Desktop uses a popover; phones stack a picture
+sheet over the invite. **Upload photo** replaces the preview and hides **Shuffle face**;
+**Use a generated face** brings back the same draft face. Add saves the face
+recipe and uploads a PNG for other clients; a failed PNG upload still saves
+the recipe. A failed photo upload still adds the agent and reports the failure.
+With the flag off, the picture shows the name's first letter.
+
+Owners and admins can use an agent row's **Change picture** menu item while
+faces are enabled. It opens a dialog (a drawer on phones) with the saved face
+or photo. The editor waits for that picture to load; a failed read offers local
+**Retry** before any picture can be saved. **Save** calls `PUT /team_agents/{agent}/avatar`; a failed save keeps
+the draft open for retry. Cancel leaves the saved picture unchanged. Agents
+without a saved picture get a stable generated face derived from their user id;
+saving that face unchanged preserves its appearance. Saved photos take priority
+over this derived face. Faces render through `UserIcon` across the app, while
+other clients use the uploaded PNG.
+
+Sizes come from the same catalog and prices as Buy a computer
+(sold-out sizes are disabled and marked **Sold out**; Add with every size sold
+out says so under the sizes and sends nothing). The agent's seat is
+included, so the button reads **Add <name> · $X/month** (or **Add agent ·
+$X/month** before a name). Add is always enabled: with no name (or one too
+long) it marks the name field invalid and moves the caret there, and sends
+nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
-in the dialog (**Adding <name>…**, "Starting <name>…") reading
+in the dialog (**Adding <name>…**) reading
 `GET /team_agents` every 500 ms until the agent reports itself online, and
 closes into the agent's DM, where it has said hi; no toast. Past five seconds
 it closes into the DM anyway, where the banner says it is still being set up
@@ -351,7 +380,7 @@ An agent teammate is reached only by DM or in channels, like any member: its
 computer's runtime (`team_agent_user_id` on `/harnesses`) never appears in
 **Where it runs**, the Agents page or composer roster, the machine strips,
 Settings → Runtimes, or teammates' machines; its computer setup offers no
-**Chat with <agent>** or **Add another agent**; and the API refuses saving an agent or
+**Chat with <agent>**; and the API refuses saving an agent or
 opening a session on it (409). Connect Claude plan and the DM banner still read it
 from the full `/harnesses` list. On phones the dialog and
 confirmation are sheets and rows stay touch rows. Backend-free check (invite,
@@ -1166,11 +1195,10 @@ change this computer. Ask a team owner or admin." with no **Retry**, only
   `ENABLE_AGENT_DMS` off it is not offered, and **Done** is the action. The
   agent is created server-side when the computer first comes up, so the setup
   steps refetch a cached agents list that lacks it.
-- **Add another agent**, a quiet link in the body, opens **Settings → Agents**
-  on the **New agent** form with this computer chosen under **Where it runs**
-  (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
-  agent's **Where it runs**, the action is **Use for this agent** instead, and
-  only closes: the editor selects the new computer when the modal closes.
+- The ready step offers only **Done** and **Chat with <agent>**; there is no
+  way on from it to add another agent. Bought from an agent's **Where it
+  runs**, the action is **Use for this agent** instead, and only closes: the
+  editor selects the new computer when the modal closes.
 
 Closing at any step keeps its place; the row's **Finish setup** reopens it.
 

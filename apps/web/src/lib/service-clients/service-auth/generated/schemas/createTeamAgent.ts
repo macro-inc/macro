@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTeamAgentAvatarFace } from './createTeamAgentAvatarFace';
 import type { CreateTeamAgentAvatarUrl } from './createTeamAgentAvatarUrl';
 import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
 
@@ -11,6 +12,7 @@ import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
  * Input for inviting an agent teammate and buying its computer.
  */
 export interface CreateTeamAgent {
+  avatarFace?: CreateTeamAgentAvatarFace;
   /** Profile picture URL (a static file the caller uploaded). */
   avatarUrl?: CreateTeamAgentAvatarUrl;
   /** What the agent is responsible for. Seeds its workspace; when this and

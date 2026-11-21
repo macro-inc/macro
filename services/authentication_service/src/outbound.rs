@@ -1,6 +1,7 @@
 //! Adapters for authentication service use cases.
 
 pub mod agent_addresses;
+pub mod agent_picture_changes;
 pub mod computer_billing;
 pub mod crm_member_access;
 pub mod email_code_signup;

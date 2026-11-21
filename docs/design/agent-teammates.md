@@ -39,6 +39,15 @@ Team admins and owners can read the repo with their Macro credential.
 
 ## Bootstrap
 
+Agent invites may include `avatarFace` (version 1, a nonblank seed of 1–64
+characters, pins that are unsigned 32-bit integers, at most 1 KiB) and
+`avatarUrl`, a Macro static file (`<static-file base>/file/<uuid>`). The recipe lives in
+`macro_user_info.avatar_face`; its optional PNG lives in `profile_picture` for
+email and notification consumers. Owners and admins replace both together via
+`PUT /team_agents/{agent_user_id}/avatar` with `{face, url}`. A photo save clears
+the recipe, and batch profile-picture reads return `avatar_face` with a nullable
+URL so a face remains available after a failed PNG upload.
+
 1. **A computer is bought** (the purchase route), or **an agent is invited**
    (`POST /team_agents`). With `enable-agent-teammates` on, both first prepare
    the agent: its account, team seat and repo, with the buyer or inviter as

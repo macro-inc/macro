@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT u.id, info.profile_picture, info.profile_picture_hash, info.avatar_face\n        FROM \"User\" u\n        JOIN macro_user_info info ON info.macro_user_id = u.macro_user_id\n        WHERE u.id = ANY($1)\n          AND (info.profile_picture IS NOT NULL OR info.avatar_face IS NOT NULL)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "profile_picture",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "profile_picture_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "avatar_face",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "efc638b56d80314180cc130204acc9b7615103bdbe7f6e68a47a7e21d2e2a464"
+}

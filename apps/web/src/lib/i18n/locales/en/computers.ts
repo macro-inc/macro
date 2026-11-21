@@ -230,7 +230,6 @@ export default {
   finishFailedBody:
     "{{computer}} is up, but its setup didn't finish. Retry to finish it.",
   chatWithAgent: 'Chat with {{agent}}',
-  addAnotherAgent: 'Add another agent',
   setupReadyNotice: 'Your computer is ready: connect your AI and finish setup',
   setupReadyNoticeBody:
     '{{computer}} is up. Bring your AI, then create an agent on it.',

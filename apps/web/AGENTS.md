@@ -1873,9 +1873,8 @@ Buy computer → Configure agent → Bring your AI → Create agent dialog, open
 with `?after=guided` in the fixture) have a backend-free browser regression that mounts the real section
 over the real computers client and answers `/auth/team/computers/*` from
 Playwright, covering the size skeleton, every step, each offers failure (422,
-403, 502, 503, dropped connection, timeout), and the two endings (Chat with <agent> into
-the agent's DM, Add another agent into the real create form with the computer
-chosen), and the setup notices (close
+403, 502, 503, dropped connection, timeout), the ending (Chat with <agent> into
+the agent's DM, beside Done), and the setup notices (close
 after Buy, the "ready" notice reopens the dialog on Bring your AI through to
 Create agent; the failure notice reopens it on Retry setup) on desktop and
 phone:

@@ -5,6 +5,7 @@ import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { ok } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type {
+  AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
@@ -16,6 +17,7 @@ import {
 } from './purchase-refusal';
 
 export type {
+  AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
@@ -89,12 +91,13 @@ const voiceUrl = (agentUserId: string) =>
 /** The caller's current team's agent teammates. Writes need team admin. */
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
-  create: (request: CreateTeamAgent) =>
+  create: (request: CreateTeamAgent, signal?: AbortSignal) =>
     fetchWithToken<
       TeamAgent,
       CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
     >(base, {
       method: 'POST',
+      signal,
       body: JSON.stringify(request),
       errorResponseHandler: createError,
     }),
@@ -112,6 +115,14 @@ export const teamAgentsClient = {
       return ok(null);
     return result;
   },
+  /** Replaces the agent's picture; team admins only. */
+  setAvatar: (agentUserId: string, avatar: AgentAvatar, signal?: AbortSignal) =>
+    fetchWithToken(`${base}/${encodeURIComponent(agentUserId)}/avatar`, {
+      method: 'PUT',
+      signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(avatar),
+    }),
   /** Used from the agent's next call. */
   setVoice: (agentUserId: string, voice: AgentVoice) =>
     fetchWithToken<AgentVoice, SetAgentVoiceErrorCode>(voiceUrl(agentUserId), {

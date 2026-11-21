@@ -1,4 +1,5 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import {
   fetchTeamAgents,
   useCreateTeamAgentMutation,
@@ -49,7 +50,12 @@ export function useAddTeamAgent(options: {
   onCleanup(() => {
     disposed = true;
   });
-  const stopped = () => disposed;
+  let operation: { session: number; teamId: string } | undefined;
+  const stopped = () =>
+    disposed ||
+    (!!operation &&
+      (queryAccountSession() !== operation.session ||
+        options.teamId() !== operation.teamId));
 
   const finish = (
     span: Span,
@@ -59,7 +65,7 @@ export function useAddTeamAgent(options: {
   ) => {
     span.setAttr('add.outcome', ending);
     span.setAttr('add.waits_for', ADD_AGENT_WAITS_FOR);
-    if (disposed) return;
+    if (stopped()) return;
     match(ending)
       .with('online', 'slow', () =>
         options.onAdded({ agent, online: ending === 'online' })
@@ -82,8 +88,9 @@ export function useAddTeamAgent(options: {
   };
 
   const add = async (request: CreateTeamAgent, size: ComputerSize) => {
-    if (state().kind === 'adding') return;
+    if (disposed || state().kind === 'adding') return;
     const teamId = options.teamId();
+    operation = { session: queryAccountSession(), teamId };
     setState({ kind: 'adding' });
     await Telemetry.span('team-agent.add', async (span) => {
       span.setAttr('team.id', teamId);
@@ -95,7 +102,7 @@ export function useAddTeamAgent(options: {
       } catch (error) {
         const refused = addRefusal(error);
         span.setAttr('add.outcome', refused.kind);
-        if (disposed) return;
+        if (stopped()) return;
         if (refused.kind === 'declined') setPurchaseKey(crypto.randomUUID());
         setState(
           match(refused)
@@ -124,8 +131,9 @@ export function useAddTeamAgent(options: {
   /** Starts the agent's computer again, on the same computer, no new charge. */
   const retry = async (agent: TeamAgent) => {
     const computerId = agent.computerId;
-    if (!computerId || state().kind === 'adding') return;
+    if (disposed || !computerId || state().kind === 'adding') return;
     const teamId = options.teamId();
+    operation = { session: queryAccountSession(), teamId };
     setState({ kind: 'adding' });
     await Telemetry.span('team-agent.add', async (span) => {
       span.setAttr('team.id', teamId);
@@ -138,7 +146,7 @@ export function useAddTeamAgent(options: {
         );
       } catch {
         span.setAttr('add.outcome', 'retry_refused');
-        if (!disposed) setState({ kind: 'not_started', agent });
+        if (!stopped()) setState({ kind: 'not_started', agent });
         return;
       }
       const ending = await span.span('team-agent.add.wait_online', (wait) =>
