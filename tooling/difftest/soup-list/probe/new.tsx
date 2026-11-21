@@ -264,7 +264,11 @@ const callers: Record<
     quickAccess: true,
     build: (p) => () => {
       const value = createQuickAccessValue();
-      const list = value.useList(...((p?.buckets ?? []) as []));
+      // `menu`: the options form an open `/` or @ menu uses (useEntityMention),
+      // which reads the cache projection and counts as a list reading the cache.
+      const list = p?.menu
+        ? value.useList({ buckets: (p?.buckets ?? []) as never, searchTerm: () => '', enabled: () => true })
+        : value.useList(...((p?.buckets ?? []) as []));
       const items = createMemo(() => list.items());
       return () => ({
         settled: !value.isLoading(),
