@@ -149,8 +149,6 @@ struct StreamedCalls {
     finished: HashMap<String, String>,
 }
 
-/// The answer a user tool gives when it has not been finished.
-
 static CANCELLED_REASON: &str = "user cancelled";
 
 /// Retries per run for tool calls to names that exist nowhere, not even the
@@ -264,8 +262,6 @@ impl StreamBridge {
 fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
     crate::tool_media::result_json(presentation)
 }
-
-/// Whether a tool's JSON result is a user tool's unfinished answer.
 
 /// The hook bodies, as inherent methods so tests can exercise them directly:
 /// rig's [`HookContext`] has no public constructor, so the [`AgentHook`] impl
