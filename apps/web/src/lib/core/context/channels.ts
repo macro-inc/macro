@@ -54,6 +54,10 @@ function sameLastViewed(a: ChannelLastViewed, b: ChannelLastViewed) {
  * closed. Each one ends the request. */
 type LastViewStop = 'timed_out' | 'superseded' | 'closed';
 
+/** What an open did with the server's view: showed it, or kept its record's
+ * later one. */
+type LastViewTaken = 'used' | 'outranked';
+
 /** One open's ask of the server. */
 type LastViewAsk = {
   /** Aborts once the open stops waiting. */
@@ -61,12 +65,13 @@ type LastViewAsk = {
   /** Why the open stopped waiting, once it has. */
   stopped: () => LastViewStop | undefined;
   /** Gives the open the server's answer, which it still waits for. */
-  take: (state: ChannelLastViewed) => void;
+  take: (state: ChannelLastViewed) => LastViewTaken;
 };
 
-/** Asks the server in a span that records what became of the answer: `used`,
- * or why the open stopped waiting. Stopping aborts the read, which ends the
- * request and the span with it. */
+/** Asks the server in a span that records what became of the answer
+ * (`used`, `outranked` by the record's later view, or `failed` when the
+ * server could not say) or why the open stopped waiting. Stopping aborts the
+ * read, which ends the request and the span with it. */
 async function askLastView(channelId: string, ask: LastViewAsk) {
   await Telemetry.span('channel.last_view', async (span) => {
     span.setAttr('channel.id', channelId);
@@ -76,13 +81,16 @@ async function askLastView(channelId: string, ask: LastViewAsk) {
       span.setAttr('channel.last_view.outcome', stopped);
       return;
     }
-    if (viewedAt.isErr()) span.error(viewedAt.error);
-    ask.take(
-      viewedAt.isOk()
-        ? { status: 'known', viewedAt: viewedAt.value }
-        : LAST_VIEW_UNKNOWN
+    if (viewedAt.isErr()) {
+      span.error(viewedAt.error);
+      ask.take(LAST_VIEW_UNKNOWN);
+      span.setAttr('channel.last_view.outcome', 'failed');
+      return;
+    }
+    span.setAttr(
+      'channel.last_view.outcome',
+      ask.take({ status: 'known', viewedAt: viewedAt.value })
     );
-    span.setAttr('channel.last_view.outcome', 'used');
   });
 }
 
@@ -133,6 +141,9 @@ function askWhileOpen(
         answered = true;
         clearTimeout(wait);
         setAnswer(state);
+        return knownLastView(lastViewed()) === knownLastView(state)
+          ? 'used'
+          : 'outranked';
       },
     });
   fireAndForget(flow ? flow.run(ask) : ask(), 'channel-viewed-at');

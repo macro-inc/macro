@@ -248,7 +248,7 @@ describe('useChannelLastViewed', () => {
 
   // A span that ends only when the server answers says nothing about a server
   // that never does: each way of stopping ends the request and the span.
-  it('records on its span whether the open used the answer, or why it stopped waiting, as it stops', async () => {
+  it('records on its span what the open did with the answer, or why it stopped waiting, as it stops', async () => {
     const spans: { name: string; attrs: Record<string, unknown> }[] = [];
     const span = vi.spyOn(Telemetry, 'span').mockImplementation(((
       name: string,
@@ -311,14 +311,25 @@ describe('useChannelLastViewed', () => {
       expect(outcome()).toBe('superseded');
       cleanup();
 
+      // A record whose view is later than the server's keeps it.
+      const joined = channelUuid('outranked');
+      const later = fillingDirectory(false);
+      later.fill([directoryChannel(joined, { viewedAt: VIEWED })]);
+      serverViews.read.mockReturnValue(okAsync(SERVER_VIEWED));
+      const { lastViewed } = setup(joined, later);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lastViewed()).toEqual({ status: 'known', viewedAt: VIEWED });
+      expect(outcome()).toBe('outranked');
+      cleanup();
+
       serverViews.read.mockReturnValue(errAsync(new Error('lookup failed')));
       setup(channelUuid('failed'), filling);
       await vi.advanceTimersByTimeAsync(0);
       expect(spans.at(-1)?.attrs).toMatchObject({
         error: true,
-        'channel.last_view.outcome': 'used',
+        'channel.last_view.outcome': 'failed',
       });
-      expect(spans).toHaveLength(5);
+      expect(spans).toHaveLength(6);
       expect(spans.filter(({ attrs }) => attrs.error)).toHaveLength(1);
     } finally {
       vi.useRealTimers();
