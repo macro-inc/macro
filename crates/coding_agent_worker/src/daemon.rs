@@ -72,6 +72,7 @@ const HANDOFF_TIMEOUT: Duration = Duration::from_secs(30);
 /// home directory's store.
 fn host_teammates(
     macro_api: &crate::config::MacroApi,
+    teammates: &crate::config::TeammatesSettings,
     credentials: &HarnessCredentials,
 ) -> Option<std::sync::Arc<crate::harness::HostTeammates>> {
     #[cfg(all(unix, not(test)))]
@@ -85,13 +86,14 @@ fn host_teammates(
             token: credentials.token.clone(),
         },
         macro_api.teammate_network.as_deref(),
+        teammates,
     )
     .inspect_err(|error| tracing::warn!(error = ?error, "could not set up hosting teammates"))
     .ok()
     .map(std::sync::Arc::new);
     #[cfg(any(not(unix), test))]
     {
-        let _ = (macro_api, credentials);
+        let _ = (macro_api, teammates, credentials);
         None
     }
 }
@@ -163,7 +165,7 @@ impl Daemon {
             adopted,
             handoffs,
             computer,
-            host_teammates(&config.macro_api, &credentials),
+            host_teammates(&config.macro_api, &config.teammates, &credentials),
         );
         let runtime_connected = runtime.connection_state();
         let agents_changed = runtime.agents_changed();

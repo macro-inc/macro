@@ -62,7 +62,7 @@ pub fn settings(contents: &str) -> Result<Settings, SettingsProblem> {
 }
 
 /// Every `KEY=value` line, the last per key winning, values unquoted.
-fn values(contents: &str) -> BTreeMap<&str, Zeroizing<String>> {
+pub fn values(contents: &str) -> BTreeMap<&str, Zeroizing<String>> {
     contents
         .lines()
         .filter_map(|line| line_parser(line).ok().map(|(_, pair)| pair))

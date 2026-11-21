@@ -54,6 +54,25 @@ fn a_local_stack_names_the_teammate_network_and_production_none() {
 }
 
 #[test]
+fn the_teammates_table_names_the_engine_and_its_exceptions() {
+    let config: Config = toml::from_str(&format!(
+        "{DEFAULT}\n[teammates]\nengine = \"podman\"\n\n[[teammates.allow]]\nnetwork = \"10.20.0.5/32\"\nports = [8101]\n"
+    ))
+    .expect("a teammates table parses");
+    assert_eq!(config.teammates.engine, EngineChoice::Podman);
+    assert_eq!(
+        config.teammates.allow,
+        [AllowEntry {
+            network: "10.20.0.5/32".to_owned(),
+            ports: vec![8101],
+        }]
+    );
+    let default: Config = toml::from_str(DEFAULT).unwrap();
+    assert_eq!(default.teammates.engine, EngineChoice::Auto);
+    assert!(default.teammates.allow.is_empty());
+}
+
+#[test]
 fn embedded_credentials_parse() {
     let with_credentials = format!(
         "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\n",

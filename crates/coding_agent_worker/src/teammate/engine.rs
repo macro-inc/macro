@@ -9,7 +9,10 @@ use std::time::Duration;
 use agent_runtime_protocol::domain::schema::v0::{
     ContainerEngineKind, TeammateInstall, TeammateInstallId,
 };
+use ipnet::IpNet;
 use teammate_lifecycle::exit::{PREVIOUS_EXIT_VARIABLE, PreviousExit};
+
+use super::egress::NetworkFacts;
 
 /// The label naming a container's install.
 pub const INSTALL_LABEL: &str = "macro.teammate.install";
@@ -73,6 +76,8 @@ pub struct UnsafeMountPath(pub PathBuf);
 /// A container as the engine last saw it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerState {
+    /// Its id.
+    pub id: Option<String>,
     /// Whether it runs now.
     pub running: bool,
     /// Its [`GENERATION_LABEL`] and [`DELIVERY_LABEL`], when it has both.
@@ -117,9 +122,9 @@ pub struct RunSpec {
     pub seccomp_profile: PathBuf,
     /// The previous run's exit, for `teammate-boot`'s failed-boot count.
     pub previous_exit: PreviousExit,
-    /// A second network beside the install's own: a local stack's, so the
-    /// agent reaches its services by their names (development only).
-    pub extra_network: Option<TeammateNetwork>,
+    /// The holder whose network namespace the container joins (by id, so
+    /// a holder recreated under the name is never joined unchecked).
+    pub holder_id: String,
 }
 
 /// A Docker network name the engine reads only as a name: a letter or
@@ -234,14 +239,83 @@ pub trait Engine: Send + Sync + 'static {
 
     /// Wait for the container to exit and return its exit code.
     fn wait(&self, name: &str) -> impl Future<Output = Result<i64, EngineError>> + Send;
+
+    /// With `engine = "auto"`, set the engine [`Engine::info`] just found
+    /// aside for the next installed one; whether there is one.
+    fn next_engine(&self) -> bool;
+
+    /// Create and start an install's holder (it only owns the network
+    /// namespace) and return its container id.
+    fn run_holder(
+        &self,
+        spec: &HolderSpec,
+    ) -> impl Future<Output = Result<String, EngineError>> + Send;
+
+    /// What the holder's namespace and networks say: resolvers, gateways
+    /// and the networks' prefixes (not the host's: see `host_prefixes`).
+    fn network_facts(
+        &self,
+        holder_id: &str,
+        networks: &[String],
+    ) -> impl Future<Output = Result<NetworkFacts, EngineError>> + Send;
+
+    /// The addresses a name has inside the holder's namespace (a local
+    /// stack's service names resolve only there).
+    fn resolve(
+        &self,
+        holder_id: &str,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<std::net::IpAddr>, EngineError>> + Send;
+
+    /// The addresses and on-link prefixes of the machine the engine's
+    /// containers run on, read now.
+    fn host_prefixes(&self) -> impl Future<Output = Result<Vec<IpNet>, EngineError>> + Send;
+
+    /// Run the guard, a one-shot in the holder's namespace that alone has
+    /// `NET_ADMIN`: load `ruleset` with `nft -f -` (none: load nothing),
+    /// then print `nft -j list table`. It exits, and is removed, before
+    /// this returns.
+    fn guard(
+        &self,
+        holder_id: &str,
+        image_id: &str,
+        ruleset: Option<&str>,
+    ) -> impl Future<Output = Result<String, GuardError>> + Send;
+}
+
+/// The holder of an install's network namespace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HolderSpec {
+    /// The install it belongs to.
+    pub install_id: TeammateInstallId,
+    /// The image it runs (`sleep`, the teammate's pinned image).
+    pub image_id: String,
+    /// The networks it joins: the install's own, and a local stack's.
+    pub networks: Vec<String>,
+}
+
+/// `macro-teammate-<install>-net`: the holder's name.
+pub fn holder_name(install_id: &TeammateInstallId) -> String {
+    format!("{}-net", container_name(install_id))
+}
+
+/// Why the guard didn't put the ruleset in place.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum GuardError {
+    /// The engine couldn't run it (it may pass: backed off like a crash).
+    #[error("the engine could not run the guard: {0}")]
+    Engine(EngineError),
+    /// It ran and `nft` refused: isolation can't be put in place here.
+    #[error("the guard could not load the ruleset: {0}")]
+    Refused(String),
 }
 
 /// The arguments after `<engine>` that create a teammate container
 /// (docs/design/teammate-runtime.md, *The container*).
 ///
 /// uid 1000, a read-only root, no capabilities, no privilege gain, the
-/// teammate seccomp profile, process, memory and CPU limits, the install's
-/// own network, and exactly three mounts: the agent volume, the
+/// teammate seccomp profile, process, memory and CPU limits, the holder's
+/// network namespace (its egress policy loaded), and exactly three mounts: the agent volume, the
 /// provider volume read-only and the credentials file read-only. Never the
 /// host's home, an engine socket, `--privileged`, devices, published ports
 /// or the host's namespaces. `--restart no`: macrod alone starts it again.
@@ -296,16 +370,11 @@ pub fn run_arguments(spec: &RunSpec) -> Result<Vec<OsString>, UnsafeMountPath> {
             "--tmpfs".to_owned(),
             "/run/teammate-runtime".to_owned(),
             "--network".to_owned(),
-            network_name(&spec.install_id),
+            format!("container:{}", spec.holder_id),
         ]
         .into_iter()
         .map(OsString::from),
     );
-    // A second `--network` needs Docker Engine 25 or Podman.
-    if let Some(network) = &spec.extra_network {
-        arguments.push("--network".into());
-        arguments.push(network.as_str().into());
-    }
     arguments.extend(
         [
             "--mount".to_owned(),
@@ -336,4 +405,95 @@ pub fn run_arguments(spec: &RunSpec) -> Result<Vec<OsString>, UnsafeMountPath> {
         .map(OsString::from),
     );
     Ok(arguments)
+}
+
+/// The label naming what a teammate's container is for.
+pub const ROLE_LABEL: &str = "macro.teammate.role";
+
+/// The arguments after `<engine>` that create an install's holder: the
+/// pinned image running `sleep`, uid 1000, no capabilities, no privilege
+/// gain, read-only, small limits, on the install's networks. It shares
+/// nothing but its network namespace, and only by id (`--network
+/// container:<id>`, never `--pid` or `--ipc`).
+pub fn holder_arguments(spec: &HolderSpec) -> Vec<OsString> {
+    let mut arguments: Vec<OsString> = [
+        "run",
+        "--detach",
+        "--name",
+        &holder_name(&spec.install_id),
+        "--user",
+        "1000:1000",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--pids-limit",
+        "16",
+        "--memory",
+        "64m",
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect();
+    for network in &spec.networks {
+        arguments.push("--network".into());
+        arguments.push(network.into());
+    }
+    arguments.extend(
+        [
+            "--label".to_owned(),
+            format!("{INSTALL_LABEL}={}", spec.install_id.as_str()),
+            "--label".to_owned(),
+            format!("{ROLE_LABEL}=holder"),
+            "--restart".to_owned(),
+            "no".to_owned(),
+            "--entrypoint".to_owned(),
+            "sleep".to_owned(),
+            spec.image_id.clone(),
+            "infinity".to_owned(),
+        ]
+        .into_iter()
+        .map(OsString::from),
+    );
+    arguments
+}
+
+/// What the guard runs: load the ruleset from stdin (when there is one),
+/// then print the table.
+pub fn guard_script(load: bool) -> &'static str {
+    if load {
+        "nft -f - && nft -j list table inet macro_teammate"
+    } else {
+        "nft -j list table inet macro_teammate"
+    }
+}
+
+/// The arguments after `<engine>` that run the guard: in the holder's
+/// network namespace only, uid 0 with `NET_ADMIN` and no other capability,
+/// read-only, no mounts, the ruleset on stdin, removed when it exits.
+pub fn guard_arguments(holder_id: &str, image_id: &str, load: bool) -> Vec<OsString> {
+    [
+        "run",
+        "--rm",
+        "--interactive",
+        "--network",
+        &format!("container:{holder_id}"),
+        "--user",
+        "0:0",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--cap-add=NET_ADMIN",
+        "--security-opt=no-new-privileges",
+        "--pids-limit",
+        "16",
+        "--label",
+        &format!("{ROLE_LABEL}=guard"),
+        "--entrypoint",
+        "sh",
+        image_id,
+        "-c",
+        guard_script(load),
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect()
 }

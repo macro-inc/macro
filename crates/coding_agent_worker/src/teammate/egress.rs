@@ -422,3 +422,23 @@ fn write_set(text: &mut String, name: &str, kind: &str, elements: impl Iterator<
     let _ = writeln!(text, "\t\telements = {{ {} }}", elements.join(", "));
     let _ = writeln!(text, "\t}}");
 }
+
+/// What `nft -j list table` prints for [`ruleset`]'s output, for fakes
+/// that have no nft.
+#[cfg(test)]
+pub(crate) fn simulated_readback(allow: &[Allow], facts: &NetworkFacts) -> String {
+    use serde_json::json;
+
+    let (blocked4, blocked6) = blocked(facts);
+    let element = |net: IpNet| json!({ "prefix": { "addr": net.network().to_string(), "len": net.prefix_len() } });
+    let mut objects = vec![
+        json!({ "table": { "family": "inet", "name": TABLE } }),
+        json!({ "chain": { "family": "inet", "table": TABLE, "name": "output", "type": "filter", "hook": "output", "prio": 0, "policy": "accept" } }),
+        json!({ "set": { "name": "blocked4", "elem": blocked4.into_iter().map(|net| element(IpNet::V4(net))).collect::<Vec<_>>() } }),
+        json!({ "set": { "name": "blocked6", "elem": blocked6.into_iter().map(|net| element(IpNet::V6(net))).collect::<Vec<_>>() } }),
+    ];
+    for expr in expected_rules(allow, facts) {
+        objects.push(json!({ "rule": { "chain": "output", "expr": expr } }));
+    }
+    json!({ "nftables": objects }).to_string()
+}

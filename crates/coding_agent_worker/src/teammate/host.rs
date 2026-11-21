@@ -53,6 +53,7 @@ pub fn host_report(
     platform: Platform,
     engine: Result<EngineInfo, EngineUnavailable>,
     user_namespaces: Option<bool>,
+    isolation: Option<bool>,
     installs: Vec<TeammateInstall>,
 ) -> TeammateHostReport {
     let unsupported_platform =
@@ -96,6 +97,8 @@ pub fn host_report(
         .is_some_and(|free| free < MINIMUM_DISK_FREE_MIB)
     {
         below(HostResource::Disk)
+    } else if isolation == Some(false) {
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
     } else if user_namespaces == Some(false) {
         Some(TeammateHostProblem::InnerSandboxUnavailable)
     } else {

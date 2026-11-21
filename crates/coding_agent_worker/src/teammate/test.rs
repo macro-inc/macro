@@ -17,7 +17,7 @@ use super::engine::{
 };
 use super::host::{Platform, can_host, host_report};
 use super::store::{Lifecycle, Store, StoredInstall};
-use super::{Status, TeammateRequest, Teammates};
+use super::{Egress, Status, TeammateRequest, Teammates};
 use teammate_lifecycle::exit::PreviousExit;
 
 const SECCOMP: &str = "/home/ada/.macrod/teammates/teammate-seccomp.json";
@@ -57,6 +57,8 @@ enum Call {
     CreateVolume(String),
     RemoveVolume(String),
     Run(RunSpec),
+    RunHolder(super::engine::HolderSpec),
+    Guard { holder_id: String, loaded: bool },
     Stop(String, Duration),
     RemoveContainer(String),
 }
@@ -75,12 +77,40 @@ struct FakeState {
     refuse_runs: u32,
     /// Whether removing a volume fails.
     volume_removal_fails: bool,
+    /// Holders started so far (for their ids).
+    holders: u32,
+    /// What the guard does: load and read back as rendered, refuse, or
+    /// print this table.
+    guard: FakeGuard,
+    /// Another installed engine `auto` may turn to, and its guard.
+    next_engine: Option<FakeGuard>,
+    /// The ruleset the guard last loaded.
+    last_ruleset: Option<String>,
+}
+
+#[derive(Clone)]
+enum FakeGuard {
+    Loads,
+    Refuses,
+    ReadsBack(String),
+}
+
+/// The facts the fake engine's namespaces have.
+fn fake_facts() -> super::egress::NetworkFacts {
+    super::egress::NetworkFacts {
+        resolvers: vec!["8.8.8.8".parse().unwrap()],
+        host_prefixes: vec!["192.168.1.0/24".parse().unwrap()],
+        gateways: vec!["172.20.0.1".parse().unwrap()],
+        network_prefixes: vec!["172.20.0.0/16".parse().unwrap()],
+    }
 }
 
 /// An engine in memory. Containers exit with the codes the test sends.
 #[derive(Clone)]
 pub(crate) struct FakeEngine {
     state: Arc<Mutex<FakeState>>,
+    /// Ends the running holders' waits (the test kills them).
+    holder_exits: Arc<tokio::sync::Notify>,
     exits: Arc<tokio::sync::Mutex<mpsc::UnboundedReceiver<i64>>>,
 }
 
@@ -98,7 +128,12 @@ impl FakeEngine {
                 calls: Vec::new(),
                 refuse_runs: 0,
                 volume_removal_fails: false,
+                holders: 0,
+                guard: FakeGuard::Loads,
+                next_engine: None,
+                last_ruleset: None,
             })),
+            holder_exits: Arc::new(tokio::sync::Notify::new()),
             exits: Arc::new(tokio::sync::Mutex::new(exits)),
         };
         (engine, exit)
@@ -202,6 +237,7 @@ impl Engine for FakeEngine {
         state.containers.insert(
             spec.container(),
             ContainerState {
+                id: Some(format!("teammate-{}", spec.delivery.generation)),
                 running: true,
                 delivery: Some(spec.delivery),
                 image_id: Some(spec.image_id.clone()),
@@ -227,6 +263,15 @@ impl Engine for FakeEngine {
     }
 
     async fn wait(&self, name: &str) -> Result<i64, EngineError> {
+        if name.starts_with("holder-") {
+            self.holder_exits.notified().await;
+            for container in self.state().containers.values_mut() {
+                if container.id.as_deref() == Some(name) {
+                    container.running = false;
+                }
+            }
+            return Ok(137);
+        }
         let code = self
             .exits
             .lock()
@@ -238,6 +283,83 @@ impl Engine for FakeEngine {
             container.running = false;
         }
         Ok(code)
+    }
+
+    fn next_engine(&self) -> bool {
+        let mut state = self.state();
+        match state.next_engine.take() {
+            Some(guard) => {
+                state.guard = guard;
+                true
+            }
+            None => false,
+        }
+    }
+
+    async fn run_holder(&self, spec: &super::engine::HolderSpec) -> Result<String, EngineError> {
+        let mut state = self.state();
+        state.calls.push(Call::RunHolder(spec.clone()));
+        state.holders += 1;
+        let id = format!("holder-{}", state.holders);
+        state.containers.insert(
+            super::engine::holder_name(&spec.install_id),
+            ContainerState {
+                id: Some(id.clone()),
+                running: true,
+                delivery: None,
+                image_id: Some(spec.image_id.clone()),
+            },
+        );
+        Ok(id)
+    }
+
+    async fn network_facts(
+        &self,
+        _holder_id: &str,
+        _networks: &[String],
+    ) -> Result<super::egress::NetworkFacts, EngineError> {
+        Ok(super::egress::NetworkFacts {
+            host_prefixes: Vec::new(),
+            ..fake_facts()
+        })
+    }
+
+    async fn host_prefixes(&self) -> Result<Vec<ipnet::IpNet>, EngineError> {
+        Ok(fake_facts().host_prefixes)
+    }
+
+    async fn resolve(
+        &self,
+        _holder_id: &str,
+        name: &str,
+    ) -> Result<Vec<std::net::IpAddr>, EngineError> {
+        match name {
+            "agent-harness-service" => Ok(vec!["172.30.0.8".parse().unwrap()]),
+            _ => Err(EngineError(format!("{name}: no such host"))),
+        }
+    }
+
+    async fn guard(
+        &self,
+        holder_id: &str,
+        _image_id: &str,
+        ruleset: Option<&str>,
+    ) -> Result<String, super::engine::GuardError> {
+        let mut state = self.state();
+        state.calls.push(Call::Guard {
+            holder_id: holder_id.to_owned(),
+            loaded: ruleset.is_some(),
+        });
+        if let Some(ruleset) = ruleset {
+            state.last_ruleset = Some(ruleset.to_owned());
+        }
+        match &state.guard {
+            FakeGuard::Loads => Ok(super::egress::simulated_readback(&[], &fake_facts())),
+            FakeGuard::Refuses => Err(super::engine::GuardError::Refused(
+                "nft: Operation not permitted".to_owned(),
+            )),
+            FakeGuard::ReadsBack(table) => Ok(table.clone()),
+        }
     }
 }
 
@@ -354,7 +476,13 @@ async fn fixture_with(directory: tempfile::TempDir, store: Store) -> Fixture {
         .state()
         .registry
         .insert(TAGGED.to_owned(), IMAGE_ID.to_owned());
-    let teammates = Teammates::new(engine.clone(), store.clone(), LINUX, SECCOMP.into(), None);
+    let teammates = Teammates::new(
+        engine.clone(),
+        store.clone(),
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let statuses = teammates.subscribe();
     teammates.detect().await;
     Fixture {
@@ -381,7 +509,7 @@ async fn next_states(
 #[test]
 fn the_host_report_names_each_problem_in_the_order_to_fix_it() {
     let problem = |platform, engine, user_namespaces| {
-        host_report(platform, engine, user_namespaces, Vec::new()).problem
+        host_report(platform, engine, user_namespaces, None, Vec::new()).problem
     };
     let with = |change: fn(&mut EngineInfo)| {
         let mut info = docker_info();
@@ -467,7 +595,7 @@ async fn the_capability_is_declared_only_when_an_engine_answers_and_nothing_is_w
             Store::new(directory.path().to_owned()),
             LINUX,
             SECCOMP.into(),
-            None,
+            Egress::default(),
         );
 
         let report = teammates.detect().await;
@@ -492,7 +620,7 @@ fn the_container_runs_with_exactly_the_specified_flags() {
         credentials_file: "/home/ada/.macrod/teammates/h/install-1/agent.env".into(),
         seccomp_profile: SECCOMP.into(),
         previous_exit: PreviousExit::Exited { code: 78 },
-        extra_network: None,
+        holder_id: "holder-1".to_owned(),
     };
 
     let arguments: Vec<String> = run_arguments(&spec)
@@ -528,7 +656,7 @@ fn the_container_runs_with_exactly_the_specified_flags() {
             "--tmpfs",
             "/run/teammate-runtime",
             "--network",
-            "macro-teammate-install-1",
+            "container:holder-1",
             "--mount",
             "type=volume,src=macro-teammate-install-1,dst=/teammate",
             "--mount",
@@ -784,6 +912,7 @@ async fn an_exit_of_a_container_with_another_deliverys_label_is_not_counted() {
     fixture.engine.state().containers.insert(
         "macro-teammate-install-1".to_owned(),
         ContainerState {
+            id: None,
             running: true,
             delivery: Some(Delivery {
                 generation: 1,
@@ -861,12 +990,29 @@ async fn a_restarted_macrod_adopts_the_running_container() {
     engine.state().containers.insert(
         "macro-teammate-install-1".to_owned(),
         ContainerState {
+            id: None,
             running: true,
             delivery: Some(Delivery::of(&install(4))),
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
+    // Its holder, with the policy in place (the fake guard reads it back).
+    engine.state().containers.insert(
+        "macro-teammate-install-1-net".to_owned(),
+        ContainerState {
+            id: Some("holder-0".to_owned()),
+            running: true,
+            delivery: None,
+            image_id: Some(IMAGE_ID.to_owned()),
+        },
+    );
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
 
     let report = teammates.detect().await;
@@ -876,7 +1022,14 @@ async fn a_restarted_macrod_adopts_the_running_container() {
         next_states(&mut statuses, 1).await,
         [TeammateRunState::Running]
     );
-    assert!(engine.calls().is_empty(), "{:?}", engine.calls());
+    // Adopted with its policy only read back: nothing started or loaded.
+    assert_eq!(
+        engine.calls(),
+        [Call::Guard {
+            holder_id: "holder-0".to_owned(),
+            loaded: false
+        }]
+    );
 
     // Still supervised: a restart request is honoured.
     engine
@@ -907,12 +1060,19 @@ async fn a_restarted_macrod_starts_an_exited_container_again() {
     engine.state().containers.insert(
         "macro-teammate-install-1".to_owned(),
         ContainerState {
+            id: None,
             running: false,
             delivery: Some(Delivery::of(&install(4))),
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
 
     teammates.detect().await;
@@ -952,9 +1112,10 @@ async fn a_stop_deletes_the_container_its_network_both_volumes_and_the_install()
         })
         .expect("stopped with a 90 s grace");
     assert_eq!(
-        calls[stop + 1..stop + 5],
+        calls[stop + 1..stop + 6],
         [
             Call::RemoveContainer("macro-teammate-install-1".to_owned()),
+            Call::RemoveContainer("macro-teammate-install-1-net".to_owned()),
             Call::RemoveNetwork("macro-teammate-install-1".to_owned()),
             Call::RemoveVolume("macro-teammate-install-1".to_owned()),
             Call::RemoveVolume("macro-teammate-install-1-provider".to_owned()),
@@ -972,7 +1133,13 @@ async fn a_run_on_a_machine_that_cant_host_fails_without_keeping_anything() {
     let directory = tempfile::tempdir().unwrap();
     let store = Store::new(directory.path().to_owned());
     let (engine, _exit) = FakeEngine::new(Err(EngineUnavailable::Unreachable));
-    let teammates = Teammates::new(engine.clone(), store.clone(), LINUX, SECCOMP.into(), None);
+    let teammates = Teammates::new(
+        engine.clone(),
+        store.clone(),
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
 
@@ -1038,7 +1205,13 @@ async fn the_real_engine_runs_the_container_confined_and_deletes_it_on_stop() {
         super::SECCOMP_PROFILE.as_bytes(),
     )
     .unwrap();
-    let teammates = Teammates::new(engine, store.clone(), Platform::current(), seccomp, None);
+    let teammates = Teammates::new(
+        engine,
+        store.clone(),
+        Platform::current(),
+        seccomp,
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
 
@@ -1238,7 +1411,7 @@ async fn a_terminal_exit_survives_a_macrod_restart_and_a_new_delivery_starts_it(
         fixture.store.clone(),
         LINUX,
         SECCOMP.into(),
-        None,
+        Egress::default(),
     );
     let mut statuses = restarted_macrod.subscribe();
     restarted_macrod.detect().await;
@@ -1282,7 +1455,7 @@ async fn a_macrod_restart_in_a_backoff_keeps_the_last_exit() {
         fixture.store.clone(),
         LINUX,
         SECCOMP.into(),
-        None,
+        Egress::default(),
     );
     let mut statuses = restarted_macrod.subscribe();
     restarted_macrod.detect().await;
@@ -1306,12 +1479,29 @@ async fn an_adopted_containers_exit_is_passed_on_once() {
     engine.state().containers.insert(
         "macro-teammate-install-1".to_owned(),
         ContainerState {
+            id: None,
             running: true,
             delivery: Some(Delivery::of(&install(4))),
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
+    // Its holder, with the policy in place (the fake guard reads it back).
+    engine.state().containers.insert(
+        "macro-teammate-install-1-net".to_owned(),
+        ContainerState {
+            id: Some("holder-0".to_owned()),
+            running: true,
+            delivery: None,
+            image_id: Some(IMAGE_ID.to_owned()),
+        },
+    );
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
     next_states(&mut statuses, 1).await;
@@ -1337,7 +1527,13 @@ async fn an_exit_macrod_did_not_see_is_passed_as_unknown() {
         .state()
         .images
         .insert(IMAGE_ID.to_owned(), IMAGE_ID.to_owned());
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
 
     teammates.detect().await;
@@ -1592,7 +1788,13 @@ async fn the_real_engine_swaps_images_rolls_back_and_keeps_the_volume() {
         super::SECCOMP_PROFILE.as_bytes(),
     )
     .unwrap();
-    let teammates = Teammates::new(engine, store.clone(), Platform::current(), seccomp, None);
+    let teammates = Teammates::new(
+        engine,
+        store.clone(),
+        Platform::current(),
+        seccomp,
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
     let name = format!("macro-teammate-{}", install_id.as_str());
@@ -1699,7 +1901,7 @@ async fn a_stop_whose_deletion_failed_is_not_started_by_a_restarted_macrod() {
         fixture.store.clone(),
         LINUX,
         SECCOMP.into(),
-        None,
+        Egress::default(),
     );
     let mut statuses = restarted_macrod.subscribe();
     restarted_macrod.detect().await;
@@ -1751,12 +1953,19 @@ async fn a_running_container_on_another_image_is_updated_not_adopted() {
     engine.state().containers.insert(
         "macro-teammate-install-1".to_owned(),
         ContainerState {
+            id: None,
             running: true,
             delivery: Some(Delivery::of(&install(4))),
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
     let mut statuses = teammates.subscribe();
 
     teammates.detect().await;
@@ -1800,7 +2009,7 @@ pub(crate) async fn fake_hosting() -> (
         store,
         LINUX,
         SECCOMP.into(),
-        None,
+        Egress::default(),
     ));
     let report = teammates.detect().await;
     ((teammates, report), engine, exit, directory)
@@ -1837,7 +2046,7 @@ fn a_credentials_path_a_mount_option_list_cant_carry_is_refused() {
             credentials_file: path.into(),
             seccomp_profile: SECCOMP.into(),
             previous_exit: PreviousExit::Unknown,
-            extra_network: None,
+            holder_id: "holder-1".to_owned(),
         };
         assert_eq!(
             run_arguments(&spec),
@@ -1865,35 +2074,85 @@ pub(crate) fn run_images(engine: &FakeEngine) -> Vec<String> {
 }
 
 #[test]
-fn a_local_stack_network_is_a_second_network_on_the_run() {
-    let spec = RunSpec {
+fn the_holder_runs_with_exactly_the_specified_flags() {
+    let spec = super::engine::HolderSpec {
         install_id: TeammateInstallId::new("install-1").unwrap(),
-        delivery: Delivery {
-            generation: 1,
-            delivery: 1,
-        },
         image_id: IMAGE_ID.to_owned(),
-        credentials_file: "/home/ada/.macrod/teammates/h/install-1/agent.env".into(),
-        seccomp_profile: SECCOMP.into(),
-        previous_exit: PreviousExit::Unknown,
-        extra_network: Some(TeammateNetwork::new("macro-wolf_services").unwrap()),
+        networks: vec![
+            "macro-teammate-install-1".to_owned(),
+            "macro-wolf_services".to_owned(),
+        ],
     };
-
-    let arguments: Vec<String> = run_arguments(&spec)
-        .unwrap()
+    let arguments: Vec<String> = super::engine::holder_arguments(&spec)
         .into_iter()
         .map(|argument| argument.into_string().unwrap())
         .collect();
-
-    let networks: Vec<&str> = arguments
-        .windows(2)
-        .filter(|pair| pair[0] == "--network")
-        .map(|pair| pair[1].as_str())
-        .collect();
-    // The install's own network stays; the stack's is added.
     assert_eq!(
-        networks,
-        ["macro-teammate-install-1", "macro-wolf_services"]
+        arguments,
+        [
+            "run",
+            "--detach",
+            "--name",
+            "macro-teammate-install-1-net",
+            "--user",
+            "1000:1000",
+            "--read-only",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            "--pids-limit",
+            "16",
+            "--memory",
+            "64m",
+            "--network",
+            "macro-teammate-install-1",
+            "--network",
+            "macro-wolf_services",
+            "--label",
+            "macro.teammate.install=install-1",
+            "--label",
+            "macro.teammate.role=holder",
+            "--restart",
+            "no",
+            "--entrypoint",
+            "sleep",
+            IMAGE_ID,
+            "infinity",
+        ]
+    );
+}
+
+#[test]
+fn the_guard_runs_with_exactly_the_specified_flags() {
+    let arguments: Vec<String> = super::engine::guard_arguments("holder-1", IMAGE_ID, true)
+        .into_iter()
+        .map(|argument| argument.into_string().unwrap())
+        .collect();
+    // The holder's network namespace only (no --pid, --ipc or mounts), uid 0
+    // with NET_ADMIN alone, the ruleset on stdin, removed when it exits.
+    assert_eq!(
+        arguments,
+        [
+            "run",
+            "--rm",
+            "--interactive",
+            "--network",
+            "container:holder-1",
+            "--user",
+            "0:0",
+            "--read-only",
+            "--cap-drop=ALL",
+            "--cap-add=NET_ADMIN",
+            "--security-opt=no-new-privileges",
+            "--pids-limit",
+            "16",
+            "--label",
+            "macro.teammate.role=guard",
+            "--entrypoint",
+            "sh",
+            IMAGE_ID,
+            "-c",
+            "nft -f - && nft -j list table inet macro_teammate",
+        ]
     );
 }
 
@@ -1907,7 +2166,7 @@ fn a_teammate_network_name_is_one_the_engine_reads_as_a_name() {
 }
 
 #[tokio::test]
-async fn the_teammate_network_reaches_every_run() {
+async fn the_teammate_network_is_joined_by_the_holder() {
     let directory = tempfile::tempdir().unwrap();
     let store = Store::new(directory.path().join("teammates/harness-1"));
     let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
@@ -1921,7 +2180,10 @@ async fn the_teammate_network_reaches_every_run() {
         store,
         LINUX,
         SECCOMP.into(),
-        Some(network.clone()),
+        Egress {
+            network: Some(network.clone()),
+            allow: Vec::new(),
+        },
     );
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
@@ -1929,14 +2191,20 @@ async fn the_teammate_network_reaches_every_run() {
     teammates.handle(run_request(1));
     next_states(&mut statuses, 3).await;
 
-    let Some(Call::Run(spec)) = engine
+    let Some(Call::RunHolder(spec)) = engine
         .calls()
         .into_iter()
-        .rfind(|call| matches!(call, Call::Run(_)))
+        .rfind(|call| matches!(call, Call::RunHolder(_)))
     else {
-        panic!("not run");
+        panic!("no holder");
     };
-    assert_eq!(spec.extra_network, Some(network));
+    assert_eq!(
+        spec.networks,
+        [
+            "macro-teammate-install-1".to_owned(),
+            network.as_str().to_owned()
+        ]
+    );
 }
 
 /// A new image replaced the settled one and runs, but not yet for its whole
@@ -1990,6 +2258,7 @@ fn the_list_shows_the_image_the_container_runs_and_a_rollback() {
     update.fetched(teammate_lifecycle::replacement::Fetch::Unavailable);
     kept.lifecycle.update = Some(update);
     let running = Observed::Container(ContainerState {
+        id: None,
         running: true,
         delivery: Some(Delivery::of(&install(3))),
         image_id: Some(OTHER_IMAGE_ID.to_owned()),
@@ -2008,5 +2277,321 @@ fn the_list_shows_the_image_the_container_runs_and_a_rollback() {
             "{:<40} {:>10}  {:<12}  absent",
             "install-1", 1, "aaaaaaaaaaaa"
         )
+    );
+}
+
+#[tokio::test]
+async fn the_agent_starts_only_after_its_holder_and_a_checked_guard() {
+    let mut fixture = fixture().await;
+
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    let calls = fixture.engine.calls();
+    let position = |wanted: &dyn Fn(&Call) -> bool| calls.iter().position(wanted).unwrap();
+    let network =
+        position(&|call| *call == Call::CreateNetwork("macro-teammate-install-1".to_owned()));
+    let holder = position(&|call| matches!(call, Call::RunHolder(_)));
+    let guard = position(&|call| {
+        *call
+            == Call::Guard {
+                holder_id: "holder-1".to_owned(),
+                loaded: true,
+            }
+    });
+    let run = position(&|call| matches!(call, Call::Run(_)));
+    assert!(
+        network < holder && holder < guard && guard < run,
+        "{calls:?}"
+    );
+    let Call::Run(spec) = &calls[run] else {
+        unreachable!()
+    };
+    assert_eq!(spec.holder_id, "holder-1");
+}
+
+#[tokio::test]
+async fn a_guard_that_cant_load_the_policy_refuses_the_start() {
+    let mut fixture = fixture().await;
+    fixture.engine.state().guard = FakeGuard::Refuses;
+
+    fixture.teammates.handle(run_request(1));
+
+    assert_eq!(
+        next_states(&mut fixture.statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Failed {
+                reason: TeammateRunFailure::NetworkIsolationUnavailable
+            }
+        ]
+    );
+    assert_eq!(fixture.engine.runs(), 0);
+}
+
+#[tokio::test]
+async fn a_policy_that_reads_back_wrong_refuses_the_start() {
+    let mut fixture = fixture().await;
+    fixture.engine.state().guard = FakeGuard::ReadsBack(r#"{"nftables": []}"#.to_owned());
+
+    fixture.teammates.handle(run_request(1));
+
+    assert_eq!(
+        next_states(&mut fixture.statuses, 3).await[2],
+        TeammateRunState::Failed {
+            reason: TeammateRunFailure::NetworkIsolationUnavailable
+        }
+    );
+    assert_eq!(fixture.engine.runs(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_holder_that_exits_is_a_crash_and_the_next_start_rebuilds_it() {
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    // The holder ends; the agent has no network, so it is stopped.
+    fixture.engine.holder_exits.notify_waiters();
+
+    assert_eq!(next_states(&mut fixture.statuses, 3).await, restarted(1));
+    let calls = fixture.engine.calls();
+    let holders: Vec<&Call> = calls
+        .iter()
+        .filter(|call| matches!(call, Call::RunHolder(_)))
+        .collect();
+    assert_eq!(holders.len(), 2, "{calls:?}");
+    let Some(Call::Run(spec)) = calls.iter().rfind(|call| matches!(call, Call::Run(_))) else {
+        panic!("not run again");
+    };
+    assert_eq!(spec.holder_id, "holder-2");
+    assert!(calls.contains(&Call::Guard {
+        holder_id: "holder-2".to_owned(),
+        loaded: true
+    }));
+}
+
+#[tokio::test]
+async fn a_stop_removes_the_holder_with_the_install() {
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    fixture.teammates.handle(stop_request(1));
+    next_states(&mut fixture.statuses, 1).await;
+
+    assert!(fixture.engine.calls().contains(&Call::RemoveContainer(
+        "macro-teammate-install-1-net".to_owned()
+    )));
+    assert!(
+        !fixture
+            .engine
+            .state()
+            .containers
+            .contains_key("macro-teammate-install-1-net")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_adopted_teammate_without_a_holder_is_restarted_with_one() {
+    // A container from before enforced egress: no holder, open network.
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-1"));
+    store.save(&stored(install(4)), &environment().0).unwrap();
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine
+        .state()
+        .images
+        .insert(IMAGE_ID.to_owned(), IMAGE_ID.to_owned());
+    engine.state().containers.insert(
+        "macro-teammate-install-1".to_owned(),
+        ContainerState {
+            id: None,
+            running: true,
+            delivery: Some(Delivery::of(&install(4))),
+            image_id: Some(IMAGE_ID.to_owned()),
+        },
+    );
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
+    let mut statuses = teammates.subscribe();
+
+    teammates.detect().await;
+
+    // Refused for want of a holder (never reported running), stopped,
+    // rebuilt.
+    assert_eq!(next_states(&mut statuses, 3).await, restarted(1));
+    let calls = engine.calls();
+    assert!(
+        calls.iter().any(|call| matches!(call, Call::RunHolder(_))),
+        "{calls:?}"
+    );
+    let Some(Call::Run(spec)) = calls.iter().rfind(|call| matches!(call, Call::Run(_))) else {
+        panic!("not started again");
+    };
+    // holder-1 was the isolation probe's.
+    assert_eq!(spec.holder_id, "holder-2");
+}
+
+#[test]
+fn an_engine_that_cant_enforce_isolation_is_a_host_problem_before_the_sandbox() {
+    assert_eq!(
+        host_report(
+            LINUX,
+            Ok(docker_info()),
+            Some(false),
+            Some(false),
+            Vec::new()
+        )
+        .problem,
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
+    );
+    assert_eq!(
+        host_report(LINUX, Ok(docker_info()), Some(true), Some(true), Vec::new()).problem,
+        None
+    );
+}
+
+/// An engine with a kept install's image, and macrod restarting on it.
+async fn restarted_on(engine: &FakeEngine) -> (Teammates<FakeEngine>, tempfile::TempDir) {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-1"));
+    let mut kept = stored(install(1));
+    kept.lifecycle.policy.started(chrono::Utc::now());
+    store.save(&kept, &environment().0).unwrap();
+    engine
+        .state()
+        .images
+        .insert(IMAGE_ID.to_owned(), IMAGE_ID.to_owned());
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    );
+    (teammates, directory)
+}
+
+#[tokio::test]
+async fn an_engine_whose_isolation_probe_fails_is_reported_and_hosts_nothing() {
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine.state().guard = FakeGuard::Refuses;
+    let (teammates, _directory) = restarted_on(&engine).await;
+
+    let report = teammates.detect().await;
+
+    assert_eq!(
+        report.problem,
+        Some(TeammateHostProblem::NetworkIsolationUnavailable)
+    );
+    assert!(!can_host(&report));
+    // The probe cleaned up after itself.
+    assert!(engine.calls().contains(&Call::RemoveContainer(
+        "macro-teammate-isolation-probe-net".to_owned()
+    )));
+    assert!(engine.calls().contains(&Call::RemoveNetwork(
+        "macro-teammate-isolation-probe".to_owned()
+    )));
+}
+
+#[tokio::test]
+async fn auto_turns_to_the_next_engine_whose_probe_passes() {
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine.state().guard = FakeGuard::Refuses;
+    engine.state().next_engine = Some(FakeGuard::Loads);
+    let (teammates, _directory) = restarted_on(&engine).await;
+
+    let report = teammates.detect().await;
+
+    assert_eq!(report.problem, None);
+}
+
+#[test]
+fn the_engine_choice_names_which_engines_may_run_teammates() {
+    use crate::config::EngineChoice;
+    use agent_runtime_protocol::domain::schema::v0::ContainerEngineKind::{Docker, Podman};
+
+    let docker_only = super::cli::CliEngine::with_choice(EngineChoice::Docker);
+    assert!(docker_only.wanted(Docker) && !docker_only.wanted(Podman));
+    let podman_only = super::cli::CliEngine::with_choice(EngineChoice::Podman);
+    assert!(!podman_only.wanted(Docker) && podman_only.wanted(Podman));
+    let auto = super::cli::CliEngine::with_choice(EngineChoice::Auto);
+    assert!(auto.wanted(Docker) && auto.wanted(Podman));
+    // Choosing one engine never falls through to the other.
+    assert!(!docker_only.next_engine());
+}
+
+#[tokio::test]
+async fn a_local_stack_allows_only_the_services_the_agent_was_given() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-1"));
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine
+        .state()
+        .registry
+        .insert(TAGGED.to_owned(), IMAGE_ID.to_owned());
+    let services =
+        [super::egress::Allow::new("172.30.0.8/32".parse().unwrap(), vec![8080]).unwrap()];
+    engine.state().guard =
+        FakeGuard::ReadsBack(super::egress::simulated_readback(&services, &fake_facts()));
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Egress {
+            network: Some(TeammateNetwork::new("macro-wolf_services").unwrap()),
+            allow: Vec::new(),
+        },
+    );
+    let mut statuses = teammates.subscribe();
+    teammates.detect().await;
+
+    teammates.handle(TeammateRequest::Run {
+        install: install(1),
+        image: image(IMAGE_ID),
+        environment: AgentEnvironment(
+            [
+                (
+                    "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_owned(),
+                    "http://agent-harness-service:8080".to_owned(),
+                ),
+                // Doesn't resolve in the namespace: left out.
+                (
+                    "MACRO_GATEWAY".to_owned(),
+                    "https://nowhere:27409".to_owned(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        ),
+        traceparent: None,
+    });
+
+    assert_eq!(
+        next_states(&mut statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+    let ruleset = engine.state().last_ruleset.clone().unwrap();
+    let accepts: Vec<&str> = ruleset
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("tcp dport {"))
+        .collect();
+    // One address and port, not the stack's subnet (other teammates share it).
+    assert_eq!(
+        accepts,
+        ["ip daddr 172.30.0.8/32 tcp dport { 8080 } accept"]
     );
 }

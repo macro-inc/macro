@@ -4904,6 +4904,7 @@ dependencies = [
  "tracing-subscriber",
  "trigger_context",
  "tui-input",
+ "url",
  "uuid",
  "webbrowser",
  "webhook",

@@ -274,10 +274,17 @@ UDP and ICMP alike:
   192.168/16, 198.18/15, multicast and reserved; IPv6 `::1` off loopback,
   `::ffff:0:0/96` (v4-mapped), the NAT64 prefixes, `fc00::/7` (ULA,
   including `fd00:ec2::254`), `fe80::/10` and multicast.
-- **Exceptions:** only the owner's explicit `[teammates] allow` entries in
-  macrod's config, each a CIDR and its TCP ports. macrod rejects `/0`,
-  loopback, anything overlapping the metadata ranges, and an entry without
-  ports.
+- **Exceptions:** only the owner's explicit entries in macrod's config,
+  each a network and its TCP ports:
+
+  ```toml
+  [[teammates.allow]]
+  network = "10.20.0.5/32"
+  ports = [8101]
+  ```
+
+  macrod rejects `/0`, loopback, anything overlapping the metadata ranges,
+  and an entry without ports, when it starts.
 
 Because the filter sees the connection, not the lookup, DNS rebinding, a
 redirect, a proxy `CONNECT` to a private target and odd IP spellings all end

@@ -11,10 +11,14 @@ use std::time::Duration;
 use agent_runtime_protocol::domain::schema::v0::ContainerEngineKind;
 use serde::Deserialize;
 
+use super::egress::NetworkFacts;
 use super::engine::{
     ContainerState, DELIVERY_LABEL, Delivery, Engine, EngineError, EngineInfo, EngineUnavailable,
-    GENERATION_LABEL, RunSpec, run_arguments,
+    GENERATION_LABEL, GuardError, HolderSpec, RunSpec, guard_arguments, holder_arguments,
+    run_arguments,
 };
+use super::netfacts;
+use crate::config::EngineChoice;
 
 /// How long a quick engine command (info, inspect, create) may take.
 const QUICK_COMMAND: Duration = Duration::from_secs(30);
@@ -28,6 +32,7 @@ const LONGEST_MESSAGE: usize = 500;
 /// The engine found by the last [`Engine::info`].
 #[derive(Debug, Clone)]
 struct Found {
+    kind: ContainerEngineKind,
     program: PathBuf,
 }
 
@@ -35,12 +40,40 @@ struct Found {
 #[derive(Debug, Default)]
 pub struct CliEngine {
     found: Mutex<Option<Found>>,
+    choice: EngineChoice,
+    /// Engines `auto` set aside because they couldn't enforce isolation.
+    set_aside: Mutex<Vec<ContainerEngineKind>>,
 }
 
 impl CliEngine {
-    /// An engine not yet found; [`Engine::info`] finds it.
+    /// An engine not yet found; [`Engine::info`] finds it (`auto`).
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An engine of the configured choice.
+    pub fn with_choice(choice: EngineChoice) -> Self {
+        Self {
+            choice,
+            ..Self::default()
+        }
+    }
+
+    /// Whether `kind` may run teammates now.
+    pub(crate) fn wanted(&self, kind: ContainerEngineKind) -> bool {
+        let set_aside = self
+            .set_aside
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&kind);
+        let chosen = match (self.choice, kind) {
+            (EngineChoice::Auto, _)
+            | (EngineChoice::Docker, ContainerEngineKind::Docker)
+            | (EngineChoice::Podman, ContainerEngineKind::Podman) => true,
+            (EngineChoice::Docker, ContainerEngineKind::Podman)
+            | (EngineChoice::Podman, ContainerEngineKind::Docker) => false,
+        };
+        chosen && !set_aside
     }
 
     /// The engine command, for `macrod teammate` to run interactively.
@@ -107,7 +140,10 @@ impl CliEngine {
         *self
             .found
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Found { program });
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Found {
+            kind: ContainerEngineKind::Docker,
+            program,
+        });
         let rootless = info
             .security_options
             .iter()
@@ -135,7 +171,10 @@ impl CliEngine {
         *self
             .found
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Found { program });
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Found {
+            kind: ContainerEngineKind::Podman,
+            program,
+        });
         Ok(EngineInfo {
             kind: ContainerEngineKind::Podman,
             supported_version: version_at_least(&info.version.version, (4, 4)),
@@ -151,8 +190,10 @@ impl CliEngine {
 impl Engine for CliEngine {
     async fn info(&self) -> Result<EngineInfo, EngineUnavailable> {
         let paths = crate::executable::search_paths();
-        let docker = crate::executable::find(&paths, "docker");
-        let podman = crate::executable::find(&paths, "podman");
+        let docker = crate::executable::find(&paths, "docker")
+            .filter(|_| self.wanted(ContainerEngineKind::Docker));
+        let podman = crate::executable::find(&paths, "podman")
+            .filter(|_| self.wanted(ContainerEngineKind::Podman));
         if docker.is_none() && podman.is_none() {
             return Err(EngineUnavailable::NotInstalled);
         }
@@ -307,6 +348,7 @@ impl Engine for CliEngine {
             }
         });
         Ok(Some(ContainerState {
+            id: inspected.id,
             running: inspected.state.running,
             delivery,
             image_id,
@@ -352,6 +394,141 @@ impl Engine for CliEngine {
             .trim()
             .parse()
             .map_err(|_| EngineError("the engine's exit code is not a number".to_owned()))
+    }
+
+    fn next_engine(&self) -> bool {
+        if self.choice != EngineChoice::Auto {
+            return false;
+        }
+        let Ok(found) = self.found() else {
+            return false;
+        };
+        let mut set_aside = self
+            .set_aside
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if set_aside.contains(&found.kind) {
+            return false;
+        }
+        set_aside.push(found.kind);
+        let paths = crate::executable::search_paths();
+        [
+            ("docker", ContainerEngineKind::Docker),
+            ("podman", ContainerEngineKind::Podman),
+        ]
+        .into_iter()
+        .any(|(program, kind)| {
+            !set_aside.contains(&kind) && crate::executable::find(&paths, program).is_some()
+        })
+    }
+
+    async fn run_holder(&self, spec: &HolderSpec) -> Result<String, EngineError> {
+        self.succeed(holder_arguments(spec), QUICK_COMMAND).await
+    }
+
+    async fn network_facts(
+        &self,
+        holder_id: &str,
+        networks: &[String],
+    ) -> Result<NetworkFacts, EngineError> {
+        let found = self.found()?;
+        let resolv_conf = self
+            .succeed(
+                ["exec", holder_id, "cat", "/etc/resolv.conf"],
+                QUICK_COMMAND,
+            )
+            .await?;
+        let mut resolvers = netfacts::nameservers(&resolv_conf);
+        if found.kind == ContainerEngineKind::Docker {
+            // Docker's embedded resolver (127.0.0.11, on lo) forwards from
+            // inside the namespace to the daemon's upstreams.
+            resolvers.extend(netfacts::docker_upstream_resolvers());
+        }
+        resolvers.retain(|resolver| !resolver.is_loopback());
+        resolvers.sort();
+        resolvers.dedup();
+
+        let mut facts = NetworkFacts {
+            resolvers,
+            ..NetworkFacts::default()
+        };
+        for network in networks {
+            let inspected = self
+                .succeed(
+                    ["network", "inspect", "--format", "{{json .}}", network],
+                    QUICK_COMMAND,
+                )
+                .await?;
+            let (prefixes, gateways) = netfacts::network_subnets(&inspected)
+                .map_err(|error| EngineError(format!("network {network}: {error}")))?;
+            facts.network_prefixes.extend(prefixes);
+            facts.gateways.extend(gateways);
+        }
+        Ok(facts)
+    }
+
+    async fn resolve(
+        &self,
+        holder_id: &str,
+        name: &str,
+    ) -> Result<Vec<std::net::IpAddr>, EngineError> {
+        let printed = self
+            .succeed(["exec", holder_id, "getent", "ahosts", name], QUICK_COMMAND)
+            .await?;
+        Ok(netfacts::resolved_addresses(&printed))
+    }
+
+    async fn host_prefixes(&self) -> Result<Vec<ipnet::IpNet>, EngineError> {
+        let output = run(Path::new("ip"), ["-j", "address", "show"], QUICK_COMMAND).await?;
+        if !output.status.success() {
+            return Err(failure(&output));
+        }
+        netfacts::host_prefixes(&String::from_utf8_lossy(&output.stdout))
+            .map_err(|error| EngineError(format!("the host's addresses: {error}")))
+    }
+
+    async fn guard(
+        &self,
+        holder_id: &str,
+        image_id: &str,
+        ruleset: Option<&str>,
+    ) -> Result<String, GuardError> {
+        use tokio::io::AsyncWriteExt as _;
+
+        let found = self.found().map_err(GuardError::Engine)?;
+        let mut child = tokio::process::Command::new(&found.program)
+            .args(guard_arguments(holder_id, image_id, ruleset.is_some()))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|error| GuardError::Engine(EngineError(error.to_string())))?;
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| GuardError::Engine(EngineError("the guard's stdin".to_owned())))?;
+        let ruleset = ruleset.unwrap_or_default().to_owned();
+        let written = async move {
+            let written = stdin.write_all(ruleset.as_bytes()).await;
+            drop(stdin);
+            written
+        };
+        let (written, output) = tokio::time::timeout(QUICK_COMMAND * 2, async {
+            tokio::join!(written, child.wait_with_output())
+        })
+        .await
+        .map_err(|_| GuardError::Engine(EngineError("the guard took too long".to_owned())))?;
+        let output = output.map_err(|error| GuardError::Engine(EngineError(error.to_string())))?;
+        if let Err(error) = written {
+            return Err(GuardError::Engine(EngineError(format!(
+                "the ruleset: {error}"
+            ))));
+        }
+        if !output.status.success() {
+            return Err(GuardError::Refused(failure(&output).0));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 }
 
@@ -472,6 +649,8 @@ struct PodmanVersion {
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct InspectedContainer {
+    #[serde(default)]
+    id: Option<String>,
     state: InspectedState,
     config: InspectedConfig,
     #[serde(default)]

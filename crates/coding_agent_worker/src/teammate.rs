@@ -15,6 +15,8 @@ pub mod engine;
 pub mod host;
 pub mod hosted_unit;
 pub mod ingest;
+pub mod isolation;
+pub mod netfacts;
 pub mod store;
 pub mod supervisor;
 
@@ -53,6 +55,9 @@ const SECCOMP_PROFILE: &str = include_str!("../../../nix/macro-box/files/teammat
 /// unreachable: a hung engine must not hold up the runtime connection.
 const ENGINE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The install id the isolation probe runs under.
+const PROBE_INSTALL: &str = "isolation-probe";
+
 /// How long the user-namespace probe may take.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -85,18 +90,30 @@ pub fn host(
     harness_id: impl std::fmt::Display,
     ingest: ingest::IngestTarget,
     network: Option<&str>,
+    settings: &crate::config::TeammatesSettings,
 ) -> rootcause::Result<HostTeammates> {
     let seccomp_profile = install_seccomp_profile()?;
     let network = network
         .map(engine::TeammateNetwork::new)
         .transpose()
         .map_err(|error| rootcause::report!("[macro] teammate_network: {error}"))?;
+    let allow = settings
+        .allow
+        .iter()
+        .map(|entry| {
+            let network = entry.network.parse().map_err(|_| {
+                rootcause::report!("[[teammates.allow]]: {} is not a network", entry.network)
+            })?;
+            egress::Allow::new(network, entry.ports.clone())
+                .map_err(|error| rootcause::report!("[[teammates.allow]]: {error}"))
+        })
+        .collect::<rootcause::Result<Vec<_>>>()?;
     let mut teammates = Teammates::new(
-        cli::CliEngine::new(),
+        cli::CliEngine::with_choice(settings.engine),
         Store::for_harness(harness_id)?,
         Platform::current(),
         seccomp_profile,
-        network,
+        Egress { network, allow },
     );
     // The lifecycle spans go to the service from here on; without a client
     // they are dropped, and teammates are still hosted.
@@ -110,6 +127,15 @@ pub fn host(
         Err(error) => tracing::warn!(error = %error, "could not set up the teammate span ingest"),
     }
     Ok(teammates)
+}
+
+/// What a teammate's network may reach beyond the public internet.
+#[derive(Debug, Clone, Default)]
+pub struct Egress {
+    /// A local stack's network the holder also joins (development).
+    pub network: Option<engine::TeammateNetwork>,
+    /// The explicit exceptions (`[[teammates.allow]]`).
+    pub allow: Vec<egress::Allow>,
 }
 
 /// An install's state, as reported to the service.
@@ -196,8 +222,8 @@ struct Shared<EngineImpl> {
     store: Store,
     platform: Platform,
     seccomp_profile: PathBuf,
-    /// A local stack's network every container also joins (development).
-    network: Option<engine::TeammateNetwork>,
+    /// What every install's network may reach.
+    egress: Egress,
     statuses: broadcast::Sender<Status>,
     latest: Mutex<BTreeMap<TeammateInstallId, Status>>,
     /// The last engine check.
@@ -218,7 +244,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         store: Store,
         platform: Platform,
         seccomp_profile: PathBuf,
-        network: Option<engine::TeammateNetwork>,
+        egress: Egress,
     ) -> Self {
         let (statuses, _) = broadcast::channel(64);
         let shared = Arc::new(Shared {
@@ -226,7 +252,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             store,
             platform,
             seccomp_profile,
-            network,
+            egress,
             statuses,
             latest: Mutex::new(BTreeMap::new()),
             host: Mutex::new(None),
@@ -256,6 +282,16 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
                 .await
                 .unwrap_or(Err(EngineUnavailable::Unreachable));
             let installs = shared.store.installs();
+            let mut engine = engine;
+            let mut isolation = self.probe_isolation(&engine, &installs).await;
+            // `auto`: an engine that can't enforce the policy gives way to
+            // the next installed one, if that one can.
+            while isolation == Some(false) && shared.engine.next_engine() {
+                engine = tokio::time::timeout(ENGINE_CHECK_TIMEOUT, shared.engine.info())
+                    .await
+                    .unwrap_or(Err(EngineUnavailable::Unreachable));
+                isolation = self.probe_isolation(&engine, &installs).await;
+            }
             let user_namespaces = match &engine {
                 Ok(info) if info.supported_version => self.probe_user_namespaces(&installs).await,
                 _ => None,
@@ -264,6 +300,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
                 shared.platform,
                 engine,
                 user_namespaces,
+                isolation,
                 installs.into_iter().map(|stored| stored.install).collect(),
             )
         }
@@ -285,6 +322,60 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
 
     /// Probe user namespaces with a kept install's image, when one is here:
     /// the probe needs an image, and macrod fetches none just to probe.
+    /// Whether the engine can put an egress policy in place: a probe
+    /// install's holder, guard and readback, with a kept install's image
+    /// (`None` when there is none here yet, or no usable engine).
+    async fn probe_isolation(
+        &self,
+        engine: &Result<engine::EngineInfo, EngineUnavailable>,
+        installs: &[StoredInstall],
+    ) -> Option<bool> {
+        if !matches!(engine, Ok(info) if info.supported_version) {
+            return None;
+        }
+        let engine = &self.shared.engine;
+        for stored in installs {
+            let image_id = &stored.image.image_id;
+            if !matches!(engine.image_id(image_id).await, Ok(Some(local)) if &local == image_id) {
+                continue;
+            }
+            let probe = TeammateInstallId::new(PROBE_INSTALL).ok()?;
+            let network = network_name(&probe);
+            let probed = async {
+                engine
+                    .create_network(&network)
+                    .await
+                    .map_err(isolation::IsolationError::Engine)?;
+                isolation::isolate(
+                    engine,
+                    &isolation::Isolation {
+                        install_id: probe.clone(),
+                        image_id: image_id.clone(),
+                        networks: vec![network.clone()],
+                        allow: &[],
+                        services: &[],
+                    },
+                )
+                .await
+            };
+            let outcome = tokio::time::timeout(PROBE_TIMEOUT, probed).await;
+            let _ = engine.remove_container(&engine::holder_name(&probe)).await;
+            let _ = engine.remove_network(&network).await;
+            return match outcome {
+                Ok(Ok(_)) => Some(true),
+                Ok(Err(error)) => {
+                    tracing::warn!(error = %error, "this engine can't enforce a teammate's egress policy");
+                    Some(false)
+                }
+                Err(_) => {
+                    tracing::warn!("the network isolation probe took too long");
+                    Some(false)
+                }
+            };
+        }
+        None
+    }
+
     async fn probe_user_namespaces(&self, installs: &[StoredInstall]) -> Option<bool> {
         let engine = &self.shared.engine;
         for stored in installs {
@@ -582,6 +673,7 @@ async fn stop<EngineImpl: Engine>(
     }
     let deleted = async {
         engine.remove_container(&name).await?;
+        engine.remove_container(&engine::holder_name(id)).await?;
         engine.remove_network(&network_name(id)).await?;
         engine.remove_volume(&volume_name(id)).await?;
         engine.remove_volume(&provider_volume_name(id)).await
@@ -616,6 +708,17 @@ async fn end_supervisor(
     }
 }
 
+/// The service endpoints a kept agent environment names.
+fn local_services(credentials_file: &std::path::Path) -> Vec<(String, u16)> {
+    match std::fs::read_to_string(credentials_file) {
+        Ok(agent_env) => netfacts::service_endpoints(&agent_env),
+        Err(error) => {
+            tracing::warn!(error = %error, "could not read the agent environment for its services");
+            Vec::new()
+        }
+    }
+}
+
 /// Supervise a kept install. A request's trace (the current span) is handed
 /// on so the first fetch and start join it. The lifecycle is kept after
 /// each step, so a restarted macrod goes on from it.
@@ -631,7 +734,14 @@ fn spawn_supervisor<EngineImpl: Engine>(
     let supervision = Supervision {
         credentials_file: shared.store.credentials_file(&stored.install.install_id),
         seccomp_profile: shared.seccomp_profile.clone(),
-        network: shared.network.clone(),
+        network: shared.egress.network.clone(),
+        allow: shared.egress.allow.clone(),
+        // A local stack: its services the agent was given, one by one.
+        services: if shared.egress.network.is_some() {
+            local_services(&shared.store.credentials_file(&stored.install.install_id))
+        } else {
+            Vec::new()
+        },
         install: stored.install,
         image: stored.image,
         resume,

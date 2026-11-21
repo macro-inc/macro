@@ -21,10 +21,15 @@ use teammate_lifecycle::supervisor::{Action, ExitEvent, Phase, Terminal};
 use tracing::Instrument as _;
 
 use super::engine::{
-    Delivery, Engine, EngineError, RunSpec, container_name, network_name, provider_volume_name,
-    volume_name,
+    Delivery, Engine, EngineError, RunSpec, container_name, holder_name, network_name,
+    provider_volume_name, volume_name,
 };
+use super::isolation::{self, Isolation, IsolationError};
 use super::store::Lifecycle;
+
+/// How long an agent whose network is gone (its holder ended, or its
+/// policy didn't check out) has to stop: it can't sync anyway.
+const HOLDER_LOST_GRACE: Duration = Duration::from_secs(10);
 
 /// How long a stopping agent has for its last sync (`docker stop -t 90`)
 /// before it is killed.
@@ -41,8 +46,12 @@ pub struct Supervision {
     pub credentials_file: PathBuf,
     /// The teammate seccomp profile on the host.
     pub seccomp_profile: PathBuf,
-    /// A local stack's network the container also joins (development).
+    /// A local stack's network the holder also joins (development).
     pub network: Option<super::engine::TeammateNetwork>,
+    /// The egress policy's explicit exceptions.
+    pub allow: Vec<super::egress::Allow>,
+    /// On a local stack, the services the agent was given (host, port).
+    pub services: Vec<(String, u16)>,
     /// Whether macrod restarted and resumes this kept delivery (adopting
     /// its container if it still runs), rather than starting a new one.
     pub resume: bool,
@@ -177,6 +186,7 @@ pub async fn supervise<EngineImpl: Engine>(
         }
     };
 
+    let mut holder: Option<String>;
     let mut attempt = 0;
     let mut announce_restart = supervision.resume && exited_before && !adopted;
     let mut first_start = true;
@@ -209,10 +219,16 @@ pub async fn supervise<EngineImpl: Engine>(
                     .await;
                 keep(&lifecycle);
                 match started {
-                    Ok(previous_exit) => {
+                    Ok((previous_exit, started_holder)) => {
                         span.record("previous_exit", tracing::field::display(previous_exit));
+                        holder = Some(started_holder);
                     }
-                    Err(error) => {
+                    Err(StartError::Isolation(reason)) => {
+                        // Never an open fallback: the agent doesn't start.
+                        tracing::warn!(install_id = install.install_id.as_str(), generation = install.generation, reason = %reason, "the teammate's egress policy is not in place");
+                        return failed(&report, TeammateRunFailure::NetworkIsolationUnavailable);
+                    }
+                    Err(StartError::Engine(error)) => {
                         // Usually passing (an engine restarting, its socket
                         // gone, a full disk): backed off like a crash.
                         tracing::warn!(install_id = install.install_id.as_str(), generation = install.generation, error = %error, "the engine refused the teammate container");
@@ -227,7 +243,25 @@ pub async fn supervise<EngineImpl: Engine>(
                     }
                 }
             }
-            Action::Adopt => {}
+            Action::Adopt => {
+                // Adopted only with its policy still in place, as now
+                // rendered; else stopped and rebuilt like a crash.
+                match adopted_holder(engine, &supervision).await {
+                    Ok(adopted) => holder = Some(adopted),
+                    Err(reason) => {
+                        tracing::warn!(install_id = install.install_id.as_str(), reason = %reason, "the adopted teammate's egress policy is not in place; restarting it");
+                        let _ = engine.stop(&name, HOLDER_LOST_GRACE).await;
+                        let lost = ExitEvent {
+                            code: None,
+                            requested: false,
+                        };
+                        action = lifecycle.policy.exited(lost, clock.now());
+                        keep(&lifecycle);
+                        announce_restart = true;
+                        continue;
+                    }
+                }
+            }
             Action::Failed(terminal) => return failed(&report, terminal_failure(terminal)),
             Action::Stopped | Action::Nothing => {
                 report(TeammateRunState::Stopped);
@@ -239,7 +273,15 @@ pub async fn supervise<EngineImpl: Engine>(
             None => TeammateRunState::Running,
         });
 
-        let exit = wait(engine, &name, &mut lifecycle, &clock, &keep).await;
+        let exit = wait(
+            engine,
+            &name,
+            holder.as_deref(),
+            &mut lifecycle,
+            &clock,
+            &keep,
+        )
+        .await;
         if replaced(engine, &name, delivery).await {
             // Another delivery's container took the name: its exits are
             // its own supervisor's.
@@ -271,19 +313,34 @@ pub async fn supervise<EngineImpl: Engine>(
 async fn wait<EngineImpl: Engine>(
     engine: &EngineImpl,
     name: &str,
+    holder: Option<&str>,
     lifecycle: &mut Lifecycle,
     clock: &Clock,
     keep: &impl Fn(&Lifecycle),
 ) -> Result<i64, EngineError> {
     let mut exit = pin!(engine.wait(name));
+    // The holder ending takes the agent's network with it: the agent is
+    // stopped and counted as crashed, and its next start rebuilds both.
+    let holder_exit = async {
+        match holder {
+            Some(holder) => {
+                let _ = engine.wait(holder).await;
+            }
+            None => std::future::pending().await,
+        }
+    };
+    let mut holder_exit = pin!(holder_exit);
     loop {
-        let Some(trial_ends) = lifecycle.update.as_ref().and_then(ImageUpdate::trial_ends) else {
-            return exit.await;
-        };
-        let remaining = (trial_ends - clock.now()).to_std().unwrap_or_default();
+        let trial_ends = lifecycle.update.as_ref().and_then(ImageUpdate::trial_ends);
+        let remaining = trial_ends.map(|ends| (ends - clock.now()).to_std().unwrap_or_default());
         tokio::select! {
             code = &mut exit => return code,
-            () = tokio::time::sleep(remaining) => {
+            () = &mut holder_exit => {
+                tracing::warn!(container = name, "the teammate's holder exited; stopping the teammate");
+                let _ = engine.stop(name, HOLDER_LOST_GRACE).await;
+                return Err(EngineError("the holder of the teammate's network exited".to_owned()));
+            }
+            () = tokio::time::sleep(remaining.unwrap_or_default()), if remaining.is_some() => {
                 let now = clock.now();
                 let settled = lifecycle
                     .update
@@ -296,6 +353,53 @@ async fn wait<EngineImpl: Engine>(
                 }
             }
         }
+    }
+}
+
+/// The adopted agent's holder, with its policy read back and checked.
+async fn adopted_holder<EngineImpl: Engine>(
+    engine: &EngineImpl,
+    supervision: &Supervision,
+) -> Result<String, String> {
+    let install_id = &supervision.install.install_id;
+    let state = engine
+        .container(&holder_name(install_id))
+        .await
+        .map_err(|error| error.to_string())?;
+    let Some(holder_id) = state
+        .filter(|state| state.running)
+        .and_then(|state| state.id)
+    else {
+        return Err("it has no running holder (it predates enforced egress)".to_owned());
+    };
+    isolation::check(
+        engine,
+        &holder_id,
+        &isolation_of(supervision, &supervision.image.image_id),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    Ok(holder_id)
+}
+
+fn isolation_of<'supervision>(
+    supervision: &'supervision Supervision,
+    image_id: &str,
+) -> Isolation<'supervision> {
+    let install_id = &supervision.install.install_id;
+    let mut networks = vec![network_name(install_id)];
+    networks.extend(
+        supervision
+            .network
+            .iter()
+            .map(|network| network.as_str().to_owned()),
+    );
+    Isolation {
+        install_id: install_id.clone(),
+        image_id: image_id.to_owned(),
+        networks,
+        allow: &supervision.allow,
+        services: &supervision.services,
     }
 }
 
@@ -460,17 +564,43 @@ async fn fetch_image<EngineImpl: Engine>(
     }
 }
 
+/// Why a start didn't happen.
+#[derive(Debug)]
+enum StartError {
+    /// The engine failed a step: backed off like a crash.
+    Engine(EngineError),
+    /// The egress policy couldn't be put in place: never started open.
+    Isolation(String),
+}
+
+impl std::fmt::Display for StartError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Engine(error) => write!(formatter, "{error}"),
+            Self::Isolation(reason) => formatter.write_str(reason),
+        }
+    }
+}
+
+impl From<EngineError> for StartError {
+    fn from(error: EngineError) -> Self {
+        Self::Engine(error)
+    }
+}
+
 /// Stop the old container (an older delivery's agent gets [`STOP_GRACE`]
 /// for its last sync, its checkpoint, which the next boot sees as a clean
 /// stop) and remove it, make sure the install's network and volumes exist,
-/// and run `image`. Returns the exit passed to the boot.
+/// put the egress policy in place (a fresh holder, the guard, the
+/// readback), and only then run `image` in the holder's namespace. Returns
+/// the exit passed to the boot and the holder's id.
 async fn start<EngineImpl: Engine>(
     engine: &EngineImpl,
     supervision: &Supervision,
     image: &TeammateImage,
     lifecycle: &mut Lifecycle,
     clock: &Clock,
-) -> Result<PreviousExit, EngineError> {
+) -> Result<(PreviousExit, String), StartError> {
     let install_id = &supervision.install.install_id;
     let name = container_name(install_id);
     if let Some(state) = engine.container(&name).await?
@@ -490,6 +620,30 @@ async fn start<EngineImpl: Engine>(
     engine
         .create_volume(&provider_volume_name(install_id))
         .await?;
+
+    let span = tracing::info_span!(
+        "teammate.isolate",
+        install_id = install_id.as_str(),
+        generation = supervision.install.generation,
+        outcome = tracing::field::Empty,
+    );
+    let isolated = isolation::isolate(engine, &isolation_of(supervision, &image.image_id))
+        .instrument(span.clone())
+        .await;
+    span.record(
+        "outcome",
+        if isolated.is_ok() {
+            "enforced"
+        } else {
+            "refused"
+        },
+    );
+    let holder_id = match isolated {
+        Ok(holder_id) => holder_id,
+        Err(IsolationError::Engine(error)) => return Err(StartError::Engine(error)),
+        Err(IsolationError::Unavailable(reason)) => return Err(StartError::Isolation(reason)),
+    };
+
     let previous_exit = lifecycle.policy.started(clock.now());
     if let Some(update) = lifecycle.update.as_mut() {
         update.started(clock.now());
@@ -502,10 +656,10 @@ async fn start<EngineImpl: Engine>(
             credentials_file: supervision.credentials_file.clone(),
             seccomp_profile: supervision.seccomp_profile.clone(),
             previous_exit,
-            extra_network: supervision.network.clone(),
+            holder_id: holder_id.clone(),
         })
         .await?;
-    Ok(previous_exit)
+    Ok((previous_exit, holder_id))
 }
 
 /// The 64 hex digits of `sha256:<hex>`, `None` for anything else.

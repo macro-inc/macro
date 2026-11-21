@@ -107,8 +107,19 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   before every dial (`runtime.rs`), and the dial lists
   `teammate-container` only when nothing is wrong; each connection then
   sends the report and every install's last state (`teammate::Link`).
-  `[macro] teammate_network` (local stack only) adds a second `--network`,
-  the stack's, beside the install's own.
+  Egress is enforced (`isolation.rs`, `egress.rs`, `netfacts.rs`): each
+  start replaces the install's holder (`macro-teammate-<id>-net`, `sleep`,
+  owns the network namespace), runs the guard (uid 0, `NET_ADMIN` only, no
+  mounts, ruleset on stdin, `--rm`), reads the table back with `nft -j` and
+  checks it, and only then runs the agent with `--network container:<holder
+  id>`. A refused or mismatched policy is `failed: networkIsolationUnavailable`,
+  never an open start; a holder exit is a crash; adoption reads the policy
+  back. `[teammates] engine` (`auto` probes, falling through to the next
+  engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
+  teammate_network` (local stack only) makes the holder join the stack's
+  network and allows just the service host:port pairs in the agent's
+  environment, resolved in the holder (`getent`). `macrod teammate ruleset`
+  (hidden) prints the ruleset for JSON input.
   `RunTeammate`/`StopTeammate` go through one ordered queue: the highest
   `(generation, delivery)` wins and lower or equal ones are ignored; a new
   delivery stops the old container with `docker stop -t 90`; stops delete
