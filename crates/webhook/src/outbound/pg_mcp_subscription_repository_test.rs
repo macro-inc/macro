@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mcp::models::McpSubscriptionKey;
+use crate::domain::mcp::service::SWEEP_BATCH;
 use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -225,12 +226,54 @@ async fn sweeping_deletes_expired_rows_in_batches(pool: PgPool) -> anyhow::Resul
         .await?;
     }
     assert_eq!(index_rows(&pool).await?, 4);
+    // More than one batch: copies of an expired row under new ids.
+    let extra = u64::from(SWEEP_BATCH) - 1;
+    sqlx::query!(
+        r#"
+        INSERT INTO mcp_event_subscription (
+            id, user_id, subscription_id, event_type, arguments, filter,
+            endpoint_url, secret_ciphertext, secret_kms_key_id,
+            secret_encryption_version, expires_at
+        )
+        SELECT gen_random_uuid(), user_id, subscription_id || '_' || n, event_type,
+            arguments, filter, endpoint_url, secret_ciphertext, secret_kms_key_id,
+            secret_encryption_version, expires_at
+        FROM mcp_event_subscription
+        CROSS JOIN generate_series(1, $1::bigint) AS n
+        WHERE user_id = $2 AND expires_at <= now()
+        "#,
+        i64::try_from(extra)?,
+        OTHER,
+    )
+    .execute(&pool)
+    .await?;
 
-    assert_eq!(repo.delete_expired_batch(2).await?, 2);
-    assert_eq!(repo.delete_expired_batch(2).await?, 1);
-    assert_eq!(repo.delete_expired_batch(2).await?, 0);
+    assert_eq!(repo.delete_expired_batch().await?, u64::from(SWEEP_BATCH));
+    assert_eq!(repo.delete_expired_batch().await?, 2);
+    assert_eq!(repo.delete_expired_batch().await?, 0);
     assert_eq!(repo.get_live(live.id).await?, Some(live));
     assert_eq!(index_rows(&pool).await?, 1, "index rows go with their row");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_renamed_user_keeps_matching(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let stored = store(
+        &repo,
+        upsert(ME, URL, "mine", &["message.posted"], Duration::hours(1)),
+    )
+    .await?;
+    let renamed = "macro|renamed@example.com";
+    sqlx::query!(r#"UPDATE "User" SET id = $1 WHERE id = $2"#, renamed, ME)
+        .execute(&pool)
+        .await?;
+
+    assert_eq!(
+        candidates(&repo, &[renamed], "message.posted").await?,
+        vec![stored.id]
+    );
+    assert!(candidates(&repo, &[ME], "message.posted").await?.is_empty());
     Ok(())
 }
 

@@ -28,8 +28,11 @@ use uuid::Uuid;
 const INTERNAL_RETRY_DELAY: Duration = Duration::from_secs(30);
 /// Most audience users one match query names; a wider audience is matched
 /// in several, so each query's work stays bounded.
-pub const AUDIENCE_CHUNK: usize = 1_000;
-/// Expired subscriptions one sweep statement deletes.
+/// With at most 50 subscriptions per user and 4 KiB per filter, one query
+/// returns at most 5,000 filters (20 MiB).
+pub const AUDIENCE_CHUNK: usize = 100;
+/// Expired subscriptions one sweep statement deletes. The repository's SQL
+/// writes it as a literal, so the planner knows the limit in every plan.
 pub const SWEEP_BATCH: u32 = 500;
 /// Most sweep statements in one round; the next round continues.
 pub const SWEEP_MAX_BATCHES: u32 = 20;
@@ -299,7 +302,7 @@ impl<R: McpSubscriptionRepo> McpSubscriptionSweeper<R> {
             batches += 1;
             let removed = self
                 .repo
-                .delete_expired_batch(SWEEP_BATCH)
+                .delete_expired_batch()
                 .await
                 .map_err(McpSubscriptionError::internal)?;
             deleted += removed;

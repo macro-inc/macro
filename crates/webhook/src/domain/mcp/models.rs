@@ -29,7 +29,7 @@ pub const MAX_SUBSCRIPTIONS_PER_USER: u32 = 50;
 pub const MAX_ARGUMENTS_BYTES: usize = 4 * 1024;
 /// Largest compiled filter, in bytes of JSON. Matching reads every
 /// candidate's filter, so this bounds the work per event.
-pub const MAX_FILTER_BYTES: usize = 8 * 1024;
+pub const MAX_FILTER_BYTES: usize = 4 * 1024;
 /// Queue contract version of [`McpEventQueueMessage`].
 pub const MCP_EVENT_QUEUE_MESSAGE_VERSION: u8 = 1;
 /// Prefix of a delivery's `webhook-id`.

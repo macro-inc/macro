@@ -111,7 +111,8 @@ impl McpSubscriptionRepo for FakeRepo {
         Ok(rows.len() != before)
     }
 
-    async fn delete_expired_batch(&self, limit: u32) -> Result<u64, FakeError> {
+    async fn delete_expired_batch(&self) -> Result<u64, FakeError> {
+        let limit = SWEEP_BATCH;
         let mut rows = self.rows.lock().expect("lock");
         let now = Utc::now();
         let mut deleted = 0;

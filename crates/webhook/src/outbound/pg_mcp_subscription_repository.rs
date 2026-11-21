@@ -147,13 +147,14 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         .execute(&mut *transaction)
         .await?;
         // A refresh replaces its own row, so it does not count against itself;
-        // expired rows wait for the sweep and do not count either. The expiry
-        // is a FILTER, not a WHERE, so the plan reads only the user's rows.
+        // expired rows wait for the sweep and do not count either. The
+        // (user, expiry) index reads only the user's live rows, at most the
+        // quota.
         let others = sqlx::query_scalar!(
             r#"
-            SELECT count(*) FILTER (WHERE expires_at > now()) AS "count!"
+            SELECT count(*) AS "count!"
             FROM mcp_event_subscription
-            WHERE user_id = $1 AND subscription_id <> $2
+            WHERE user_id = $1 AND expires_at > now() AND subscription_id <> $2
             "#,
             user_id,
             upsert.subscription_id.as_str(),
@@ -202,7 +203,7 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         .fetch_one(&mut *transaction)
         .await?;
         // The event names index the row for matching; a refresh may change
-        // the filter, so they are rewritten.
+        // the filter and always changes the expiry, so they are rewritten.
         sqlx::query!(
             r#"
             DELETE FROM mcp_event_subscription_event
@@ -214,14 +215,17 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
         .await?;
         sqlx::query!(
             r#"
-            INSERT INTO mcp_event_subscription_event (user_id, event_name, subscription_row_id)
-            SELECT $1, event_name, $3
+            INSERT INTO mcp_event_subscription_event (
+                subscription_row_id, event_name, user_id, expires_at
+            )
+            SELECT $1, event_name, $3, $4
             FROM unnest($2::text[]) AS events(event_name)
             ON CONFLICT DO NOTHING
             "#,
-            user_id,
-            &events,
             row.id,
+            &events,
+            user_id,
+            row.expires_at,
         )
         .execute(&mut *transaction)
         .await?;
@@ -249,7 +253,10 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn delete_expired_batch(&self, limit: u32) -> Result<u64, Self::Err> {
+    async fn delete_expired_batch(&self) -> Result<u64, Self::Err> {
+        // The limit is `SWEEP_BATCH` written as a literal: as a bound
+        // parameter, a generic plan does not know it and can read every
+        // expired row to delete 500.
         let result = sqlx::query!(
             r#"
             DELETE FROM mcp_event_subscription
@@ -258,11 +265,10 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
                 FROM mcp_event_subscription
                 WHERE expires_at <= now()
                 ORDER BY expires_at
-                LIMIT $1
+                LIMIT 500
                 FOR UPDATE SKIP LOCKED
             )
             "#,
-            i64::from(limit),
         )
         .execute(&self.pool)
         .await?;
@@ -308,7 +314,8 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             SELECT s.id, s.user_id, s.filter
             FROM mcp_event_subscription_event e
             JOIN mcp_event_subscription s ON s.id = e.subscription_row_id
-            WHERE e.user_id = ANY($1) AND e.event_name = $2 AND s.expires_at > now()
+            WHERE e.user_id = ANY($1) AND e.event_name = $2 AND e.expires_at > now()
+                AND s.expires_at > now()
             "#,
             user_ids,
             event_name,

@@ -373,15 +373,23 @@ encrypts the secret before calling it.
   expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
   1 min to 24 h) and are deleted outright on unsubscribe. Expired rows stop
   matching at once and are deleted by `McpSubscriptionSweeper`, which
-  `document_storage_service` runs every minute (batches of 500, at most 20 per
-  round, `FOR UPDATE SKIP LOCKED` so replicas share it). A user holds at most
-  50 live rows: subscribe takes a per-user advisory lock, then counts and
+  `document_storage_service` runs every minute (batches of 500, the limit
+  written into the SQL so a generic plan stops at it, at most 20 per round,
+  `FOR UPDATE SKIP LOCKED` so replicas share it). A user holds at most 50 live
+  rows: subscribe takes a per-user advisory lock, then counts and
   writes in one transaction, so concurrent subscribes cannot pass the quota
-  together. Arguments are capped at 4 KiB of JSON and filters at 8 KiB.
-- **Match index.** `mcp_event_subscription_event` holds one row per (user,
-  event name, subscription), rewritten with the filter. Fan-out reads it for
-  the event's audience and name, in chunks of 1,000 users, fetching only each
-  candidate's id, owner and filter, under a 5 s statement timeout.
+  together. Arguments and filters are each capped at 4 KiB of JSON.
+- **Match index.** `mcp_event_subscription_event` holds one row per
+  (subscription, event name), carrying the owner and the expiry, rewritten
+  with the filter and the expiry. Fan-out reads its `(user_id, event_name,
+  expires_at)` index for the event's audience and name, so an expired row
+  waiting for the sweep is never read, in chunks of 100 users (at most 5,000
+  candidates and 20 MiB of filters per query), fetching only each candidate's
+  id, owner and filter, under a 5 s statement timeout. Its foreign key is
+  the subscription's `(id, user_id)`, not `"User"`, so writes take no lock on
+  the user row and a renamed user id cascades through both tables. The quota
+  count and the endpoint check read the `(user_id, expires_at)` index, so a
+  backlog of expired rows costs them nothing.
 - **Filter.** `domain/mcp/filter.rs`: an OR of clauses, each exact event
   names, optional parent ids (the webhook `ids` semantics) and an AND of
   conditions on whitelisted message fields (`parent_type`, `parent_id`,

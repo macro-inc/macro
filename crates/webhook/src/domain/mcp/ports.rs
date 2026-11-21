@@ -75,12 +75,9 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         subscription_id: &McpSubscriptionId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Delete up to `limit` expired subscriptions of any user, oldest
-    /// first; how many were deleted.
-    fn delete_expired_batch(
-        &self,
-        limit: u32,
-    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+    /// Delete up to [`SWEEP_BATCH`](super::service::SWEEP_BATCH) expired
+    /// subscriptions of any user, oldest first; how many were deleted.
+    fn delete_expired_batch(&self) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 
     /// Whether the user holds a live subscription to `endpoint_url`, which
     /// means the endpoint was verified for them.
