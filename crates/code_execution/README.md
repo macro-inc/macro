@@ -179,7 +179,7 @@ starts processes nor loads other built-ins (`NODE_ALLOWED` in
 map doesn't know. The program's `fetch` hands each request, as plain data, to
 a worker the bootstrap starts before the program loads (`fetcher.mjs`), which
 sets the header and trace context, holds back a dry run's writes and sends
-it. The program never reaches that worker's realm, so rewriting built-ins,
+it. The program can reach the channel to that worker but never its realm, and the worker checks every message, so rewriting built-ins,
 Deno's own fetch internals included, changes only what its request says, not
 whether it is marked or checked. Like a dry run, this is still held inside
 the process: the sandbox's `--allow-net` reaches the API origins directly,

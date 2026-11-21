@@ -75,16 +75,32 @@ async function send({url, method, headers, body, options}) {
 }
 
 async function answer(port, data) {
+  // Only the bootstrap should post here, but the program can reach the port:
+  // anything malformed is refused, never thrown.
+  if (data === null || typeof data !== "object") return;
   if (data.abort !== undefined) {
-    inFlight.get(data.abort)?.abort();
+    inFlight.get(data.abort)?.abort(data.reason);
     return;
   }
   const {id, request} = data;
+  if (typeof id !== "number") return;
+  if (request === null || typeof request !== "object") {
+    port.postMessage({id, error: {name: "TypeError", message: "A malformed request was refused."}});
+    return;
+  }
   const controller = new AbortController();
   inFlight.set(id, controller);
   try {
     const response = await send({...request, options: {...request.options, signal: controller.signal}});
-    const body = response.body;
+    // Relayed, so an abort reaches the body until it ends.
+    let body = null;
+    if (response.body) {
+      const relay = new TransformStream();
+      response.body.pipeTo(relay.writable).catch(() => {}).finally(() => inFlight.delete(id));
+      body = relay.readable;
+    } else {
+      inFlight.delete(id);
+    }
     port.postMessage({
       id,
       response: {
@@ -93,9 +109,8 @@ async function answer(port, data) {
       },
     }, body ? [body] : []);
   } catch (error) {
-    port.postMessage({id, error: {name: error?.name ?? "Error", message: String(error?.message ?? error)}});
-  } finally {
     inFlight.delete(id);
+    port.postMessage({id, error: {name: error?.name ?? "Error", message: String(error?.message ?? error)}});
   }
 }
 

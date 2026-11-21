@@ -43,6 +43,7 @@ const requestOptions = ["redirect", "cache", "credentials", "integrity", "keepal
 const headersForEach = uncurry(Headers.prototype.forEach);
 const appendHeader = uncurry(Headers.prototype.append);
 const responseHeaders = getter(Response.prototype, "headers");
+const responseClone = uncurry(Response.prototype.clone);
 const signalAborted = getter(AbortSignal.prototype, "aborted");
 const signalReason = getter(AbortSignal.prototype, "reason");
 const addEventListener = uncurry(EventTarget.prototype.addEventListener);
@@ -206,6 +207,15 @@ try {
     if (denoErrors[name] !== undefined) return new denoErrors[name](message);
     return new NativeError(message);
   };
+  // What a constructed Response can't say itself, on it and on its clones.
+  // Its headers stay mutable, unlike a fetched response's.
+  const dress = (response, url, redirected, type) => {
+    defineProperty(response, "url", {value: url});
+    defineProperty(response, "redirected", {value: redirected});
+    defineProperty(response, "type", {value: type});
+    defineProperty(response, "clone", {value: () => dress(responseClone(response), url, redirected, type)});
+    return response;
+  };
   // Async, so a refusal or a throw in here rejects like a failed fetch.
   globalThis.fetch = async (input, init) => {
     const request = new NativeRequest(input, init);
@@ -227,12 +237,18 @@ try {
     const id = nextRequest++;
     const answer = await new NativePromise((resolve, reject) => {
       mapSet(pending, id, resolve);
+      // Also after the answer: aborting then stops the body, with the reason.
       addEventListener(signal, "abort", () => {
+        const reason = signalReason(signal);
+        try {
+          postMessage(fetcher, {abort: id, reason});
+        } catch {
+          postMessage(fetcher, {abort: id});
+        }
         if (mapGet(pending, id) === undefined) return;
         mapDelete(pending, id);
-        postMessage(fetcher, {abort: id});
-        reject(signalReason(signal));
-      });
+        reject(reason);
+      }, {__proto__: null, once: true});
       postMessage(fetcher, {
         id, request: {url: requestUrl(request), method: requestMethod(request), headers, body, options},
       }, body === null ? [] : [body]);
@@ -243,10 +259,7 @@ try {
     // Appended one by one: an init's headers are read through iterators.
     const answered = responseHeaders(response);
     for (let index = 0; index < received.length; index++) appendHeader(answered, received[index][0], received[index][1]);
-    defineProperty(response, "url", {value: url});
-    defineProperty(response, "redirected", {value: redirected});
-    defineProperty(response, "type", {value: type});
-    return response;
+    return dress(response, url, redirected, type);
   };
   const activeRequests = new Set();
   let observedRequests = 0;

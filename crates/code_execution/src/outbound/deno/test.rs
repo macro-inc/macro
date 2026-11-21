@@ -2383,7 +2383,9 @@ export async function main() {
   const controller = new AbortController();
   controller.abort(new Error("stopped"));
   const aborted = await fetch("HOST/never", {signal: controller.signal}).then(() => "sent", error => error.message);
+  const copy = moved.clone();
   return {
+    copy: {url: copy.url, redirected: copy.redirected, type: copy.type},
     moved: {status: moved.status, url: moved.url, redirected: moved.redirected, type: moved.type,
       answer: moved.headers.get("x-answer"), cookies: moved.headers.getSetCookie(), text: await moved.text()},
     posted: {status: posted.status, redirected: posted.redirected, body: await posted.json()},
@@ -2411,6 +2413,7 @@ export async function main() {
     assert_eq!(
         value,
         serde_json::json!({
+            "copy": {"url": format!("{host}/final"), "redirected": true, "type": "basic"},
             "moved": {
                 "status": 201, "url": format!("{host}/final"), "redirected": true, "type": "basic",
                 "answer": "one", "cookies": ["a=1", "b=2"], "text": "final",
@@ -2428,6 +2431,133 @@ export async function main() {
         .to_ascii_lowercase();
     assert!(posted.contains("content-length: 7\r\n"), "{posted}");
     assert!(!sent.iter().any(|request| request.contains("/never")));
+    service.shutdown().await;
+}
+
+/// Aborting after the answer stops the body with the signal's reason, as
+/// Deno's own fetch does, instead of streaming it to the end.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn aborting_after_the_answer_stops_the_body() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        read_request(&mut stream).await;
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        // Chunks until the client goes away; a body that ran to its end
+        // would take 50 of them.
+        let mut written = 0;
+        for _ in 0..50 {
+            if stream.write_all(b"1\r\nx\r\n").await.is_err() {
+                break;
+            }
+            written += 1;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        written
+    });
+    let source = r#"
+export async function main() {
+  const controller = new AbortController();
+  const response = await fetch("HOST/slow", {signal: controller.signal});
+  const reader = response.body.getReader();
+  await reader.read();
+  controller.abort(new Error("stopped"));
+  try {
+    while (!(await reader.read()).done);
+    return "read to the end";
+  } catch (error) {
+    return `rejected: ${error.message}`;
+  }
+}
+"#
+    .replace("HOST", &host);
+    let (_, outcome) = run_unattended(
+        &service,
+        &source,
+        unattended(
+            "fixture-run-token",
+            &[("cognition", host.clone())],
+            serde_json::json!({}),
+            false,
+        ),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value, "rejected: stopped");
+    let written = tokio::time::timeout(Duration::from_secs(10), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(written < 50, "{written}");
+    service.shutdown().await;
+}
+
+/// A program can reach the channel to the sender through an
+/// `EventTarget.prototype.dispatchEvent` hook. Malformed messages on it are
+/// refused without stopping the sender, and what it sends stays marked.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn malformed_messages_to_the_sender_are_refused() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, stop, server) = recording_server(ok_json).await;
+    let source = r#"
+export async function main() {
+  let port;
+  const dispatch = EventTarget.prototype.dispatchEvent;
+  EventTarget.prototype.dispatchEvent = function (event) {
+    if (this instanceof MessagePort) port ??= this;
+    return dispatch.call(this, event);
+  };
+  await fetch("HOST/first");
+  EventTarget.prototype.dispatchEvent = dispatch;
+  if (!port) return "no port";
+  const answers = [];
+  port.addEventListener("message", ({data}) => answers.push(data));
+  for (const message of [null, 7, {}, {id: "x"}, {id: 1000, request: null}, {abort: 1001}]) port.postMessage(message);
+  const second = await fetch("HOST/second");
+  return {second: second.status, answers: answers.filter(answer => answer.id === 1000)};
+}
+"#
+    .replace("HOST", &host);
+    let (_, outcome) = run_unattended(
+        &service,
+        &source,
+        unattended(
+            "fixture-run-token",
+            &[("cognition", host.clone())],
+            serde_json::json!({}),
+            false,
+        ),
+    )
+    .await;
+    stop.send(()).unwrap();
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "second": 200,
+            "answers": [{"id": 1000, "error": {"name": "TypeError", "message": "A malformed request was refused."}}],
+        })
+    );
+    let sent = server.await.unwrap();
+    assert_eq!(
+        sent.iter()
+            .map(|request| method_and_mark(request))
+            .collect::<Vec<_>>(),
+        vec![("GET", true), ("GET", true)]
+    );
     service.shutdown().await;
 }
 

@@ -79,7 +79,12 @@ picks the forwarder and sends it; the program's `fetch` only reads its request
 into plain data (with copies of built-ins taken before the program loads,
 `uncurry`/`getter`) and posts it over a `MessageChannel`, reading request
 bodies whole. Answers come back the same way, with `url`, `redirected` and
-`type` set as own properties. Rewriting `Function.prototype.call` stops Deno
+`type` set as own properties (kept by `clone()`), and headers that stay
+mutable, unlike a fetched response's; an abort after the answer stops the
+body with the signal's reason. The program can reach the channel and the
+worker object (through an `EventTarget.prototype.dispatchEvent` hook), never
+its realm: the worker checks every message and refuses malformed ones, so at
+most a program stops its own fetches. Rewriting `Function.prototype.call` stops Deno
 delivering those answers, so such a program's fetches can hang until the
 deadline; nothing it sends goes unmarked. A built-in the wrapper starts
 reading gets a copy and a row in the `PATCHED_FETCHES` test; test direct and
