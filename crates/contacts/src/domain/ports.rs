@@ -326,6 +326,22 @@ pub trait ContactsService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
 
+    /// The requested ids that are in the user's contacts, the user included.
+    /// By default the whole directory is read and filtered; an implementation
+    /// that can look ids up directly should.
+    fn query_contacts_among(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send {
+        async move {
+            let wanted: HashSet<_> = ids.iter().collect();
+            let mut contacts = self.query_contacts(user_id).await?;
+            contacts.retain(|contact| wanted.contains(contact));
+            Ok(contacts)
+        }
+    }
+
     /// Adds a contact connection between n users as a complete graph.
     fn add_contact_nodes(
         &self,

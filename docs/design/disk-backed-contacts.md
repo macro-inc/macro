@@ -273,7 +273,10 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   existing email fallback choice. Self remains included.
 - [x] Define a distinct viewer-scoped contact record and stable normalized identity.
   `GraphqlContact.id` derives from the viewer/person pair; `userId` identifies the
-  target. Names do not affect identity.
+  target. Names do not affect identity. `lists` carries the viewer's list keys
+  for the person (`teammates`, `interacted`, `invited`, `gmail`, `outlook`),
+  read from the list-aware tables for every viewer; which store chooses the
+  directory's ids follows the per-viewer `contacts-list-reads` flag.
   Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
   do not merge viewer-specific names into a global public-profile record.
 - [x] Provide bounded search and batch ID/email resolution under the same authorized
