@@ -1326,7 +1326,7 @@ for (const dark of [false, true]) {
     await expect(dialog.getByRole('status')).toHaveText('Loading picture…');
     await expect(
       dialog.getByRole('button', { name: 'Save', exact: true })
-    ).toHaveCount(0);
+    ).toBeDisabled();
     allowPicture.resolve();
     await expect(dialog.getByRole('alert')).toHaveText(
       "Couldn't load the picture. Try again."

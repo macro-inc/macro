@@ -27,7 +27,13 @@ export function MobileFaceSlot(props: FaceSlotProps) {
       <Show when={!props.draft.photo()}>
         <ShuffleBadge onShuffle={props.draft.shuffle} />
       </Show>
-      <Dialog open={open()} onOpenChange={setOpen} class="w-[28rem]">
+      {/* Stacked over the invite sheet, so glass would show its controls. */}
+      <Dialog
+        open={open()}
+        onOpenChange={setOpen}
+        opaqueSheet
+        class="w-[28rem]"
+      >
         <Panel depth={2} class="max-h-[85vh] w-full rounded-xl text-ink">
           {/* The title takes the body's inset; Done's own padding lines its
               text up on the other edge. */}

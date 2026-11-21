@@ -33,3 +33,33 @@ it('chooses a suggested face, and keeps it chosen through New faces', () => {
   for (const button of suggestionButtons())
     expect(button.getAttribute('aria-pressed')).toBe('false');
 });
+
+it('marks only Any as pressed while a part is unpinned, and only the pin once pinned', () => {
+  render(() => {
+    const draft = createFaceDraft({ v: 1, seed: 'start', pins: {} });
+    return <FaceEditor draft={draft} initials="A" />;
+  });
+  const skinOptions = () =>
+    screen.getAllByRole('button', { name: /^Skin \d+$/ });
+
+  // The face still resolves to some skin, but that option isn't a selection.
+  expect(
+    screen
+      .getByRole('button', { name: 'Any Skin' })
+      .getAttribute('aria-pressed')
+  ).toBe('true');
+  for (const option of skinOptions())
+    expect(option.getAttribute('aria-pressed')).toBe('false');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Skin 3' }));
+  expect(
+    screen
+      .getByRole('button', { name: 'Any Skin' })
+      .getAttribute('aria-pressed')
+  ).toBe('false');
+  expect(
+    skinOptions()
+      .filter((option) => option.getAttribute('aria-pressed') === 'true')
+      .map((option) => option.getAttribute('aria-label'))
+  ).toEqual(['Skin 3']);
+});
