@@ -63,13 +63,21 @@ export function InteractionCard(props: {
       // Keep the answer's typed shape intact; the controller checks liveness.
       const onRespond: RespondToElicitation = (answer) =>
         props.controller.respond({ ...request, answer });
+      // As on the session's own card; nothing is claimed while the viewer's
+      // access is still loading.
+      const viewer = () =>
+        props.controller.accessKnown() && !props.controller.canAnswer();
       const summary = (): ElicitationSummary => ({
         title: `${props.agentName ?? 'The agent'} is asking`,
-        status: props.controller.canAnswer() ? 'Waiting for you' : undefined,
+        status: props.controller.canAnswer()
+          ? 'Waiting for you'
+          : viewer()
+            ? 'Waiting for an editor'
+            : undefined,
         message: request.message,
-        notice: props.controller.canAnswer()
-          ? undefined
-          : 'This agent is no longer available. You can still read the conversation.',
+        notice: viewer()
+          ? 'Only people who can edit this session can answer.'
+          : undefined,
       });
       const asForm = (): LiveQuestionRequest =>
         request.request.kind === 'user_tool'

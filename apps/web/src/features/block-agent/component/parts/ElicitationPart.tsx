@@ -48,7 +48,7 @@ function outcomeLabel(part: ElicitationPartData): string {
         .with('user_tool', () => 'Confirmed')
         .otherwise(() => 'Answered')
     )
-    .with({ kind: 'declined' }, () => 'Declined')
+    .with({ kind: 'declined' }, () => 'Skipped')
     .with({ kind: 'cancelled' }, () => 'Cancelled')
     .with({ kind: 'completed' }, () => 'Finished')
     .with({ kind: 'errored' }, () => 'Refused')

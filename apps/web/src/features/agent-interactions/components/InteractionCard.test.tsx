@@ -51,13 +51,14 @@ const colour: ElicitationSchema = {
   ],
 };
 
-function controller(canAnswer: boolean) {
+function controller(canAnswer: boolean, accessKnown = true) {
   const respond = vi.fn<(response: InteractionResponse) => Promise<boolean>>(
     () => Promise.resolve(true)
   );
   const value: InteractionController = {
     pending: () => [],
     canAnswer: () => canAnswer,
+    accessKnown: () => accessKnown,
     answering: () => false,
     respond,
   };
@@ -101,16 +102,15 @@ describe('InteractionCard', () => {
     });
   });
 
-  it('a question from an agent that is gone reads as such and cannot be answered', () => {
+  it('a viewer who cannot edit the session sees who can answer, and cannot', () => {
     const { value, respond } = controller(false);
     const view = render(() => (
       <InteractionCard request={formQuestion} controller={value} />
     ));
     const card = within(view.getByRole('region', { name: 'Agent question' }));
     card.getByText('The agent is asking');
-    card.getByText(
-      'This agent is no longer available. You can still read the conversation.'
-    );
+    card.getByText('Waiting for an editor');
+    card.getByText('Only people who can edit this session can answer.');
     expect(card.queryByText('Waiting for you')).toBeNull();
     for (const name of ['Submit', 'Skip']) {
       const button = card.getByRole('button', { name });
@@ -118,6 +118,18 @@ describe('InteractionCard', () => {
       fireEvent.click(button);
     }
     expect(respond).not.toHaveBeenCalled();
+  });
+
+  it('claims nothing about access while it is still loading', () => {
+    const { value } = controller(false, false);
+    const view = render(() => (
+      <InteractionCard request={formQuestion} controller={value} />
+    ));
+    const card = within(view.getByRole('region', { name: 'Agent question' }));
+    expect(card.queryByText('Waiting for an editor')).toBeNull();
+    expect(
+      card.queryByText('Only people who can edit this session can answer.')
+    ).toBeNull();
   });
 
   it('a user tool with no composer here asks with its flat form on the card', () => {

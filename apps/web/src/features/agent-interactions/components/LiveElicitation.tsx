@@ -26,7 +26,7 @@ import type {
   CreateCalendarEvent,
   SendEmail,
 } from '@service-cognition/generated/tools/types';
-import { Button, Card, Tooltip } from '@ui';
+import { Button, Card } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -189,8 +189,8 @@ export function QuestionFields(props: {
  * Skip declines, the one refusal whose effect is the same for every agent:
  * the agent goes on without an answer. Cancel is not offered beside it,
  * because no agent stops for it (Claude aborts the tool call and goes on,
- * Codex can't tell it from a decline), and the session's own Stop is already
- * on screen wherever a question is. On a card they follow the
+ * Codex can't tell it from a decline); stopping the agent is the session's
+ * own Stop. On a card they follow the
  * session's other cards (`ToolApprovalCard`): the refusals quiet on the left,
  * the question's own action on the right, and nothing primary.
  *
@@ -253,16 +253,15 @@ export function QuestionActions(props: {
     </Switch>
   );
   const refusals = (
-    <Tooltip label="The agent continues without your answer">
-      <Button
-        variant={props.card ? 'ghost' : 'secondary'}
-        size={size()}
-        disabled={props.locked}
-        onClick={() => respond({ action: 'decline' })}
-      >
-        Skip
-      </Button>
-    </Tooltip>
+    <Button
+      variant={props.card ? 'ghost' : 'secondary'}
+      size={size()}
+      tooltip="The agent continues without your answer"
+      disabled={props.locked}
+      onClick={() => respond({ action: 'decline' })}
+    >
+      Skip
+    </Button>
   );
 
   return (
@@ -412,7 +411,8 @@ export function composableDraft(
  * form for `CreateCalendarEvent`, the email compose for `SendEmail`. The
  * composer's Create/Send accepts the review with the whole edited draft; its
  * Cancel, where it has one, declines. The email composer has only Send, so
- * `cancel` adds a Cancel beneath it for a surface with no other refusal.
+ * `cancel` adds a Skip beneath it, which declines like a question's Skip, for
+ * a surface with no other refusal.
  * Callers pass only a draft from `composableDraft`.
  */
 export function UserToolComposer(props: {
@@ -470,6 +470,7 @@ export function UserToolComposer(props: {
               <Button
                 variant="ghost"
                 size="xs"
+                tooltip="The agent continues without sending it"
                 disabled={locked()}
                 onClick={() =>
                   fireAndForget(
@@ -478,7 +479,7 @@ export function UserToolComposer(props: {
                   )
                 }
               >
-                Cancel
+                Skip
               </Button>
             </div>
           </Show>

@@ -506,7 +506,7 @@ describe('ElicitationPart', () => {
 
     // The email composer offers only Send, so the card carries the decline the
     // calendar composer answers through its own Cancel.
-    it('an email review can be declined from the card', () => {
+    it('an email review can be skipped from the card', () => {
       const request = review('SendEmail', {
         to: [{ email: 'alice@example.com' }],
         cc: [],
@@ -518,7 +518,7 @@ describe('ElicitationPart', () => {
       const { getByText } = render(() => (
         <ElicitationPart turn={0} part={part({ request })} />
       ));
-      fireEvent.click(getByText('Cancel'));
+      fireEvent.click(getByText('Skip'));
       expect(respond).toHaveBeenCalledWith({ action: 'decline' });
     });
 
@@ -595,7 +595,7 @@ describe('ElicitationPart', () => {
       expect(tool.dataset.status).toBe('completed');
     });
 
-    it('a declined review with no tool report reads as a declined question', () => {
+    it('a declined review with no tool report reads as a skipped question', () => {
       const request = review('CreateCalendarEvent', eventDraft);
       const { getByTestId, queryByTestId } = render(() => (
         <ElicitationPart
@@ -604,7 +604,7 @@ describe('ElicitationPart', () => {
         />
       ));
       expect(queryByTestId('user-tool')).toBeNull();
-      expect(getByTestId('trailing').textContent).toBe('Declined');
+      expect(getByTestId('trailing').textContent).toBe('Skipped');
     });
   });
 
