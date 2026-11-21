@@ -10,7 +10,6 @@ export {
 } from './collapsed-sections';
 export {
   type ListControlOption,
-  ListFilterCountBadge,
   ListFilterDropdown,
   type ListFilterDropdownProps,
   type ListFilterGroup,
@@ -48,6 +47,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   asideCollapsedPreferenceKey,
+  asideWidthPreferenceKey,
   useViewShell,
   ViewNavigationControls,
   ViewShell,

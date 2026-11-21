@@ -55,11 +55,13 @@ import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
+import { useTeammateIds } from '@queries/team/roster';
 import {
   ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
   intervalWhileRead,
 } from '@queries/visible-refresh';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -68,7 +70,9 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
+  on,
   onCleanup,
 } from 'solid-js';
 import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
@@ -463,6 +467,16 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // stable cache for transformed items
   const itemCache = new Map<string, CacheEntry>();
+  // Retire copied CRM rows even when no list observes the lazy index memos.
+  createRenderEffect(
+    on(crmAccessAllowed, (allowed) => {
+      if (allowed) return;
+      for (const [id, { item }] of itemCache) {
+        if (item.bucket === 'crm_company' || item.bucket === 'crm_contact')
+          itemCache.delete(id);
+      }
+    })
+  );
 
   const recentlyViewedQuery = useRecentlyViewedSoupQuery();
 
@@ -615,6 +629,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const crmCompanyEntries = createLazyMemo(() => {
+    if (!crmAccessAllowed()) return [];
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
 
@@ -678,6 +693,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // CRM contacts (live CRM list, most recently interacted first). They are
   // not Macro users, so they stay out of the 'person' bucket.
   const crmContactEntries = createLazyMemo(() => {
+    if (!crmAccessAllowed()) return [];
     const allEntries: IndexEntry[] = [];
     for (const contact of crmContactsAccessor()) {
       if (contact.hidden) continue;
@@ -1019,9 +1035,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const getById = (id: string): QuickAccessItem | undefined => {
-    return (
-      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item
-    );
+    const item =
+      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item;
+    if (
+      !crmAccessAllowed() &&
+      (item?.bucket === 'crm_company' || item?.bucket === 'crm_contact')
+    )
+      return undefined;
+    return item;
   };
 
   const resolveEntries = (entries: IndexEntry[]): QuickAccessItem[] => {
@@ -1105,7 +1126,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const options = typeof first === 'object' ? first : undefined;
     const buckets = options ? [...options.buckets] : (args as Bucket[]);
     const projectedBuckets = createMemo(() =>
-      buckets.length ? buckets : BUCKET_COMBINATIONS.all
+      (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
+        (bucket) =>
+          (bucket !== 'crm_company' && bucket !== 'crm_contact') ||
+          crmAccessAllowed()
+      )
     );
     const personExclusions = createContactExclusions(
       function* () {
@@ -1117,12 +1142,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       },
       () => (options?.excludeSelf ? directoryScope().userId : undefined)
     );
+    const listsPeople = () =>
+      projectedBuckets().includes('person') && options?.enabled?.() !== false;
     const personList = createPersonList({
       scope: directoryScope,
       resetKey: personExclusions.key,
+      localBudgetMs: options?.peopleLocalBudgetMs,
       search: () => options?.searchTerm?.() ?? '',
-      enabled: () =>
-        projectedBuckets().includes('person') && options?.enabled?.() !== false,
+      enabled: listsPeople,
+      teammates: useTeammateIds(listsPeople),
       policy: () => {
         const viewer = directoryScope().userId;
         return {
@@ -1132,6 +1160,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               ? viewer?.split('@')[1]
               : undefined,
           excluded: personExclusions.native(),
+          listPriority: options?.peopleListPriority?.(),
         };
       },
       activity: dmActivityByUserId,

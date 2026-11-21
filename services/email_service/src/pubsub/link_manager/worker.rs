@@ -6,7 +6,6 @@ use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use futures::StreamExt;
 use sqlx::PgPool;
 use sqs_client::SQS;
@@ -63,7 +62,7 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
 ) {
     run_worker_with_cancellation(
         worker,
@@ -98,7 +97,7 @@ pub(crate) async fn context(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
     cancellation_token: CancellationToken,
 ) -> Option<LinkManagerContext> {
     let outlook = loop {
@@ -150,7 +149,7 @@ pub(crate) async fn context(
         redis_client.clone(),
         sqs_client.clone(),
         macro_event_broker.clone(),
-        contacts_ingress,
+        contacts_ingress.clone(),
     ));
     let ctx = LinkManagerContext {
         sqs_worker: worker.clone(),
@@ -173,7 +172,10 @@ pub(crate) async fn context(
                 },
                 auth: crate::outbound::link_manager::DeletionAuth(auth_service_client),
                 crm: crm_service,
-                refresh: crate::outbound::link_manager::DeletionRefresh(connection_gateway_client),
+                refresh: crate::outbound::link_manager::DeletionRefresh {
+                    gateway: connection_gateway_client,
+                    contacts: contacts_ingress,
+                },
                 broker: macro_event_broker,
             },
         }),
@@ -199,7 +201,7 @@ pub async fn run_worker_with_cancellation(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
-    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    contacts_ingress: Arc<crate::composition::ContactsProducer>,
     cancellation_token: CancellationToken,
 ) {
     let Some(ctx) = context(

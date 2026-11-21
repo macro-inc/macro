@@ -1,4 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -10,6 +11,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { crmSnapshotAuthorization } from './authorization';
 import { useOptionalUrqlClient } from './context';
 import type { ObserverClientOptions, UrqlObserverFactory } from './observer';
 import {
@@ -28,12 +30,15 @@ export function createBaseQuery<
   name: string
 ): Result {
   const providerClient = useOptionalUrqlClient();
-  // Requests sent while the enclosing view loads join its trace; see
-  // traceParentExchange.
+  // Requests sent while the enclosing view loads join its trace, unless the
+  // caller names its own parent; see traceParentExchange.
   const flow = useFlowTrace();
   const options = createMemo(() => {
-    const next = getOptions();
-    if (!flow) return next;
+    const input = getOptions();
+    const next = crmSnapshotAuthorization().paused
+      ? { ...input, enabled: false }
+      : input;
+    if (!flow || next.context?.[TRACE_PARENT_CONTEXT_KEY]) return next;
     return {
       ...next,
       context: { ...next.context, [TRACE_PARENT_CONTEXT_KEY]: flow },
@@ -120,17 +125,23 @@ export function createBaseQuery<
 
   let firstOptionsRun = true;
   let currentClient = initialClient;
+  let generation = untrack(crmSnapshotAuthorization).epoch;
 
   createComputed(() => {
     const nextOptions = options();
     const nextClient = client();
+    const nextGeneration = crmSnapshotAuthorization().epoch;
     if (firstOptionsRun) {
       firstOptionsRun = false;
       return;
     }
 
     const current = untrack(observer);
-    if (nextClient !== currentClient) {
+    if (
+      nextClient !== currentClient ||
+      !cacheSessionGeneration.isCurrent(generation)
+    ) {
+      generation = nextGeneration;
       const replacement = untrack(() =>
         createObserver(nextClient, nextOptions)
       );

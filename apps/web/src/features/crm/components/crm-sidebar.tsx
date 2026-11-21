@@ -28,6 +28,8 @@ const RECORD_ICONS = {
 export function CrmSidebar(props: {
   /** The highlighted record type, list, pipeline, or `settings`. */
   active: string;
+  /** Keep destinations visible until access is proven denied. */
+  canAccess: boolean;
   pipelines?: JSX.Element;
   /** Pinned to the bottom of the scrolling content, above the tools. */
   promotion?: JSX.Element;
@@ -57,54 +59,58 @@ export function CrmSidebar(props: {
             <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
           </div>
         </ViewSidebar.Header>
-        <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
-          <CrmCreateMenu
-            onCreateCompany={props.onCreateCompany}
-            onCreateContact={props.onCreateContact}
-            pipeline={props.pipeline}
-          />
-        </ViewSidebar.Primary>
+        <Show when={props.canAccess}>
+          <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
+            <CrmCreateMenu
+              onCreateCompany={props.onCreateCompany}
+              onCreateContact={props.onCreateContact}
+              pipeline={props.pipeline}
+            />
+          </ViewSidebar.Primary>
+        </Show>
       </header>
       <ViewSidebar.Content>
-        <SidebarRoutineSuggestions surface="crm" />
-        <CollapsibleSection.Root
-          sectionId="records"
-          sectionLabel={t('crm.records')}
-          open={recordsOpen()}
-          onOpenChange={setRecordsOpen}
-        >
-          <CollapsibleSection.Header>
-            <CollapsibleSection.Trigger>
-              <span>{t('crm.records')}</span>
-              <CollapsibleSection.Indicator />
-            </CollapsibleSection.Trigger>
-          </CollapsibleSection.Header>
-          <CollapsibleSection.Content>
-            <ViewSidebar.Nav
-              aria-label={t('crm.recordsNavigation')}
-              ref={tourTarget(COMPANIES_TOUR.records)}
-            >
-              <For each={[...CRM_RECORDS, ...CRM_ACTIVITY_TABS]}>
-                {(record) => (
-                  <ViewSidebar.Item
-                    active={props.active === record.id}
-                    onClick={() => props.onNavigate(record.id)}
-                  >
-                    <ViewSidebar.Icon>
-                      <Dynamic
-                        component={RECORD_ICONS[record.id]}
-                        class="size-4"
-                      />
-                    </ViewSidebar.Icon>
-                    <span class="truncate">{record.label}</span>
-                  </ViewSidebar.Item>
-                )}
-              </For>
-            </ViewSidebar.Nav>
-          </CollapsibleSection.Content>
-        </CollapsibleSection.Root>
+        <Show when={props.canAccess}>
+          <SidebarRoutineSuggestions surface="crm" />
+          <CollapsibleSection.Root
+            sectionId="records"
+            sectionLabel={t('crm.records')}
+            open={recordsOpen()}
+            onOpenChange={setRecordsOpen}
+          >
+            <CollapsibleSection.Header>
+              <CollapsibleSection.Trigger>
+                <span>{t('crm.records')}</span>
+                <CollapsibleSection.Indicator />
+              </CollapsibleSection.Trigger>
+            </CollapsibleSection.Header>
+            <CollapsibleSection.Content>
+              <ViewSidebar.Nav
+                aria-label={t('crm.recordsNavigation')}
+                ref={tourTarget(COMPANIES_TOUR.records)}
+              >
+                <For each={[...CRM_RECORDS, ...CRM_ACTIVITY_TABS]}>
+                  {(record) => (
+                    <ViewSidebar.Item
+                      active={props.active === record.id}
+                      onClick={() => props.onNavigate(record.id)}
+                    >
+                      <ViewSidebar.Icon>
+                        <Dynamic
+                          component={RECORD_ICONS[record.id]}
+                          class="size-4"
+                        />
+                      </ViewSidebar.Icon>
+                      <span class="truncate">{record.label}</span>
+                    </ViewSidebar.Item>
+                  )}
+                </For>
+              </ViewSidebar.Nav>
+            </CollapsibleSection.Content>
+          </CollapsibleSection.Root>
+        </Show>
         {props.pipelines}
-        <Show when={props.listsEnabled}>
+        <Show when={props.canAccess && props.listsEnabled}>
           <CollapsibleSection.Root
             sectionId="lists"
             sectionLabel={t('crm.lists')}
@@ -158,39 +164,42 @@ export function CrmSidebar(props: {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
         </Show>
-        {props.promotion}
+        <Show when={props.canAccess}>{props.promotion}</Show>
       </ViewSidebar.Content>
-      <ViewSidebar.Footer>
-        <ViewSidebar.Nav aria-label={t('crm.toolsNavigation')}>
-          <ViewSidebar.Item
-            onClick={props.onImport}
-            disabled={!props.canCreateList}
-          >
-            <ViewSidebar.Icon>
-              <ImportIcon class="size-4" />
-            </ViewSidebar.Icon>
-            {t('crm.import')}
-          </ViewSidebar.Item>
-          <ViewSidebar.Item
-            onClick={props.onExport}
-            disabled={!props.canCreateList}
-          >
-            <ViewSidebar.Icon>
-              <ExportIcon class="size-4" />
-            </ViewSidebar.Icon>
-            {t('crm.export')}
-          </ViewSidebar.Item>
-          <ViewSidebar.Item
-            active={props.active === 'settings'}
-            onClick={props.onSettings}
-          >
-            <ViewSidebar.Icon>
-              <GearIcon class="size-4" />
-            </ViewSidebar.Icon>
-            {t('crm.settings')}
-          </ViewSidebar.Item>
-        </ViewSidebar.Nav>
-      </ViewSidebar.Footer>
+      <Show when={props.canAccess}>
+        <ViewSidebar.Footer>
+          <ViewSidebar.Nav aria-label={t('crm.toolsNavigation')}>
+            <ViewSidebar.Item
+              onClick={props.onImport}
+              disabled={!props.canCreateList}
+            >
+              <ViewSidebar.Icon>
+                <ImportIcon class="size-4" />
+              </ViewSidebar.Icon>
+              {t('crm.import')}
+            </ViewSidebar.Item>
+            <ViewSidebar.Item
+              onClick={props.onExport}
+              disabled={!props.canCreateList}
+            >
+              <ViewSidebar.Icon>
+                <ExportIcon class="size-4" />
+              </ViewSidebar.Icon>
+              {t('crm.export')}
+            </ViewSidebar.Item>
+            <ViewSidebar.Item
+              active={props.active === 'settings'}
+              aria-label={t('crm.settingsLabel')}
+              onClick={props.onSettings}
+            >
+              <ViewSidebar.Icon>
+                <GearIcon class="size-4" />
+              </ViewSidebar.Icon>
+              {t('crm.settings')}
+            </ViewSidebar.Item>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Footer>
+      </Show>
     </ViewSidebar.Root>
   );
 }

@@ -8,7 +8,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import {
   CalendarOccurrenceItemFieldsFragmentDoc,
@@ -17,6 +17,7 @@ import {
   type CalendarRangeInput,
 } from '@service-storage/graphql/generated/graphql';
 import { ResultAsync } from 'neverthrow';
+import { match } from 'ts-pattern';
 import type { CalendarOccurrenceQueryRange } from '../keys';
 import type { CalendarOccurrencesData } from '../occurrences';
 import { mapCalendarOccurrence, mapCalendarSyncStatus } from './map';
@@ -27,6 +28,10 @@ import {
   markCalendarCacheAnswered,
   withinCacheHeadStart,
 } from './readiness';
+import type {
+  CalendarCatchUp,
+  CalendarSyncController,
+} from './sync-controller';
 
 const MS_PER_DAY = 86_400_000;
 const OCCURRENCE_PAGE_SIZE = 2000;
@@ -216,6 +221,7 @@ export async function fetchCalendarWindow(
   fetchPage: FetchCalendarOccurrencePage,
   signal?: AbortSignal
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   const watermarks: CalendarLinkWatermarkWire[][] = [];
   const sample = beginCalendarSyncStatusSample();
   let syncStatus: CalendarSyncStatus = CalendarSyncStatus.ready;
@@ -244,10 +250,13 @@ export async function fetchCalendarWindow(
     after = page.endCursor;
   }
   recordCalendarSyncStatus(syncStatus, sample);
-  await host.calendarCommit({
-    coverage: window.coverage,
-    watermark: { kind: 'merge', links: lowestWatermark(watermarks) },
-  });
+  await host.calendarCommit(
+    {
+      coverage: window.coverage,
+      watermark: { kind: 'merge', links: lowestWatermark(watermarks) },
+    },
+    generation
+  );
 }
 
 const occurrenceSelection = selectRecords(
@@ -382,8 +391,15 @@ const firstReads = new WeakMap<object, Promise<unknown>>();
 
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
+  /**
+   * The cache may be older than what REST already showed. `older` is what it
+   * holds for a covered week, for when REST cannot answer either.
+   */
+  | { kind: 'behind'; older?: CalendarOccurrencesData }
   | { kind: 'unsupported' }
   | { kind: 'not-ready' };
+
+type TraceSpan = Pick<Span, 'setAttr'>;
 
 /**
  * Asks the host for a viewport. A host that has never answered gets a head
@@ -416,7 +432,9 @@ async function askCalendarRange(
 
 /**
  * Answers a viewport from the cache, fetching only spans never fetched and,
- * once per key, viewports whose cached occurrences cannot be read.
+ * once per key, viewports whose cached occurrences cannot be read. When the
+ * cache may be older than a REST answer already on screen, `sync` brings it
+ * forward first; a cache it cannot bring forward answers `behind`.
  */
 export async function readCalendarRange(
   host: Pick<
@@ -428,9 +446,14 @@ export async function readCalendarRange(
     fetchPage?: FetchCalendarOccurrencePage;
     signal?: AbortSignal;
     headStartMs?: number;
+    sync?: Pick<CalendarSyncController, 'caughtUp' | 'catchUp'>;
+    span?: TraceSpan;
   } = {}
 ): Promise<CalendarRangeRead> {
   const args = toCalendarRangeArgs(range);
+  // Asked before the first read: a delta finishing during that read leaves
+  // the read older than the cache it reports as caught up.
+  const behind = options.sync ? !options.sync.caughtUp() : false;
   const first = await askCalendarRange(
     host,
     args,
@@ -438,6 +461,23 @@ export async function readCalendarRange(
   );
   if (first === 'not-ready') return { kind: 'not-ready' };
   let result = first;
+  if (result.kind === 'unsupported') return { kind: 'unsupported' };
+  let catchUp: CalendarCatchUp = 'current';
+  if (behind && options.sync) {
+    // Stays on a read whose deadline passes while the delta runs.
+    options.span?.setAttr('calendar.read.catch_up', 'waiting');
+    catchUp = await options.sync.catchUp();
+    options.span?.setAttr('calendar.read.catch_up', catchUp);
+  }
+  if (options.signal?.aborted) throw options.signal.reason;
+  const current = await match(catchUp)
+    // The cache moved on since the first read whenever it was behind then.
+    .with('current', () => (behind ? host.calendarRange(args) : result))
+    .with('held', 'retried', () => host.calendarRange(args))
+    .with('behind', () => undefined)
+    .exhaustive(() => undefined);
+  if (!current) return olderRange(host, result);
+  result = current;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
   const fetchPage = options.fetchPage ?? fetchCalendarOccurrencePage;
   if (result.gaps.length > 0) {
@@ -457,3 +497,18 @@ export async function readCalendarRange(
   if (items === 'unsupported') return { kind: 'unsupported' };
   return { kind: 'range', data: { items, syncStatus: latestSyncStatus } };
 }
+
+/**
+ * A read REST answers first, so it fetches nothing: a covered week keeps what
+ * the cache holds in case REST fails, and a week with gaps keeps nothing.
+ */
+async function olderRange(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  range: Extract<CalendarRangeCacheResult, { kind: 'range' }>
+): Promise<CalendarRangeRead> {
+  if (range.gaps.length > 0) return { kind: 'behind' };
+  const { items } = await readOccurrenceItems(host, range.occurrenceKeys);
+  return { kind: 'behind', older: { items, syncStatus: latestSyncStatus } };
+}
+
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';

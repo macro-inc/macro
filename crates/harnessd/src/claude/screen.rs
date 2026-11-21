@@ -43,10 +43,9 @@ pub enum CodeOutcome {
         /// How long the screen says the token lasts.
         valid_for: Option<Validity>,
     },
-    /// The provider refused the code.
+    /// The provider refused the code, or the CLI called it invalid. Either
+    /// way the CLI has ended its sign-in.
     Rejected,
-    /// The CLI could not read the code.
-    Malformed,
 }
 
 impl std::fmt::Debug for CodeOutcome {
@@ -58,7 +57,6 @@ impl std::fmt::Debug for CodeOutcome {
                 .field("valid_for", valid_for)
                 .finish(),
             Self::Rejected => formatter.write_str("Rejected"),
-            Self::Malformed => formatter.write_str("Malformed"),
         }
     }
 }
@@ -77,7 +75,7 @@ pub fn code_outcome(rows: &[String]) -> Option<CodeOutcome> {
         return Some(CodeOutcome::Rejected);
     }
     if rows.iter().any(|row| row.contains(MALFORMED)) {
-        return Some(CodeOutcome::Malformed);
+        return Some(CodeOutcome::Rejected);
     }
     if !rows.iter().any(|row| row.contains(CREATED)) {
         return None;

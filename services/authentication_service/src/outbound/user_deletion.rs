@@ -2,6 +2,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use contacts::domain::ports::ContactListIngress;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,13 +17,14 @@ use uuid::Uuid;
 
 use crate::service::user::delete_user::UserDeletionGateway;
 
-/// HTTP, in-process team service, onboarding repository, Stripe, and database
-/// adapter composed at authentication-service startup.
-pub struct UserDeletionAdapter<T: TeamService, O: OnboardingRepo> {
+/// HTTP, in-process team service, onboarding repository, contacts queue,
+/// Stripe, and database adapter composed at authentication-service startup.
+pub struct UserDeletionAdapter<T: TeamService, O: OnboardingRepo, C: ContactListIngress> {
     db: PgPool,
     documents: Arc<DocumentStorageServiceClient>,
     teams: Arc<T>,
     onboarding: O,
+    contacts: Arc<C>,
     stripe: Arc<stripe::Client>,
     client: reqwest::Client,
     internal_key: String,
@@ -30,7 +32,7 @@ pub struct UserDeletionAdapter<T: TeamService, O: OnboardingRepo> {
     scheduled_action_url: String,
 }
 
-impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
+impl<T: TeamService, O: OnboardingRepo, C: ContactListIngress> UserDeletionAdapter<T, O, C> {
     /// Construct a bounded HTTP client. Redirects must not turn a failed
     /// internal DELETE into an unrelated successful response.
     ///
@@ -46,6 +48,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
         documents: Arc<DocumentStorageServiceClient>,
         teams: Arc<T>,
         onboarding: O,
+        contacts: Arc<C>,
         stripe: Arc<stripe::Client>,
         internal_key: String,
         harness_url: String,
@@ -56,6 +59,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
             documents,
             teams,
             onboarding,
+            contacts,
             stripe,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(300))
@@ -96,7 +100,9 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
     }
 }
 
-impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdapter<T, O> {
+impl<T: TeamService, O: OnboardingRepo, C: ContactListIngress> UserDeletionGateway
+    for UserDeletionAdapter<T, O, C>
+{
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.delete_owned(&self.scheduled_action_url, "scheduled-actions", user)
             .await
@@ -134,6 +140,15 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
             .await
             .map_err(|error| Report::new(error).into_dynamic())
             .context("failed to delete user onboarding")?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn delete_contacts(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
+        self.contacts
+            .user_deleted(user.clone())
+            .await
+            .context("failed to queue contacts deletion")?;
         Ok(())
     }
 

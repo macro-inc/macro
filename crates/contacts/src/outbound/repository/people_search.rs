@@ -53,6 +53,8 @@ impl PeopleSearchRepository for DbContactsRepository {
                         id: ContactId::for_viewer(&viewer, &user_id),
                         user_id,
                         name,
+                        // Ranked search does not read the list-aware directory yet.
+                        lists: Vec::new(),
                     },
                     is_teammate: row.is_teammate,
                     is_agent: row.is_agent,

@@ -1,3 +1,6 @@
+mod backfill;
+mod directory;
+mod lists;
 mod page;
 mod people_search;
 #[cfg(test)]
@@ -72,6 +75,10 @@ impl ContactsRepository for DbContactsRepository {
             return Ok(());
         }
 
+        // Insert in key order so two messages with overlapping pairs wait on
+        // each other instead of deadlocking.
+        let mut connections: Vec<_> = connections.into_iter().collect();
+        connections.sort_by(|a, b| (a.0.as_ref(), a.1.as_ref()).cmp(&(b.0.as_ref(), b.1.as_ref())));
         let (users1, users2): (Vec<_>, Vec<_>) = connections.into_iter().unzip();
 
         let u1: Vec<&str> = users1.iter().map(|u| u.as_ref()).collect();

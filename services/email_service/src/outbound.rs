@@ -45,6 +45,8 @@ pub mod calendar_disconnect;
 pub mod inbox_access;
 /// Stored sent-message contacts for an inbox.
 pub mod inbox_contacts;
+/// The inbox a directory's Gmail or Outlook contacts are recorded under.
+pub mod inbox_source;
 /// Original legacy operation errors retained across domain ports.
 pub mod persistence_error;
 /// Stored scheduled drafts for an inbox.
@@ -56,6 +58,8 @@ pub mod signature_settings;
 pub mod backfill_jobs;
 pub mod gmail_push;
 pub mod inbox_connection;
+/// The lock timeout of the writes that connect an inbox.
+pub(crate) mod link_lock;
 /// File-service and stored attachment deletion.
 pub mod sfs_deletion;
 /// URL-backed contact photos and self-contact refresh effects.

@@ -34,6 +34,12 @@
   --color-ink-placeholder: #999999;
 }
 
+/* These tokens redefine `--color-ink`, so the selection tint restarts here
+   (see the `::selection` rule in index.css). */
+.fig-editor-theme::selection {
+  background-color: oklch(from var(--color-ink) l c h / 0.1);
+}
+
 /* Shared app dialogs are portaled outside the editor's root. */
 .fig-editor-theme.elevated-surface {
   border-radius: 12px;

@@ -13,10 +13,10 @@
 //! run on the commit it tested; nothing is reverted or blocked by it. Its
 //! last job tells the Macro Alerts channel when the pushes or the nightly
 //! runs turn red, and when they pass again ([`email_e2e_alert`]).
+use gh_workflow::expr::typed::{Bool, Expr, JobHandle, StepHandle, always, cancelled, failure};
 
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Push, Run, Schedule, Step, Use, Workflow,
-    WorkflowDispatch,
+    Event, Job, Level, Permissions, Push, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 use xtask_paths::RepoGlob;
 
@@ -53,7 +53,7 @@ const MAIN_PATHS: &[RepoGlob<'static>] = &[
 const NIGHTLY: &str = "0 4 * * *";
 
 /// The job that runs the suite.
-const SUITE_JOB: &str = "suite";
+const SUITE_JOB: JobHandle<()> = JobHandle::new("suite", ());
 
 /// The artifact every run uploads its Playwright report as, which the alert
 /// job reads the failed tests from.
@@ -74,7 +74,7 @@ const JOB_MINUTES: u32 = 45;
 const SUITE_MINUTES: u32 = 30;
 
 /// The step that dates the checkout, which the seal depends on.
-const REUSE_STEP: &str = "reuse";
+const REUSE_STEP: StepHandle<()> = StepHandle::new("reuse", ());
 
 /// The stack instance each job starts: its own Compose project and ports.
 const INSTANCE: &str = "channels-e2e";
@@ -88,7 +88,9 @@ const RESULTS: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("apps/web/tests/channels-e2e/.run");
 
 /// A run that failed or was cancelled, which is what a job out of time is.
-const NOT_GREEN: &str = "failure() || cancelled()";
+fn not_green() -> Expr<Bool> {
+    failure().or(cancelled())
+}
 
 /// Build the workflow.
 pub fn channels_e2e() -> Workflow {
@@ -112,7 +114,7 @@ pub fn channels_e2e() -> Workflow {
         .add_job(SUITE_JOB, suite())
         .add_job(
             email_e2e_alert::JOB,
-            email_e2e_alert::job(&[SUITE_JOB], REPORT_ARTIFACT),
+            email_e2e_alert::job(&[&SUITE_JOB], REPORT_ARTIFACT),
         )
 }
 
@@ -128,7 +130,7 @@ fn suite() -> Job {
         .add_env(("CHANNELS_E2E_INSTANCE", INSTANCE))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
-        .add_step(steps::reuse_cargo_target().id(REUSE_STEP))
+        .add_step(steps::reuse_cargo_target().id(REUSE_STEP.id()))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -145,7 +147,7 @@ fn suite() -> Job {
                 // A re-run of a failed job uploads under the same name again.
                 .add_with(("overwrite", true))
                 .add_with(("retention-days", 7))
-                .if_condition(Expression::new("always()")),
+                .if_condition(always()),
         )
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -154,9 +156,8 @@ fn suite() -> Job {
             // seal make the next job rebuild every workspace crate, so one
             // slow run would slow the run after it. Only once the checkout
             // was dated, which is what the seal vouches for.
-            steps::seal_cargo_target().if_condition(Expression::new(format!(
-                "always() && steps.{REUSE_STEP}.outcome == 'success'"
-            ))),
+            steps::seal_cargo_target()
+                .if_condition(always().and(REUSE_STEP.outcome().eq("success"))),
         )
 }
 
@@ -178,7 +179,7 @@ fn stack_logs() -> Step<Run> {
              cp infra/local/generated/{INSTANCE}/run/*.log {logs}/ 2>/dev/null || true",
             logs = STACK_LOGS.as_str(),
         ))
-        .if_condition(Expression::new(NOT_GREEN))
+        .if_condition(not_green())
 }
 
 fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
@@ -187,5 +188,5 @@ fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
         .add_with(("include-hidden-files", true))
         .add_with(("if-no-files-found", "ignore"))
         .add_with(("retention-days", 7))
-        .if_condition(Expression::new(NOT_GREEN))
+        .if_condition(not_green())
 }

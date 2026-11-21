@@ -117,7 +117,8 @@ pub enum Phase {
     Running,
     /// The guest crashed. With a `retry` it restarts when that is due; with
     /// none it gave up (too many crashes, a failed effect or a lost host),
-    /// paged an operator, and waits for an operator retry.
+    /// paged an operator, and waits for a retry, or for a sign of life when
+    /// its cause can pass.
     Crashed {
         /// Crashes inside the current [`CRASH_WINDOW`].
         restarts: u8,
@@ -326,16 +327,40 @@ impl Failure {
             Self::Payment => "The payment for the computer didn't go through, so it was released.",
         }
     }
+
+    /// Whether `sign` shows this give-up's cause has passed. A guest that
+    /// kept crashing or that the host couldn't power is running if macrod
+    /// connects; an agent that missed its deadline is running only once it
+    /// reports online, since macrod was already connected when it missed.
+    /// The rest can't pass by themselves and wait for a retry.
+    fn ended_by(self, sign: SignOfLife) -> bool {
+        match self {
+            Self::Power | Self::KeptCrashing => true,
+            Self::AgentNotStarted => sign == SignOfLife::AgentOnline,
+            Self::Create
+            | Self::HostLost
+            | Self::SetupExhausted
+            | Self::AgentUnsupported
+            | Self::Payment => false,
+        }
+    }
+}
+
+/// Evidence that a computer which gave up is running after all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignOfLife {
+    MacrodConnected,
+    AgentOnline,
 }
 
 impl ComputerState {
-    /// The purchase context to parent work under while first setup is running.
-    /// Completed or untimed setups return `None`; their work links instead.
+    /// The purchase context to parent work under during the first start,
+    /// including handing an agent teammate over until it reports online.
+    /// Later work returns `None` and links instead.
     pub fn setup_traceparent(&self) -> Option<&str> {
-        self.setup
-            .as_ref()
-            .filter(|setup| !setup.complete())
-            .and(self.provision_traceparent.as_deref())
+        self.provision_traceparent
+            .as_deref()
+            .filter(|_| self.first_start())
     }
 
     /// Whether the computer is still on its first start: setup hasn't
@@ -552,12 +577,13 @@ pub fn transition(
         Event::MacrodConnected => {
             next.macrod_connected = true;
             next.macrod_misses = 0;
+            let recovered = recover(state, &mut next, SignOfLife::MacrodConnected);
             // An agent's credentials are handed over only once its
             // computer is paid for: a charging one waits for the charge, and
-            // one that gave up waits for a retry.
+            // one that gave up waits for a retry or a recovery.
             if state.awaiting_agent
-                && !state.macrod_connected
-                && !gave_up(&state.phase)
+                && (recovered || !state.macrod_connected)
+                && !gave_up(&next.phase)
                 && !state.billing.is_charging()
             {
                 deliver_agent(&mut effects, now);
@@ -574,7 +600,13 @@ pub fn transition(
         }
 
         Event::MacrodConnectedWithoutAgentHandOff => {
-            if !state.awaiting_agent || gave_up(&state.phase) {
+            // A give-up this connection would end still can't hand the agent
+            // over: it fails for the macrod instead of recovering.
+            let would_recover = gave_up(&state.phase)
+                && state
+                    .failure
+                    .is_some_and(|failure| failure.ended_by(SignOfLife::MacrodConnected));
+            if !state.awaiting_agent || (gave_up(&state.phase) && !would_recover) {
                 return transition(state, &Event::MacrodConnected, context);
             }
             give_up(
@@ -703,7 +735,17 @@ pub fn transition(
 
         Event::AgentOnline => {
             next.awaiting_agent = false;
+            if recover(state, &mut next, SignOfLife::AgentOnline) && !next.macrod_connected {
+                // Watch for the connection the agent's report implies.
+                effects.push(Effect::ScheduleTimer {
+                    kind: TimerKind::MacrodMissing,
+                    at: now + MACROD_GRACE,
+                });
+            }
         }
+
+        // Only timed: see `SetupTimeline::advance_agent`.
+        Event::AgentDelivered => {}
 
         Event::AgentRedeliver => {
             if state.awaiting_agent
@@ -946,7 +988,28 @@ pub(crate) fn gave_up(phase: &Phase) -> bool {
     matches!(phase, Phase::Crashed { retry: None, .. })
 }
 
-/// Stop restarting and page an operator; [`Event::OperatorRetry`] resumes.
+/// End a give-up that `sign` shows has passed: the guest never stopped
+/// (a give-up stops nothing), so it is running again, and the failure and
+/// crash count are cleared. A computer the team turned off stays as it is.
+/// Returns whether it recovered.
+fn recover(state: &ComputerState, next: &mut ComputerState, sign: SignOfLife) -> bool {
+    let passed = state.failure.is_some_and(|failure| failure.ended_by(sign));
+    if !gave_up(&state.phase) || state.power != Power::On || !passed {
+        return false;
+    }
+    tracing::info!(failure = ?state.failure, sign = ?sign, "a computer that gave up is running again");
+    next.phase = Phase::Running;
+    next.failure = None;
+    next.recent_crashes.clear();
+    next.macrod_misses = 0;
+    next.power_on_requested = false;
+    next.retried_by_team = false;
+    true
+}
+
+/// Stop restarting and page an operator; a retry resumes, and so does a
+/// sign of life when the cause can pass ([`Failure::ended_by`]). Whether
+/// macrod is connected is presence, not lifecycle, and stays as observed.
 fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, failure: Failure, reason: String) {
     next.failure = Some(failure);
     next.phase = Phase::Crashed {
@@ -954,7 +1017,6 @@ fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, failure: Failure
         retry: None,
     };
     next.power_on_requested = false;
-    next.macrod_connected = false;
     if next.retried_by_team {
         tracing::warn!(reason = %reason, "a computer the team retried gave up again; not paging");
     } else {

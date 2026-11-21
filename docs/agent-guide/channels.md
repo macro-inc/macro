@@ -65,9 +65,12 @@ narrow split that shows the conversation alone, Esc reaches the split as before
 (clearing a selection, leaving spotlight).
 
 A click in a draft moves the caret where it lands, including a quick
-trackpad tap and a click while the page is busy. The composer re-focuses itself
-only for clicks outside its text (`MarkdownShell`); re-focusing on a click in
-the text wrote the previous caret back over the new one.
+trackpad or touch tap and a click while the page is busy. The composer
+re-focuses itself only for clicks outside its text; re-focusing on a click in
+the text wrote the previous caret back over the new one. Every Lexical input
+shares this rule (`focusEditorFromClick`, used by `MarkdownShell` and
+`MarkdownTextarea`), so the email body, event descriptions and Universal Input
+drafts behave the same way.
 
 To check this, arrow through several conversations (focus stays in the list),
 press Enter (the composer takes focus), press Esc twice (back on the same row),
@@ -172,6 +175,16 @@ three-step flow:
 
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+**New direct message** opens a draft message whose To
+field takes either people or one existing conversation. People open their DM
+or group chat, creating it on the first message. While the field is empty it
+also suggests the channels and group chats you belong to (the same set as
+Share To; reach a one-to-one DM by picking the person). A picked channel is the
+only recipient: the field takes no typing and suggests nothing until its chip
+is removed (its X, or Backspace), and once anyone is picked channels are no
+longer suggested. Send posts into the channel and opens it at the message, as
+sending to a DM does. Phones and tablets behave the same.
 
 The channel header's Invite dialog and Participants add controls use paged personal
 suggestions, not a complete address book. Scrolling to the end (or PageDown) lists
@@ -637,8 +650,13 @@ so their late answer never pushes People's rows down; phones pin People rows
 above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
-When the people read fails (a busy cache times it out), the menu reads it again
-once by itself and shows "Couldn't load people" with Retry only if that fails too.
+The loading rows stay blank for the first half second, so an ordinary open
+shows no loading state. When the local cache has not answered within two
+seconds (a busy cache, or one changing owner across tabs), People lists the
+server's people instead and keeps them in place for that query.
+When the people read fails, the menu reads it again once by itself and shows
+"Couldn't load people" with Retry if that fails too, or if nothing has answered
+by the time the rows stop waiting. People never disappears without a message.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
@@ -1077,6 +1095,33 @@ its own row, and a reply uses its parent thread. Verify that an incoming reactio
 brings that row back into the inbox, displays the reaction and channel name, and
 opens the reacted-to message. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
+
+## Marking notifications done in the channel gutter
+
+Desktop only, behind `enable-channel-notification-gutter`, which is on in
+local development (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER` overrides it).
+Open a channel in a pane at least 1400px wide, so the list docks in the
+gutter, with notifications from another account: new top-level messages, a
+thread reply, and a mention. Then narrow the pane to see the popover and the
+hidden states. Check that:
+
+- A round check sits in the gutter left of each stack's newest message. For a
+  thread, it sits beside the newest notified reply, or beside the top-level
+  message while the thread is collapsed. Clicking it removes the check and
+  marks that stack's notifications done in Home.
+- A toggle with the notifications bell and a count sits at the top left of
+  the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
+  card docked in the gutter. Narrower panes open the list as a popover. Not
+  done and Unread switch which stacks it lists. Clicking a row scrolls to its
+  message, and the row's check marks it done (or read, in Unread). While a
+  list's notifications load it says so, and if the read fails it offers Retry
+  instead of an empty list.
+- Unseen stacks show an unread dot before their icon, and the toggle shows
+  one after its count while any not-done stack is unseen. Reading a stack (here, in Home, or
+  on another device) clears its dot.
+- With nothing left to mark done, the bell and the list hide (an open popover
+  closes); a new notification brings the bell back.
+- Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
 
 ## Requests to join
 
@@ -1529,8 +1574,9 @@ The sidebar's **New** dropdown spans its button's full width.
 **New** offers separate **New channel** and **New direct message** actions in
 both sidebar layouts. **New channel** opens the existing
 [name, visibility, and optional invitations flow](#create-a-channel).
-**New direct message** opens the existing recipient picker, including people,
-external email addresses, private groups, and available agent personas.
+**New direct message** opens the draft message's recipient picker: people,
+external email addresses, available agent personas, or one channel or group
+chat you belong to (see [Create a channel](#create-a-channel)).
 The sectioned sidebar also offers **New section** in the same menu.
 
 Check each creation action with the sidebar flag on and off; changing the layout
@@ -1835,10 +1881,14 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Invite` and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. `Ask Macro` lives in the channel
-title menu (the `...` after the name, or the split title's menu) on every
-platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
+`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. On desktop both the inline
+conversation header and the split header (the channel block, which the
+Notifications preview shows) show them left to right as
+`Ask Macro`, `Invite`, `Call`, after the live viewer avatars; `Ask Macro` is the
+same button a document header shows before Share. The channel title menu (the
+`...` after the name, or the split title's menu) also offers `Ask Macro` on every
+platform; phones show it only there. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
@@ -1862,8 +1912,8 @@ Other channels and views retain the floating pill.
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
-and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Invite` buttons. An ellipsis follows the name — after the breadcrumb where
+and name, the same inset tab strip, live viewer avatars, and the `Ask Macro`,
+`Invite`, and `Call` buttons. An ellipsis follows the name — after the breadcrumb where
 the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,

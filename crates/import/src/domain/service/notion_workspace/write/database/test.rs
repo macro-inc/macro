@@ -38,52 +38,8 @@ fn source_item(title: &str) -> WriteItem {
     }
 }
 
-/// What earlier attempts recorded, kept the way the ledger keeps it: the
-/// first record of an object wins.
-#[derive(Default)]
-struct FakeStore(Mutex<Vec<WrittenObject>>);
-
-impl WrittenObjects for FakeStore {
-    async fn written(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        import_ids: &[Uuid],
-    ) -> crate::domain::ports::Result<Vec<WrittenObject>> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|object| import_ids.contains(&object.import_id))
-            .cloned()
-            .collect())
-    }
-
-    async fn record_written(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        objects: &[WrittenObject],
-    ) -> crate::domain::ports::Result<Vec<WrittenObject>> {
-        let mut stored = self.0.lock().unwrap();
-        Ok(objects
-            .iter()
-            .map(|object| {
-                let existing = stored.iter().find(|known| {
-                    known.import_id == object.import_id
-                        && known.kind == object.kind
-                        && known.object == object.object
-                });
-                match existing {
-                    Some(known) => known.clone(),
-                    None => {
-                        stored.push(object.clone());
-                        object.clone()
-                    }
-                }
-            })
-            .collect())
-    }
-}
+mod store;
+use store::FakeStore;
 
 /// A Notion workspace holding one data source with two rows.
 struct FakeNotion {
@@ -155,6 +111,8 @@ struct WrittenDocument {
     markdown: String,
     links: NotionLinks,
     dates: Option<SourceDates>,
+    folder: Option<Uuid>,
+    visibility: crate::domain::ports::ImportVisibility,
 }
 
 /// Records what the import asks Macro to create. `fail_at_batch` makes that
@@ -162,7 +120,13 @@ struct WrittenDocument {
 /// leave it.
 #[derive(Default)]
 struct FakeWriter {
+    reject_assignee_replay: bool,
+    reapplied_tasks: Mutex<Vec<(Uuid, String, ImportVisibility)>>,
+    task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
     databases: Mutex<usize>,
+    tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
+    task_folders: Mutex<Vec<Option<Uuid>>>,
+    folder_visibilities: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
     folders: Mutex<Vec<(String, Option<Uuid>)>>,
     documents: Mutex<Vec<WrittenDocument>>,
     batches: Mutex<Vec<Vec<DatabaseOp>>>,
@@ -188,7 +152,7 @@ impl WorkspaceWriter for FakeWriter {
         _: Uuid,
         _: &str,
         _: &str,
-        _: bool,
+        _visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         unreachable!("Notion-only test writer")
     }
@@ -199,8 +163,8 @@ impl WorkspaceWriter for FakeWriter {
         _: &str,
         _: &str,
         _: &ImportedTaskProperties,
-        _: bool,
-    ) -> anyhow::Result<String> {
+        _visibility: crate::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
         unreachable!("Notion-only test writer")
     }
     async fn link_tracker_task(
@@ -217,10 +181,28 @@ impl WorkspaceWriter for FakeWriter {
         _user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
+        self.folder_visibilities.lock().unwrap().push(visibility);
         let mut folders = self.folders.lock().unwrap();
         folders.push((name.to_string(), parent));
         Ok(Uuid::from_u128(900 + folders.len() as u128))
+    }
+
+    async fn folder_has_explicit_grant(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
+    async fn folder_has_team_edit_grant(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
     }
 
     async fn folder_exists(
@@ -248,8 +230,9 @@ impl WorkspaceWriter for FakeWriter {
         markdown: &str,
         links: &NotionLinks,
         _properties: &ImportedDocumentProperties,
-        _folder: Option<Uuid>,
+        folder: Option<Uuid>,
         dates: Option<SourceDates>,
+        visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<String> {
         let mut documents = self.documents.lock().unwrap();
         // Like Macro: a document id already in use is the earlier attempt's.
@@ -260,23 +243,46 @@ impl WorkspaceWriter for FakeWriter {
                 markdown: markdown.to_string(),
                 links: links.clone(),
                 dates,
+                folder,
+                visibility,
             });
         }
         Ok(id.to_string())
     }
 
+    async fn reapply_task_assignee(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        id: Uuid,
+        email: &str,
+        visibility: ImportVisibility,
+    ) -> anyhow::Result<Option<crate::domain::ports::TaskImportNoticeReason>> {
+        self.reapplied_tasks
+            .lock()
+            .unwrap()
+            .push((id, email.to_string(), visibility));
+        anyhow::ensure!(!self.reject_assignee_replay, "assignee update failed");
+        Ok(None)
+    }
+
     async fn create_task(
         &self,
         _user: &MacroUserIdStr<'static>,
-        _id: Uuid,
+        id: Uuid,
         _name: &str,
         _markdown: &str,
         _links: &NotionLinks,
         _properties: &ImportedTaskProperties,
-        _folder: Option<Uuid>,
+        folder: Option<Uuid>,
         _dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
-        unimplemented!("a copied database writes no tasks")
+        visibility: crate::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
+        self.tasks.lock().unwrap().push(visibility);
+        self.task_folders.lock().unwrap().push(folder);
+        Ok(crate::domain::ports::CreatedImportTask {
+            id: id.to_string(),
+            notice: self.task_notice,
+        })
     }
 
     async fn create_database(
@@ -436,10 +442,23 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         &tokio::sync::RwLock::new(links.clone()),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
 
+    assert!(
+        writer
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|doc| doc.visibility == crate::domain::ports::ImportVisibility::Personal)
+    );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![crate::domain::ports::ImportVisibility::Personal]
+    );
     let batches = writer.batches.lock().unwrap();
     // Schema first: rename the starter table and title and add the select;
     // the relation waits, and the Page column comes once a row has content.
@@ -601,7 +620,8 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
             .collect(),
     };
     let writer = FakeWriter::default();
-    let source_item = source_item("Bugs");
+    let mut source_item = source_item("Bugs");
+    source_item.shared = true;
     let store = FakeStore::default();
     let user = user();
     let progress = Progress::new(&store, &user, source_item.import_id, &[]);
@@ -617,10 +637,23 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
 
+    assert!(
+        writer
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|doc| doc.visibility == crate::domain::ports::ImportVisibility::Shared)
+    );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![crate::domain::ports::ImportVisibility::Shared]
+    );
     assert_eq!(
         writer.folders.lock().unwrap().as_slice(),
         [("Bugs pages".to_string(), Some(Uuid::from_u128(42)))]
@@ -668,6 +701,7 @@ async fn a_cancelled_import_stops_before_writing_rows() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &cancel,
+        None,
     )
     .await;
 
@@ -728,6 +762,7 @@ async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -801,6 +836,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
+        None,
     )
     .await;
     assert_eq!(first.unwrap_err().to_string(), "the process stopped");
@@ -820,6 +856,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -889,6 +926,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap_err();
@@ -908,6 +946,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -934,3 +973,5 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
     };
     assert_eq!(linked.len(), 2);
 }
+
+mod folders;

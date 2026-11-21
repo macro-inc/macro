@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::messages::ContactsNodes;
 use axum::{
     body::Body,
     http::{Request, header},
@@ -49,6 +50,14 @@ impl ContactsService for MockService {
     async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), Report> {
         Ok(())
     }
+
+    async fn invite_contact(
+        &self,
+        _inviter: MacroUserIdStr<'static>,
+        _invitee: MacroUserIdStr<'static>,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 /// Echoes the limit it was given as that many people, so tests see the cap.
@@ -73,6 +82,14 @@ impl PeopleSearchService for MockService {
                         ),
                         user_id,
                         name: (index == 0).then(|| "Person Zero".to_string()),
+                        lists: if index == 0 {
+                            vec![
+                                crate::domain::models::list::ContactList::Teammates,
+                                crate::domain::models::list::ContactList::Gmail,
+                            ]
+                        } else {
+                            Vec::new()
+                        },
                     },
                     is_teammate: index == 0,
                     is_agent: index == 1,
@@ -333,6 +350,7 @@ async fn search_returns_ranked_people_with_the_default_limit() {
             "name": "Person Zero",
             "isTeammate": true,
             "isAgent": false,
+            "lists": ["teammates", "gmail"],
         })
     );
     assert_eq!(
@@ -342,6 +360,7 @@ async fn search_returns_ranked_people_with_the_default_limit() {
             "name": null,
             "isTeammate": false,
             "isAgent": true,
+            "lists": [],
         })
     );
 }

@@ -7,9 +7,14 @@ export function MentionLoadingRows(props: {
   count: number;
   label: string;
   rowClass?: string;
+  /** Keeps the rows' space without drawing them yet. */
+  blank?: boolean;
 }) {
   return (
-    <ListSkeleton.Root label={props.label}>
+    <ListSkeleton.Root
+      label={props.label}
+      class={props.blank ? 'invisible' : undefined}
+    >
       <For each={Array.from({ length: props.count })}>
         {() => (
           <div

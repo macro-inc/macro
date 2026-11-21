@@ -364,6 +364,12 @@ pub async fn build(
         connection_gateway: channels_connection_gateway.clone(),
         sqs: aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker: macro_event_broker.clone(),
+        environment: config.environment,
+        feature_flags: ai_tools::service_feature_flags(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            config.environment,
+        )?,
     };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -830,6 +836,7 @@ pub async fn build(
         &databases_tool_context,
         soup_service.clone(),
         db.clone(),
+        side_effect_clients.feature_flags.clone(),
     );
     let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
     let pipeline_tool_context = ai_tools::build_pipeline_tool_context(

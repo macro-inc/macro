@@ -236,3 +236,84 @@ pub async fn assert_account_reset<S: Storage>(engine: &mut Engine<S>) {
             .is_none()
     );
 }
+
+/// The web app's contact top-up: an exact `ContactDirectoryByUserIds` lookup
+/// written under a fresh contact fence replaces a cached contact's fields and
+/// adds a new contact, both searchable at once. Native hosts run this engine
+/// and storage, so an over-the-air bundle can rely on it.
+pub async fn assert_contact_top_up<S: Storage>(engine: &mut Engine<S>) {
+    let mut scope = HydrationScope {
+        identity: VIEWER.into(),
+        storage_generation: engine.current_storage_generation().await.unwrap(),
+        contact_fence: None,
+    };
+    scope.contact_fence = Some(
+        engine
+            .contact_snapshot(&ContactSnapshotRequest {
+                scope: scope.clone(),
+                scan: None,
+            })
+            .await
+            .unwrap()
+            .fence,
+    );
+    let user_ids = ["macro|user000000@example.com", "macro|newcomer@example.com"];
+    let variables = json!({ "userIds": user_ids });
+    let data = json!({"user": {"id": VIEWER, "contactsByUserIds": [
+        {"id": "contact-000000", "userId": user_ids[0], "email": "user000000@example.com", "name": "Renamed Colleague"},
+        {"id": "contact-newcomer", "userId": user_ids[1], "email": "newcomer@example.com", "name": "Newcomer Person"},
+    ]}});
+    let result = engine
+        .hydrate_query_in_scope(
+            NetworkWrite {
+                query: DOCUMENT,
+                operation_name: Some("ContactDirectoryByUserIds"),
+                variables: variables.as_object().unwrap(),
+                data: &data,
+                identity: Some(VIEWER),
+            },
+            &scope,
+            vec![],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.search_changed_buckets,
+        std::collections::BTreeSet::from(["person".to_owned()])
+    );
+
+    for (query, record_key) in [
+        ("Renamed Colleague", "GraphqlContact:contact-000000"),
+        ("Newcomer Person", "GraphqlContact:contact-newcomer"),
+    ] {
+        let page = engine
+            .search(&SearchRequest {
+                profile: SearchProfile::QuickAccessV1,
+                buckets: vec!["person".into()],
+                query: query.into(),
+                cursor: None,
+                limit: 1,
+                now_ms: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(page.documents.len(), 1, "{query}");
+        assert_eq!(page.documents[0].record_key.as_ref(), record_key);
+    }
+
+    // The stored name is replaced, not kept beside the new one.
+    let selection = RecordSelection::parse(
+        &engine.schema_snapshot(),
+        DOCUMENT,
+        "ContactDirectoryFields",
+    )
+    .unwrap();
+    let renamed = engine
+        .read_records_by_keys(
+            &selection,
+            &[EntityKey::entity("GraphqlContact", &["contact-000000"])],
+        )
+        .await
+        .unwrap();
+    assert_eq!(renamed.value[0].record["name"], "Renamed Colleague");
+}

@@ -238,6 +238,21 @@ time a picker stays open afterwards is not counted. Reading the same input again
 after a search ended, as a reopened picker or a re-read after a contact change
 does, starts a new span with `contacts.repeat` true. Never add the query text.
 
+A `contacts.read_window` answered by the server (`contacts.source` `server`,
+a tab without a usable local cache) has a `contacts.read_server_window` child.
+On the first page of a typed search it has up to two more, read in parallel:
+`contacts.read_server_exact`, the server's exact-name search (never for text
+that holds an `@`), and `contacts.read_server_named`, the lookup by ID of the
+viewer's teammates or of the one person a whole typed address identifies. Each
+has its own `graphql.transport` request, with one exception: a teammate lookup
+equal to one still in flight, as the previous keystroke's is, shares that
+request, so its span has none under it and the request sits in the trace of the
+search that started it. The window records `contacts.named_exact_count` and
+`contacts.named_word_start_count`, how many of the listed people the text
+names, `contacts.named_failed` when one of the extra reads failed, and
+`contacts.named_late` when one had not answered within its budget; either way
+the page was listed without the people that read would have added.
+
 ## Agent sessions
 
 A session's lifetime is reconstructable from these spans. All of them carry
@@ -389,7 +404,7 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | On | Attributes |
 | --- | --- |
 | Every span in a classed trace, including HTTP client spans started in it | `macro.sampling.class` (the class it asked for, else its parent's) and `macro.sampling.rate` (that class's rate; weight by its inverse) |
-| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
+| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with a long frame in the window, its attribution (below); with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
 | Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
 | A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
@@ -552,6 +567,25 @@ Phases you will see:
   `ui.long_task_*` and `ui.long_animation_frame_*`. These are a two-frame paint
   opportunity and overlapping main-thread work, not proof a pixel painted or
   that the flow caused every task.
+- Long-frame attribution on roots comes from the frames overlapping the root's
+  window (input event to finish), read 150 ms after the root finishes (at once
+  when it is cancelled, times out or the page hides) because Chrome reports a
+  frame only after presenting it; the span keeps its real end.
+  Fields: `ui.long_animation_frame_max_ms`, `_max_render_ms` (rendering phase of
+  the longest frame) and `_max_style_layout_ms` (its style and layout),
+  `_forced_style_layout_ms` (forced layout by scripts, all frames),
+  `_script_count` (scripts reported, at most three), and for the up to three
+  longest scripts
+  `ui.long_animation_frame_script_<1..3>.{invoker, invoker_type, source_url,
+  source_function, source_char_position, duration_ms, forced_style_layout_ms}`.
+  `source_url` is origin and path only; page code (inline handlers, Tauri IPC
+  replies) is `<origin>/(document)`, other schemes keep only the scheme, and
+  invokers drop element ids and `[src=…]`. The invoker is the entry point the
+  browser called: every Solid `onClick` is `#document.onclick` in `solid-js/web`,
+  and promise continuations go to whoever awaited first, so resolve
+  `source_url` + `source_char_position` through the build's source map
+  (`<chunk>.js.map` next to the chunk) to find the code. Chrome and Edge only
+  (desktop CEF included); Safari and Firefox have no Long Animation Frames.
 - `flow.outcome=success` means the UI reached readiness, which can be a
   terminal error panel; read connected HTTP spans to tell whether data loaded.
   Exclude cancelled, hidden, timeout and error outcomes from load percentiles.

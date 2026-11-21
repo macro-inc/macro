@@ -26,6 +26,7 @@ import { CrmRecordDetail } from './record-detail';
 
 const taskContext = vi.hoisted(() => ({
   records: [] as (() => CrmTaskRecord)[],
+  canAccess: (): boolean => true,
   get record() {
     return this.records.at(-1);
   },
@@ -39,6 +40,9 @@ const trackedItems = () =>
   createOpenTracker.mock.calls.map(([block, item]) => [block, item()]);
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    canAccess: () => taskContext.canAccess(),
+    accessState: () => (taskContext.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: async () => {},
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
     isTeamAdmin: () => () => false,
@@ -56,6 +60,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Tooltip: (props: ParentProps) => <>{props.children}</>,
+  EmptyStatePanel: (props: { title: string }) => <p>{props.title}</p>,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -69,6 +74,9 @@ vi.mock('@components/app/side-panel', () => ({
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => 1200,
+}));
 vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
 vi.mock('./record-details-section', () => ({
   RecordDetailsSection: () => null,
@@ -215,6 +223,7 @@ beforeAll(async () => {
   await vi.importActual('./contact-detail');
 }, 30_000);
 beforeEach(() => {
+  taskContext.canAccess = () => true;
   vi.stubGlobal(
     'ResizeObserver',
     class {

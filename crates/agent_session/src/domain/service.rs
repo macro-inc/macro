@@ -59,7 +59,7 @@ use tracing::instrument::WithSubscriber as _;
 use bots::domain::models::BotId;
 
 use super::coding_preferences::CodingPreferences;
-use super::connection::RuntimeAttachment;
+use super::connection::{RuntimeAttachment, RuntimeConnectionId};
 use super::error::{AgentSessionError, Result};
 use super::lifecycle::session_identity;
 use super::model::{
@@ -119,6 +119,11 @@ struct ActiveSession {
     /// transport is already known to be gone fails immediately instead of
     /// waiting out the full command timeout for nothing.
     transport_closed: Option<CancellationToken>,
+    /// The shared runtime connection the actor is bound to, when it rides on
+    /// one. A redial evicts the old connection long before its actors finish
+    /// winding down, so being attached is not the same as being attached to
+    /// the runtime's current socket.
+    connection: Option<RuntimeConnectionId>,
 }
 
 type ActiveSessions = DashMap<AgentSessionId, ActiveSession>;
@@ -367,6 +372,11 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// that could not take a requested list keeps its previous one until its
     /// next attach.
     fn attached_mcp_servers(&self, id: AgentSessionId) -> Option<Vec<McpServer>>;
+
+    /// The shared runtime connection the session's live actor on this
+    /// instance is bound to; `None` when none is attached here, or it has a
+    /// transport of its own.
+    fn attached_connection(&self, id: AgentSessionId) -> Option<RuntimeConnectionId>;
 
     /// Hand the session's agent `servers` from now on. The live connection
     /// re-resumes its ACP session with them before the next prompt reaches
@@ -639,6 +649,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     deleting: false,
                     stopping: false,
                     transport_closed: None,
+                    connection: None,
                 });
                 Ok(AttachReservation {
                     active: self.active.clone(),
@@ -683,6 +694,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         active.commands = Some(commands.clone());
         active.mcp_servers = attachment.mcp_servers.clone();
         active.transport_closed = attachment.closed.clone();
+        active.connection = attachment.connection;
         let (opened, opened_rx) = watch::channel(None);
         active.opened = Some(opened_rx);
         drop(active);
@@ -859,6 +871,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     deleting,
                     stopping: true,
                     transport_closed: None,
+                    connection: None,
                 });
                 (stopped, marker)
             }
@@ -1334,6 +1347,13 @@ where
             .get(&id)
             .filter(|active| active.commands.is_some())
             .map(|active| active.mcp_servers.clone())
+    }
+
+    fn attached_connection(&self, id: AgentSessionId) -> Option<RuntimeConnectionId> {
+        self.active
+            .get(&id)
+            .filter(|active| active.commands.is_some())
+            .and_then(|active| active.connection)
     }
 
     async fn replace_mcp_servers(&self, id: AgentSessionId, servers: Vec<McpServer>) -> Result<()> {

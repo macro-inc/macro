@@ -26,6 +26,14 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+If account or CRM access changes while a document or file is still loading,
+its load retries once with fresh permissions and content in both Drive and
+standalone file views. Check a cold file open
+with local storage delayed: the file should finish opening after recovery. A
+revoked file stays unavailable, and a second interruption leaves the existing
+retry control. An already-open editor does not reload merely because the cache
+finishes starting.
+
 Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
 snippets and skills included) records the open once in the user's history,
 which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
@@ -80,9 +88,11 @@ to request again.
 This workflow also applies to the existing chat, folder, project, database, call,
 and agent-session Share menus, using the access levels that each supports.
 
-Reviewers see a pending count on **Share**. Entering an item with pending requests
+Reviewers see a pending count on **Share**, after its label (after the icon
+where the header hides the label), and its tooltip and accessible name read
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
-badge. On mobile, review requests in the **People** tab. **Permission requests**
+count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials

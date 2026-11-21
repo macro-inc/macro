@@ -4,6 +4,20 @@ use sqlx::types::Uuid;
 #[cfg(test)]
 mod test;
 
+/// A CRM contact population share-locks a link row for its whole transaction.
+/// A health write behind one gives up after 5 s (SQLSTATE 55P03) instead of
+/// holding the token fetch, and its pooled connection, until it ends; the
+/// next fetch writes it again.
+async fn begin_health_write(
+    pool: &PgPool,
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL lock_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    Ok(tx)
+}
+
 /// Re-homes a link's `fusionauth_user_id`. Used after a shared mailbox's Google grant is
 /// relocated onto a dedicated FusionAuth user so token resolution follows it there.
 #[tracing::instrument(skip(pool), err)]
@@ -37,6 +51,7 @@ pub async fn update_link_fusionauth_user_id(
 /// Returns `false` when it was already flagged or no such link exists.
 #[tracing::instrument(skip(pool), err)]
 pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Result<bool> {
+    let mut tx = begin_health_write(pool).await?;
     let row = sqlx::query!(
         r#"
         WITH prev AS (
@@ -52,8 +67,9 @@ pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Resu
         "#,
         link_id,
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(matches!(row, Some(r) if r.did_transition))
 }
@@ -62,6 +78,7 @@ pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Resu
 /// flag isn't set, so it is cheap to call on every successful token fetch.
 #[tracing::instrument(skip(pool), err)]
 pub async fn clear_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Result<()> {
+    let mut tx = begin_health_write(pool).await?;
     sqlx::query!(
         r#"
         UPDATE email_links
@@ -72,8 +89,9 @@ pub async fn clear_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Re
         "#,
         link_id,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(())
 }

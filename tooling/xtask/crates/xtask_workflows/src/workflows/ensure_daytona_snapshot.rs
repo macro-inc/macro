@@ -6,9 +6,10 @@
 //! cache is the freshness check). GHCR is the published copy for `main`
 //! (`:latest`) and for verifying the image on PRs (`:$SHA` only).
 
+use gh_workflow::expr::typed::{Str, github};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Push,
-    Step, Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Push, Step,
+    Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -78,7 +79,7 @@ pub fn ensure_daytona_snapshot() -> Workflow {
             .pull_request(image_source_pull_request())
             .workflow_dispatch(WorkflowDispatch::default()))
         .concurrency(
-            Concurrency::new(Expression::new("${{ github.workflow }}-${{ github.ref }}"))
+            Concurrency::new(format!("{}-{}", github().workflow(), github().git_ref()))
                 .cancel_in_progress(false),
         )
         .add_job("ensure-snapshot", ensure_snapshot())
@@ -91,7 +92,7 @@ fn ensure_snapshot() -> Job {
         .name("Ensure macro-agent-harness snapshot")
         .runs_on(runners::Runner::Small.to_string())
         // PRs only need the GHCR publish; Daytona snapshot create is main-only.
-        .cond(Expression::new("github.event_name != 'pull_request'"))
+        .cond(github().event_name().ne("pull_request"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
@@ -128,10 +129,11 @@ fn publish_image() -> Job {
         .name("Publish sandbox image to GHCR")
         .runs_on(runners::Runner::Mid.to_string())
         .timeout_minutes(90u32)
-        .cond(Expression::new(
-            "github.event_name != 'pull_request' || \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github().event_name().ne("pull_request").or(github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository())),
+        )
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_namespace_buildx())
         .add_step(
@@ -141,8 +143,8 @@ fn publish_image() -> Job {
                     echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
                 "#})
                 .shell("bash")
-                .add_env(("GITHUB_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
-                .add_env(("GITHUB_ACTOR", "${{ github.actor }}")),
+                .add_env(("GITHUB_TOKEN", vars::GITHUB_TOKEN))
+                .add_env(("GITHUB_ACTOR", github().actor())),
         )
         .add_step(
             Step::new("Build and push sandbox image")

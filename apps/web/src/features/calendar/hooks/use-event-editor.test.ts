@@ -503,6 +503,34 @@ describe('scheduling a Macro call', () => {
     }
   });
 
+  it('closes a confirmed create without navigating when its identity is unavailable', async () => {
+    mocks.createEvent.mockResolvedValue(undefined);
+    const created = vi.fn();
+    const saved = vi.fn();
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () => false,
+            event: () => undefined,
+            onCreated: created,
+            onSaved: saved,
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(mocks.createEvent).toHaveBeenCalledOnce();
+      expect(created).not.toHaveBeenCalled();
+      expect(saved).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
+      expect(editor.saveError()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
   it('reports the created event before it closes', async () => {
     const order: string[] = [];
     const created = vi.fn(() => order.push('created'));
@@ -1540,5 +1568,91 @@ describe('guest permissions', () => {
     } finally {
       dispose();
     }
+  });
+});
+
+describe('replacing an Outlook event without Teams', () => {
+  it('carries the unsaved edits without the conference', () => {
+    createRoot((dispose) => {
+      const event: CalendarEvent = {
+        ...savedEvent,
+        location: 'Room 1',
+        description: '<p>Agenda</p>',
+        conferenceUrl: 'https://teams.microsoft.com/l/meetup-join/abc',
+        conferenceProvider: 'microsoft_teams',
+        calendar: { ...savedEvent.calendar, provider: 'outlook' },
+        attendees: [
+          {
+            email: 'guest@example.com',
+            responseStatus: 'accepted',
+            isOrganizer: false,
+            isSelf: false,
+            isOptional: false,
+          },
+        ],
+      };
+      const editor = useEventEditor({
+        event: () => event,
+        onSaved: vi.fn(),
+        macroCallsEnabled: () => false,
+      });
+      const form = createCalendarEventFormController({
+        initialValue: calendarEventToEditorInitialValues(event),
+        isEdit: true,
+        calendarOptions: editor.calendarOptions,
+        guestOptions: () => [],
+      });
+      form.setField('title', 'Planning, moved');
+      form.setField('location', 'Room 2');
+      form.setField('conference', 'none');
+      form.setSelectedGuests([]);
+
+      const request = editor.replacementRequest(form.submitValues()!, 'all');
+
+      expect(request).toEqual({
+        target: {
+          eventId: 'event-1',
+          calendarId: 'calendar-1',
+          recurrenceId: undefined,
+        },
+        changes: {
+          title: 'Planning, moved',
+          location: 'Room 2',
+          attendees: [],
+        },
+      });
+      expect(JSON.stringify(request?.changes)).not.toContain('conference');
+      dispose();
+    });
+  });
+
+  it('replaces one occurrence when the edit is scoped to it', () => {
+    createRoot((dispose) => {
+      const event: CalendarEvent = {
+        ...savedEvent,
+        location: '',
+        recurrenceId: '2026-09-22T14:00:00Z',
+        recurrenceLines: [],
+      };
+      const editor = useEventEditor({
+        event: () => event,
+        onSaved: vi.fn(),
+        macroCallsEnabled: () => false,
+      });
+
+      const request = editor.replacementRequest(
+        {
+          ...values,
+          title: 'Planning',
+          location: '',
+          conferenceChoice: 'none',
+        },
+        'this_event'
+      );
+
+      expect(request?.target.recurrenceId).toBe('2026-09-22T14:00:00Z');
+      expect(request?.changes.recurrenceLines).toBeUndefined();
+      dispose();
+    });
   });
 });

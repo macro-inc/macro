@@ -9,7 +9,7 @@ import CodeIcon from '@icon/system/regular/code.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import { Dropdown } from '@ui';
-import { batch, Show } from 'solid-js';
+import { batch } from 'solid-js';
 import {
   activeFilterCount,
   type ConversationFilterCategory,
@@ -153,45 +153,37 @@ export function ConversationFiltersControl(props: ConversationFiltersProps) {
       props.onShowUnlistedRunsChange(false);
     });
   return (
-    <div class="relative shrink-0">
-      <ListFilterDropdown
-        label={t('agentWork.filterConversations')}
-        size="icon-xs"
-        class="size-(--sidebar-control-size)"
-        groups={FILTER_GROUPS}
-        isSelected={(category, value) =>
-          (props.filters[category] as readonly FilterValue[]).includes(value)
-        }
-        selectedIds={(category) => props.filters[category]}
-        onSelectionChange={props.onFilterChange}
-        footer={
-          <>
-            <Dropdown.Group>
-              <Dropdown.CheckboxItem
-                closeOnSelect
-                checked={props.showUnlistedRuns}
-                onChange={props.onShowUnlistedRunsChange}
-              >
-                <span class="flex-1">
-                  {t('viewMenus.showHiddenRoutineRuns')}
-                </span>
-              </Dropdown.CheckboxItem>
-            </Dropdown.Group>
-            <Dropdown.Group>
-              <Dropdown.Item onSelect={clear}>
-                <Dropdown.ItemLabel class="text-failure-ink">
-                  {t('viewMenus.clearFilters')}
-                </Dropdown.ItemLabel>
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </>
-        }
-      />
-      <Show when={count() > 0}>
-        <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-          {count()}
-        </span>
-      </Show>
-    </div>
+    <ListFilterDropdown
+      label={t('agentWork.filterConversations')}
+      size={count() ? 'xs' : 'icon-xs'}
+      class={count() ? undefined : 'size-(--sidebar-control-size)'}
+      activeCount={count()}
+      groups={FILTER_GROUPS}
+      isSelected={(category, value) =>
+        (props.filters[category] as readonly FilterValue[]).includes(value)
+      }
+      selectedIds={(category) => props.filters[category]}
+      onSelectionChange={props.onFilterChange}
+      footer={
+        <>
+          <Dropdown.Group>
+            <Dropdown.CheckboxItem
+              closeOnSelect
+              checked={props.showUnlistedRuns}
+              onChange={props.onShowUnlistedRunsChange}
+            >
+              <span class="flex-1">{t('viewMenus.showHiddenRoutineRuns')}</span>
+            </Dropdown.CheckboxItem>
+          </Dropdown.Group>
+          <Dropdown.Group>
+            <Dropdown.Item onSelect={clear}>
+              <Dropdown.ItemLabel class="text-failure-ink">
+                {t('viewMenus.clearFilters')}
+              </Dropdown.ItemLabel>
+            </Dropdown.Item>
+          </Dropdown.Group>
+        </>
+      }
+    />
   );
 }

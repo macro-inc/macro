@@ -1,6 +1,7 @@
 {
   "name": "@macro-inc/muppet",
   "version": "0.0.0",
+  "apiLevel": 3,
   "private": true,
   "type": "module",
   "exports": {

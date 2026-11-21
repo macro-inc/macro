@@ -14,7 +14,7 @@ struct FakeRepository {
     lookups: Mutex<Vec<(String, Vec<String>)>>,
 }
 
-impl ContactsPageRepository for FakeRepository {
+impl ContactsPageService for FakeRepository {
     async fn lookup_contact_ids(
         &self,
         viewer: MacroUserIdStr<'_>,

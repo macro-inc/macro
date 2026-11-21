@@ -4,6 +4,7 @@ use harnesses::domain::ports::HarnessRepo as _;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const OWNER: &str = "macro|bindings@example.com";
 
@@ -442,10 +443,12 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    Arc::clone(&replica)
+    let restored = Arc::clone(&replica)
         .renew(vec![(harness, connection)])
         .await;
     assert!(reads_connected(&pool, harness).await);
+    // Extending a lapsed lease is not a restore.
+    assert_eq!(restored, []);
 
     sqlx::query!(r#"DELETE FROM harness_runtime_connection"#)
         .execute(&pool)
@@ -457,9 +460,204 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
         .unwrap();
     assert!(!reads_connected(&pool, harness).await);
 
-    replica.renew(vec![(harness, connection)]).await;
+    let other_harness = insert_harness(&pool).await;
+    let other_connection = RuntimeConnectionId::generate();
+    Arc::clone(&replica)
+        .connected(
+            other_harness,
+            other_connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+
+    let restored = replica
+        .renew(vec![
+            (harness, connection),
+            (other_harness, other_connection),
+        ])
+        .await;
 
     assert!(reads_connected(&pool, harness).await);
+    // Only the row that was gone is reported, so the registry can check it.
+    assert_eq!(restored, [(harness, connection)]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn renewal_extends_leases_while_the_shared_pool_is_exhausted(pool: PgPool) {
+    let harness = insert_harness(&pool).await;
+    let shared = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let replica = Arc::new(PgHarnessPresence::new(shared.clone(), ReplicaId::mint()));
+    let connection = RuntimeConnectionId::generate();
+    Arc::clone(&replica)
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() + interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Everything else in the service holds the shared pool's connections.
+    let _busy = shared.acquire().await.unwrap();
+    let restored = tokio::time::timeout(
+        Duration::from_secs(10),
+        Arc::clone(&replica).renew(vec![(harness, connection)]),
+    )
+    .await
+    .expect("the renewal does not wait for the shared pool");
+
+    // The row was there to extend, not restored.
+    assert_eq!(restored, []);
+
+    let lease_left = sqlx::query_scalar!(
+        r#"
+        SELECT extract(epoch FROM lease_expires_at - now())::float8 AS "seconds!"
+        FROM harness_runtime_connection WHERE id = $1
+        "#,
+        connection.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        lease_left > 20.0,
+        "the lease was not extended: {lease_left}s left"
+    );
+}
+
+/// A TCP proxy to Postgres that can make one connection go silent: once
+/// armed, the next connection to send more than a bare `Sync` (5 bytes, the
+/// pool's liveness ping) stops forwarding both ways without closing, like a
+/// socket whose peer vanished mid-query.
+struct SilenceableProxy {
+    port: u16,
+    armed: Arc<AtomicBool>,
+}
+
+impl SilenceableProxy {
+    async fn start(target: (String, u16)) -> Self {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let armed = Arc::new(AtomicBool::new(false));
+        let armed_for_connections = Arc::clone(&armed);
+        tokio::spawn(async move {
+            loop {
+                let (client, _) = listener.accept().await.unwrap();
+                let server = tokio::net::TcpStream::connect(target.clone())
+                    .await
+                    .unwrap();
+                let silent = Arc::new(AtomicBool::new(false));
+                let (client_read, client_write) = client.into_split();
+                let (server_read, server_write) = server.into_split();
+                tokio::spawn(forward(
+                    client_read,
+                    server_write,
+                    Arc::clone(&silent),
+                    Some(Arc::clone(&armed_for_connections)),
+                ));
+                tokio::spawn(forward(server_read, client_write, silent, None));
+            }
+        });
+        Self { port, armed }
+    }
+
+    fn silence_the_next_query(&self) {
+        self.armed.store(true, Ordering::SeqCst);
+    }
+}
+
+async fn forward(
+    mut from: tokio::net::tcp::OwnedReadHalf,
+    mut to: tokio::net::tcp::OwnedWriteHalf,
+    silent: Arc<AtomicBool>,
+    armed: Option<Arc<AtomicBool>>,
+) {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let mut buffer = vec![0; 16 * 1024];
+    loop {
+        let read = match from.read(&mut buffer).await {
+            Ok(0) | Err(_) => return,
+            Ok(read) => read,
+        };
+        if read > 5
+            && armed
+                .as_ref()
+                .is_some_and(|armed| armed.swap(false, Ordering::SeqCst))
+        {
+            silent.store(true, Ordering::SeqCst);
+        }
+        if silent.load(Ordering::SeqCst) {
+            // Hold both halves open and pass nothing on.
+            std::future::pending::<()>().await;
+        }
+        if to.write_all(&buffer[..read]).await.is_err() {
+            return;
+        }
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_renewal_after_one_cut_off_by_a_silent_socket_extends_the_lease(pool: PgPool) {
+    let harness = insert_harness(&pool).await;
+    let direct = pool.connect_options();
+    let proxy = SilenceableProxy::start((direct.get_host().to_owned(), direct.get_port())).await;
+    let shared = sqlx::postgres::PgPoolOptions::new()
+        .connect_with(direct.as_ref().clone().host("127.0.0.1").port(proxy.port))
+        .await
+        .unwrap();
+    let replica = Arc::new(PgHarnessPresence::new(shared, ReplicaId::mint()));
+    let connection = RuntimeConnectionId::generate();
+    Arc::clone(&replica)
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    // Opens the renewal pool's one connection.
+    Arc::clone(&replica)
+        .renew(vec![(harness, connection)])
+        .await;
+
+    proxy.silence_the_next_query();
+    // Its connection goes silent mid-query; the renewal timeout cuts it off.
+    Arc::clone(&replica)
+        .renew(vec![(harness, connection)])
+        .await;
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() + interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // The silent connection must not keep the renewal pool's only slot.
+    Arc::clone(&replica)
+        .renew(vec![(harness, connection)])
+        .await;
+    let lease_left = sqlx::query_scalar!(
+        r#"
+        SELECT extract(epoch FROM lease_expires_at - now())::float8 AS "seconds!"
+        FROM harness_runtime_connection WHERE id = $1
+        "#,
+        connection.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        lease_left > 20.0,
+        "the renewal after the cut-off one did not extend the lease: {lease_left}s left"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

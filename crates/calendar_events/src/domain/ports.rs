@@ -60,6 +60,7 @@ pub struct CalendarProviderError {
     kind: CalendarProviderErrorKind,
     message: String,
     retry_after: Option<std::time::Duration>,
+    refused: bool,
 }
 
 impl CalendarProviderError {
@@ -69,6 +70,7 @@ impl CalendarProviderError {
             kind,
             message: message.into(),
             retry_after: None,
+            refused: false,
         }
     }
 
@@ -79,7 +81,27 @@ impl CalendarProviderError {
             kind: CalendarProviderErrorKind::Deferred,
             message: message.into(),
             retry_after,
+            refused: false,
         }
+    }
+
+    /// A [`CalendarProviderErrorKind::Permanent`] change the adapter refuses
+    /// before sending anything to the provider, with a message written for
+    /// the user. Mutations show the message alone, without the "request
+    /// failed" prefix, since no request was made.
+    pub fn refused(message: impl Into<String>) -> Self {
+        Self {
+            kind: CalendarProviderErrorKind::Permanent,
+            message: message.into(),
+            retry_after: None,
+            refused: true,
+        }
+    }
+
+    /// Whether the adapter refused the change before any provider request;
+    /// see [`Self::refused`].
+    pub fn is_refused(&self) -> bool {
+        self.refused
     }
 
     /// When a [`CalendarProviderErrorKind::Deferred`] call may be retried.
