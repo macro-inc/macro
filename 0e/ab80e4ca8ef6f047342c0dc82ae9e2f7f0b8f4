@@ -1,0 +1,19 @@
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_86a3b382b10917::t_7682d44a388e05 144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0eab80e4ca8ef6f047342c0dc82ae9e2f7f0b8f4",
+  "prompts": {},
+  "sessions": {
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
