@@ -61,6 +61,17 @@ export function KeyBar(props: {
 
   const keepKeyboard = (event: Event) => event.preventDefault();
 
+  let field: HTMLInputElement | undefined;
+  /**
+   * After a key is pressed (a tap, or Enter or Space from a tablet's hardware
+   * keyboard on a focused key), the text field has the keyboard again, so
+   * what is typed next goes to the guest rather than the app.
+   */
+  const backToField = (event: MouseEvent) => {
+    if (event.target instanceof Element && event.target.closest('button'))
+      field?.focus({ preventScroll: true });
+  };
+
   const toggle = (modifier: Modifier) =>
     setModifiers((held) =>
       held.includes(modifier)
@@ -84,7 +95,10 @@ export function KeyBar(props: {
     >
       <div class="relative">
         <Input
-          ref={entry.ref}
+          ref={(element) => {
+            field = element;
+            entry.ref(element);
+          }}
           size="md"
           aria-label={t('agentScreen.typeToSend', { name: props.agentName })}
           autocapitalize="off"
@@ -110,6 +124,7 @@ export function KeyBar(props: {
         class="flex flex-wrap gap-1.5"
         onPointerDown={keepKeyboard}
         onMouseDown={keepKeyboard}
+        onClick={backToField}
       >
         <Button
           size="sm"

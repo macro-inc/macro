@@ -17,4 +17,31 @@ describe('KeyBar', () => {
     // The text field itself still takes focus.
     expect(fireEvent.mouseDown(screen.getByRole('textbox'))).toBe(true);
   });
+
+  it('gives focus back to the text field after a key is pressed, by tap or by keyboard', () => {
+    const keys: [number, boolean][] = [];
+    render(() => (
+      <KeyBar
+        agentName="Ada"
+        onText={() => {}}
+        onKey={(keysym, down) => keys.push([keysym, down])}
+      />
+    ));
+    const field = screen.getByRole('textbox');
+
+    // A tablet's hardware keyboard activates a focused key with Enter or
+    // Space, which arrives as a click; a tap that focused it clicks too.
+    for (const name of ['Ctrl', 'Esc']) {
+      const key = screen.getByRole('button', { name });
+      key.focus();
+      fireEvent.click(key);
+      expect(document.activeElement).toBe(field);
+    }
+    expect(keys).toEqual([
+      [0xffe3, true],
+      [0xff1b, true],
+      [0xff1b, false],
+      [0xffe3, false],
+    ]);
+  });
 });
