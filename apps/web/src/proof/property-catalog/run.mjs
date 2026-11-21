@@ -155,16 +155,26 @@ const tsNorm = (s, key, parent) => {
   return instant(s) ?? (s.startsWith('\u0000') ? `\u0000${s}` : s);
 };
 const JT = (x) => JSON.stringify(sortKeys(x, tsNorm));
-// The tie key lowercases like JavaScript. The server lowercases definitions
-// with options in Rust (`to_lowercase`) and plain definitions and option
-// strings in PostgreSQL (`LOWER` under the database collation); every string
-// a key was built from is kept, and the run checks at its end that
-// PostgreSQL lowercases each one the same way (checkCollation), or fails.
+// Tie keys lowercase the way the server sorted that list. Definitions with
+// options are sorted in Rust (`to_lowercase`: Unicode's full mapping, as
+// JavaScript's toLowerCase). Plain definitions, options and tag options are
+// sorted in PostgreSQL (`LOWER` under the database's libc collation:
+// towlower, one code point at a time, so `İ` becomes `i`, not `i̇`, and a
+// final `Σ` stays `σ`). `sqlLower` maps one code point at a time; every
+// string it lowered is kept, and the run asks PostgreSQL at its end to lower
+// each one and fails if any differs (checkCollation).
 const LOWERED = new Set();
-const lower = (s) => {
+const rustLower = (s) => String(s ?? '').toLowerCase();
+const sqlLower = (s) => {
   const str = String(s ?? '');
   if (LOWERED.size < 200000) LOWERED.add(str);
-  return str.toLowerCase();
+  let out = '';
+  for (const ch of str) {
+    const l = ch.toLowerCase();
+    // A code point whose full lowercase is longer (only U+0130) takes its simple mapping.
+    out += [...l].length === 1 ? l : ch === '\u0130' ? 'i' : l;
+  }
+  return out;
 };
 
 // Tie order. The server sorts definitions by lowercased display_name and
@@ -176,7 +186,9 @@ const lower = (s) => {
 const rowId = (el) => (Array.isArray(el) ? (typeof el[0] === 'string' ? el[0] : undefined) : (el?.definition?.id ?? el?.id ?? el?.propertyId ?? el?.definitionId));
 function defKey(e) {
   const d = e?.definition ?? e;
-  return d && typeof d === 'object' && typeof d.display_name === 'string' ? `d:${lower(d.display_name)}` : null;
+  if (!d || typeof d !== 'object' || typeof d.display_name !== 'string') return null;
+  // A definition with options (`{ definition, property_options }`) came from the Rust sort.
+  return e?.definition ? `d:${rustLower(d.display_name)}` : `d:${sqlLower(d.display_name)}`;
 }
 function optKey(o) {
   // REST options are snake case, REST tag options camel case.
@@ -184,7 +196,7 @@ function optKey(o) {
   if (!o || typeof o !== 'object' || typeof order !== 'number' || !o.value || typeof o.value !== 'object') return null;
   const v = o.value.value;
   if (typeof v === 'number') return `o:${order}|${v}|`;
-  if (typeof v === 'string') return `o:${order}||${lower(v)}`;
+  if (typeof v === 'string') return `o:${order}||${sqlLower(v)}`;
   return null;
 }
 const byId = (a, b) => {
@@ -309,6 +321,7 @@ function classify(a, b, canon = (x) => x) {
 function errorView(e) {
   if (!e) return null;
   if (!e.retry) throw new Error(`error without the page's retry decision: ${JSON.stringify(e)}`);
+  if (typeof e.fullMessage !== 'string') throw new Error(`error without the page's whole message: ${JSON.stringify(e)}`);
   return e;
 }
 
@@ -560,7 +573,8 @@ async function openSide(storageState, side, label) {
     const req = r.request();
     if (!isWrite(req)) return r.fallback();
     const u = new URL(req.url());
-    const entry = { method: req.method(), path: u.pathname + u.search, body: req.postData() ?? null };
+    // The origin is part of a write's identity: a replay to another host is a mismatch.
+    const entry = { method: req.method(), path: u.origin + u.pathname + u.search, body: req.postData() ?? null };
     // setup: the runner's own writes (accounts, volume, load), NEW pages only.
     if (tap.mode === 'setup' && side === 'neu') return r.fallback();
     if (tap.mode === 'pass' || tap.mode === 'setup') {
@@ -752,11 +766,21 @@ const errorLabel = (e) => (e ? `${e.class}/${JSON.stringify(e.codes)}/${e.httpSt
 // Errors are always compared, whatever the data did. A different error with
 // the same retry decision is error-shape (each old=>new pair its own
 // signature); one side failing alone, or a different retry decision, is a diff.
+// Equality reads the whole message; the signature shows the masked one. Two
+// errors whose masked views agree but whose whole messages differ (other ids,
+// or text past the mask's 160 characters), or whose messages name different
+// ids, are a diff: the same kind of failure about something else.
+const idsIn = (e) => [...new Set(String(e?.fullMessage ?? '').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [])].map((x) => x.toLowerCase()).sort();
+const maskedView = (e) => e && { ...e, fullMessage: undefined };
 function compareErrors(level, kind, ea, eb, extra = {}) {
   const A = errorView(ea);
   const B = errorView(eb);
   if (J(A) === J(B)) return record(level, `${kind}.error`, 'equal');
-  const cls = (A === null) !== (B === null) || A?.retry !== B?.retry ? 'diff' : 'error-shape';
+  const ia = idsIn(A);
+  const ib = idsIn(B);
+  const otherIds = ia.length > 0 && ib.length > 0 && J(ia) !== J(ib);
+  const sameMask = A !== null && B !== null && J(maskedView(A)) === J(maskedView(B));
+  const cls = (A === null) !== (B === null) || A?.retry !== B?.retry || otherIds || sameMask ? 'diff' : 'error-shape';
   record(level, `${kind}.error`, cls, A, B, { ...extra, errorPair: `${errorLabel(A)}=>${errorLabel(B)}` });
 }
 function compareReader(level, id, a, b) {
@@ -1271,7 +1295,7 @@ function sql(statement, vars) {
   return true;
 }
 // PostgreSQL's LOWER, under the database's own collation, for every string a
-// tie key lowercased (see `lower`): one call over stdin, strings as JSON.
+// tie key lowered as PostgreSQL would (see `sqlLower`): one call over stdin, strings as JSON.
 function checkCollation() {
   const all = [...LOWERED].filter((x) => !x.includes('\u0000'));
   const res = { strings: all.length, skippedWithNul: LOWERED.size - all.length, mismatches: [] };
@@ -1283,7 +1307,8 @@ function checkCollation() {
   const out = execFileSync('docker', ['exec', '-i', CONFIG.pg, 'psql', '-U', 'user', '-d', 'macrodb', '-At', '-v', 'ON_ERROR_STOP=1'], { input: statement, encoding: 'utf8', maxBuffer: 1 << 28 });
   const pg = JSON.parse(out);
   all.forEach((x, i) => {
-    if (pg[i] !== x.toLowerCase() && res.mismatches.length < 50) res.mismatches.push({ s: x, js: x.toLowerCase(), pg: pg[i] });
+    const mine = sqlLower(x);
+    if (pg[i] !== mine && res.mismatches.length < 50) res.mismatches.push({ s: x, harness: mine, pg: pg[i] });
   });
   return res;
 }

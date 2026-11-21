@@ -129,9 +129,9 @@ function errorShape(error: unknown) {
             (g as { extensions?: { code?: string } }).extensions?.code ?? null
         )
       : null,
-    // The query client's own retry decision (lib/queries/client.ts), and
-    // the message with ids masked, so two different failures never pass as
-    // one.
+    // The query client's own retry decision (lib/queries/client.ts); the
+    // message with ids masked, for grouping; and the whole message, which
+    // equality compares, so two different failures never pass as one.
     retry:
       thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
       thrownResultErrorHasCode(error, 'FORBIDDEN')
@@ -140,6 +140,7 @@ function errorShape(error: unknown) {
     message: String((error as Error)?.message ?? error)
       .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<id>')
       .slice(0, 160),
+    fullMessage: String((error as Error)?.message ?? error).slice(0, 4000),
   };
 }
 
