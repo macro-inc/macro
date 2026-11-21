@@ -170,6 +170,17 @@ export const enableAgentTeammates = defineFlag({
 });
 
 /**
+ * *My own computer* in Invite an agent: the agent runs in the teammate
+ * runtime container on one of the inviter's own machines. The backend checks
+ * the same key on the acting person.
+ */
+export const enableSelfHostedTeammates = defineFlag({
+  key: 'enable-self-hosted-teammates',
+  env: 'ENABLE_SELF_HOSTED_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
+});
+
+/**
  * Auto in the agent composer's mode switch: the agent harness picks Chat or
  * Code per prompt. Macro employees only; the backend checks the same key.
  */
@@ -273,6 +284,17 @@ export const ENABLE_LIVE_INDICATORS = defineFlag({
 export const ENABLE_PROFILE_PICTURES = defineFlag({
   env: 'ENABLE_PROFILE_PICTURES',
   default: true,
+}).enabled;
+
+/**
+ * Draw agent teammates' parametric faces: a saved face, or one derived from
+ * an agent's user id when it has no picture. On in development. Env-only
+ * because every `UserIcon` reads it, including ones rendered outside the
+ * PostHog provider.
+ */
+export const ENABLE_AGENT_FACES = defineFlag({
+  env: 'ENABLE_AGENT_FACES',
+  default: DEV_MODE_ENV,
 }).enabled;
 
 export const ENABLE_VIDEO_BLOCK = defineFlag({

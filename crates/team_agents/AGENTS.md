@@ -53,6 +53,14 @@ flag) read and commit it through agent_git; the agent's next call uses it.
 admins behind the same flag; agent_harness_service implements its
 `VoiceProvider` and mounts it at `/voices`.
 
+The invite accepts `avatarFace` and `avatarUrl`. Owners and admins can replace
+them with `PUT /team_agents/{agent_user_id}/avatar` (`{face, url}`, 204), behind
+the same flag. Saving a face writes its recipe and PNG URL together; a missing
+URL clears the old PNG. A URL must be a Macro static file,
+`<StaticFilePublicUrl>/file/<uuid>` (`PictureBase`), on invite and edit, so
+clients never load a host an admin chose. Saving a photo clears the recipe. Picture changes
+publish through the `AgentPictureChanges` port after persistence.
+
 `domain::admission::AgentAdmission::admit(agent, team)` answers whether an
 account is an agent the vault may admit, from current facts each call: its
 `team_agents` row is for that team, `"User"."isAgent"` is set, it is still a
@@ -84,15 +92,58 @@ on macrod connect for an agent's computer unless the agent already counts as
 online (one invited before reports, backfilled; its workspace never reports). Not tied to the starter agent: any
 agent runtime reports the same way.
 
+### On the owner's own machine
+
+Behind `enable-self-hosted-teammates` (acting admin, fail closed) on top of
+`enable-agent-teammates`. `POST /team_agents` with
+`computer: {kind: "own", harnessId}` (a request with only `size` still buys
+a computer; both is a 400) checks the machine (`self_hosting::HostEligibility`:
+the admin's own paired harness, never a Macro computer; connected; latest
+`TeammateHost` report has an engine, no problem, an image for its
+architecture and the hardware floor), then makes the account, seat and repo
+as above and a `team_agent_installs` row (generation 1) instead of a
+purchase, and tells agent_harness_service (`TeammateRuntimes`, internal
+`POST /internal/teammates/{harness}/changed`). `GET /team_agents/hosts` lists
+the admin's machines with eligibility and each installed engine (`engines`,
+with whether it can confine a teammate's network). Status comes from the install's
+`run_state` (`downloading` is new) and `first_online_at`; a `failed` or
+`rolled_back` install also answers `installProblem` (`{kind: failed |
+rolledBack, reason}`, the machine's `InstallFailure`), absent during a move or
+removal.
+
+Delivery is counted: the replica holding the machine's socket asks
+`POST /internal/team_agent_install/{harness}/{install}` with what the runtime
+runs; `issue_install` bumps `delivery` only when the runtime is behind the
+row (`PgTeammateInstalls::next_delivery`, a conditional update whose row lock
+is held until the `CountedDelivery` is released), mints under that lock so
+racing replicas mint in delivery order (`replace_key`, same brain key name),
+releases (kept even when minting failed, so the runtime stays behind and gets
+the next delivery) and returns the image
+(`TeammateRuntimeImage::for_arch`, a per-architecture constant; a local
+stack may override it with `OVERRIDE_TEAMMATE_RUNTIME_IMAGE_{AMD64,ARM64}` =
+`<repository>@sha256:<hex>`, ignored outside `ENVIRONMENT=local`) and the
+environment with public addresses (`MACRO_TEAMMATE_INSTALL_ID`, no
+`MACRO_COMPUTER_ID`; on a local stack, the in-network `OVERRIDE_*` addresses a
+local Macro computer gets, since the teammate joins the stack's network). A move (`POST /team_agents/{agent}/install`) or removal
+first marks the row's `checkpoint`; the old machine stops the agent (its last
+push), then `finish_checkpoint` (internal `.../{install}/checkpointed`, or at
+once when the machine is offline, or after `CHECKPOINT_TIMEOUT`) makes a new
+install id and generation on the target, or revokes and removes the agent
+with its install last. No billing (`SELF_HOSTED_TEAMMATE_PRICING` is `None`).
+Spec: `docs/design/teammate-runtime.md`.
+
 ## Start here
 
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
+- `src/domain/self_hosting.rs`, `src/domain/service/self_hosted.rs`,
+  `src/outbound/pg_teammate_installs.rs`: agents on owners' own machines.
 
 ## Scope
 
-- Owns: agent accounts, the `team_agents` table, enrollment issuance.
+- Owns: agent accounts, the `team_agents`, `team_agent_installs` and
+  `harness_teammate_hosts` tables, enrollment and install issuance.
 - Not here: the computer lifecycle and billing → `crates/hosted_runtimes`;
   membership and seats → `crates/teams`; the repo server → `crates/agent_git`;
   the agent runtime → `packages/muppet` and its template `packages/starter-agent`.

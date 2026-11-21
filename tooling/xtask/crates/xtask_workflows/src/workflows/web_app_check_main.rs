@@ -198,7 +198,7 @@ fn typescript() -> Job {
 /// Typecheck's checks, each `(name, directory, command)`. They read the same
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. The SDK is built first, for the agent runtime.
-const TYPECHECKS: [(&str, &str, &str); 14] = [
+const TYPECHECKS: [(&str, &str, &str); 15] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -262,6 +262,11 @@ const TYPECHECKS: [(&str, &str, &str); 14] = [
         "Check Agent Runtime",
         "packages/muppet",
         "bun run typecheck && bun run test",
+    ),
+    (
+        "Check Agent Faces Package",
+        "packages/agent-faces",
+        "bun run type-check && bun run test",
     ),
     // The template's own lockfile is what an agent's image installs from.
     (
@@ -583,7 +588,7 @@ fn paths_filter() -> Step<Use> {
     DornyPathsFilter::new(
         "Filter changed paths",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/agent-faces/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
     )
     .step()

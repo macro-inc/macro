@@ -108,6 +108,11 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
 
 ## Gotchas
 
+- `macro_user_info.avatar_face` stores an optional versioned face recipe beside
+  `profile_picture`. Batch picture reads include face-only rows and return a
+  nullable URL; malformed recipes do not fail the batch. Photo writes through
+  `user::update_profile_picture` clear the recipe.
+
 - `document_email` has a statement-level `AFTER DELETE` trigger
   (`document_email_release`, migration `20261116200143`) that queues each
   document a statement unlinks in `released_email_attachment_documents`, even

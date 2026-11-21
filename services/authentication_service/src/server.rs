@@ -756,7 +756,8 @@ async fn run_server() -> anyhow::Result<()> {
         .with_rollout(computer_rollout),
     );
     // Agent teammates: off for every admin unless `enable-agent-teammates`
-    // is on for them in PostHog.
+    // is on for them in PostHog; on their own machines, also
+    // `enable-self-hosted-teammates`.
     let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
         team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
@@ -783,6 +784,26 @@ async fn run_server() -> anyhow::Result<()> {
             team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
         ),
         crate::outbound::agent_addresses::AgentAddresses,
+        crate::outbound::agent_picture_changes::BrokerAgentPictureChanges::new(
+            macro_event_broker.clone(),
+        ),
+        // The base browsers upload agent pictures to and load them from.
+        team_agents::domain::avatar::PictureBase::new(
+            macro_service_urls::StaticFilePublicUrl::new()?.to_string(),
+        ),
+        team_agents::domain::service::SelfHosting {
+            installs: team_agents::outbound::pg_teammate_installs::PgTeammateInstalls::new(
+                db.clone(),
+            ),
+            runtimes: crate::outbound::teammate_runtimes::HarnessTeammateRuntimes::new(
+                harness_url.clone(),
+                &internal_key,
+            )?,
+            images: team_agents::domain::self_hosting::TeammateRuntimeImage::for_arch,
+            public_environment: Box::new(crate::outbound::agent_addresses::PublicAgentAddresses(
+                config.environment,
+            )),
+        },
     ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(

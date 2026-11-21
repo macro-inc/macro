@@ -40,6 +40,13 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   against those packages) beside them.
   `_computer-use-linux.nix` builds computer-use-linux (MIT) from source at a
   pinned release.
+- `_teammate-runtime.nix` is the agent's runtime closure, defined once for
+  its two launchers (docs/design/teammate-runtime.md): Bun (pinned over
+  nixpkgs'), `start-agent`, `agent-stopped`, `git-credential-agent`, the
+  desktop's commands (Xvnc, the bus, PulseAudio, Chromium), the MCP servers
+  JSON and a `claude` wrapper, all parameterised by `paths` (workspace, boot
+  state, credentials, desktop sockets, provider sign-in). `_agent.nix`
+  feeds it the hosted paths; `_teammate-image.nix` the container's.
 - `files/` holds the enrollment probe script, the agent's `start-agent`,
   `agent-stopped` and `git-credential-agent`, the VM test's git server and
   computer-use client, and `/etc/claude-code/CLAUDE.md`;
@@ -71,6 +78,17 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `boot_args` turns the serial port off (`8250.nr_uarts=0`: a guest could
   flood the host's log); `macro.box.firecracker.serialConsole = true` gives a
   console on ttyS0 for debugging an image by hand.
+- `nix build .#teammate-runtime-image` (x86_64-linux and aarch64-linux) →
+  a script that streams the teammate runtime image: `./result | docker load`.
+  See *The teammate runtime image* below.
+- `nix run .#teammate-runtime-test` runs that image in the local Docker
+  engine with macrod's flags and asserts its contract.
+- `nix run .#teammate-egress-test -- docker|podman` (with
+  `MACROD=<macrod>` to render with `macrod teammate ruleset`) checks
+  enforced egress adversarially: holder, guard and teammate as macrod makes
+  them, every blocked target with an unguarded control, per engine (rootless
+  podman: netavark bridges in the rootless-netns). It opens exactly its two
+  host test ports in `nixos-fw` with sudo and deletes those rules on exit.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
 - `nix build .#macro-box-harnessd` → the harnessd binary (and
   `.#macro-box-macrod` → macrod) the images bake in.
@@ -308,6 +326,63 @@ and restores every computer from that snapshot. Contract with the host:
   read or write through it), caps it at 64 KiB, installs it as
   `/var/lib/macrod/agent.env` (0600, macro) and empties the inbox; the
   agent's own path unit then starts it.
+
+## The teammate runtime image
+
+An agent teammate on its owner's own machine runs `teammate-runtime-image`
+(`_teammate-image.nix`), which macrod runs with the flags in
+docs/design/teammate-runtime.md ("The container"). Contract:
+
+- uid 1000 `agent`, `HOME=/teammate/home`, `CLAUDE_CONFIG_DIR` under it.
+  `/teammate` (the agent volume: `workspace`, `state`, `browser`, `home`,
+  `.restart`) and `/teammate-provider` (the provider volume, read-only for
+  the agent) are owned by 1000 in the image, so fresh named volumes are.
+  `/run/teammate` exists in the image and holds only the read-only bind of
+  `agent.env`; `CREDENTIALS_DIRECTORY=/run/teammate`, so the runtime's
+  bubblewrap hides it from Claude Code and scripts (`startup.ts` `hiding`).
+  The desktop's sockets are in `/run/teammate-runtime/desktop` (tmpfs).
+  `claude` reads `/teammate-provider/claude/credential.json`, and
+  `HARNESSD_STATE_DIRECTORY=/teammate-provider`.
+- The entrypoint is `tini` then `files/teammate-entrypoint`: the session
+  bus, Xvnc `:1` (VNC 127.0.0.1:5901 only), PulseAudio, Openbox and
+  Chromium (CDP 127.0.0.1:9223, profile `/teammate/browser`; a stale
+  profile lock from the last container is removed), each started again if
+  it dies, then `teammate-boot run` (crates/teammate_lifecycle, the flake's
+  `teammate-boot` package; start-agent's variables as flags), which boots
+  the workspace and execs the runtime. The container exits with the
+  agent's code (0 stopped, 1 crash, 77, 78, 79; see the crate) and there is
+  no `agent-stopped`: macrod passes the last container's exit to the next
+  one as `TEAMMATE_PREVIOUS_EXIT` (`unknown`, or 0 for a stop it asked
+  for), and teammate-boot counts failed boots from it. Each start is a new
+  container on the same volumes. After a land the agent exits 75
+  by itself (it watches its restart marker `/teammate/.restart`), and so
+  does the container; macrod starts it again (no failed boot). `docker stop` sends SIGTERM to the agent, which
+  syncs its repository once more when no wake is running. A stop is taken
+  at any point of the start: before the agent starts, it never does; an
+  agent that a stop ended by its signal (no handler yet) stopped cleanly,
+  as systemd treats SIGTERM, so the container exits 0 either way. Its
+  writeShellApplication runs it with errexit and nounset: every wait and
+  kill in the loop must tolerate a failure.
+- The root is read-only; writable are the agent volume and the tmpfs
+  `/tmp` and `/run/teammate-runtime`. Docker gives a `--tmpfs` the mode,
+  but not the owner, of the image directory it covers (the tmpfs is root's),
+  so both are 1777 in the image and the entrypoint makes its own 0700
+  `/run/teammate-runtime/desktop`.
+- `files/teammate-seccomp.json` is the seccomp profile macrod passes:
+  Docker 29.5.1's default (moby/profiles, vendored in moby at
+  `docker-v29.5.1`) plus, only without the capability the default gates
+  them on, `clone` (any flags), `unshare` with `CLONE_NEWUSER`, `mount`,
+  `umount2`, `pivot_root` and `chroot`. Without it, bubblewrap fails
+  ("No permissions to create a new namespace") and Chromium aborts.
+  Measured: bubblewrap needs clone, mount, umount2 and pivot_root; Chromium
+  needs chroot and clone with `CLONE_NEWPID|CLONE_NEWNET` inside its user
+  namespace (no `CLONE_NEWUSER` flag), so clone can't be narrowed; setns
+  is not needed. With no capabilities the kernel still refuses all of them
+  outside a user namespace. To regenerate after a Docker upgrade, append
+  the four `teammate:` rules to the new default profile.
+- aarch64-linux: the image evaluates; `_agent-runtime.nix`'s
+  node_modules hash for it is not known yet (`lib.fakeHash`), so its first
+  build on an aarch64 builder reports the hash to put there. Untested.
 
 ## Running the Docker image
 

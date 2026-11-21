@@ -204,6 +204,30 @@ describe('sandbox', () => {
     ]);
   });
 
+  test('in the teammate runtime container, children run with /run/teammate (the agent.env bind) hidden and the provider volume read-only', () => {
+    const started = startup(
+      {
+        AGENT_WORKSPACE: '/teammate/workspace',
+        MUPPET_CREDENTIALS_FILE: '/run/teammate/agent.env',
+        CREDENTIALS_DIRECTORY: '/run/teammate',
+        HARNESSD_STATE_DIRECTORY: '/teammate-provider',
+      },
+      reserved
+    );
+    expect(started.kind === 'configured' && started.value.sandbox).toEqual([
+      'bwrap',
+      '--dev-bind',
+      '/',
+      '/',
+      '--tmpfs',
+      '/run/teammate',
+      '--ro-bind',
+      '/teammate-provider',
+      '/teammate-provider',
+      '--',
+    ]);
+  });
+
   test("on a computer, harnessd's state directory must be named, or the agent doesn't start", () => {
     expect(startup(hosted, reserved)).toEqual({
       kind: 'invalid',

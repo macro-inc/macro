@@ -35,30 +35,53 @@ export const restarter =
  * `file` (MUPPET_LAST_GOOD_FILE), written atomically. Call it once the
  * behavior is built, its credentials read, presence open and its sources
  * started; it waits until chat is `listening` too (its stream open and a
- * round trip to Macro worked), and throws if `deadline` comes first, so a
- * boot that can't hear is a failed one the launcher counts. Returns the SHA.
+ * round trip to Macro worked). At `deadline` it throws only when Macro has
+ * answered (`reached`) and chat still can't hear, the code's fault, so the
+ * launcher counts a failed boot. While Macro is unreachable (the agent's
+ * machine is offline) it waits, unhealthy but up, and gives the stream a new
+ * deadline once Macro answers. Returns the SHA.
  */
+const heard = 'heard';
+const late = 'late';
+
 export const markHealthy = async ({
   git,
   disk,
   file,
   listening,
   deadline,
+  reached,
+  reachable,
 }: {
   readonly git: (args: readonly string[]) => ReturnType<Git>;
   readonly disk: Pick<Disk, 'write'>;
   readonly file: string;
   readonly listening: () => Promise<void>;
   readonly deadline: () => Promise<void>;
+  /** Macro has answered a request in this process. */
+  readonly reached: () => boolean;
+  /** Resolves once Macro has answered a request. */
+  readonly reachable: () => Promise<void>;
 }): Promise<string> => {
-  const heard = await Promise.race([
-    listening().then(() => true),
-    deadline().then(() => false),
-  ]);
-  if (!heard)
-    throw new Error(
-      "not listening: chat's event stream didn't open, or Macro didn't answer, in time"
-    );
+  for (;;) {
+    const outcome = await Promise.race([
+      listening().then(() => heard),
+      deadline().then(() => late),
+    ]);
+    if (outcome === heard) break;
+    if (reached())
+      throw new Error(
+        "not listening: Macro answers, but chat's event stream didn't open in time"
+      );
+    // Offline: wait for Macro, then give the stream its deadline again.
+    if (
+      (await Promise.race([
+        listening().then(() => heard),
+        reachable().then(() => late),
+      ])) === heard
+    )
+      break;
+  }
   const head = await git(['rev-parse', '--verify', 'HEAD']);
   const sha = head.stdout.trim();
   if (head.code !== 0 || sha === '')

@@ -102,9 +102,76 @@ in
           ln -s ${rootfs}/rootfs.img $out/rootfs.ext4
           echo ${lib.escapeShellArg (lib.concatStringsSep " " nixos.config.macro.box.firecracker.kernelParams)} > $out/boot_args
         '';
+      # The teammate runtime image, for x86_64-linux and aarch64-linux
+      # (`_teammate-image.nix`); Claude Code is its one unfree package.
+      teammatePkgs = import inputs.nixpkgs {
+        inherit system;
+        config.allowUnfreePredicate = package: lib.getName package == "claude-code";
+      };
+      teammateImage = import ./_teammate-image.nix {
+        pkgs = teammatePkgs;
+        runtime = import ./_agent-runtime.nix { pkgs = teammatePkgs; };
+        computerUse = import ./_computer-use-linux.nix { pkgs = teammatePkgs; };
+        claudeCode = import ./_claude-code.nix { pkgs = teammatePkgs; };
+        teammateBoot = self'.packages.teammate-boot;
+      };
     in
     {
-      packages = lib.optionalAttrs (system == "x86_64-linux") {
+      packages =
+        lib.optionalAttrs (system == "x86_64-linux" || system == "aarch64-linux") {
+          teammate-runtime-image = teammateImage;
+          # Runs the image in the local Docker engine with macrod's flags and
+          # asserts the container contract (`files/teammate-runtime-test`).
+          teammate-runtime-test = teammatePkgs.writeShellApplication {
+            name = "teammate-runtime-test";
+            runtimeInputs = [
+              teammatePkgs.git
+              teammatePkgs.gzip
+              teammatePkgs.gawk
+              teammatePkgs.coreutils
+            ];
+            text = ''
+              image=${teammateImage}
+              seccomp=${./files/teammate-seccomp.json}
+              starter_agent=${
+                lib.fileset.toSource {
+                  root = ../../packages/starter-agent;
+                  fileset = lib.fileset.difference ../../packages/starter-agent (
+                    lib.fileset.maybeMissing ../../packages/starter-agent/node_modules
+                  );
+                }
+              }
+              git_server=${./files/test-git-server.py}
+              python=${lib.getExe teammatePkgs.python3}
+              git_bin=${teammatePkgs.git}/bin
+            ''
+            + builtins.readFile ./files/teammate-runtime-test;
+          };
+          # Enforced egress, adversarially, in the local Docker or rootless
+          # Podman (`-- docker|podman`; files/teammate-egress-test).
+          teammate-egress-test = teammatePkgs.writeShellApplication {
+            name = "teammate-egress-test";
+            runtimeInputs = [
+              teammatePkgs.podman
+              teammatePkgs.nftables
+              teammatePkgs.iproute2
+              teammatePkgs.jq
+              teammatePkgs.gawk
+              teammatePkgs.gnugrep
+              teammatePkgs.gnused
+              teammatePkgs.coreutils
+              teammatePkgs.findutils
+            ];
+            text = ''
+              image=${teammateImage}
+              seccomp=${./files/teammate-seccomp.json}
+              helper=${./files/teammate-egress-helper.py}
+              python=${lib.getExe teammatePkgs.python3}
+            ''
+            + builtins.readFile ./files/teammate-egress-test;
+          };
+        }
+        // lib.optionalAttrs (system == "x86_64-linux") {
         macro-box-claude-code = box.claudeCode;
         macro-box-claude-agent-acp = box.claudeAgentAcp;
         macro-agent-runtime = box.agent.runtime;

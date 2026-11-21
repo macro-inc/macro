@@ -1,6 +1,7 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentControls from './en/agent-controls';
+import agentFaces from './en/agent-faces';
 import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
@@ -45,6 +46,7 @@ import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import teamMembers from './en/team-members';
+import teammateHosts from './en/teammate-hosts';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -56,6 +58,7 @@ export default {
   agentAutoArchive,
   appearance,
   agentControls,
+  agentFaces,
   agentNavigation,
   accountManager,
   agentSetup,
@@ -99,6 +102,7 @@ export default {
   subRoutines,
   tabs,
   teamAgents,
+  teammateHosts,
   teamMembers,
   tutorials,
   viewMenus,

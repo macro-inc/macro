@@ -339,6 +339,7 @@ async fn a_close_waits_for_its_own_connected_write() {
         accepts: RuntimeAccepts {
             agents_changed: true,
             apply_agent: false,
+            ..RuntimeAccepts::default()
         },
     };
     registry
@@ -400,6 +401,7 @@ async fn a_dial_that_binds_an_agent_tells_its_runtime_its_agents_changed() {
         accepts: RuntimeAccepts {
             agents_changed: true,
             apply_agent: false,
+            ..RuntimeAccepts::default()
         },
     };
 
@@ -457,6 +459,7 @@ async fn a_dial_that_binds_nothing_sends_its_runtime_nothing() {
         accepts: RuntimeAccepts {
             agents_changed: true,
             apply_agent: false,
+            ..RuntimeAccepts::default()
         },
     };
 
@@ -869,4 +872,91 @@ async fn a_renewal_restores_a_held_connections_missing_row() {
 
     assert_eq!(presence.rows(), [held.id]);
     assert_eq!(presence.events(), [PresenceEvent::Connected(held.id)]);
+}
+
+fn teammate_install() -> agent_runtime_protocol::domain::schema::v0::TeammateInstall {
+    agent_runtime_protocol::domain::schema::v0::TeammateInstall {
+        install_id: agent_runtime_protocol::domain::schema::v0::TeammateInstallId::new("i-1")
+            .unwrap(),
+        generation: 1,
+        delivery: 1,
+    }
+}
+
+fn teammate_image() -> agent_runtime_protocol::domain::schema::v0::TeammateImage {
+    agent_runtime_protocol::domain::schema::v0::TeammateImage {
+        repository: "ghcr.io/macro-inc/teammate-runtime".to_owned(),
+        image_id: format!("sha256:{}", "a".repeat(64)),
+    }
+}
+
+#[tokio::test]
+async fn a_teammate_install_goes_only_to_the_dial_it_was_issued_for_on_a_runtime_that_hosts_them() {
+    let registry = RuntimeRegistry::new();
+    let runtime = ContainerMock::default();
+    registry.attach_accepting(
+        HarnessId::TEST_A,
+        runtime.clone(),
+        RuntimeAccepts {
+            teammate_container: true,
+            ..RuntimeAccepts::default()
+        },
+    );
+    let dial = registry.connection_of(HarnessId::TEST_A).unwrap();
+    let environment = || {
+        agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
+            [("MACRO_API_KEY".to_owned(), "mak_x".to_owned())].into(),
+        )
+    };
+
+    // Issued for an earlier dial: a redial may report another generation.
+    let stale = registry
+        .run_teammate(
+            HarnessId::TEST_A,
+            RuntimeConnectionId::generate(),
+            teammate_install(),
+            teammate_image(),
+            environment(),
+            None,
+        )
+        .await;
+    let sent = registry
+        .run_teammate(
+            HarnessId::TEST_A,
+            dial,
+            teammate_install(),
+            teammate_image(),
+            environment(),
+            None,
+        )
+        .await;
+
+    assert!(!stale);
+    assert!(sent);
+    let runs = runtime
+        .sent()
+        .into_iter()
+        .filter(|message| matches!(message, ToRuntimeMessage::RunTeammate { .. }))
+        .count();
+    assert_eq!(runs, 1);
+}
+
+#[tokio::test]
+async fn a_runtime_that_hosts_no_teammates_is_never_sent_one() {
+    let registry = RuntimeRegistry::new();
+    let runtime = ContainerMock::default();
+    registry.attach(HarnessId::TEST_A, runtime.clone());
+    let dial = registry.connection_of(HarnessId::TEST_A).unwrap();
+
+    let sent = registry
+        .stop_teammate(HarnessId::TEST_A, dial, teammate_install(), None)
+        .await;
+
+    assert!(!sent);
+    assert!(
+        !runtime
+            .sent()
+            .iter()
+            .any(|message| matches!(message, ToRuntimeMessage::StopTeammate { .. }))
+    );
 }

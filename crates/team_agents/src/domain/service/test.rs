@@ -12,8 +12,11 @@ use crate::domain::models::{
     AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerSize, ComputerState,
     MAX_NAME_CHARS, RepoToken, VoiceModel,
 };
+use crate::domain::self_hosting::{HostFacts, InstallRunState};
 
 const ADMIN: &str = "macro|admin@example.com";
+/// The static file service's public base in these tests.
+const PICTURES: &str = "https://static-file-service.example.com";
 const TEAM: &str = "0193a1b2-0000-7000-8000-0000000000aa";
 const COMPUTER: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00c1);
 
@@ -31,11 +34,15 @@ fn request() -> CreateTeamAgent {
         name: "  Sam Rivera ".to_owned(),
         job_description: "Runs vendor relations.".to_owned(),
         personality: "Dry, direct, kind.".to_owned(),
-        size: ComputerSize::Standard,
+        size: Some(ComputerSize::Standard),
+        computer: None,
         avatar_url: None,
+        avatar_face: None,
         voice: None,
     }
 }
+
+mod avatar;
 
 /// Every port call, in order.
 #[derive(Clone, Default)]
@@ -137,6 +144,19 @@ impl TeamAgentRepository for FakeRepository {
             .collect())
     }
 
+    async fn set_avatar(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        _: &AgentAvatar,
+    ) -> Result<bool, FakeError> {
+        self.journal.record("avatar.save");
+        Ok(self
+            .records()
+            .iter()
+            .any(|record| record.team_id == team_id && record.user_id == *agent))
+    }
+
     async fn mark_online(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), FakeError> {
         self.journal.record("agent.mark_online");
         for agent in self.agents.lock().unwrap().iter_mut() {
@@ -148,6 +168,14 @@ impl TeamAgentRepository for FakeRepository {
             }
         }
         Ok(())
+    }
+}
+
+struct PictureChanges(Journal);
+
+impl AgentPictureChanges for PictureChanges {
+    fn picture_changed(&self, _: &MacroUserIdStr<'_>, _: Option<&str>) {
+        self.0.record("picture.changed");
     }
 }
 
@@ -398,24 +426,35 @@ impl agent_credentials::AgentCreators for FakeRepository {
     }
 }
 
-/// The rollout for people, which a test can turn off after an invite. Like
-/// PostHog's targeting, it never matches an agent's own account.
+/// The rollouts for people (agent teammates, then self-hosted ones), which a
+/// test can turn off after an invite. Like PostHog's targeting, they never
+/// match an agent's own account.
 #[derive(Clone)]
-struct Flags(Arc<AtomicBool>);
+struct Flags(Arc<AtomicBool>, Arc<AtomicBool>);
 
 impl Flags {
     fn set(&self, on: bool) {
         self.0.store(on, Ordering::SeqCst);
+    }
+
+    fn set_self_hosted(&self, on: bool) {
+        self.1.store(on, Ordering::SeqCst);
     }
 }
 
 impl FeatureFlags for Flags {
     async fn load(&self, user: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
         let agent = user.as_ref().ends_with(AGENT_EMAIL_DOMAIN);
-        Ok(FlagSnapshot::new([(
-            AGENT_TEAMMATES_FLAG.to_owned(),
-            FlagValue::Boolean(!agent && self.0.load(Ordering::SeqCst)),
-        )]))
+        Ok(FlagSnapshot::new([
+            (
+                AGENT_TEAMMATES_FLAG.to_owned(),
+                FlagValue::Boolean(!agent && self.0.load(Ordering::SeqCst)),
+            ),
+            (
+                SELF_HOSTED_TEAMMATES_FLAG.to_owned(),
+                FlagValue::Boolean(!agent && self.1.load(Ordering::SeqCst)),
+            ),
+        ]))
     }
 }
 
@@ -430,6 +469,238 @@ impl EnrollmentEnvironment for Addresses {
     }
 }
 
+/// Installs in memory, with each machine's owner.
+#[derive(Clone, Default)]
+struct FakeInstalls {
+    journal: Journal,
+    rows: Arc<Mutex<Vec<TeammateInstallRecord>>>,
+    hosts: Arc<Mutex<Vec<(MacroUserIdStr<'static>, HostFacts)>>>,
+    /// Queries that read installs by agent.
+    agent_reads: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl FakeInstalls {
+    fn row(&self, install_id: Uuid) -> Option<TeammateInstallRecord> {
+        self.rows
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|row| row.install_id == install_id)
+            .cloned()
+    }
+
+    fn update(
+        &self,
+        matches: impl Fn(&TeammateInstallRecord) -> bool,
+        change: impl FnOnce(&mut TeammateInstallRecord),
+    ) -> Option<TeammateInstallRecord> {
+        let mut rows = self.rows.lock().unwrap();
+        let row = rows.iter_mut().find(|row| matches(row))?;
+        change(row);
+        Some(row.clone())
+    }
+}
+
+/// A counted delivery; the fake serializes nothing.
+pub(super) struct FakeDelivery((u64, u64));
+
+impl CountedDelivery for FakeDelivery {
+    fn pair(&self) -> (u64, u64) {
+        self.0
+    }
+
+    async fn release(self) -> Result<(), TeamAgentError> {
+        Ok(())
+    }
+}
+
+impl TeammateInstalls for FakeInstalls {
+    type Delivery = FakeDelivery;
+
+    async fn create(&self, install: &NewTeammateInstall) -> Result<CreatedInstall, TeamAgentError> {
+        let mut rows = self.rows.lock().unwrap();
+        if let Some(existing) = rows.iter().find(|row| row.agent == install.agent) {
+            return Ok(CreatedInstall::AlreadyInstalled(existing.clone()));
+        }
+        self.journal
+            .record(format!("install.create on {}", install.harness_id));
+        let row = TeammateInstallRecord {
+            install_id: install.install_id,
+            agent: install.agent.clone(),
+            team_id: install.team_id,
+            harness_id: install.harness_id,
+            generation: 1,
+            run_state: InstallRunState::Pending,
+            failure: None,
+            delivery: 0,
+            applied: None,
+            checkpoint: None,
+            image_id: None,
+        };
+        rows.push(row.clone());
+        Ok(CreatedInstall::Created(row))
+    }
+
+    async fn for_agent(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        self.agent_reads.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|row| row.agent.as_ref() == agent.as_ref())
+            .cloned())
+    }
+
+    async fn for_agents(
+        &self,
+        agents: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        self.agent_reads.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|row| agents.contains(&row.agent))
+            .cloned()
+            .collect())
+    }
+
+    async fn by_id(
+        &self,
+        install_id: Uuid,
+    ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        Ok(self.row(install_id))
+    }
+
+    async fn begin_checkpoint(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        checkpoint: Checkpoint,
+    ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        self.journal
+            .record(format!("install.checkpoint {checkpoint:?}"));
+        Ok(self.update(
+            |row| {
+                row.agent.as_ref() == agent.as_ref()
+                    && (!matches!(row.checkpoint, Some((Checkpoint::Removing, _)))
+                        || checkpoint == Checkpoint::Removing)
+            },
+            |row| {
+                // An earlier checkpoint keeps when it started.
+                let since = row
+                    .checkpoint
+                    .map_or_else(chrono::Utc::now, |(_, since)| since);
+                row.checkpoint = Some((checkpoint, since));
+            },
+        ))
+    }
+
+    async fn finish_move(
+        &self,
+        install_id: Uuid,
+        new_install_id: Uuid,
+    ) -> Result<Option<TeammateInstallRecord>, TeamAgentError> {
+        self.journal.record("install.finish_move");
+        Ok(self.update(
+            |row| {
+                row.install_id == install_id
+                    && matches!(row.checkpoint, Some((Checkpoint::Moving { .. }, _)))
+            },
+            |row| {
+                let Some((Checkpoint::Moving { to }, _)) = row.checkpoint else {
+                    return;
+                };
+                row.install_id = new_install_id;
+                row.harness_id = to;
+                row.generation += 1;
+                row.delivery = 0;
+                row.applied = None;
+                row.run_state = InstallRunState::Pending;
+                row.checkpoint = None;
+            },
+        ))
+    }
+
+    async fn next_delivery(
+        &self,
+        install_id: Uuid,
+        harness: HarnessId,
+        reported: (u64, u64),
+        image_id: &str,
+    ) -> Result<Option<FakeDelivery>, TeamAgentError> {
+        Ok(self
+            .update(
+                |row| {
+                    row.install_id == install_id
+                        && row.harness_id == harness
+                        && row.checkpoint.is_none()
+                        && (row.generation, row.delivery) > reported
+                },
+                |row| {
+                    row.delivery += 1;
+                    row.image_id = Some(image_id.to_owned());
+                },
+            )
+            .map(|row| FakeDelivery((row.generation, row.delivery))))
+    }
+
+    async fn hosts_of(&self, owner: &MacroUserIdStr<'_>) -> Result<Vec<HostFacts>, TeamAgentError> {
+        Ok(self
+            .hosts
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(host_owner, _)| host_owner.as_ref() == owner.as_ref())
+            .map(|(_, host)| host.clone())
+            .collect())
+    }
+
+    async fn host(&self, harness: HarnessId) -> Result<Option<HostFacts>, TeamAgentError> {
+        Ok(self
+            .hosts
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(_, host)| host.harness_id == harness)
+            .map(|(_, host)| host.clone()))
+    }
+}
+
+/// Delivery nudges, journaled.
+struct FakeRuntimes(Journal);
+
+impl TeammateRuntimes for FakeRuntimes {
+    async fn installs_changed(&self, harness: HarnessId) {
+        self.0.record(format!("runtimes.changed {harness}"));
+    }
+}
+
+/// An image for every architecture.
+fn any_image(
+    _: agent_runtime_protocol::domain::schema::v0::HostArch,
+) -> Option<agent_runtime_protocol::domain::schema::v0::TeammateImage> {
+    Some(agent_runtime_protocol::domain::schema::v0::TeammateImage {
+        repository: "ghcr.io/macro-inc/teammate-runtime".to_owned(),
+        image_id: format!("sha256:{}", "a".repeat(64)),
+    })
+}
+
+struct PublicAddresses;
+
+impl EnrollmentEnvironment for PublicAddresses {
+    fn environment(&self) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
+        Ok(vec![(
+            "MACRO_GATEWAY",
+            "https://public-gateway.example.com".to_owned(),
+        )])
+    }
+}
+
 type Service = TeamAgentServiceImpl<
     FakeRepository,
     FakeMembership,
@@ -439,6 +710,8 @@ type Service = TeamAgentServiceImpl<
     FakeRepository,
     Flags,
     FakeNotices,
+    FakeInstalls,
+    FakeRuntimes,
 >;
 
 fn service(flag: bool, computers: FakeComputers) -> (Service, Journal) {
@@ -447,7 +720,10 @@ fn service(flag: bool, computers: FakeComputers) -> (Service, Journal) {
 }
 
 fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal, Flags) {
-    let flags = Flags(Arc::new(AtomicBool::new(flag)));
+    let flags = Flags(
+        Arc::new(AtomicBool::new(flag)),
+        Arc::new(AtomicBool::new(true)),
+    );
     let journal = computers.journal.clone();
     let repository = FakeRepository {
         journal: journal.clone(),
@@ -463,9 +739,22 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
         Some(flags.clone()),
         FakeNotices::default(),
         Addresses,
+        PictureChanges(journal.clone()),
+        PictureBase::new(PICTURES),
+        SelfHosting {
+            installs: FakeInstalls {
+                journal: journal.clone(),
+                ..FakeInstalls::default()
+            },
+            runtimes: FakeRuntimes(journal.clone()),
+            images: any_image,
+            public_environment: Box::new(PublicAddresses),
+        },
     );
     (service, journal, flags)
 }
+
+mod self_hosted;
 
 #[tokio::test]
 async fn inviting_an_agent_creates_its_account_seat_repo_and_computer_in_order() {

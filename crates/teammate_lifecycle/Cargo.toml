@@ -1,0 +1,31 @@
+[package]
+edition = "2024"
+name = "teammate_lifecycle"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "teammate-boot"
+path = "src/bin/teammate-boot.rs"
+
+[dependencies]
+chrono = { workspace = true }
+clap = { workspace = true, features = ["env"] }
+lazy-regex = { workspace = true }
+nom = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "process", "time", "io-util", "signal", "fs"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
+
+# The boot runner (process groups) is Unix only.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

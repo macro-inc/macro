@@ -162,6 +162,10 @@ non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
 opentelemetry = { workspace = true, features = ["metrics"] }
+# Self-hosted macrod's teammate spans (`src/teammates/telemetry.rs`).
+opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
+prost = { workspace = true }
+tonic = { version = "0.14", default-features = false, features = ["channel"] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 png = { workspace = true }
 prompt = { path = "../../crates/prompt" }

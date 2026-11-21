@@ -18,6 +18,8 @@ export function purchaseRefusalOf(
       'PAYMENT_DECLINED',
       'NO_ROOM',
       'INVITE_IN_PROGRESS',
+      'HOST_NOT_ELIGIBLE',
+      'SELF_HOSTED_NOT_ENABLED',
       (code) => code
     )
     .otherwise(() => undefined);

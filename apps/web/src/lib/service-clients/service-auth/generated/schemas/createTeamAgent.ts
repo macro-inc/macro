@@ -4,15 +4,20 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTeamAgentAvatarFace } from './createTeamAgentAvatarFace';
 import type { CreateTeamAgentAvatarUrl } from './createTeamAgentAvatarUrl';
+import type { CreateTeamAgentComputer } from './createTeamAgentComputer';
+import type { CreateTeamAgentSize } from './createTeamAgentSize';
 import type { CreateTeamAgentVoice } from './createTeamAgentVoice';
 
 /**
  * Input for inviting an agent teammate and buying its computer.
  */
 export interface CreateTeamAgent {
+  avatarFace?: CreateTeamAgentAvatarFace;
   /** Profile picture URL (a static file the caller uploaded). */
   avatarUrl?: CreateTeamAgentAvatarUrl;
+  computer?: CreateTeamAgentComputer;
   /** What the agent is responsible for. Seeds its workspace; when this and
 `personality` are empty the agent asks its owner what to take on. */
   jobDescription?: string;
@@ -23,8 +28,9 @@ export interface CreateTeamAgent {
   /** One key per Invite dialog, reused when the invite is retried, so a
 retry never buys a second computer. */
   purchaseKey: string;
-  /** The computer to buy. */
-  size: string;
+  /** The computer to buy, when `computer` is absent (the request shape
+before own machines). Give one of `size` and `computer`. */
+  size?: CreateTeamAgentSize;
   /** The call voice picked in the invite; `None` keeps the starter
 agent's default. */
   voice?: CreateTeamAgentVoice;

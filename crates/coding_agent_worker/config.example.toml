@@ -18,6 +18,9 @@
 # api_url = "http://localhost:50009/agent-harness"
 # # Base URL of the storage service (harness pairing + live event stream).
 # storage_url = "http://localhost:50009/dss"
+# # Local stack only: the stack's Docker network every hosted teammate's
+# # container also joins (needs Docker Engine 25 or Podman).
+# teammate_network = "macro-<instance>_services"
 # # Base URL of the Macro web app, used for the pairing and settings links.
 # web_url = "http://localhost:3000/app"
 
@@ -46,3 +49,14 @@ repo_url = "https://github.com/macro-inc/macro"
 # installs it. Set auto = false (or MACROD_NO_UPDATE=1) to turn that off.
 # [update]
 # auto = true
+
+# Agent teammates hosted on this machine (docs/design/teammate-runtime.md).
+# [teammates]
+# # Which container engine runs them: "auto" (Docker, then Podman: the first
+# # that can enforce the egress policy), "docker" or "podman".
+# engine = "auto"
+# # Private destinations a teammate may reach over TCP beyond the public
+# # internet; none by default.
+# [[teammates.allow]]
+# network = "10.20.0.5/32"
+# ports = [8101]

@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::admission::AgentAccountFacts;
+use crate::domain::avatar::AgentAvatar;
 use crate::domain::models::{CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgentRecord};
 use crate::domain::ports::{AgentAccounts, TeamAgentRepository};
 
@@ -172,6 +173,31 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip_all, fields(team_id = %team_id), err)]
+    async fn set_avatar(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        avatar: &AgentAvatar,
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO macro_user_info (macro_user_id, profile_picture, profile_picture_hash, avatar_face)
+            SELECT u.macro_user_id, $3, NULL, $4
+            FROM "User" u
+            JOIN team_agents ta ON ta.user_id = u.id
+            WHERE u.id = $1 AND ta.team_id = $2 AND u."isAgent" = TRUE
+            ON CONFLICT (macro_user_id) DO UPDATE SET
+                profile_picture = EXCLUDED.profile_picture,
+                profile_picture_hash = NULL,
+                avatar_face = EXCLUDED.avatar_face
+            "#,
+            agent.as_ref(), team_id, avatar.url,
+            avatar.face.as_ref().map(sqlx::types::Json) as _,
+        ).execute(&self.pool).await?;
+        Ok(result.rows_affected() == 1)
+    }
 }
 
 impl AgentAccounts for PgTeamAgentsRepo {
@@ -252,12 +278,13 @@ impl PgTeamAgentsRepo {
 
         sqlx::query!(
             r#"
-            INSERT INTO macro_user_info (macro_user_id, first_name, profile_picture)
-            VALUES ($1, $2, $3)
+            INSERT INTO macro_user_info (macro_user_id, first_name, profile_picture, avatar_face)
+            VALUES ($1, $2, $3, $4)
             "#,
             macro_user_id,
             account.name.as_str(),
             account.avatar_url,
+            account.avatar_face.as_ref().map(sqlx::types::Json) as _,
         )
         .execute(&mut *transaction)
         .await?;

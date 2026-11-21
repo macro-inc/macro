@@ -3,7 +3,11 @@ import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCrmMemberAccessChanges } from '@core/constant/featureFlags';
+import {
+  ENABLE_AGENT_FACES,
+  enableCrmMemberAccessChanges,
+  enableSelfHostedTeammates,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -32,6 +36,7 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
+import { useTeammateHostsQuery } from '@queries/team-agents/hosts';
 import { useRemoveTeamAgentMutation } from '@queries/team-agents/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
@@ -49,11 +54,20 @@ import {
   mapArray,
   Show,
 } from 'solid-js';
+import {
+  AgentPictureDialog,
+  type AgentPictureSelection,
+} from './components/agent-picture-dialog';
 import { AgentVoiceDialog } from './components/agent-voice-dialog';
+import { MoveTeammateDialog } from './components/move-teammate-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamMemberRow } from './components/team-member-row';
+import { TeammateCommand } from './components/teammate-command';
+import { TeammateRunsOn } from './components/teammate-runs-on';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
+import { canMoveTeammate, ownMachineRemoveBody } from './core/teammate-host';
+import { installProblemLine } from './core/teammate-install-problem';
 import {
   SettingsCard,
   SettingsPage,
@@ -184,10 +198,40 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const retryAgent = useRetryTeamAgentSetup();
   // Voices are team-admin only on the server, like the rest of agent management.
   const canChangeVoice = () => agentsOn() && isAdminOrOwner();
+  // Pictures, too.
+  const canChangePicture = () => ENABLE_AGENT_FACES && canChangeVoice();
+  // Agents on an admin's own machine: which machine, and moving them.
+  const selfHostedFlag = useFeatureFlag(enableSelfHostedTeammates);
+  const selfHosted = () =>
+    agentsOn() && !selfHostedFlag().loading && selfHostedFlag().enabled;
+  const hostsQuery = useTeammateHostsQuery(
+    () => props.team.id,
+    () => selfHosted() && agents().some((agent) => !!agent.harnessId)
+  );
+  /** The name of the machine an agent runs on, if it runs on one of ours. */
+  const hostName = (agent: TeamAgent) => {
+    const harnessId = agent.harnessId;
+    if (!harnessId) return undefined;
+    const hosts = hostsQuery.isSuccess ? hostsQuery.data.hosts : [];
+    return (
+      hosts.find((host) => host.harnessId === harnessId)?.name ??
+      t('teamAgents.ownersComputer')
+    );
+  };
+  /** The viewer's own machines: who may move an agent depends on them. */
+  const ownHarnessIds = () =>
+    hostsQuery.isSuccess
+      ? hostsQuery.data.hosts.map((host) => host.harnessId)
+      : [];
+  const [moveAgent, setMoveAgent] = createSignal<TeamAgent>();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
-  // Losing access closes the dialog for good, not until access returns.
+  const [pictureAgent, setPictureAgent] = createSignal<AgentPictureSelection>();
+  // Losing access closes the dialogs for good, not until access returns.
   createEffect(() => {
-    if (!canChangeVoice()) setVoiceAgent(undefined);
+    if (canChangeVoice()) return;
+    setVoiceAgent(undefined);
+    setPictureAgent(undefined);
+    setMoveAgent(undefined);
   });
 
   const members = createMemo(() =>
@@ -526,9 +570,21 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       menu={
                         <AgentMenu
                           name={agent.name}
+                          onChangePicture={
+                            canChangePicture()
+                              ? (opener) => setPictureAgent({ agent, opener })
+                              : undefined
+                          }
                           onChangeVoice={
                             canChangeVoice()
                               ? () => setVoiceAgent(agent)
+                              : undefined
+                          }
+                          onMove={
+                            selfHosted() &&
+                            isAdminOrOwner() &&
+                            canMoveTeammate(agent, userId(), ownHarnessIds())
+                              ? () => setMoveAgent(agent)
                               : undefined
                           }
                           onRemove={
@@ -537,6 +593,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
                               : undefined
                           }
                         />
+                      }
+                      problem={
+                        selfHosted()
+                          ? installProblemLine(
+                              agent.installProblem,
+                              hostName(agent) ?? t('teamAgents.ownersComputer')
+                            )
+                          : undefined
                       }
                       setupStep={agentSetupStep(agent)}
                       onRetry={
@@ -551,10 +615,27 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           : undefined
                       }
                       retrying={retryAgent.pending()}
+                      runsOn={
+                        <Show when={selfHosted() && hostName(agent)}>
+                          {(host) => <TeammateRunsOn host={host()} />}
+                        </Show>
+                      }
                       claude={
-                        isAdminOrOwner() ? (
-                          <TeamAgentClaude agent={agent} />
-                        ) : undefined
+                        <Show when={isAdminOrOwner()}>
+                          <Show
+                            when={selfHosted() && hostName(agent)}
+                            fallback={<TeamAgentClaude agent={agent} />}
+                          >
+                            {(host) => (
+                              <div class="flex flex-wrap items-center gap-x-1 text-xs text-ink-muted">
+                                {t('teammateHosts.ownClaudeHint', {
+                                  host: host(),
+                                })}
+                                <TeammateCommand command="macrod teammate sign-in" />
+                              </div>
+                            )}
+                          </Show>
+                        </Show>
                       }
                     />
                   )}
@@ -665,7 +746,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
         confirmLabel={t('teamAgents.removeConfirm')}
         pending={removeAgentMutation.isPending}
         onConfirm={handleRemoveAgent}
-        body={t('teamAgents.removeBody')}
+        body={(() => {
+          const agent = agentToRemove();
+          const host = agent && selfHosted() ? hostName(agent) : undefined;
+          return host ? ownMachineRemoveBody(host) : t('teamAgents.removeBody');
+        })()}
       />
       <ConfirmDialog
         open={!!showCancelInviteModal()}
@@ -684,6 +769,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
         }
       />
 
+      <AgentPictureDialog
+        selection={canChangePicture() ? pictureAgent() : undefined}
+        onClose={() => setPictureAgent(undefined)}
+      />
+      <MoveTeammateDialog
+        teamId={props.team.id}
+        agent={selfHosted() && isAdminOrOwner() ? moveAgent() : undefined}
+        onClose={() => setMoveAgent(undefined)}
+      />
       <AgentVoiceDialog
         teamId={props.team.id}
         agent={canChangeVoice() ? voiceAgent() : undefined}

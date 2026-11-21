@@ -1,4 +1,5 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import {
   fetchTeamAgents,
   useCreateTeamAgentMutation,
@@ -16,6 +17,7 @@ import {
   addedAgentProgress,
   addRefusal,
 } from '../core/team-agent-add';
+import type { HostInvite } from '../core/team-agent-draft';
 import { retryTeamAgentComputer } from './team-agent-status';
 
 /** The agent's progress, or `undefined` when the list couldn't be read. */
@@ -49,7 +51,12 @@ export function useAddTeamAgent(options: {
   onCleanup(() => {
     disposed = true;
   });
-  const stopped = () => disposed;
+  let operation: { session: number; teamId: string } | undefined;
+  const stopped = () =>
+    disposed ||
+    (!!operation &&
+      (queryAccountSession() !== operation.session ||
+        options.teamId() !== operation.teamId));
 
   const finish = (
     span: Span,
@@ -59,7 +66,7 @@ export function useAddTeamAgent(options: {
   ) => {
     span.setAttr('add.outcome', ending);
     span.setAttr('add.waits_for', ADD_AGENT_WAITS_FOR);
-    if (disposed) return;
+    if (stopped()) return;
     match(ending)
       .with('online', 'slow', () =>
         options.onAdded({ agent, online: ending === 'online' })
@@ -70,6 +77,12 @@ export function useAddTeamAgent(options: {
         setState({ kind: 'refunded' });
       })
       .with('failed', () => {
+        // On the inviter's own computer nothing was bought: no refund, no
+        // second try on the same purchase.
+        if (agent.harnessId) {
+          setState({ kind: 'host_failed', agent });
+          return;
+        }
         // The second failure is undone on the server: charge and computer.
         if (attempt > 1 || !agent.computerId) {
           setPurchaseKey(crypto.randomUUID());
@@ -81,13 +94,20 @@ export function useAddTeamAgent(options: {
       .exhaustive();
   };
 
-  const add = async (request: CreateTeamAgent, size: ComputerSize) => {
-    if (state().kind === 'adding') return;
+  /**
+   * Sends the invite and waits for the agent. `size` is the size bought, for
+   * a full host to name; left out when the agent runs on the inviter's own
+   * computer.
+   */
+  const invite = async (request: CreateTeamAgent, size?: ComputerSize) => {
+    if (disposed || state().kind === 'adding') return;
     const teamId = options.teamId();
+    operation = { session: queryAccountSession(), teamId };
     setState({ kind: 'adding' });
     await Telemetry.span('team-agent.add', async (span) => {
       span.setAttr('team.id', teamId);
-      span.setAttr('computer.size', request.size);
+      span.setAttr('computer.kind', size ? 'new' : 'own');
+      if (size) span.setAttr('computer.size', size);
       span.setAttr('add.attempt', 1);
       let agent: TeamAgent;
       try {
@@ -95,15 +115,18 @@ export function useAddTeamAgent(options: {
       } catch (error) {
         const refused = addRefusal(error);
         span.setAttr('add.outcome', refused.kind);
-        if (disposed) return;
+        if (stopped()) return;
         if (refused.kind === 'declined') setPurchaseKey(crypto.randomUUID());
         setState(
           match(refused)
             .returnType<AddAgentState>()
-            .with({ kind: 'no_room' }, () => ({
-              kind: 'no_room',
-              size,
-            }))
+            .with(
+              { kind: 'no_room' },
+              (): AddAgentState =>
+                size
+                  ? { kind: 'no_room', size }
+                  : { kind: 'refused', reason: 'unavailable' }
+            )
             .otherwise((other) => other)
         );
         return;
@@ -124,8 +147,9 @@ export function useAddTeamAgent(options: {
   /** Starts the agent's computer again, on the same computer, no new charge. */
   const retry = async (agent: TeamAgent) => {
     const computerId = agent.computerId;
-    if (!computerId || state().kind === 'adding') return;
+    if (disposed || !computerId || state().kind === 'adding') return;
     const teamId = options.teamId();
+    operation = { session: queryAccountSession(), teamId };
     setState({ kind: 'adding' });
     await Telemetry.span('team-agent.add', async (span) => {
       span.setAttr('team.id', teamId);
@@ -138,7 +162,7 @@ export function useAddTeamAgent(options: {
         );
       } catch {
         span.setAttr('add.outcome', 'retry_refused');
-        if (!disposed) setState({ kind: 'not_started', agent });
+        if (!stopped()) setState({ kind: 'not_started', agent });
         return;
       }
       const ending = await span.span('team-agent.add.wait_online', (wait) =>
@@ -162,7 +186,15 @@ export function useAddTeamAgent(options: {
       if (current === 'no_room' || current === 'refused')
         setState({ kind: 'editing' });
     },
-    add,
+    /** Buy `size` and run the agent on it. */
+    add: (request: CreateTeamAgent, size: ComputerSize) =>
+      invite(request, size),
+    /** Run the agent on one of the inviter's own computers: nothing is bought. */
+    addOnHost: ({ harnessId, ...request }: HostInvite) =>
+      invite({
+        ...request,
+        computer: { kind: 'own', harnessId },
+      }),
     retry,
   };
 }

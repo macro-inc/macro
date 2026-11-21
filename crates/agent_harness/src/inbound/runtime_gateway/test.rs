@@ -344,6 +344,20 @@ fn only_a_runtime_that_lists_apply_agent_can_run_an_agent_teammate() {
         RuntimeAccepts {
             agents_changed: true,
             apply_agent: true,
+            teammate_container: false,
         }
     );
+}
+
+#[test]
+fn only_a_runtime_that_lists_teammate_container_hosts_teammates() {
+    use axum::http::{HeaderMap, HeaderValue};
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        RUNTIME_ACCEPTS_HEADER,
+        HeaderValue::from_static("agents-changed, teammate-container"),
+    );
+
+    assert!(super::runtime_accepts(&headers).teammate_container);
 }

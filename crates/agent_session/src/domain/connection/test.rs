@@ -166,6 +166,26 @@ fn model_probe_responses_belong_to_the_connection_waiters() {
 }
 
 #[test]
+fn teammate_reports_go_to_teammate_delivery_never_to_sessions() {
+    use agent_runtime_protocol::domain::schema::v0::{
+        TeammateInstall, TeammateInstallId, TeammateRunState,
+    };
+    let mut routes = Routes::default();
+
+    assert_eq!(
+        routes.route(&ToServerMessage::TeammateStatus {
+            install: TeammateInstall {
+                install_id: TeammateInstallId::new("i-1").unwrap(),
+                generation: 1,
+                delivery: 1,
+            },
+            state: TeammateRunState::Running,
+        }),
+        Routed::Teammate
+    );
+}
+
+#[test]
 fn an_answer_to_the_connection_is_neither_a_session_frame_nor_an_orphan() {
     let mut routes = Routes::default();
     routes.expect_connection_response(RequestId::Str("macro-live-sessions-1".to_owned()));

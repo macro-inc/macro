@@ -84,8 +84,12 @@ One process, `bin/agent run`, under the computer's agent service, which sets
 `AGENT_WORKSPACE` (this repository), `MUPPET_CREDENTIALS_FILE`,
 `MUPPET_LAST_GOOD_FILE`, `MUPPET_RESTART_FILE` and, for stdio MCP servers
 every wake gets (e.g. computer use), `MUPPET_MCP_SERVERS_JSON`. None has a
-default: a missing or invalid one exits 78, which the service retries (and
-rolls back only when the code changed since the last good boot). It runs Claude Code as the `claude` on PATH. It builds
+default: a missing or invalid one exits 78. The launcher counts a 78 as a
+failed boot, so code that broke its own settings rolls back to the last good
+boot; a 78 on that last good boot ends the next start with 77, and the
+supervisor waits for a new delivery. Exit 0 is a stop and 75 a restart after
+a land; the full table is in `docs/design/teammate-runtime.md` (*The runtime
+contract*). It runs Claude Code as the `claude` on PATH. It builds
 the behavior in `behavior/`, shows the agent online in Macro, and waits on its
 event sources. A handler decides cheaply what each event needs, and wakes the
 agent (Claude Code, with `AGENT.md` and who it is as its system prompt) only
@@ -147,9 +151,9 @@ agent's service.
 | `MUPPET_CREDENTIALS_FILE` | yes (hosted) | The enrollment's `agent.env`, a systemd credential: `KEY="value"` lines. |
 | `MUPPET_CREDENTIALS` | no | `sops` for a self-hosted agent, which keeps `secrets.enc.json` instead. |
 | `MUPPET_LAST_GOOD_FILE` | yes (`run`) | Written with HEAD after a healthy boot. |
-| `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land; the image restarts the service. |
+| `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land, by whichever process landed; `run` sees it change, stops (a last sync when idle) and exits 75, which its launcher starts again. |
 | `MUPPET_MCP_SERVERS_JSON` | no | Stdio MCP servers for every wake (`{name: {command, args?, env?}}`). |
-| `CREDENTIALS_DIRECTORY` | set by systemd | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
+| `CREDENTIALS_DIRECTORY` | set by systemd or the teammate image (`/run/teammate`) | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
 | `HARNESSD_STATE_DIRECTORY` | yes (with systemd credentials) | harnessd's Claude sign-in, read-only inside the sandbox; the `claude` wrapper on PATH reads it. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Where spans go; none means none are exported. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | no | Extra export headers (`key=value,…`); the image names the computer (`x-macro-computer-id`), for a per-computer limit at the intake once the id is signed. |
@@ -164,6 +168,21 @@ Without them, Claude Code uses the computer's Claude login (harnessd).
 It may also hold `OTEL_EXPORTER_OTLP_ENDPOINT` (the deployment's telemetry
 intake), which the image exports as process environment.
 `MACRO_SETUP_TRACEPARENT` comes from a file of its own, never agent.env.
+
+On SIGTERM (a unit's stop, `docker stop`) with no wake running, `run`
+commits, pulls and pushes once more (`sync: stopping`, at most 40 s) before it
+exits 0, so the agent's work follows it to another machine; a wake that is
+running is cut off and its work is committed by the next start. A stop
+during the start is handled the same way.
+
+An agent's own machine goes offline: Macro being unreachable is not a
+failure. The start needs nothing from Macro, and a stream from Macro whose
+start fails (asking who the agent is, listening for messages) is tried
+again, backing off from 1 s to 60 s, while the agent shows offline. A boot
+is healthy (`MUPPET_LAST_GOOD_FILE` written) only once chat hears Macro; an
+offline one waits, up and not healthy, with no deadline. Only when Macro
+answers and chat's stream still doesn't open within 3 minutes does `run`
+exit 1, a failed boot, so code that broke listening rolls back.
 
 Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
 credential is missing or invalid. The launcher (`start-agent`) adds: `78` when

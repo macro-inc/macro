@@ -783,6 +783,22 @@ Check the generated wiring without starting anything:
 cargo x validate-local-compose --instance computers --computers docker
 ```
 
+### A teammate on your own machine
+
+A teammate you invite onto your own machine runs in a container macrod
+starts (`docs/design/teammate-runtime.md`). On a local stack it can reach the
+stack only on the stack's network: set it in the macrod config you pair with
+the stack, and macrod attaches every teammate container to it beside the
+install's own network (Docker Engine 25 or Podman):
+
+```toml
+[macro]
+teammate_network = "macro-<instance>_services"
+```
+
+The service hands the teammate the stack's in-network addresses, as it does a
+local Macro computer. Never set this outside a local stack.
+
 ## Port Conflicts (macOS)
 
 The default instance binds a fixed set of host ports. macOS reserves some of them

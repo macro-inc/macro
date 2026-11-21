@@ -172,6 +172,21 @@ pub struct RuntimeAccepts {
     /// `ToRuntimeMessage::ApplyAgent`: without it the runtime can't run an
     /// agent teammate.
     pub apply_agent: bool,
+    /// `ToRuntimeMessage::RunTeammate` and `StopTeammate`: the runtime hosts
+    /// agent teammates in containers on its owner's own machine.
+    pub teammate_container: bool,
+}
+
+/// A runtime's report about hosting agent teammates (`TeammateHost` or
+/// `TeammateStatus`), with the dial it came on.
+#[derive(Debug, Clone)]
+pub struct TeammateReport {
+    /// The harness whose runtime sent it.
+    pub harness: HarnessId,
+    /// The dial it came on.
+    pub connection: RuntimeConnectionId,
+    /// The report.
+    pub message: agent_runtime_protocol::domain::schema::v0::ToServerMessage,
 }
 
 /// A harness and one of its runtime connections.

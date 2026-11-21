@@ -96,6 +96,59 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   image's `claude` wrapper swaps the gateway env for the computer's own
   credential when harnessd holds one. ACP trace logs contain only direction
   and byte counts.
+- `src/teammate.rs` (`src/teammate/`, Unix only): agent teammates hosted on
+  the owner's own machine in the teammate runtime container
+  (`docs/design/teammate-runtime.md`, the spec). `engine.rs` is the engine
+  port and the exact `docker run` flags (`run_arguments`); `cli.rs` drives
+  `docker` or `podman` (found on `PATH`, never installed); `host.rs` turns
+  the engine check into the `TeammateHost` report (first problem wins:
+  platform, engine, floor, inner sandbox; the user-namespace probe needs a
+  kept install's image and is skipped without one). The engine is checked
+  before every dial (`runtime.rs`), and the dial lists
+  `teammate-container` only when nothing is wrong; each connection then
+  sends the report and every install's last state (`teammate::Link`).
+  Egress is enforced (`isolation.rs`, `egress.rs`, `netfacts.rs`): each
+  start replaces the install's holder (`macro-teammate-<id>-net`, `sleep`,
+  owns the network namespace), runs the guard (uid 0, `NET_ADMIN` only, no
+  mounts, ruleset on stdin, `--rm`), reads the table back with `nft -j` and
+  checks it, and only then runs the agent with `--network container:<holder
+  id>`. A refused or mismatched policy is `failed: networkIsolationUnavailable`,
+  never an open start; a holder exit is a crash; adoption reads the policy
+  back. `[teammates] engine` (`auto` probes, falling through to the next
+  engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
+  teammate_network` (local stack only) makes the holder join the stack's
+  network and allows just the service host:port pairs in the agent's
+  environment, resolved in the holder (`getent`). `macrod teammate ruleset`
+  (hidden) prints the ruleset for JSON input.
+  `RunTeammate`/`StopTeammate` go through one ordered queue: the highest
+  `(generation, delivery)` wins and lower or equal ones are ignored; a new
+  delivery stops the old container with `docker stop -t 90`; stops delete
+  the container, its per-install network, both volumes and the store entry.
+  `supervisor.rs` carries out `crates/teammate_lifecycle`'s decisions (the
+  one exit table, backoff 2-60 s, start-rate cap, image trial and rollback);
+  never interpret an exit code here. Each start is a new container with
+  `--env TEAMMATE_PREVIOUS_EXIT`; the policy state, settled image and image
+  update live in `install.json` (`store::Lifecycle`), so a restarted macrod
+  keeps its backoff and leaves a 77/79 install down until a new delivery.
+  A restarted macrod adopts a running container
+  with the kept delivery's labels. Store: `~/.macrod/teammates/<harness>/
+  <install>/` (0700; `agent.env` 0644 for uid 1000, written by rename). The
+  seccomp profile is `nix/macro-box/files/teammate-seccomp.json`, built in
+  and written to `~/.macrod/teammates/teammate-seccomp.json`. Spans
+  (to the ingest): `teammate.run`, `teammate.stop` (joined to the message's
+  `traceparent`), `teammate.pull` (outcome), `teammate.start` (attempt,
+  previous exit, image id, rollback reason), `teammate.checkpoint`,
+  `teammate.rollback`, `teammate.engine_check`; opaque install ids only. `macrod teammate
+  list|logs|sign-in` is `command.rs`; sign-in runs `claude setup-token` in a
+  separate container with only the provider volume, read-write.
+  `hosted_unit.rs` is the hosted backend: on an agent's Macro computer
+  (`Computer` starts it when the agent inbox exists) it drives exactly
+  `macro-agent.service` and `macro-agent-apply.service` through typed
+  `systemctl` argv with the same policy, writes `/run/macro-agent/previous-exit`
+  before each start, adopts an active unit, keeps its state in
+  `~/.macrod/hosted-agent.json`, and installs + restarts on `ApplyAgent`. It
+  controls only a unit with `Restart=no` (the controller image's); older
+  images keep their own restarts.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
@@ -217,6 +270,12 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Windows is built natively on a Namespace Windows runner by
   `build_agent_daemon_on_tag` (MSVC, static CRT). Run that workflow with
   `workflow_dispatch` on your branch to check a Windows-affecting change.
+- Teammate containers against the real engine (needs Docker or Podman, the
+  teammate image loaded as `teammate-runtime:latest`, and the internet):
+  `cargo test -p coding_agent_worker --bins the_real_engine -- --ignored
+  --test-threads=1` (`MACRO_TEAMMATE_TEST_ENGINE=docker|podman` picks one); they build throwaway images from the teammate image,
+  create and delete their own containers, holders, networks and volumes, check
+  the egress policy from inside a teammate, and take about three minutes.
 - `cargo tree -p coding_agent_worker -i rdkafka-sys --target x86_64-unknown-linux-musl`
   must find nothing: librdkafka breaks the static and Windows builds.
 
@@ -225,6 +284,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Paired credentials remain scope-free. Resolve webhook scope from current
   `shared_team_ids`, never a team owner variant; every harness has a human owner.
 
+- `macrod` tests never build the real teammate host (`daemon.rs`
+  `host_teammates` is `None` under `cfg(test)`): it writes under
+  `~/.macrod` and runs the engine. Use the fake engine in
+  `src/teammate/test.rs`.
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.
 - Set the PTY master's close-on-exec flag with `fcntl` on macOS; its
@@ -278,10 +341,14 @@ which a computer's `macrod.service` loads, with `OTEL_EXPORTER_OTLP_HEADERS`
 naming the computer (`x-macro-computer-id`). The analytics proxy does not
 honour it yet: it is unauthenticated, so the proxy still limits by client IP
 until the id is signed. Only setup spans (`run_enroll`,
-`macrod.enroll.*`, `macrod.agent.apply`) export, with the marker's computer
+`macrod.enroll.*`, `macrod.agent.apply`) and `teammate.*` spans export, with the marker's computer
 UUID as a resource attribute. Enrollment joins the setup trace from
 `Enrollment.traceparent`; its claim sends the setup `traceparent`.
 `ApplyAgent.traceparent` parents `macrod.agent.apply` and is staged once, beside
 the agent's environment and never in it (a redelivery's fresh one would rewrite
 agent.env and restart the agent), at `/run/macro-agent-inbox/setup-traceparent`. stdout remains the daemon
 protocol.
+A macrod that hosts teammates always sends its `teammate.*` spans to the
+service's ingest, `POST <api_url>/teammates/telemetry` with the harness
+credential (`src/teammate/ingest.rs`): one request per 10 s, 16 batches kept
+offline, never waited on.

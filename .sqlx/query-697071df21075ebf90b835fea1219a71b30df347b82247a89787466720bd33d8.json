@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO harness_teammate_hosts (harness_id, report, reported_at)\n            VALUES ($1, $2, now())\n            ON CONFLICT (harness_id) DO UPDATE\n            SET report = EXCLUDED.report, reported_at = EXCLUDED.reported_at\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "697071df21075ebf90b835fea1219a71b30df347b82247a89787466720bd33d8"
+}
