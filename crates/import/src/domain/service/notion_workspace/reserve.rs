@@ -276,12 +276,13 @@ where
                 failure::Failure::SourceRetryable(reason) => {
                     let attempts = progress.reservation_failure().await?;
                     tracing::Span::current().record("attempts", attempts as i64);
-                    tracing::warn!(source_id = %item.notion_id, attempts, retryable = attempts < 3, "source reservation did not complete");
-                    if attempts < 3 {
+                    tracing::warn!(source_id = %item.notion_id, attempts, retryable = attempts < write::RESERVATION_ATTEMPTS, "source reservation did not complete");
+                    if attempts < write::RESERVATION_ATTEMPTS {
                         progress.flush_warnings().await?;
                         return Err(ImportError::Other(
                             failure::RunFailure(format!(
-                                "{reason}; attempt {attempts} of 3, retry this import"
+                                "{reason}; attempt {attempts} of {}, retry this import",
+                                write::RESERVATION_ATTEMPTS
                             ))
                             .into(),
                         ));

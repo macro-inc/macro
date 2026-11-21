@@ -40,6 +40,8 @@ mod test;
 
 /// Objects written at once.
 pub(super) const WRITE_CONCURRENCY: usize = 4;
+/// Source-specific reservation failures tolerated within one ledger generation.
+pub(super) const RESERVATION_ATTEMPTS: usize = 3;
 /// Row bodies fetched at once within one database.
 const BODY_CONCURRENCY: usize = 3;
 /// Name of the folder every workspace import writes into.
@@ -327,14 +329,14 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
                 return Err(crate::domain::models::SourceStopReason::UnsupportedMarker.into());
             }
         }
-        Ok(receipts.len().min(3))
+        Ok(receipts.len().min(RESERVATION_ATTEMPTS))
     }
 
     /// Spend one source-scoped attempt; run-wide failures never call this.
     pub async fn reservation_failure(&self) -> anyhow::Result<usize> {
         let count = self.reservation_failures()?;
-        if count >= 3 {
-            return Ok(3);
+        if count >= RESERVATION_ATTEMPTS {
+            return Ok(RESERVATION_ATTEMPTS);
         }
         let attempt = Uuid::now_v7();
         self.record_all(vec![WrittenObject {
