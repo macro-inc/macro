@@ -18,11 +18,11 @@ use webhook::domain::models::WebhookFilter;
 /// `webhook::inbound::mcp_router::MCP_EVENT_SUBSCRIPTIONS_PATH` under the
 /// service's `/internal` nest; the router is behind the webhook crate's
 /// `inbound` feature, which this service does not build.
-const SUBSCRIBE_PATH: &str = "internal/mcp/event_subscriptions";
+pub(super) const SUBSCRIBE_PATH: &str = "internal/mcp/event_subscriptions";
 /// `MCP_EVENT_UNSUBSCRIBE_PATH`, likewise.
 const UNSUBSCRIBE_PATH: &str = "internal/mcp/event_subscriptions/unsubscribe";
 /// The live event stream webhooks' SSE clients read.
-const STREAM_PATH: &str = "webhook/events/stream";
+pub(super) const STREAM_PATH: &str = "webhook/events/stream";
 /// The stream's heartbeat event, `webhook::domain::stream::STREAM_HEARTBEAT_EVENT`.
 const HEARTBEAT_EVENT: &str = "heartbeat";
 /// Connecting to the service.
@@ -116,7 +116,12 @@ pub(crate) struct DssEvents {
 }
 
 impl DssEvents {
-    pub(crate) fn new(base_url: url::Url, internal_key: String) -> anyhow::Result<Self> {
+    pub(crate) fn new(mut base_url: url::Url, internal_key: String) -> anyhow::Result<Self> {
+        // The deployed bases sit under a path (`https://gateway…/dss`), and
+        // `Url::join` replaces a last segment that has no trailing slash.
+        if !base_url.path().ends_with('/') {
+            base_url.set_path(&format!("{}/", base_url.path()));
+        }
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .read_timeout(STREAM_READ_TIMEOUT)
@@ -128,16 +133,20 @@ impl DssEvents {
         })
     }
 
+    /// Where a call to `path` goes.
+    pub(super) fn url(&self, path: &str) -> Result<url::Url, rootcause::Report> {
+        self.base_url
+            .join(path)
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())
+    }
+
     fn request(
         &self,
         method: reqwest::Method,
         path: &str,
         user: &MacroUserIdStr<'static>,
     ) -> Result<reqwest::RequestBuilder, rootcause::Report> {
-        let url = self
-            .base_url
-            .join(path)
-            .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+        let url = self.url(path)?;
         let mut headers = http::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
         Ok(self

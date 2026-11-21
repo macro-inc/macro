@@ -26,8 +26,14 @@ pub(crate) const DEFAULT_HEARTBEAT: Duration = Duration::from_secs(30);
 pub(crate) const MIN_HEARTBEAT: Duration = Duration::from_secs(5);
 /// Longest heartbeat granted: under the load balancer's idle timeout.
 pub(crate) const MAX_HEARTBEAT: Duration = Duration::from_secs(45);
-/// Event ids remembered to drop an event a second source also gave.
-const RECENT_EVENT_IDS: usize = 1024;
+/// Event ids remembered to drop an event a second source also gave: as many
+/// as the source retains for resuming, so a group catching up from it cannot
+/// repeat one another group gave.
+const RECENT_EVENT_IDS: usize = 4096;
+/// A source that sends neither an event nor a heartbeat for this long has
+/// stalled, even while its keep-alive comments hold the connection open.
+const SOURCE_SILENCE: Duration =
+    webhook::domain::models::STREAM_HEARTBEAT_INTERVAL.saturating_mul(3);
 /// First wait before reconnecting a source.
 const FIRST_RETRY: Duration = Duration::from_millis(500);
 /// Longest wait between reconnects.
@@ -229,7 +235,9 @@ fn group_stream(
         user,
         group,
         current: Some(opened),
-        last_event_id: None,
+        // A cursor minted now, so a group that loses its source before its
+        // first event still resumes from when it opened.
+        last_event_id: Some(uuid::Uuid::now_v7().to_string()),
         failures: 0,
     };
     stream::unfold(state, |mut state| async move {
@@ -254,7 +262,15 @@ fn group_stream(
                 }
                 continue;
             };
-            match current.next().await {
+            let next = tokio::time::timeout(SOURCE_SILENCE, current.next())
+                .await
+                .unwrap_or_else(|_| {
+                    Some(Err(SourceError(rootcause::report!(
+                        "the event source sent nothing for {} s",
+                        SOURCE_SILENCE.as_secs()
+                    ))))
+                });
+            match next {
                 Some(Ok(SourceItem::Event(event))) => {
                     state.failures = 0;
                     state.last_event_id = Some(event.event_id.clone());

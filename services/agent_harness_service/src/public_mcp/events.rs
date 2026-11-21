@@ -187,7 +187,9 @@ pub(crate) struct McpEvents {
     store: Arc<dyn SubscriptionStore>,
     source: Arc<dyn EventSource>,
     sealer: Arc<dyn SecretSealer>,
-    compiled: Mutex<LruCache<(String, String), McpEventFilter>>,
+    /// One cell per user and wording, so concurrent first requests share one
+    /// model call; a failed call leaves the cell empty for the next.
+    compiled: Mutex<LruCache<(String, String), Arc<tokio::sync::OnceCell<McpEventFilter>>>>,
     open_streams: Arc<Mutex<HashMap<String, u8>>>,
 }
 
@@ -221,21 +223,17 @@ impl McpEvents {
             }
             Selection::Query(query) => {
                 let key = (user.as_ref().to_owned(), query.clone());
-                let cached = self
+                let cell = self
                     .compiled
                     .lock()
-                    .ok()
-                    .and_then(|mut cache| cache.get(&key).cloned());
-                match cached {
-                    Some(filter) => filter,
-                    None => {
-                        let filter = self.compiler.compile(user, query).await?;
-                        if let Ok(mut cache) = self.compiled.lock() {
-                            cache.put(key, filter.clone());
-                        }
-                        filter
-                    }
-                }
+                    .map_err(|_| {
+                        EventsError::Internal(rootcause::report!("filter cache poisoned"))
+                    })?
+                    .get_or_insert(key, Arc::default)
+                    .clone();
+                cell.get_or_try_init(|| self.compiler.compile(user, query))
+                    .await?
+                    .clone()
             }
         };
         filter

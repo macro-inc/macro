@@ -89,6 +89,8 @@ fn event(name: &str, envelope: Value) -> SourceEvent {
 struct FakeCompiler {
     queries: Mutex<Vec<String>>,
     answer: Mutex<Option<CompileError>>,
+    /// When set, each compile waits for it before answering.
+    hold: Mutex<Option<Arc<tokio::sync::Notify>>>,
 }
 
 #[async_trait::async_trait]
@@ -99,6 +101,10 @@ impl FilterCompiler for FakeCompiler {
         query: &str,
     ) -> Result<McpEventFilter, CompileError> {
         self.queries.lock().unwrap().push(query.to_owned());
+        let hold = self.hold.lock().unwrap().clone();
+        if let Some(hold) = hold {
+            hold.notified().await;
+        }
         match self.answer.lock().unwrap().take() {
             Some(error) => Err(error),
             None => Ok(channel_mentions()),
@@ -676,6 +682,38 @@ async fn a_mismatched_name_header_is_refused() {
     )
     .await
     .unwrap();
+
+    // A client that sends Mcp-Method follows the HTTP standardization, so it
+    // must send Mcp-Name too, once.
+    let headers = |names: &[&str]| {
+        let mut builder = http::Request::builder().header("mcp-method", "events/subscribe");
+        for name in names {
+            builder = builder.header("mcp-name", *name);
+        }
+        let (parts, ()) = builder.body(()).unwrap().into_parts();
+        let mut extensions = rmcp::model::Extensions::new();
+        extensions.insert(parts);
+        extensions
+    };
+    for names in [&[][..], &["message.posted", "message.mentioned"][..]] {
+        let error = call(
+            &fixture.events,
+            "events/subscribe",
+            subscribe_params("message.posted", json!({})),
+            &headers(names),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code.0, -32020, "{names:?}");
+    }
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({})),
+        &headers(&["message.posted"]),
+    )
+    .await
+    .unwrap();
 }
 
 // --- events/unsubscribe ---------------------------------------------------
@@ -733,6 +771,69 @@ async fn the_same_words_compile_once_per_user() {
     let other = MacroUserIdStr::parse_from_str(OTHER).unwrap();
     fixture.events.compile(&other, &query).await.unwrap();
     assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn concurrent_first_requests_share_one_model_call() {
+    let fixture = fixture();
+    let hold = Arc::new(tokio::sync::Notify::new());
+    *fixture.compiler.hold.lock().unwrap() = Some(Arc::clone(&hold));
+    let query = Selection::Query(MENTIONS.to_owned());
+    // Polled in order: the first waits on the model, the second on the
+    // first, then the model answers.
+    let user = me();
+    let (first, second, ()) = tokio::join!(
+        fixture.events.compile(&user, &query),
+        fixture.events.compile(&user, &query),
+        async { hold.notify_waiters() },
+    );
+    assert_eq!(first.unwrap(), second.unwrap());
+    assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_failed_compile_is_not_cached() {
+    let fixture = fixture();
+    *fixture.compiler.answer.lock().unwrap() =
+        Some(CompileError::Refused("not an event".to_owned()));
+    let query = Selection::Query(MENTIONS.to_owned());
+    assert!(fixture.events.compile(&me(), &query).await.is_err());
+    assert!(fixture.events.compile(&me(), &query).await.is_ok());
+    assert_eq!(fixture.compiler.queries.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn a_refusal_keeps_the_model_words_out_of_its_display() {
+    let error = CompileError::Refused("the words of the request".to_owned());
+    assert!(!error.to_string().contains("words of the request"));
+    let shown = super::EventsError::from(error);
+    assert!(shown.to_string().contains("words of the request"));
+}
+
+#[test]
+fn the_service_is_reached_under_its_gateway_path() {
+    let dss = super::dss::DssEvents::new(
+        url::Url::parse("https://gateway.example/dss").unwrap(),
+        "key".to_owned(),
+    )
+    .unwrap();
+    assert_eq!(
+        dss.url(super::dss::SUBSCRIBE_PATH).unwrap().as_str(),
+        "https://gateway.example/dss/internal/mcp/event_subscriptions"
+    );
+    assert_eq!(
+        dss.url(super::dss::STREAM_PATH).unwrap().as_str(),
+        "https://gateway.example/dss/webhook/events/stream"
+    );
+    let local = super::dss::DssEvents::new(
+        url::Url::parse("http://localhost:8080").unwrap(),
+        "key".to_owned(),
+    )
+    .unwrap();
+    assert_eq!(
+        local.url(super::dss::STREAM_PATH).unwrap().as_str(),
+        "http://localhost:8080/webhook/events/stream"
+    );
 }
 
 #[test]
@@ -991,6 +1092,58 @@ async fn a_lost_source_reports_an_error_and_resumes_after_its_last_event() {
     let opens = fixture.source.opens.lock().unwrap();
     assert_eq!(opens.len(), 2);
     assert_eq!(opens[1].1.as_deref(), Some(resumed_after.as_str()));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_silent_source_is_replaced_and_resumes_from_when_it_opened() {
+    let fixture = fixture();
+    // Held open but silent: no event, no heartbeat.
+    let _silent = fixture.source.queue(None);
+    let opened_at = uuid::Uuid::now_v7();
+    let started = tokio::time::Instant::now();
+    stream_with(
+        &fixture.events,
+        json!({"name": "message.posted", "heartbeatMs": 45_000}),
+        |mut receiver, cancel| async move {
+            loop {
+                let (method, _) = next(&mut receiver).await;
+                if method == "notifications/events/error" {
+                    break;
+                }
+            }
+            assert_eq!(started.elapsed(), Duration::from_secs(60));
+            // The group reopens after its first retry wait.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            cancel.cancel();
+        },
+    )
+    .await
+    .unwrap();
+
+    let opens = fixture.source.opens.lock().unwrap();
+    assert_eq!(opens.len(), 2, "the silent source was reopened");
+    let cursor = uuid::Uuid::parse_str(opens[1].1.as_deref().unwrap()).unwrap();
+    assert_eq!(cursor.get_version_num(), 7);
+    assert!(cursor >= opened_at);
+}
+
+#[tokio::test]
+async fn a_client_that_leaves_during_setup_frees_its_slot() {
+    let fixture = fixture();
+    // The model never answers.
+    *fixture.compiler.hold.lock().unwrap() = Some(Arc::new(tokio::sync::Notify::new()));
+    let result = stream_with(
+        &fixture.events,
+        json!({"name": QUERY_EVENT, "arguments": {"query": MENTIONS}}),
+        |_, cancel| async move { cancel.cancel() },
+    )
+    .await;
+    assert!(result.is_err());
+    assert!(fixture.source.opens.lock().unwrap().is_empty());
+    let slots: Vec<_> = (0..MAX_STREAMS_PER_USER)
+        .map(|_| fixture.events.claim_stream(&me()))
+        .collect();
+    assert!(slots.iter().all(Result::is_ok));
 }
 
 #[tokio::test]

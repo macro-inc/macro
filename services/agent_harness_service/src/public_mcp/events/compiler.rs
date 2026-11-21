@@ -18,8 +18,10 @@ use webhook::domain::models::WEBHOOK_EVENT_NAMES;
 /// Why a request was not compiled.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CompileError {
-    /// The request does not fit the filter language.
-    #[error("{0}")]
+    /// The request does not fit the filter language, saying why. The reason
+    /// is the model's words about the request, so it is shown to the caller
+    /// but kept out of this error's display, which spans record.
+    #[error("the request does not fit the filter language")]
     Refused(String),
     /// The subscriber's AI usage refuses new work.
     #[error("{0}")]

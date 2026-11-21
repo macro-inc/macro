@@ -34,6 +34,9 @@ const CALLBACK_ENDPOINT_ERROR: i32 = -32027;
 const HEADER_MISMATCH: i32 = -32020;
 /// The routing header naming the event type.
 const MCP_NAME_HEADER: &str = "mcp-name";
+/// Sent by every request of a client following the HTTP standardization
+/// (SEP-2243), which must then also send `Mcp-Name`.
+const MCP_METHOD_HEADER: &str = "mcp-method";
 /// Where the filter a subscription delivers by is returned.
 pub(crate) const FILTER_META: &str = "com.macro/filter";
 /// Where the reading of that filter in words is returned.
@@ -145,18 +148,25 @@ fn ttl(params: Option<&Value>) -> Result<McpTtlRequest, McpError> {
     }
 }
 
-/// A request's `Mcp-Name` header, when it sent one, must name `params.name`.
+/// A request's `Mcp-Name` header must be one value naming `params.name`. It
+/// may be absent only from a client that sends no `Mcp-Method` either: one
+/// from before the HTTP standardization.
 fn check_name_header(extensions: &rmcp::model::Extensions, name: &str) -> Result<(), McpError> {
-    let header = extensions
+    let Some(headers) = extensions
         .get::<http::request::Parts>()
-        .and_then(|parts| parts.headers.get(MCP_NAME_HEADER));
-    match header {
-        Some(value) if value.as_bytes() != name.as_bytes() => Err(McpError::new(
+        .map(|parts| &parts.headers)
+    else {
+        return Ok(());
+    };
+    let mut values = headers.get_all(MCP_NAME_HEADER).iter();
+    match (values.next(), values.next()) {
+        (Some(value), None) if value.as_bytes() == name.as_bytes() => Ok(()),
+        (None, _) if !headers.contains_key(MCP_METHOD_HEADER) => Ok(()),
+        _ => Err(McpError::new(
             ErrorCode(HEADER_MISMATCH),
-            "Mcp-Name does not match params.name",
+            "Mcp-Name must be sent once and match params.name",
             None,
         )),
-        _ => Ok(()),
     }
 }
 
@@ -306,10 +316,23 @@ async fn stream<Sink: NotificationSink>(
     tracing::Span::current().record("mcp.event.name", name.as_str());
     let selected = selection(&name, &arguments)?;
     let slot = events.claim_stream(&scope.user)?;
-    let compiled = events.compile(&scope.user, &selected).await?;
-    let sources = super::stream::open_sources(&events.source, &scope.user, &compiled.filter)
-        .await
-        .map_err(|error| EventsError::Internal(error.0))?;
+    // rmcp signals a client leaving without dropping this future, so setup
+    // stops on it too, releasing the slot rather than holding it until the
+    // model and the sources answer.
+    let setup = async {
+        let compiled = events.compile(&scope.user, &selected).await?;
+        let sources = super::stream::open_sources(&events.source, &scope.user, &compiled.filter)
+            .await
+            .map_err(|error| EventsError::Internal(error.0))?;
+        Ok::<_, EventsError>((compiled, sources))
+    };
+    let (compiled, sources) = tokio::select! {
+        biased;
+        () = scope.cancel.cancelled() => {
+            return Err(McpError::new(ErrorCode::INTERNAL_ERROR, "request cancelled", None));
+        }
+        setup = setup => setup?,
+    };
     tracing::Span::current().record("mcp.events.sources", sources.len());
     let heartbeat = heartbeat_ms
         .map(Duration::from_millis)
