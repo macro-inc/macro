@@ -12,22 +12,19 @@ import type { PropertyOption } from '../../service-clients/service-properties/ge
 import type { PropertyOptionResponse } from '../../service-clients/service-properties/generated/schemas/propertyOptionResponse';
 import type { TagSetResponse } from '../../service-clients/service-properties/generated/schemas/tagSetResponse';
 import type { UpdatePropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/updatePropertyOptionRequest';
+import { listTagSets } from '../../service-clients/service-storage/property-catalog';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
 
 const EMPTY_TAG_SETS: TagSetResponse[] = [];
 
-function fetchTags() {
-  return throwOnErr(() => propertiesServiceClient.listTags());
-}
-
 /** The caller's tag sets: their personal set, plus their team's set when on a team. */
 export function useTagsQuery() {
   const isAuthenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: propertiesKeys.tags.queryKey,
-    queryFn: fetchTags,
+    queryFn: listTagSets,
     staleTime: 1000 * 60 * 5,
     enabled: isAuthenticated() === true,
     placeholderData: EMPTY_TAG_SETS,

@@ -9,6 +9,7 @@ import type { EntityType } from '../../service-clients/service-properties/genera
 import type { PropertyDefinition } from '../../service-clients/service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from '../../service-clients/service-properties/generated/schemas/propertyDefinitionResponse';
 import type { PropertyScope } from '../../service-clients/service-properties/generated/schemas/propertyScope';
+import { listPropertyDefinitions } from '../../service-clients/service-storage/property-catalog';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
@@ -31,13 +32,7 @@ function listPropertiesQueryOptions(
       forEntityType,
     }).queryKey,
     queryFn: () =>
-      throwOnErr(() =>
-        propertiesServiceClient.listProperties({
-          scope,
-          include_options: includeOptions,
-          for_entity_type: forEntityType,
-        })
-      ),
+      listPropertyDefinitions({ scope, includeOptions, forEntityType }),
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -61,14 +56,8 @@ export async function fetchPropertyDefinitionWithOptions(
       scope: 'all',
       includeOptions: true,
     }).queryKey,
-    queryFn: async () =>
-      await throwOnErr(
-        async () =>
-          await propertiesServiceClient.listProperties({
-            scope: 'all',
-            include_options: true,
-          })
-      ),
+    queryFn: () =>
+      listPropertyDefinitions({ scope: 'all', includeOptions: true }),
     staleTime: 0,
   });
 

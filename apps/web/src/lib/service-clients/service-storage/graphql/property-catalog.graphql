@@ -1,0 +1,88 @@
+# The viewer's property catalog: definitions, their select options, and tag sets.
+# Writes to it stay on the properties REST service, so the TanStack queries in
+# lib/queries/properties own refresh and optimism; these documents only read.
+
+fragment PropertyCatalogDefinitionFields on GraphqlPropertyDefinition {
+	id
+	owner {
+		scope
+		principalId
+	}
+	displayName
+	dataType
+	isMultiSelect
+	specificEntityType
+	isSystem
+	isMetadata
+	createdAt
+	updatedAt
+}
+
+fragment PropertyCatalogOptionFields on GraphqlPropertyOption {
+	id
+	propertyDefinitionId
+	displayOrder
+	value {
+		__typename
+		... on GraphqlStringPropertyOptionValue {
+			stringValue: value
+		}
+		... on GraphqlNumberPropertyOptionValue {
+			numberValue: value
+		}
+	}
+	color
+	createdAt
+	updatedAt
+}
+
+query PropertyCatalogDefinitions(
+	$scope: GraphqlPropertyDefinitionScope!
+	$forEntityType: GraphqlPropertyEntityType
+) {
+	user {
+		id
+		propertyDefinitions(scope: $scope, forEntityType: $forEntityType) {
+			...PropertyCatalogDefinitionFields
+		}
+	}
+}
+
+query PropertyCatalogDefinitionsWithOptions(
+	$scope: GraphqlPropertyDefinitionScope!
+	$forEntityType: GraphqlPropertyEntityType
+) {
+	user {
+		id
+		propertyDefinitions(scope: $scope, forEntityType: $forEntityType) {
+			...PropertyCatalogDefinitionFields
+			options {
+				...PropertyCatalogOptionFields
+			}
+		}
+	}
+}
+
+query PropertyCatalogOptions($propertyDefinitionId: ID!) {
+	user {
+		id
+		propertyOptions(propertyDefinitionId: $propertyDefinitionId) {
+			...PropertyCatalogOptionFields
+		}
+	}
+}
+
+query PropertyCatalogTagSets {
+	user {
+		id
+		tagSets {
+			scope
+			definition {
+				...PropertyCatalogDefinitionFields
+			}
+			options {
+				...PropertyCatalogOptionFields
+			}
+		}
+	}
+}

@@ -12,6 +12,7 @@ import {
   BLUE_TAG,
   DOCS_TAG,
   DOCUMENT_ID,
+  graphqlTagSets,
   OTHER_DOCUMENT_ID,
   soupDocument,
   tagAssignment,
@@ -129,6 +130,8 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
             { key: '', totalCount: items.length, items, nextCursor: null },
           ],
         },
+        // The tag picker reads tag sets over GraphQL (PropertyCatalogTagSets).
+        tagSets: graphqlTagSets,
       },
       updateEntityPropertyOptions: ({
         input,
