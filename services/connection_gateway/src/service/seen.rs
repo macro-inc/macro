@@ -58,8 +58,8 @@ impl SeenRecorder {
         lock(&self.marked).insert(user.clone());
     }
 
-    /// Marks `user` now, before it returns, and answers the future that marks
-    /// them again every [`MARK_EVERY`]. The first mark does not wait for the
+    /// Marks `user` now and returns the future that marks them again every
+    /// [`MARK_EVERY`] from this mark. The first mark does not wait for the
     /// future to be polled, so a connection that closes at once is still
     /// seen. The future never finishes: run it beside the connection, which
     /// drops it when it closes.
@@ -68,9 +68,10 @@ impl SeenRecorder {
         user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = ()> + Send + 'static {
         self.mark(&user);
+        let next = Instant::now() + MARK_EVERY;
         let recorder = self.clone();
         async move {
-            let mut every = tokio::time::interval_at(Instant::now() + MARK_EVERY, MARK_EVERY);
+            let mut every = tokio::time::interval_at(next, MARK_EVERY);
             every.set_missed_tick_behavior(MissedTickBehavior::Delay);
             loop {
                 every.tick().await;

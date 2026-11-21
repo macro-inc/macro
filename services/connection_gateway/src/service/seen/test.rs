@@ -155,6 +155,26 @@ async fn a_connection_that_closes_at_once_is_still_seen() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn the_hourly_mark_counts_from_the_open_mark_not_the_first_poll() {
+    let mut started = start(0);
+    let marking = started.recorder.mark_while_open(user(ADA));
+    let marked = Instant::now();
+    assert_eq!(next_write(&mut started.writes).await.0, [ADA]);
+
+    // The connection's loop first polls the marking ten minutes later.
+    tokio::time::advance(Duration::from_secs(10 * 60)).await;
+    let open = tokio::spawn(marking);
+
+    assert_eq!(next_write(&mut started.writes).await.0, [ADA]);
+    let after = marked.elapsed();
+    assert!(
+        after >= MARK_EVERY && after <= MARK_EVERY + FLUSH_EVERY,
+        "second write {after:?} after the open mark"
+    );
+    open.abort();
+}
+
+#[tokio::test(start_paused = true)]
 async fn stopping_writes_what_was_marked_and_ends_the_task() {
     let mut started = start(0);
     // Let the first, empty round pass so the stop is what writes Ada.
