@@ -669,3 +669,87 @@ async fn a_late_report_about_an_older_delivery_doesnt_overwrite_a_newer_one(pool
     assert_eq!(stored.run_state, InstallRunState::Running);
     assert_eq!(stored.applied, Some((1, 2)));
 }
+
+async fn make_admin(pool: &PgPool, user: &str, role: &str) {
+    sqlx::query!(
+        "INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, $3::TEXT::team_role)
+         ON CONFLICT (user_id, team_id) DO UPDATE SET team_role = EXCLUDED.team_role",
+        user,
+        TEAM,
+        role,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+const OTHER_ADMIN: &str = "macro|other-admin@example.com";
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_machine_may_host_while_its_owner_is_an_admin_and_it_is_paired(pool: PgPool) {
+    fixture(&pool).await;
+    insert_user(
+        &pool,
+        OTHER_ADMIN,
+        "other-admin@example.com",
+        Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0013),
+    )
+    .await;
+    let theirs = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0d03);
+    insert_harness(&pool, theirs, "Theirs", OTHER_ADMIN).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, theirs))
+        .await
+        .unwrap();
+    let host = HarnessId::new_from_uuid(theirs);
+
+    // Not on the team at all.
+    assert!(!installs.host_entitled(host, TEAM).await.unwrap());
+    assert_eq!(installs.unentitled_installs(10).await.unwrap().len(), 1);
+
+    make_admin(&pool, OTHER_ADMIN, "admin").await;
+    assert!(installs.host_entitled(host, TEAM).await.unwrap());
+    assert!(installs.unentitled_installs(10).await.unwrap().is_empty());
+
+    // Demoted.
+    make_admin(&pool, OTHER_ADMIN, "member").await;
+    assert!(!installs.host_entitled(host, TEAM).await.unwrap());
+
+    // An admin again, then unpairs the machine.
+    make_admin(&pool, OTHER_ADMIN, "admin").await;
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        theirs
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(!installs.host_entitled(host, TEAM).await.unwrap());
+    assert_eq!(installs.unentitled_installs(10).await.unwrap().len(), 1);
+
+    // Already being removed: no longer listed.
+    installs
+        .begin_checkpoint(&user(AGENT), Checkpoint::Removing)
+        .await
+        .unwrap();
+    assert!(installs.unentitled_installs(10).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_teams_owner_may_host_without_a_member_row(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+
+    assert!(
+        installs
+            .host_entitled(HarnessId::new_from_uuid(LAPTOP), TEAM)
+            .await
+            .unwrap()
+    );
+    assert!(installs.unentitled_installs(10).await.unwrap().is_empty());
+}

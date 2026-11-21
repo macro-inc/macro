@@ -329,6 +329,22 @@ pub trait TeammateInstalls: Send + Sync + 'static {
         &self,
         harness: HarnessId,
     ) -> impl Future<Output = Result<Option<HostFacts>, TeamAgentError>> + Send;
+
+    /// Whether `harness` may still host an agent of `team_id`: it is paired
+    /// (not deleted) and its owner is still an owner or admin of the team.
+    fn host_entitled(
+        &self,
+        harness: HarnessId,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, TeamAgentError>> + Send;
+
+    /// Up to `limit` installs, not already being removed, on (or moving to)
+    /// a machine that may no longer host them (see
+    /// [`TeammateInstalls::host_entitled`]).
+    fn unentitled_installs(
+        &self,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<TeammateInstallRecord>, TeamAgentError>> + Send;
 }
 
 /// Telling the machines' service that a machine's installs changed, so the
@@ -450,6 +466,14 @@ pub trait TeamAgentService: Send + Sync + 'static {
         &self,
         install_id: Uuid,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
+    /// Take every agent off machines that may no longer host it: the
+    /// owner left the team or lost admin, or unpaired the machine. Each
+    /// loses its credentials at once and is removed once its machine stops
+    /// it (or the wait gives up). How many were taken off.
+    fn offboard_unentitled_hosts(
+        &self,
+    ) -> impl Future<Output = Result<usize, TeamAgentError>> + Send;
 
     /// The agent part of a computer's enrollment: fresh credentials and its
     /// environment, or `None` when the computer runs no agent.

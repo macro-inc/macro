@@ -845,6 +845,13 @@ async fn run_server() -> anyhow::Result<()> {
     } else {
         tracing::info!("computers agents worker off (COMPUTERS_AGENT_EFFECTS unset)");
     }
+    // Takes agent teammates off owners' own machines that may no longer
+    // host them (the owner left the team, lost admin, or unpaired the
+    // machine). Idempotent, so every replica sweeps; drained with the rest.
+    computer_billing.spawn(run_teammate_host_offboarding(
+        team_agents_service.clone(),
+        computer_billing_stop.clone(),
+    ));
     computer_billing.close();
     // The Stripe event inbox: the webhook stores events; every replica's
     // worker applies due cursors (leased, so replicas never collide), and
@@ -1169,6 +1176,28 @@ async fn run_computer_agent_effects(
             Err(error) => {
                 tracing::error!(error = ?error, "computer agent effects pass failed");
             }
+        }
+    }
+}
+
+/// How often agents on machines that may no longer host them are taken off.
+const TEAMMATE_HOST_OFFBOARDING_TICK: std::time::Duration = std::time::Duration::from_secs(60);
+
+async fn run_teammate_host_offboarding(
+    team_agents: Arc<crate::api::context::TeamAgentsServiceType>,
+    stop: CancellationToken,
+) {
+    use team_agents::domain::ports::TeamAgentService;
+    let mut interval = tokio::time::interval(TEAMMATE_HOST_OFFBOARDING_TICK);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        // Each round is its own `team_agents.offboard_hosts` span.
+        if let Err(error) = team_agents.offboard_unentitled_hosts().await {
+            tracing::error!(error = ?error, "teammate host offboarding round failed");
         }
     }
 }

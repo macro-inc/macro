@@ -976,6 +976,13 @@ where
         self.finish_installed_checkpoint(install_id).await
     }
 
+    #[tracing::instrument(name = "team_agents.offboard_hosts", skip(self), fields(offboarded = tracing::field::Empty), err)]
+    async fn offboard_unentitled_hosts(&self) -> Result<usize, TeamAgentError> {
+        let offboarded = self.offboard_unentitled().await?;
+        tracing::Span::current().record("offboarded", offboarded);
+        Ok(offboarded)
+    }
+
     #[tracing::instrument(
         name = "team_agents.issue_enrollment",
         skip(self),

@@ -115,6 +115,9 @@ impl TeamAgentService for Reached {
     async fn finish_checkpoint(&self, _: uuid::Uuid) -> Result<(), TeamAgentError> {
         unreachable!("an internal route")
     }
+    async fn offboard_unentitled_hosts(&self) -> Result<usize, TeamAgentError> {
+        unreachable!("not a route")
+    }
     async fn issue_enrollment(
         &self,
         _: ComputerId,

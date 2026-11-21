@@ -578,3 +578,91 @@ async fn a_finished_move_revokes_the_old_machines_credentials_before_the_new_one
         "{after:?}"
     );
 }
+
+#[tokio::test]
+async fn a_machine_whose_owner_lost_admin_gets_nothing_and_its_agent_comes_off() {
+    let (service, journal, _) = self_hosted_service();
+    let agent = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let install = service
+        .installs
+        .for_agent(&agent.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    let before = journal.entries().len();
+
+    let issued = service
+        .issue_install(LAPTOP, install.install_id, None)
+        .await
+        .unwrap();
+
+    assert!(issued.is_none());
+    let after = &journal.entries()[before..];
+    assert!(
+        !after.iter().any(|entry| entry == "api_key.mint"),
+        "{after:?}"
+    );
+    assert!(
+        after.iter().any(|entry| entry == "api_key.revoke_all"),
+        "{after:?}"
+    );
+    assert!(
+        after.iter().any(|entry| entry == "repo.create Sam Rivera"),
+        "{after:?}"
+    );
+    let removing = service
+        .installs
+        .for_agent(&agent.user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(removing.checkpoint, Some((Checkpoint::Removing, _))),
+        "{removing:?}"
+    );
+}
+
+#[tokio::test]
+async fn the_sweep_takes_agents_off_only_the_machines_that_may_no_longer_host_them() {
+    let (service, journal, _) = self_hosted_service();
+    let leaving = service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let staying = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                purchase_key: "invite-2".to_owned(),
+                name: "Ada".to_owned(),
+                ..own(DESKTOP)
+            },
+        )
+        .await
+        .unwrap();
+    service.installs.unentitled.lock().unwrap().push(LAPTOP);
+    let before = journal.entries().len();
+
+    let offboarded = service.offboard_unentitled_hosts().await.unwrap();
+
+    assert_eq!(offboarded, 1);
+    let checkpoint = |agent: &TeamAgent| {
+        service
+            .installs
+            .rows
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|row| row.agent == agent.user_id)
+            .and_then(|row| row.checkpoint.map(|(checkpoint, _)| checkpoint))
+    };
+    assert_eq!(checkpoint(&leaving), Some(Checkpoint::Removing));
+    assert_eq!(checkpoint(&staying), None);
+    assert_eq!(
+        journal.entries()[before..]
+            .iter()
+            .filter(|entry| *entry == "api_key.revoke_all")
+            .count(),
+        1
+    );
+    // Already being removed: the next round leaves it alone.
+    assert_eq!(service.offboard_unentitled_hosts().await.unwrap(), 0);
+}

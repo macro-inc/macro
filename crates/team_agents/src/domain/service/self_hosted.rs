@@ -2,6 +2,9 @@
 //! move, removal and credential issuance for installs.
 
 use super::*;
+
+/// Installs offboarded per sweep round.
+const OFFBOARD_PAGE: u32 = 100;
 use crate::domain::models::InstallProblem;
 use crate::domain::self_hosting::InstallRunState;
 
@@ -173,6 +176,40 @@ where
         }
         self.runtimes.installs_changed(install.harness_id).await;
         Ok(())
+    }
+
+    /// Take an agent off a machine that may no longer host it: void its
+    /// credentials now, then remove it once the machine stops it.
+    pub(super) async fn offboard(
+        &self,
+        install: &TeammateInstallRecord,
+    ) -> Result<(), TeamAgentError> {
+        self.revoke_credentials(&install.agent).await?;
+        let Some(removing) = self
+            .installs
+            .begin_checkpoint(&install.agent, Checkpoint::Removing)
+            .await?
+        else {
+            return Ok(());
+        };
+        tracing::info!(install_id = %install.install_id, "taking an agent teammate off a machine that may no longer host it");
+        self.checkpoint_began(&removing).await
+    }
+
+    /// Offboard every install on a machine that may no longer host it, a
+    /// page at a time; one failure doesn't stop the rest.
+    pub(super) async fn offboard_unentitled(&self) -> Result<usize, TeamAgentError> {
+        let installs = self.installs.unentitled_installs(OFFBOARD_PAGE).await?;
+        let mut offboarded = 0;
+        for install in &installs {
+            match self.offboard(install).await {
+                Ok(()) => offboarded += 1,
+                Err(error) => {
+                    tracing::error!(install_id = %install.install_id, error = ?error, "could not take an agent off its machine");
+                }
+            }
+        }
+        Ok(offboarded)
     }
 
     /// Start removing an agent on its owner's own machine.
@@ -386,6 +423,20 @@ where
                 pending_checkpoint = install.checkpoint.is_some(),
                 "the install isn't to run on this machine now; nothing to issue"
             );
+            return Ok(None);
+        }
+        // A machine whose owner left the team, lost admin or unpaired it gets
+        // nothing more, and the agent comes off it.
+        let entitled = self
+            .installs
+            .host_entitled(harness, install.team_id)
+            .await
+            .map_err(issuance_failed("check the machine's owner"))?;
+        if !entitled {
+            tracing::warn!("the machine may no longer host this agent; taking it off");
+            self.offboard(&install)
+                .await
+                .map_err(issuance_failed("take the agent off the machine"))?;
             return Ok(None);
         }
 

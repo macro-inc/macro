@@ -456,6 +456,87 @@ impl TeammateInstalls for PgTeammateInstalls {
         .map_err(TeamAgentError::internal)?;
         Ok(row.map(HostFacts::from))
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn host_entitled(
+        &self,
+        harness: HarnessId,
+        team_id: Uuid,
+    ) -> Result<bool, TeamAgentError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM harnesses h
+                JOIN team t ON t.id = $2
+                WHERE h.id = $1
+                  AND h.deleted_at IS NULL
+                  AND h.computer_id IS NULL
+                  AND (
+                      t.owner_id = h.owner_user_id
+                      OR EXISTS (
+                          SELECT 1 FROM team_user tu
+                          WHERE tu.user_id = h.owner_user_id
+                            AND tu.team_id = $2
+                            AND tu.team_role IN ('owner', 'admin')
+                      )
+                  )
+            ) AS "entitled!"
+            "#,
+            harness.as_uuid(),
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn unentitled_installs(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<TeammateInstallRecord>, TeamAgentError> {
+        // A whole-table read of a small table: one row per own-machine agent.
+        let rows = sqlx::query_as!(
+            InstallRow,
+            r#"
+            SELECT i.install_id, i.agent_user_id, i.team_id, i.harness_id, i.generation,
+                   i.run_state, i.failure, i.delivery, i.applied_generation, i.applied_delivery,
+                   i.checkpoint, i.move_to_harness_id, i.checkpoint_started_at,
+                   i.delivered_image_id
+            FROM team_agent_installs i
+            JOIN team t ON t.id = i.team_id
+            WHERE i.checkpoint IS DISTINCT FROM 'removing'
+              AND EXISTS (
+                  SELECT 1
+                  FROM harnesses h
+                  WHERE h.id IN (i.harness_id, i.move_to_harness_id)
+                    AND (
+                        h.deleted_at IS NOT NULL
+                        OR h.owner_user_id IS NULL
+                        OR (
+                            h.owner_user_id IS DISTINCT FROM t.owner_id
+                            AND NOT EXISTS (
+                                SELECT 1 FROM team_user tu
+                                WHERE tu.user_id = h.owner_user_id
+                                  AND tu.team_id = i.team_id
+                                  AND tu.team_role IN ('owner', 'admin')
+                            )
+                        )
+                    )
+              )
+            ORDER BY i.install_id
+            LIMIT $1
+            "#,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(TeamAgentError::internal)?;
+        rows.into_iter()
+            .map(TeammateInstallRecord::try_from)
+            .collect()
+    }
 }
 
 /// Delivery's side, for the replica holding a machine's socket.
