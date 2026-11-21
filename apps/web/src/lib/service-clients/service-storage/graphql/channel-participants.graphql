@@ -1,0 +1,21 @@
+# Who is in one channel, for the participants query. soupEntity reads the
+# primary, so a roster read right after a join, approval or bot add sees it.
+# Read past the normalized cache: the participants query's TanStack cache owns
+# refresh and optimism.
+query ChannelParticipantsSoup($input: SoupEntityInput!) {
+	user {
+		id
+		soupEntity(input: $input) {
+			... on GraphqlSoupChannel {
+				id
+				participants {
+					channelId
+					userId
+					role
+					joinedAt
+					leftAt
+				}
+			}
+		}
+	}
+}

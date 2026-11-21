@@ -1,7 +1,5 @@
-import { storageServiceClient } from '@service-storage/client';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useChannelParticipants } from './use-channel-participants';
@@ -10,8 +8,9 @@ vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { getChannelParticipants: vi.fn() },
+const network = vi.hoisted(() => ({ query: vi.fn() }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupNetworkClient: () => network,
 }));
 
 const clients: QueryClient[] = [];
@@ -56,29 +55,39 @@ describe('useChannelParticipants', () => {
   it('does not suspend without a channel, as on a document composer', () => {
     mount('');
     expectContent('|');
-    expect(storageServiceClient.getChannelParticipants).not.toHaveBeenCalled();
+    expect(network.query).not.toHaveBeenCalled();
   });
 
   it('lists the participants once they load, without suspending', async () => {
-    const response =
-      Promise.withResolvers<
-        Awaited<ReturnType<typeof storageServiceClient.getChannelParticipants>>
-      >();
-    vi.mocked(storageServiceClient.getChannelParticipants).mockReturnValue(
-      response.promise
-    );
+    let answer: (result: unknown) => void = () => {};
+    network.query.mockReturnValue({
+      subscribe: (onResult: (result: unknown) => void) => {
+        answer = onResult;
+        return { unsubscribe: () => {} };
+      },
+    });
     mount('channel-1');
     expectContent('|');
-    response.resolve(
-      ok([
-        {
-          channel_id: 'channel-1',
-          joined_at: '2026-09-24T12:00:00Z',
-          role: 'member',
-          user_id: 'macro|a@macro.com',
+    answer({
+      data: {
+        user: {
+          id: 'macro|a@macro.com',
+          soupEntity: {
+            id: 'channel-1',
+            participants: [
+              {
+                channelId: 'channel-1',
+                joinedAt: '2026-09-24T12:00:00+00:00',
+                leftAt: null,
+                role: 'member',
+                userId: 'macro|a@macro.com',
+              },
+            ],
+          },
         },
-      ])
-    );
+      },
+      error: undefined,
+    });
     await waitFor(() => expectContent('macro|a@macro.com|macro|a@macro.com'));
   });
 });
