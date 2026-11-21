@@ -63,22 +63,12 @@ where
     Sessions: AgentSessionRepo,
 {
     async fn settle(&self, usage: &ConnectedAppUse) -> Result<Settled, CodeModeError> {
-        let mut grant = self
+        let grant = self
             .egress
             .session_grant(usage.session)
             .await
             .map_err(egress_error)?;
         let user = usage.user.clone();
-        // A job keeps the authority of the owner's turn that launched it, so
-        // a later turn someone else prompts does not hold its calls.
-        if let Some(turn) = usage.job_turn {
-            grant.prompter = Some(TurnPrompter {
-                kind: agent_session::domain::model::PrompterKind::User,
-                action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(turn),
-                user: Some(grant.owner.clone()),
-                client: None,
-            });
-        }
 
         let session = self
             .sessions

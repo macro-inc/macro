@@ -836,6 +836,7 @@ pub async fn build(
         &databases_tool_context,
         soup_service.clone(),
         db.clone(),
+        side_effect_clients.feature_flags.clone(),
     );
     let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
     let pipeline_tool_context = ai_tools::build_pipeline_tool_context(

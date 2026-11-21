@@ -103,6 +103,7 @@ impl ExecutionStore for Executions {
             return Err(CodeModeError::NotFound);
         }
         Ok(ExecutionRecord {
+            credential_correlation_id: None,
             acting_as: None,
             turn_id: None,
             execution_id: execution,

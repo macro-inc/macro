@@ -8,9 +8,14 @@
 use crate::domain::models::{
     messages::ContactsNodes,
     page::{ContactCursor, ContactIdPage, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
+    people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch},
     query::ContactLookup,
 };
-use crate::domain::ports::{ContactListReader, ContactsPageService, ContactsService};
+use crate::domain::ports::{
+    ContactListReader, ContactsPageService, ContactsService, CorrespondentsService,
+    PeopleSearchService,
+};
+use crate::domain::service::search_people_with;
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -45,7 +50,9 @@ pub enum DirectorySource {
 /// unavailable flag provider costs one timeout per viewer per lifetime.
 /// Concurrent reads for one viewer share a single load.
 pub struct ContactListReads<F> {
-    flags: F,
+    /// `None` without a flag provider (a deployment with no PostHog key):
+    /// every viewer reads the legacy graph.
+    flags: Option<F>,
     decisions: Mutex<Decisions>,
 }
 
@@ -72,6 +79,12 @@ impl Decision {
 impl<F> ContactListReads<F> {
     /// Read the flag through `flags`; nothing is remembered yet.
     pub fn new(flags: F) -> Self {
+        Self::optional(Some(flags))
+    }
+
+    /// Read the flag through `flags` when the deployment has a provider;
+    /// without one every viewer reads the legacy graph.
+    pub fn optional(flags: Option<F>) -> Self {
         Self {
             flags,
             decisions: Mutex::new(Decisions::default()),
@@ -116,10 +129,13 @@ impl<F> ContactListReads<F> {
 impl<F: FeatureFlags> ContactListReads<F> {
     /// The store this viewer's reads come from now.
     pub async fn source_for(&self, viewer: &MacroUserIdStr<'_>) -> DirectorySource {
+        let Some(flags) = &self.flags else {
+            return DirectorySource::Legacy;
+        };
         *self
             .decision(viewer.as_ref())
             .source
-            .get_or_init(|| read(&self.flags, viewer))
+            .get_or_init(|| read(flags, viewer))
             .await
     }
 }
@@ -149,9 +165,11 @@ async fn read<F: FeatureFlags>(flags: &F, viewer: &MacroUserIdStr<'_>) -> Direct
     }
 }
 
-/// Directory id reads that follow each viewer's flag: the legacy service's, or
+/// Directory reads that follow each viewer's flag: the legacy service's, or
 /// the list-aware reader's. It serves the bounded page and lookup reads
-/// ([`ContactsPageService`]) and the full listing ([`ContactsService`]).
+/// ([`ContactsPageService`]), the full listing ([`ContactsService`]), ranked
+/// people search ([`PeopleSearchService`]) and email correspondents
+/// ([`CorrespondentsService`]).
 pub struct FlaggedContactReads<Legacy, Lists, F> {
     legacy: Arc<Legacy>,
     lists: Arc<Lists>,
@@ -317,5 +335,90 @@ where
         invitee: MacroUserIdStr<'static>,
     ) -> Result<(), Report> {
         self.legacy.invite_contact(inviter, invitee).await
+    }
+}
+
+impl<Legacy, Lists, F> PeopleSearchService for FlaggedContactReads<Legacy, Lists, F>
+where
+    Legacy: PeopleSearchService,
+    Lists: ContactListReader,
+    F: FeatureFlags + 'static,
+{
+    /// The list-aware search ranks by list group and returns each match's
+    /// lists. A legacy search keeps its ranking; its matches get their lists
+    /// from the list-aware tables, like the GraphQL directory's, so a match
+    /// only the legacy graph knows has none.
+    #[tracing::instrument(
+        name = "contacts.reads.people_search",
+        skip_all,
+        fields(source = tracing::field::Empty),
+        err
+    )]
+    async fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        match self.source_for(&viewer).await {
+            DirectorySource::Lists => {
+                search_people_with(query, limit, |needle| {
+                    self.lists.search_listed_people(viewer, needle, limit)
+                })
+                .await
+            }
+            DirectorySource::Legacy => {
+                let mut people = self
+                    .legacy
+                    .search_people(viewer.clone(), query, limit)
+                    .await?;
+                let ids = people
+                    .iter()
+                    .map(|person| person.contact.user_id.clone())
+                    .collect();
+                let Some(lookup) = ContactLookup::new(ids) else {
+                    return Err(rootcause::report!("people search exceeded its limit"));
+                };
+                let mut lists: HashMap<_, _> = self
+                    .lists
+                    .contact_lists(viewer, &lookup)
+                    .await?
+                    .into_iter()
+                    .map(|listed| (listed.user_id, listed.lists))
+                    .collect();
+                for person in &mut people {
+                    if let Some(person_lists) = lists.remove(&person.contact.user_id) {
+                        person.contact.lists = person_lists;
+                    }
+                }
+                Ok(people)
+            }
+        }
+    }
+}
+
+impl<Legacy, Lists, F> CorrespondentsService for FlaggedContactReads<Legacy, Lists, F>
+where
+    Legacy: CorrespondentsService,
+    Lists: ContactListReader,
+    F: FeatureFlags + 'static,
+{
+    /// The list-aware path returns only the user's inbox contacts.
+    #[tracing::instrument(
+        name = "contacts.reads.correspondents",
+        skip_all,
+        fields(source = tracing::field::Empty, count = tracing::field::Empty),
+        err
+    )]
+    async fn correspondents(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let correspondents = match self.source_for(&user_id).await {
+            DirectorySource::Legacy => self.legacy.correspondents(user_id).await?,
+            DirectorySource::Lists => self.lists.inbox_contacts(user_id).await?,
+        };
+        tracing::Span::current().record("count", correspondents.len() as i64);
+        Ok(correspondents)
     }
 }

@@ -178,6 +178,7 @@ impl Jobs {
             now + chrono::TimeDelta::from_std(JOB_LIMIT).map_err(|_| CodeModeError::Unavailable)?;
         identity.lifetime = RunLifetime::Job { deadline };
         let mut record = ExecutionRecord {
+            credential_correlation_id: None,
             execution_id: identity.execution,
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
@@ -192,7 +193,6 @@ impl Jobs {
                 title: title.clone(),
                 started_at: now,
                 deadline,
-                correlation: None,
                 never_ran: false,
             }),
         };
@@ -398,10 +398,7 @@ impl Jobs {
             record.status = ExecutionStatus::Interrupted;
             // A job binds its credential before its program starts, so one
             // with none never ran.
-            let never_ran = record
-                .job
-                .as_ref()
-                .is_some_and(|job| job.correlation.is_none());
+            let never_ran = record.job.is_some() && record.credential_correlation_id.is_none();
             if let Some(job) = &mut record.job {
                 job.never_ran = never_ran;
             }
@@ -643,11 +640,10 @@ impl JobRun {
                 return (Stop::Ended, Progress::Refused(NO_CREDENTIAL));
             }
         };
-        // Only this credential may spend the job's connected-app authority;
-        // the record names it before the program can make a call.
-        if let Some(job) = &mut self.record.job {
-            job.correlation = issued.correlation;
-        }
+        // The record names the credential before the program can make a
+        // call: only it may spend the execution, and it is what the job
+        // revokes when it stops.
+        self.record.credential_correlation_id = Some(issued.correlation_id);
         match self.store_activity().await {
             Ok(()) => {}
             Err(CodeModeError::NotFound) => return (Stop::Gone, Progress::NotStarted),
@@ -883,7 +879,7 @@ fn truncate_error(error: &str) -> String {
 /// failed write as a settle is retried; one that still fails expires on its
 /// own at the deadline.
 async fn revoke(credentials: &dyn ExecutionCredentials, record: &ExecutionRecord) {
-    let Some(correlation) = record.job.as_ref().and_then(|job| job.correlation) else {
+    let Some(correlation) = record.credential_correlation_id else {
         return;
     };
     let mut wait = SETTLE_RETRY_FIRST_WAIT;

@@ -1,11 +1,13 @@
 //! A running program showing the person who prompted its turn something in
 //! the Macro app tab they typed in (`macro.ui.open`).
 //!
-//! Only a turn a person prompted from a tab can do this, and only that
+//! Only the unscoped credential issued for the recorded execution may request
+//! navigation. A turn a person prompted from a tab can show things only in that
 //! person's tab: the command is addressed to the tab the prompt came from and
 //! sent to that person's own connections, which ignore it unless the tab is
-//! theirs. Routines, triggers and channel mentions have no tab, so they are
-//! answered `no_client` and nothing is sent. What to show is an app path that
+//! theirs. Admitted turns without a tab answer `no_client` and send nothing.
+//! Scoped callers answer `no_client` without sending. Uncorrelated and foreign
+//! unscoped credentials are refused before navigation. What to show is an app path that
 //! must match a route the web app opened to agents, checked here and again by
 //! the tab against its real route table. Each turn and each person has a
 //! budget, so a program that reads an instruction in an email cannot flood
@@ -26,6 +28,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use utoipa::ToSchema;
 
+use super::execution_access::{
+    Refusal, check_binding, credential_for_session, record_backend_error,
+};
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
 
 mod routes;
@@ -250,6 +255,7 @@ impl UiCommandService {
     /// Admit only a running execution of the session's current turn, called
     /// by the account that execution was approved to act as, as connected
     /// apps do: a finished, replayed or foreign program cannot send.
+    #[tracing::instrument(skip_all, fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty, refusal = tracing::field::Empty, error = tracing::field::Empty, otel.status_code = tracing::field::Empty))]
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
@@ -258,33 +264,43 @@ impl UiCommandService {
     ) -> Result<Admitted, CodeModeError> {
         let session =
             super::reviews::session_id(access.entity().entity_type, &access.entity().entity_id)?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(session));
+        let correlation = credential_for_session(session)?;
         if access.acting_user_id() != Some(caller) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
 
-        let record = self.store.get(session, execution).await?;
-        // No tab waits on a background job.
-        if record.job.is_some() {
-            return Err(CodeModeError::Invalid(
-                "macro.ui.open is not available in a background job.".into(),
-            ));
-        }
-        let active = self.active.active(session).await?;
+        let record = self
+            .store
+            .get(session, execution)
+            .await
+            .inspect_err(record_backend_error)?;
+        check_binding(&record, correlation)?;
+        let active = self
+            .active
+            .active(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         };
         if record.status != ExecutionStatus::Running || active != Some(turn) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         }
 
-        let turn_facts = self.turns.turn(session).await?;
+        let turn_facts = self
+            .turns
+            .turn(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let requester = turn_facts
             .prompter
             .as_ref()
             .and_then(TurnPrompter::acting_user);
-        let acts_as = resolve(&acting_as, &turn_facts.owner, requester)?;
+        let acts_as = resolve(&acting_as, &turn_facts.owner, requester)
+            .map_err(|_| Refusal::WrongAccount.error())?;
         if acts_as != caller {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
 
         Ok(Admitted {
@@ -306,8 +322,9 @@ impl UiCommandService {
             ui.route = tracing::field::Empty,
             ui.client.count = tracing::field::Empty,
             outcome = tracing::field::Empty,
-        ),
-        err
+            error = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        )
     )]
     pub async fn open(
         &self,
@@ -316,13 +333,22 @@ impl UiCommandService {
         input: OpenInApp,
     ) -> Result<UiCommandOutcome, CodeModeError> {
         let span = tracing::Span::current();
+        // Scoped runs have no prompting tab. Preserve the non-throwing SDK
+        // outcome without reading an execution or delivering a command.
+        if agent_correlation::context::is_scoped() {
+            span.record("outcome", "no_client");
+            return Ok(UiCommandOutcome::NoClient);
+        }
         let admitted = self.admit(access, caller, input.execution_id).await?;
         span.record(
             "agent_session.id",
             tracing::field::display(admitted.session),
         );
 
-        let outcome = self.dispatch(admitted, input).await?;
+        let outcome = self
+            .dispatch(admitted, input)
+            .await
+            .inspect_err(record_backend_error)?;
         span.record("outcome", outcome_label(&outcome));
         Ok(outcome)
     }

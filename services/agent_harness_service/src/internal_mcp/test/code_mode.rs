@@ -48,9 +48,9 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         _: tokio_util::sync::CancellationToken,
     ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
         Ok(agent_code_mode::domain::IssuedRun {
+            correlation_id: uuid::Uuid::from_u128(1),
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
-            correlation: None,
         })
     }
     async fn approve_job(

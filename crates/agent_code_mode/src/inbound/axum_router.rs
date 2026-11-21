@@ -1,6 +1,7 @@
 //! Session-authorized reads for code execution's existing tool components.
+mod execution_response;
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionRecord, JobCancel, SessionCodeMode,
+    CodeModeError, ExecutionId, JobCancel, SessionCodeMode,
     connected_apps::*,
     reviews::*,
     ui_commands::{OpenInApp, UiCommandOutcome, UiCommandService},
@@ -20,6 +21,7 @@ use entity_access::{
     },
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
 };
+pub use execution_response::ExecutionRecordResponse;
 use macro_authorization::{
     ActingUser, CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState, UserOnly, is_program_run,
@@ -187,13 +189,13 @@ impl IntoResponse for CodeExecutionApiError {
 
 #[utoipa::path(get, path = "/agent-sessions/{session_id}/code-executions/{execution_id}", tag = "agent-sessions", operation_id = "get_code_execution",
     params(("session_id" = Uuid, Path, description = "Owning session"), ("execution_id" = Uuid, Path, description = "Execution receipt identity")),
-    responses((status = 200, body = ExecutionRecord), (status = 401), (status = 403), (status = 404), (status = 500)))]
+    responses((status = 200, body = ExecutionRecordResponse), (status = 401), (status = 403), (status = 404), (status = 500)))]
 /// Fetch one execution only after the caller has obtained view access to its session.
 pub async fn get_code_execution<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, execution)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ExecutionRecord>, CodeExecutionApiError> {
+) -> Result<Json<ExecutionRecordResponse>, CodeExecutionApiError> {
     state
         .service
         .read(
@@ -201,6 +203,7 @@ pub async fn get_code_execution<Access: EntityAccessService, Auth: MacroAuthoriz
             ExecutionId::from_uuid(execution),
         )
         .await
+        .map(ExecutionRecordResponse::from)
         .map(Json)
         .map_err(CodeExecutionApiError)
 }
@@ -378,7 +381,6 @@ pub async fn list_connected_apps<Access: EntityAccessService, Auth: MacroAuthori
         .apps(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
         )
         .await
@@ -404,7 +406,6 @@ pub async fn list_connected_app_tools<
         .tools(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             ConnectedAppRef { kind, key },
         )
@@ -434,7 +435,6 @@ pub async fn call_connected_app_tool<
         .call(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             ConnectedAppRef { kind, key },
             call,
@@ -466,7 +466,6 @@ pub async fn discover_connected_apps<
         .discover(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             request,
         )
@@ -496,7 +495,6 @@ pub async fn add_connected_mcp_server<
         .add_server(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             server,
         )
@@ -531,7 +529,6 @@ pub async fn search_connected_app_tools<
         .search_tools(
             &access.entity_access_receipt,
             &caller.authorization.user.macro_user_id,
-            agent_correlation::context::current(),
             ExecutionId::from_uuid(execution),
             &query.query,
         )

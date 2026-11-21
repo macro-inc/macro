@@ -1,5 +1,10 @@
 use super::*;
-use crate::domain::models::{listed::ListedContact, page::ContactIdEntry};
+use crate::domain::models::{
+    contact::{Contact, ContactId},
+    list::ContactList,
+    listed::ListedContact,
+    page::ContactIdEntry,
+};
 use feature_flags::{FlagSnapshot, FlagValue};
 use macro_user_id::cowlike::CowLike;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -104,6 +109,42 @@ impl ContactsService for Legacy {
     }
 }
 
+fn person(viewer: &str, email: &str) -> PersonMatch {
+    PersonMatch {
+        contact: Contact {
+            id: ContactId::for_viewer(&user(viewer), &user(email)),
+            user_id: user(email),
+            name: None,
+            lists: Vec::new(),
+        },
+        is_teammate: false,
+        is_agent: false,
+    }
+}
+
+impl PeopleSearchService for Legacy {
+    async fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _query: &PeopleSearchQuery,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        Ok(vec![
+            person(viewer.email_str(), "legacy@example.com"),
+            person(viewer.email_str(), "listed@example.com"),
+        ])
+    }
+}
+
+impl CorrespondentsService for Legacy {
+    async fn correspondents(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(vec![user("legacy@example.com")])
+    }
+}
+
 /// The list-aware directory, served as consecutive `pages`.
 struct Lists {
     pages: Vec<ContactIdPage>,
@@ -152,12 +193,21 @@ impl ContactListReader for Lists {
             .collect())
     }
 
+    /// Everyone whose address starts with `listed` is in `interacted`.
     async fn contact_lists(
         &self,
         _viewer: MacroUserIdStr<'_>,
-        _lookup: &ContactLookup,
+        lookup: &ContactLookup,
     ) -> Result<Vec<ListedContact>, Report> {
-        Err(rootcause::report!("the router never reads lists"))
+        Ok(lookup
+            .ids()
+            .iter()
+            .filter(|id| id.email_str().starts_with("listed"))
+            .map(|id| ListedContact {
+                user_id: id.clone(),
+                lists: vec![ContactList::Interacted],
+            })
+            .collect())
     }
 
     async fn audience_page(
@@ -167,6 +217,24 @@ impl ContactListReader for Lists {
         _limit: ContactPageSize,
     ) -> Result<ContactIdPage, Report> {
         Err(rootcause::report!("the router never reads audiences"))
+    }
+
+    async fn search_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _needle: &str,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        let mut found = person(viewer.email_str(), "listed-search@example.com");
+        found.contact.lists = vec![ContactList::Gmail];
+        Ok(vec![found])
+    }
+
+    async fn inbox_contacts(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(vec![user("listed-inbox@example.com")])
     }
 }
 
@@ -364,4 +432,99 @@ async fn concurrent_reads_for_one_viewer_share_one_load() {
         (DirectorySource::Lists, DirectorySource::Lists)
     );
     assert_eq!(flags.loads.load(Ordering::SeqCst), 1);
+}
+
+fn searched(people: &[PersonMatch]) -> Vec<(&str, Vec<ContactList>)> {
+    people
+        .iter()
+        .map(|person| {
+            (
+                person.contact.user_id.email_str(),
+                person.contact.lists.clone(),
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn people_search_follows_the_viewers_flag() {
+    let query = PeopleSearchQuery::new("ex").unwrap();
+    let (reads, _) = router(Flags::new(Ok(Some(true))), Vec::new());
+    let people = reads
+        .search_people(
+            user("viewer@example.com"),
+            &query,
+            PeopleSearchLimit::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        searched(&people),
+        [("listed-search@example.com", vec![ContactList::Gmail])]
+    );
+
+    let (reads, _) = router(Flags::new(Err(())), Vec::new());
+    let people = reads
+        .search_people(
+            user("viewer@example.com"),
+            &query,
+            PeopleSearchLimit::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        searched(&people),
+        [
+            ("legacy@example.com", vec![]),
+            ("listed@example.com", vec![ContactList::Interacted]),
+        ],
+        "legacy matches keep their order and get lists from the list-aware tables"
+    );
+}
+
+#[tokio::test]
+async fn a_list_aware_search_too_short_to_match_reads_nothing() {
+    let (reads, _) = router(Flags::new(Ok(Some(true))), Vec::new());
+    let people = reads
+        .search_people(
+            user("viewer@example.com"),
+            &PeopleSearchQuery::new(" e ").unwrap(),
+            PeopleSearchLimit::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert!(people.is_empty());
+}
+
+#[tokio::test]
+async fn correspondents_follow_the_viewers_flag() {
+    let (reads, _) = router(Flags::new(Ok(Some(true))), Vec::new());
+    assert_eq!(
+        reads
+            .correspondents(user("viewer@example.com"))
+            .await
+            .unwrap(),
+        [user("listed-inbox@example.com")]
+    );
+    let (reads, _) = router(Flags::new(Ok(Some(false))), Vec::new());
+    assert_eq!(
+        reads
+            .correspondents(user("viewer@example.com"))
+            .await
+            .unwrap(),
+        [user("legacy@example.com")]
+    );
+}
+
+#[tokio::test]
+async fn without_a_flag_provider_every_viewer_reads_legacy() {
+    let reads: Router = FlaggedContactReads::new(
+        Arc::new(Legacy),
+        Arc::new(Lists::new(vec![page(&["macro|listed@example.com"], None)])),
+        ContactListReads::optional(None),
+    );
+    assert_eq!(
+        page_source(&reads, "viewer@example.com").await,
+        "legacy@example.com"
+    );
 }

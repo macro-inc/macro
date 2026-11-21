@@ -287,6 +287,7 @@ impl RunCredentials {
                 CodeModeError::Unavailable
             })?;
         Ok(IssuedRun {
+            correlation_id: correlation,
             environment: RunEnvironment {
                 token,
                 trace_headers: trace_headers(),
@@ -297,7 +298,6 @@ impl RunCredentials {
                 egress: self.egress.egress(&actor).await,
             },
             acting_user: actor,
-            correlation: Some(correlation),
         })
     }
 }

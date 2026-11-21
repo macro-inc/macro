@@ -16,6 +16,7 @@ fn owner() -> MacroUserIdStr<'static> {
 
 fn job(deadline: chrono::DateTime<chrono::Utc>) -> ExecutionRecord {
     ExecutionRecord {
+        credential_correlation_id: None,
         execution_id: ExecutionId::mint(),
         acting_as: Some(ai_toolset::actor::ToolActor::Owner),
         turn_id: Some(macro_uuid::Uuid::from_u128(7)),
@@ -30,7 +31,6 @@ fn job(deadline: chrono::DateTime<chrono::Utc>) -> ExecutionRecord {
             title: "Checking routine".into(),
             started_at: deadline - chrono::TimeDelta::minutes(10),
             deadline,
-            correlation: None,
             never_ran: false,
         }),
     }
@@ -295,7 +295,7 @@ async fn a_started_job_keeps_its_credentials_correlation(pool: PgPool) {
         .await
         .unwrap();
     let correlation = macro_uuid::Uuid::from_u128(0x10b);
-    record.job.as_mut().unwrap().correlation = Some(correlation);
+    record.credential_correlation_id = Some(correlation);
     store.save_activity(session(1), &record).await.unwrap();
     let listed = store
         .list(
@@ -305,8 +305,5 @@ async fn a_started_job_keeps_its_credentials_correlation(pool: PgPool) {
         )
         .await
         .unwrap();
-    assert_eq!(
-        listed[0].job.as_ref().unwrap().correlation,
-        Some(correlation)
-    );
+    assert_eq!(listed[0].credential_correlation_id, Some(correlation));
 }

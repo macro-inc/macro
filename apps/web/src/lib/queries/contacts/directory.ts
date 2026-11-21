@@ -7,6 +7,7 @@ import {
   type PeopleSearch,
   type PeopleSearchResult,
 } from '@graphql-cache/people/generated';
+import type { PeopleCache } from '@graphql-cache/people/host';
 import { isStaleHydrationScopeError } from '@graphql-cache/protocol';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { ContactDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
@@ -23,6 +24,7 @@ import {
   readContactCacheScope,
 } from './cache-scope';
 import { canonicalContactUserId } from './contact-user-id';
+import type { ContactListPriority } from './list-priority';
 
 export { ContactDirectoryScopeError } from './cache-scope';
 export const CONTACT_WINDOW_SIZE = 50;
@@ -57,8 +59,13 @@ export type ContactDirectoryCursor =
     };
 export type ContactPeoplePolicy = Pick<
   PeopleSearch,
-  'mode' | 'excluded' | 'senderDomain'
->;
+  'mode' | 'excluded' | 'senderDomain' | 'onlyListed'
+> & {
+  /** Orders people by contact list within each name stage; see
+   * `PeopleSearch.listPriority`. Only a host on policy 7 or later reads it:
+   * older hosts keep their order, and `onlyListed` drops nobody there. */
+  listPriority?: ContactListPriority;
+};
 export type RankedPerson = Extract<
   PeopleSearchResult,
   { kind: 'page' }
@@ -191,7 +198,26 @@ function isBoundedWindow(
     bytes(query) <= 512 &&
     policy.excluded.length <= 500 &&
     policy.excluded.every((id) => bytes(id) <= 1024) &&
-    (policy.senderDomain == null || bytes(policy.senderDomain) <= 255)
+    (policy.senderDomain == null || bytes(policy.senderDomain) <= 255) &&
+    isBoundedListPriority(policy.listPriority ?? [], bytes)
+  );
+}
+
+/** The cache-core host's bounds for a list order (`people.rs`): it refuses
+ * the whole search past them. */
+const MAX_LIST_GROUPS = 16;
+const MAX_LIST_KEYS = 64;
+const MAX_LIST_KEY_BYTES = 128;
+
+function isBoundedListPriority(
+  groups: ContactListPriority,
+  bytes: (value: string) => number
+): boolean {
+  const keys = groups.flat();
+  return (
+    groups.length <= MAX_LIST_GROUPS &&
+    keys.length <= MAX_LIST_KEYS &&
+    keys.every((key) => key.length > 0 && bytes(key) <= MAX_LIST_KEY_BYTES)
   );
 }
 
@@ -287,6 +313,65 @@ async function readLocalWithinBudget(
   return 'failed';
 }
 
+/** The list fields of a people search, present only when a policy sets them. */
+type ListOrder = Pick<PeopleSearch, 'listPriority' | 'onlyListed'>;
+
+/** The first people policy that reads a list order. */
+const LIST_ORDER_POLICY_VERSION = 7;
+
+/** The people policy each cache host last answered a search with. A host
+ * tells its policy only in its answers, and hosts on policy 5 and 6 (native
+ * builds before the release that brings 7) refuse any search carrying list
+ * fields, so a list order is sent only to a host that has answered with 7 or
+ * later. A page's host keeps its policy for the life of the page. */
+const answeredPolicies = new WeakMap<PeopleCache, number>();
+
+function listOrder(policy: ContactPeoplePolicy): ListOrder | undefined {
+  const groups = policy.listPriority ?? [];
+  if (!groups.length && !policy.onlyListed) return undefined;
+  return {
+    ...(groups.length
+      ? { listPriority: groups.map((group) => [...group]) }
+      : {}),
+    ...(policy.onlyListed ? { onlyListed: true } : {}),
+  };
+}
+
+/** Searches with the policy's list order when the host reads one. The first
+ * search on a host whose policy is not yet known goes without it; if the host
+ * answers with policy 7 or later, the search is sent again with the order, so
+ * the first window a picker shows is already ordered by list. */
+async function searchWithListOrder(
+  people: PeopleCache,
+  policy: ContactPeoplePolicy,
+  search: (lists: ListOrder | undefined) => ReturnType<PeopleCache['search']>,
+  span: Span
+): ReturnType<PeopleCache['search']> {
+  const lists = listOrder(policy);
+  const known = answeredPolicies.get(people) ?? 0;
+  const sendsLists = !!lists && known >= LIST_ORDER_POLICY_VERSION;
+  const first = await search(sendsLists ? lists : undefined);
+  const resend =
+    !!lists &&
+    !sendsLists &&
+    first.kind === 'page' &&
+    first.policyVersion >= LIST_ORDER_POLICY_VERSION;
+  const result = resend ? await search(lists) : first;
+  if (result.kind === 'page') {
+    answeredPolicies.set(people, result.policyVersion);
+    span.setAttr('contacts.policy_version', result.policyVersion);
+  }
+  if (lists) {
+    // A host that has not answered with a page has told no policy yet.
+    let outcome = 'unknown';
+    if (sendsLists || resend) outcome = 'sent';
+    else if (result.kind === 'page') outcome = 'unsupported';
+    span.setAttr('contacts.list_order', outcome);
+    span.setAttr('contacts.list_order_resent', resend);
+  }
+  return result;
+}
+
 /** Reads the local ranked projection. Returns undefined when this tab has no
  * usable cache for the viewer: no host, a retired or unsupported host, an
  * unbound viewer, a pending context, or an older people policy. */
@@ -316,17 +401,22 @@ async function readLocalWindow(
   )
     throw new ContactDirectoryScopeError();
 
+  const search = (lists: ListOrder | undefined) =>
+    people.search({
+      mode: policy.mode,
+      excluded: policy.excluded,
+      senderDomain: policy.senderDomain,
+      ...lists,
+      scope: { identity: viewer, storageGeneration: generation },
+      query: request.query,
+      limit,
+      nowMs: Date.now(),
+      cursor: request.cursor?.after,
+    });
   let result: Awaited<ReturnType<typeof people.search>>;
   try {
     result = await span.span('contacts.read_cached_window', () =>
-      people.search({
-        ...policy,
-        scope: { identity: viewer, storageGeneration: generation },
-        query: request.query,
-        limit,
-        nowMs: Date.now(),
-        cursor: request.cursor?.after,
-      })
+      searchWithListOrder(people, policy, search, span)
     );
   } catch (error) {
     if (

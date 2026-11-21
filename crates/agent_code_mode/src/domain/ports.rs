@@ -75,12 +75,12 @@ pub enum Detach {
 
 /// A run credential and the account it acts as.
 pub struct IssuedRun {
+    /// Fresh verified invocation signed into this run credential. Persist before starting it.
+    pub correlation_id: macro_uuid::Uuid,
     /// What the program runs with.
     pub environment: RunEnvironment,
     /// The account the credential was minted for.
     pub acting_user: MacroUserIdStr<'static>,
-    /// The correlation the credential signs, when it has one.
-    pub correlation: Option<macro_uuid::Uuid>,
 }
 
 /// Durable code execution records, always scoped by the owning session.

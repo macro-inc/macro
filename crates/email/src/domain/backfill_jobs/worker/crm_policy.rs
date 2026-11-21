@@ -15,7 +15,7 @@ where
     E: BackfillEffects,
     C: BackfillCrm,
 {
-    let slot = admit_write_slot(ctx.effects.acquire_crm(payload.team_id).await)?;
+    let slot = admit_crm_slot(ctx.effects.acquire_crm(payload.team_id).await)?;
     slot.hold(async {
         let Some(page) = ctx.crm.policy_history_page(payload).await? else {
             return Ok(());

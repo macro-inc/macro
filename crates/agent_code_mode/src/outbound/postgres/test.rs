@@ -11,6 +11,7 @@ async fn records_survive_reconnection_and_remain_scoped_to_their_session(pool: P
     let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
     let other = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(2));
     let record = ExecutionRecord {
+        credential_correlation_id: None,
         acting_as: None,
         turn_id: None,
         execution_id: ExecutionId::mint(),
@@ -70,6 +71,7 @@ async fn records_with_nul_characters_are_saved_without_them(pool: PgPool) {
         .unwrap();
     let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
     let mut record = ExecutionRecord {
+        credential_correlation_id: None,
         acting_as: None,
         turn_id: None,
         execution_id: ExecutionId::mint(),

@@ -145,6 +145,7 @@ impl UiCommandDelivery for Gateway {
 
 fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
     ExecutionRecord {
+        credential_correlation_id: Some(Uuid::from_u128(1)),
         execution_id: execution,
         // System turns' programs act as the owner, who also prompts here.
         acting_as: Some(ToolActor::Owner),
@@ -220,8 +221,13 @@ impl Harness {
             &session().to_string(),
             EntityType::AgentSession,
         );
-        self.service
-            .open(
+        agent_correlation::context::scope_attribution(
+            agent_correlation::context::Attribution {
+                correlation_id: Some(Uuid::from_u128(1)),
+                session_id: Some(session().as_uuid()),
+                ..Default::default()
+            },
+            self.service.open(
                 &access,
                 &caller,
                 OpenInApp {
@@ -229,8 +235,9 @@ impl Harness {
                     path: path.to_owned(),
                     placement: UiPlacement::BesideAgent,
                 },
-            )
-            .await
+            ),
+        )
+        .await
     }
 
     async fn open(&self, path: &str) -> UiCommandOutcome {
@@ -515,7 +522,6 @@ async fn a_background_job_never_sends_a_command() {
                     title: "Scanning inbox".into(),
                     started_at: now,
                     deadline: now + chrono::TimeDelta::minutes(10),
-                    correlation: None,
                     never_ran: false,
                 }),
                 ..record(execution, Uuid::from_u128(TURN))
@@ -533,9 +539,34 @@ async fn a_background_job_never_sends_a_command() {
         execution,
     };
 
-    assert!(matches!(
-        harness.open_as(owner(), DOC).await,
-        Err(CodeModeError::Invalid(_))
-    ));
+    // A job's credential is scoped: it opens nothing and is told no tab
+    // waits, as any scoped caller is.
+    let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
+        owner(),
+        &session().to_string(),
+        EntityType::AgentSession,
+    );
+    let outcome = agent_correlation::context::scope_attribution(
+        agent_correlation::context::Attribution {
+            correlation_id: Some(Uuid::from_u128(1)),
+            session_id: Some(session().as_uuid()),
+            scope: Some(agent_correlation::scope::SessionScope::Job),
+            ..Default::default()
+        },
+        harness.service.open(
+            &access,
+            &owner(),
+            OpenInApp {
+                execution_id: harness.execution,
+                path: DOC.to_owned(),
+                placement: UiPlacement::BesideAgent,
+            },
+        ),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Ok(UiCommandOutcome::NoClient)),
+        "{outcome:?}"
+    );
     assert!(harness.gateway.frames().is_empty());
 }

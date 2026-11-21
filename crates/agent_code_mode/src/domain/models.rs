@@ -91,12 +91,6 @@ pub struct JobInfo {
     pub started_at: chrono::DateTime<chrono::Utc>,
     /// When it stops at the latest.
     pub deadline: chrono::DateTime<chrono::Utc>,
-    /// The correlation its credential was minted with, once it started:
-    /// only that credential may spend the job's connected-app authority.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(skip)]
-    #[schema(ignore)]
-    pub correlation: Option<macro_uuid::Uuid>,
     /// It settled before its program ever started: nothing ran.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub never_ran: bool,
@@ -172,9 +166,12 @@ pub enum RecordedCallStatus {
 
 /// Durable source and final outcome, with historical bridge calls when present.
 /// The full journal is not included in the model's tool result.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionRecord {
+    /// Verified invocation issued for this execution; absent on historical records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_correlation_id: Option<Uuid>,
     /// Execution identity.
     pub execution_id: ExecutionId,
     /// Account choice bound to this saved execution; absent on historical records.

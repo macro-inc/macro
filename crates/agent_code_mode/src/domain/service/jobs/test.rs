@@ -305,9 +305,9 @@ impl ExecutionCredentials for Credentials {
     ) -> Result<IssuedRun, CodeModeError> {
         self.lifetimes.lock().unwrap().push(identity.lifetime);
         Ok(IssuedRun {
+            correlation_id: macro_uuid::Uuid::from_u128(0xf0),
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
-            correlation: None,
         })
     }
     async fn approve_job(
@@ -330,9 +330,9 @@ impl ExecutionCredentials for Credentials {
         }
         self.lifetimes.lock().unwrap().push(identity.lifetime);
         Ok(IssuedRun {
+            correlation_id: JOB_CORRELATION,
             environment: code_execution::domain::RunEnvironment::default(),
             acting_user: acting_user.clone(),
-            correlation: Some(JOB_CORRELATION),
         })
     }
     async fn revoke_job(&self, correlation: macro_uuid::Uuid) -> Result<(), CodeModeError> {
@@ -563,15 +563,15 @@ async fn a_background_execution_returns_at_once_and_settles_into_one_waking_even
     assert_eq!(record.status, ExecutionStatus::Succeeded);
     assert_eq!(record.activity.len(), 1);
     let lifetimes = harness.credentials.lifetimes.lock().unwrap().clone();
+    assert_eq!(
+        record.credential_correlation_id,
+        Some(JOB_CORRELATION),
+        "the job is bound to its own credential"
+    );
     let job = record.job.unwrap();
     assert!(
         matches!(lifetimes[..], [RunLifetime::Job { deadline }] if deadline == job.deadline),
         "the credential lasts as long as the job: {lifetimes:?}"
-    );
-    assert_eq!(
-        job.correlation,
-        Some(JOB_CORRELATION),
-        "the job is bound to its own credential"
     );
     assert!(!job.never_ran);
     assert_eq!(
@@ -760,6 +760,7 @@ async fn the_sweep_settles_a_dead_replicas_job_once() {
         (
             harness.session.id,
             ExecutionRecord {
+                credential_correlation_id: Some(JOB_CORRELATION),
                 execution_id: id,
                 acting_as: Some(ai_toolset::actor::ToolActor::Owner),
                 turn_id: Some(TURN),
@@ -774,7 +775,6 @@ async fn the_sweep_settles_a_dead_replicas_job_once() {
                     title: "Scanning inbox".into(),
                     started_at: long_ago,
                     deadline: long_ago + chrono::TimeDelta::minutes(10),
-                    correlation: Some(JOB_CORRELATION),
                     never_ran: false,
                 }),
             },
@@ -810,6 +810,7 @@ async fn the_job_list_names_running_and_settled_jobs() {
 #[test]
 fn a_result_too_large_for_the_event_is_left_out_with_a_reason() {
     let record = ExecutionRecord {
+        credential_correlation_id: None,
         execution_id: ExecutionId::mint(),
         acting_as: None,
         turn_id: None,
@@ -850,6 +851,7 @@ async fn a_settle_that_fails_once_is_retried() {
 #[test]
 fn a_huge_error_is_cut_so_its_event_fits() {
     let record = ExecutionRecord {
+        credential_correlation_id: None,
         execution_id: ExecutionId::mint(),
         acting_as: None,
         turn_id: None,
@@ -917,13 +919,13 @@ async fn a_queued_job_has_no_credential_until_it_gets_a_slot() {
     assert_eq!(receipt.status, ExecutionStatus::Running);
     assert_eq!(harness.credentials.approved(), 1);
     assert_eq!(harness.credentials.minted(), 0);
-    assert_eq!(harness.rows.record(id).job.unwrap().correlation, None);
+    assert_eq!(harness.rows.record(id).credential_correlation_id, None);
 
     drop(slots);
     harness.program.starts.acquire().await.unwrap().forget();
     assert_eq!(harness.credentials.minted(), 1);
     assert_eq!(
-        harness.rows.record(id).job.unwrap().correlation,
+        harness.rows.record(id).credential_correlation_id,
         Some(JOB_CORRELATION)
     );
     harness.service.shutdown_jobs().await;
@@ -1032,6 +1034,7 @@ async fn the_sweep_says_a_dead_replicas_queued_job_never_ran() {
         (
             harness.session.id,
             ExecutionRecord {
+                credential_correlation_id: None,
                 execution_id: id,
                 acting_as: Some(ai_toolset::actor::ToolActor::Owner),
                 turn_id: Some(TURN),
@@ -1046,7 +1049,6 @@ async fn the_sweep_says_a_dead_replicas_queued_job_never_ran() {
                     title: "Scanning inbox".into(),
                     started_at: long_ago,
                     deadline: long_ago + chrono::TimeDelta::minutes(10),
-                    correlation: None,
                     never_ran: false,
                 }),
             },

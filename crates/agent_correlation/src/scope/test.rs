@@ -647,6 +647,11 @@ fn a_job_is_refused_whatever_its_lists_do_not_name() {
             "POST",
             "/dss/chats/0192f1a0-0000-7000-8000-000000000001/tool/call",
         ),
+        // Connected apps: a job uses none.
+        (
+            "GET",
+            "/agent-harness/agent-sessions/0192f1a0-0000-7000-8000-000000000001/code-executions/0192f1a0-0000-7000-8000-000000000002/connected-apps",
+        ),
         ("POST", "/items/soup/graphql"),
         // Changes to existing items, the owner's own included: an item's
         // audience would read what a job writes there.

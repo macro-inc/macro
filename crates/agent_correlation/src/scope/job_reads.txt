@@ -19,9 +19,6 @@ GET /agent-sessions/{session_id}/auto-archive
 GET /agent-sessions/{session_id}/changes
 GET /agent-sessions/{session_id}/changes/patch
 GET /agent-sessions/{session_id}/code-executions/{execution_id}
-GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps
-GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools
-GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools
 GET /agent-sessions/{session_id}/code-executions/{execution_id}/reviews
 GET /agent-sessions/{session_id}/log
 GET /agent-sessions/{session_id}/log/folded

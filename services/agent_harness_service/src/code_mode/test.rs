@@ -723,7 +723,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "job run {scope:?}"
         );
-        let correlation = run.correlation.expect("a job knows its correlation");
+        let correlation = run.correlation_id;
         // Once the job stops, its credential's correlation is revoked, so
         // every service that validates attribution refuses a copy of it.
         credentials.revoke_job(correlation).await.unwrap();

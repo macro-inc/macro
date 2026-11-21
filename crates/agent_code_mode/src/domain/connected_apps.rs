@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
+use super::execution_access::{
+    Refusal, check_binding, credential_for_session, record_backend_error,
+};
 use super::{CodeModeError, ExecutionId, ExecutionStatus, ExecutionStore, ExecutionTurns};
 
 #[cfg(test)]
@@ -136,22 +139,6 @@ pub struct ConnectedAppUse {
     pub acting_as: ToolActor,
     /// That choice resolved against the current turn.
     pub user: MacroUserIdStr<'static>,
-    /// Set for a background job: the turn that launched it, whose authority
-    /// it keeps. A job only launches in a turn its owner prompted, so its
-    /// calls are never held for approval after that turn.
-    pub job_turn: Option<macro_uuid::Uuid>,
-}
-
-/// Discovering and adding servers wait on the turn's gate, which a job no
-/// longer has; a job uses the apps it was given.
-fn refuse_in_job(usage: &ConnectedAppUse) -> Result<(), CodeModeError> {
-    if usage.job_turn.is_some() {
-        return Err(CodeModeError::Invalid(
-            "A background job can't discover or add connected apps; do that in the foreground."
-                .into(),
-        ));
-    }
-    Ok(())
 }
 
 /// The session agent's connected apps, reached through the harness egress.
@@ -217,61 +204,56 @@ impl ConnectedAppService {
     /// Admit only a running execution of the session's current turn, so a
     /// finished program, a replayed one or another turn cannot spend it, and
     /// only a caller holding the account that execution was approved to act
-    /// as: its credential names that account, and nobody else's may spend it.
-    /// A running job is spent only by its own credential: `correlation`, the
-    /// verified correlation of the caller's credential, must be the one the
-    /// job was minted with, so another credential of the owner's can't use a
-    /// job's id to borrow its authority.
+    /// as. The verified correlation and session must match the credential
+    /// recorded before this execution started; scoped credentials are never
+    /// admitted, even when their scope name is unknown.
+    #[tracing::instrument(skip_all, fields(code_execution_id = %execution, agent_session_id = tracing::field::Empty, refusal = tracing::field::Empty, error = tracing::field::Empty, otel.status_code = tracing::field::Empty))]
     async fn admit(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
     ) -> Result<ConnectedAppUse, CodeModeError> {
         let session =
             super::reviews::session_id(access.entity().entity_type, &access.entity().entity_id)?;
+        tracing::Span::current().record("agent_session_id", tracing::field::display(session));
+        let correlation = credential_for_session(session)?;
         if access.acting_user_id() != Some(caller) {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
-        let record = self.store.get(session, execution).await?;
+        let record = self
+            .store
+            .get(session, execution)
+            .await
+            .inspect_err(record_backend_error)?;
+        check_binding(&record, correlation)?;
+        let active = self
+            .turns
+            .active(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let (Some(acting_as), Some(turn)) = (record.acting_as, record.turn_id) else {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::NotRunning.error());
         };
-        if record.status != ExecutionStatus::Running {
-            return Err(CodeModeError::Forbidden);
+        if record.status != ExecutionStatus::Running || active != Some(turn) {
+            return Err(Refusal::NotRunning.error());
         }
-        let accounts = self.tools.accounts(session).await?;
-        // A running job is bound to itself, not to the session's current
-        // turn, and acts as the owner who launched it.
-        if let Some(job) = &record.job {
-            if &accounts.owner != caller
-                || job.correlation.is_none()
-                || job.correlation != correlation
-            {
-                return Err(CodeModeError::Forbidden);
-            }
-            return Ok(ConnectedAppUse {
-                session,
-                acting_as,
-                user: caller.clone(),
-                job_turn: Some(turn),
-            });
-        }
-        if self.turns.active(session).await? != Some(turn) {
-            return Err(CodeModeError::Forbidden);
-        }
+
+        let accounts = self
+            .tools
+            .accounts(session)
+            .await
+            .inspect_err(record_backend_error)?;
         let user = acting_as
             .resolve(&accounts.owner, accounts.requester.as_ref())
-            .map_err(|_| CodeModeError::Forbidden)?;
+            .map_err(|_| Refusal::WrongAccount.error())?;
         if user != caller {
-            return Err(CodeModeError::Forbidden);
+            return Err(Refusal::WrongAccount.error());
         }
         Ok(ConnectedAppUse {
             session,
             acting_as,
             user: caller.clone(),
-            job_turn: None,
         })
     }
 
@@ -280,10 +262,9 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
     ) -> Result<Vec<ConnectedApp>, CodeModeError> {
-        let usage = self.admit(access, caller, correlation, execution).await?;
+        let usage = self.admit(access, caller, execution).await?;
         self.tools.apps(&usage).await
     }
 
@@ -292,11 +273,10 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         app: ConnectedAppRef,
     ) -> Result<Vec<ConnectedTool>, CodeModeError> {
-        let usage = self.admit(access, caller, correlation, execution).await?;
+        let usage = self.admit(access, caller, execution).await?;
         self.tools.tools(&usage, &app).await
     }
 
@@ -305,12 +285,11 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         app: ConnectedAppRef,
         call: CallConnectedTool,
     ) -> Result<ConnectedToolResult, CodeModeError> {
-        let usage = self.admit(access, caller, correlation, execution).await?;
+        let usage = self.admit(access, caller, execution).await?;
         self.tools.call(&usage, &app, call).await
     }
 
@@ -319,12 +298,10 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         request: DiscoveryRequest,
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
-        let usage = self.admit(access, caller, correlation, execution).await?;
-        refuse_in_job(&usage)?;
+        let usage = self.admit(access, caller, execution).await?;
         self.tools.discover(&usage, request).await
     }
 
@@ -333,12 +310,10 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         server: ConnectMcpServer,
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
-        let usage = self.admit(access, caller, correlation, execution).await?;
-        refuse_in_job(&usage)?;
+        let usage = self.admit(access, caller, execution).await?;
         self.tools.add_server(&usage, server).await
     }
 
@@ -350,11 +325,10 @@ impl ConnectedAppService {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         caller: &MacroUserIdStr<'static>,
-        correlation: Option<macro_uuid::Uuid>,
         execution: ExecutionId,
         query: &str,
     ) -> Result<ConnectedToolSearch, CodeModeError> {
-        let usage = self.admit(access, caller, correlation, execution).await?;
+        let usage = self.admit(access, caller, execution).await?;
         let apps = self.tools.apps(&usage).await?;
         let listings = futures::future::join_all(apps.iter().map(|app| {
             let reference = ConnectedAppRef {

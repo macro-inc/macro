@@ -88,6 +88,24 @@ impl ContactListReader for Lists {
             "the directory service never reads audiences"
         ))
     }
+    async fn search_listed_people(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _needle: &str,
+        _limit: crate::domain::models::people::PeopleSearchLimit,
+    ) -> Result<Vec<crate::domain::models::people::PersonMatch>, Report> {
+        Err(rootcause::report!(
+            "the directory service never searches people"
+        ))
+    }
+    async fn inbox_contacts(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Err(rootcause::report!(
+            "the directory service never reads inbox contacts"
+        ))
+    }
 }
 
 #[derive(Default)]
