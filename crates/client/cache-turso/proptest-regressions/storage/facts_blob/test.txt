@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a0857d2d3a48b38b55a5507362deca6214f1e1bdce9399aa0d16e744e0d7a838 # shrinks to first = IndexDocument { record_key: RecordKey("a"), profile: Profile(Token("p")), partition: Token("part"), exact_facts: [], integer_facts: [], sort_facts: [IntegerFact { attribute: Token("a"), value: 0 }] }, second = IndexDocument { record_key: RecordKey("a"), profile: Profile(Token("p")), partition: Token("part"), exact_facts: [], integer_facts: [], sort_facts: [] }, cut = Index(0)

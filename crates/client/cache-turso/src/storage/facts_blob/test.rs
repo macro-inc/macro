@@ -155,6 +155,31 @@ proptest! {
     }
 
     #[test]
+    fn reused_buffers_hold_only_the_last_blob(
+        first in document(),
+        second in document(),
+        cut in any::<prop::sample::Index>(),
+    ) {
+        let first_blob = encode(&first);
+        let second_blob = encode(&second);
+        let expected = decode(&second_blob)
+            .unwrap()
+            .to_document(second.record_key.clone(), second.profile.clone(), second.partition.clone());
+        let read = |facts: &Facts<'_>| {
+            facts.to_document(second.record_key.clone(), second.profile.clone(), second.partition.clone())
+        };
+        let mut facts = Facts::default();
+        prop_assert!(decode_into(&first_blob, &mut facts).is_some());
+        // A refused blob leaves partial facts behind; the next decode clears them.
+        let _ = decode_into(&second_blob[..cut.index(second_blob.len())], &mut facts);
+        prop_assert!(decode_into(&second_blob, &mut facts).is_some());
+        prop_assert_eq!(read(&facts), expected.clone());
+        let mut facts: Facts<'_> = facts.recycle();
+        prop_assert!(decode_into(&second_blob, &mut facts).is_some());
+        prop_assert_eq!(read(&facts), expected);
+    }
+
+    #[test]
     fn a_damaged_blob_is_refused_or_read_within_bounds(
         document in document(),
         cut in any::<prop::sample::Index>(),

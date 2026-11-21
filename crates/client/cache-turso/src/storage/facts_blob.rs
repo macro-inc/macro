@@ -86,6 +86,21 @@ pub(super) fn decode_into<'a>(blob: &'a [u8], facts: &mut Facts<'a>) -> Option<(
 }
 
 impl Facts<'_> {
+    /// Empties the facts, keeping their buffers for the next [`decode_into`]
+    /// without borrowing this blob.
+    pub(super) fn recycle(self) -> Facts<'static> {
+        fn empty<T, U>(mut items: Vec<T>) -> Vec<U> {
+            items.clear();
+            // Same layout, so the collect reuses the allocation in place.
+            items.into_iter().map(|_| unreachable!()).collect()
+        }
+        Facts {
+            exact: empty(self.exact),
+            integer: empty(self.integer),
+            sort: empty(self.sort),
+        }
+    }
+
     /// The facts as an owned, canonical document.
     pub(super) fn to_document(
         &self,

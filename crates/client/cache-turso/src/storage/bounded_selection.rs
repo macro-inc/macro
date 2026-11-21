@@ -261,17 +261,18 @@ fn row_matches(
     query: &IndexQuery,
     source: conjunction::FactSource,
     record_key: &str,
-    row: &[Value],
+    row: &WindowRow<'_>,
+    facts: &mut facts_blob::Facts<'static>,
 ) -> Result<bool, TursoStorageError> {
     match source {
-        conjunction::FactSource::Optimistic => Ok(required_i64(row, 4)? == 1),
+        conjunction::FactSource::Optimistic => Ok(row_i64(row[4])? == 1),
         conjunction::FactSource::Authority => {
-            let blob = match required_value(row, 4)? {
+            let blob = match row[4] {
                 Value::Null => return Ok(false),
                 Value::Blob(blob) => &blob[..],
                 _ => return Err(invariant()),
             };
-            let partition = match required_value(row, 3)? {
+            let partition = match row[3] {
                 Value::Text(partition) => partition.as_str(),
                 _ => return Err(invariant()),
             };
@@ -279,11 +280,31 @@ fn row_matches(
                 .find(|candidate| candidate.partition.as_str() == partition)
                 .ok_or_else(invariant)?
                 .predicate;
-            let facts = facts_blob::decode(blob).ok_or_else(invariant)?;
-            Ok(predicate_index::matches_facts(
-                &facts, record_key, predicate,
-            ))
+            // Decodes into the window's buffers, so a row allocates nothing.
+            let mut decoded: facts_blob::Facts<'_> = std::mem::take(facts);
+            let matched = facts_blob::decode_into(blob, &mut decoded)
+                .map(|()| predicate_index::matches_facts(&decoded, record_key, predicate));
+            *facts = decoded.recycle();
+            matched.ok_or_else(invariant)
         }
+    }
+}
+
+/// A window row's columns, borrowed from the statement: record key, sort
+/// value, document id, partition, and the facts blob or optimistic verdict.
+type WindowRow<'a> = [&'a Value; 5];
+
+fn row_i64(value: &Value) -> Result<i64, TursoStorageError> {
+    match value {
+        Value::Numeric(Numeric::Integer(value)) => Ok(*value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
+    }
+}
+
+fn row_text(value: &Value) -> Result<&str, TursoStorageError> {
+    match value {
+        Value::Text(value) => Ok(value.as_str()),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Corruption)),
     }
 }
 
@@ -296,6 +317,8 @@ struct Window {
     exhausted: bool,
     last: Option<Position>,
     hits: Vec<ReferenceHit>,
+    /// Decode buffers reused across rows.
+    facts: facts_blob::Facts<'static>,
 }
 
 impl Window {
@@ -306,6 +329,7 @@ impl Window {
             exhausted: false,
             last: None,
             hits: Vec::new(),
+            facts: facts_blob::Facts::default(),
         }
     }
 
@@ -337,20 +361,29 @@ impl Window {
         let mut read = 0;
         driver::query_each_prepared(&mut statement, parameters, |row| {
             read += 1;
-            self.take(query, &row.get_values().cloned().collect::<Vec<_>>())
+            if row.len() != 5 {
+                return Err(invariant());
+            }
+            self.take(
+                query,
+                &[
+                    row.get_value(0),
+                    row.get_value(1),
+                    row.get_value(2),
+                    row.get_value(3),
+                    row.get_value(4),
+                ],
+            )
         })?;
         self.read += read;
         self.exhausted = read < count;
         Ok(true)
     }
 
-    fn take(&mut self, query: &IndexQuery, row: &[Value]) -> Result<(), TursoStorageError> {
-        if row.len() != 5 {
-            return Err(invariant());
-        }
+    fn take(&mut self, query: &IndexQuery, row: &WindowRow<'_>) -> Result<(), TursoStorageError> {
         let position = Position {
-            value: required_i64(row, 1)?,
-            document: required_i64(row, 2)?,
+            value: row_i64(row[1])?,
+            document: row_i64(row[2])?,
         };
         let later = self.last.is_none_or(|last| {
             let order = (position.value, position.document).cmp(&(last.value, last.document));
@@ -362,10 +395,11 @@ impl Window {
         if later {
             self.last = Some(position);
         }
-        let record_key = required_text(row, 0)?;
-        if row_matches(query, self.source, &record_key, row)? {
+        let record_key = row_text(row[0])?;
+        if row_matches(query, self.source, record_key, row, &mut self.facts)? {
             self.hits.push(ReferenceHit {
-                record_key: PredicateRecordKey::new(record_key).map_err(|_| invariant())?,
+                record_key: PredicateRecordKey::new(record_key.to_owned())
+                    .map_err(|_| invariant())?,
                 sort_value: position.value,
             });
         }
