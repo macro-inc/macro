@@ -2,11 +2,14 @@ import { type AgentFace, renderFace } from '@macro-inc/agent-faces';
 import { Avatar } from '@ui';
 import { createMemo } from 'solid-js';
 
-/** A face, or a photo chosen in its place, drawn as a circle `size` px wide. */
+/**
+ * A face, or a photo chosen in its place, drawn as a circle `size` px wide, or
+ * filling its parent for `'fill'`.
+ */
 export function FaceImage(props: {
   face: AgentFace;
   photoUrl?: string;
-  size: number;
+  size: number | 'fill';
   /** Shown if the picture fails to load. */
   initials: string;
 }) {
@@ -18,7 +21,11 @@ export function FaceImage(props: {
   return (
     <span
       class="block shrink-0"
-      style={{ width: `${props.size}px`, height: `${props.size}px` }}
+      style={
+        props.size === 'fill'
+          ? { width: '100%', height: '100%' }
+          : { width: `${props.size}px`, height: `${props.size}px` }
+      }
     >
       <Avatar size="fill" highlightEdge>
         <Avatar.Image src={src()} alt="" class="bg-surface object-cover" />

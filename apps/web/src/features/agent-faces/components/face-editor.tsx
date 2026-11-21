@@ -96,7 +96,9 @@ export function FaceEditor(props: {
                   {t('agentFaces.newFaces')}
                 </Button>
               </div>
-              <div class="grid grid-cols-8 gap-1.5 max-sm:grid-cols-4">
+              {/* Auto columns spread edge to edge, so the first and last
+                  faces line up with the labels on every width. */}
+              <div class="grid grid-cols-[repeat(8,auto)] justify-between gap-y-2 max-sm:grid-cols-[repeat(4,auto)]">
                 <Index each={suggestions.faces()}>
                   {(face, index) => (
                     <button
@@ -105,14 +107,16 @@ export function FaceEditor(props: {
                         number: index + 1,
                       })}
                       aria-pressed={sameFace(face(), props.draft.face())}
-                      class="flex items-center justify-center rounded-full outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px]"
+                      class="group flex items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px] touch:min-w-[44px]"
                       onClick={() => props.draft.choose(face())}
                     >
-                      <FaceImage
-                        face={face()}
-                        size={36}
-                        initials={props.initials}
-                      />
+                      <span class="block size-9 rounded-full outline-2 outline-offset-1 outline-transparent group-aria-pressed:outline-ink touch:size-12">
+                        <FaceImage
+                          face={face()}
+                          size="fill"
+                          initials={props.initials}
+                        />
+                      </span>
                     </button>
                   )}
                 </Index>
@@ -207,6 +211,7 @@ function PartRow(props: {
   const current = createMemo(
     () => resolvedParts(props.draft.face())[props.row.part]
   );
+  const pinned = () => props.draft.face().pins[props.row.part];
   const label = () => t(PART_LABEL[props.row.part]);
   const options = () =>
     Array.from({ length: props.row.options }, (_, index) => index);
@@ -214,15 +219,19 @@ function PartRow(props: {
   return (
     <div class="flex flex-col gap-1.5" data-face-part={props.row.part}>
       <span class="text-xs text-ink-muted">{label()}</span>
-      <div class="flex flex-wrap gap-1.5">
+      {/* Each button is the hit area; the ring sits on what it draws, so a
+          44px touch target doesn't ring a 24px swatch. */}
+      <div class="flex flex-wrap gap-1.5 touch:gap-y-2">
         <button
           type="button"
           aria-label={t('agentFaces.anyPart', { part: label() })}
-          aria-pressed={props.draft.face().pins[props.row.part] === undefined}
-          class="rounded-full border border-edge-muted px-2 text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px]"
+          aria-pressed={pinned() === undefined}
+          class="group flex items-center rounded-full focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px]"
           onClick={() => props.draft.unpin(props.row.part)}
         >
-          {t('agentFaces.any')}
+          <span class="rounded-full border border-edge-muted px-2 py-0.5 text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent group-aria-pressed:outline-ink">
+            {t('agentFaces.any')}
+          </span>
         </button>
         <Index each={options()}>
           {(index) => (
@@ -232,33 +241,45 @@ function PartRow(props: {
                 part: label(),
                 number: index() + 1,
               })}
-              aria-pressed={current() === index()}
-              class="flex items-center justify-center rounded-full outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px] touch:min-w-[44px]"
+              aria-pressed={pinned() === index()}
+              class="flex items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px] touch:min-w-[44px]"
               onClick={() => props.draft.pin(props.row.part, index())}
             >
-              <Show
-                when={props.row.swatches?.[index()]}
-                fallback={
-                  <FaceImage
-                    face={{
-                      ...props.draft.face(),
-                      pins: {
-                        ...props.draft.face().pins,
-                        [props.row.part]: index(),
-                      },
-                    }}
-                    size={PREVIEW_SIZE}
-                    initials={props.initials}
-                  />
-                }
+              {/* A pin gets the ink ring; while "Any" holds it, the option
+                  the face resolves to only gets a quiet one. */}
+              <span
+                class="block rounded-full outline-2 outline-offset-1"
+                classList={{
+                  'outline-ink': pinned() === index(),
+                  'outline-edge-muted':
+                    pinned() === undefined && current() === index(),
+                  'outline-transparent': current() !== index(),
+                }}
               >
-                {(hex) => (
-                  <span
-                    class="block size-6 rounded-full border border-edge-muted"
-                    style={{ background: hex() }}
-                  />
-                )}
-              </Show>
+                <Show
+                  when={props.row.swatches?.[index()]}
+                  fallback={
+                    <FaceImage
+                      face={{
+                        ...props.draft.face(),
+                        pins: {
+                          ...props.draft.face().pins,
+                          [props.row.part]: index(),
+                        },
+                      }}
+                      size={PREVIEW_SIZE}
+                      initials={props.initials}
+                    />
+                  }
+                >
+                  {(hex) => (
+                    <span
+                      class="block size-6 rounded-full border border-edge-muted"
+                      style={{ background: hex() }}
+                    />
+                  )}
+                </Show>
+              </span>
             </button>
           )}
         </Index>
