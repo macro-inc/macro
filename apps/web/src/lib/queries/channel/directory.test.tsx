@@ -81,8 +81,10 @@ import {
   createMemoryChannelDirectory,
   fetchJoinedChannels,
   lookupChannel,
+  OWN_WRITE_READ_DEADLINE_MS,
   type PrimaryChannelRead,
   pageJoinedChannels,
+  primaryChannelReader,
   refreshChannelDirectory,
   settledChannelLookup,
   staticChannelDirectory,
@@ -3643,6 +3645,65 @@ describe("the viewer's own channel writes", () => {
       channelUuid('a'),
     ]);
     expect(nameOf(directory, 'a')).toBe('before');
+  });
+
+  it('lets go of reads the primary never answers at their deadline, ending their requests', async () => {
+    // The write's deadline aborts when the test says, as
+    // `OWN_WRITE_READ_DEADLINE_MS` passing would.
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const deadline = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockImplementation((ms) =>
+        ms === OWN_WRITE_READ_DEADLINE_MS ? deadline.signal : realTimeout(ms)
+      );
+    try {
+      let sent = 0;
+      let ended = 0;
+      const hung = fakeClient(() =>
+        make(() => {
+          sent += 1;
+          return () => {
+            ended += 1;
+          };
+        })
+      ) as ReturnType<typeof fakeNetwork>['client'];
+      const client = queryClient();
+      let settled = false;
+      const written = (async () => {
+        await writeOf(client, { client: hung }, ['a', 'b']);
+        settled = true;
+      })();
+      await vi.waitFor(() => expect(sent).toBe(2));
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      expect(ended).toBe(0);
+
+      deadline.abort();
+      await written;
+
+      expect(ended).toBe(2);
+      expect(ownChannelWrites(client).writes()).toEqual({});
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it("ends a primary read through the app's reader once its signal aborts", async () => {
+    let ended = 0;
+    const hung = fakeClient(() =>
+      make(() => () => {
+        ended += 1;
+      })
+    ) as ReturnType<typeof fakeNetwork>['client'];
+    const stop = new AbortController();
+    const read = primaryChannelReader(() => hung)(
+      channelUuid('a'),
+      stop.signal
+    );
+    stop.abort();
+    await expect(read).rejects.toBe(stop.signal.reason);
+    expect(ended).toBe(1);
   });
 
   it('reads nothing for ids that are not channels', async () => {

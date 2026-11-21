@@ -139,6 +139,9 @@ const OWN_WRITE_REREADS = 4;
 // source, as it would without the reads.
 const OWN_WRITE_READ_LIMIT = 20;
 const OWN_WRITE_READ_CONCURRENCY = 4;
+// A write's reads still unanswered after this hold nothing, as a failed
+// read does, and end their requests: the write's refresh waits on them.
+export const OWN_WRITE_READ_DEADLINE_MS = 20_000;
 // A full read of the cached directory settles the channels its walk of a
 // replica and the cache disagree on by reading each from the primary, a few
 // at a time; more than this many fail the read.
@@ -866,6 +869,13 @@ async function readChannelFromPrimary(
   };
 }
 
+/** Reads one channel from the primary over `soup`'s client, ending the
+ * request once `signal` aborts. */
+export function primaryChannelReader(soup: () => UrqlQuery) {
+  return (channelId: string, signal?: AbortSignal) =>
+    readChannelFromPrimary(soup(), channelId, signal);
+}
+
 /** A full read that could not settle every channel its walk and the cache
  * disagree on: an action on every joined channel would act on membership
  * the replica may have trailed, so it fails instead, as a failed read of
@@ -953,8 +963,10 @@ async function settleFullReadOnPrimary(
 /** Reads the channels a write of the viewer's changed and holds what the
  * primary showed for the directories, all at once, and holds the channels
  * it removed as unreadable without reading them. A failed read holds
- * nothing, and neither does a write of more than `OWN_WRITE_READ_LIMIT`
- * channels: the directory shows what it reads, as it would without this. */
+ * nothing, and neither do reads still unanswered once
+ * `OWN_WRITE_READ_DEADLINE_MS` passed, nor a write of more than
+ * `OWN_WRITE_READ_LIMIT` channels: the directory shows what it reads, as it
+ * would without this. */
 async function readOwnWrites(
   changed: readonly string[],
   removed: readonly string[],
@@ -989,27 +1001,31 @@ async function readOwnWrites(
     // channels from now on.
     const sent = own.send(writer, [...reading, ...gone]);
     // Settled however the reads end: with what they found for this viewer,
-    // or with nothing once the account changed or a read threw.
+    // or with nothing once the account changed, the deadline passed or a
+    // read threw.
     const found: Record<string, DirectoryChannel | null> = {};
+    // One deadline for the whole write: its refresh waits on these reads.
+    const deadline = AbortSignal.timeout(OWN_WRITE_READ_DEADLINE_MS);
     try {
       const reads: PrimaryChannelRead[] = [];
-      // Chunks after the first start past an await, outside the span. Each
-      // starts only while the writer is still signed in, so none goes out
-      // under a later sign-in.
+      // Each chunk starts only while the writer is still signed in, so none
+      // goes out under a later sign-in.
       for (let at = 0; at < reading.length; at += OWN_WRITE_READ_CONCURRENCY) {
         if (!signedIn()) {
           span.setAttr('channel_directory.scope', 'other_viewer');
           return;
         }
-        reads.push(
-          ...(await span.run(() =>
-            Promise.all(
-              reading
-                .slice(at, at + OWN_WRITE_READ_CONCURRENCY)
-                .map((id) => readChannelFromPrimary(soup(), id))
-            )
-          ))
+        const chunk = await readOwnWriteChunk(
+          span,
+          reading.slice(at, at + OWN_WRITE_READ_CONCURRENCY),
+          soup,
+          deadline
         );
+        if (!chunk) {
+          span.setAttr('channel_directory.outcome', 'timed_out');
+          return;
+        }
+        reads.push(...chunk);
       }
       if (!signedIn()) {
         span.setAttr('channel_directory.scope', 'other_viewer');
@@ -1033,6 +1049,26 @@ async function readOwnWrites(
       sent.settle(found);
     }
   });
+}
+
+/** One chunk of a write's primary reads, run in its span; undefined once
+ * `deadline` passed, which ends every read still unanswered. */
+async function readOwnWriteChunk(
+  span: TraceContext,
+  ids: readonly string[],
+  soup: () => UrqlQuery,
+  deadline: AbortSignal
+): Promise<PrimaryChannelRead[] | undefined> {
+  if (deadline.aborted) return undefined;
+  try {
+    // Chunks after the first start past an await: run each in the span.
+    return await span.run(() =>
+      Promise.all(ids.map((id) => readChannelFromPrimary(soup(), id, deadline)))
+    );
+  } catch (error) {
+    if (deadline.aborted) return undefined;
+    throw error;
+  }
 }
 
 /** What a by-id read found. `returned` is undefined when the answer proves
@@ -2494,8 +2530,7 @@ export function createAppChannelDirectory(): ChannelDirectory {
         ),
       fetchAll: (signal) =>
         walkCurrentJoinedChannels(queryClient, getGraphqlSoupClient(), signal),
-      readFromPrimary: (channelId) =>
-        readChannelFromPrimary(getGraphqlSoupClient(), channelId),
+      readFromPrimary: primaryChannelReader(getGraphqlSoupClient),
       writesSeen: () => directoryWrites(queryClient).seen,
       pageAll: async (signal) => {
         const walk = await pageJoinedChannels(getGraphqlSoupClient(), signal);
