@@ -88,6 +88,7 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
                     &[],
                     None,
                     candidate_budget(query.as_query()),
+                    true,
                 );
                 let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
                 let rows = driver::query_prepared(&mut statement, parameters).unwrap();
@@ -112,6 +113,7 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
                     &[],
                     Some(middle),
                     candidate_budget(query.as_query()),
+                    true,
                 );
                 let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
                 let rows = driver::query_prepared(&mut statement, parameters).unwrap();
@@ -263,6 +265,90 @@ fn complete_cutoff_ties_use_record_keys_not_internal_document_ids() {
                 );
             }
         }
+    });
+}
+
+/// The shadow probe and the optimistic window run exactly while a pending
+/// write holds optimistic documents, and the page follows the layer both ways.
+#[test]
+fn the_shadow_probe_runs_only_while_optimistic_documents_exist() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-pending").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..40)
+                    .map(|n| ProjectionMutation::Replace(document(n, i64::from(n))))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let query = query(owner("owner"), SortDirection::Desc, SortDirection::Asc);
+        let page = |storage: &TursoStorage| {
+            let connection = storage.connection();
+            let pending = has_optimistic_documents(&connection).unwrap();
+            let actual = hits(&connection, &query, &[]);
+            assert_eq!(actual, reference(&connection, &query, &[]));
+            (pending, actual)
+        };
+        let (pending, before) = page(&storage);
+        assert!(!pending);
+        assert_eq!(before[0], ("Thing:00039".to_owned(), 39));
+        let (sql, _) = candidate_sql(
+            query.as_query(),
+            conjunction::FactSource::Authority,
+            &[],
+            None,
+            MIN_CANDIDATES,
+            false,
+        );
+        assert!(!sql.contains("optimistic_index_documents"), "{sql}");
+
+        let mut moved = document(39, 39);
+        moved.partition = Token::new("other").unwrap();
+        let id = storage
+            .enqueue_mutation_with_shadow(
+                queued("Pending"),
+                vec![
+                    PendingOptimisticProjection {
+                        state: OptimisticProjectionState::Complete(moved),
+                        uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                    },
+                    PendingOptimisticProjection {
+                        state: OptimisticProjectionState::Complete(document(100, 100)),
+                        uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        let (pending, shadowed) = page(&storage);
+        assert!(pending);
+        assert_eq!(shadowed[0], ("Thing:00100".to_owned(), 100));
+        assert!(!shadowed.iter().any(|(key, _)| key == "Thing:00039"));
+
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 10,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            storage
+                .discard_mutation(
+                    id,
+                    MutationClaimToken {
+                        owner: "runner".into(),
+                        generation: claimed.lease_generation,
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(page(&storage), (false, before));
     });
 }
 
@@ -775,6 +861,7 @@ fn a_tie_wider_than_the_cap_falls_back_with_the_same_pages() {
                 &[],
                 Some(position),
                 MIN_CANDIDATES,
+                true,
             );
             let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
             let rows = driver::query_prepared(&mut statement, parameters).unwrap();
