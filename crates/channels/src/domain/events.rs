@@ -119,6 +119,17 @@ pub enum ChannelEvent {
         /// Active participants after the join.
         active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
     },
+    /// Team auto-join added members to a channel: someone joined a team with
+    /// auto-join channels, or a channel turned auto-join on. It only updates
+    /// contacts; nobody is notified and nothing reaches the event broker.
+    MembersAutoJoined {
+        /// Channel the members were added to.
+        channel_id: Uuid,
+        /// Members the auto-join added or reactivated.
+        added_user_ids: Vec<MacroUserIdStr<'static>>,
+        /// Active participants after the auto-join.
+        active_participant_user_ids: Vec<MacroUserIdStr<'static>>,
+    },
     /// Channel metadata was updated (rename).
     ChannelUpdated {
         /// Updated channel id.

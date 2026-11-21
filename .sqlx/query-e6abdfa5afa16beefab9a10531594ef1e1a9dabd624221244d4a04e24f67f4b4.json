@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Removes the deleted user's own rows (primary-key prefix) and every row\n-- naming them (the contact indexes), and returns the other owners who lost\n-- them. Each data-modifying CTE runs whether or not the outer query reads it.\nWITH owned_lists AS (\n    DELETE FROM contact_list_members WHERE user_id = $1\n), owned_inbox AS (\n    DELETE FROM contact_inbox_members WHERE user_id = $1\n), listed AS (\n    DELETE FROM contact_list_members WHERE contact_user_id = $1\n    RETURNING user_id\n), inboxed AS (\n    DELETE FROM contact_inbox_members WHERE contact_user_id = $1\n    RETURNING user_id\n)\nSELECT user_id AS \"user_id!\" FROM listed\nUNION\nSELECT user_id FROM inboxed\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e6abdfa5afa16beefab9a10531594ef1e1a9dabd624221244d4a04e24f67f4b4"
+}

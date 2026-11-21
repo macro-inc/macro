@@ -2,14 +2,24 @@
 # start, configures git, links the image's packages, rolls back to the last
 # good commit after repeated failed boots, then runs the runtime.
 # `_agent.nix` prepends `workspace`, `last_good`, `failures`, `boot_head`,
-# `helper`, `helper_credentials`, `runtime` and `max_failed_boots`.
+# `helper`, `helper_credentials`, `runtime`, `max_failed_boots`,
+# `setup_traceparent` and `setup_traceparent_used`. The runtime gets the time
+# of each step in MACRO_LAUNCH_TIMINGS, for its `agent.launch` spans.
 umask 077
+# The runtime has the exporter, so this script only times its steps: Unix
+# microseconds from bash's own clock.
+now() { local t=$EPOCHREALTIME; echo "${t/[.,]/}"; }
+launch_timings="started:$(now)"
+step_started=
+begin() { step_started=$(now); }
+finish() { launch_timings+=",$1:$step_started:$(now)"; }
 mode=${1:?usage: start-agent run}
 # The unit sets MUPPET_CREDENTIALS_FILE to its agent.env credential.
 credentials=${MUPPET_CREDENTIALS_FILE:?}
 
 [[ $mode == run ]] || { echo "unknown mode: $mode" >&2; exit 2; }
 
+begin
 repo_url=$(setting "$credentials" MACRO_REPO_URL)
 user_id=$(setting "$credentials" MACRO_AGENT_USER_ID)
 name=$(setting "$credentials" MACRO_AGENT_NAME)
@@ -29,10 +39,12 @@ if [[ ! "$repo_url" =~ ^https?://[^/@]+/ ]]; then
   echo 'MACRO_REPO_URL must be an HTTP(S) URL without credentials' >&2
   exit 78
 fi
+finish settings
 
 export GIT_TERMINAL_PROMPT=0
 helper_command="!$helper $helper_credentials"
 if [[ ! -e "$workspace" ]]; then
+  begin
   # Clone into a temporary sibling: a failed clone never poisons first start.
   mkdir -p "$(dirname "$workspace")"
   staging=$(mktemp -d "$workspace.clone.XXXXXX")
@@ -41,16 +53,19 @@ if [[ ! -e "$workspace" ]]; then
     clone -- "$repo_url" "$staging"
   mv -T "$staging" "$workspace"
   trap - EXIT
+  finish clone
 fi
 
 # Follow a re-enrollment's repo URL. Store only the helper and the credential
 # file's path, never the token. The empty entry resets inherited helpers.
+begin
 git -C "$workspace" remote set-url origin "$repo_url"
 git -C "$workspace" config --local --replace-all credential.helper ''
 git -C "$workspace" config --local --add credential.helper "$helper_command"
 git -C "$workspace" config --local credential.useHttpPath true
 git -C "$workspace" config --local user.name "$name"
 git -C "$workspace" config --local user.email "${user_id#macro|}"
+finish configure
 
 # The workspace's git, never running a hook: hooks are files the agent writes.
 wgit() { git -C "$workspace" -c core.hooksPath=/dev/null -c commit.gpgsign=false "$@"; }
@@ -60,6 +75,7 @@ wgit() { git -C "$workspace" -c core.hooksPath=/dev/null -c commit.gpgsign=false
 # code with a commit of its tree on top of the broken head, so the runtime's
 # next pull --rebase keeps it (and its next sync pushes it) instead of
 # fast-forwarding back to the broken head still on origin.
+begin
 count=$(cat "$failures" 2>/dev/null || echo 0)
 good=$(cat "$last_good" 2>/dev/null || true)
 head=$(wgit rev-parse HEAD)
@@ -78,6 +94,7 @@ fi
 # Written before anything here can fail the boot, so agent-stopped counts
 # that failure against this head.
 echo "$head" > "$boot_head"
+finish rollback
 
 # The image's packages, installed from the starter agent's bun.lock. A lock
 # that differs because the image was updated is adopted (committed, so the
@@ -108,6 +125,7 @@ dependencies_edited() {
   ours=$(dependency_fields <"$workspace/package.json") || return 0
   [[ $ours != "$theirs" ]]
 }
+begin
 if ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
   if dependencies_edited; then
     echo "bun.lock differs from the image's and the agent changed its dependencies; new packages need a new image" >&2
@@ -125,7 +143,9 @@ if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
   rm -rf "$modules"
   ln -s "$runtime/node_modules" "$modules"
 fi
+finish packages
 
+begin
 # The agent's code runs against the image's muppet, which ships separately:
 # code newer than the image (a new agent seeded by a newer harness, or a
 # land) fails at import on every boot. Its package.json says which muppet
@@ -167,7 +187,33 @@ if ((needs > has)); then
   fi
   exit 79
 fi
+finish compatibility
+
+# Where the runtime's spans go: agent.env's, not a credential. The intake
+# can limit each computer by the id it sends, not by the egress IP that
+# computers share, once the id is signed.
+endpoint=$(setting "$credentials" OTEL_EXPORTER_OTLP_ENDPOINT)
+if [[ -n $endpoint ]]; then
+  export OTEL_EXPORTER_OTLP_ENDPOINT=$endpoint
+  computer=$(setting "$credentials" MACRO_COMPUTER_ID)
+  if [[ $computer =~ ^[A-Za-z0-9-]{1,64}$ ]]; then
+    export OTEL_EXPORTER_OTLP_HEADERS="x-macro-computer-id=$computer"
+  fi
+fi
+# The computer's setup trace, which macrod stages beside agent.env: the
+# runtime's start (agent.start) joins it once. A restart after that (a land,
+# a crash) is not setup, so a context already used is left out.
+if [[ -s $setup_traceparent ]]; then
+  trace=$(head -c 64 "$setup_traceparent")
+  if [[ $trace =~ ^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$ ]] &&
+    [[ $trace != "$(cat "$setup_traceparent_used" 2>/dev/null || true)" ]]; then
+    echo "$trace" >"$setup_traceparent_used"
+    export MACRO_SETUP_TRACEPARENT=$trace
+  fi
+fi
 
 cd "$workspace"
 echo "starting the runtime at $head" >&2
+MACRO_LAUNCH_TIMINGS="$launch_timings,exec:$(now)"
+export MACRO_LAUNCH_TIMINGS
 exec bun "$workspace/cli.ts" run

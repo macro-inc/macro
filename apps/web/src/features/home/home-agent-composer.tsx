@@ -61,7 +61,7 @@ export function HomeAgentComposer(props: {
     props.onStarted(id);
   };
   return (
-    <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">
+    <div class="agents-view-portal agents-scope min-w-0 [&_.newchat]:p-0">
       <NewChatPage
         homeLayout
         roster={roster.roster()}

@@ -10,6 +10,19 @@ pub type WebhookId = String;
 /// Custom headers supplied for webhook delivery.
 pub type WebhookHeaders = BTreeMap<String, String>;
 
+/// How often a live event stream sends a heartbeat while its server's broker
+/// consumer is making progress.
+pub const STREAM_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);
+
+/// Response header a live event stream sets when it sends heartbeats: the
+/// interval in whole seconds. A client may treat several missed intervals as a
+/// dead stream only when this is present; older servers send none.
+pub const STREAM_HEARTBEAT_HEADER: &str = "x-macro-stream-heartbeat";
+
+/// SSE `event` name of a heartbeat. Its data is `{}` and it has no `id`, so it
+/// never moves a client's resume cursor.
+pub const STREAM_HEARTBEAT_EVENT: &str = "heartbeat";
+
 /// Version of the webhook event queue message contract emitted by this crate.
 #[cfg(feature = "ports")]
 pub const WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION: u8 = 1;

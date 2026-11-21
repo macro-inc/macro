@@ -91,6 +91,8 @@ fn native_person_policy_preserves_scope_and_publication() {
             limit: 1,
             now_ms: 0,
             cursor: None,
+            list_priority: vec![],
+            only_listed: false,
         };
         assert!(matches!(
             handle.people_search(request.clone()).await.unwrap(),

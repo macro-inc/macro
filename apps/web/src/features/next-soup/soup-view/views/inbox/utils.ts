@@ -118,6 +118,9 @@ export function itemContent(
     return;
   }
 
+  // What the sender wrote, not the linked channel's latest message.
+  if (meta?.tag === 'ping') return meta.content.body;
+
   const channel = channelMessageContent(entity);
   if (channel) return channel;
   return notification ? notificationContent(notification) : undefined;

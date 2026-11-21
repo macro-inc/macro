@@ -12,7 +12,14 @@ import ListIcon from '@icon/system/regular/list-bullets.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import GroupIcon from '@icon/system/regular/stack.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Button, ButtonGroup, type ButtonSize, cn, Dropdown } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type ButtonSize,
+  CountBadge,
+  cn,
+  Dropdown,
+} from '@ui';
 import {
   type Accessor,
   batch,
@@ -265,21 +272,6 @@ export type ListFilterDropdownProps<
   footer?: JSX.Element;
 } & ListDropdownOpenProps;
 
-/**
- * Overlays the number of applied filters on a `ListFilterDropdown` trigger, so
- * a collapsed menu still reveals that the list is filtered. Render it as a
- * sibling of the dropdown inside a `relative` wrapper.
- */
-export function ListFilterCountBadge(props: { count: number }) {
-  return (
-    <Show when={props.count > 0}>
-      <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-        {props.count}
-      </span>
-    </Show>
-  );
-}
-
 function SourcedFilterSubmenu<TId extends string>(props: {
   createSource: SearchableOptionSourceFactory<TId>;
   selected: Accessor<TId[]>;
@@ -403,11 +395,7 @@ export function ListFilterDropdown<
             class={props.class}
           >
             <FilterIcon class="size-4 shrink-0" />
-            <Show when={props.activeCount}>
-              <span class="flex min-w-4 h-4 items-center justify-center rounded-full bg-accent px-1 text-xxs font-medium leading-none text-surface">
-                {props.activeCount}
-              </span>
-            </Show>
+            <CountBadge count={props.activeCount ?? 0} />
           </Dropdown.Trigger>
         }
       >
