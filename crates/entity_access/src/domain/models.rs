@@ -222,6 +222,10 @@ pub struct AnyEntityPermission;
 
 /// Trait implemented by marker types that encode a permission requirement.
 pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
+    /// Whether the requirement guards a change (a comment, an edit, an
+    /// owner's or admin's action) rather than a read. A background job's
+    /// credential makes a change only to an item its owner owns.
+    const CHANGES: bool = false;
     /// Returns whether the provided permission satisfies this requirement.
     fn is_satisfied_by(permission: &EntityPermission) -> bool;
 }
@@ -294,8 +298,15 @@ impl EntityPermission {
     }
 
     /// Returns whether this permission satisfies the provided marker type.
+    /// Under a background job's credential (`SessionScope::Job`), a change
+    /// needs owner access: a job changes only its owner's own items, never
+    /// one someone else shared with them.
     pub fn satisfies<T: RequiredPermission>(&self) -> bool {
         T::is_satisfied_by(self)
+            && (!T::CHANGES
+                || agent_correlation::context::current_scope()
+                    != Some(agent_correlation::scope::SessionScope::Job)
+                || self.allows_access_level(AccessLevel::Owner))
     }
 }
 
@@ -312,18 +323,21 @@ impl RequiredPermission for ViewAccessLevel {
 }
 
 impl RequiredPermission for CommentAccessLevel {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_access_level(AccessLevel::Comment)
     }
 }
 
 impl RequiredPermission for EditAccessLevel {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_access_level(AccessLevel::Edit)
     }
 }
 
 impl RequiredPermission for OwnerAccessLevel {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_access_level(AccessLevel::Owner)
     }
@@ -339,12 +353,14 @@ impl RequiredPermission for ViewOnly {
 }
 
 impl RequiredPermission for OwnerParticipantRole {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_participant_role(ParticipantRole::Owner)
     }
 }
 
 impl RequiredPermission for AdminParticipantRole {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_participant_role(ParticipantRole::Admin)
     }
@@ -363,12 +379,14 @@ impl RequiredPermission for MemberTeamRole {
 }
 
 impl RequiredPermission for AdminTeamRole {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_team_role(TeamRole::Admin)
     }
 }
 
 impl RequiredPermission for OwnerTeamRole {
+    const CHANGES: bool = true;
     fn is_satisfied_by(permission: &EntityPermission) -> bool {
         permission.allows_team_role(TeamRole::Owner)
     }

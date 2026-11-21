@@ -14,6 +14,10 @@ depended-on crates in the backend.
   method per entity kind.
 - `src/domain/models.rs`: `AccessLevel`, `RequiredPermission`,
   `EntityAccessReceipt` — the typed receipt proving a checked access level.
+  A requirement that guards a change (`RequiredPermission::CHANGES`:
+  comment, edit, owner, admin roles) needs owner access under a background
+  job's credential (`agent_correlation` scope `job`): `satisfies` checks it,
+  so a job changes only its owner's own items.
 - `src/inbound/axum_extractors.rs`: Axum extractors that resolve a receipt
   from the request (feature `inbound`).
 - `src/outbound/pg_access_repo.rs`: the Postgres adapter (feature `outbound`).
