@@ -99,6 +99,10 @@ with an outline and preview, keeping `reviews`; the frame limit stays the backst
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
 
+A promise that rejects before the program awaits or catches it would end Deno
+with no frame; the bootstrap's `unhandledrejection` listener reports its reason
+as the run's error instead, with how to avoid it.
+
 Every Deno child's `code_execution.process` span records how it ended:
 `process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
 and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`

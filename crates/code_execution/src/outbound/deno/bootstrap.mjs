@@ -23,6 +23,17 @@ function emit(frame) {
   let offset = 0;
   while (offset < bytes.length) offset += write(bytes.subarray(offset));
 }
+// A promise that rejects before anything awaits or catches it (one started
+// early and awaited after other work) makes Deno exit with no frame, and the
+// run reads only "Deno exited without a result". Report the rejection instead.
+globalThis.addEventListener("unhandledrejection", (event) => {
+  event.preventDefault();
+  emit({
+    type: "error",
+    message: `${String(event.reason)}\nThis promise rejected before the program awaited or caught it, which ends the run. Await or catch each promise where it starts, or collect them with Promise.allSettled.`,
+  });
+  exit(0);
+});
 function cut(text, bytes) {
   const encoded = encoder.encode(text);
   return encoded.length <= bytes ? text : decoder.decode(encoded.subarray(0, bytes));
